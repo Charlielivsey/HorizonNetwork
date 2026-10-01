@@ -18,7 +18,7 @@ show_menu() {
     echo -e "  ║                                                   ║"
     echo -e "  ╚═══════════════════════════════════════════════════╝${RESET}"
     echo ""
-    echo -e "  ${GRAY}VPS: 217.154.34.205${RESET}"
+    echo -e "  ${GRAY}VPS: 217.154.34.205  |  Tailscale: 100.95.232.62${RESET}"
     echo ""
     echo -e "  ${WHITE}Select an option:${RESET}"
     echo ""
