@@ -21,7 +21,9 @@ const DEFAULT_SETTINGS = {
 let splashWindow = null;
 let mainWindow = null;
 let tray = null;
-let session = null;
+
+// Map of tabId -> session object for multi-tab SSH
+const sessions = new Map();
 
 // ── Config ────────────────────────────────────────────────
 
@@ -48,6 +50,7 @@ function getSettings() {
     host: cfg.host || DEFAULT_SETTINGS.host,
     port: Number(cfg.port) || DEFAULT_SETTINGS.port,
     username: cfg.username || DEFAULT_SETTINGS.username,
+    theme: cfg.theme || "dark",
   };
 }
 
@@ -94,10 +97,10 @@ function createSplash() {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1040,
-    height: 680,
-    minWidth: 640,
-    minHeight: 420,
+    width: 1100,
+    height: 720,
+    minWidth: 700,
+    minHeight: 480,
     backgroundColor: "#0c0c0c",
     show: false,
     frame: false,
@@ -164,7 +167,7 @@ function createTrayIfNeeded() {
       {
         label: "Quit",
         click: () => {
-          disconnect();
+          disconnectAll();
           app.quit();
         },
       },
@@ -174,7 +177,7 @@ function createTrayIfNeeded() {
   return true;
 }
 
-// ── SSH ───────────────────────────────────────────────────
+// ── SSH (multi-tab) ──────────────────────────────────────
 
 function loadPrivateKeys() {
   const keys = [];
@@ -234,34 +237,42 @@ function describeError(err, s) {
 }
 
 function endSession(s) {
-  if (session === s) session = null;
+  sessions.delete(s.tabId);
   clearTimeout(s.connectTimer);
   s.passwordCallback = null;
-  try {
-    if (s.stream) s.stream.close();
-  } catch (_) {}
-  try {
-    s.conn.end();
-  } catch (_) {}
+  try { if (s.stream) s.stream.close(); } catch (_) {}
+  try { s.conn.end(); } catch (_) {}
 }
 
 function failSession(s, err) {
-  if (session !== s) return;
+  if (!sessions.has(s.tabId) || sessions.get(s.tabId) !== s) return;
   const info = describeError(err, s);
   endSession(s);
-  send("ssh-status", { state: "error", ...info });
+  send("ssh-status", { tabId: s.tabId, state: "error", ...info });
 }
 
-function disconnect() {
-  if (session) endSession(session);
+function disconnectTab(tabId) {
+  const s = sessions.get(tabId);
+  if (s) endSession(s);
 }
 
-function connect({ cols, rows }) {
-  disconnect();
+function disconnectAll() {
+  for (const s of sessions.values()) {
+    clearTimeout(s.connectTimer);
+    s.passwordCallback = null;
+    try { if (s.stream) s.stream.close(); } catch (_) {}
+    try { s.conn.end(); } catch (_) {}
+  }
+  sessions.clear();
+}
+
+function connectTab(tabId, { cols, rows }) {
+  disconnectTab(tabId);
 
   const target = getSettings();
   const conn = new Client();
   const s = {
+    tabId,
     conn,
     target,
     stream: null,
@@ -274,9 +285,9 @@ function connect({ cols, rows }) {
     timedOut: false,
     connectTimer: null,
   };
-  session = s;
+  sessions.set(tabId, s);
 
-  send("ssh-status", { state: "connecting", target });
+  send("ssh-status", { tabId, state: "connecting", target });
 
   s.connectTimer = setTimeout(() => {
     s.timedOut = true;
@@ -284,20 +295,20 @@ function connect({ cols, rows }) {
   }, CONNECT_TIMEOUT_MS);
 
   conn.on("ready", () => {
-    if (session !== s) return;
+    if (sessions.get(tabId) !== s) return;
     conn.shell({ term: "xterm-256color", cols: cols || 80, rows: rows || 24 }, (err, stream) => {
-      if (session !== s) return;
+      if (sessions.get(tabId) !== s) return;
       if (err) return failSession(s, err);
 
       s.stream = stream;
-      send("ssh-status", { state: "connected", target });
+      send("ssh-status", { tabId, state: "connected", target });
 
-      stream.on("data", (data) => send("ssh-data", data));
-      stream.stderr.on("data", (data) => send("ssh-data", data));
+      stream.on("data", (data) => send("ssh-data", { tabId, data }));
+      stream.stderr.on("data", (data) => send("ssh-data", { tabId, data }));
       stream.on("close", () => {
-        if (session !== s) return;
+        if (sessions.get(tabId) !== s) return;
         endSession(s);
-        send("ssh-status", { state: "closed", target });
+        send("ssh-status", { tabId, state: "closed", target });
       });
     });
   });
@@ -305,10 +316,10 @@ function connect({ cols, rows }) {
   conn.on("error", (err) => failSession(s, err));
 
   conn.on("close", () => {
-    if (session !== s) return;
+    if (sessions.get(tabId) !== s) return;
     if (s.stream) {
       endSession(s);
-      send("ssh-status", { state: "closed", target });
+      send("ssh-status", { tabId, state: "closed", target });
     } else {
       failSession(s, new Error("The server closed the connection."));
     }
@@ -338,13 +349,11 @@ function connect({ cols, rows }) {
       return false;
     },
     authHandler: (methodsLeft, _partialSuccess, next) => {
-      // Reaching auth means the handshake finished, so the connect timeout no longer applies.
       clearTimeout(s.connectTimer);
-      if (session !== s) return next(false);
+      if (sessions.get(tabId) !== s) return next(false);
 
       const username = target.username;
 
-      // "none" lets Tailscale SSH (or any server that pre-authorises us) log straight in.
       if (methodsLeft === null) return next({ type: "none", username });
 
       if (methodsLeft.includes("publickey") && s.keys.length) {
@@ -375,11 +384,60 @@ function connect({ cols, rows }) {
       };
 
       send("ssh-status", {
+        tabId,
         state: "password",
         target,
         error: s.passwordAttempts > 0 ? "Incorrect password. Try again." : null,
       });
     },
+  });
+}
+
+// ── SFTP file browser ─────────────────────────────────────
+
+function sftpListDir(tabId, dirPath) {
+  const s = sessions.get(tabId);
+  if (!s || !s.conn) return Promise.reject(new Error("Not connected"));
+  return new Promise((resolve, reject) => {
+    s.conn.sftp((err, sftp) => {
+      if (err) return reject(err);
+      sftp.readdir(dirPath, (err2, list) => {
+        if (err2) return reject(err2);
+        const items = list
+          .filter((f) => f.filename !== "." && f.filename !== "..")
+          .map((f) => ({
+            name: f.filename,
+            isDir: (f.attrs.mode & 0o40000) !== 0,
+            size: f.attrs.size,
+            modified: f.attrs.mtime * 1000,
+            mode: f.attrs.mode,
+          }))
+          .sort((a, b) => {
+            if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+            return a.name.localeCompare(b.name);
+          });
+        resolve(items);
+      });
+    });
+  });
+}
+
+function sftpReadFile(tabId, filePath) {
+  const s = sessions.get(tabId);
+  if (!s || !s.conn) return Promise.reject(new Error("Not connected"));
+  return new Promise((resolve, reject) => {
+    s.conn.sftp((err, sftp) => {
+      if (err) return reject(err);
+      sftp.stat(filePath, (statErr, stats) => {
+        if (statErr) return reject(statErr);
+        if (stats.size > 2 * 1024 * 1024) return reject(new Error("File is too large to preview (max 2 MB)."));
+        const chunks = [];
+        const rs = sftp.createReadStream(filePath);
+        rs.on("data", (chunk) => chunks.push(chunk));
+        rs.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")));
+        rs.on("error", reject);
+      });
+    });
   });
 }
 
@@ -392,8 +450,16 @@ ipcMain.handle("save-settings", (_event, input) => {
   if (result.error) return { ok: false, error: result.error };
   const cfg = loadConfig();
   Object.assign(cfg, result.settings);
+  if (input.theme) cfg.theme = input.theme;
   saveConfig(cfg);
-  return { ok: true, settings: result.settings };
+  return { ok: true, settings: { ...result.settings, theme: cfg.theme || "dark" } };
+});
+
+ipcMain.handle("save-theme", (_event, theme) => {
+  const cfg = loadConfig();
+  cfg.theme = theme;
+  saveConfig(cfg);
+  return { ok: true };
 });
 
 ipcMain.handle("forget-host-key", () => {
@@ -404,28 +470,36 @@ ipcMain.handle("forget-host-key", () => {
   return true;
 });
 
-ipcMain.on("ssh-connect", (_event, size) => connect(size || {}));
+ipcMain.on("ssh-connect", (_event, { tabId, cols, rows }) => connectTab(tabId, { cols, rows }));
 
-ipcMain.on("ssh-cancel", () => {
-  if (!session) return;
-  const s = session;
+ipcMain.on("ssh-cancel", (_event, tabId) => {
+  const s = sessions.get(tabId);
+  if (!s) return;
   endSession(s);
-  send("ssh-status", { state: "idle", target: s.target });
+  send("ssh-status", { tabId, state: "idle", target: s.target });
 });
 
-ipcMain.on("ssh-password", (_event, password) => {
-  if (session && session.passwordCallback && typeof password === "string") {
-    session.passwordCallback(password);
+ipcMain.on("ssh-password", (_event, { tabId, password }) => {
+  const s = sessions.get(tabId);
+  if (s && s.passwordCallback && typeof password === "string") {
+    s.passwordCallback(password);
   }
 });
 
-ipcMain.on("ssh-input", (_event, data) => {
-  if (session && session.stream && typeof data === "string") session.stream.write(data);
+ipcMain.on("ssh-input", (_event, { tabId, data }) => {
+  const s = sessions.get(tabId);
+  if (s && s.stream && typeof data === "string") s.stream.write(data);
 });
 
-ipcMain.on("ssh-resize", (_event, { cols, rows } = {}) => {
-  if (session && session.stream && cols > 0 && rows > 0) session.stream.setWindow(rows, cols, 0, 0);
+ipcMain.on("ssh-resize", (_event, { tabId, cols, rows }) => {
+  const s = sessions.get(tabId);
+  if (s && s.stream && cols > 0 && rows > 0) s.stream.setWindow(rows, cols, 0, 0);
 });
+
+ipcMain.on("ssh-disconnect", (_event, tabId) => disconnectTab(tabId));
+
+ipcMain.handle("sftp-list", (_event, { tabId, path: dirPath }) => sftpListDir(tabId, dirPath));
+ipcMain.handle("sftp-read", (_event, { tabId, path: filePath }) => sftpReadFile(tabId, filePath));
 
 ipcMain.handle("clipboard-read", () => clipboard.readText());
 ipcMain.on("clipboard-write", (_event, text) => {
@@ -443,7 +517,7 @@ ipcMain.on("window-maximize", () => {
   else mainWindow.maximize();
 });
 ipcMain.on("window-close", () => {
-  disconnect();
+  disconnectAll();
   mainWindow?.close();
 });
 
@@ -460,7 +534,7 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.on("window-all-closed", () => {
-    disconnect();
+    disconnectAll();
     if (tray) {
       tray.destroy();
       tray = null;
