@@ -148,7 +148,8 @@ while true; do
             echo ""
             ;;
         0)
-            echo -e "\n  ${GRAY}Goodbye.${RESET}\n"
+            echo -e "\n  ${GRAY}Disconnecting...${RESET}\n"
+            kill -HUP "$(ps -o ppid= -p $$ | tr -d ' ')" 2>/dev/null
             exit 0
             ;;
         *)
