@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 if [ "$HN_IN_CONSOLE" = "1" ] && [ "$(basename -- "$0")" != "horizon" ]; then
-    return 2>/dev/null || exit 0
+    exit 0
 fi
 
 BLUE='\033[1;34m'
