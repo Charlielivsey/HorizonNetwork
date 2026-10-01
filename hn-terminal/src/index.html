@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HN Terminal</title>
+    <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: #0c0c0c;
+            color: #cccccc;
+            font-family: 'Cascadia Code', 'Consolas', 'Courier New', monospace;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Title bar — Windows Terminal style */
+        .titlebar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 32px;
+            background: #1f1f1f;
+            -webkit-app-region: drag;
+            flex-shrink: 0;
+            border-bottom: 1px solid #333;
+        }
+
+        .titlebar-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding-left: 12px;
+        }
+
+        .titlebar-icon {
+            width: 14px;
+            height: 14px;
+        }
+
+        .titlebar-title {
+            font-size: 12px;
+            color: #999;
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        .titlebar-controls {
+            display: flex;
+            -webkit-app-region: no-drag;
+            height: 100%;
+        }
+
+        .titlebar-btn {
+            width: 46px;
+            height: 100%;
+            border: none;
+            background: transparent;
+            color: #999;
+            font-size: 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Segoe MDL2 Assets', 'Segoe Fluent Icons', sans-serif;
+        }
+
+        .titlebar-btn:hover { background: #333; }
+        .titlebar-btn.close:hover { background: #e81123; color: white; }
+
+        /* Tab bar */
+        .tabbar {
+            display: flex;
+            align-items: center;
+            height: 36px;
+            background: #181818;
+            flex-shrink: 0;
+            padding: 0 8px;
+            gap: 2px;
+        }
+
+        .tab {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 0 16px;
+            height: 28px;
+            background: #0c0c0c;
+            border-radius: 6px 6px 0 0;
+            font-size: 12px;
+            color: #ccc;
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        .tab-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #666;
+            transition: background 0.3s;
+        }
+
+        .tab-dot.online { background: #16c60c; }
+        .tab-dot.connecting { background: #f9f1a5; animation: blink 1s infinite; }
+        .tab-dot.offline { background: #e81123; }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        /* Terminal container */
+        #terminal-container {
+            flex: 1;
+            padding: 4px 8px 8px;
+            display: none;
+        }
+
+        #terminal-container .xterm {
+            height: 100%;
+        }
+
+        /* VPN disconnected screen */
+        .vpn-screen {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 24px;
+            padding: 40px;
+        }
+
+        .vpn-screen.hidden { display: none; }
+
+        .vpn-logo {
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            background: linear-gradient(135deg, #38bdf8, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        .vpn-box {
+            background: #1a1a2e;
+            border: 1px solid #2a2a3e;
+            border-radius: 12px;
+            padding: 40px 48px;
+            text-align: center;
+            max-width: 440px;
+        }
+
+        .vpn-icon {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 20px;
+        }
+
+        .vpn-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #e0e0e0;
+            margin-bottom: 12px;
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        .vpn-text {
+            font-size: 13px;
+            color: #888;
+            line-height: 1.7;
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        .vpn-spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid #2a2a3e;
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 16px auto 0;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .vpn-status-line {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 20px;
+            font-size: 12px;
+            color: #666;
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        .vpn-status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #e81123;
+            animation: blink 2s infinite;
+        }
+
+        /* Reconnect banner */
+        .reconnect-bar {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            height: 36px;
+            background: #2a1a1a;
+            border-top: 1px solid #4a2020;
+            font-size: 12px;
+            color: #f87171;
+            font-family: 'Segoe UI', sans-serif;
+            flex-shrink: 0;
+        }
+
+        .reconnect-bar.visible { display: flex; }
+
+        .reconnect-btn {
+            padding: 4px 16px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        .reconnect-btn:hover { background: #2563eb; }
+    </style>
+</head>
+<body>
+    <div class="titlebar">
+        <div class="titlebar-left">
+            <svg class="titlebar-icon" viewBox="0 0 16 16" fill="none">
+                <rect x="1" y="1" width="14" height="14" rx="2" stroke="#38bdf8" stroke-width="1.5"/>
+                <text x="8" y="11.5" text-anchor="middle" fill="#38bdf8" font-size="8" font-weight="bold" font-family="sans-serif">HN</text>
+            </svg>
+            <span class="titlebar-title">HN Terminal</span>
+        </div>
+        <div class="titlebar-controls">
+            <button class="titlebar-btn" onclick="hn.minimize()">&#xE921;</button>
+            <button class="titlebar-btn" onclick="hn.maximize()">&#xE922;</button>
+            <button class="titlebar-btn close" onclick="hn.close()">&#xE8BB;</button>
+        </div>
+    </div>
+
+    <div class="tabbar">
+        <div class="tab">
+            <span class="tab-dot connecting" id="tab-dot"></span>
+            <span id="tab-label">Connecting...</span>
+        </div>
+    </div>
+
+    <div class="vpn-screen" id="vpn-screen">
+        <div class="vpn-logo">HORIZON NETWORK</div>
+        <div class="vpn-box">
+            <svg class="vpn-icon" viewBox="0 0 64 64" fill="none">
+                <rect x="8" y="20" width="48" height="32" rx="4" stroke="#3b82f6" stroke-width="2"/>
+                <path d="M32 28v12M26 34h12" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"/>
+                <circle cx="32" cy="14" r="6" stroke="#e81123" stroke-width="2"/>
+                <line x1="28" y1="10" x2="36" y2="18" stroke="#e81123" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <div class="vpn-title">VPN Not Connected</div>
+            <div class="vpn-text">
+                Connect to the Tailscale VPN to access<br>
+                the Horizon Network VPS.
+            </div>
+            <div class="vpn-spinner"></div>
+            <div class="vpn-status-line">
+                <span class="vpn-status-dot"></span>
+                <span>Waiting for Tailscale connection...</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="terminal-container"></div>
+
+    <div class="reconnect-bar" id="reconnect-bar">
+        <span>Connection lost</span>
+        <button class="reconnect-btn" onclick="hn.reconnect()">Reconnect</button>
+    </div>
+
+    <script>
+        const { Terminal } = require("@xterm/xterm");
+        const { FitAddon } = require("@xterm/addon-fit");
+        const { WebLinksAddon } = require("@xterm/addon-web-links");
+
+        const term = new Terminal({
+            theme: {
+                background: "#0c0c0c",
+                foreground: "#cccccc",
+                cursor: "#cccccc",
+                cursorAccent: "#0c0c0c",
+                selectionBackground: "#264f78",
+                selectionForeground: "#ffffff",
+                black: "#0c0c0c",
+                red: "#c50f1f",
+                green: "#13a10e",
+                yellow: "#c19c00",
+                blue: "#0037da",
+                magenta: "#881798",
+                cyan: "#3a96dd",
+                white: "#cccccc",
+                brightBlack: "#767676",
+                brightRed: "#e74856",
+                brightGreen: "#16c60c",
+                brightYellow: "#f9f1a5",
+                brightBlue: "#3b78ff",
+                brightMagenta: "#b4009e",
+                brightCyan: "#61d6d6",
+                brightWhite: "#f2f2f2",
+            },
+            fontFamily: "'Cascadia Code', 'Cascadia Mono', 'Consolas', monospace",
+            fontSize: 14,
+            lineHeight: 1.2,
+            cursorBlink: true,
+            cursorStyle: "bar",
+            scrollback: 10000,
+            allowProposedApi: true,
+        });
+
+        const fitAddon = new FitAddon();
+        term.loadAddon(fitAddon);
+        term.loadAddon(new WebLinksAddon());
+
+        const termContainer = document.getElementById("terminal-container");
+        const vpnScreen = document.getElementById("vpn-screen");
+        const reconnectBar = document.getElementById("reconnect-bar");
+        const tabDot = document.getElementById("tab-dot");
+        const tabLabel = document.getElementById("tab-label");
+
+        term.open(termContainer);
+
+        term.onData((data) => hn.sendInput(data));
+
+        function fitTerminal() {
+            fitAddon.fit();
+            hn.resize(term.cols, term.rows);
+        }
+
+        window.addEventListener("resize", fitTerminal);
+
+        hn.onTerminalData((data) => term.write(data));
+
+        hn.onVpnStatus((connected) => {
+            if (connected) {
+                tabDot.className = "tab-dot connecting";
+                tabLabel.textContent = "Connecting...";
+            } else {
+                vpnScreen.classList.remove("hidden");
+                termContainer.style.display = "none";
+                reconnectBar.classList.remove("visible");
+                tabDot.className = "tab-dot offline";
+                tabLabel.textContent = "VPN Disconnected";
+            }
+        });
+
+        hn.onSshConnected(() => {
+            vpnScreen.classList.add("hidden");
+            termContainer.style.display = "block";
+            reconnectBar.classList.remove("visible");
+            tabDot.className = "tab-dot online";
+            tabLabel.textContent = "root@horizon-vps";
+            setTimeout(fitTerminal, 50);
+            term.focus();
+        });
+
+        hn.onSshDisconnected((code) => {
+            reconnectBar.classList.add("visible");
+            tabDot.className = "tab-dot offline";
+            tabLabel.textContent = "Disconnected";
+        });
+
+        hn.onSshError((msg) => {
+            reconnectBar.classList.add("visible");
+            tabDot.className = "tab-dot offline";
+            tabLabel.textContent = "Error";
+        });
+    </script>
+</body>
+</html>
