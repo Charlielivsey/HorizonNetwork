@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+if [ "$HN_IN_CONSOLE" = "1" ]; then
+    return 2>/dev/null || exit 0
+fi
+
 BLUE='\033[1;34m'
 CYAN='\033[0;36m'
 WHITE='\033[1;37m'
@@ -419,7 +423,7 @@ ha_submenu() {
             1)
                 echo -e "\n  ${CYAN}Opening Horizon Advertising console...${RESET}\n"
                 cd "$HA_DIR" 2>/dev/null || echo -e "  ${RED}Directory ${HA_DIR} not found${RESET}"
-                exec bash --login
+                HN_IN_CONSOLE=1 exec bash --login
                 ;;
             2)
                 echo ""
@@ -499,7 +503,7 @@ while true; do
     case $choice in
         1)
             echo -e "\n  ${CYAN}Opening console...${RESET}\n"
-            exec bash --login
+            HN_IN_CONSOLE=1 exec bash --login
             ;;
         2)
             echo ""
