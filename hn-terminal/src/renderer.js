@@ -521,6 +521,14 @@
 
     let filesTabId = null;
     let filesCurrentPath = "/";
+    let filesItems = [];
+    let filesHistory = [];
+    let filesHistoryIdx = -1;
+    let filesSortKey = "name";
+    let filesSortAsc = true;
+    let filesFilter = "";
+    let filesPreviewPath = null;
+    let contextTarget = null;
 
     function getConnectedTabId() {
         for (const [id, tab] of sshTabs) {
@@ -533,85 +541,310 @@
         const connId = getConnectedTabId();
         if (!connId) {
             $("files-empty").hidden = false;
+            $("files-col-header").hidden = true;
             $("files-list").querySelectorAll(".file-row").forEach((r) => r.remove());
             $("files-preview").hidden = true;
+            $("files-statusbar").hidden = true;
             return;
         }
         if (filesTabId !== connId) {
             filesTabId = connId;
             filesCurrentPath = "/";
+            filesHistory = ["/"];
+            filesHistoryIdx = 0;
         }
-        loadDirectory(filesCurrentPath);
+        loadDirectory(filesCurrentPath, true);
     }
 
-    async function loadDirectory(dirPath) {
+    function navigateTo(dirPath) {
+        if (dirPath === filesCurrentPath) { loadDirectory(dirPath, true); return; }
+        filesHistory = filesHistory.slice(0, filesHistoryIdx + 1);
+        filesHistory.push(dirPath);
+        filesHistoryIdx = filesHistory.length - 1;
+        loadDirectory(dirPath);
+    }
+
+    function updateNavButtons() {
+        $("files-back").disabled = filesHistoryIdx <= 0;
+        $("files-forward").disabled = filesHistoryIdx >= filesHistory.length - 1;
+        $("files-up").disabled = filesCurrentPath === "/";
+    }
+
+    $("files-back").addEventListener("click", () => {
+        if (filesHistoryIdx > 0) { filesHistoryIdx--; loadDirectory(filesHistory[filesHistoryIdx]); }
+    });
+    $("files-forward").addEventListener("click", () => {
+        if (filesHistoryIdx < filesHistory.length - 1) { filesHistoryIdx++; loadDirectory(filesHistory[filesHistoryIdx]); }
+    });
+    $("files-up").addEventListener("click", () => {
+        if (filesCurrentPath !== "/") {
+            navigateTo(filesCurrentPath.replace(/\/[^/]+\/?$/, "") || "/");
+        }
+    });
+
+    function buildBreadcrumb(dirPath) {
+        const bc = $("files-breadcrumb");
+        bc.innerHTML = "";
+        const parts = dirPath.split("/").filter(Boolean);
+        const rootSeg = document.createElement("span");
+        rootSeg.className = "bread-seg";
+        rootSeg.textContent = "/";
+        rootSeg.addEventListener("click", () => navigateTo("/"));
+        bc.appendChild(rootSeg);
+
+        let built = "";
+        for (let i = 0; i < parts.length; i++) {
+            built += "/" + parts[i];
+            const sep = document.createElement("span");
+            sep.className = "bread-sep";
+            sep.textContent = "/";
+            bc.appendChild(sep);
+
+            const seg = document.createElement("span");
+            seg.className = "bread-seg";
+            seg.textContent = parts[i];
+            const target = built;
+            seg.addEventListener("click", () => navigateTo(target));
+            bc.appendChild(seg);
+        }
+    }
+
+    async function loadDirectory(dirPath, skipHistory) {
         const connId = getConnectedTabId();
         if (!connId) return;
         filesTabId = connId;
         filesCurrentPath = dirPath;
-        $("files-breadcrumb").textContent = dirPath;
+        buildBreadcrumb(dirPath);
         $("files-empty").hidden = true;
+        $("files-col-header").hidden = false;
+        $("files-statusbar").hidden = false;
         $("files-preview").hidden = true;
+        filesPreviewPath = null;
+        $("files-status-text").textContent = "Loading…";
 
-        // Remove old rows
         $("files-list").querySelectorAll(".file-row").forEach((r) => r.remove());
+        updateNavButtons();
 
         try {
-            const items = await hn.sftpList(connId, dirPath);
-
-            // Parent dir link
-            if (dirPath !== "/") {
-                const parentRow = createFileRow({ name: "..", isDir: true, size: 0 }, dirPath);
-                $("files-list").appendChild(parentRow);
-            }
-
-            for (const item of items) {
-                const row = createFileRow(item, dirPath);
-                $("files-list").appendChild(row);
-            }
+            filesItems = await hn.sftpList(connId, dirPath);
+            renderFileList();
         } catch (err) {
+            filesItems = [];
             $("files-empty").hidden = false;
+            $("files-col-header").hidden = true;
             $("files-empty").querySelector("p").textContent = err.message || "Failed to list directory.";
+            $("files-status-text").textContent = "";
         }
+    }
+
+    function sortItems(items) {
+        const sorted = [...items];
+        sorted.sort((a, b) => {
+            if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+            let cmp = 0;
+            if (filesSortKey === "name") cmp = a.name.localeCompare(b.name);
+            else if (filesSortKey === "size") cmp = (a.size || 0) - (b.size || 0);
+            else if (filesSortKey === "date") cmp = (a.modified || 0) - (b.modified || 0);
+            else if (filesSortKey === "perms") cmp = (a.mode || 0) - (b.mode || 0);
+            return filesSortAsc ? cmp : -cmp;
+        });
+        return sorted;
+    }
+
+    function filterItems(items) {
+        if (!filesFilter) return items;
+        const q = filesFilter.toLowerCase();
+        return items.filter((i) => i.name.toLowerCase().includes(q));
+    }
+
+    function renderFileList() {
+        $("files-list").querySelectorAll(".file-row").forEach((r) => r.remove());
+        const filtered = filterItems(sortItems(filesItems));
+
+        for (const item of filtered) {
+            const row = createFileRow(item, filesCurrentPath);
+            $("files-list").appendChild(row);
+        }
+
+        const dirs = filesItems.filter((i) => i.isDir).length;
+        const files = filesItems.filter((i) => !i.isDir).length;
+        let status = `${dirs} folder${dirs !== 1 ? "s" : ""}, ${files} file${files !== 1 ? "s" : ""}`;
+        if (filesFilter) status = `${filtered.length} of ${filesItems.length} items (filtered)`;
+        $("files-status-text").textContent = status;
+
+        updateSortHeaders();
+    }
+
+    function updateSortHeaders() {
+        $("files-col-header").querySelectorAll("[data-sort]").forEach((col) => {
+            const key = col.dataset.sort;
+            const arrow = col.querySelector(".sort-arrow");
+            if (key === filesSortKey) {
+                col.classList.add("active");
+                arrow.textContent = filesSortAsc ? "▲" : "▼";
+            } else {
+                col.classList.remove("active");
+                arrow.textContent = "";
+            }
+        });
+    }
+
+    $("files-col-header").addEventListener("click", (e) => {
+        const col = e.target.closest("[data-sort]");
+        if (!col) return;
+        const key = col.dataset.sort;
+        if (key === filesSortKey) filesSortAsc = !filesSortAsc;
+        else { filesSortKey = key; filesSortAsc = true; }
+        renderFileList();
+    });
+
+    $("files-search").addEventListener("input", (e) => {
+        filesFilter = e.target.value;
+        renderFileList();
+    });
+
+    function getFileType(name, mode) {
+        const ext = name.includes(".") ? name.split(".").pop().toLowerCase() : "";
+        const codeExts = ["js", "ts", "jsx", "tsx", "py", "rb", "go", "rs", "c", "cpp", "h", "hpp", "java", "php", "cs", "swift", "kt", "sh", "bash", "zsh", "fish", "ps1", "lua", "pl", "r", "sql", "html", "htm", "css", "scss", "less", "xml", "svg", "vue", "svelte"];
+        const imageExts = ["png", "jpg", "jpeg", "gif", "bmp", "webp", "ico", "svg", "tiff", "tif"];
+        const archiveExts = ["zip", "tar", "gz", "bz2", "xz", "7z", "rar", "deb", "rpm", "pkg"];
+        const configExts = ["json", "yaml", "yml", "toml", "ini", "cfg", "conf", "env", "properties"];
+        const isExec = mode && (mode & 0o111) !== 0;
+
+        if (codeExts.includes(ext)) return "file-code";
+        if (imageExts.includes(ext)) return "file-image";
+        if (archiveExts.includes(ext)) return "file-archive";
+        if (configExts.includes(ext)) return "file-config";
+        if (isExec && !ext) return "file-exec";
+        return "file";
+    }
+
+    function getFileIcon(item) {
+        if (item.isDir) {
+            return '<svg class="file-icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
+        }
+        const ext = item.name.includes(".") ? item.name.split(".").pop().toLowerCase() : "";
+        const imageExts = ["png", "jpg", "jpeg", "gif", "bmp", "webp", "ico", "tiff", "tif"];
+        const archiveExts = ["zip", "tar", "gz", "bz2", "xz", "7z", "rar", "deb", "rpm"];
+        const codeExts = ["js", "ts", "jsx", "tsx", "py", "rb", "go", "rs", "c", "cpp", "h", "java", "php", "sh", "bash"];
+
+        if (imageExts.includes(ext)) {
+            return '<svg class="file-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
+        }
+        if (archiveExts.includes(ext)) {
+            return '<svg class="file-icon" viewBox="0 0 24 24"><path d="M21 8v13H3V3h12l6 5z"/><path d="M14 3v6h6"/><path d="M10 12h4M10 15h4"/></svg>';
+        }
+        if (codeExts.includes(ext)) {
+            return '<svg class="file-icon" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>';
+        }
+        if (["md", "txt", "log", "csv", "readme"].includes(ext) || item.name.toLowerCase() === "readme") {
+            return '<svg class="file-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>';
+        }
+        return '<svg class="file-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+    }
+
+    function modeToString(mode) {
+        if (!mode) return "";
+        const perms = mode & 0o7777;
+        const str = ["---", "--x", "-w-", "-wx", "r--", "r-x", "rw-", "rwx"];
+        return str[(perms >> 6) & 7] + str[(perms >> 3) & 7] + str[perms & 7];
+    }
+
+    function formatDate(ts) {
+        if (!ts) return "";
+        const d = new Date(ts);
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, "0");
+        if (d.getFullYear() === now.getFullYear()) {
+            const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            return `${months[d.getMonth()]} ${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        }
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    }
+
+    function joinPath(base, name) {
+        return base === "/" ? "/" + name : base + "/" + name;
     }
 
     function createFileRow(item, parentPath) {
         const row = document.createElement("div");
-        row.className = "file-row " + (item.isDir ? "dir" : "file");
+        const fileType = item.isDir ? "dir" : getFileType(item.name, item.mode);
+        row.className = "file-row " + fileType;
+        row.dataset.name = item.name;
+        row.dataset.isDir = item.isDir ? "1" : "";
 
-        const iconSvg = item.isDir
-            ? '<svg class="file-icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>'
-            : '<svg class="file-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+        const sizeStr = item.isDir ? "—" : formatSize(item.size);
+        const dateStr = formatDate(item.modified);
+        const permStr = modeToString(item.mode);
 
-        const sizeStr = item.isDir ? "" : formatSize(item.size);
+        row.innerHTML = `<div class="file-icon-wrap">${getFileIcon(item)}</div><span class="file-name">${escapeHtml(item.name)}</span><span class="file-size">${sizeStr}</span><span class="file-date">${dateStr}</span><span class="file-perms">${permStr}</span>`;
 
-        row.innerHTML = `${iconSvg}<span class="file-name">${escapeHtml(item.name)}</span><span class="file-size">${sizeStr}</span>`;
-
-        row.addEventListener("click", () => {
+        row.addEventListener("click", (e) => {
+            if (e.target.closest(".file-rename-input")) return;
             if (item.isDir) {
-                let newPath;
-                if (item.name === "..") {
-                    newPath = parentPath.replace(/\/[^/]+\/?$/, "") || "/";
-                } else {
-                    newPath = parentPath === "/" ? "/" + item.name : parentPath + "/" + item.name;
-                }
-                loadDirectory(newPath);
+                navigateTo(joinPath(parentPath, item.name));
             } else {
-                previewFile(item.name, parentPath === "/" ? "/" + item.name : parentPath + "/" + item.name);
+                const fullPath = joinPath(parentPath, item.name);
+                previewFile(item, fullPath);
                 $("files-list").querySelectorAll(".file-row").forEach((r) => r.classList.remove("selected"));
                 row.classList.add("selected");
             }
         });
 
+        row.addEventListener("dblclick", () => {
+            if (item.isDir) navigateTo(joinPath(parentPath, item.name));
+        });
+
+        row.addEventListener("contextmenu", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            showContextMenu(e.clientX, e.clientY, item, parentPath);
+        });
+
         return row;
     }
 
-    async function previewFile(name, filePath) {
+    // ── Preview ────────────────────────────────────
+
+    const previewImageExts = ["png", "jpg", "jpeg", "gif", "bmp", "webp", "ico", "svg", "tiff", "tif"];
+
+    function isImageFile(name) {
+        const ext = name.includes(".") ? name.split(".").pop().toLowerCase() : "";
+        return previewImageExts.includes(ext);
+    }
+
+    async function previewFile(item, filePath) {
         const connId = getConnectedTabId();
         if (!connId) return;
-        $("preview-name").textContent = name;
+        filesPreviewPath = filePath;
+        $("preview-name").textContent = item.name;
+        $("preview-meta").textContent = `${formatSize(item.size)} · ${formatDate(item.modified)} · ${modeToString(item.mode)}`;
         $("preview-content").textContent = "Loading…";
+        $("preview-content").hidden = false;
+        $("preview-image").hidden = true;
         $("files-preview").hidden = false;
+
+        if (isImageFile(item.name)) {
+            try {
+                const content = await hn.sftpRead(connId, filePath);
+                const ext = item.name.split(".").pop().toLowerCase();
+                if (ext === "svg") {
+                    $("preview-image").innerHTML = `<img src="data:image/svg+xml;base64,${btoa(content)}" alt="${escapeHtml(item.name)}">`;
+                } else {
+                    const mimeMap = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", bmp: "image/bmp", webp: "image/webp", ico: "image/x-icon", tiff: "image/tiff", tif: "image/tiff" };
+                    const mime = mimeMap[ext] || "application/octet-stream";
+                    const bytes = new TextEncoder().encode(content);
+                    let binary = "";
+                    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+                    $("preview-image").innerHTML = `<img src="data:${mime};base64,${btoa(binary)}" alt="${escapeHtml(item.name)}">`;
+                }
+                $("preview-content").hidden = true;
+                $("preview-image").hidden = false;
+            } catch (err) {
+                $("preview-content").textContent = err.message || "Cannot preview this file.";
+            }
+            return;
+        }
 
         try {
             const content = await hn.sftpRead(connId, filePath);
@@ -623,13 +856,246 @@
 
     $("preview-close").addEventListener("click", () => {
         $("files-preview").hidden = true;
+        filesPreviewPath = null;
         $("files-list").querySelectorAll(".file-row").forEach((r) => r.classList.remove("selected"));
     });
 
-    $("files-refresh").addEventListener("click", () => loadDirectory(filesCurrentPath));
+    $("preview-download").addEventListener("click", () => {
+        if (filesPreviewPath) downloadFile(filesPreviewPath);
+    });
+
+    // ── File operations ────────────────────────────
+
+    async function downloadFile(remotePath) {
+        const connId = getConnectedTabId();
+        if (!connId) return;
+        try {
+            await hn.sftpDownload(connId, remotePath);
+        } catch (err) {
+            alert("Download failed: " + (err.message || err));
+        }
+    }
+
+    async function uploadFiles() {
+        const connId = getConnectedTabId();
+        if (!connId) return;
+        try {
+            const result = await hn.sftpUpload(connId, filesCurrentPath);
+            if (result && !result.canceled) loadDirectory(filesCurrentPath, true);
+        } catch (err) {
+            alert("Upload failed: " + (err.message || err));
+        }
+    }
+
+    async function deleteItem(item, parentPath) {
+        const fullPath = joinPath(parentPath, item.name);
+        const msg = item.isDir
+            ? `Delete folder "${item.name}" and all its contents?`
+            : `Delete "${item.name}"?`;
+        if (!confirm(msg)) return;
+        const connId = getConnectedTabId();
+        if (!connId) return;
+        try {
+            await hn.sftpDelete(connId, fullPath, item.isDir);
+            loadDirectory(filesCurrentPath, true);
+        } catch (err) {
+            alert("Delete failed: " + (err.message || err));
+        }
+    }
+
+    async function renameItem(item, parentPath) {
+        const row = $("files-list").querySelector(`.file-row[data-name="${CSS.escape(item.name)}"]`);
+        if (!row) return;
+        row.classList.add("rename-active");
+        const nameSpan = row.querySelector(".file-name");
+        const oldName = item.name;
+        const input = document.createElement("input");
+        input.className = "file-rename-input";
+        input.value = oldName;
+        nameSpan.replaceWith(input);
+        input.focus();
+        const dotIdx = oldName.lastIndexOf(".");
+        if (dotIdx > 0 && !item.isDir) input.setSelectionRange(0, dotIdx);
+        else input.select();
+
+        const finish = async (commit) => {
+            input.replaceWith(nameSpan);
+            row.classList.remove("rename-active");
+            if (!commit || input.value === oldName || !input.value.trim()) return;
+            const connId = getConnectedTabId();
+            if (!connId) return;
+            const oldPath = joinPath(parentPath, oldName);
+            const newPath = joinPath(parentPath, input.value.trim());
+            try {
+                await hn.sftpRename(connId, oldPath, newPath);
+                loadDirectory(filesCurrentPath, true);
+            } catch (err) {
+                alert("Rename failed: " + (err.message || err));
+            }
+        };
+
+        input.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") { e.preventDefault(); finish(true); }
+            if (e.key === "Escape") { e.preventDefault(); finish(false); }
+        });
+        input.addEventListener("blur", () => finish(true));
+    }
+
+    async function createFolder() {
+        const name = prompt("New folder name:");
+        if (!name || !name.trim()) return;
+        const connId = getConnectedTabId();
+        if (!connId) return;
+        const newPath = joinPath(filesCurrentPath, name.trim());
+        try {
+            await hn.sftpMkdir(connId, newPath);
+            loadDirectory(filesCurrentPath, true);
+        } catch (err) {
+            alert("Create folder failed: " + (err.message || err));
+        }
+    }
+
+    async function chmodItem(item, parentPath) {
+        const current = item.mode ? "0" + (item.mode & 0o7777).toString(8) : "0644";
+        const input = prompt("Enter new permissions (octal, e.g. 0755):", current);
+        if (!input || !input.trim()) return;
+        const mode = parseInt(input.trim(), 8);
+        if (isNaN(mode) || mode < 0 || mode > 0o7777) { alert("Invalid permission value."); return; }
+        const connId = getConnectedTabId();
+        if (!connId) return;
+        const fullPath = joinPath(parentPath, item.name);
+        try {
+            await hn.sftpChmod(connId, fullPath, mode);
+            loadDirectory(filesCurrentPath, true);
+        } catch (err) {
+            alert("Chmod failed: " + (err.message || err));
+        }
+    }
+
+    $("files-refresh").addEventListener("click", () => loadDirectory(filesCurrentPath, true));
+    $("files-new-folder").addEventListener("click", () => createFolder());
+    $("files-upload-btn").addEventListener("click", () => uploadFiles());
+
+    // ── Context menu ───────────────────────────────
+
+    function showContextMenu(x, y, item, parentPath) {
+        contextTarget = { item, parentPath };
+        const menu = $("files-context-menu");
+        menu.hidden = false;
+        const openBtn = menu.querySelector('[data-action="open"]');
+        const dlBtn = menu.querySelector('[data-action="download"]');
+        openBtn.textContent = item.isDir ? "Open folder" : "Preview";
+        dlBtn.hidden = item.isDir;
+
+        const rect = menu.getBoundingClientRect();
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        menu.style.left = (x + rect.width > vw ? vw - rect.width - 8 : x) + "px";
+        menu.style.top = (y + rect.height > vh ? vh - rect.height - 8 : y) + "px";
+    }
+
+    function hideContextMenu() {
+        $("files-context-menu").hidden = true;
+        contextTarget = null;
+    }
+
+    document.addEventListener("click", hideContextMenu);
+    document.addEventListener("contextmenu", (e) => {
+        if (!e.target.closest(".files-context-menu")) hideContextMenu();
+    });
+
+    $("files-context-menu").addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-action]");
+        if (!btn || !contextTarget) return;
+        const { item, parentPath } = contextTarget;
+        const action = btn.dataset.action;
+        hideContextMenu();
+
+        if (action === "open") {
+            if (item.isDir) navigateTo(joinPath(parentPath, item.name));
+            else previewFile(item, joinPath(parentPath, item.name));
+        } else if (action === "download") {
+            downloadFile(joinPath(parentPath, item.name));
+        } else if (action === "rename") {
+            renameItem(item, parentPath);
+        } else if (action === "delete") {
+            deleteItem(item, parentPath);
+        } else if (action === "chmod") {
+            chmodItem(item, parentPath);
+        }
+    });
+
+    // ── Drag & drop upload ─────────────────────────
+
+    const listWrap = $("files-list-wrap");
+    let dragCounter = 0;
+
+    listWrap.addEventListener("dragenter", (e) => {
+        e.preventDefault();
+        dragCounter++;
+        if (getConnectedTabId()) $("files-drop-overlay").hidden = false;
+    });
+
+    listWrap.addEventListener("dragleave", (e) => {
+        e.preventDefault();
+        dragCounter--;
+        if (dragCounter <= 0) { dragCounter = 0; $("files-drop-overlay").hidden = true; }
+    });
+
+    listWrap.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+    });
+
+    listWrap.addEventListener("drop", async (e) => {
+        e.preventDefault();
+        dragCounter = 0;
+        $("files-drop-overlay").hidden = true;
+        const connId = getConnectedTabId();
+        if (!connId) return;
+
+        const files = e.dataTransfer.files;
+        if (!files.length) return;
+
+        let uploaded = 0;
+        for (const file of files) {
+            try {
+                await hn.sftpUploadBuffer(connId, filesCurrentPath, file.name, await file.arrayBuffer());
+                uploaded++;
+            } catch (err) {
+                console.error("Upload failed:", file.name, err);
+            }
+        }
+
+        if (uploaded > 0) loadDirectory(filesCurrentPath, true);
+    });
+
+    // ── File browser keyboard shortcuts ────────────
+
+    document.addEventListener("keydown", (e) => {
+        if (currentView !== "files") return;
+        if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+        if (e.key === "Backspace" || (e.altKey && e.key === "ArrowLeft")) {
+            e.preventDefault();
+            if (filesHistoryIdx > 0) { filesHistoryIdx--; loadDirectory(filesHistory[filesHistoryIdx]); }
+        }
+        if (e.altKey && e.key === "ArrowUp") {
+            e.preventDefault();
+            if (filesCurrentPath !== "/") navigateTo(filesCurrentPath.replace(/\/[^/]+\/?$/, "") || "/");
+        }
+        if (e.key === "F5" || (e.ctrlKey && e.key === "r")) {
+            e.preventDefault();
+            loadDirectory(filesCurrentPath, true);
+        }
+        if (e.ctrlKey && e.key === "f") {
+            e.preventDefault();
+            $("files-search").focus();
+        }
+    });
 
     function formatSize(bytes) {
         if (bytes === 0) return "0 B";
+        if (bytes == null) return "";
         const units = ["B", "KB", "MB", "GB"];
         const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
         return (bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1) + " " + units[i];

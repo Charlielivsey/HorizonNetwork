@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, shell, clipboard } = require("electron");
+const { app, BrowserWindow, ipcMain, Tray, Menu, shell, clipboard, dialog } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
@@ -441,6 +441,127 @@ function sftpReadFile(tabId, filePath) {
   });
 }
 
+function sftpDownload(tabId, remotePath) {
+  const s = sessions.get(tabId);
+  if (!s || !s.conn) return Promise.reject(new Error("Not connected"));
+  const defaultName = path.basename(remotePath);
+  return dialog.showSaveDialog(mainWindow, {
+    defaultPath: defaultName,
+    properties: ["showOverwriteConfirmation"],
+  }).then(({ canceled, filePath: localPath }) => {
+    if (canceled || !localPath) return { ok: false, canceled: true };
+    return new Promise((resolve, reject) => {
+      s.conn.sftp((err, sftp) => {
+        if (err) return reject(err);
+        const rs = sftp.createReadStream(remotePath);
+        const ws = fs.createWriteStream(localPath);
+        rs.pipe(ws);
+        ws.on("finish", () => resolve({ ok: true, path: localPath }));
+        rs.on("error", reject);
+        ws.on("error", reject);
+      });
+    });
+  });
+}
+
+function sftpUpload(tabId, localPath, remoteDir) {
+  const s = sessions.get(tabId);
+  if (!s || !s.conn) return Promise.reject(new Error("Not connected"));
+  const remotePath = remoteDir === "/" ? "/" + path.basename(localPath) : remoteDir + "/" + path.basename(localPath);
+  return new Promise((resolve, reject) => {
+    s.conn.sftp((err, sftp) => {
+      if (err) return reject(err);
+      const rs = fs.createReadStream(localPath);
+      const ws = sftp.createWriteStream(remotePath);
+      rs.pipe(ws);
+      ws.on("close", () => resolve({ ok: true, path: remotePath }));
+      rs.on("error", reject);
+      ws.on("error", reject);
+    });
+  });
+}
+
+function sftpUploadDialog(tabId, remoteDir) {
+  return dialog.showOpenDialog(mainWindow, {
+    properties: ["openFile", "multiSelections"],
+  }).then(async ({ canceled, filePaths }) => {
+    if (canceled || !filePaths.length) return { ok: false, canceled: true };
+    const results = [];
+    for (const lp of filePaths) {
+      try {
+        const r = await sftpUpload(tabId, lp, remoteDir);
+        results.push({ name: path.basename(lp), ok: true, path: r.path });
+      } catch (e) {
+        results.push({ name: path.basename(lp), ok: false, error: e.message });
+      }
+    }
+    return { ok: true, results };
+  });
+}
+
+function sftpUploadBuffer(tabId, remoteDir, fileName, buffer) {
+  const s = sessions.get(tabId);
+  if (!s || !s.conn) return Promise.reject(new Error("Not connected"));
+  const remotePath = remoteDir === "/" ? "/" + fileName : remoteDir + "/" + fileName;
+  return new Promise((resolve, reject) => {
+    s.conn.sftp((err, sftp) => {
+      if (err) return reject(err);
+      const ws = sftp.createWriteStream(remotePath);
+      ws.on("close", () => resolve({ ok: true, path: remotePath }));
+      ws.on("error", reject);
+      ws.end(Buffer.from(buffer));
+    });
+  });
+}
+
+function sftpDelete(tabId, remotePath, isDir) {
+  const s = sessions.get(tabId);
+  if (!s || !s.conn) return Promise.reject(new Error("Not connected"));
+  return new Promise((resolve, reject) => {
+    s.conn.sftp((err, sftp) => {
+      if (err) return reject(err);
+      if (isDir) {
+        sftp.rmdir(remotePath, (e) => (e ? reject(e) : resolve({ ok: true })));
+      } else {
+        sftp.unlink(remotePath, (e) => (e ? reject(e) : resolve({ ok: true })));
+      }
+    });
+  });
+}
+
+function sftpRename(tabId, oldPath, newPath) {
+  const s = sessions.get(tabId);
+  if (!s || !s.conn) return Promise.reject(new Error("Not connected"));
+  return new Promise((resolve, reject) => {
+    s.conn.sftp((err, sftp) => {
+      if (err) return reject(err);
+      sftp.rename(oldPath, newPath, (e) => (e ? reject(e) : resolve({ ok: true })));
+    });
+  });
+}
+
+function sftpMkdir(tabId, dirPath) {
+  const s = sessions.get(tabId);
+  if (!s || !s.conn) return Promise.reject(new Error("Not connected"));
+  return new Promise((resolve, reject) => {
+    s.conn.sftp((err, sftp) => {
+      if (err) return reject(err);
+      sftp.mkdir(dirPath, (e) => (e ? reject(e) : resolve({ ok: true })));
+    });
+  });
+}
+
+function sftpChmod(tabId, remotePath, mode) {
+  const s = sessions.get(tabId);
+  if (!s || !s.conn) return Promise.reject(new Error("Not connected"));
+  return new Promise((resolve, reject) => {
+    s.conn.sftp((err, sftp) => {
+      if (err) return reject(err);
+      sftp.chmod(remotePath, mode, (e) => (e ? reject(e) : resolve({ ok: true })));
+    });
+  });
+}
+
 // ── IPC ───────────────────────────────────────────────────
 
 ipcMain.handle("get-state", () => ({ version: APP_VERSION, settings: getSettings() }));
@@ -500,6 +621,13 @@ ipcMain.on("ssh-disconnect", (_event, tabId) => disconnectTab(tabId));
 
 ipcMain.handle("sftp-list", (_event, { tabId, path: dirPath }) => sftpListDir(tabId, dirPath));
 ipcMain.handle("sftp-read", (_event, { tabId, path: filePath }) => sftpReadFile(tabId, filePath));
+ipcMain.handle("sftp-download", (_event, { tabId, path: remotePath }) => sftpDownload(tabId, remotePath));
+ipcMain.handle("sftp-upload", (_event, { tabId, remoteDir }) => sftpUploadDialog(tabId, remoteDir));
+ipcMain.handle("sftp-upload-buffer", (_event, { tabId, remoteDir, fileName, buffer }) => sftpUploadBuffer(tabId, remoteDir, fileName, buffer));
+ipcMain.handle("sftp-delete", (_event, { tabId, path: remotePath, isDir }) => sftpDelete(tabId, remotePath, isDir));
+ipcMain.handle("sftp-rename", (_event, { tabId, oldPath, newPath }) => sftpRename(tabId, oldPath, newPath));
+ipcMain.handle("sftp-mkdir", (_event, { tabId, path: dirPath }) => sftpMkdir(tabId, dirPath));
+ipcMain.handle("sftp-chmod", (_event, { tabId, path: remotePath, mode }) => sftpChmod(tabId, remotePath, mode));
 
 ipcMain.handle("clipboard-read", () => clipboard.readText());
 ipcMain.on("clipboard-write", (_event, text) => {
