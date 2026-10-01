@@ -13,7 +13,7 @@ let sshProcess = null;
 let connectCheckInterval = null;
 
 const APP_VERSION = pkg.version;
-const DEFAULT_VPS_IP = "100.95.232.62";
+const DEFAULT_VPS_IP = "217.154.34.205";
 const SSH_USER = "root";
 const ICON_PATH = path.join(__dirname, "..", "assets", "icon.ico");
 const GITHUB_OWNER = "Charlielivsey";
@@ -157,8 +157,8 @@ function checkReachable() {
   return new Promise((resolve) => {
     const cmd =
       process.platform === "win32"
-        ? `ping -n 1 -w 2000 ${ip}`
-        : `ping -c 1 -W 2 ${ip}`;
+        ? `ping -n 1 -w 3000 ${ip}`
+        : `ping -c 1 -W 3 ${ip}`;
     exec(cmd, (error) => {
       resolve(!error);
     });
@@ -216,6 +216,7 @@ function startSSH() {
       "-o", "ServerAliveCountMax=3",
       "-o", "ConnectTimeout=10",
       "-o", "UserKnownHostsFile=" + path.join(os.homedir(), ".ssh", "known_hosts"),
+      "-o", "PreferredAuthentications=password,keyboard-interactive,publickey",
       `${SSH_USER}@${ip}`,
     ];
 
