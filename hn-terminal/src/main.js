@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, Tray, Menu, dialog, shell } = require("electron");
 const path = require("path");
+const fs = require("fs");
 const https = require("https");
 const { exec, spawn } = require("child_process");
 const os = require("os");
@@ -12,12 +13,36 @@ let sshProcess = null;
 let connectCheckInterval = null;
 
 const APP_VERSION = pkg.version;
-const VPS_IP = "100.95.232.62";
+const DEFAULT_VPS_IP = "100.95.232.62";
 const SSH_USER = "root";
 const ICON_PATH = path.join(__dirname, "..", "assets", "icon.ico");
 const GITHUB_OWNER = "Charlielivsey";
 const GITHUB_REPO = "HorizonNetwork";
 const VERSION_FILE_PATH = "hn-terminal/package.json";
+const CONFIG_PATH = path.join(app.getPath("userData"), "config.json");
+
+function loadConfig() {
+  try {
+    return JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8"));
+  } catch (_) {
+    return {};
+  }
+}
+
+function saveConfig(cfg) {
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
+}
+
+function getVpsIp() {
+  const cfg = loadConfig();
+  return cfg.vpsIp || DEFAULT_VPS_IP;
+}
+
+function setVpsIp(ip) {
+  const cfg = loadConfig();
+  cfg.vpsIp = ip;
+  saveConfig(cfg);
+}
 
 function createSplash() {
   splashWindow = new BrowserWindow({
@@ -63,6 +88,7 @@ function createWindow() {
       }
       mainWindow.show();
       mainWindow.webContents.send("app-version", APP_VERSION);
+      mainWindow.webContents.send("vps-ip", getVpsIp());
       startConnectionLoop();
       checkForUpdates(false);
     }, 1800);
@@ -127,11 +153,12 @@ function createTrayIfNeeded() {
 }
 
 function checkReachable() {
+  const ip = getVpsIp();
   return new Promise((resolve) => {
     const cmd =
       process.platform === "win32"
-        ? `ping -n 1 -w 2000 ${VPS_IP}`
-        : `ping -c 1 -W 2 ${VPS_IP}`;
+        ? `ping -n 1 -w 2000 ${ip}`
+        : `ping -c 1 -W 2 ${ip}`;
     exec(cmd, (error) => {
       resolve(!error);
     });
@@ -139,6 +166,10 @@ function checkReachable() {
 }
 
 async function startConnectionLoop() {
+  if (mainWindow) {
+    mainWindow.webContents.send("vps-ip", getVpsIp());
+  }
+
   const reachable = await checkReachable();
   if (mainWindow) {
     mainWindow.webContents.send("connection-status", reachable);
@@ -175,6 +206,7 @@ function killSSH() {
 }
 
 function startSSH() {
+  const ip = getVpsIp();
   try {
     const sshPath = process.platform === "win32" ? "ssh.exe" : "ssh";
     const args = [
@@ -184,7 +216,7 @@ function startSSH() {
       "-o", "ServerAliveCountMax=3",
       "-o", "ConnectTimeout=10",
       "-o", "UserKnownHostsFile=" + path.join(os.homedir(), ".ssh", "known_hosts"),
-      `${SSH_USER}@${VPS_IP}`,
+      `${SSH_USER}@${ip}`,
     ];
 
     const proc = spawn(sshPath, args, {
@@ -323,6 +355,20 @@ ipcMain.on("reconnect", () => {
 
 ipcMain.on("check-updates", () => {
   checkForUpdates(true);
+});
+
+ipcMain.on("set-vps-ip", (_event, ip) => {
+  setVpsIp(ip);
+  killSSH();
+  if (connectCheckInterval) {
+    clearInterval(connectCheckInterval);
+    connectCheckInterval = null;
+  }
+  startConnectionLoop();
+});
+
+ipcMain.handle("get-vps-ip", () => {
+  return getVpsIp();
 });
 
 ipcMain.on("window-minimize", () => mainWindow?.minimize());
