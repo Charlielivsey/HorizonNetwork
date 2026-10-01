@@ -19,9 +19,6 @@ contextBridge.exposeInMainWorld("hn", {
   writeClipboard: (text) => ipcRenderer.send("clipboard-write", text),
   openExternal: (url) => ipcRenderer.send("open-external", url),
 
-  checkUpdates: () => ipcRenderer.send("check-updates"),
-  onUpdateAvailable: on("update-available"),
-
   minimize: () => ipcRenderer.send("window-minimize"),
   maximize: () => ipcRenderer.send("window-maximize"),
   close: () => ipcRenderer.send("window-close"),

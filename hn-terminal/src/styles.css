@@ -92,20 +92,6 @@ button { font-family: inherit; }
 .win-btn:hover { background: rgba(255, 255, 255, 0.08); color: var(--text); }
 .win-close:hover { background: #c42b1c; color: #fff; }
 
-/* ── Update bar ──────────────────────────────────── */
-.update-bar {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    height: 34px;
-    background: #0f2417;
-    border-bottom: 1px solid #1b3d27;
-    color: #86efac;
-    font-size: 12px;
-    flex-shrink: 0;
-}
-
 /* ── Tab bar ─────────────────────────────────────── */
 .tabbar {
     height: 40px;

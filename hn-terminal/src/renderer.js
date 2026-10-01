@@ -277,18 +277,6 @@
         $("forget-host-key").disabled = true;
     });
 
-    $("check-updates").addEventListener("click", () => hn.checkUpdates());
-
-    // ── Updates ─────────────────────────────────────
-
-    hn.onUpdateAvailable((version) => {
-        $("update-text").textContent = `Version ${version} is available.`;
-        $("update-bar").hidden = false;
-    });
-
-    $("update-download").addEventListener("click", () => hn.checkUpdates());
-    $("update-dismiss").addEventListener("click", () => ($("update-bar").hidden = true));
-
     // ── Window controls ─────────────────────────────
 
     $("btn-minimize").addEventListener("click", () => hn.minimize());

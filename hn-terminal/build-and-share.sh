@@ -19,6 +19,31 @@ fi
 
 cd "$SCRIPT_DIR"
 
+# Always build the latest pushed code. Git replaces this file with a new inode,
+# so the running copy is unaffected; we then re-run the updated script.
+BRANCH="claude/vps-welcome-screen-m373a1"
+if [ -z "$HN_SYNCED" ]; then
+    echo -e "${CYAN}  Fetching latest code ($BRANCH)...${RESET}"
+    git fetch -q origin "$BRANCH"
+    # Generated files from older builds that are now tracked would block the update
+    for f in package-lock.json .gitignore; do
+        if [ -e "$f" ] && ! git ls-files --error-unmatch "$f" &>/dev/null; then
+            rm -f "$f"
+        fi
+    done
+    if [ "$(git rev-parse --abbrev-ref HEAD)" != "$BRANCH" ]; then
+        git checkout -q "$BRANCH" 2>/dev/null || git checkout -q -b "$BRANCH" "origin/$BRANCH"
+    fi
+    if ! git merge -q --ff-only "origin/$BRANCH"; then
+        echo -e "${RED}  Error: could not update to the latest code.${RESET}"
+        echo -e "  Local changes on the VPS are blocking it:"
+        git status --short | sed 's/^/    /'
+        exit 1
+    fi
+    echo -e "${GREEN}  [✓]${RESET} Code is at $(git log -1 --format='%h %s' | cut -c1-70)"
+    HN_SYNCED=1 exec bash "$SCRIPT_DIR/build-and-share.sh" "$@"
+fi
+
 VERSION=$(node -p "require('./package.json').version")
 echo -e "  Version: ${CYAN}v${VERSION}${RESET}"
 echo ""
@@ -35,7 +60,7 @@ rm -rf dist node_modules
 
 # Install dependencies
 echo -e "${CYAN}  Installing dependencies...${RESET}"
-npm install --no-optional 2>&1 | tail -5
+npm ci 2>&1 | tail -5
 
 # Install Wine for cross-compiling to Windows
 if ! command -v wine &>/dev/null; then

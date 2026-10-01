@@ -1,8 +1,7 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, dialog, shell, clipboard } = require("electron");
+const { app, BrowserWindow, ipcMain, Tray, Menu, shell, clipboard } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
-const https = require("https");
 const crypto = require("crypto");
 const { Client, utils: sshUtils } = require("ssh2");
 const pkg = require("../package.json");
@@ -11,9 +10,6 @@ const APP_VERSION = pkg.version;
 const ICON_PATH = app.isPackaged
   ? path.join(process.resourcesPath, "icon.ico")
   : path.join(__dirname, "..", "assets", "icon.ico");
-const GITHUB_OWNER = "Charlielivsey";
-const GITHUB_REPO = "HorizonNetwork";
-const UPDATE_URL = `https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/claude/vps-welcome-screen-m373a1/hn-terminal/package.json`;
 const CONNECT_TIMEOUT_MS = 12000;
 
 const DEFAULT_SETTINGS = {
@@ -128,7 +124,6 @@ function createWindow() {
       splashWindow = null;
       mainWindow.show();
       mainWindow.focus();
-      checkForUpdates(false);
     }, 1500);
   });
 
@@ -163,7 +158,6 @@ function createTrayIfNeeded() {
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: "Show HN Secure Enclave", click: showMainWindow },
-      { label: "Check for Updates", click: () => checkForUpdates(true) },
       { type: "separator" },
       { label: `v${APP_VERSION}`, enabled: false },
       { type: "separator" },
@@ -389,65 +383,6 @@ function connect({ cols, rows }) {
   });
 }
 
-// ── Updates ───────────────────────────────────────────────
-
-function compareVersions(a, b) {
-  const pa = String(a).replace(/^v/, "").split(".").map(Number);
-  const pb = String(b).replace(/^v/, "").split(".").map(Number);
-  for (let i = 0; i < 3; i++) {
-    if ((pa[i] || 0) < (pb[i] || 0)) return -1;
-    if ((pa[i] || 0) > (pb[i] || 0)) return 1;
-  }
-  return 0;
-}
-
-function checkForUpdates(manual) {
-  const showFailure = (message) => {
-    if (!manual || !mainWindow) return;
-    dialog.showMessageBox(mainWindow, { type: "warning", title: "Update Check Failed", message, buttons: ["OK"] });
-  };
-
-  const req = https.get(UPDATE_URL, { headers: { "User-Agent": "HN-Secure-Enclave" }, timeout: 10000 }, (res) => {
-    let body = "";
-    res.on("data", (chunk) => (body += chunk));
-    res.on("end", () => {
-      let remoteVersion;
-      try {
-        remoteVersion = JSON.parse(body).version;
-      } catch (_) {
-        return showFailure("Could not check for updates. Try again later.");
-      }
-
-      if (compareVersions(APP_VERSION, remoteVersion) < 0) {
-        send("update-available", remoteVersion);
-        if (!mainWindow) return;
-        dialog
-          .showMessageBox(mainWindow, {
-            type: "info",
-            title: "Update Available",
-            message: `A new version of HN Secure Enclave is available.\n\nCurrent: v${APP_VERSION}\nLatest: v${remoteVersion}\n\nWould you like to download the update?`,
-            buttons: ["Download Update", "Later"],
-            defaultId: 0,
-            cancelId: 1,
-          })
-          .then(({ response }) => {
-            if (response === 0) shell.openExternal(`https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases`);
-          });
-      } else if (manual && mainWindow) {
-        dialog.showMessageBox(mainWindow, {
-          type: "info",
-          title: "No Updates",
-          message: `You're running the latest version (v${APP_VERSION}).`,
-          buttons: ["OK"],
-        });
-      }
-    });
-  });
-
-  req.on("timeout", () => req.destroy(new Error("timeout")));
-  req.on("error", () => showFailure("Could not reach GitHub. Check your internet connection."));
-}
-
 // ── IPC ───────────────────────────────────────────────────
 
 ipcMain.handle("get-state", () => ({ version: APP_VERSION, settings: getSettings() }));
@@ -500,8 +435,6 @@ ipcMain.on("clipboard-write", (_event, text) => {
 ipcMain.on("open-external", (_event, url) => {
   if (typeof url === "string" && /^https?:\/\//i.test(url)) shell.openExternal(url);
 });
-
-ipcMain.on("check-updates", () => checkForUpdates(true));
 
 ipcMain.on("window-minimize", () => mainWindow?.minimize());
 ipcMain.on("window-maximize", () => {
