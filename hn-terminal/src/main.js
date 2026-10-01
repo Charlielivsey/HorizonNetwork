@@ -649,7 +649,7 @@ function syncThemeToVPS(theme) {
     lavender: { blue: "\\033[38;5;141m", cyan: "\\033[38;5;183m" },
   };
   const colors = colorMap[theme] || colorMap.dark;
-  const welcomePath = "/root/welcome.sh";
+  const welcomePath = "/usr/local/bin/horizon";
 
   return new Promise((resolve, reject) => {
     conn.sftp((err, sftp) => {
