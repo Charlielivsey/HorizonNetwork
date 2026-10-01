@@ -9,6 +9,8 @@ RED='\033[0;31m'
 YELLOW='\033[1;33m'
 RESET='\033[0m'
 
+HA_DIR="/opt/horizon-advertising"
+
 show_menu() {
     clear
     echo ""
@@ -25,11 +27,153 @@ show_menu() {
     echo -e "  ${CYAN}[1]${RESET}  Open Console"
     echo -e "  ${CYAN}[2]${RESET}  System Status"
     echo -e "  ${CYAN}[3]${RESET}  PM2 Services"
-    echo -e "  ${CYAN}[4]${RESET}  Manage Services (systemd)"
-    echo -e "  ${CYAN}[5]${RESET}  View Logs"
-    echo -e "  ${CYAN}[6]${RESET}  Network Info"
+    echo -e "  ${CYAN}[4]${RESET}  Horizon Advertising"
+    echo -e "  ${CYAN}[5]${RESET}  Manage Services (systemd)"
+    echo -e "  ${CYAN}[6]${RESET}  View Logs"
+    echo -e "  ${CYAN}[7]${RESET}  Network Info"
     echo -e "  ${CYAN}[0]${RESET}  Exit"
     echo ""
+}
+
+show_ha_menu() {
+    clear
+    echo ""
+    echo -e "${BLUE}  ╔═══════════════════════════════════════════════════╗"
+    echo -e "  ║                                                   ║"
+    echo -e "  ║         H O R I Z O N   A D V E R T I S I N G     ║"
+    echo -e "  ║                                                   ║"
+    echo -e "  ╚═══════════════════════════════════════════════════╝${RESET}"
+    echo ""
+    echo -e "  ${GRAY}Directory: ${HA_DIR}${RESET}"
+    echo -e "  ${GRAY}Website:   http://100.95.232.62:3100${RESET}"
+    echo ""
+
+    # Show HA service status
+    if command -v pm2 &>/dev/null; then
+        local status
+        status=$(pm2 jlist 2>/dev/null | grep -o '"name":"ha-[^"]*","[^}]*"status":"[^"]*"' | head -5)
+        if [ -n "$status" ]; then
+            echo -e "  ${WHITE}Services:${RESET}"
+            pm2 jlist 2>/dev/null | python3 -c "
+import sys, json
+try:
+    procs = json.load(sys.stdin)
+    for p in procs:
+        if p['name'].startswith('ha-'):
+            s = p['pm2_env']['status']
+            color = '\033[0;32m' if s == 'online' else '\033[0;31m'
+            print(f\"  {color}●\033[0m  {p['name']:20s} {s}\")
+except: pass
+" 2>/dev/null
+            echo ""
+        else
+            echo -e "  ${YELLOW}No HA services running${RESET}"
+            echo ""
+        fi
+    fi
+
+    echo -e "  ${WHITE}Select an option:${RESET}"
+    echo ""
+    echo -e "  ${CYAN}[1]${RESET}  Open HA Console"
+    echo -e "  ${CYAN}[2]${RESET}  Restart All HA Services"
+    echo -e "  ${CYAN}[3]${RESET}  Stop All HA Services"
+    echo -e "  ${CYAN}[4]${RESET}  Start All HA Services"
+    echo -e "  ${CYAN}[5]${RESET}  View HA Logs"
+    echo -e "  ${CYAN}[m]${RESET}  Back to Main Menu"
+    echo ""
+}
+
+ha_get_services() {
+    pm2 jlist 2>/dev/null | python3 -c "
+import sys, json
+try:
+    procs = json.load(sys.stdin)
+    for p in procs:
+        if p['name'].startswith('ha-'):
+            print(p['name'])
+except: pass
+" 2>/dev/null
+}
+
+ha_submenu() {
+    show_ha_menu
+    while true; do
+        echo -ne "  ${WHITE}HA ➤ ${RESET}"
+        read -r ha_choice
+        case $ha_choice in
+            1)
+                echo -e "\n  ${CYAN}Opening Horizon Advertising console...${RESET}\n"
+                cd "$HA_DIR" 2>/dev/null || echo -e "  ${RED}Directory ${HA_DIR} not found${RESET}"
+                exec bash --login
+                ;;
+            2)
+                echo ""
+                local services
+                services=$(ha_get_services)
+                if [ -z "$services" ]; then
+                    echo -e "  ${YELLOW}No HA services found in PM2${RESET}"
+                else
+                    echo -e "  ${CYAN}Restarting all HA services...${RESET}"
+                    echo "$services" | while read -r svc; do
+                        pm2 restart "$svc" 2>/dev/null
+                        echo -e "  ${GREEN}[✓]${RESET} Restarted $svc"
+                    done
+                fi
+                echo ""
+                ;;
+            3)
+                echo ""
+                local services
+                services=$(ha_get_services)
+                if [ -z "$services" ]; then
+                    echo -e "  ${YELLOW}No HA services found in PM2${RESET}"
+                else
+                    echo -e "  ${CYAN}Stopping all HA services...${RESET}"
+                    echo "$services" | while read -r svc; do
+                        pm2 stop "$svc" 2>/dev/null
+                        echo -e "  ${GREEN}[✓]${RESET} Stopped $svc"
+                    done
+                fi
+                echo ""
+                ;;
+            4)
+                echo ""
+                local services
+                services=$(ha_get_services)
+                if [ -z "$services" ]; then
+                    echo -e "  ${YELLOW}No HA services found in PM2${RESET}"
+                else
+                    echo -e "  ${CYAN}Starting all HA services...${RESET}"
+                    echo "$services" | while read -r svc; do
+                        pm2 start "$svc" 2>/dev/null
+                        echo -e "  ${GREEN}[✓]${RESET} Started $svc"
+                    done
+                fi
+                echo ""
+                ;;
+            5)
+                echo ""
+                local services
+                services=$(ha_get_services)
+                if [ -z "$services" ]; then
+                    echo -e "  ${YELLOW}No HA services found in PM2${RESET}"
+                else
+                    echo -e "  ${BLUE}── HA Logs ──${RESET}"
+                    echo "$services" | while read -r svc; do
+                        pm2 logs "$svc" --lines 15 --nostream 2>/dev/null
+                    done
+                fi
+                echo ""
+                ;;
+            m)
+                show_menu
+                break
+                ;;
+            *)
+                echo -e "  ${GRAY}Invalid option. Try again.${RESET}"
+                ;;
+        esac
+    done
 }
 
 show_menu
@@ -128,22 +272,26 @@ while true; do
             echo ""
             ;;
         4)
+            ha_submenu
+            ;;
+        5)
             echo ""
             echo -e "  ${BLUE}── Active Services (systemd) ──${RESET}"
             systemctl list-units --type=service --state=running --no-pager --no-legend 2>/dev/null | \
                 awk '{printf "  %-40s %s\n", $1, $4}' | head -20
             echo ""
             ;;
-        5)
+        6)
             echo ""
             echo -e "  ${BLUE}── Recent Logs ──${RESET}"
             journalctl --no-pager -n 20 2>/dev/null || echo "  No journal access"
             echo ""
             ;;
-        6)
+        7)
             echo ""
             echo -e "  ${BLUE}── Network Info ──${RESET}"
             echo -e "  ${GRAY}Public IP:${RESET}  217.154.34.205"
+            echo -e "  ${GRAY}Tailscale:${RESET} 100.95.232.62"
             ip -4 addr show 2>/dev/null | awk '/inet /{printf "  %-12s %s\n", $NF, $2}'
             echo ""
             ;;
