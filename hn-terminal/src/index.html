@@ -2,734 +2,154 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HN Secure Enclave</title>
     <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-
-        body {
-            background: #0c0c0c;
-            color: #cccccc;
-            font-family: 'Segoe UI', -apple-system, sans-serif;
-            overflow: hidden;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-
-        /* ── Title bar ── */
-        .titlebar {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            height: 32px;
-            background: #1a1a1a;
-            -webkit-app-region: drag;
-            flex-shrink: 0;
-            border-bottom: 1px solid #2a2a2a;
-            padding-left: 12px;
-        }
-
-        .titlebar-left {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .titlebar-icon {
-            width: 14px;
-            height: 14px;
-        }
-
-        .titlebar-title {
-            font-size: 12px;
-            color: #808080;
-        }
-
-        .titlebar-version {
-            font-size: 10px;
-            color: #4a4a4a;
-            margin-left: 2px;
-        }
-
-        .titlebar-controls {
-            display: flex;
-            -webkit-app-region: no-drag;
-            height: 100%;
-        }
-
-        .titlebar-btn {
-            width: 46px;
-            height: 100%;
-            border: none;
-            background: transparent;
-            color: #808080;
-            font-size: 10px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-family: 'Segoe MDL2 Assets', 'Segoe Fluent Icons', sans-serif;
-            transition: background 0.1s;
-        }
-
-        .titlebar-btn:hover { background: #333; }
-        .titlebar-btn.close:hover { background: #c42b1c; color: #fff; }
-
-        /* ── Tab bar ── */
-        .tabbar {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            height: 38px;
-            background: #151515;
-            flex-shrink: 0;
-            padding: 0 8px;
-            border-bottom: 1px solid #2a2a2a;
-        }
-
-        .tabbar-left {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-
-        .tab {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 0 14px;
-            height: 30px;
-            background: #0c0c0c;
-            border: 1px solid #2a2a2a;
-            border-bottom: none;
-            border-radius: 8px 8px 0 0;
-            font-size: 12px;
-            color: #b0b0b0;
-        }
-
-        .tab-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #555;
-            transition: background 0.3s;
-        }
-
-        .tab-dot.online { background: #16c60c; }
-        .tab-dot.connecting { background: #e8b817; animation: pulse 1.2s ease-in-out infinite; }
-        .tab-dot.offline { background: #c42b1c; }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.35; }
-        }
-
-        .tabbar-right {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-
-        .gear-btn {
-            width: 32px;
-            height: 28px;
-            background: transparent;
-            border: 1px solid transparent;
-            border-radius: 6px;
-            color: #666;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.15s;
-        }
-
-        .gear-btn:hover { background: #222; border-color: #333; color: #aaa; }
-        .gear-btn.active { background: #1e2a3a; border-color: #2d4a6a; color: #5b9cf6; }
-
-        .gear-btn svg { width: 16px; height: 16px; }
-
-        /* ── Update banner ── */
-        .update-bar {
-            display: none;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            height: 30px;
-            background: linear-gradient(90deg, #0d2818, #132d1b);
-            border-bottom: 1px solid #1a4028;
-            font-size: 12px;
-            color: #5eead4;
-            flex-shrink: 0;
-        }
-
-        .update-bar.visible { display: flex; }
-
-        .update-btn {
-            padding: 2px 10px;
-            background: #16a34a;
-            color: #fff;
-            border: none;
-            border-radius: 3px;
-            font-size: 11px;
-            cursor: pointer;
-        }
-
-        .update-btn:hover { background: #15803d; }
-
-        .update-dismiss {
-            background: none;
-            border: none;
-            color: #4a7a5a;
-            cursor: pointer;
-            font-size: 16px;
-            line-height: 1;
-            padding: 0 2px;
-        }
-
-        .update-dismiss:hover { color: #8ab89a; }
-
-        /* ── Content area ── */
-        .content-area {
-            flex: 1;
-            display: flex;
-            min-height: 0;
-            position: relative;
-        }
-
-        .main-view {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            min-width: 0;
-        }
-
-        /* ── Terminal ── */
-        #terminal-container {
-            flex: 1;
-            padding: 4px 8px 8px;
-            display: none;
-        }
-
-        #terminal-container .xterm { height: 100%; }
-
-        /* ── Disconnect screen ── */
-        .disconnect-screen {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 20px;
-            padding: 40px 20px;
-        }
-
-        .disconnect-screen.hidden { display: none; }
-
-        .disconnect-logo {
-            font-size: 24px;
-            font-weight: 700;
-            letter-spacing: 3px;
-            background: linear-gradient(135deg, #60a5fa, #3b82f6);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .disconnect-box {
-            background: #111827;
-            border: 1px solid #1f2937;
-            border-radius: 12px;
-            padding: 36px 44px;
-            text-align: center;
-            max-width: 420px;
-            width: 100%;
-        }
-
-        .disconnect-icon {
-            width: 56px;
-            height: 56px;
-            margin: 0 auto 16px;
-            opacity: 0.8;
-        }
-
-        .disconnect-title {
-            font-size: 17px;
-            font-weight: 600;
-            color: #e5e7eb;
-            margin-bottom: 10px;
-        }
-
-        .disconnect-text {
-            font-size: 13px;
-            color: #6b7280;
-            line-height: 1.6;
-        }
-
-        .disconnect-ip {
-            display: inline-block;
-            background: #0c0c0c;
-            border: 1px solid #2a2a2a;
-            border-radius: 4px;
-            padding: 3px 10px;
-            font-family: 'Cascadia Code', 'Consolas', monospace;
-            font-size: 12px;
-            color: #60a5fa;
-            margin-top: 12px;
-        }
-
-        .disconnect-spinner {
-            width: 28px;
-            height: 28px;
-            border: 2px solid #1f2937;
-            border-top-color: #3b82f6;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-            margin: 14px auto 0;
-        }
-
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        .disconnect-status {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            margin-top: 16px;
-            font-size: 11px;
-            color: #4b5563;
-        }
-
-        .disconnect-status-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: #c42b1c;
-            animation: pulse 2s ease-in-out infinite;
-        }
-
-        /* ── Settings panel ── */
-        .settings-panel {
-            width: 0;
-            overflow: hidden;
-            background: #111118;
-            border-left: 1px solid #1e1e2e;
-            flex-shrink: 0;
-            transition: width 0.2s ease;
-        }
-
-        .settings-panel.visible { width: 260px; }
-
-        .settings-inner {
-            width: 260px;
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-        }
-
-        .settings-header {
-            padding: 14px 16px 10px;
-            border-bottom: 1px solid #1e1e2e;
-            font-size: 13px;
-            font-weight: 600;
-            color: #b0b0b0;
-            letter-spacing: 0.3px;
-        }
-
-        .settings-section {
-            padding: 14px 16px;
-            border-bottom: 1px solid #151520;
-        }
-
-        .settings-label {
-            font-size: 10px;
-            color: #6b7280;
-            text-transform: uppercase;
-            letter-spacing: 0.8px;
-            margin-bottom: 8px;
-            font-weight: 600;
-        }
-
-        .settings-value {
-            font-size: 13px;
-            color: #9ca3af;
-            font-family: 'Cascadia Code', 'Consolas', monospace;
-        }
-
-        .settings-status-row {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .settings-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #555;
-            flex-shrink: 0;
-        }
-
-        .settings-dot.online { background: #16c60c; }
-        .settings-dot.offline { background: #c42b1c; }
-        .settings-dot.connecting { background: #e8b817; animation: pulse 1.2s ease-in-out infinite; }
-
-        .settings-status-text {
-            font-size: 12px;
-            color: #9ca3af;
-        }
-
-        .settings-input-row {
-            display: flex;
-            gap: 6px;
-        }
-
-        .settings-input {
-            flex: 1;
-            min-width: 0;
-            background: #0a0a0f;
-            border: 1px solid #2a2a3a;
-            border-radius: 4px;
-            color: #d1d5db;
-            font-size: 12px;
-            padding: 6px 8px;
-            font-family: 'Cascadia Code', 'Consolas', monospace;
-            outline: none;
-            transition: border-color 0.15s;
-        }
-
-        .settings-input:focus { border-color: #3b82f6; }
-
-        .settings-save-btn {
-            padding: 6px 10px;
-            background: #3b82f6;
-            color: #fff;
-            border: none;
-            border-radius: 4px;
-            font-size: 11px;
-            cursor: pointer;
-            font-weight: 500;
-            white-space: nowrap;
-            transition: background 0.15s;
-        }
-
-        .settings-save-btn:hover { background: #2563eb; }
-
-        .settings-saved {
-            font-size: 11px;
-            color: #16c60c;
-            margin-top: 6px;
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-
-        .settings-saved.show { opacity: 1; }
-
-        .settings-hint {
-            font-size: 10px;
-            color: #4b5563;
-            margin-top: 8px;
-            line-height: 1.5;
-        }
-
-        /* ── Reconnect bar ── */
-        .reconnect-bar {
-            display: none;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            height: 34px;
-            background: #1c0f0f;
-            border-top: 1px solid #3a1a1a;
-            font-size: 12px;
-            color: #f87171;
-            flex-shrink: 0;
-        }
-
-        .reconnect-bar.visible { display: flex; }
-
-        .reconnect-btn {
-            padding: 3px 14px;
-            background: #3b82f6;
-            color: #fff;
-            border: none;
-            border-radius: 3px;
-            font-size: 11px;
-            cursor: pointer;
-        }
-
-        .reconnect-btn:hover { background: #2563eb; }
-    </style>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <!-- Title bar -->
-    <div class="titlebar">
-        <div class="titlebar-left">
-            <svg class="titlebar-icon" viewBox="0 0 16 16" fill="none">
-                <rect x="1" y="1" width="14" height="14" rx="2" stroke="#60a5fa" stroke-width="1.5"/>
-                <text x="8" y="11.5" text-anchor="middle" fill="#60a5fa" font-size="8" font-weight="bold" font-family="sans-serif">HN</text>
+    <header class="titlebar">
+        <div class="titlebar-brand">
+            <svg class="brand-mark" viewBox="0 0 16 16" aria-hidden="true">
+                <rect x="1" y="1" width="14" height="14" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"/>
+                <text x="8" y="11.2" text-anchor="middle" fill="currentColor" font-size="7.5" font-weight="700" font-family="Segoe UI, sans-serif">HN</text>
             </svg>
-            <span class="titlebar-title">HN Secure Enclave</span>
-            <span class="titlebar-version" id="title-version"></span>
+            <span class="brand-name">HN Secure Enclave</span>
+            <span class="version-pill" id="title-version"></span>
         </div>
-        <div class="titlebar-controls">
-            <button class="titlebar-btn" onclick="hn.minimize()">&#xE921;</button>
-            <button class="titlebar-btn" onclick="hn.maximize()">&#xE922;</button>
-            <button class="titlebar-btn close" onclick="hn.close()">&#xE8BB;</button>
-        </div>
-    </div>
-
-    <!-- Update banner -->
-    <div class="update-bar" id="update-bar">
-        <span id="update-text">Update available</span>
-        <button class="update-btn" id="update-download-btn">Download</button>
-        <button class="update-dismiss" id="update-dismiss-btn">&times;</button>
-    </div>
-
-    <!-- Tab bar -->
-    <div class="tabbar">
-        <div class="tabbar-left">
-            <div class="tab">
-                <span class="tab-dot connecting" id="tab-dot"></span>
-                <span id="tab-label">Connecting...</span>
-            </div>
-        </div>
-        <div class="tabbar-right">
-            <button class="gear-btn" id="gear-btn" title="Settings">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="3"/>
-                    <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
-                </svg>
+        <div class="window-controls">
+            <button class="win-btn" id="btn-minimize" title="Minimise" aria-label="Minimise">
+                <svg viewBox="0 0 10 10"><path d="M0 5h10" stroke="currentColor" stroke-width="1"/></svg>
+            </button>
+            <button class="win-btn" id="btn-maximize" title="Maximise" aria-label="Maximise">
+                <svg viewBox="0 0 10 10" id="icon-maximize"><rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1"/></svg>
+                <svg viewBox="0 0 10 10" id="icon-restore" hidden><path d="M2.5 2.5V0.5h7v7h-2M0.5 2.5h7v7h-7z" fill="none" stroke="currentColor" stroke-width="1"/></svg>
+            </button>
+            <button class="win-btn win-close" id="btn-close" title="Close" aria-label="Close">
+                <svg viewBox="0 0 10 10"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1"/></svg>
             </button>
         </div>
+    </header>
+
+    <div class="update-bar" id="update-bar" hidden>
+        <span id="update-text">A new version is available.</span>
+        <button class="btn btn-small btn-success" id="update-download">Download</button>
+        <button class="icon-btn" id="update-dismiss" aria-label="Dismiss">&times;</button>
     </div>
 
-    <!-- Content -->
-    <div class="content-area">
-        <div class="main-view">
-            <div class="disconnect-screen" id="disconnect-screen">
-                <div class="disconnect-logo">HN SECURE ENCLAVE</div>
-                <div class="disconnect-box">
-                    <svg class="disconnect-icon" viewBox="0 0 64 64" fill="none">
-                        <rect x="8" y="20" width="48" height="32" rx="4" stroke="#3b82f6" stroke-width="2"/>
-                        <path d="M32 28v12M26 34h12" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"/>
-                        <circle cx="32" cy="14" r="6" stroke="#c42b1c" stroke-width="2"/>
-                        <line x1="28" y1="10" x2="36" y2="18" stroke="#c42b1c" stroke-width="2" stroke-linecap="round"/>
-                    </svg>
-                    <div class="disconnect-title">Unable to Connect</div>
-                    <div class="disconnect-text">
-                        Cannot reach the Horizon Network server.<br>
-                        Check your connection and try again.
-                    </div>
-                    <div class="disconnect-ip" id="disconnect-ip"></div>
-                    <div class="disconnect-spinner"></div>
-                    <div class="disconnect-status">
-                        <span class="disconnect-status-dot"></span>
-                        <span>Retrying automatically...</span>
-                    </div>
-                </div>
-            </div>
-
-            <div id="terminal-container"></div>
+    <nav class="tabbar">
+        <div class="tab">
+            <span class="status-dot" id="tab-dot"></span>
+            <span class="tab-label" id="tab-label">Starting…</span>
         </div>
+        <button class="settings-btn" id="settings-open">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            <span>Settings</span>
+        </button>
+    </nav>
 
-        <!-- Settings sidebar -->
-        <div class="settings-panel" id="settings-panel">
-            <div class="settings-inner">
-                <div class="settings-header">Settings</div>
+    <main class="stage">
+        <div class="terminal" id="terminal"></div>
 
-                <div class="settings-section">
-                    <div class="settings-label">Status</div>
-                    <div class="settings-status-row">
-                        <span class="settings-dot connecting" id="settings-dot"></span>
-                        <span class="settings-status-text" id="settings-status-text">Connecting...</span>
+        <div class="overlay" id="overlay">
+            <!-- Connecting -->
+            <section class="card" id="screen-connecting" hidden>
+                <div class="spinner"></div>
+                <h2>Connecting…</h2>
+                <p class="target" data-target></p>
+                <div class="actions">
+                    <button class="btn btn-ghost" data-action="cancel">Cancel</button>
+                </div>
+            </section>
+
+            <!-- Password -->
+            <section class="card" id="screen-password" hidden>
+                <div class="card-icon icon-accent">
+                    <svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+                </div>
+                <h2>Enter password</h2>
+                <p class="target" data-target></p>
+                <form id="password-form" autocomplete="off">
+                    <input type="password" id="password-input" class="input" placeholder="Password" spellcheck="false">
+                    <p class="form-error" id="password-error" hidden></p>
+                    <div class="actions">
+                        <button type="button" class="btn btn-ghost" data-action="cancel">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Log in</button>
                     </div>
-                </div>
+                </form>
+            </section>
 
-                <div class="settings-section">
-                    <div class="settings-label">VPS IP Address</div>
-                    <div class="settings-input-row">
-                        <input type="text" class="settings-input" id="settings-ip" spellcheck="false" placeholder="e.g. 217.154.34.205">
-                        <button class="settings-save-btn" id="settings-save">Save</button>
-                    </div>
-                    <div class="settings-saved" id="settings-saved">Saved — reconnecting...</div>
-                    <div class="settings-hint">IP address of the VPS to connect to via SSH.</div>
+            <!-- Message (error / disconnected / idle) -->
+            <section class="card" id="screen-message" hidden>
+                <div class="card-icon" id="message-icon">
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5v.01"/></svg>
                 </div>
+                <h2 id="message-title"></h2>
+                <p class="message" id="message-text"></p>
+                <p class="target" data-target></p>
+                <div class="actions">
+                    <button class="btn btn-ghost" data-action="settings">Settings</button>
+                    <button class="btn btn-primary" id="message-primary" data-action="connect">Connect</button>
+                </div>
+            </section>
+        </div>
+    </main>
 
-                <div class="settings-section">
-                    <div class="settings-label">SSH User</div>
-                    <div class="settings-value">root</div>
-                </div>
-
-                <div class="settings-section">
-                    <div class="settings-label">App Version</div>
-                    <div class="settings-value" id="settings-version">—</div>
-                </div>
+    <!-- Settings dialog -->
+    <div class="modal-backdrop" id="settings-modal" hidden>
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+            <div class="modal-header">
+                <h2 id="settings-title">Settings</h2>
+                <button class="icon-btn" id="settings-close" aria-label="Close settings">&times;</button>
             </div>
+            <form id="settings-form" autocomplete="off">
+                <div class="modal-body">
+                    <div class="field">
+                        <label for="set-host">Server IP address</label>
+                        <input class="input mono" id="set-host" spellcheck="false" placeholder="217.154.34.205">
+                    </div>
+                    <div class="field-row">
+                        <div class="field">
+                            <label for="set-username">Username</label>
+                            <input class="input mono" id="set-username" spellcheck="false" placeholder="root">
+                        </div>
+                        <div class="field field-port">
+                            <label for="set-port">Port</label>
+                            <input class="input mono" id="set-port" inputmode="numeric" placeholder="22">
+                        </div>
+                    </div>
+                    <p class="form-error" id="settings-error" hidden></p>
+                    <p class="hint" id="settings-hint"></p>
+
+                    <div class="divider"></div>
+
+                    <div class="setting-line">
+                        <div>
+                            <div class="setting-name">Saved host key</div>
+                            <div class="setting-desc">Forget it if the server was reinstalled.</div>
+                        </div>
+                        <button type="button" class="btn btn-small btn-ghost" id="forget-host-key">Forget</button>
+                    </div>
+                    <div class="setting-line">
+                        <div>
+                            <div class="setting-name">Version</div>
+                            <div class="setting-desc mono" id="settings-version"></div>
+                        </div>
+                        <button type="button" class="btn btn-small btn-ghost" id="check-updates">Check for updates</button>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-ghost" id="settings-cancel">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="settings-save">Save</button>
+                </div>
+            </form>
         </div>
     </div>
 
-    <!-- Reconnect bar -->
-    <div class="reconnect-bar" id="reconnect-bar">
-        <span>Connection lost</span>
-        <button class="reconnect-btn" onclick="hn.reconnect()">Reconnect</button>
-    </div>
-
-    <script>
-        const { Terminal } = require("@xterm/xterm");
-        const { FitAddon } = require("@xterm/addon-fit");
-        const { WebLinksAddon } = require("@xterm/addon-web-links");
-
-        const term = new Terminal({
-            theme: {
-                background: "#0c0c0c",
-                foreground: "#cccccc",
-                cursor: "#cccccc",
-                cursorAccent: "#0c0c0c",
-                selectionBackground: "#264f78",
-                selectionForeground: "#ffffff",
-                black: "#0c0c0c",
-                red: "#c50f1f",
-                green: "#13a10e",
-                yellow: "#c19c00",
-                blue: "#0037da",
-                magenta: "#881798",
-                cyan: "#3a96dd",
-                white: "#cccccc",
-                brightBlack: "#767676",
-                brightRed: "#e74856",
-                brightGreen: "#16c60c",
-                brightYellow: "#f9f1a5",
-                brightBlue: "#3b78ff",
-                brightMagenta: "#b4009e",
-                brightCyan: "#61d6d6",
-                brightWhite: "#f2f2f2",
-            },
-            fontFamily: "'Cascadia Code', 'Cascadia Mono', 'Consolas', monospace",
-            fontSize: 14,
-            lineHeight: 1.2,
-            cursorBlink: true,
-            cursorStyle: "bar",
-            scrollback: 10000,
-            allowProposedApi: true,
-        });
-
-        const fitAddon = new FitAddon();
-        term.loadAddon(fitAddon);
-        term.loadAddon(new WebLinksAddon());
-
-        const $ = (id) => document.getElementById(id);
-
-        const termContainer = $("terminal-container");
-        const disconnectScreen = $("disconnect-screen");
-        const disconnectIp = $("disconnect-ip");
-        const reconnectBar = $("reconnect-bar");
-        const tabDot = $("tab-dot");
-        const tabLabel = $("tab-label");
-        const settingsPanel = $("settings-panel");
-        const gearBtn = $("gear-btn");
-        const settingsIp = $("settings-ip");
-        const settingsSave = $("settings-save");
-        const settingsSaved = $("settings-saved");
-        const settingsDot = $("settings-dot");
-        const settingsStatusText = $("settings-status-text");
-
-        term.open(termContainer);
-        term.onData((data) => hn.sendInput(data));
-
-        function fitTerminal() {
-            if (termContainer.style.display !== "none") {
-                fitAddon.fit();
-                hn.resize(term.cols, term.rows);
-            }
-        }
-
-        window.addEventListener("resize", fitTerminal);
-
-        // Settings toggle
-        gearBtn.addEventListener("click", () => {
-            const open = settingsPanel.classList.toggle("visible");
-            gearBtn.classList.toggle("active", open);
-            setTimeout(fitTerminal, 250);
-        });
-
-        // Save IP
-        settingsSave.addEventListener("click", () => {
-            const ip = settingsIp.value.trim();
-            if (!ip) return;
-            hn.setVpsIp(ip);
-            settingsSaved.classList.add("show");
-            setTimeout(() => settingsSaved.classList.remove("show"), 2500);
-        });
-
-        settingsIp.addEventListener("keydown", (e) => {
-            if (e.key === "Enter") settingsSave.click();
-        });
-
-        // Load initial IP
-        hn.getVpsIp().then((ip) => {
-            settingsIp.value = ip;
-            disconnectIp.textContent = ip;
-        });
-
-        // IPC handlers
-        hn.onTerminalData((data) => term.write(data));
-
-        hn.onAppVersion((version) => {
-            $("title-version").textContent = "v" + version;
-            $("settings-version").textContent = "v" + version;
-        });
-
-        hn.onVpsIp((ip) => {
-            settingsIp.value = ip;
-            disconnectIp.textContent = ip;
-        });
-
-        hn.onUpdateAvailable((version) => {
-            $("update-text").textContent = "Update available: v" + version;
-            $("update-bar").classList.add("visible");
-        });
-
-        $("update-download-btn").addEventListener("click", () => hn.checkUpdates());
-        $("update-dismiss-btn").addEventListener("click", () => $("update-bar").classList.remove("visible"));
-
-        function setStatus(dotClass, label) {
-            tabDot.className = "tab-dot " + dotClass;
-            tabLabel.textContent = label;
-            settingsDot.className = "settings-dot " + dotClass;
-            settingsStatusText.textContent = label;
-        }
-
-        hn.onConnectionStatus((connected) => {
-            if (connected) {
-                setStatus("connecting", "Connecting...");
-            } else {
-                disconnectScreen.classList.remove("hidden");
-                termContainer.style.display = "none";
-                reconnectBar.classList.remove("visible");
-                setStatus("offline", "Unreachable");
-            }
-        });
-
-        hn.onSshConnected(() => {
-            disconnectScreen.classList.add("hidden");
-            termContainer.style.display = "block";
-            reconnectBar.classList.remove("visible");
-            setStatus("online", "Connected");
-            setTimeout(fitTerminal, 50);
-            term.focus();
-        });
-
-        hn.onSshDisconnected((code) => {
-            reconnectBar.classList.add("visible");
-            setStatus("offline", "Disconnected");
-        });
-
-        hn.onSshError((msg) => {
-            reconnectBar.classList.add("visible");
-            setStatus("offline", "Error");
-        });
-    </script>
+    <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
+    <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+    <script src="../node_modules/@xterm/addon-web-links/lib/addon-web-links.js"></script>
+    <script src="renderer.js"></script>
 </body>
 </html>

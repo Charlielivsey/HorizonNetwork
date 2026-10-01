@@ -5,7 +5,7 @@ Copyright (c) 2026 Horizon Network. All rights reserved.
 This software is proprietary to Horizon Network and is provided
 for authorised use only.
 
-By installing HN Terminal, you agree to the following terms:
+By installing HN Secure Enclave, you agree to the following terms:
 
 1. GRANT OF LICENSE
    Horizon Network grants you a non-exclusive, non-transferable
@@ -18,9 +18,9 @@ By installing HN Terminal, you agree to the following terms:
    consent from Horizon Network.
 
 3. CONNECTIVITY
-   HN Secure Enclave requires an active Tailscale VPN connection to
-   function. You are responsible for maintaining your own
-   Tailscale configuration and network access.
+   HN Secure Enclave requires network access to the Horizon Network
+   server. You are responsible for keeping your login credentials
+   secure.
 
 4. DISCLAIMER
    This software is provided "as is" without warranty of any kind.
