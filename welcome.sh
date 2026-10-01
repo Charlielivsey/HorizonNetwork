@@ -27,6 +27,315 @@ ha_service_names() {
     pm2 jlist 2>/dev/null | grep -o '"name":"ha-[^"]*"' | sed 's/"name":"//;s/"//'
 }
 
+show_user_menu() {
+    clear
+    echo ""
+    echo -e "${BLUE}  ╔═══════════════════════════════════════════════════╗"
+    echo -e "  ║                                                   ║"
+    echo -e "  ║            U S E R   M A N A G E M E N T          ║"
+    echo -e "  ║                                                   ║"
+    echo -e "  ╚═══════════════════════════════════════════════════╝${RESET}"
+    echo ""
+
+    local user_count
+    user_count=$(awk -F: '$3 >= 1000 && $1 != "nobody" {print $1}' /etc/passwd | wc -l)
+    echo -e "  ${GRAY}Users on this system: ${user_count}${RESET}"
+    echo ""
+    echo -e "  ${WHITE}Select an option:${RESET}"
+    echo ""
+    echo -e "  ${CYAN}[1]${RESET}  Add User"
+    echo -e "  ${CYAN}[2]${RESET}  Delete User"
+    echo -e "  ${CYAN}[3]${RESET}  Manage Sudoers"
+    echo -e "  ${CYAN}[m]${RESET}  Back to Main Menu"
+    echo ""
+}
+
+add_user() {
+    echo ""
+    echo -ne "  ${WHITE}Username: ${RESET}"
+    read -r new_user
+    if [ -z "$new_user" ]; then
+        echo -e "  ${RED}Username cannot be empty.${RESET}"
+        return
+    fi
+    if ! echo "$new_user" | grep -qP '^[a-z_][a-z0-9_-]{0,31}$'; then
+        echo -e "  ${RED}Invalid username. Use lowercase letters, numbers, hyphens and underscores.${RESET}"
+        return
+    fi
+    if id "$new_user" &>/dev/null; then
+        echo -e "  ${RED}User '${new_user}' already exists.${RESET}"
+        return
+    fi
+
+    echo -ne "  ${WHITE}Display Name: ${RESET}"
+    read -r display_name
+    if [ -z "$display_name" ]; then
+        display_name="$new_user"
+    fi
+
+    echo -ne "  ${WHITE}Password: ${RESET}"
+    read -rs new_pass
+    echo ""
+    if [ -z "$new_pass" ]; then
+        echo -e "  ${RED}Password cannot be empty.${RESET}"
+        return
+    fi
+    echo -ne "  ${WHITE}Confirm Password: ${RESET}"
+    read -rs confirm_pass
+    echo ""
+    if [ "$new_pass" != "$confirm_pass" ]; then
+        echo -e "  ${RED}Passwords do not match.${RESET}"
+        return
+    fi
+
+    echo ""
+    echo -e "  ${CYAN}Creating user '${new_user}'...${RESET}"
+    if useradd -m -c "$display_name" -s /bin/bash "$new_user" 2>/dev/null; then
+        echo "$new_user:$new_pass" | chpasswd 2>/dev/null
+        echo -e "  ${GREEN}[✓]${RESET} User '${new_user}' created successfully"
+        echo -e "  ${GRAY}    Display Name: ${display_name}${RESET}"
+        echo -e "  ${GRAY}    Home:         /home/${new_user}${RESET}"
+    else
+        echo -e "  ${RED}[✗] Failed to create user. Are you running as root?${RESET}"
+    fi
+    echo ""
+}
+
+delete_user() {
+    echo ""
+    echo -e "  ${BLUE}── System Users ──${RESET}"
+    echo ""
+    awk -F: '$3 >= 1000 && $1 != "nobody" {printf "  %-20s %s (UID %s)\n", $1, $5, $3}' /etc/passwd
+    echo ""
+    echo -ne "  ${WHITE}Username to delete: ${RESET}"
+    read -r del_user
+    if [ -z "$del_user" ]; then
+        echo -e "  ${GRAY}Cancelled.${RESET}"
+        return
+    fi
+    if ! id "$del_user" &>/dev/null; then
+        echo -e "  ${RED}User '${del_user}' does not exist.${RESET}"
+        return
+    fi
+    if [ "$del_user" = "root" ]; then
+        echo -e "  ${RED}Cannot delete the root user.${RESET}"
+        return
+    fi
+
+    echo -ne "  ${YELLOW}Delete home directory too? [y/N]: ${RESET}"
+    read -r del_home
+    echo ""
+    echo -ne "  ${RED}Are you sure you want to delete '${del_user}'? [y/N]: ${RESET}"
+    read -r confirm
+    if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+        echo -e "  ${GRAY}Cancelled.${RESET}"
+        return
+    fi
+
+    echo ""
+    if [ "$del_home" = "y" ] || [ "$del_home" = "Y" ]; then
+        userdel -r "$del_user" 2>/dev/null
+    else
+        userdel "$del_user" 2>/dev/null
+    fi
+
+    if ! id "$del_user" &>/dev/null; then
+        echo -e "  ${GREEN}[✓]${RESET} User '${del_user}' deleted"
+    else
+        echo -e "  ${RED}[✗] Failed to delete user. Are you running as root?${RESET}"
+    fi
+    echo ""
+}
+
+show_sudoers_menu() {
+    echo ""
+    echo -e "  ${BLUE}── Current Sudoers ──${RESET}"
+    echo ""
+    local found=0
+    while IFS= read -r line; do
+        if echo "$line" | grep -qP '^\s*[^#%].*\bALL\b'; then
+            local sudoer
+            sudoer=$(echo "$line" | awk '{print $1}')
+            if id "$sudoer" &>/dev/null; then
+                echo -e "  ${GREEN}●${RESET}  ${sudoer}  ${GRAY}(user)${RESET}"
+                found=1
+            fi
+        fi
+        if echo "$line" | grep -qP '^\s*%'; then
+            local grp
+            grp=$(echo "$line" | awk '{print $1}' | sed 's/^%//')
+            echo -e "  ${CYAN}●${RESET}  %${grp}  ${GRAY}(group)${RESET}"
+            found=1
+        fi
+    done < /etc/sudoers
+
+    if [ -d /etc/sudoers.d ]; then
+        for f in /etc/sudoers.d/*; do
+            [ -f "$f" ] || continue
+            while IFS= read -r line; do
+                if echo "$line" | grep -qP '^\s*[^#%].*\bALL\b'; then
+                    local sudoer
+                    sudoer=$(echo "$line" | awk '{print $1}')
+                    if id "$sudoer" &>/dev/null; then
+                        echo -e "  ${GREEN}●${RESET}  ${sudoer}  ${GRAY}(user — $(basename "$f"))${RESET}"
+                        found=1
+                    fi
+                fi
+            done < "$f"
+        done
+    fi
+
+    if [ "$found" = 0 ]; then
+        echo -e "  ${GRAY}No sudoers entries found.${RESET}"
+    fi
+
+    # Also show members of the sudo group
+    local sudo_members
+    sudo_members=$(getent group sudo 2>/dev/null | cut -d: -f4)
+    if [ -n "$sudo_members" ]; then
+        echo ""
+        echo -e "  ${GRAY}Members of 'sudo' group: ${sudo_members}${RESET}"
+    fi
+
+    echo ""
+    echo -e "  ${WHITE}Actions:${RESET}"
+    echo ""
+    echo -e "  ${CYAN}[1]${RESET}  Add user to sudoers"
+    echo -e "  ${CYAN}[2]${RESET}  Remove user from sudoers"
+    echo -e "  ${CYAN}[m]${RESET}  Back"
+    echo ""
+    while true; do
+        echo -ne "  ${WHITE}Sudoers ➤ ${RESET}"
+        read -r sudo_choice
+        case $sudo_choice in
+            1)
+                echo -ne "  ${WHITE}Username to grant sudo: ${RESET}"
+                read -r sudo_user
+                if [ -z "$sudo_user" ]; then
+                    echo -e "  ${GRAY}Cancelled.${RESET}"
+                elif ! id "$sudo_user" &>/dev/null; then
+                    echo -e "  ${RED}User '${sudo_user}' does not exist.${RESET}"
+                else
+                    usermod -aG sudo "$sudo_user" 2>/dev/null
+                    if groups "$sudo_user" 2>/dev/null | grep -q '\bsudo\b'; then
+                        echo -e "  ${GREEN}[✓]${RESET} '${sudo_user}' added to sudoers"
+                    else
+                        echo -e "  ${RED}[✗] Failed. Are you running as root?${RESET}"
+                    fi
+                fi
+                echo ""
+                ;;
+            2)
+                echo -ne "  ${WHITE}Username to remove from sudo: ${RESET}"
+                read -r unsudo_user
+                if [ -z "$unsudo_user" ]; then
+                    echo -e "  ${GRAY}Cancelled.${RESET}"
+                elif [ "$unsudo_user" = "root" ]; then
+                    echo -e "  ${RED}Cannot remove root from sudoers.${RESET}"
+                elif ! id "$unsudo_user" &>/dev/null; then
+                    echo -e "  ${RED}User '${unsudo_user}' does not exist.${RESET}"
+                else
+                    gpasswd -d "$unsudo_user" sudo 2>/dev/null
+                    # Also remove from sudoers.d if present
+                    rm -f "/etc/sudoers.d/$unsudo_user" 2>/dev/null
+                    if ! groups "$unsudo_user" 2>/dev/null | grep -q '\bsudo\b'; then
+                        echo -e "  ${GREEN}[✓]${RESET} '${unsudo_user}' removed from sudoers"
+                    else
+                        echo -e "  ${RED}[✗] Failed. Are you running as root?${RESET}"
+                    fi
+                fi
+                echo ""
+                ;;
+            m)
+                break
+                ;;
+            *)
+                echo -e "  ${GRAY}Invalid option.${RESET}"
+                ;;
+        esac
+    done
+}
+
+user_submenu() {
+    show_user_menu
+    while true; do
+        echo -ne "  ${WHITE}Users ➤ ${RESET}"
+        read -r user_choice
+        case $user_choice in
+            1)
+                add_user
+                ;;
+            2)
+                delete_user
+                ;;
+            3)
+                show_sudoers_menu
+                show_user_menu
+                ;;
+            m)
+                show_menu
+                break
+                ;;
+            *)
+                echo -e "  ${GRAY}Invalid option. Try again.${RESET}"
+                ;;
+        esac
+    done
+}
+
+logout_all_sessions() {
+    echo ""
+    local my_tty
+    my_tty=$(tty 2>/dev/null | sed 's|/dev/||')
+    local sessions
+    sessions=$(who 2>/dev/null | awk '{print $1, $2}')
+    local count
+    count=$(echo "$sessions" | grep -c . 2>/dev/null || echo 0)
+
+    echo -e "  ${BLUE}── Active SSH Sessions ──${RESET}"
+    echo ""
+    if [ "$count" -le 1 ]; then
+        echo -e "  ${GRAY}No other sessions are active.${RESET}"
+        echo ""
+        return
+    fi
+
+    who 2>/dev/null | while IFS= read -r line; do
+        local tty
+        tty=$(echo "$line" | awk '{print $2}')
+        if [ "$tty" = "$my_tty" ]; then
+            echo -e "  ${GREEN}●${RESET}  ${line}  ${GRAY}(this session)${RESET}"
+        else
+            echo -e "  ${YELLOW}●${RESET}  ${line}"
+        fi
+    done
+    echo ""
+    echo -ne "  ${RED}Log out ALL other sessions? [y/N]: ${RESET}"
+    read -r confirm
+    if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+        echo -e "  ${GRAY}Cancelled.${RESET}"
+        echo ""
+        return
+    fi
+
+    echo ""
+    who 2>/dev/null | while IFS= read -r line; do
+        local tty user pid
+        tty=$(echo "$line" | awk '{print $2}')
+        user=$(echo "$line" | awk '{print $1}')
+        if [ "$tty" != "$my_tty" ]; then
+            pid=$(ps -t "/dev/$tty" -o pid= 2>/dev/null | head -1 | tr -d ' ')
+            if [ -n "$pid" ]; then
+                kill -HUP "$pid" 2>/dev/null
+                echo -e "  ${GREEN}[✓]${RESET} Logged out ${user} on ${tty}"
+            fi
+        fi
+    done
+    echo ""
+    echo -e "  ${GREEN}Done.${RESET} Only this session remains."
+    echo ""
+}
+
 show_menu() {
     clear
     local counts
@@ -50,6 +359,8 @@ show_menu() {
     echo -e "  ${CYAN}[5]${RESET}  Manage Services (systemd)"
     echo -e "  ${CYAN}[6]${RESET}  View Logs"
     echo -e "  ${CYAN}[7]${RESET}  Network Info"
+    echo -e "  ${CYAN}[8]${RESET}  User Management"
+    echo -e "  ${CYAN}[9]${RESET}  Log Out All Sessions"
     echo -e "  ${CYAN}[0]${RESET}  Exit"
     echo ""
 }
@@ -298,6 +609,12 @@ while true; do
             echo -e "  ${GRAY}Tailscale:${RESET} 100.95.232.62"
             ip -4 addr show 2>/dev/null | awk '/inet /{printf "  %-12s %s\n", $NF, $2}'
             echo ""
+            ;;
+        8)
+            user_submenu
+            ;;
+        9)
+            logout_all_sessions
             ;;
         0)
             echo -e "\n  ${GRAY}Disconnecting...${RESET}\n"
