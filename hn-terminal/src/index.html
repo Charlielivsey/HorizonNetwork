@@ -32,6 +32,30 @@
         </div>
     </header>
 
+    <!-- Login Screen -->
+    <div class="login-overlay" id="login-overlay">
+        <div class="login-card">
+            <svg class="login-logo" viewBox="0 0 16 16" aria-hidden="true">
+                <rect x="1" y="1" width="14" height="14" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"/>
+                <text x="8" y="11.2" text-anchor="middle" fill="currentColor" font-size="7.5" font-weight="700" font-family="Segoe UI, sans-serif">HN</text>
+            </svg>
+            <h2>HN Secure Enclave</h2>
+            <p class="login-subtitle">Sign in to continue</p>
+            <form id="login-form" autocomplete="off">
+                <div class="field">
+                    <label for="login-username">Username</label>
+                    <input class="input" id="login-username" spellcheck="false" placeholder="admin">
+                </div>
+                <div class="field">
+                    <label for="login-password">Password</label>
+                    <input class="input" id="login-password" type="password" placeholder="Password">
+                </div>
+                <p class="form-error" id="login-error" hidden></p>
+                <button type="submit" class="btn btn-primary login-btn">Sign in</button>
+            </form>
+        </div>
+    </div>
+
     <div class="app-body">
         <!-- Sidebar -->
         <nav class="sidebar">
@@ -57,6 +81,10 @@
                 <button class="sidebar-item" data-view="settings" title="Settings">
                     <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                     <span>Settings</span>
+                </button>
+                <button class="sidebar-item" id="sidebar-logout" title="Sign out" hidden>
+                    <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                    <span>Logout</span>
                 </button>
             </div>
         </nav>
@@ -290,6 +318,29 @@
                         </div>
                     </div>
 
+                    <div class="settings-section" id="admin-section" hidden>
+                        <h3>Administration</h3>
+                        <div class="setting-line">
+                            <div>
+                                <div class="setting-name">User Management</div>
+                                <div class="setting-desc">Add and manage Secure Enclave users.</div>
+                            </div>
+                            <button type="button" class="btn btn-small btn-primary" id="admin-settings-btn">Manage Users</button>
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <h3>Theme Sync</h3>
+                        <div class="setting-line">
+                            <div>
+                                <div class="setting-name">Push theme to VPS</div>
+                                <div class="setting-desc">Update the VPS welcome screen colours to match your theme.</div>
+                            </div>
+                            <button type="button" class="btn btn-small btn-ghost" id="sync-theme-btn">Sync</button>
+                        </div>
+                        <p class="sync-status" id="sync-theme-status" hidden></p>
+                    </div>
+
                     <div class="settings-section">
                         <h3>About</h3>
                         <div class="setting-line">
@@ -298,6 +349,43 @@
                                 <div class="setting-desc mono" id="settings-version"></div>
                             </div>
                         </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ADMIN VIEW -->
+            <section class="view" id="view-admin" hidden>
+                <div class="settings-page">
+                    <div class="admin-header">
+                        <button class="btn btn-small btn-ghost" id="admin-back">&larr; Back to Settings</button>
+                        <h2 class="settings-page-title">User Management</h2>
+                    </div>
+                    <div class="settings-section">
+                        <h3>Add User</h3>
+                        <form id="admin-add-form" autocomplete="off">
+                            <div class="field-row">
+                                <div class="field">
+                                    <label for="admin-new-username">Username</label>
+                                    <input class="input" id="admin-new-username" spellcheck="false" placeholder="username">
+                                </div>
+                                <div class="field">
+                                    <label for="admin-new-password">Password</label>
+                                    <input class="input" id="admin-new-password" type="password" placeholder="password">
+                                </div>
+                            </div>
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="admin-new-isadmin">
+                                <span>Administrator</span>
+                            </label>
+                            <p class="form-error" id="admin-add-error" hidden></p>
+                            <div class="settings-actions">
+                                <button type="submit" class="btn btn-primary">Add User</button>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="settings-section">
+                        <h3>Users</h3>
+                        <div class="admin-user-list" id="admin-user-list"></div>
                     </div>
                 </div>
             </section>

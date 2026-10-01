@@ -28,6 +28,13 @@ contextBridge.exposeInMainWorld("hn", {
   sftpChmod: (tabId, path, mode) => ipcRenderer.invoke("sftp-chmod", { tabId, path, mode }),
   getFilePath: (file) => webUtils.getPathForFile(file),
 
+  login: (username, password) => ipcRenderer.invoke("login", { username, password }),
+  getUsers: () => ipcRenderer.invoke("get-users"),
+  addUser: (username, password, isAdmin) => ipcRenderer.invoke("add-user", { username, password, isAdmin }),
+  deleteUser: (username) => ipcRenderer.invoke("delete-user", { username }),
+  toggleAdmin: (username) => ipcRenderer.invoke("toggle-admin", { username }),
+  syncTheme: (theme) => ipcRenderer.invoke("sync-theme", theme),
+
   readClipboard: () => ipcRenderer.invoke("clipboard-read"),
   writeClipboard: (text) => ipcRenderer.send("clipboard-write", text),
   openExternal: (url) => ipcRenderer.send("open-external", url),

@@ -71,6 +71,78 @@ function hostKeyId(host, port) {
   return `${host}:${port}`;
 }
 
+// ── User Management ──────────────────────────────────────
+
+function hashPassword(password, salt) {
+  if (!salt) salt = crypto.randomBytes(16).toString("hex");
+  const hash = crypto.createHash("sha256").update(salt + password).digest("hex");
+  return { hash, salt };
+}
+
+function loadUsers() {
+  const cfg = loadConfig();
+  return cfg.users || [];
+}
+
+function saveUsers(users) {
+  const cfg = loadConfig();
+  cfg.users = users;
+  saveConfig(cfg);
+}
+
+function seedDefaultAdmin() {
+  const users = loadUsers();
+  if (users.length === 0) {
+    const { hash, salt } = hashPassword("admin");
+    users.push({
+      username: "admin",
+      passwordHash: hash,
+      salt,
+      isAdmin: true,
+      createdAt: Date.now(),
+    });
+    saveUsers(users);
+  }
+}
+
+function verifyLogin(username, password) {
+  const users = loadUsers();
+  const user = users.find((u) => u.username === username);
+  if (!user) return { ok: false, error: "Invalid username or password." };
+  const { hash } = hashPassword(password, user.salt);
+  if (hash !== user.passwordHash) return { ok: false, error: "Invalid username or password." };
+  return { ok: true, user: { username: user.username, isAdmin: user.isAdmin } };
+}
+
+function addUserAccount(username, password, isAdmin) {
+  if (!username || !password) return { ok: false, error: "Username and password are required." };
+  if (!/^[A-Za-z_][A-Za-z0-9_.\-]{0,31}$/.test(username)) return { ok: false, error: "Invalid username format." };
+  const users = loadUsers();
+  if (users.find((u) => u.username === username)) return { ok: false, error: "User already exists." };
+  const { hash, salt } = hashPassword(password);
+  users.push({ username, passwordHash: hash, salt, isAdmin: !!isAdmin, createdAt: Date.now() });
+  saveUsers(users);
+  return { ok: true };
+}
+
+function deleteUserAccount(username) {
+  const users = loadUsers();
+  const idx = users.findIndex((u) => u.username === username);
+  if (idx === -1) return { ok: false, error: "User not found." };
+  users.splice(idx, 1);
+  saveUsers(users);
+  return { ok: true };
+}
+
+function toggleUserAdmin(username) {
+  const users = loadUsers();
+  const user = users.find((u) => u.username === username);
+  if (!user) return { ok: false, error: "User not found." };
+  user.isAdmin = !user.isAdmin;
+  saveUsers(users);
+  return { ok: true, isAdmin: user.isAdmin };
+}
+
 // ── Windows ───────────────────────────────────────────────
 
 function send(channel, payload) {
@@ -562,6 +634,43 @@ function sftpChmod(tabId, remotePath, mode) {
   });
 }
 
+// ── Theme sync ───────────────────────────────────────────
+
+function syncThemeToVPS(theme) {
+  let conn = null;
+  for (const s of sessions.values()) {
+    if (s.conn && s.stream) { conn = s.conn; break; }
+  }
+  if (!conn) return Promise.reject(new Error("Not connected to the VPS."));
+
+  const colorMap = {
+    dark:     { blue: "\\033[1;34m", cyan: "\\033[0;36m" },
+    pink:     { blue: "\\033[38;5;198m", cyan: "\\033[38;5;205m" },
+    lavender: { blue: "\\033[38;5;141m", cyan: "\\033[38;5;183m" },
+  };
+  const colors = colorMap[theme] || colorMap.dark;
+  const welcomePath = "/root/welcome.sh";
+
+  return new Promise((resolve, reject) => {
+    conn.sftp((err, sftp) => {
+      if (err) return reject(err);
+      const chunks = [];
+      const rs = sftp.createReadStream(welcomePath);
+      rs.on("data", (chunk) => chunks.push(chunk));
+      rs.on("error", (e) => reject(new Error("Could not read welcome.sh: " + e.message)));
+      rs.on("end", () => {
+        let content = Buffer.concat(chunks).toString("utf-8");
+        content = content.replace(/^BLUE=.*$/m, `BLUE='${colors.blue}'`);
+        content = content.replace(/^CYAN=.*$/m, `CYAN='${colors.cyan}'`);
+        const ws = sftp.createWriteStream(welcomePath);
+        ws.on("close", () => resolve({ ok: true }));
+        ws.on("error", (e) => reject(new Error("Could not write welcome.sh: " + e.message)));
+        ws.end(content);
+      });
+    });
+  });
+}
+
 // ── IPC ───────────────────────────────────────────────────
 
 ipcMain.handle("get-state", () => ({ version: APP_VERSION, settings: getSettings() }));
@@ -629,6 +738,13 @@ ipcMain.handle("sftp-rename", (_event, { tabId, oldPath, newPath }) => sftpRenam
 ipcMain.handle("sftp-mkdir", (_event, { tabId, path: dirPath }) => sftpMkdir(tabId, dirPath));
 ipcMain.handle("sftp-chmod", (_event, { tabId, path: remotePath, mode }) => sftpChmod(tabId, remotePath, mode));
 
+ipcMain.handle("login", (_event, { username, password }) => verifyLogin(username, password));
+ipcMain.handle("get-users", () => loadUsers().map((u) => ({ username: u.username, isAdmin: u.isAdmin, createdAt: u.createdAt })));
+ipcMain.handle("add-user", (_event, { username, password, isAdmin }) => addUserAccount(username, password, isAdmin));
+ipcMain.handle("delete-user", (_event, { username }) => deleteUserAccount(username));
+ipcMain.handle("toggle-admin", (_event, { username }) => toggleUserAdmin(username));
+ipcMain.handle("sync-theme", (_event, theme) => syncThemeToVPS(theme));
+
 ipcMain.handle("clipboard-read", () => clipboard.readText());
 ipcMain.on("clipboard-write", (_event, text) => {
   if (typeof text === "string") clipboard.writeText(text);
@@ -657,6 +773,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on("second-instance", showMainWindow);
 
   app.whenReady().then(() => {
+    seedDefaultAdmin();
     createSplash();
     createWindow();
   });

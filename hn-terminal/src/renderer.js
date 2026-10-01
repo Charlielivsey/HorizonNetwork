@@ -2,6 +2,7 @@
     const $ = (id) => document.getElementById(id);
 
     let settings = { host: "", port: 22, username: "root", theme: "dark" };
+    let currentUser = null;
     let currentView = "home";
     let tabCounter = 0;
     let activeTabId = null;
@@ -70,6 +71,41 @@
         settings.theme = theme;
         applyTheme(theme);
         hn.saveTheme(theme);
+        hn.syncTheme(theme).catch(() => {});
+    });
+
+    // ── Login ──────────────────────────────────────
+
+    $("login-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const username = $("login-username").value.trim();
+        const password = $("login-password").value;
+        if (!username || !password) return;
+
+        const result = await hn.login(username, password);
+        if (!result.ok) {
+            $("login-error").textContent = result.error;
+            $("login-error").hidden = false;
+            return;
+        }
+
+        currentUser = result.user;
+        $("login-overlay").hidden = true;
+        $("login-error").hidden = true;
+        $("sidebar-logout").hidden = false;
+        if (currentUser.isAdmin) $("admin-section").hidden = false;
+    });
+
+    $("sidebar-logout").addEventListener("click", () => {
+        currentUser = null;
+        $("login-overlay").hidden = false;
+        $("sidebar-logout").hidden = true;
+        $("admin-section").hidden = true;
+        $("login-username").value = "";
+        $("login-password").value = "";
+        $("login-error").hidden = true;
+        switchView("home");
+        setTimeout(() => $("login-username").focus(), 100);
     });
 
     // ── Sidebar navigation ──────────────────────────
@@ -99,6 +135,9 @@
         }
         if (view === "files") {
             refreshFilesIfNeeded();
+        }
+        if (view === "admin") {
+            loadUserList();
         }
     }
 
@@ -515,6 +554,95 @@
         await hn.forgetHostKey();
         $("forget-host-key").textContent = "Forgotten";
         $("forget-host-key").disabled = true;
+    });
+
+    // ── Admin page ─────────────────────────────────
+
+    $("admin-settings-btn").addEventListener("click", () => switchView("admin"));
+    $("admin-back").addEventListener("click", () => switchView("settings"));
+
+    $("admin-add-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const username = $("admin-new-username").value.trim();
+        const password = $("admin-new-password").value;
+        const isAdmin = $("admin-new-isadmin").checked;
+
+        if (!username || !password) {
+            $("admin-add-error").textContent = "Username and password are required.";
+            $("admin-add-error").hidden = false;
+            return;
+        }
+
+        const result = await hn.addUser(username, password, isAdmin);
+        if (!result.ok) {
+            $("admin-add-error").textContent = result.error;
+            $("admin-add-error").hidden = false;
+            return;
+        }
+
+        $("admin-add-error").hidden = true;
+        $("admin-new-username").value = "";
+        $("admin-new-password").value = "";
+        $("admin-new-isadmin").checked = false;
+        loadUserList();
+    });
+
+    async function loadUserList() {
+        const users = await hn.getUsers();
+        const list = $("admin-user-list");
+        list.innerHTML = "";
+
+        for (const user of users) {
+            const row = document.createElement("div");
+            row.className = "admin-user-row";
+            row.innerHTML = `
+                <div class="admin-user-info">
+                    <span class="admin-user-name">${escapeHtml(user.username)}</span>
+                    ${user.isAdmin ? '<span class="admin-user-badge">Admin</span>' : ""}
+                </div>
+                <div class="admin-user-actions">
+                    <button class="btn btn-small btn-ghost admin-toggle-btn">${user.isAdmin ? "Remove Admin" : "Make Admin"}</button>
+                    <button class="btn btn-small btn-ghost admin-delete-btn">Delete</button>
+                </div>
+            `;
+
+            row.querySelector(".admin-toggle-btn").addEventListener("click", async () => {
+                await hn.toggleAdmin(user.username);
+                loadUserList();
+            });
+
+            row.querySelector(".admin-delete-btn").addEventListener("click", async () => {
+                if (!confirm(`Delete user "${user.username}"?`)) return;
+                const result = await hn.deleteUser(user.username);
+                if (result.ok) loadUserList();
+            });
+
+            list.appendChild(row);
+        }
+    }
+
+    // ── Theme sync ─────────────────────────────────
+
+    $("sync-theme-btn").addEventListener("click", async () => {
+        const btn = $("sync-theme-btn");
+        const status = $("sync-theme-status");
+        btn.textContent = "Syncing…";
+        btn.disabled = true;
+        status.hidden = true;
+
+        try {
+            await hn.syncTheme(settings.theme);
+            btn.textContent = "Synced!";
+            status.textContent = "Theme colours pushed to VPS.";
+            status.className = "sync-status success";
+            status.hidden = false;
+        } catch (err) {
+            status.textContent = err.message || "Sync failed. Are you connected?";
+            status.className = "sync-status error";
+            status.hidden = false;
+        }
+
+        setTimeout(() => { btn.textContent = "Sync"; btn.disabled = false; }, 1500);
     });
 
     // ── File browser ────────────────────────────────
@@ -1126,6 +1254,6 @@
         $("settings-version").textContent = "v" + initial.version;
         refreshTargets(settings);
         applyTheme(settings.theme || "dark");
-        // Start on home page, don't auto-connect
+        $("login-username").focus();
     });
 })();
