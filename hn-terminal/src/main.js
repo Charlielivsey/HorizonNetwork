@@ -1,7 +1,9 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu } = require("electron");
+const { app, BrowserWindow, ipcMain, Tray, Menu, dialog, shell } = require("electron");
 const path = require("path");
+const https = require("https");
 const { exec, spawn } = require("child_process");
 const os = require("os");
+const pkg = require("../package.json");
 
 let splashWindow;
 let mainWindow;
@@ -9,9 +11,13 @@ let tray = null;
 let sshProcess = null;
 let connectCheckInterval = null;
 
+const APP_VERSION = pkg.version;
 const VPS_IP = "100.95.232.62";
 const SSH_USER = "root";
 const ICON_PATH = path.join(__dirname, "..", "assets", "icon.ico");
+const GITHUB_OWNER = "Charlielivsey";
+const GITHUB_REPO = "HorizonNetwork";
+const VERSION_FILE_PATH = "hn-terminal/package.json";
 
 function createSplash() {
   splashWindow = new BrowserWindow({
@@ -56,7 +62,9 @@ function createWindow() {
         splashWindow = null;
       }
       mainWindow.show();
+      mainWindow.webContents.send("app-version", APP_VERSION);
       startConnectionLoop();
+      checkForUpdates(false);
     }, 1800);
   });
 
@@ -74,7 +82,7 @@ function createWindow() {
 function createTrayIfNeeded() {
   if (tray) return;
   tray = new Tray(ICON_PATH);
-  tray.setToolTip("HN Secure Enclave");
+  tray.setToolTip(`HN Secure Enclave v${APP_VERSION}`);
   tray.setContextMenu(
     Menu.buildFromTemplate([
       {
@@ -93,6 +101,15 @@ function createTrayIfNeeded() {
           startConnectionLoop();
         },
       },
+      {
+        label: "Check for Updates",
+        click: () => checkForUpdates(true),
+      },
+      { type: "separator" },
+      {
+        label: `v${APP_VERSION}`,
+        enabled: false,
+      },
       { type: "separator" },
       {
         label: "Quit",
@@ -109,7 +126,7 @@ function createTrayIfNeeded() {
   });
 }
 
-function checkTailscale() {
+function checkReachable() {
   return new Promise((resolve) => {
     const cmd =
       process.platform === "win32"
@@ -122,22 +139,22 @@ function checkTailscale() {
 }
 
 async function startConnectionLoop() {
-  const connected = await checkTailscale();
+  const reachable = await checkReachable();
   if (mainWindow) {
-    mainWindow.webContents.send("vpn-status", connected);
+    mainWindow.webContents.send("connection-status", reachable);
   }
 
-  if (connected && !sshProcess) {
+  if (reachable && !sshProcess) {
     startSSH();
     return;
   }
 
-  if (!connected) {
+  if (!reachable) {
     if (connectCheckInterval) clearInterval(connectCheckInterval);
     connectCheckInterval = setInterval(async () => {
-      const status = await checkTailscale();
+      const status = await checkReachable();
       if (mainWindow) {
-        mainWindow.webContents.send("vpn-status", status);
+        mainWindow.webContents.send("connection-status", status);
       }
       if (status && !sshProcess) {
         clearInterval(connectCheckInterval);
@@ -184,9 +201,8 @@ function startSSH() {
     });
 
     proc.stderr.on("data", (data) => {
-      const text = data.toString("utf-8");
       if (mainWindow) {
-        mainWindow.webContents.send("terminal-data", text);
+        mainWindow.webContents.send("terminal-data", data.toString("utf-8"));
       }
     });
 
@@ -215,19 +231,98 @@ function startSSH() {
   }
 }
 
+function compareVersions(a, b) {
+  const pa = a.replace(/^v/, "").split(".").map(Number);
+  const pb = b.replace(/^v/, "").split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] || 0) < (pb[i] || 0)) return -1;
+    if ((pa[i] || 0) > (pb[i] || 0)) return 1;
+  }
+  return 0;
+}
+
+function checkForUpdates(manual) {
+  const url = `https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/claude/vps-welcome-screen-m373a1/${VERSION_FILE_PATH}`;
+
+  const req = https.get(url, { headers: { "User-Agent": "HN-Secure-Enclave" } }, (res) => {
+    let body = "";
+    res.on("data", (chunk) => (body += chunk));
+    res.on("end", () => {
+      try {
+        const remote = JSON.parse(body);
+        const remoteVersion = remote.version;
+
+        if (compareVersions(APP_VERSION, remoteVersion) < 0) {
+          if (mainWindow) {
+            mainWindow.webContents.send("update-available", remoteVersion);
+          }
+
+          dialog
+            .showMessageBox(mainWindow, {
+              type: "info",
+              title: "Update Available",
+              message: `A new version of HN Secure Enclave is available.\n\nCurrent: v${APP_VERSION}\nLatest: v${remoteVersion}\n\nWould you like to download the update?`,
+              buttons: ["Download Update", "Later"],
+              defaultId: 0,
+              cancelId: 1,
+              icon: ICON_PATH,
+            })
+            .then(({ response }) => {
+              if (response === 0) {
+                shell.openExternal(
+                  `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases`
+                );
+              }
+            });
+        } else if (manual) {
+          dialog.showMessageBox(mainWindow, {
+            type: "info",
+            title: "No Updates",
+            message: `You're running the latest version.\n\nv${APP_VERSION}`,
+            buttons: ["OK"],
+            icon: ICON_PATH,
+          });
+        }
+      } catch (_) {
+        if (manual) {
+          dialog.showMessageBox(mainWindow, {
+            type: "warning",
+            title: "Update Check Failed",
+            message: "Could not check for updates. Try again later.",
+            buttons: ["OK"],
+          });
+        }
+      }
+    });
+  });
+
+  req.on("error", () => {
+    if (manual) {
+      dialog.showMessageBox(mainWindow, {
+        type: "warning",
+        title: "Update Check Failed",
+        message: "Could not reach GitHub. Check your internet connection.",
+        buttons: ["OK"],
+      });
+    }
+  });
+}
+
 ipcMain.on("terminal-input", (_event, data) => {
   if (sshProcess && sshProcess.stdin.writable) {
     sshProcess.stdin.write(data);
   }
 });
 
-ipcMain.on("terminal-resize", (_event, { cols, rows }) => {
-  // resize is handled by the terminal emulator on the VPS side
-});
+ipcMain.on("terminal-resize", (_event, { cols, rows }) => {});
 
 ipcMain.on("reconnect", () => {
   killSSH();
   startConnectionLoop();
+});
+
+ipcMain.on("check-updates", () => {
+  checkForUpdates(true);
 });
 
 ipcMain.on("window-minimize", () => mainWindow?.minimize());

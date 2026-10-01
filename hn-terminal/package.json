@@ -1,10 +1,14 @@
 {
   "name": "hn-secure-enclave",
-  "version": "1.0.0",
-  "description": "HN Secure Enclave — Secure VPS access via Tailscale",
+  "version": "1.1.0",
+  "description": "HN Secure Enclave — Secure VPS access for Horizon Network",
   "author": {
     "name": "Horizon Network",
     "email": "charlie.livsey@hngroup.org.uk"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Charlielivsey/HorizonNetwork.git"
   },
   "main": "src/main.js",
   "scripts": {

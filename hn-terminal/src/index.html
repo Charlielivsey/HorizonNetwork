@@ -18,7 +18,7 @@
             flex-direction: column;
         }
 
-        /* Title bar — Windows Terminal style */
+        /* Title bar */
         .titlebar {
             display: flex;
             align-items: center;
@@ -45,6 +45,12 @@
         .titlebar-title {
             font-size: 12px;
             color: #999;
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        .titlebar-version {
+            font-size: 10px;
+            color: #555;
             font-family: 'Segoe UI', sans-serif;
         }
 
@@ -112,6 +118,47 @@
             50% { opacity: 0.3; }
         }
 
+        /* Update banner */
+        .update-bar {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            height: 32px;
+            background: #1a2a1a;
+            border-bottom: 1px solid #2a4a2a;
+            font-size: 12px;
+            color: #4ade80;
+            font-family: 'Segoe UI', sans-serif;
+            flex-shrink: 0;
+        }
+
+        .update-bar.visible { display: flex; }
+
+        .update-btn {
+            padding: 3px 12px;
+            background: #16a34a;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        .update-btn:hover { background: #15803d; }
+
+        .update-dismiss {
+            background: none;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            font-size: 14px;
+            padding: 0 4px;
+        }
+
+        .update-dismiss:hover { color: #999; }
+
         /* Terminal container */
         #terminal-container {
             flex: 1;
@@ -123,8 +170,8 @@
             height: 100%;
         }
 
-        /* VPN disconnected screen */
-        .vpn-screen {
+        /* Disconnected screen */
+        .disconnect-screen {
             flex: 1;
             display: flex;
             flex-direction: column;
@@ -134,9 +181,9 @@
             padding: 40px;
         }
 
-        .vpn-screen.hidden { display: none; }
+        .disconnect-screen.hidden { display: none; }
 
-        .vpn-logo {
+        .disconnect-logo {
             font-size: 28px;
             font-weight: 700;
             letter-spacing: 2px;
@@ -146,7 +193,7 @@
             font-family: 'Segoe UI', sans-serif;
         }
 
-        .vpn-box {
+        .disconnect-box {
             background: #1a1a2e;
             border: 1px solid #2a2a3e;
             border-radius: 12px;
@@ -155,13 +202,13 @@
             max-width: 440px;
         }
 
-        .vpn-icon {
+        .disconnect-icon {
             width: 64px;
             height: 64px;
             margin: 0 auto 20px;
         }
 
-        .vpn-title {
+        .disconnect-title {
             font-size: 18px;
             font-weight: 600;
             color: #e0e0e0;
@@ -169,14 +216,14 @@
             font-family: 'Segoe UI', sans-serif;
         }
 
-        .vpn-text {
+        .disconnect-text {
             font-size: 13px;
             color: #888;
             line-height: 1.7;
             font-family: 'Segoe UI', sans-serif;
         }
 
-        .vpn-spinner {
+        .disconnect-spinner {
             width: 32px;
             height: 32px;
             border: 3px solid #2a2a3e;
@@ -190,7 +237,7 @@
             to { transform: rotate(360deg); }
         }
 
-        .vpn-status-line {
+        .disconnect-status-line {
             display: flex;
             align-items: center;
             gap: 8px;
@@ -200,7 +247,7 @@
             font-family: 'Segoe UI', sans-serif;
         }
 
-        .vpn-status-dot {
+        .disconnect-status-dot {
             width: 6px;
             height: 6px;
             border-radius: 50%;
@@ -247,12 +294,19 @@
                 <text x="8" y="11.5" text-anchor="middle" fill="#38bdf8" font-size="8" font-weight="bold" font-family="sans-serif">HN</text>
             </svg>
             <span class="titlebar-title">HN Secure Enclave</span>
+            <span class="titlebar-version" id="title-version"></span>
         </div>
         <div class="titlebar-controls">
             <button class="titlebar-btn" onclick="hn.minimize()">&#xE921;</button>
             <button class="titlebar-btn" onclick="hn.maximize()">&#xE922;</button>
             <button class="titlebar-btn close" onclick="hn.close()">&#xE8BB;</button>
         </div>
+    </div>
+
+    <div class="update-bar" id="update-bar">
+        <span id="update-text">Update available</span>
+        <button class="update-btn" id="update-download-btn">Download</button>
+        <button class="update-dismiss" id="update-dismiss-btn">&times;</button>
     </div>
 
     <div class="tabbar">
@@ -262,24 +316,24 @@
         </div>
     </div>
 
-    <div class="vpn-screen" id="vpn-screen">
-        <div class="vpn-logo">HN SECURE ENCLAVE</div>
-        <div class="vpn-box">
-            <svg class="vpn-icon" viewBox="0 0 64 64" fill="none">
+    <div class="disconnect-screen" id="disconnect-screen">
+        <div class="disconnect-logo">HN SECURE ENCLAVE</div>
+        <div class="disconnect-box">
+            <svg class="disconnect-icon" viewBox="0 0 64 64" fill="none">
                 <rect x="8" y="20" width="48" height="32" rx="4" stroke="#3b82f6" stroke-width="2"/>
                 <path d="M32 28v12M26 34h12" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"/>
                 <circle cx="32" cy="14" r="6" stroke="#e81123" stroke-width="2"/>
                 <line x1="28" y1="10" x2="36" y2="18" stroke="#e81123" stroke-width="2" stroke-linecap="round"/>
             </svg>
-            <div class="vpn-title">VPN Not Connected</div>
-            <div class="vpn-text">
-                Connect to the Tailscale VPN to access<br>
-                the Horizon Network VPS.
+            <div class="disconnect-title">Unable to Connect</div>
+            <div class="disconnect-text">
+                Cannot reach the Horizon Network VPS.<br>
+                Check your network connection and try again.
             </div>
-            <div class="vpn-spinner"></div>
-            <div class="vpn-status-line">
-                <span class="vpn-status-dot"></span>
-                <span>Waiting for Tailscale connection...</span>
+            <div class="disconnect-spinner"></div>
+            <div class="disconnect-status-line">
+                <span class="disconnect-status-dot"></span>
+                <span>Waiting for connection...</span>
             </div>
         </div>
     </div>
@@ -335,10 +389,13 @@
         term.loadAddon(new WebLinksAddon());
 
         const termContainer = document.getElementById("terminal-container");
-        const vpnScreen = document.getElementById("vpn-screen");
+        const disconnectScreen = document.getElementById("disconnect-screen");
         const reconnectBar = document.getElementById("reconnect-bar");
         const tabDot = document.getElementById("tab-dot");
         const tabLabel = document.getElementById("tab-label");
+        const updateBar = document.getElementById("update-bar");
+        const updateText = document.getElementById("update-text");
+        const titleVersion = document.getElementById("title-version");
 
         term.open(termContainer);
 
@@ -353,21 +410,38 @@
 
         hn.onTerminalData((data) => term.write(data));
 
-        hn.onVpnStatus((connected) => {
+        hn.onAppVersion((version) => {
+            titleVersion.textContent = "v" + version;
+        });
+
+        hn.onUpdateAvailable((version) => {
+            updateText.textContent = "Update available: v" + version;
+            updateBar.classList.add("visible");
+        });
+
+        document.getElementById("update-download-btn").addEventListener("click", () => {
+            hn.checkUpdates();
+        });
+
+        document.getElementById("update-dismiss-btn").addEventListener("click", () => {
+            updateBar.classList.remove("visible");
+        });
+
+        hn.onConnectionStatus((connected) => {
             if (connected) {
                 tabDot.className = "tab-dot connecting";
                 tabLabel.textContent = "Connecting...";
             } else {
-                vpnScreen.classList.remove("hidden");
+                disconnectScreen.classList.remove("hidden");
                 termContainer.style.display = "none";
                 reconnectBar.classList.remove("visible");
                 tabDot.className = "tab-dot offline";
-                tabLabel.textContent = "VPN Disconnected";
+                tabLabel.textContent = "Disconnected";
             }
         });
 
         hn.onSshConnected(() => {
-            vpnScreen.classList.add("hidden");
+            disconnectScreen.classList.add("hidden");
             termContainer.style.display = "block";
             reconnectBar.classList.remove("visible");
             tabDot.className = "tab-dot online";
