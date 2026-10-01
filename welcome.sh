@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-if [ "$HN_IN_CONSOLE" = "1" ]; then
+if [ "$HN_IN_CONSOLE" = "1" ] && [ "$(basename -- "$0")" != "horizon" ]; then
     return 2>/dev/null || exit 0
 fi
 
