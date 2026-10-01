@@ -5,93 +5,123 @@ BLUE='\033[1;34m'
 GREEN='\033[0;32m'
 GRAY='\033[0;37m'
 RED='\033[0;31m'
+YELLOW='\033[1;33m'
 RESET='\033[0m'
 
 echo ""
-echo -e "${BLUE}── Horizon Network Welcome Screen Setup ──${RESET}"
+echo -e "${BLUE}══════════════════════════════════════════════════${RESET}"
+echo -e "${BLUE}  Horizon Network — Welcome Screen Installer${RESET}"
+echo -e "${BLUE}══════════════════════════════════════════════════${RESET}"
 echo ""
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
-WELCOME="$REPO_DIR/welcome.sh"
+SRC="$REPO_DIR/welcome.sh"
 
-if [ ! -f "$WELCOME" ]; then
+if [ ! -f "$SRC" ]; then
     echo -e "${RED}[✗] welcome.sh not found in $REPO_DIR${RESET}"
     exit 1
 fi
 
-# 1. Clean old per-user entries from root and all users
-echo -e "${GRAY}[1/5] Cleaning old per-user welcome screen entries...${RESET}"
+# ── STEP 1: Nuke everything old ──────────────────────────────────
+echo -e "${YELLOW}[1/4] Removing ALL old welcome screen traces...${RESET}"
+
+# Remove old command
+rm -f /usr/local/bin/horizon
+
+# Remove old profile.d script
+rm -f /etc/profile.d/horizon-welcome.sh
+rm -f /etc/profile.d/horizon.sh
+
+# Clean every user's shell rc files
 for home_dir in /root /home/*; do
     [ -d "$home_dir" ] || continue
     for rcfile in "$home_dir/.bashrc" "$home_dir/.profile" "$home_dir/.bash_profile" "$home_dir/.bash_login"; do
-        if [ -f "$rcfile" ]; then
-            sed -i '/welcome\.sh/d' "$rcfile"
-            sed -i '/HorizonNetwork\/welcome/d' "$rcfile"
-            sed -i '/\/usr\/local\/bin\/horizon/d' "$rcfile"
-            sed -i '/HN_IN_CONSOLE/d' "$rcfile"
-            sed -i '/Horizon Network welcome menu/d' "$rcfile"
-        fi
+        [ -f "$rcfile" ] || continue
+        sed -i '/[Hh]orizon/d' "$rcfile" 2>/dev/null || true
+        sed -i '/welcome\.sh/d' "$rcfile" 2>/dev/null || true
+        sed -i '/HN_IN_CONSOLE/d' "$rcfile" 2>/dev/null || true
     done
 done
 
-# Also remove old system-wide profile script if it exists
-rm -f /etc/profile.d/horizon-welcome.sh
+echo -e "${GREEN}  [✓] Old entries removed${RESET}"
 
-# 2. Remove old symlink/command
-echo -e "${GRAY}[2/5] Removing old horizon command...${RESET}"
-rm -f /usr/local/bin/horizon
+# ── STEP 2: Copy the script to /usr/local/bin ────────────────────
+echo -e "${YELLOW}[2/4] Installing horizon command...${RESET}"
 
-# 3. Install fresh — system-wide for ALL users
-echo -e "${GRAY}[3/5] Installing welcome screen system-wide...${RESET}"
-chmod +x "$WELCOME"
+cp -f "$SRC" /usr/local/bin/horizon
+chmod 755 /usr/local/bin/horizon
 
-# Create the horizon command as a symlink
-ln -sf "$WELCOME" /usr/local/bin/horizon
+echo -e "${GREEN}  [✓] /usr/local/bin/horizon installed${RESET}"
 
-# Install system-wide via /etc/profile.d/ — runs for every user on login
-cat > /etc/profile.d/horizon-welcome.sh << 'PROFILE'
-# Horizon Network welcome menu — runs on login for all users
-if [ -z "$HN_IN_CONSOLE" ] && [ -t 0 ] && command -v horizon &>/dev/null; then
-    horizon
+# ── STEP 3: System-wide login hook ───────────────────────────────
+echo -e "${YELLOW}[3/4] Setting up system-wide login hook...${RESET}"
+
+cat > /etc/profile.d/horizon.sh << 'EOF'
+if [ -z "$HN_IN_CONSOLE" ] && [ -t 0 ] && [ -x /usr/local/bin/horizon ]; then
+    /usr/local/bin/horizon
 fi
-PROFILE
-chmod +x /etc/profile.d/horizon-welcome.sh
+EOF
+chmod 644 /etc/profile.d/horizon.sh
 
-# 4. Sync settings to user dogday
-echo -e "${GRAY}[4/5] Syncing settings to user dogday...${RESET}"
+echo -e "${GREEN}  [✓] /etc/profile.d/horizon.sh created${RESET}"
+
+# ── STEP 4: Verify ───────────────────────────────────────────────
+echo -e "${YELLOW}[4/4] Verifying installation...${RESET}"
+
+PASS=0
+FAIL=0
+
+if [ -x /usr/local/bin/horizon ]; then
+    echo -e "${GREEN}  [✓] horizon command exists and is executable${RESET}"
+    PASS=$((PASS+1))
+else
+    echo -e "${RED}  [✗] horizon command missing${RESET}"
+    FAIL=$((FAIL+1))
+fi
+
+if [ -f /etc/profile.d/horizon.sh ]; then
+    echo -e "${GREEN}  [✓] profile.d login hook installed${RESET}"
+    PASS=$((PASS+1))
+else
+    echo -e "${RED}  [✗] profile.d hook missing${RESET}"
+    FAIL=$((FAIL+1))
+fi
+
+if grep -q "User Management" /usr/local/bin/horizon; then
+    echo -e "${GREEN}  [✓] Menu has all options (User Management found)${RESET}"
+    PASS=$((PASS+1))
+else
+    echo -e "${RED}  [✗] Menu is outdated (User Management missing)${RESET}"
+    FAIL=$((FAIL+1))
+fi
+
+if grep -q "Log Out All Sessions" /usr/local/bin/horizon; then
+    echo -e "${GREEN}  [✓] Menu has Log Out All Sessions${RESET}"
+    PASS=$((PASS+1))
+else
+    echo -e "${RED}  [✗] Menu missing Log Out All Sessions${RESET}"
+    FAIL=$((FAIL+1))
+fi
+
+# Check dogday user exists
 if id dogday &>/dev/null; then
-    DOGDAY_HOME=$(eval echo ~dogday)
-    # Make sure dogday can access the repo
-    if [ ! -d "$DOGDAY_HOME" ]; then
-        echo -e "${RED}[✗] dogday home directory not found${RESET}"
-    else
-        # Copy root's bashrc settings (minus old welcome stuff, already cleaned)
-        # Ensure dogday has a .bashrc
-        if [ ! -f "$DOGDAY_HOME/.bashrc" ]; then
-            cp /etc/skel/.bashrc "$DOGDAY_HOME/.bashrc" 2>/dev/null || touch "$DOGDAY_HOME/.bashrc"
-        fi
-        chown dogday:dogday "$DOGDAY_HOME/.bashrc"
-        echo -e "${GREEN}[✓]${RESET} dogday configured (system-wide profile handles the menu)"
-    fi
+    echo -e "${GREEN}  [✓] User dogday exists — will see menu on login${RESET}"
+    PASS=$((PASS+1))
 else
-    echo -e "${RED}[✗] User 'dogday' does not exist${RESET}"
-fi
-
-# 5. Verify
-echo -e "${GRAY}[5/5] Verifying...${RESET}"
-if [ -L /usr/local/bin/horizon ]; then
-    echo -e "${GREEN}[✓]${RESET} horizon command installed at /usr/local/bin/horizon"
-else
-    echo -e "${RED}[✗] horizon symlink failed${RESET}"
-fi
-
-if [ -f /etc/profile.d/horizon-welcome.sh ]; then
-    echo -e "${GREEN}[✓]${RESET} system-wide login script installed (/etc/profile.d/)"
-else
-    echo -e "${RED}[✗] profile.d script missing${RESET}"
+    echo -e "${GRAY}  [—] User dogday does not exist yet${RESET}"
 fi
 
 echo ""
-echo -e "${GREEN}Done.${RESET} The welcome menu will show on login for ALL users."
-echo -e "${GRAY}Any user can type 'horizon' at any time to open it.${RESET}"
+if [ "$FAIL" -eq 0 ]; then
+    echo -e "${GREEN}All checks passed. ${PASS}/${PASS} OK.${RESET}"
+else
+    echo -e "${RED}${FAIL} check(s) failed.${RESET}"
+fi
+
+echo ""
+echo -e "${GREEN}Done.${RESET}"
+echo -e "  • Every user will see the menu on SSH login"
+echo -e "  • Any user can type ${CYAN}horizon${RESET} to reopen it"
+echo -e "  • Press ${CYAN}[1]${RESET} Open Console to get a normal shell"
+echo -e "  • Disconnect and reconnect to test"
 echo ""
