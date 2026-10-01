@@ -111,7 +111,7 @@ function verifyLogin(username, password) {
   if (!user) return { ok: false, error: "Invalid username or password." };
   const { hash } = hashPassword(password, user.salt);
   if (hash !== user.passwordHash) return { ok: false, error: "Invalid username or password." };
-  return { ok: true, user: { username: user.username, isAdmin: user.isAdmin } };
+  return { ok: true, user: { username: user.username, isAdmin: user.isAdmin, theme: user.theme || "dark" } };
 }
 
 function addUserAccount(username, password, isAdmin) {
@@ -130,6 +130,15 @@ function deleteUserAccount(username) {
   const idx = users.findIndex((u) => u.username === username);
   if (idx === -1) return { ok: false, error: "User not found." };
   users.splice(idx, 1);
+  saveUsers(users);
+  return { ok: true };
+}
+
+function saveUserTheme(username, theme) {
+  const users = loadUsers();
+  const user = users.find((u) => u.username === username);
+  if (!user) return { ok: false, error: "User not found." };
+  user.theme = theme;
   saveUsers(users);
   return { ok: true };
 }
@@ -663,7 +672,12 @@ function syncThemeToVPS(theme) {
         content = content.replace(/^BLUE=.*$/m, `BLUE='${colors.blue}'`);
         content = content.replace(/^CYAN=.*$/m, `CYAN='${colors.cyan}'`);
         const ws = sftp.createWriteStream(welcomePath);
-        ws.on("close", () => resolve({ ok: true }));
+        ws.on("close", () => {
+          sftp.chmod(welcomePath, 0o755, (chmodErr) => {
+            if (chmodErr) return reject(new Error("Could not restore permissions: " + chmodErr.message));
+            resolve({ ok: true });
+          });
+        });
         ws.on("error", (e) => reject(new Error("Could not write welcome.sh: " + e.message)));
         ws.end(content);
       });
@@ -744,6 +758,7 @@ ipcMain.handle("add-user", (_event, { username, password, isAdmin }) => addUserA
 ipcMain.handle("delete-user", (_event, { username }) => deleteUserAccount(username));
 ipcMain.handle("toggle-admin", (_event, { username }) => toggleUserAdmin(username));
 ipcMain.handle("sync-theme", (_event, theme) => syncThemeToVPS(theme));
+ipcMain.handle("save-user-theme", (_event, { username, theme }) => saveUserTheme(username, theme));
 
 ipcMain.handle("clipboard-read", () => clipboard.readText());
 ipcMain.on("clipboard-write", (_event, text) => {

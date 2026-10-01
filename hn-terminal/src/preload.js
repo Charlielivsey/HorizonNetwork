@@ -34,6 +34,7 @@ contextBridge.exposeInMainWorld("hn", {
   deleteUser: (username) => ipcRenderer.invoke("delete-user", { username }),
   toggleAdmin: (username) => ipcRenderer.invoke("toggle-admin", { username }),
   syncTheme: (theme) => ipcRenderer.invoke("sync-theme", theme),
+  saveUserTheme: (username, theme) => ipcRenderer.invoke("save-user-theme", { username, theme }),
 
   readClipboard: () => ipcRenderer.invoke("clipboard-read"),
   writeClipboard: (text) => ipcRenderer.send("clipboard-write", text),

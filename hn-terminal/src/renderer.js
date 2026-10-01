@@ -71,6 +71,7 @@
         settings.theme = theme;
         applyTheme(theme);
         hn.saveTheme(theme);
+        if (currentUser) hn.saveUserTheme(currentUser.username, theme);
         hn.syncTheme(theme).catch(() => {});
     });
 
@@ -94,6 +95,11 @@
         $("login-error").hidden = true;
         $("sidebar-logout").hidden = false;
         if (currentUser.isAdmin) $("admin-section").hidden = false;
+        if (currentUser.theme) {
+            settings.theme = currentUser.theme;
+            applyTheme(currentUser.theme);
+        }
+        switchView("home");
     });
 
     $("sidebar-logout").addEventListener("click", () => {
@@ -446,6 +452,7 @@
                 showTabScreen(tabId, null);
                 try { tab.fitAddon.fit(); } catch (_) {}
                 tab.term.focus();
+                hn.syncTheme(settings.theme).catch(() => {});
                 break;
 
             case "closed":
