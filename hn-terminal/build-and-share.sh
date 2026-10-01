@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -e
+set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SHARE_DIR="/share/GATEWAY"
@@ -18,6 +18,10 @@ if [ ! -d "$SHARE_DIR" ]; then
 fi
 
 cd "$SCRIPT_DIR"
+
+VERSION=$(node -p "require('./package.json').version")
+echo -e "  Version: ${CYAN}v${VERSION}${RESET}"
+echo ""
 
 # Install build tools if needed
 if ! command -v make &>/dev/null; then
@@ -44,18 +48,20 @@ fi
 echo -e "${CYAN}  Building Windows installer...${RESET}"
 npx electron-builder --win --x64 2>&1 | tail -20
 
-# Find the built installer
-INSTALLER=$(find dist -name "HN-Secure-Enclave-Setup-*.exe" -type f 2>/dev/null | head -1)
+INSTALLER="dist/HN-Secure-Enclave-Setup-${VERSION}.exe"
 
-if [ -z "$INSTALLER" ]; then
-    echo -e "${RED}  Error: Build failed — no installer found${RESET}"
+if [ ! -f "$INSTALLER" ]; then
+    echo -e "${RED}  Error: Build failed — $INSTALLER not found${RESET}"
     echo -e "  Check the output above for errors."
     exit 1
 fi
 
-# Copy to Samba share
-mkdir -p "$SHARE_DIR/HN Secure Enclave"
-cp "$INSTALLER" "$SHARE_DIR/HN Secure Enclave/"
+# Replace any older installers on the Samba share with this one
+DEST="$SHARE_DIR/HN Secure Enclave"
+mkdir -p "$DEST"
+rm -f "$DEST"/HN-Secure-Enclave-Setup-*.exe
+cp "$INSTALLER" "$DEST/"
+chmod 644 "$DEST/$(basename "$INSTALLER")"
 
 echo ""
 echo -e "${GREEN}  Done!${RESET}"
