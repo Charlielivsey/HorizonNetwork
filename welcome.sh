@@ -11,8 +11,26 @@ RESET='\033[0m'
 
 HA_DIR="/opt/horizon-advertising"
 
+pm2_count() {
+    if ! command -v pm2 &>/dev/null; then
+        echo "0/0"
+        return
+    fi
+    local total online
+    total=$(pm2 jlist 2>/dev/null | grep -o '"name"' | wc -l)
+    online=$(pm2 jlist 2>/dev/null | grep -o '"status":"online"' | wc -l)
+    echo "${online}/${total}"
+}
+
+ha_service_names() {
+    if ! command -v pm2 &>/dev/null; then return; fi
+    pm2 jlist 2>/dev/null | grep -o '"name":"ha-[^"]*"' | sed 's/"name":"//;s/"//'
+}
+
 show_menu() {
     clear
+    local counts
+    counts=$(pm2_count)
     echo ""
     echo -e "${BLUE}  ╔═══════════════════════════════════════════════════╗"
     echo -e "  ║                                                   ║"
@@ -21,6 +39,7 @@ show_menu() {
     echo -e "  ╚═══════════════════════════════════════════════════╝${RESET}"
     echo ""
     echo -e "  ${GRAY}VPS: 217.154.34.205  |  Tailscale: 100.95.232.62${RESET}"
+    echo -e "  ${GRAY}PM2 Services: ${counts} running${RESET}"
     echo ""
     echo -e "  ${WHITE}Select an option:${RESET}"
     echo ""
@@ -45,29 +64,26 @@ show_ha_menu() {
     echo -e "  ╚═══════════════════════════════════════════════════╝${RESET}"
     echo ""
     echo -e "  ${GRAY}Directory: ${HA_DIR}${RESET}"
-    echo -e "  ${GRAY}Website:   http://100.95.232.62:3100${RESET}"
+    echo -e "  ${GRAY}Website:   http://217.154.34.205/ha${RESET}"
     echo ""
 
-    # Show HA service status
     if command -v pm2 &>/dev/null; then
-        local status
-        status=$(pm2 jlist 2>/dev/null | grep -o '"name":"ha-[^"]*","[^}]*"status":"[^"]*"' | head -5)
-        if [ -n "$status" ]; then
+        local services
+        services=$(ha_service_names)
+        if [ -n "$services" ]; then
             echo -e "  ${WHITE}Services:${RESET}"
-            pm2 jlist 2>/dev/null | python3 -c "
-import sys, json
-try:
-    procs = json.load(sys.stdin)
-    for p in procs:
-        if p['name'].startswith('ha-'):
-            s = p['pm2_env']['status']
-            color = '\033[0;32m' if s == 'online' else '\033[0;31m'
-            print(f\"  {color}●\033[0m  {p['name']:20s} {s}\")
-except: pass
-" 2>/dev/null
+            echo "$services" | while read -r svc; do
+                local status
+                status=$(pm2 show "$svc" 2>/dev/null | grep "status" | head -1 | awk '{print $NF}')
+                if [ "$status" = "online" ]; then
+                    echo -e "  ${GREEN}●${RESET}  ${svc}  ${GREEN}${status}${RESET}"
+                else
+                    echo -e "  ${RED}●${RESET}  ${svc}  ${RED}${status}${RESET}"
+                fi
+            done
             echo ""
         else
-            echo -e "  ${YELLOW}No HA services running${RESET}"
+            echo -e "  ${YELLOW}No HA services found in PM2${RESET}"
             echo ""
         fi
     fi
@@ -81,18 +97,6 @@ except: pass
     echo -e "  ${CYAN}[5]${RESET}  View HA Logs"
     echo -e "  ${CYAN}[m]${RESET}  Back to Main Menu"
     echo ""
-}
-
-ha_get_services() {
-    pm2 jlist 2>/dev/null | python3 -c "
-import sys, json
-try:
-    procs = json.load(sys.stdin)
-    for p in procs:
-        if p['name'].startswith('ha-'):
-            print(p['name'])
-except: pass
-" 2>/dev/null
 }
 
 ha_submenu() {
@@ -109,7 +113,7 @@ ha_submenu() {
             2)
                 echo ""
                 local services
-                services=$(ha_get_services)
+                services=$(ha_service_names)
                 if [ -z "$services" ]; then
                     echo -e "  ${YELLOW}No HA services found in PM2${RESET}"
                 else
@@ -124,7 +128,7 @@ ha_submenu() {
             3)
                 echo ""
                 local services
-                services=$(ha_get_services)
+                services=$(ha_service_names)
                 if [ -z "$services" ]; then
                     echo -e "  ${YELLOW}No HA services found in PM2${RESET}"
                 else
@@ -139,7 +143,7 @@ ha_submenu() {
             4)
                 echo ""
                 local services
-                services=$(ha_get_services)
+                services=$(ha_service_names)
                 if [ -z "$services" ]; then
                     echo -e "  ${YELLOW}No HA services found in PM2${RESET}"
                 else
@@ -154,7 +158,7 @@ ha_submenu() {
             5)
                 echo ""
                 local services
-                services=$(ha_get_services)
+                services=$(ha_service_names)
                 if [ -z "$services" ]; then
                     echo -e "  ${YELLOW}No HA services found in PM2${RESET}"
                 else
