@@ -37,9 +37,10 @@ for home_dir in /root /home/*; do
     [ -d "$home_dir" ] || continue
     for rcfile in "$home_dir/.bashrc" "$home_dir/.profile" "$home_dir/.bash_profile" "$home_dir/.bash_login"; do
         [ -f "$rcfile" ] || continue
-        sed -i '/[Hh]orizon/d' "$rcfile" 2>/dev/null || true
-        sed -i '/welcome\.sh/d' "$rcfile" 2>/dev/null || true
-        sed -i '/HN_IN_CONSOLE/d' "$rcfile" 2>/dev/null || true
+        sed -i '/# Horizon Network welcome menu/d' "$rcfile" 2>/dev/null || true
+        sed -i '/HN_IN_CONSOLE.*horizon/d' "$rcfile" 2>/dev/null || true
+        sed -i '/\/usr\/local\/bin\/horizon/d' "$rcfile" 2>/dev/null || true
+        sed -i '\|HorizonNetwork/welcome\.sh|d' "$rcfile" 2>/dev/null || true
     done
 done
 
