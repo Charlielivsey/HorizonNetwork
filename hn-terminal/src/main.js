@@ -1,16 +1,30 @@
 const { app, BrowserWindow, ipcMain, Tray, Menu } = require("electron");
 const path = require("path");
 const { exec } = require("child_process");
+const { Client } = require("ssh2");
+const fs = require("fs");
 const os = require("os");
 
 let splashWindow;
 let mainWindow;
 let tray = null;
-let ptyProcess = null;
+let sshClient = null;
+let sshStream = null;
 let connectCheckInterval = null;
 
 const VPS_IP = "100.95.232.62";
+const SSH_USER = "root";
 const ICON_PATH = path.join(__dirname, "..", "assets", "icon.ico");
+
+function getSSHKeyPath() {
+  const home = os.homedir();
+  const keys = ["id_ed25519", "id_rsa", "id_ecdsa"];
+  for (const k of keys) {
+    const p = path.join(home, ".ssh", k);
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
 
 function createSplash() {
   splashWindow = new BrowserWindow({
@@ -73,11 +87,11 @@ function createWindow() {
 function createTrayIfNeeded() {
   if (tray) return;
   tray = new Tray(ICON_PATH);
-  tray.setToolTip("HN Terminal");
+  tray.setToolTip("HN Secure Enclave");
   tray.setContextMenu(
     Menu.buildFromTemplate([
       {
-        label: "Show HN Terminal",
+        label: "Show HN Secure Enclave",
         click: () => {
           mainWindow?.show();
           mainWindow?.focus();
@@ -87,10 +101,7 @@ function createTrayIfNeeded() {
       {
         label: "Reconnect",
         click: () => {
-          if (ptyProcess) {
-            ptyProcess.kill();
-            ptyProcess = null;
-          }
+          disconnectSSH();
           mainWindow?.show();
           startConnectionLoop();
         },
@@ -99,10 +110,7 @@ function createTrayIfNeeded() {
       {
         label: "Quit",
         click: () => {
-          if (ptyProcess) {
-            ptyProcess.kill();
-            ptyProcess = null;
-          }
+          disconnectSSH();
           app.quit();
         },
       },
@@ -132,7 +140,7 @@ async function startConnectionLoop() {
     mainWindow.webContents.send("vpn-status", connected);
   }
 
-  if (connected && !ptyProcess) {
+  if (connected && !sshClient) {
     startSSH();
     return;
   }
@@ -144,7 +152,7 @@ async function startConnectionLoop() {
       if (mainWindow) {
         mainWindow.webContents.send("vpn-status", status);
       }
-      if (status && !ptyProcess) {
+      if (status && !sshClient) {
         clearInterval(connectCheckInterval);
         connectCheckInterval = null;
         startSSH();
@@ -153,68 +161,113 @@ async function startConnectionLoop() {
   }
 }
 
-function startSSH() {
-  try {
-    const pty = require("node-pty");
-    const shell = process.platform === "win32" ? "ssh.exe" : "ssh";
-    const args = [
-      "-o", "StrictHostKeyChecking=accept-new",
-      "-o", "ServerAliveInterval=30",
-      "-o", "ConnectTimeout=10",
-      `root@${VPS_IP}`,
-    ];
-
-    ptyProcess = pty.spawn(shell, args, {
-      name: "xterm-256color",
-      cols: 120,
-      rows: 30,
-      cwd: os.homedir(),
-      env: process.env,
-    });
-
-    ptyProcess.onData((data) => {
-      if (mainWindow) {
-        mainWindow.webContents.send("terminal-data", data);
-      }
-    });
-
-    ptyProcess.onExit(({ exitCode }) => {
-      ptyProcess = null;
-      if (mainWindow) {
-        mainWindow.webContents.send("ssh-disconnected", exitCode);
-        startConnectionLoop();
-      }
-    });
-
-    if (mainWindow) {
-      mainWindow.webContents.send("ssh-connected");
-    }
-  } catch (err) {
-    if (mainWindow) {
-      mainWindow.webContents.send("ssh-error", err.message);
-    }
+function disconnectSSH() {
+  if (sshStream) {
+    sshStream.close();
+    sshStream = null;
+  }
+  if (sshClient) {
+    sshClient.end();
+    sshClient = null;
   }
 }
 
+function startSSH() {
+  const keyPath = getSSHKeyPath();
+  if (!keyPath) {
+    if (mainWindow) {
+      mainWindow.webContents.send(
+        "ssh-error",
+        "No SSH key found in ~/.ssh (tried id_ed25519, id_rsa, id_ecdsa). Add a key or enable Tailscale SSH on the VPS."
+      );
+    }
+    return;
+  }
+
+  const conn = new Client();
+  sshClient = conn;
+
+  conn.on("ready", () => {
+    if (mainWindow) {
+      mainWindow.webContents.send("ssh-connected");
+    }
+
+    conn.shell(
+      {
+        term: "xterm-256color",
+        cols: 120,
+        rows: 30,
+      },
+      (err, stream) => {
+        if (err) {
+          if (mainWindow) mainWindow.webContents.send("ssh-error", err.message);
+          return;
+        }
+
+        sshStream = stream;
+
+        stream.on("data", (data) => {
+          if (mainWindow) {
+            mainWindow.webContents.send("terminal-data", data.toString("utf-8"));
+          }
+        });
+
+        stream.stderr.on("data", (data) => {
+          if (mainWindow) {
+            mainWindow.webContents.send("terminal-data", data.toString("utf-8"));
+          }
+        });
+
+        stream.on("close", () => {
+          sshStream = null;
+          disconnectSSH();
+          if (mainWindow) {
+            mainWindow.webContents.send("ssh-disconnected", 0);
+            startConnectionLoop();
+          }
+        });
+      }
+    );
+  });
+
+  conn.on("error", (err) => {
+    sshClient = null;
+    if (mainWindow) {
+      mainWindow.webContents.send("ssh-error", err.message);
+      startConnectionLoop();
+    }
+  });
+
+  conn.on("close", () => {
+    sshClient = null;
+    sshStream = null;
+  });
+
+  conn.connect({
+    host: VPS_IP,
+    port: 22,
+    username: SSH_USER,
+    privateKey: fs.readFileSync(keyPath),
+    readyTimeout: 10000,
+    keepaliveInterval: 30000,
+    keepaliveCountMax: 3,
+  });
+}
+
 ipcMain.on("terminal-input", (_event, data) => {
-  if (ptyProcess) {
-    ptyProcess.write(data);
+  if (sshStream) {
+    sshStream.write(data);
   }
 });
 
 ipcMain.on("terminal-resize", (_event, { cols, rows }) => {
-  if (ptyProcess) {
-    try {
-      ptyProcess.resize(cols, rows);
-    } catch (_) {}
+  if (sshStream) {
+    sshStream.setWindow(rows, cols, 0, 0);
   }
 });
 
 ipcMain.on("reconnect", () => {
-  if (ptyProcess) {
-    ptyProcess.kill();
-    ptyProcess = null;
-  }
+  disconnectSSH();
   startConnectionLoop();
 });
 
@@ -227,10 +280,7 @@ ipcMain.on("window-maximize", () => {
   }
 });
 ipcMain.on("window-close", () => {
-  if (ptyProcess) {
-    ptyProcess.kill();
-    ptyProcess = null;
-  }
+  disconnectSSH();
   mainWindow?.close();
 });
 
@@ -241,10 +291,7 @@ app.whenReady().then(() => {
 
 app.on("window-all-closed", () => {
   if (connectCheckInterval) clearInterval(connectCheckInterval);
-  if (ptyProcess) {
-    ptyProcess.kill();
-    ptyProcess = null;
-  }
+  disconnectSSH();
   if (tray) {
     tray.destroy();
     tray = null;

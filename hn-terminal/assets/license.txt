@@ -1,4 +1,4 @@
-HN Terminal — End User License Agreement
+HN Secure Enclave — End User License Agreement
 
 Copyright (c) 2026 Horizon Network. All rights reserved.
 
@@ -9,7 +9,7 @@ By installing HN Terminal, you agree to the following terms:
 
 1. GRANT OF LICENSE
    Horizon Network grants you a non-exclusive, non-transferable
-   licence to install and use HN Terminal on your personal devices
+   licence to install and use HN Secure Enclave on your personal devices
    for the purpose of accessing Horizon Network infrastructure.
 
 2. RESTRICTIONS
@@ -18,7 +18,7 @@ By installing HN Terminal, you agree to the following terms:
    consent from Horizon Network.
 
 3. CONNECTIVITY
-   HN Terminal requires an active Tailscale VPN connection to
+   HN Secure Enclave requires an active Tailscale VPN connection to
    function. You are responsible for maintaining your own
    Tailscale configuration and network access.
 

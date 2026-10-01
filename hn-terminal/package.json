@@ -1,7 +1,7 @@
 {
-  "name": "hn-terminal",
+  "name": "hn-secure-enclave",
   "version": "1.0.0",
-  "description": "Horizon Network Terminal — Secure VPS access via Tailscale",
+  "description": "HN Secure Enclave — Secure VPS access via Tailscale",
   "author": {
     "name": "Horizon Network",
     "email": "charlie.livsey@hngroup.org.uk"
@@ -9,13 +9,11 @@
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "rebuild": "electron-rebuild",
-    "build": "electron-builder --win",
-    "postinstall": "electron-builder install-app-deps"
+    "build": "electron-builder --win"
   },
   "build": {
-    "appId": "com.horizonnetwork.terminal",
-    "productName": "HN Terminal",
+    "appId": "com.horizonnetwork.secure-enclave",
+    "productName": "HN Secure Enclave",
     "copyright": "Copyright © 2026 Horizon Network",
     "win": {
       "target": [
@@ -37,9 +35,9 @@
       "license": "assets/license.txt",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "HN Terminal",
+      "shortcutName": "HN Secure Enclave",
       "menuCategory": "Horizon Network",
-      "artifactName": "HN-Terminal-Setup-${version}.${ext}",
+      "artifactName": "HN-Secure-Enclave-Setup-${version}.${ext}",
       "installerHeaderIcon": "assets/icon.ico",
       "deleteAppDataOnUninstall": true
     },
@@ -58,11 +56,10 @@
     "@xterm/xterm": "^5.5.0",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/addon-web-links": "^0.11.0",
-    "node-pty": "^1.0.0"
+    "ssh2": "^1.16.0"
   },
   "devDependencies": {
     "electron": "^33.0.0",
-    "electron-builder": "^25.0.0",
-    "electron-rebuild": "^3.2.9"
+    "electron-builder": "^25.0.0"
   }
 }
