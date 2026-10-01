@@ -1,0 +1,35 @@
+HN Terminal — End User License Agreement
+
+Copyright (c) 2026 Horizon Network. All rights reserved.
+
+This software is proprietary to Horizon Network and is provided
+for authorised use only.
+
+By installing HN Terminal, you agree to the following terms:
+
+1. GRANT OF LICENSE
+   Horizon Network grants you a non-exclusive, non-transferable
+   licence to install and use HN Terminal on your personal devices
+   for the purpose of accessing Horizon Network infrastructure.
+
+2. RESTRICTIONS
+   You may not distribute, modify, reverse engineer, or create
+   derivative works based on this software without prior written
+   consent from Horizon Network.
+
+3. CONNECTIVITY
+   HN Terminal requires an active Tailscale VPN connection to
+   function. You are responsible for maintaining your own
+   Tailscale configuration and network access.
+
+4. DISCLAIMER
+   This software is provided "as is" without warranty of any kind.
+   Horizon Network shall not be liable for any damages arising
+   from the use of this software.
+
+5. TERMINATION
+   This licence is effective until terminated. Horizon Network
+   may terminate this licence at any time if you fail to comply
+   with these terms.
+
+For questions, contact: charlie.livsey@hngroup.org.uk

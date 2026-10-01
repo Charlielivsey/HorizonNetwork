@@ -1,13 +1,32 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, ipcMain, Tray, Menu } = require("electron");
 const path = require("path");
-const { exec, spawn } = require("child_process");
+const { exec } = require("child_process");
 const os = require("os");
 
+let splashWindow;
 let mainWindow;
+let tray = null;
 let ptyProcess = null;
 let connectCheckInterval = null;
 
 const VPS_IP = "100.95.232.62";
+const ICON_PATH = path.join(__dirname, "..", "assets", "icon.ico");
+
+function createSplash() {
+  splashWindow = new BrowserWindow({
+    width: 380,
+    height: 280,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    icon: ICON_PATH,
+    webPreferences: { nodeIntegration: false, contextIsolation: true },
+  });
+  splashWindow.loadFile(path.join(__dirname, "splash.html"));
+  splashWindow.center();
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -16,9 +35,10 @@ function createWindow() {
     minWidth: 600,
     minHeight: 400,
     backgroundColor: "#0c0c0c",
+    show: false,
     frame: false,
     titleBarStyle: "hidden",
-    icon: path.join(__dirname, "..", "assets", "icon.ico"),
+    icon: ICON_PATH,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -27,14 +47,80 @@ function createWindow() {
   });
 
   mainWindow.loadFile(path.join(__dirname, "index.html"));
+
+  mainWindow.once("ready-to-show", () => {
+    setTimeout(() => {
+      if (splashWindow) {
+        splashWindow.close();
+        splashWindow = null;
+      }
+      mainWindow.show();
+      startConnectionLoop();
+    }, 1800);
+  });
+
   mainWindow.on("closed", () => {
     mainWindow = null;
+  });
+
+  mainWindow.on("minimize", (event) => {
+    event.preventDefault();
+    mainWindow.hide();
+    createTrayIfNeeded();
+  });
+}
+
+function createTrayIfNeeded() {
+  if (tray) return;
+  tray = new Tray(ICON_PATH);
+  tray.setToolTip("HN Terminal");
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      {
+        label: "Show HN Terminal",
+        click: () => {
+          mainWindow?.show();
+          mainWindow?.focus();
+        },
+      },
+      { type: "separator" },
+      {
+        label: "Reconnect",
+        click: () => {
+          if (ptyProcess) {
+            ptyProcess.kill();
+            ptyProcess = null;
+          }
+          mainWindow?.show();
+          startConnectionLoop();
+        },
+      },
+      { type: "separator" },
+      {
+        label: "Quit",
+        click: () => {
+          if (ptyProcess) {
+            ptyProcess.kill();
+            ptyProcess = null;
+          }
+          app.quit();
+        },
+      },
+    ])
+  );
+  tray.on("double-click", () => {
+    mainWindow?.show();
+    mainWindow?.focus();
   });
 }
 
 function checkTailscale() {
   return new Promise((resolve) => {
-    exec(`ping -n 1 -w 1500 ${VPS_IP}`, (error) => {
+    const cmd =
+      process.platform === "win32"
+        ? `ping -n 1 -w 1500 ${VPS_IP}`
+        : `ping -c 1 -W 2 ${VPS_IP}`;
+    exec(cmd, (error) => {
       resolve(!error);
     });
   });
@@ -48,6 +134,7 @@ async function startConnectionLoop() {
 
   if (connected && !ptyProcess) {
     startSSH();
+    return;
   }
 
   if (!connected) {
@@ -148,8 +235,8 @@ ipcMain.on("window-close", () => {
 });
 
 app.whenReady().then(() => {
+  createSplash();
   createWindow();
-  startConnectionLoop();
 });
 
 app.on("window-all-closed", () => {
@@ -157,6 +244,10 @@ app.on("window-all-closed", () => {
   if (ptyProcess) {
     ptyProcess.kill();
     ptyProcess = null;
+  }
+  if (tray) {
+    tray.destroy();
+    tray = null;
   }
   app.quit();
 });

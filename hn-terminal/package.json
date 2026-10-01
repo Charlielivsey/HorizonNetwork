@@ -2,6 +2,10 @@
   "name": "hn-terminal",
   "version": "1.0.0",
   "description": "Horizon Network Terminal — Secure VPS access via Tailscale",
+  "author": {
+    "name": "Horizon Network",
+    "email": "charlie.livsey@hngroup.org.uk"
+  },
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
@@ -12,18 +16,42 @@
   "build": {
     "appId": "com.horizonnetwork.terminal",
     "productName": "HN Terminal",
+    "copyright": "Copyright © 2026 Horizon Network",
     "win": {
-      "target": "nsis",
-      "icon": "assets/icon.ico"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "publisherName": "Horizon Network"
     },
     "nsis": {
-      "oneClick": true,
-      "allowToChangeInstallationDirectory": false
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerSidebar": "assets/installerSidebar.bmp",
+      "installerHeader": "assets/installerHeader.bmp",
+      "license": "assets/license.txt",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "HN Terminal",
+      "menuCategory": "Horizon Network",
+      "artifactName": "HN-Terminal-Setup-${version}.${ext}",
+      "installerHeaderIcon": "assets/icon.ico",
+      "deleteAppDataOnUninstall": true
     },
     "files": [
       "src/**/*",
-      "assets/**/*",
       "node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "assets/icon.ico",
+        "to": "icon.ico"
+      }
     ]
   },
   "dependencies": {
