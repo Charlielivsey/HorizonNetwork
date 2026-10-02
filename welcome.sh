@@ -612,9 +612,8 @@ updates_submenu() {
     done
 }
 
-show_menu
-
 while true; do
+    show_menu
     echo -ne "  ${WHITE}➤ ${RESET}"
     read -r choice
     case $choice in
@@ -623,20 +622,27 @@ while true; do
             HN_IN_CONSOLE=1 exec bash --login
             ;;
         2)
+            clear
             echo ""
             echo -e "  ${BLUE}── System Status ──${RESET}"
+            echo ""
             echo -e "  ${GRAY}Hostname:${RESET}  $(hostname)"
             echo -e "  ${GRAY}Uptime:${RESET}    $(uptime -p 2>/dev/null || uptime)"
             echo -e "  ${GRAY}Load:${RESET}      $(cat /proc/loadavg 2>/dev/null | awk '{print $1, $2, $3}')"
             echo -e "  ${GRAY}Memory:${RESET}    $(free -h 2>/dev/null | awk '/Mem:/{print $3 "/" $2}')"
             echo -e "  ${GRAY}Disk:${RESET}      $(df -h / 2>/dev/null | awk 'NR==2{print $3 "/" $2 " (" $5 " used)"}')"
             echo ""
+            echo -ne "  ${GRAY}Press Enter to continue...${RESET}"
+            read -r
             ;;
         3)
             echo ""
             if ! command -v pm2 &>/dev/null; then
                 echo -e "  ${RED}PM2 is not installed.${RESET}"
                 echo -e "  ${GRAY}Run: npm install -g pm2${RESET}"
+                echo ""
+                echo -ne "  ${GRAY}Press Enter to continue...${RESET}"
+                read -r
             else
                 echo -e "  ${BLUE}── Services ──${RESET}"
                 echo ""
@@ -696,7 +702,6 @@ while true; do
                             pm2 monit
                             ;;
                         m)
-                            show_menu
                             break
                             ;;
                         *)
@@ -705,7 +710,6 @@ while true; do
                     esac
                 done
             fi
-            echo ""
             ;;
         4)
             ha_submenu
@@ -714,24 +718,35 @@ while true; do
             updates_submenu
             ;;
         6)
+            clear
             echo ""
             echo -e "  ${BLUE}── Recent Logs ──${RESET}"
+            echo ""
             journalctl --no-pager -n 20 2>/dev/null || echo "  No journal access"
             echo ""
+            echo -ne "  ${GRAY}Press Enter to continue...${RESET}"
+            read -r
             ;;
         7)
+            clear
             echo ""
             echo -e "  ${BLUE}── Network Info ──${RESET}"
+            echo ""
             echo -e "  ${GRAY}Public IP:${RESET}  217.154.34.205"
             echo -e "  ${GRAY}Tailscale:${RESET} 100.95.232.62"
             ip -4 addr show 2>/dev/null | awk '/inet /{printf "  %-12s %s\n", $NF, $2}'
             echo ""
+            echo -ne "  ${GRAY}Press Enter to continue...${RESET}"
+            read -r
             ;;
         8)
             user_submenu
             ;;
         9)
             logout_all_sessions
+            echo ""
+            echo -ne "  ${GRAY}Press Enter to continue...${RESET}"
+            read -r
             ;;
         0)
             echo -e "\n  ${GRAY}Disconnecting...${RESET}\n"
@@ -739,7 +754,6 @@ while true; do
             exit 0
             ;;
         *)
-            echo -e "  ${GRAY}Invalid option. Try again.${RESET}"
             ;;
     esac
 done

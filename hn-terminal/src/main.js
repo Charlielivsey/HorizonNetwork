@@ -653,9 +653,12 @@ function syncThemeToVPS(theme) {
   if (!conn) return Promise.reject(new Error("Not connected to the VPS."));
 
   const colorMap = {
-    dark:     { blue: "\\033[1;34m", cyan: "\\033[0;36m" },
-    pink:     { blue: "\\033[38;5;198m", cyan: "\\033[38;5;205m" },
-    lavender: { blue: "\\033[38;5;141m", cyan: "\\033[38;5;183m" },
+    dark:             { blue: "\\033[1;34m", cyan: "\\033[0;36m" },
+    pink:             { blue: "\\033[38;5;198m", cyan: "\\033[38;5;205m" },
+    lavender:         { blue: "\\033[38;5;141m", cyan: "\\033[38;5;183m" },
+    light:            { blue: "\\033[0;34m", cyan: "\\033[0;36m" },
+    "light-pink":     { blue: "\\033[38;5;161m", cyan: "\\033[38;5;168m" },
+    "light-lavender": { blue: "\\033[38;5;91m", cyan: "\\033[38;5;133m" },
   };
   const colors = colorMap[theme] || colorMap.dark;
   const welcomePath = "/usr/local/bin/horizon";
