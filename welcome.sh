@@ -352,15 +352,15 @@ show_menu() {
     echo -e "  ╚═══════════════════════════════════════════════════╝${RESET}"
     echo ""
     echo -e "  ${GRAY}VPS: 217.154.34.205  |  Tailscale: 100.95.232.62${RESET}"
-    echo -e "  ${GRAY}PM2 Services: ${counts} running${RESET}"
+    echo -e "  ${GRAY}Services: ${counts} running${RESET}"
     echo ""
     echo -e "  ${WHITE}Select an option:${RESET}"
     echo ""
     echo -e "  ${CYAN}[1]${RESET}  Open Console"
     echo -e "  ${CYAN}[2]${RESET}  System Status"
-    echo -e "  ${CYAN}[3]${RESET}  PM2 Services"
+    echo -e "  ${CYAN}[3]${RESET}  Services"
     echo -e "  ${CYAN}[4]${RESET}  Horizon Advertising"
-    echo -e "  ${CYAN}[5]${RESET}  Manage Services (systemd)"
+    echo -e "  ${CYAN}[5]${RESET}  Updates"
     echo -e "  ${CYAN}[6]${RESET}  View Logs"
     echo -e "  ${CYAN}[7]${RESET}  Network Info"
     echo -e "  ${CYAN}[8]${RESET}  User Management"
@@ -495,6 +495,123 @@ ha_submenu() {
     done
 }
 
+REPO_DIR="/root/HorizonNetwork"
+REPO_BRANCH="claude/vps-welcome-screen-m373a1"
+
+show_updates_menu() {
+    clear
+    echo ""
+    echo -e "${BLUE}  ╔═══════════════════════════════════════════════════╗"
+    echo -e "  ║                                                   ║"
+    echo -e "  ║              U P D A T E S                        ║"
+    echo -e "  ║                                                   ║"
+    echo -e "  ╚═══════════════════════════════════════════════════╝${RESET}"
+    echo ""
+
+    if [ -d "$REPO_DIR/.git" ]; then
+        local current_branch
+        current_branch=$(cd "$REPO_DIR" && git rev-parse --abbrev-ref HEAD 2>/dev/null)
+        local last_commit
+        last_commit=$(cd "$REPO_DIR" && git log -1 --format="%h %s" 2>/dev/null)
+        local last_pull
+        last_pull=$(stat -c %Y "$REPO_DIR/.git/FETCH_HEAD" 2>/dev/null)
+        if [ -n "$last_pull" ]; then
+            last_pull=$(date -d @"$last_pull" "+%Y-%m-%d %H:%M" 2>/dev/null)
+        else
+            last_pull="never"
+        fi
+        echo -e "  ${GRAY}Repository:  ${REPO_DIR}${RESET}"
+        echo -e "  ${GRAY}Branch:      ${current_branch}${RESET}"
+        echo -e "  ${GRAY}Last commit: ${last_commit}${RESET}"
+        echo -e "  ${GRAY}Last pull:   ${last_pull}${RESET}"
+    else
+        echo -e "  ${RED}Repository not found at ${REPO_DIR}${RESET}"
+    fi
+
+    echo ""
+    echo -e "  ${WHITE}Select an option:${RESET}"
+    echo ""
+    echo -e "  ${CYAN}[1]${RESET}  Pull Latest Updates"
+    echo -e "  ${CYAN}[2]${RESET}  Pull & Reinstall Welcome Screen"
+    echo -e "  ${CYAN}[3]${RESET}  Pull & Rebuild Secure Enclave"
+    echo -e "  ${CYAN}[4]${RESET}  View Recent Commits"
+    echo -e "  ${CYAN}[5]${RESET}  Open Update Console"
+    echo -e "  ${CYAN}[m]${RESET}  Back to Main Menu"
+    echo ""
+}
+
+updates_submenu() {
+    show_updates_menu
+    while true; do
+        echo -ne "  ${WHITE}Updates ➤ ${RESET}"
+        read -r upd_choice
+        case $upd_choice in
+            1)
+                echo ""
+                echo -e "  ${CYAN}Pulling latest from ${REPO_BRANCH}...${RESET}"
+                echo ""
+                cd "$REPO_DIR" 2>/dev/null || { echo -e "  ${RED}Cannot access ${REPO_DIR}${RESET}"; echo ""; continue; }
+                sudo git fetch origin "$REPO_BRANCH" 2>&1 | sed 's/^/  /'
+                sudo git reset --hard "origin/$REPO_BRANCH" 2>&1 | sed 's/^/  /'
+                echo ""
+                echo -e "  ${GREEN}[✓] Updated to latest${RESET}"
+                echo ""
+                ;;
+            2)
+                echo ""
+                echo -e "  ${CYAN}Pulling and reinstalling welcome screen...${RESET}"
+                echo ""
+                cd "$REPO_DIR" 2>/dev/null || { echo -e "  ${RED}Cannot access ${REPO_DIR}${RESET}"; echo ""; continue; }
+                sudo git fetch origin "$REPO_BRANCH" 2>&1 | sed 's/^/  /'
+                sudo git reset --hard "origin/$REPO_BRANCH" 2>&1 | sed 's/^/  /'
+                echo ""
+                sudo bash "$REPO_DIR/setup-welcome.sh"
+                echo -e "  ${GREEN}[✓] Welcome screen reinstalled. Changes take effect on next login.${RESET}"
+                echo ""
+                ;;
+            3)
+                echo ""
+                echo -e "  ${CYAN}Pulling and rebuilding Secure Enclave...${RESET}"
+                echo ""
+                cd "$REPO_DIR" 2>/dev/null || { echo -e "  ${RED}Cannot access ${REPO_DIR}${RESET}"; echo ""; continue; }
+                sudo git fetch origin "$REPO_BRANCH" 2>&1 | sed 's/^/  /'
+                sudo git reset --hard "origin/$REPO_BRANCH" 2>&1 | sed 's/^/  /'
+                echo ""
+                if [ -f "$REPO_DIR/hn-terminal/build-and-share.sh" ]; then
+                    sudo bash "$REPO_DIR/hn-terminal/build-and-share.sh"
+                else
+                    echo -e "  ${RED}Build script not found${RESET}"
+                fi
+                echo ""
+                ;;
+            4)
+                echo ""
+                echo -e "  ${BLUE}── Recent Commits ──${RESET}"
+                echo ""
+                cd "$REPO_DIR" 2>/dev/null || { echo -e "  ${RED}Cannot access ${REPO_DIR}${RESET}"; echo ""; continue; }
+                git log --oneline -15 2>/dev/null | sed 's/^/  /'
+                echo ""
+                ;;
+            5)
+                echo ""
+                echo -e "  ${CYAN}Opening update console at ${REPO_DIR}...${RESET}"
+                echo -e "  ${GRAY}Type 'exit' to return to the menu.${RESET}"
+                echo ""
+                cd "$REPO_DIR" 2>/dev/null || { echo -e "  ${RED}Cannot access ${REPO_DIR}${RESET}"; echo ""; continue; }
+                bash
+                show_updates_menu
+                ;;
+            m)
+                show_menu
+                break
+                ;;
+            *)
+                echo -e "  ${GRAY}Invalid option. Try again.${RESET}"
+                ;;
+        esac
+    done
+}
+
 show_menu
 
 while true; do
@@ -521,7 +638,7 @@ while true; do
                 echo -e "  ${RED}PM2 is not installed.${RESET}"
                 echo -e "  ${GRAY}Run: npm install -g pm2${RESET}"
             else
-                echo -e "  ${BLUE}── PM2 Services ──${RESET}"
+                echo -e "  ${BLUE}── Services ──${RESET}"
                 echo ""
                 pm2 list 2>/dev/null
                 echo ""
@@ -594,11 +711,7 @@ while true; do
             ha_submenu
             ;;
         5)
-            echo ""
-            echo -e "  ${BLUE}── Active Services (systemd) ──${RESET}"
-            systemctl list-units --type=service --state=running --no-pager --no-legend 2>/dev/null | \
-                awk '{printf "  %-40s %s\n", $1, $4}' | head -20
-            echo ""
+            updates_submenu
             ;;
         6)
             echo ""
