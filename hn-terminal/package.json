@@ -1,6 +1,6 @@
 {
   "name": "hn-secure-enclave",
-  "version": "1.9.6",
+  "version": "1.9.7",
   "description": "HN Secure Enclave — Secure VPS access for Horizon Network",
   "author": {
     "name": "Horizon Network",
@@ -13,7 +13,9 @@
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --win"
+    "build": "electron-builder --win --mac",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac"
   },
   "build": {
     "appId": "com.horizonnetwork.secure-enclave",
@@ -30,6 +32,27 @@
       ],
       "icon": "assets/icon.ico",
       "publisherName": "Horizon Network"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "assets/icon_256.png",
+      "category": "public.app-category.utilities",
+      "artifactName": "HN-Secure-Enclave-${version}-${arch}.${ext}"
+    },
+    "dmg": {
+      "title": "HN Secure Enclave",
+      "contents": [
+        { "x": 130, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ]
     },
     "nsis": {
       "oneClick": false,
@@ -58,6 +81,10 @@
       {
         "from": "assets/icon.ico",
         "to": "icon.ico"
+      },
+      {
+        "from": "assets/icon_256.png",
+        "to": "icon_256.png"
       }
     ]
   },

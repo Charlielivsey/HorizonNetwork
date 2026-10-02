@@ -62,6 +62,8 @@ rm -rf dist node_modules
 echo -e "${CYAN}  Installing dependencies...${RESET}"
 npm ci 2>&1 | tail -5
 
+# ── Windows build ──────────────────────────────────────
+
 # Install Wine for cross-compiling to Windows
 if ! command -v wine &>/dev/null; then
     echo -e "${CYAN}  Installing Wine for Windows cross-compilation...${RESET}"
@@ -73,23 +75,66 @@ fi
 echo -e "${CYAN}  Building Windows installer...${RESET}"
 npx electron-builder --win --x64 2>&1 | tail -20
 
-INSTALLER="dist/HN-Secure-Enclave-Setup-${VERSION}.exe"
+WIN_INSTALLER="dist/HN-Secure-Enclave-Setup-${VERSION}.exe"
 
-if [ ! -f "$INSTALLER" ]; then
-    echo -e "${RED}  Error: Build failed — $INSTALLER not found${RESET}"
-    echo -e "  Check the output above for errors."
-    exit 1
+if [ ! -f "$WIN_INSTALLER" ]; then
+    echo -e "${RED}  Warning: Windows build failed — $WIN_INSTALLER not found${RESET}"
+else
+    echo -e "${GREEN}  [✓]${RESET} Windows installer built"
 fi
 
-# Replace any older installers on the Samba share with this one
+# ── macOS build ────────────────────────────────────────
+
+echo -e "${CYAN}  Building macOS installer...${RESET}"
+npx electron-builder --mac --x64 --arm64 2>&1 | tail -20
+
+MAC_X64="dist/HN-Secure-Enclave-${VERSION}-x64.dmg"
+MAC_ARM="dist/HN-Secure-Enclave-${VERSION}-arm64.dmg"
+
+MAC_FOUND=0
+for dmg in "$MAC_X64" "$MAC_ARM"; do
+    if [ -f "$dmg" ]; then
+        MAC_FOUND=1
+    fi
+done
+
+if [ $MAC_FOUND -eq 0 ]; then
+    echo -e "${RED}  Warning: macOS build failed — no DMG files found${RESET}"
+else
+    echo -e "${GREEN}  [✓]${RESET} macOS installer(s) built"
+fi
+
+# ── Deploy ─────────────────────────────────────────────
+
 DEST="$SHARE_DIR/HN Secure Enclave"
 mkdir -p "$DEST"
-rm -f "$DEST"/HN-Secure-Enclave-Setup-*.exe
-cp "$INSTALLER" "$DEST/"
-chmod 644 "$DEST/$(basename "$INSTALLER")"
+
+# Deploy Windows
+if [ -f "$WIN_INSTALLER" ]; then
+    rm -f "$DEST"/HN-Secure-Enclave-Setup-*.exe
+    cp "$WIN_INSTALLER" "$DEST/"
+    chmod 644 "$DEST/$(basename "$WIN_INSTALLER")"
+fi
+
+# Deploy macOS
+for dmg in "$MAC_X64" "$MAC_ARM"; do
+    if [ -f "$dmg" ]; then
+        rm -f "$DEST"/HN-Secure-Enclave-*-"$(basename "$dmg" | grep -oP '(x64|arm64)')".dmg 2>/dev/null || true
+        cp "$dmg" "$DEST/"
+        chmod 644 "$DEST/$(basename "$dmg")"
+    fi
+done
 
 echo ""
 echo -e "${GREEN}  Done!${RESET}"
-echo -e "  Installer: ${CYAN}$(basename "$INSTALLER")${RESET}"
-echo -e "  Location:  ${CYAN}\\\\GATEWAY\\HN Secure Enclave\\$(basename "$INSTALLER")${RESET}"
+echo ""
+if [ -f "$WIN_INSTALLER" ]; then
+    echo -e "  Windows: ${CYAN}\\\\GATEWAY\\HN Secure Enclave\\$(basename "$WIN_INSTALLER")${RESET}"
+fi
+if [ -f "$MAC_X64" ]; then
+    echo -e "  macOS (Intel): ${CYAN}\\\\GATEWAY\\HN Secure Enclave\\$(basename "$MAC_X64")${RESET}"
+fi
+if [ -f "$MAC_ARM" ]; then
+    echo -e "  macOS (Apple Silicon): ${CYAN}\\\\GATEWAY\\HN Secure Enclave\\$(basename "$MAC_ARM")${RESET}"
+fi
 echo ""

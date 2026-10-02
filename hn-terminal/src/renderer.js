@@ -262,7 +262,7 @@
         // Create terminal
         const term = new Terminal({
             theme: getTermTheme(),
-            fontFamily: "'Cascadia Mono', 'Cascadia Code', Consolas, 'DejaVu Sans Mono', monospace",
+            fontFamily: "'SF Mono', 'Cascadia Mono', 'Cascadia Code', Menlo, Consolas, 'DejaVu Sans Mono', monospace",
             fontSize: 14,
             lineHeight: 1.15,
             cursorBlink: true,
@@ -1282,6 +1282,11 @@
         $("settings-version").textContent = "v" + initial.version;
         refreshTargets(settings);
         applyTheme(settings.theme || "dark");
+
+        if (initial.platform === "darwin") {
+            document.documentElement.setAttribute("data-platform", "mac");
+        }
+
         $("login-username").focus();
     });
 })();

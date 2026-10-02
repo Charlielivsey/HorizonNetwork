@@ -19,8 +19,8 @@
     --warning: #eab308;
     --danger: #ef4444;
     --danger-soft: rgba(239, 68, 68, 0.12);
-    --ui-font: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
-    --mono-font: "Cascadia Mono", "Cascadia Code", Consolas, "DejaVu Sans Mono", monospace;
+    --ui-font: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    --mono-font: "SF Mono", "Cascadia Mono", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace;
     --term-bg: #0c0c0c;
     --term-fg: #cccccc;
     --term-cursor: #ffffff;
@@ -1448,3 +1448,8 @@ button { font-family: inherit; }
 
 .sync-status.success { color: var(--success); background: rgba(34, 197, 94, 0.1); }
 .sync-status.error { color: #f87171; background: var(--danger-soft); }
+
+/* ── macOS platform overrides ──────────────────── */
+:root[data-platform="mac"] .window-controls { display: none; }
+:root[data-platform="mac"] .titlebar { padding-left: 78px; }
+:root[data-platform="mac"] .login-overlay { top: 34px; }

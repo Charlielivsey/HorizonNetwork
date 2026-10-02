@@ -7,9 +7,11 @@ const { Client, utils: sshUtils } = require("ssh2");
 const pkg = require("../package.json");
 
 const APP_VERSION = pkg.version;
+const IS_MAC = process.platform === "darwin";
+const ICON_EXT = IS_MAC ? "icon_256.png" : "icon.ico";
 const ICON_PATH = app.isPackaged
-  ? path.join(process.resourcesPath, "icon.ico")
-  : path.join(__dirname, "..", "assets", "icon.ico");
+  ? path.join(process.resourcesPath, ICON_EXT)
+  : path.join(__dirname, "..", "assets", ICON_EXT);
 const CONNECT_TIMEOUT_MS = 12000;
 
 const DEFAULT_SETTINGS = {
@@ -173,14 +175,13 @@ function createSplash() {
 }
 
 function createWindow() {
-  mainWindow = new BrowserWindow({
+  const winOpts = {
     width: 1100,
     height: 720,
     minWidth: 700,
     minHeight: 480,
     backgroundColor: "#0c0c0c",
     show: false,
-    frame: false,
     icon: ICON_PATH,
     webPreferences: {
       nodeIntegration: false,
@@ -188,7 +189,16 @@ function createWindow() {
       sandbox: true,
       preload: path.join(__dirname, "preload.js"),
     },
-  });
+  };
+
+  if (IS_MAC) {
+    winOpts.titleBarStyle = "hiddenInset";
+    winOpts.trafficLightPosition = { x: 14, y: 10 };
+  } else {
+    winOpts.frame = false;
+  }
+
+  mainWindow = new BrowserWindow(winOpts);
 
   mainWindow.loadFile(path.join(__dirname, "index.html"));
 
@@ -210,11 +220,13 @@ function createWindow() {
   mainWindow.on("maximize", () => send("window-state", { maximized: true }));
   mainWindow.on("unmaximize", () => send("window-state", { maximized: false }));
 
-  mainWindow.on("minimize", (event) => {
-    if (!createTrayIfNeeded()) return;
-    event.preventDefault();
-    mainWindow.hide();
-  });
+  if (!IS_MAC) {
+    mainWindow.on("minimize", (event) => {
+      if (!createTrayIfNeeded()) return;
+      event.preventDefault();
+      mainWindow.hide();
+    });
+  }
 
   mainWindow.on("closed", () => {
     mainWindow = null;
@@ -701,7 +713,7 @@ function syncThemeToVPS(theme) {
 
 // ── IPC ───────────────────────────────────────────────────
 
-ipcMain.handle("get-state", () => ({ version: APP_VERSION, settings: getSettings() }));
+ipcMain.handle("get-state", () => ({ version: APP_VERSION, settings: getSettings(), platform: process.platform }));
 
 ipcMain.handle("save-settings", (_event, input) => {
   const result = validateSettings(input || {});
@@ -790,8 +802,12 @@ ipcMain.on("window-maximize", () => {
   else mainWindow.maximize();
 });
 ipcMain.on("window-close", () => {
-  disconnectAll();
-  mainWindow?.close();
+  if (IS_MAC) {
+    mainWindow?.hide();
+  } else {
+    disconnectAll();
+    mainWindow?.close();
+  }
 });
 
 // ── App lifecycle ─────────────────────────────────────────
@@ -808,11 +824,25 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.on("window-all-closed", () => {
-    disconnectAll();
-    if (tray) {
-      tray.destroy();
-      tray = null;
+    if (!IS_MAC) {
+      disconnectAll();
+      if (tray) {
+        tray.destroy();
+        tray = null;
+      }
+      app.quit();
     }
-    app.quit();
+  });
+
+  app.on("activate", () => {
+    if (mainWindow) {
+      showMainWindow();
+    } else {
+      createWindow();
+    }
+  });
+
+  app.on("before-quit", () => {
+    disconnectAll();
   });
 }
