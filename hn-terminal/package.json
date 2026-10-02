@@ -1,6 +1,6 @@
 {
   "name": "hn-secure-enclave",
-  "version": "1.9.5",
+  "version": "1.9.6",
   "description": "HN Secure Enclave — Secure VPS access for Horizon Network",
   "author": {
     "name": "Horizon Network",

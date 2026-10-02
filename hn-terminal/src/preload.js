@@ -8,7 +8,7 @@ contextBridge.exposeInMainWorld("hn", {
   saveTheme: (theme) => ipcRenderer.invoke("save-theme", theme),
   forgetHostKey: () => ipcRenderer.invoke("forget-host-key"),
 
-  connect: (tabId, cols, rows) => ipcRenderer.send("ssh-connect", { tabId, cols, rows }),
+  connect: (tabId, cols, rows, username, password) => ipcRenderer.send("ssh-connect", { tabId, cols, rows, username, password }),
   cancel: (tabId) => ipcRenderer.send("ssh-cancel", tabId),
   sendPassword: (tabId, password) => ipcRenderer.send("ssh-password", { tabId, password }),
   sendInput: (tabId, data) => ipcRenderer.send("ssh-input", { tabId, data }),

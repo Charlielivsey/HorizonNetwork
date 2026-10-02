@@ -15,7 +15,6 @@ const CONNECT_TIMEOUT_MS = 12000;
 const DEFAULT_SETTINGS = {
   host: "217.154.34.205",
   port: 22,
-  username: "root",
 };
 
 let splashWindow = null;
@@ -49,7 +48,6 @@ function getSettings() {
   return {
     host: cfg.host || DEFAULT_SETTINGS.host,
     port: Number(cfg.port) || DEFAULT_SETTINGS.port,
-    username: cfg.username || DEFAULT_SETTINGS.username,
     theme: cfg.theme || "dark",
   };
 }
@@ -57,14 +55,12 @@ function getSettings() {
 function validateSettings(input) {
   const host = String(input.host || "").trim();
   const port = Number(String(input.port || "").trim());
-  const username = String(input.username || "").trim();
 
   if (!host) return { error: "Enter an IP address or hostname." };
   if (!/^[A-Za-z0-9.\-:\[\]]+$/.test(host)) return { error: "That doesn't look like a valid IP address or hostname." };
   if (!Number.isInteger(port) || port < 1 || port > 65535) return { error: "Port must be a number between 1 and 65535." };
-  if (!/^[A-Za-z_][A-Za-z0-9_.-]{0,31}$/.test(username)) return { error: "Enter a valid username." };
 
-  return { settings: { host: host.replace(/^\[|\]$/g, ""), port, username } };
+  return { settings: { host: host.replace(/^\[|\]$/g, ""), port } };
 }
 
 function hostKeyId(host, port) {
@@ -347,10 +343,10 @@ function disconnectAll() {
   sessions.clear();
 }
 
-function connectTab(tabId, { cols, rows }) {
+function connectTab(tabId, { cols, rows, username, password }) {
   disconnectTab(tabId);
 
-  const target = getSettings();
+  const target = { ...getSettings(), username };
   const conn = new Client();
   const s = {
     tabId,
@@ -365,6 +361,7 @@ function connectTab(tabId, { cols, rows }) {
     authUnsupported: null,
     timedOut: false,
     connectTimer: null,
+    prePassword: password || null,
   };
   sessions.set(tabId, s);
 
@@ -446,6 +443,20 @@ function connectTab(tabId, { cols, rows }) {
       if (!canPassword && !canKeyboard) {
         s.authUnsupported = methodsLeft;
         return next(false);
+      }
+
+      if (s.prePassword && s.passwordAttempts === 0) {
+        const pw = s.prePassword;
+        s.prePassword = null;
+        s.passwordAttempts += 1;
+        if (canPassword) {
+          return next({ type: "password", username, password: pw });
+        }
+        return next({
+          type: "keyboard-interactive",
+          username,
+          prompt: (_name, _instructions, _lang, prompts, finish) => finish(prompts.map(() => pw)),
+        });
       }
 
       s.awaitingPassword = true;
@@ -717,7 +728,7 @@ ipcMain.handle("forget-host-key", () => {
   return true;
 });
 
-ipcMain.on("ssh-connect", (_event, { tabId, cols, rows }) => connectTab(tabId, { cols, rows }));
+ipcMain.on("ssh-connect", (_event, { tabId, cols, rows, username, password }) => connectTab(tabId, { cols, rows, username, password }));
 
 ipcMain.on("ssh-cancel", (_event, tabId) => {
   const s = sessions.get(tabId);

@@ -1,7 +1,7 @@
 (() => {
     const $ = (id) => document.getElementById(id);
 
-    let settings = { host: "", port: 22, username: "root", theme: "dark" };
+    let settings = { host: "", port: 22, theme: "dark" };
     let currentUser = null;
     let currentView = "home";
     let tabCounter = 0;
@@ -10,8 +10,13 @@
 
     // ── Helpers ─────────────────────────────────────
 
-    function targetLabel(s = settings) {
-        return `${s.username}@${s.host}${Number(s.port) === 22 ? "" : ":" + s.port}`;
+    function targetLabel(s) {
+        const src = s || settings;
+        const user = src.username || "";
+        const host = src.host || settings.host;
+        const port = Number(src.port || settings.port);
+        if (user) return `${user}@${host}${port === 22 ? "" : ":" + port}`;
+        return `${host}${port === 22 ? "" : ":" + port}`;
     }
 
     // ── Theme ───────────────────────────────────────
@@ -238,12 +243,16 @@
                     <div class="card-icon icon-accent">
                         <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M7 8l4 4-4 4M13 16h4"/></svg>
                     </div>
-                    <h2>Ready to connect</h2>
+                    <h2>Connect to server</h2>
                     <p class="target" data-target></p>
-                    <div class="actions">
-                        <button class="btn btn-ghost" data-action="settings" data-tab="${tabId}">Settings</button>
-                        <button class="btn btn-primary" data-action="connect" data-tab="${tabId}">Connect</button>
-                    </div>
+                    <form class="connect-form" autocomplete="off">
+                        <input type="text" class="input mono connect-user" placeholder="Username" spellcheck="false" value="root">
+                        <input type="password" class="input connect-pass" placeholder="Password" spellcheck="false">
+                        <div class="actions">
+                            <button type="button" class="btn btn-ghost" data-action="settings" data-tab="${tabId}">Settings</button>
+                            <button type="submit" class="btn btn-primary">Connect</button>
+                        </div>
+                    </form>
                 </section>
             </div>
         `;
@@ -310,7 +319,20 @@
             }
         });
 
-        // Password form
+        // Connect form (idle screen)
+        const connectForm = pane.querySelector(".connect-form");
+        connectForm.addEventListener("submit", (e) => {
+            e.preventDefault();
+            const userInput = pane.querySelector(".connect-user");
+            const passInput = pane.querySelector(".connect-pass");
+            const username = userInput.value.trim();
+            const password = passInput.value;
+            if (!username) { userInput.focus(); return; }
+            if (!password) { passInput.focus(); return; }
+            connectTab(tabId, username, password);
+        });
+
+        // Password form (re-prompt from server)
         const pwForm = pane.querySelector(".password-form");
         pwForm.addEventListener("submit", (e) => {
             e.preventDefault();
@@ -330,7 +352,7 @@
                 const action = btn.dataset.action;
                 const tid = btn.dataset.tab;
                 if (action === "cancel") hn.cancel(tid);
-                else if (action === "connect") connectTab(tid);
+                else if (action === "connect") showTabScreen(tid, "idle");
                 else if (action === "settings") switchView("settings");
             });
         });
@@ -379,12 +401,12 @@
         updateHomeStatus();
     }
 
-    function connectTab(tabId) {
+    function connectTab(tabId, username, password) {
         const tab = sshTabs.get(tabId);
         if (!tab) return;
         tab.term.reset();
         try { tab.fitAddon.fit(); } catch (_) {}
-        hn.connect(tabId, tab.term.cols, tab.term.rows);
+        hn.connect(tabId, tab.term.cols, tab.term.rows, username, password);
     }
 
     function setTabDot(tabId, cls) {
@@ -523,7 +545,6 @@
     function populateSettingsForm() {
         $("set-host").value = settings.host;
         $("set-port").value = settings.port;
-        $("set-username").value = settings.username;
         $("settings-error").hidden = true;
         $("forget-host-key").textContent = "Forget";
         $("forget-host-key").disabled = false;
@@ -534,7 +555,6 @@
         const result = await hn.saveSettings({
             host: $("set-host").value,
             port: $("set-port").value,
-            username: $("set-username").value,
             theme: settings.theme,
         });
         if (!result.ok) {

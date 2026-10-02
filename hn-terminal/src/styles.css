@@ -648,6 +648,8 @@ button { font-family: inherit; }
 
 .password-form { margin-top: 18px; text-align: left; }
 .password-form .actions { justify-content: flex-end; }
+.connect-form { margin-top: 18px; text-align: left; display: flex; flex-direction: column; gap: 10px; }
+.connect-form .actions { justify-content: flex-end; }
 
 /* ── Files view ──────────────────────────────────── */
 .files-view {
