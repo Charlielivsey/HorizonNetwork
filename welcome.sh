@@ -365,6 +365,8 @@ show_menu() {
     echo -e "  ${CYAN}[7]${RESET}  Network Info"
     echo -e "  ${CYAN}[8]${RESET}  User Management"
     echo -e "  ${CYAN}[9]${RESET}  Log Out All Sessions"
+    echo ""
+    echo -e "  ${CYAN}[l]${RESET}  Log Out"
     echo -e "  ${CYAN}[0]${RESET}  Exit"
     echo ""
 }
@@ -508,13 +510,13 @@ show_updates_menu() {
     echo -e "  ╚═══════════════════════════════════════════════════╝${RESET}"
     echo ""
 
-    if [ -d "$REPO_DIR/.git" ]; then
+    if sudo test -d "$REPO_DIR/.git"; then
         local current_branch
-        current_branch=$(cd "$REPO_DIR" && git rev-parse --abbrev-ref HEAD 2>/dev/null)
+        current_branch=$(sudo git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null)
         local last_commit
-        last_commit=$(cd "$REPO_DIR" && git log -1 --format="%h %s" 2>/dev/null)
+        last_commit=$(sudo git -C "$REPO_DIR" log -1 --format="%h %s" 2>/dev/null)
         local last_pull
-        last_pull=$(stat -c %Y "$REPO_DIR/.git/FETCH_HEAD" 2>/dev/null)
+        last_pull=$(sudo stat -c %Y "$REPO_DIR/.git/FETCH_HEAD" 2>/dev/null)
         if [ -n "$last_pull" ]; then
             last_pull=$(date -d @"$last_pull" "+%Y-%m-%d %H:%M" 2>/dev/null)
         else
@@ -550,9 +552,8 @@ updates_submenu() {
                 echo ""
                 echo -e "  ${CYAN}Pulling latest from ${REPO_BRANCH}...${RESET}"
                 echo ""
-                cd "$REPO_DIR" 2>/dev/null || { echo -e "  ${RED}Cannot access ${REPO_DIR}${RESET}"; echo ""; continue; }
-                sudo git fetch origin "$REPO_BRANCH" 2>&1 | sed 's/^/  /'
-                sudo git reset --hard "origin/$REPO_BRANCH" 2>&1 | sed 's/^/  /'
+                sudo git -C "$REPO_DIR" fetch origin "$REPO_BRANCH" 2>&1 | sed 's/^/  /'
+                sudo git -C "$REPO_DIR" reset --hard "origin/$REPO_BRANCH" 2>&1 | sed 's/^/  /'
                 echo ""
                 echo -e "  ${GREEN}[✓] Updated to latest${RESET}"
                 echo ""
@@ -561,9 +562,8 @@ updates_submenu() {
                 echo ""
                 echo -e "  ${CYAN}Pulling and reinstalling welcome screen...${RESET}"
                 echo ""
-                cd "$REPO_DIR" 2>/dev/null || { echo -e "  ${RED}Cannot access ${REPO_DIR}${RESET}"; echo ""; continue; }
-                sudo git fetch origin "$REPO_BRANCH" 2>&1 | sed 's/^/  /'
-                sudo git reset --hard "origin/$REPO_BRANCH" 2>&1 | sed 's/^/  /'
+                sudo git -C "$REPO_DIR" fetch origin "$REPO_BRANCH" 2>&1 | sed 's/^/  /'
+                sudo git -C "$REPO_DIR" reset --hard "origin/$REPO_BRANCH" 2>&1 | sed 's/^/  /'
                 echo ""
                 sudo bash "$REPO_DIR/setup-welcome.sh"
                 echo -e "  ${GREEN}[✓] Welcome screen reinstalled. Changes take effect on next login.${RESET}"
@@ -573,11 +573,10 @@ updates_submenu() {
                 echo ""
                 echo -e "  ${CYAN}Pulling and rebuilding Secure Enclave...${RESET}"
                 echo ""
-                cd "$REPO_DIR" 2>/dev/null || { echo -e "  ${RED}Cannot access ${REPO_DIR}${RESET}"; echo ""; continue; }
-                sudo git fetch origin "$REPO_BRANCH" 2>&1 | sed 's/^/  /'
-                sudo git reset --hard "origin/$REPO_BRANCH" 2>&1 | sed 's/^/  /'
+                sudo git -C "$REPO_DIR" fetch origin "$REPO_BRANCH" 2>&1 | sed 's/^/  /'
+                sudo git -C "$REPO_DIR" reset --hard "origin/$REPO_BRANCH" 2>&1 | sed 's/^/  /'
                 echo ""
-                if [ -f "$REPO_DIR/hn-terminal/build-and-share.sh" ]; then
+                if sudo test -f "$REPO_DIR/hn-terminal/build-and-share.sh"; then
                     sudo bash "$REPO_DIR/hn-terminal/build-and-share.sh"
                 else
                     echo -e "  ${RED}Build script not found${RESET}"
@@ -588,8 +587,7 @@ updates_submenu() {
                 echo ""
                 echo -e "  ${BLUE}── Recent Commits ──${RESET}"
                 echo ""
-                cd "$REPO_DIR" 2>/dev/null || { echo -e "  ${RED}Cannot access ${REPO_DIR}${RESET}"; echo ""; continue; }
-                git log --oneline -15 2>/dev/null | sed 's/^/  /'
+                sudo git -C "$REPO_DIR" log --oneline -15 2>/dev/null | sed 's/^/  /'
                 echo ""
                 ;;
             5)
@@ -597,8 +595,7 @@ updates_submenu() {
                 echo -e "  ${CYAN}Opening update console at ${REPO_DIR}...${RESET}"
                 echo -e "  ${GRAY}Type 'exit' to return to the menu.${RESET}"
                 echo ""
-                cd "$REPO_DIR" 2>/dev/null || { echo -e "  ${RED}Cannot access ${REPO_DIR}${RESET}"; echo ""; continue; }
-                bash
+                sudo bash -c "cd '$REPO_DIR' && exec bash"
                 show_updates_menu
                 ;;
             m)
@@ -747,6 +744,10 @@ while true; do
             echo ""
             echo -ne "  ${GRAY}Press Enter to continue...${RESET}"
             read -r
+            ;;
+        l|L)
+            echo -e "\n  ${GRAY}Logging out...${RESET}\n"
+            logout 2>/dev/null || exit 0
             ;;
         0)
             echo -e "\n  ${GRAY}Disconnecting...${RESET}\n"
