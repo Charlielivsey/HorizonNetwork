@@ -373,6 +373,7 @@
                 switchSSHTab(remaining[remaining.length - 1]);
             } else {
                 activeTabId = null;
+                switchView("home");
             }
         }
         updateHomeStatus();
