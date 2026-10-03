@@ -536,8 +536,9 @@ show_updates_menu() {
     echo -e "  ${CYAN}[1]${RESET}  Pull Latest Updates"
     echo -e "  ${CYAN}[2]${RESET}  Pull & Reinstall Welcome Screen"
     echo -e "  ${CYAN}[3]${RESET}  Pull & Rebuild Secure Enclave"
-    echo -e "  ${CYAN}[4]${RESET}  View Recent Commits"
-    echo -e "  ${CYAN}[5]${RESET}  Open Update Console"
+    echo -e "  ${CYAN}[4]${RESET}  Setup Clover Share"
+    echo -e "  ${CYAN}[5]${RESET}  View Recent Commits"
+    echo -e "  ${CYAN}[6]${RESET}  Open Update Console"
     echo -e "  ${CYAN}[m]${RESET}  Back to Main Menu"
     echo ""
 }
@@ -585,12 +586,24 @@ updates_submenu() {
                 ;;
             4)
                 echo ""
+                if sudo test -f "$REPO_DIR/setup-clover-share.sh"; then
+                    sudo bash "$REPO_DIR/setup-clover-share.sh"
+                else
+                    echo -e "  ${RED}Setup script not found. Pull latest code first.${RESET}"
+                fi
+                echo ""
+                echo -ne "  ${GRAY}Press Enter to continue...${RESET}"
+                read -r
+                show_updates_menu
+                ;;
+            5)
+                echo ""
                 echo -e "  ${BLUE}── Recent Commits ──${RESET}"
                 echo ""
                 sudo git -C "$REPO_DIR" log --oneline -15 2>/dev/null | sed 's/^/  /'
                 echo ""
                 ;;
-            5)
+            6)
                 echo ""
                 echo -e "  ${CYAN}Opening update console at ${REPO_DIR}...${RESET}"
                 echo -e "  ${GRAY}Type 'exit' to return to the menu.${RESET}"

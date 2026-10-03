@@ -1449,7 +1449,13 @@ button { font-family: inherit; }
 .sync-status.success { color: var(--success); background: rgba(34, 197, 94, 0.1); }
 .sync-status.error { color: #f87171; background: var(--danger-soft); }
 
+/* ── Network share buttons ─────────────────────── */
+.mount-label-mac { display: none; }
+.mount-label-win { display: inline; }
+
 /* ── macOS platform overrides ──────────────────── */
 :root[data-platform="mac"] .window-controls { display: none; }
 :root[data-platform="mac"] .titlebar { padding-left: 78px; }
 :root[data-platform="mac"] .login-overlay { top: 34px; }
+:root[data-platform="mac"] .mount-label-mac { display: inline; }
+:root[data-platform="mac"] .mount-label-win { display: none; }

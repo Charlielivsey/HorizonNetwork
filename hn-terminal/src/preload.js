@@ -36,6 +36,8 @@ contextBridge.exposeInMainWorld("hn", {
   syncTheme: (theme) => ipcRenderer.invoke("sync-theme", theme),
   saveUserTheme: (username, theme) => ipcRenderer.invoke("save-user-theme", { username, theme }),
 
+  mountShare: (name) => ipcRenderer.invoke("mount-share", name),
+
   readClipboard: () => ipcRenderer.invoke("clipboard-read"),
   writeClipboard: (text) => ipcRenderer.send("clipboard-write", text),
   openExternal: (url) => ipcRenderer.send("open-external", url),

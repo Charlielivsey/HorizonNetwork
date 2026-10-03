@@ -19,13 +19,10 @@ fi
 
 cd "$SCRIPT_DIR"
 
-# Always build the latest pushed code. Git replaces this file with a new inode,
-# so the running copy is unaffected; we then re-run the updated script.
 BRANCH="claude/vps-welcome-screen-m373a1"
 if [ -z "$HN_SYNCED" ]; then
     echo -e "${CYAN}  Fetching latest code ($BRANCH)...${RESET}"
     git fetch -q origin "$BRANCH"
-    # Generated files from older builds that are now tracked would block the update
     for f in package-lock.json .gitignore; do
         if [ -e "$f" ] && ! git ls-files --error-unmatch "$f" &>/dev/null; then
             rm -f "$f"
@@ -48,93 +45,90 @@ VERSION=$(node -p "require('./package.json').version")
 echo -e "  Version: ${CYAN}v${VERSION}${RESET}"
 echo ""
 
-# Install build tools if needed
+# Install build tools if needed (first run only)
 if ! command -v make &>/dev/null; then
     echo -e "${CYAN}  Installing build tools...${RESET}"
     apt-get update -qq
     apt-get install -y -qq build-essential
 fi
-
-# Clean previous build
-rm -rf dist node_modules
-
-# Install dependencies
-echo -e "${CYAN}  Installing dependencies...${RESET}"
-npm ci 2>&1 | tail -5
-
-# ── Windows build ──────────────────────────────────────
-
-# Install Wine for cross-compiling to Windows
 if ! command -v wine &>/dev/null; then
     echo -e "${CYAN}  Installing Wine for Windows cross-compilation...${RESET}"
     dpkg --add-architecture i386 2>/dev/null || true
     apt-get update -qq
     apt-get install -y -qq wine wine64 2>&1 | tail -3
 fi
-
-echo -e "${CYAN}  Building Windows installer...${RESET}"
-if npx electron-builder --win --x64 2>&1 | tail -20; then
-    true
-fi
-
-WIN_INSTALLER="dist/HN-Secure-Enclave-Setup-${VERSION}.exe"
-
-if [ ! -f "$WIN_INSTALLER" ]; then
-    echo -e "${RED}  Warning: Windows build failed — $WIN_INSTALLER not found${RESET}"
-else
-    echo -e "${GREEN}  [✓]${RESET} Windows installer built"
-fi
-
-# ── macOS build ────────────────────────────────────────
-
-# icnsutils converts PNG icons to macOS .icns format on Linux
 if ! command -v png2icns &>/dev/null; then
     echo -e "${CYAN}  Installing macOS cross-compilation tools...${RESET}"
     apt-get update -qq
     apt-get install -y -qq icnsutils 2>&1 | tail -3
 fi
 
-echo -e "${CYAN}  Building macOS app...${RESET}"
+# Clean previous build output, keep node_modules
+rm -rf dist
+
+# Only reinstall if node_modules is missing or package.json changed
+if [ ! -d node_modules ] || [ package.json -nt node_modules/.package-lock.json ]; then
+    echo -e "${CYAN}  Installing dependencies...${RESET}"
+    npm ci 2>&1 | tail -5
+else
+    echo -e "${GREEN}  [✓]${RESET} Dependencies up to date"
+fi
+
+# ── Build both platforms in parallel ──────────────────
+
+echo -e "${CYAN}  Building Windows + macOS in parallel...${RESET}"
+echo ""
+
+WIN_LOG="$(mktemp)"
 MAC_LOG="$(mktemp)"
-if npx electron-builder --mac --x64 --arm64 2>&1 | tee "$MAC_LOG" | tail -20; then
-    true
+
+npx electron-builder --win --x64 >"$WIN_LOG" 2>&1 &
+WIN_PID=$!
+
+npx electron-builder --mac --x64 --arm64 >"$MAC_LOG" 2>&1 &
+MAC_PID=$!
+
+WIN_OK=0
+MAC_OK=0
+
+if wait $WIN_PID; then WIN_OK=1; fi
+if wait $MAC_PID; then MAC_OK=1; fi
+
+# ── Check results ────────────────────────────────────
+
+WIN_INSTALLER="dist/HN-Secure-Enclave-Setup-${VERSION}.exe"
+if [ -f "$WIN_INSTALLER" ]; then
+    echo -e "${GREEN}  [✓]${RESET} Windows installer built"
+else
+    echo -e "${RED}  [✗] Windows build failed${RESET}"
+    tail -15 "$WIN_LOG" 2>/dev/null | sed 's/^/    /'
 fi
 
 MAC_X64="dist/HN-Secure-Enclave-${VERSION}-mac-x64.zip"
 MAC_ARM="dist/HN-Secure-Enclave-${VERSION}-mac-arm64.zip"
-
-MAC_FOUND=0
-for zipf in "$MAC_X64" "$MAC_ARM"; do
-    if [ -f "$zipf" ]; then
-        MAC_FOUND=1
-    fi
-done
-
-if [ $MAC_FOUND -eq 0 ]; then
-    echo -e "${RED}  Warning: macOS build failed — no zip files found${RESET}"
-    echo -e "${RED}  Full build log:${RESET}"
-    cat "$MAC_LOG" 2>/dev/null | sed 's/^/    /'
+if [ -f "$MAC_X64" ] || [ -f "$MAC_ARM" ]; then
+    echo -e "${GREEN}  [✓]${RESET} macOS app built"
+else
+    echo -e "${RED}  [✗] macOS build failed${RESET}"
+    tail -15 "$MAC_LOG" 2>/dev/null | sed 's/^/    /'
     echo ""
     echo -e "${RED}  Files in dist/:${RESET}"
     ls -la dist/ 2>/dev/null | sed 's/^/    /' || echo "    (no dist directory)"
-else
-    echo -e "${GREEN}  [✓]${RESET} macOS app built"
 fi
-rm -f "$MAC_LOG"
+
+rm -f "$WIN_LOG" "$MAC_LOG"
 
 # ── Deploy ─────────────────────────────────────────────
 
 DEST="$SHARE_DIR/HN Secure Enclave"
 mkdir -p "$DEST"
 
-# Deploy Windows
 if [ -f "$WIN_INSTALLER" ]; then
     rm -f "$DEST"/HN-Secure-Enclave-Setup-*.exe
     cp "$WIN_INSTALLER" "$DEST/"
     chmod 644 "$DEST/$(basename "$WIN_INSTALLER")"
 fi
 
-# Deploy macOS
 for zipf in "$MAC_X64" "$MAC_ARM"; do
     if [ -f "$zipf" ]; then
         ARCH="$(basename "$zipf" | grep -oP '(x64|arm64)')"

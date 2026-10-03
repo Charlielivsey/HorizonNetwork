@@ -548,6 +548,7 @@
         $("settings-error").hidden = true;
         $("forget-host-key").textContent = "Forget";
         $("forget-host-key").disabled = false;
+        updateSharePaths();
     }
 
     $("settings-form").addEventListener("submit", async (e) => {
@@ -565,6 +566,7 @@
         settings = result.settings;
         $("settings-error").hidden = true;
         refreshTargets(settings);
+        updateSharePaths();
 
         // Brief flash to confirm save
         const btn = $("settings-save");
@@ -583,6 +585,43 @@
         $("forget-host-key").textContent = "Forgotten";
         $("forget-host-key").disabled = true;
     });
+
+    // ── Network shares ────────────────────────────
+
+    function updateSharePaths() {
+        const host = settings.host;
+        const isMac = document.documentElement.getAttribute("data-platform") === "mac";
+        if (isMac) {
+            $("share-gateway-path").textContent = `smb://${host}/GATEWAY`;
+            $("share-clover-path").textContent = `smb://${host}/Clover`;
+        } else {
+            $("share-gateway-path").textContent = `\\\\${host}\\GATEWAY`;
+            $("share-clover-path").textContent = `\\\\${host}\\Clover`;
+        }
+    }
+
+    async function mountShare(name, btn) {
+        const status = $("mount-status");
+        btn.disabled = true;
+        try {
+            const result = await hn.mountShare(name);
+            if (result.ok) {
+                status.textContent = `Opening ${name}…`;
+                status.className = "sync-status success";
+            } else {
+                status.textContent = result.error || "Failed to open share.";
+                status.className = "sync-status error";
+            }
+        } catch (err) {
+            status.textContent = err.message || "Failed to open share.";
+            status.className = "sync-status error";
+        }
+        status.hidden = false;
+        setTimeout(() => { btn.disabled = false; status.hidden = true; }, 2000);
+    }
+
+    $("mount-gateway").addEventListener("click", () => mountShare("GATEWAY", $("mount-gateway")));
+    $("mount-clover").addEventListener("click", () => mountShare("Clover", $("mount-clover")));
 
     // ── Admin page ─────────────────────────────────
 
@@ -1287,6 +1326,7 @@
             document.documentElement.setAttribute("data-platform", "mac");
         }
 
+        updateSharePaths();
         $("login-username").focus();
     });
 })();

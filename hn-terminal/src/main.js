@@ -1,4 +1,5 @@
 const { app, BrowserWindow, ipcMain, Tray, Menu, shell, clipboard, dialog } = require("electron");
+const { execFile } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
@@ -808,6 +809,19 @@ ipcMain.on("window-close", () => {
     disconnectAll();
     mainWindow?.close();
   }
+});
+
+ipcMain.handle("mount-share", (_event, shareName) => {
+  const { host } = getSettings();
+  if (!host) return { ok: false, error: "No server configured." };
+  const name = String(shareName).replace(/[^A-Za-z0-9_ -]/g, "");
+  if (!name) return { ok: false, error: "Invalid share name." };
+  if (IS_MAC) {
+    execFile("open", [`smb://${host}/${name}`]);
+  } else {
+    execFile("explorer", [`\\\\${host}\\${name}`]);
+  }
+  return { ok: true };
 });
 
 // ── App lifecycle ─────────────────────────────────────────
