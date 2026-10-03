@@ -87,8 +87,16 @@ fi
 
 # ── macOS build ────────────────────────────────────────
 
+# icnsutils converts PNG icons to macOS .icns format on Linux
+if ! command -v png2icns &>/dev/null; then
+    echo -e "${CYAN}  Installing macOS cross-compilation tools...${RESET}"
+    apt-get update -qq
+    apt-get install -y -qq icnsutils 2>&1 | tail -3
+fi
+
 echo -e "${CYAN}  Building macOS app...${RESET}"
-if npx electron-builder --mac --x64 --arm64 2>&1 | tail -20; then
+MAC_LOG="$(mktemp)"
+if npx electron-builder --mac --x64 --arm64 2>&1 | tee "$MAC_LOG" | tail -20; then
     true
 fi
 
@@ -104,9 +112,15 @@ done
 
 if [ $MAC_FOUND -eq 0 ]; then
     echo -e "${RED}  Warning: macOS build failed — no zip files found${RESET}"
+    echo -e "${RED}  Full build log:${RESET}"
+    cat "$MAC_LOG" 2>/dev/null | sed 's/^/    /'
+    echo ""
+    echo -e "${RED}  Files in dist/:${RESET}"
+    ls -la dist/ 2>/dev/null | sed 's/^/    /' || echo "    (no dist directory)"
 else
     echo -e "${GREEN}  [✓]${RESET} macOS app built"
 fi
+rm -f "$MAC_LOG"
 
 # ── Deploy ─────────────────────────────────────────────
 
