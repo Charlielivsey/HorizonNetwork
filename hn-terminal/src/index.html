@@ -72,6 +72,10 @@
                     <svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                     <span>Files</span>
                 </button>
+                <button class="sidebar-item" data-view="shares" title="Network Shares">
+                    <svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+                    <span>Shares</span>
+                </button>
                 <button class="sidebar-item" data-view="vpn" title="VPN">
                     <svg viewBox="0 0 24 24"><rect x="1" y="5" width="22" height="14" rx="7"/><circle cx="8" cy="12" r="3"/></svg>
                     <span>VPN</span>
@@ -257,6 +261,37 @@
                 </div>
             </section>
 
+            <!-- SHARES VIEW -->
+            <section class="view" id="view-shares" hidden>
+                <div class="settings-page">
+                    <h2 class="settings-page-title">Network Shares</h2>
+                    <div class="settings-section">
+                        <h3>Available Shares</h3>
+                        <div class="setting-line">
+                            <div>
+                                <div class="setting-name">GATEWAY</div>
+                                <div class="setting-desc mono" id="share-gateway-path"></div>
+                            </div>
+                            <button type="button" class="btn btn-small btn-primary" id="mount-gateway">
+                                <span class="mount-label-mac">Add to Finder</span>
+                                <span class="mount-label-win">Add to Explorer</span>
+                            </button>
+                        </div>
+                        <div class="setting-line">
+                            <div>
+                                <div class="setting-name">Clover</div>
+                                <div class="setting-desc mono" id="share-clover-path"></div>
+                            </div>
+                            <button type="button" class="btn btn-small btn-primary" id="mount-clover">
+                                <span class="mount-label-mac">Add to Finder</span>
+                                <span class="mount-label-win">Add to Explorer</span>
+                            </button>
+                        </div>
+                        <p class="sync-status" id="mount-status" hidden></p>
+                    </div>
+                </div>
+            </section>
+
             <!-- SETTINGS VIEW -->
             <section class="view" id="view-settings" hidden>
                 <div class="settings-page">
@@ -324,31 +359,6 @@
                         </div>
                     </div>
 
-                    <div class="settings-section">
-                        <h3>Network Shares</h3>
-                        <div class="setting-line">
-                            <div>
-                                <div class="setting-name">GATEWAY</div>
-                                <div class="setting-desc mono" id="share-gateway-path"></div>
-                            </div>
-                            <button type="button" class="btn btn-small btn-primary" id="mount-gateway">
-                                <span class="mount-label-mac">Add to Finder</span>
-                                <span class="mount-label-win">Add to Explorer</span>
-                            </button>
-                        </div>
-                        <div class="setting-line">
-                            <div>
-                                <div class="setting-name">Clover</div>
-                                <div class="setting-desc mono" id="share-clover-path"></div>
-                            </div>
-                            <button type="button" class="btn btn-small btn-primary" id="mount-clover">
-                                <span class="mount-label-mac">Add to Finder</span>
-                                <span class="mount-label-win">Add to Explorer</span>
-                            </button>
-                        </div>
-                        <p class="sync-status" id="mount-status" hidden></p>
-                    </div>
-
                     <div class="settings-section" id="admin-section" hidden>
                         <h3>Administration</h3>
                         <div class="setting-line">
@@ -358,18 +368,6 @@
                             </div>
                             <button type="button" class="btn btn-small btn-primary" id="admin-settings-btn">Manage Users</button>
                         </div>
-                    </div>
-
-                    <div class="settings-section">
-                        <h3>Theme Sync</h3>
-                        <div class="setting-line">
-                            <div>
-                                <div class="setting-name">Push theme to VPS</div>
-                                <div class="setting-desc">Update the VPS welcome screen colours to match your theme.</div>
-                            </div>
-                            <button type="button" class="btn btn-small btn-ghost" id="sync-theme-btn">Sync</button>
-                        </div>
-                        <p class="sync-status" id="sync-theme-status" hidden></p>
                     </div>
 
                     <div class="settings-section">

@@ -74,49 +74,39 @@ else
     echo -e "${GREEN}  [✓]${RESET} Dependencies up to date"
 fi
 
-# ── Build both platforms in parallel ──────────────────
+# ── Build Windows ────────────────────────────────────
 
-echo -e "${CYAN}  Building Windows + macOS in parallel...${RESET}"
+echo -e "${CYAN}  Building Windows installer...${RESET}"
 echo ""
 
-WIN_LOG="$(mktemp)"
-MAC_LOG="$(mktemp)"
-
-npx electron-builder --win --x64 >"$WIN_LOG" 2>&1 &
-WIN_PID=$!
-
-npx electron-builder --mac --x64 --arm64 >"$MAC_LOG" 2>&1 &
-MAC_PID=$!
-
-WIN_OK=0
-MAC_OK=0
-
-if wait $WIN_PID; then WIN_OK=1; fi
-if wait $MAC_PID; then MAC_OK=1; fi
-
-# ── Check results ────────────────────────────────────
-
 WIN_INSTALLER="dist/HN-Secure-Enclave-Setup-${VERSION}.exe"
-if [ -f "$WIN_INSTALLER" ]; then
-    echo -e "${GREEN}  [✓]${RESET} Windows installer built"
+if npx electron-builder --win --x64 2>&1 | tail -5; then
+    if [ -f "$WIN_INSTALLER" ]; then
+        echo -e "${GREEN}  [✓]${RESET} Windows installer built"
+    else
+        echo -e "${RED}  [✗] Windows build produced no installer${RESET}"
+    fi
 else
     echo -e "${RED}  [✗] Windows build failed${RESET}"
-    tail -15 "$WIN_LOG" 2>/dev/null | sed 's/^/    /'
 fi
+
+# ── Build macOS ──────────────────────────────────────
+
+echo ""
+echo -e "${CYAN}  Building macOS app...${RESET}"
+echo ""
 
 MAC_X64="dist/HN-Secure-Enclave-${VERSION}-mac-x64.zip"
 MAC_ARM="dist/HN-Secure-Enclave-${VERSION}-mac-arm64.zip"
-if [ -f "$MAC_X64" ] || [ -f "$MAC_ARM" ]; then
-    echo -e "${GREEN}  [✓]${RESET} macOS app built"
+if npx electron-builder --mac --x64 --arm64 2>&1 | tail -5; then
+    if [ -f "$MAC_X64" ] || [ -f "$MAC_ARM" ]; then
+        echo -e "${GREEN}  [✓]${RESET} macOS app built"
+    else
+        echo -e "${RED}  [✗] macOS build produced no output${RESET}"
+    fi
 else
     echo -e "${RED}  [✗] macOS build failed${RESET}"
-    tail -15 "$MAC_LOG" 2>/dev/null | sed 's/^/    /'
-    echo ""
-    echo -e "${RED}  Files in dist/:${RESET}"
-    ls -la dist/ 2>/dev/null | sed 's/^/    /' || echo "    (no dist directory)"
 fi
-
-rm -f "$WIN_LOG" "$MAC_LOG"
 
 # ── Deploy ─────────────────────────────────────────────
 

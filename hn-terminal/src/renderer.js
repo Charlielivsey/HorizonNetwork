@@ -147,6 +147,9 @@
         if (view === "files") {
             refreshFilesIfNeeded();
         }
+        if (view === "shares") {
+            updateSharePaths();
+        }
         if (view === "admin") {
             loadUserList();
         }
@@ -246,7 +249,7 @@
                     <h2>Connect to server</h2>
                     <p class="target" data-target></p>
                     <form class="connect-form" autocomplete="off">
-                        <input type="text" class="input mono connect-user" placeholder="Username" spellcheck="false" value="root">
+                        <input type="text" class="input mono connect-user" placeholder="Username" spellcheck="false">
                         <input type="password" class="input connect-pass" placeholder="Password" spellcheck="false">
                         <div class="actions">
                             <button type="button" class="btn btn-ghost" data-action="settings" data-tab="${tabId}">Settings</button>
@@ -548,7 +551,6 @@
         $("settings-error").hidden = true;
         $("forget-host-key").textContent = "Forget";
         $("forget-host-key").disabled = false;
-        updateSharePaths();
     }
 
     $("settings-form").addEventListener("submit", async (e) => {
@@ -687,30 +689,6 @@
             list.appendChild(row);
         }
     }
-
-    // ── Theme sync ─────────────────────────────────
-
-    $("sync-theme-btn").addEventListener("click", async () => {
-        const btn = $("sync-theme-btn");
-        const status = $("sync-theme-status");
-        btn.textContent = "Syncing…";
-        btn.disabled = true;
-        status.hidden = true;
-
-        try {
-            await hn.syncTheme(settings.theme);
-            btn.textContent = "Synced!";
-            status.textContent = "Theme colours pushed to VPS.";
-            status.className = "sync-status success";
-            status.hidden = false;
-        } catch (err) {
-            status.textContent = err.message || "Sync failed. Are you connected?";
-            status.className = "sync-status error";
-            status.hidden = false;
-        }
-
-        setTimeout(() => { btn.textContent = "Sync"; btn.disabled = false; }, 1500);
-    });
 
     // ── File browser ────────────────────────────────
 
