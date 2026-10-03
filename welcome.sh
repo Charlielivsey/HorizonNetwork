@@ -5,6 +5,7 @@ if [ "$HN_IN_CONSOLE" = "1" ] && [ "$(basename -- "$0")" != "horizon" ]; then
 fi
 
 BLUE='\033[1;34m'
+LAVENDER='\033[38;5;183m'
 CYAN='\033[0;36m'
 WHITE='\033[1;37m'
 GRAY='\033[0;37m'
@@ -343,12 +344,12 @@ logout_all_sessions() {
 show_menu() {
     clear
     echo ""
-    echo -e "${BLUE}  ╔═══════════════════════════════════════════════════════════╗"
-    echo -e "  ║                                                           ║"
-    echo -e "  ║   H O R I Z O N   N E T W O R K   S E C U R E            ║"
-    echo -e "  ║                 E N C L A V E                             ║"
-    echo -e "  ║                                                           ║"
-    echo -e "  ╚═══════════════════════════════════════════════════════════╝${RESET}"
+    echo -e "${LAVENDER}  ╔═════════════════════════════════════════════════════════╗"
+    echo -e "  ║                                                         ║"
+    echo -e "  ║       H O R I Z O N   N E T W O R K   S E C U R E      ║"
+    echo -e "  ║                   E N C L A V E                         ║"
+    echo -e "  ║                                                         ║"
+    echo -e "  ╚═════════════════════════════════════════════════════════╝${RESET}"
     echo ""
     echo -e "  ${WHITE}Select an option:${RESET}"
     echo ""
