@@ -1,6 +1,6 @@
 {
   "name": "hn-secure-enclave",
-  "version": "1.9.8",
+  "version": "1.9.9",
   "description": "HN Secure Enclave — Secure VPS access for Horizon Network",
   "author": {
     "name": "Horizon Network",
@@ -36,7 +36,7 @@
     "mac": {
       "target": [
         {
-          "target": "dmg",
+          "target": "zip",
           "arch": [
             "x64",
             "arm64"
@@ -45,7 +45,7 @@
       ],
       "icon": "assets/icon_256.png",
       "category": "public.app-category.utilities",
-      "artifactName": "HN-Secure-Enclave-${version}-${arch}.${ext}"
+      "artifactName": "HN-Secure-Enclave-${version}-mac-${arch}.${ext}"
     },
     "dmg": {
       "title": "HN Secure Enclave",

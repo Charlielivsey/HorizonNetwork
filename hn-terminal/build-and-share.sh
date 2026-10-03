@@ -87,25 +87,25 @@ fi
 
 # ── macOS build ────────────────────────────────────────
 
-echo -e "${CYAN}  Building macOS installer...${RESET}"
+echo -e "${CYAN}  Building macOS app...${RESET}"
 if npx electron-builder --mac --x64 --arm64 2>&1 | tail -20; then
     true
 fi
 
-MAC_X64="dist/HN-Secure-Enclave-${VERSION}-x64.dmg"
-MAC_ARM="dist/HN-Secure-Enclave-${VERSION}-arm64.dmg"
+MAC_X64="dist/HN-Secure-Enclave-${VERSION}-mac-x64.zip"
+MAC_ARM="dist/HN-Secure-Enclave-${VERSION}-mac-arm64.zip"
 
 MAC_FOUND=0
-for dmg in "$MAC_X64" "$MAC_ARM"; do
-    if [ -f "$dmg" ]; then
+for zipf in "$MAC_X64" "$MAC_ARM"; do
+    if [ -f "$zipf" ]; then
         MAC_FOUND=1
     fi
 done
 
 if [ $MAC_FOUND -eq 0 ]; then
-    echo -e "${RED}  Warning: macOS build failed — no DMG files found${RESET}"
+    echo -e "${RED}  Warning: macOS build failed — no zip files found${RESET}"
 else
-    echo -e "${GREEN}  [✓]${RESET} macOS installer(s) built"
+    echo -e "${GREEN}  [✓]${RESET} macOS app built"
 fi
 
 # ── Deploy ─────────────────────────────────────────────
@@ -121,11 +121,12 @@ if [ -f "$WIN_INSTALLER" ]; then
 fi
 
 # Deploy macOS
-for dmg in "$MAC_X64" "$MAC_ARM"; do
-    if [ -f "$dmg" ]; then
-        rm -f "$DEST"/HN-Secure-Enclave-*-"$(basename "$dmg" | grep -oP '(x64|arm64)')".dmg 2>/dev/null || true
-        cp "$dmg" "$DEST/"
-        chmod 644 "$DEST/$(basename "$dmg")"
+for zipf in "$MAC_X64" "$MAC_ARM"; do
+    if [ -f "$zipf" ]; then
+        ARCH="$(basename "$zipf" | grep -oP '(x64|arm64)')"
+        rm -f "$DEST"/HN-Secure-Enclave-*-mac-"${ARCH}".zip 2>/dev/null || true
+        cp "$zipf" "$DEST/"
+        chmod 644 "$DEST/$(basename "$zipf")"
     fi
 done
 
