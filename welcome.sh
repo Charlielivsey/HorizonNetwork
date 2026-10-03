@@ -344,12 +344,12 @@ logout_all_sessions() {
 show_menu() {
     clear
     echo ""
-    echo -e "${LAVENDER}  ╔═════════════════════════════════════════════════════════╗"
-    echo -e "  ║                                                         ║"
-    echo -e "  ║       H O R I Z O N   N E T W O R K   S E C U R E      ║"
-    echo -e "  ║                   E N C L A V E                         ║"
-    echo -e "  ║                                                         ║"
-    echo -e "  ╚═════════════════════════════════════════════════════════╝${RESET}"
+    echo -e "${LAVENDER}  ╔═══════════════════════════════════════════════════════╗"
+    echo -e "  ║                                                       ║"
+    echo -e "  ║      H O R I Z O N   N E T W O R K   S E C U R E      ║"
+    echo -e "  ║                     E N C L A V E                     ║"
+    echo -e "  ║                                                       ║"
+    echo -e "  ╚═══════════════════════════════════════════════════════╝${RESET}"
     echo ""
     echo -e "  ${WHITE}Select an option:${RESET}"
     echo ""
