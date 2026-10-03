@@ -73,7 +73,9 @@ if ! command -v wine &>/dev/null; then
 fi
 
 echo -e "${CYAN}  Building Windows installer...${RESET}"
-npx electron-builder --win --x64 2>&1 | tail -20
+if npx electron-builder --win --x64 2>&1 | tail -20; then
+    true
+fi
 
 WIN_INSTALLER="dist/HN-Secure-Enclave-Setup-${VERSION}.exe"
 
@@ -86,7 +88,9 @@ fi
 # ── macOS build ────────────────────────────────────────
 
 echo -e "${CYAN}  Building macOS installer...${RESET}"
-npx electron-builder --mac --x64 --arm64 2>&1 | tail -20
+if npx electron-builder --mac --x64 --arm64 2>&1 | tail -20; then
+    true
+fi
 
 MAC_X64="dist/HN-Secure-Enclave-${VERSION}-x64.dmg"
 MAC_ARM="dist/HN-Secure-Enclave-${VERSION}-arm64.dmg"
