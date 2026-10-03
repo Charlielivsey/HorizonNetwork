@@ -48,10 +48,10 @@ show_user_menu() {
     echo ""
     echo -e "  ${WHITE}Select an option:${RESET}"
     echo ""
-    echo -e "  ${CYAN}[1]${RESET}  Add User"
-    echo -e "  ${CYAN}[2]${RESET}  Delete User"
-    echo -e "  ${CYAN}[3]${RESET}  Manage Sudoers"
-    echo -e "  ${CYAN}[m]${RESET}  Back to Main Menu"
+    echo -e "  ${LAVENDER}[1]${RESET}  Add User"
+    echo -e "  ${LAVENDER}[2]${RESET}  Delete User"
+    echo -e "  ${LAVENDER}[3]${RESET}  Manage Sudoers"
+    echo -e "  ${LAVENDER}[m]${RESET}  Back to Main Menu"
     echo ""
 }
 
@@ -94,7 +94,7 @@ add_user() {
     fi
 
     echo ""
-    echo -e "  ${CYAN}Creating user '${new_user}'...${RESET}"
+    echo -e "  ${LAVENDER}Creating user '${new_user}'...${RESET}"
     if useradd -m -c "$display_name" -s /bin/bash "$new_user" 2>/dev/null; then
         echo "$new_user:$new_pass" | chpasswd 2>/dev/null
         echo -e "  ${GREEN}[✓]${RESET} User '${new_user}' created successfully"
@@ -169,7 +169,7 @@ show_sudoers_menu() {
         if echo "$line" | grep -qP '^\s*%'; then
             local grp
             grp=$(echo "$line" | awk '{print $1}' | sed 's/^%//')
-            echo -e "  ${CYAN}●${RESET}  %${grp}  ${GRAY}(group)${RESET}"
+            echo -e "  ${LAVENDER}●${RESET}  %${grp}  ${GRAY}(group)${RESET}"
             found=1
         fi
     done < /etc/sudoers
@@ -205,9 +205,9 @@ show_sudoers_menu() {
     echo ""
     echo -e "  ${WHITE}Actions:${RESET}"
     echo ""
-    echo -e "  ${CYAN}[1]${RESET}  Add user to sudoers"
-    echo -e "  ${CYAN}[2]${RESET}  Remove user from sudoers"
-    echo -e "  ${CYAN}[m]${RESET}  Back"
+    echo -e "  ${LAVENDER}[1]${RESET}  Add user to sudoers"
+    echo -e "  ${LAVENDER}[2]${RESET}  Remove user from sudoers"
+    echo -e "  ${LAVENDER}[m]${RESET}  Back"
     echo ""
     while true; do
         echo -ne "  ${WHITE}Sudoers ➤ ${RESET}"
@@ -392,17 +392,17 @@ show_menu() {
     local i
     for i in 0 1 2 3; do
         local left right
-        left=$(printf "${CYAN}[%s]${RESET}  %-*s" "${nums_l[$i]}" $(( col_w - 6 )) "${items_l[$i]}")
-        right=$(printf "${CYAN}[%s]${RESET}  %s" "${nums_r[$i]}" "${items_r[$i]}")
+        left=$(printf "${LAVENDER}[%s]${RESET}  %-*s" "${nums_l[$i]}" $(( col_w - 6 )) "${items_l[$i]}")
+        right=$(printf "${LAVENDER}[%s]${RESET}  %s" "${nums_r[$i]}" "${items_r[$i]}")
         echo -e "  ${left}${right}"
     done
     echo ""
     local logout_all
-    logout_all=$(printf "${CYAN}[9]${RESET}  %-*s" $(( col_w - 6 )) "Log Out All Sessions")
+    logout_all=$(printf "${LAVENDER}[9]${RESET}  %-*s" $(( col_w - 6 )) "Log Out All Sessions")
     echo -e "  ${logout_all}"
     local lo exit_opt
-    lo=$(printf "${CYAN}[l]${RESET}  %-*s" $(( col_w - 6 )) "Log Out")
-    exit_opt=$(printf "${CYAN}[0]${RESET}  %s" "Exit")
+    lo=$(printf "${LAVENDER}[l]${RESET}  %-*s" $(( col_w - 6 )) "Log Out")
+    exit_opt=$(printf "${LAVENDER}[0]${RESET}  %s" "Exit")
     echo -e "  ${lo}${exit_opt}"
     echo ""
 }
@@ -443,12 +443,12 @@ show_ha_menu() {
 
     echo -e "  ${WHITE}Select an option:${RESET}"
     echo ""
-    echo -e "  ${CYAN}[1]${RESET}  Open HA Console"
-    echo -e "  ${CYAN}[2]${RESET}  Restart All HA Services"
-    echo -e "  ${CYAN}[3]${RESET}  Stop All HA Services"
-    echo -e "  ${CYAN}[4]${RESET}  Start All HA Services"
-    echo -e "  ${CYAN}[5]${RESET}  View HA Logs"
-    echo -e "  ${CYAN}[m]${RESET}  Back to Main Menu"
+    echo -e "  ${LAVENDER}[1]${RESET}  Open HA Console"
+    echo -e "  ${LAVENDER}[2]${RESET}  Restart All HA Services"
+    echo -e "  ${LAVENDER}[3]${RESET}  Stop All HA Services"
+    echo -e "  ${LAVENDER}[4]${RESET}  Start All HA Services"
+    echo -e "  ${LAVENDER}[5]${RESET}  View HA Logs"
+    echo -e "  ${LAVENDER}[m]${RESET}  Back to Main Menu"
     echo ""
 }
 
@@ -459,7 +459,7 @@ ha_submenu() {
         read -r ha_choice
         case $ha_choice in
             1)
-                echo -e "\n  ${CYAN}Opening Horizon Advertising console...${RESET}\n"
+                echo -e "\n  ${LAVENDER}Opening Horizon Advertising console...${RESET}\n"
                 cd "$HA_DIR" 2>/dev/null || echo -e "  ${RED}Directory ${HA_DIR} not found${RESET}"
                 HN_IN_CONSOLE=1 exec bash --login
                 ;;
@@ -470,7 +470,7 @@ ha_submenu() {
                 if [ -z "$services" ]; then
                     echo -e "  ${YELLOW}No HA services found in PM2${RESET}"
                 else
-                    echo -e "  ${CYAN}Restarting all HA services...${RESET}"
+                    echo -e "  ${LAVENDER}Restarting all HA services...${RESET}"
                     echo "$services" | while read -r svc; do
                         pm2 restart "$svc" 2>/dev/null
                         echo -e "  ${GREEN}[✓]${RESET} Restarted $svc"
@@ -485,7 +485,7 @@ ha_submenu() {
                 if [ -z "$services" ]; then
                     echo -e "  ${YELLOW}No HA services found in PM2${RESET}"
                 else
-                    echo -e "  ${CYAN}Stopping all HA services...${RESET}"
+                    echo -e "  ${LAVENDER}Stopping all HA services...${RESET}"
                     echo "$services" | while read -r svc; do
                         pm2 stop "$svc" 2>/dev/null
                         echo -e "  ${GREEN}[✓]${RESET} Stopped $svc"
@@ -500,7 +500,7 @@ ha_submenu() {
                 if [ -z "$services" ]; then
                     echo -e "  ${YELLOW}No HA services found in PM2${RESET}"
                 else
-                    echo -e "  ${CYAN}Starting all HA services...${RESET}"
+                    echo -e "  ${LAVENDER}Starting all HA services...${RESET}"
                     echo "$services" | while read -r svc; do
                         pm2 start "$svc" 2>/dev/null
                         echo -e "  ${GREEN}[✓]${RESET} Started $svc"
@@ -569,13 +569,13 @@ show_updates_menu() {
     echo ""
     echo -e "  ${WHITE}Select an option:${RESET}"
     echo ""
-    echo -e "  ${CYAN}[1]${RESET}  Pull Latest Updates"
-    echo -e "  ${CYAN}[2]${RESET}  Pull & Reinstall Welcome Screen"
-    echo -e "  ${CYAN}[3]${RESET}  Pull & Rebuild Secure Enclave"
-    echo -e "  ${CYAN}[4]${RESET}  Setup Clover Share"
-    echo -e "  ${CYAN}[5]${RESET}  View Recent Commits"
-    echo -e "  ${CYAN}[6]${RESET}  Open Update Console"
-    echo -e "  ${CYAN}[m]${RESET}  Back to Main Menu"
+    echo -e "  ${LAVENDER}[1]${RESET}  Pull Latest Updates"
+    echo -e "  ${LAVENDER}[2]${RESET}  Pull & Reinstall Welcome Screen"
+    echo -e "  ${LAVENDER}[3]${RESET}  Pull & Rebuild Secure Enclave"
+    echo -e "  ${LAVENDER}[4]${RESET}  Setup Clover Share"
+    echo -e "  ${LAVENDER}[5]${RESET}  View Recent Commits"
+    echo -e "  ${LAVENDER}[6]${RESET}  Open Update Console"
+    echo -e "  ${LAVENDER}[m]${RESET}  Back to Main Menu"
     echo ""
 }
 
@@ -587,7 +587,7 @@ updates_submenu() {
         case $upd_choice in
             1)
                 echo ""
-                echo -e "  ${CYAN}Pulling latest from ${REPO_BRANCH}...${RESET}"
+                echo -e "  ${LAVENDER}Pulling latest from ${REPO_BRANCH}...${RESET}"
                 echo ""
                 sudo git -C "$REPO_DIR" fetch origin "$REPO_BRANCH" 2>&1 | sed 's/^/  /'
                 sudo git -C "$REPO_DIR" reset --hard "origin/$REPO_BRANCH" 2>&1 | sed 's/^/  /'
@@ -597,7 +597,7 @@ updates_submenu() {
                 ;;
             2)
                 echo ""
-                echo -e "  ${CYAN}Pulling and reinstalling welcome screen...${RESET}"
+                echo -e "  ${LAVENDER}Pulling and reinstalling welcome screen...${RESET}"
                 echo ""
                 sudo git -C "$REPO_DIR" fetch origin "$REPO_BRANCH" 2>&1 | sed 's/^/  /'
                 sudo git -C "$REPO_DIR" reset --hard "origin/$REPO_BRANCH" 2>&1 | sed 's/^/  /'
@@ -608,7 +608,7 @@ updates_submenu() {
                 ;;
             3)
                 echo ""
-                echo -e "  ${CYAN}Pulling and rebuilding Secure Enclave...${RESET}"
+                echo -e "  ${LAVENDER}Pulling and rebuilding Secure Enclave...${RESET}"
                 echo ""
                 sudo git -C "$REPO_DIR" fetch origin "$REPO_BRANCH" 2>&1 | sed 's/^/  /'
                 sudo git -C "$REPO_DIR" reset --hard "origin/$REPO_BRANCH" 2>&1 | sed 's/^/  /'
@@ -641,7 +641,7 @@ updates_submenu() {
                 ;;
             6)
                 echo ""
-                echo -e "  ${CYAN}Opening update console at ${REPO_DIR}...${RESET}"
+                echo -e "  ${LAVENDER}Opening update console at ${REPO_DIR}...${RESET}"
                 echo -e "  ${GRAY}Type 'exit' to return to the menu.${RESET}"
                 echo ""
                 sudo bash -c "cd '$REPO_DIR' && exec bash"
@@ -664,7 +664,7 @@ while true; do
     read -r choice
     case $choice in
         1)
-            echo -e "\n  ${CYAN}Opening console...${RESET}\n"
+            echo -e "\n  ${LAVENDER}Opening console...${RESET}\n"
             HN_IN_CONSOLE=1 exec bash --login
             ;;
         2)
@@ -695,10 +695,10 @@ while true; do
                 pm2 list 2>/dev/null
                 echo ""
                 echo -e "  ${WHITE}PM2 Actions:${RESET}"
-                echo -e "  ${CYAN}[a]${RESET}  Start a process    ${CYAN}[b]${RESET}  Stop a process"
-                echo -e "  ${CYAN}[c]${RESET}  Restart a process  ${CYAN}[d]${RESET}  Delete a process"
-                echo -e "  ${CYAN}[e]${RESET}  View process logs  ${CYAN}[f]${RESET}  PM2 monit"
-                echo -e "  ${CYAN}[m]${RESET}  Back to main menu"
+                echo -e "  ${LAVENDER}[a]${RESET}  Start a process    ${LAVENDER}[b]${RESET}  Stop a process"
+                echo -e "  ${LAVENDER}[c]${RESET}  Restart a process  ${LAVENDER}[d]${RESET}  Delete a process"
+                echo -e "  ${LAVENDER}[e]${RESET}  View process logs  ${LAVENDER}[f]${RESET}  PM2 monit"
+                echo -e "  ${LAVENDER}[m]${RESET}  Back to main menu"
                 echo ""
                 while true; do
                     echo -ne "  ${WHITE}PM2 ➤ ${RESET}"
