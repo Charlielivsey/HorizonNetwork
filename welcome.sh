@@ -353,13 +353,13 @@ show_menu() {
     echo ""
     echo -e "  ${WHITE}Select an option:${RESET}"
     echo ""
-    echo -e "  ${CYAN}[1]${RESET}  Open Console          ${CYAN}[5]${RESET}  Updates"
-    echo -e "  ${CYAN}[2]${RESET}  System Status          ${CYAN}[6]${RESET}  View Logs"
-    echo -e "  ${CYAN}[3]${RESET}  Services               ${CYAN}[7]${RESET}  Network Info"
-    echo -e "  ${CYAN}[4]${RESET}  Horizon Advertising    ${CYAN}[8]${RESET}  User Management"
+    echo -e "  ${CYAN}[1]${RESET}  Open Console          ${CYAN}[2]${RESET}  System Status"
+    echo -e "  ${CYAN}[3]${RESET}  Services              ${CYAN}[4]${RESET}  Horizon Advertising"
+    echo -e "  ${CYAN}[5]${RESET}  Updates               ${CYAN}[6]${RESET}  View Logs"
+    echo -e "  ${CYAN}[7]${RESET}  Network Info           ${CYAN}[8]${RESET}  User Management"
     echo ""
     echo -e "  ${CYAN}[9]${RESET}  Log Out All Sessions"
-    echo -e "  ${CYAN}[l]${RESET}  Log Out                ${CYAN}[0]${RESET}  Exit"
+    echo -e "  ${CYAN}[l]${RESET}  Log Out               ${CYAN}[0]${RESET}  Exit"
     echo ""
 }
 
