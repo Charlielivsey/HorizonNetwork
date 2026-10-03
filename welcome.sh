@@ -5,6 +5,7 @@ if [ "$HN_IN_CONSOLE" = "1" ] && [ "$(basename -- "$0")" != "horizon" ]; then
 fi
 
 BLUE='\033[1;34m'
+LAVENDER='\033[38;5;183m'
 CYAN='\033[0;36m'
 WHITE='\033[1;37m'
 GRAY='\033[0;37m'
@@ -47,10 +48,10 @@ show_user_menu() {
     echo ""
     echo -e "  ${WHITE}Select an option:${RESET}"
     echo ""
-    echo -e "  ${CYAN}[1]${RESET}  Add User"
-    echo -e "  ${CYAN}[2]${RESET}  Delete User"
-    echo -e "  ${CYAN}[3]${RESET}  Manage Sudoers"
-    echo -e "  ${CYAN}[m]${RESET}  Back to Main Menu"
+    echo -e "  ${LAVENDER}[1]${RESET}  Add User"
+    echo -e "  ${LAVENDER}[2]${RESET}  Delete User"
+    echo -e "  ${LAVENDER}[3]${RESET}  Manage Sudoers"
+    echo -e "  ${LAVENDER}[m]${RESET}  Back to Main Menu"
     echo ""
 }
 
@@ -93,7 +94,7 @@ add_user() {
     fi
 
     echo ""
-    echo -e "  ${CYAN}Creating user '${new_user}'...${RESET}"
+    echo -e "  ${LAVENDER}Creating user '${new_user}'...${RESET}"
     if useradd -m -c "$display_name" -s /bin/bash "$new_user" 2>/dev/null; then
         echo "$new_user:$new_pass" | chpasswd 2>/dev/null
         echo -e "  ${GREEN}[✓]${RESET} User '${new_user}' created successfully"
@@ -168,7 +169,7 @@ show_sudoers_menu() {
         if echo "$line" | grep -qP '^\s*%'; then
             local grp
             grp=$(echo "$line" | awk '{print $1}' | sed 's/^%//')
-            echo -e "  ${CYAN}●${RESET}  %${grp}  ${GRAY}(group)${RESET}"
+            echo -e "  ${LAVENDER}●${RESET}  %${grp}  ${GRAY}(group)${RESET}"
             found=1
         fi
     done < /etc/sudoers
@@ -204,9 +205,9 @@ show_sudoers_menu() {
     echo ""
     echo -e "  ${WHITE}Actions:${RESET}"
     echo ""
-    echo -e "  ${CYAN}[1]${RESET}  Add user to sudoers"
-    echo -e "  ${CYAN}[2]${RESET}  Remove user from sudoers"
-    echo -e "  ${CYAN}[m]${RESET}  Back"
+    echo -e "  ${LAVENDER}[1]${RESET}  Add user to sudoers"
+    echo -e "  ${LAVENDER}[2]${RESET}  Remove user from sudoers"
+    echo -e "  ${LAVENDER}[m]${RESET}  Back"
     echo ""
     while true; do
         echo -ne "  ${WHITE}Sudoers ➤ ${RESET}"
@@ -340,34 +341,69 @@ logout_all_sessions() {
     echo ""
 }
 
+center_text() {
+    local text="$1" width="$2"
+    local len=${#text}
+    local pad=$(( (width - len) / 2 ))
+    local right=$(( width - len - pad ))
+    printf "%${pad}s%s%${right}s" "" "$text" ""
+}
+
 show_menu() {
     clear
-    local counts
-    counts=$(pm2_count)
+    local cols
+    cols=$(tput cols 2>/dev/null || echo 80)
+    local box_w=$(( cols - 8 ))
+    [ "$box_w" -gt 60 ] && box_w=60
+    [ "$box_w" -lt 40 ] && box_w=40
+    local inner=$(( box_w - 2 ))
+
+    local border
+    border=$(printf '═%.0s' $(seq 1 "$box_w"))
+    local blank
+    blank=$(printf ' %.0s' $(seq 1 "$inner"))
+
+    local title1="H O R I Z O N   N E T W O R K   S E C U R E"
+    local title2="E N C L A V E"
+    local row1 row2
+    row1=$(center_text "$title1" "$inner")
+    row2=$(center_text "$title2" "$inner")
+
     echo ""
-    echo -e "${BLUE}  ╔═══════════════════════════════════════════════════╗"
-    echo -e "  ║                                                   ║"
-    echo -e "  ║            H O R I Z O N   N E T W O R K          ║"
-    echo -e "  ║                                                   ║"
-    echo -e "  ╚═══════════════════════════════════════════════════╝${RESET}"
-    echo ""
-    echo -e "  ${GRAY}VPS: 217.154.34.205  |  Tailscale: 100.95.232.62${RESET}"
-    echo -e "  ${GRAY}Services: ${counts} running${RESET}"
+    echo -e "${LAVENDER}  ╔${border}╗"
+    echo -e "  ║${blank}║"
+    echo -e "  ║${row1}║"
+    echo -e "  ║${row2}║"
+    echo -e "  ║${blank}║"
+    echo -e "  ╚${border}╝${RESET}"
     echo ""
     echo -e "  ${WHITE}Select an option:${RESET}"
     echo ""
-    echo -e "  ${CYAN}[1]${RESET}  Open Console"
-    echo -e "  ${CYAN}[2]${RESET}  System Status"
-    echo -e "  ${CYAN}[3]${RESET}  Services"
-    echo -e "  ${CYAN}[4]${RESET}  Horizon Advertising"
-    echo -e "  ${CYAN}[5]${RESET}  Updates"
-    echo -e "  ${CYAN}[6]${RESET}  View Logs"
-    echo -e "  ${CYAN}[7]${RESET}  Network Info"
-    echo -e "  ${CYAN}[8]${RESET}  User Management"
-    echo -e "  ${CYAN}[9]${RESET}  Log Out All Sessions"
+
+    local col_w=$(( (cols - 6) / 2 ))
+    [ "$col_w" -gt 35 ] && col_w=35
+    [ "$col_w" -lt 20 ] && col_w=20
+
+    local items_l=("Open Console" "Services" "Updates" "Network Info")
+    local items_r=("System Status" "Horizon Advertising" "View Logs" "User Management")
+    local nums_l=(1 3 5 7)
+    local nums_r=(2 4 6 8)
+
+    local i
+    for i in 0 1 2 3; do
+        local left right
+        left=$(printf "${LAVENDER}[%s]${RESET}  %-*s" "${nums_l[$i]}" $(( col_w - 6 )) "${items_l[$i]}")
+        right=$(printf "${LAVENDER}[%s]${RESET}  %s" "${nums_r[$i]}" "${items_r[$i]}")
+        echo -e "  ${left}${right}"
+    done
     echo ""
-    echo -e "  ${CYAN}[l]${RESET}  Log Out"
-    echo -e "  ${CYAN}[0]${RESET}  Exit"
+    local logout_all
+    logout_all=$(printf "${LAVENDER}[9]${RESET}  %-*s" $(( col_w - 6 )) "Log Out All Sessions")
+    echo -e "  ${logout_all}"
+    local lo exit_opt
+    lo=$(printf "${LAVENDER}[l]${RESET}  %-*s" $(( col_w - 6 )) "Log Out")
+    exit_opt=$(printf "${LAVENDER}[0]${RESET}  %s" "Exit")
+    echo -e "  ${lo}${exit_opt}"
     echo ""
 }
 
@@ -407,12 +443,12 @@ show_ha_menu() {
 
     echo -e "  ${WHITE}Select an option:${RESET}"
     echo ""
-    echo -e "  ${CYAN}[1]${RESET}  Open HA Console"
-    echo -e "  ${CYAN}[2]${RESET}  Restart All HA Services"
-    echo -e "  ${CYAN}[3]${RESET}  Stop All HA Services"
-    echo -e "  ${CYAN}[4]${RESET}  Start All HA Services"
-    echo -e "  ${CYAN}[5]${RESET}  View HA Logs"
-    echo -e "  ${CYAN}[m]${RESET}  Back to Main Menu"
+    echo -e "  ${LAVENDER}[1]${RESET}  Open HA Console"
+    echo -e "  ${LAVENDER}[2]${RESET}  Restart All HA Services"
+    echo -e "  ${LAVENDER}[3]${RESET}  Stop All HA Services"
+    echo -e "  ${LAVENDER}[4]${RESET}  Start All HA Services"
+    echo -e "  ${LAVENDER}[5]${RESET}  View HA Logs"
+    echo -e "  ${LAVENDER}[m]${RESET}  Back to Main Menu"
     echo ""
 }
 
@@ -423,7 +459,7 @@ ha_submenu() {
         read -r ha_choice
         case $ha_choice in
             1)
-                echo -e "\n  ${CYAN}Opening Horizon Advertising console...${RESET}\n"
+                echo -e "\n  ${LAVENDER}Opening Horizon Advertising console...${RESET}\n"
                 cd "$HA_DIR" 2>/dev/null || echo -e "  ${RED}Directory ${HA_DIR} not found${RESET}"
                 HN_IN_CONSOLE=1 exec bash --login
                 ;;
@@ -434,7 +470,7 @@ ha_submenu() {
                 if [ -z "$services" ]; then
                     echo -e "  ${YELLOW}No HA services found in PM2${RESET}"
                 else
-                    echo -e "  ${CYAN}Restarting all HA services...${RESET}"
+                    echo -e "  ${LAVENDER}Restarting all HA services...${RESET}"
                     echo "$services" | while read -r svc; do
                         pm2 restart "$svc" 2>/dev/null
                         echo -e "  ${GREEN}[✓]${RESET} Restarted $svc"
@@ -449,7 +485,7 @@ ha_submenu() {
                 if [ -z "$services" ]; then
                     echo -e "  ${YELLOW}No HA services found in PM2${RESET}"
                 else
-                    echo -e "  ${CYAN}Stopping all HA services...${RESET}"
+                    echo -e "  ${LAVENDER}Stopping all HA services...${RESET}"
                     echo "$services" | while read -r svc; do
                         pm2 stop "$svc" 2>/dev/null
                         echo -e "  ${GREEN}[✓]${RESET} Stopped $svc"
@@ -464,7 +500,7 @@ ha_submenu() {
                 if [ -z "$services" ]; then
                     echo -e "  ${YELLOW}No HA services found in PM2${RESET}"
                 else
-                    echo -e "  ${CYAN}Starting all HA services...${RESET}"
+                    echo -e "  ${LAVENDER}Starting all HA services...${RESET}"
                     echo "$services" | while read -r svc; do
                         pm2 start "$svc" 2>/dev/null
                         echo -e "  ${GREEN}[✓]${RESET} Started $svc"
@@ -533,13 +569,13 @@ show_updates_menu() {
     echo ""
     echo -e "  ${WHITE}Select an option:${RESET}"
     echo ""
-    echo -e "  ${CYAN}[1]${RESET}  Pull Latest Updates"
-    echo -e "  ${CYAN}[2]${RESET}  Pull & Reinstall Welcome Screen"
-    echo -e "  ${CYAN}[3]${RESET}  Pull & Rebuild Secure Enclave"
-    echo -e "  ${CYAN}[4]${RESET}  Setup Clover Share"
-    echo -e "  ${CYAN}[5]${RESET}  View Recent Commits"
-    echo -e "  ${CYAN}[6]${RESET}  Open Update Console"
-    echo -e "  ${CYAN}[m]${RESET}  Back to Main Menu"
+    echo -e "  ${LAVENDER}[1]${RESET}  Pull Latest Updates"
+    echo -e "  ${LAVENDER}[2]${RESET}  Pull & Reinstall Welcome Screen"
+    echo -e "  ${LAVENDER}[3]${RESET}  Pull & Rebuild Secure Enclave"
+    echo -e "  ${LAVENDER}[4]${RESET}  Setup Clover Share"
+    echo -e "  ${LAVENDER}[5]${RESET}  View Recent Commits"
+    echo -e "  ${LAVENDER}[6]${RESET}  Open Update Console"
+    echo -e "  ${LAVENDER}[m]${RESET}  Back to Main Menu"
     echo ""
 }
 
@@ -551,7 +587,7 @@ updates_submenu() {
         case $upd_choice in
             1)
                 echo ""
-                echo -e "  ${CYAN}Pulling latest from ${REPO_BRANCH}...${RESET}"
+                echo -e "  ${LAVENDER}Pulling latest from ${REPO_BRANCH}...${RESET}"
                 echo ""
                 sudo git -C "$REPO_DIR" fetch origin "$REPO_BRANCH" 2>&1 | sed 's/^/  /'
                 sudo git -C "$REPO_DIR" reset --hard "origin/$REPO_BRANCH" 2>&1 | sed 's/^/  /'
@@ -561,7 +597,7 @@ updates_submenu() {
                 ;;
             2)
                 echo ""
-                echo -e "  ${CYAN}Pulling and reinstalling welcome screen...${RESET}"
+                echo -e "  ${LAVENDER}Pulling and reinstalling welcome screen...${RESET}"
                 echo ""
                 sudo git -C "$REPO_DIR" fetch origin "$REPO_BRANCH" 2>&1 | sed 's/^/  /'
                 sudo git -C "$REPO_DIR" reset --hard "origin/$REPO_BRANCH" 2>&1 | sed 's/^/  /'
@@ -572,7 +608,7 @@ updates_submenu() {
                 ;;
             3)
                 echo ""
-                echo -e "  ${CYAN}Pulling and rebuilding Secure Enclave...${RESET}"
+                echo -e "  ${LAVENDER}Pulling and rebuilding Secure Enclave...${RESET}"
                 echo ""
                 sudo git -C "$REPO_DIR" fetch origin "$REPO_BRANCH" 2>&1 | sed 's/^/  /'
                 sudo git -C "$REPO_DIR" reset --hard "origin/$REPO_BRANCH" 2>&1 | sed 's/^/  /'
@@ -605,7 +641,7 @@ updates_submenu() {
                 ;;
             6)
                 echo ""
-                echo -e "  ${CYAN}Opening update console at ${REPO_DIR}...${RESET}"
+                echo -e "  ${LAVENDER}Opening update console at ${REPO_DIR}...${RESET}"
                 echo -e "  ${GRAY}Type 'exit' to return to the menu.${RESET}"
                 echo ""
                 sudo bash -c "cd '$REPO_DIR' && exec bash"
@@ -628,7 +664,7 @@ while true; do
     read -r choice
     case $choice in
         1)
-            echo -e "\n  ${CYAN}Opening console...${RESET}\n"
+            echo -e "\n  ${LAVENDER}Opening console...${RESET}\n"
             HN_IN_CONSOLE=1 exec bash --login
             ;;
         2)
@@ -659,10 +695,10 @@ while true; do
                 pm2 list 2>/dev/null
                 echo ""
                 echo -e "  ${WHITE}PM2 Actions:${RESET}"
-                echo -e "  ${CYAN}[a]${RESET}  Start a process    ${CYAN}[b]${RESET}  Stop a process"
-                echo -e "  ${CYAN}[c]${RESET}  Restart a process  ${CYAN}[d]${RESET}  Delete a process"
-                echo -e "  ${CYAN}[e]${RESET}  View process logs  ${CYAN}[f]${RESET}  PM2 monit"
-                echo -e "  ${CYAN}[m]${RESET}  Back to main menu"
+                echo -e "  ${LAVENDER}[a]${RESET}  Start a process    ${LAVENDER}[b]${RESET}  Stop a process"
+                echo -e "  ${LAVENDER}[c]${RESET}  Restart a process  ${LAVENDER}[d]${RESET}  Delete a process"
+                echo -e "  ${LAVENDER}[e]${RESET}  View process logs  ${LAVENDER}[f]${RESET}  PM2 monit"
+                echo -e "  ${LAVENDER}[m]${RESET}  Back to main menu"
                 echo ""
                 while true; do
                     echo -ne "  ${WHITE}PM2 ➤ ${RESET}"
