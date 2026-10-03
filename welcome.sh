@@ -341,25 +341,69 @@ logout_all_sessions() {
     echo ""
 }
 
+center_text() {
+    local text="$1" width="$2"
+    local len=${#text}
+    local pad=$(( (width - len) / 2 ))
+    local right=$(( width - len - pad ))
+    printf "%${pad}s%s%${right}s" "" "$text" ""
+}
+
 show_menu() {
     clear
+    local cols
+    cols=$(tput cols 2>/dev/null || echo 80)
+    local box_w=$(( cols - 4 ))
+    [ "$box_w" -gt 70 ] && box_w=70
+    [ "$box_w" -lt 40 ] && box_w=40
+    local inner=$(( box_w - 2 ))
+
+    local border
+    border=$(printf '═%.0s' $(seq 1 "$box_w"))
+    local blank
+    blank=$(printf ' %.0s' $(seq 1 "$inner"))
+
+    local title1="H O R I Z O N   N E T W O R K   S E C U R E"
+    local title2="E N C L A V E"
+    local row1 row2
+    row1=$(center_text "$title1" "$inner")
+    row2=$(center_text "$title2" "$inner")
+
     echo ""
-    echo -e "${LAVENDER}  ╔═══════════════════════════════════════════════════════╗"
-    echo -e "  ║                                                       ║"
-    echo -e "  ║      H O R I Z O N   N E T W O R K   S E C U R E      ║"
-    echo -e "  ║                     E N C L A V E                     ║"
-    echo -e "  ║                                                       ║"
-    echo -e "  ╚═══════════════════════════════════════════════════════╝${RESET}"
+    echo -e "${LAVENDER}  ╔${border}╗"
+    echo -e "  ║${blank}║"
+    echo -e "  ║${row1}║"
+    echo -e "  ║${row2}║"
+    echo -e "  ║${blank}║"
+    echo -e "  ╚${border}╝${RESET}"
     echo ""
     echo -e "  ${WHITE}Select an option:${RESET}"
     echo ""
-    echo -e "  ${CYAN}[1]${RESET}  Open Console          ${CYAN}[2]${RESET}  System Status"
-    echo -e "  ${CYAN}[3]${RESET}  Services              ${CYAN}[4]${RESET}  Horizon Advertising"
-    echo -e "  ${CYAN}[5]${RESET}  Updates               ${CYAN}[6]${RESET}  View Logs"
-    echo -e "  ${CYAN}[7]${RESET}  Network Info           ${CYAN}[8]${RESET}  User Management"
+
+    local col_w=$(( (cols - 6) / 2 ))
+    [ "$col_w" -gt 35 ] && col_w=35
+    [ "$col_w" -lt 20 ] && col_w=20
+
+    local items_l=("Open Console" "Services" "Updates" "Network Info")
+    local items_r=("System Status" "Horizon Advertising" "View Logs" "User Management")
+    local nums_l=(1 3 5 7)
+    local nums_r=(2 4 6 8)
+
+    local i
+    for i in 0 1 2 3; do
+        local left right
+        left=$(printf "${CYAN}[%s]${RESET}  %-*s" "${nums_l[$i]}" $(( col_w - 6 )) "${items_l[$i]}")
+        right=$(printf "${CYAN}[%s]${RESET}  %s" "${nums_r[$i]}" "${items_r[$i]}")
+        echo -e "  ${left}${right}"
+    done
     echo ""
-    echo -e "  ${CYAN}[9]${RESET}  Log Out All Sessions"
-    echo -e "  ${CYAN}[l]${RESET}  Log Out               ${CYAN}[0]${RESET}  Exit"
+    local logout_all
+    logout_all=$(printf "${CYAN}[9]${RESET}  %-*s" $(( col_w - 6 )) "Log Out All Sessions")
+    echo -e "  ${logout_all}"
+    local lo exit_opt
+    lo=$(printf "${CYAN}[l]${RESET}  %-*s" $(( col_w - 6 )) "Log Out")
+    exit_opt=$(printf "${CYAN}[0]${RESET}  %s" "Exit")
+    echo -e "  ${lo}${exit_opt}"
     echo ""
 }
 
