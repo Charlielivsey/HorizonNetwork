@@ -8,7 +8,7 @@ const pkg = require("../package.json");
 
 const APP_VERSION = pkg.version;
 const IS_MAC = process.platform === "darwin";
-const ICON_EXT = IS_MAC ? "icon_256.png" : "icon.ico";
+const ICON_EXT = IS_MAC ? "icon_1024.png" : "icon.ico";
 const ICON_PATH = app.isPackaged
   ? path.join(process.resourcesPath, ICON_EXT)
   : path.join(__dirname, "..", "assets", ICON_EXT);
