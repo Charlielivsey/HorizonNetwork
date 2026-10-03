@@ -353,8 +353,8 @@ show_menu() {
     clear
     local cols
     cols=$(tput cols 2>/dev/null || echo 80)
-    local box_w=$(( cols - 4 ))
-    [ "$box_w" -gt 70 ] && box_w=70
+    local box_w=$(( cols - 8 ))
+    [ "$box_w" -gt 60 ] && box_w=60
     [ "$box_w" -lt 40 ] && box_w=40
     local inner=$(( box_w - 2 ))
 
