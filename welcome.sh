@@ -384,22 +384,19 @@ show_menu() {
     [ "$col_w" -gt 35 ] && col_w=35
     [ "$col_w" -lt 20 ] && col_w=20
 
-    local items_l=("Open Console" "Services" "Updates" "Network Info")
-    local items_r=("System Status" "Horizon Advertising" "View Logs" "User Management")
-    local nums_l=(1 3 5 7)
-    local nums_r=(2 4 6 8)
+    local items_l=("Open Console" "Services" "Updates" "Network Info" "Claude AI")
+    local items_r=("System Status" "Horizon Advertising" "View Logs" "User Management" "Log Out All Sessions")
+    local nums_l=(1 3 5 7 c)
+    local nums_r=(2 4 6 8 9)
 
     local i
-    for i in 0 1 2 3; do
+    for i in 0 1 2 3 4; do
         local left right
         left=$(printf "${LAVENDER}[%s]${RESET}  %-*s" "${nums_l[$i]}" $(( col_w - 6 )) "${items_l[$i]}")
         right=$(printf "${LAVENDER}[%s]${RESET}  %s" "${nums_r[$i]}" "${items_r[$i]}")
         echo -e "  ${left}${right}"
     done
     echo ""
-    local logout_all
-    logout_all=$(printf "${LAVENDER}[9]${RESET}  %-*s" $(( col_w - 6 )) "Log Out All Sessions")
-    echo -e "  ${logout_all}"
     local lo exit_opt
     lo=$(printf "${LAVENDER}[l]${RESET}  %-*s" $(( col_w - 6 )) "Log Out")
     exit_opt=$(printf "${LAVENDER}[0]${RESET}  %s" "Exit")
@@ -658,6 +655,318 @@ updates_submenu() {
     done
 }
 
+CLAUDE_CHAT_DIR="/var/lib/horizon/claude-chats"
+CLAUDE_CONFIG="/etc/horizon/claude.conf"
+
+claude_ensure_deps() {
+    if ! command -v jq &>/dev/null; then
+        echo -e "  ${YELLOW}Installing jq...${RESET}"
+        sudo apt-get install -y jq >/dev/null 2>&1
+    fi
+    if ! command -v curl &>/dev/null; then
+        echo -e "  ${RED}curl is required but not installed.${RESET}"
+        return 1
+    fi
+    sudo mkdir -p "$CLAUDE_CHAT_DIR" "$(dirname "$CLAUDE_CONFIG")"
+    sudo chmod 777 "$CLAUDE_CHAT_DIR"
+    return 0
+}
+
+claude_get_api_key() {
+    if [ -f "$CLAUDE_CONFIG" ]; then
+        local key
+        key=$(grep '^ANTHROPIC_API_KEY=' "$CLAUDE_CONFIG" 2>/dev/null | cut -d= -f2-)
+        if [ -n "$key" ]; then
+            echo "$key"
+            return 0
+        fi
+    fi
+    return 1
+}
+
+claude_setup_key() {
+    echo ""
+    echo -e "  ${LAVENDER}── Claude AI Setup ──${RESET}"
+    echo ""
+    echo -e "  ${WHITE}An Anthropic API key is required.${RESET}"
+    echo ""
+    echo -e "  ${GRAY}To get one:${RESET}"
+    echo -e "  ${GRAY}  1. Go to ${WHITE}console.anthropic.com${GRAY}${RESET}"
+    echo -e "  ${GRAY}  2. Sign in or create an account${RESET}"
+    echo -e "  ${GRAY}  3. Go to ${WHITE}API Keys${GRAY} in the sidebar${RESET}"
+    echo -e "  ${GRAY}  4. Click ${WHITE}Create Key${GRAY}${RESET}"
+    echo -e "  ${GRAY}  5. Copy the key (starts with sk-ant-)${RESET}"
+    echo ""
+    echo -ne "  ${WHITE}Paste your API key: ${RESET}"
+    read -r api_key
+    if [ -z "$api_key" ]; then
+        echo -e "  ${RED}No key entered.${RESET}"
+        return 1
+    fi
+    if [[ ! "$api_key" =~ ^sk-ant- ]]; then
+        echo -e "  ${YELLOW}Warning: Key doesn't start with sk-ant- — it may not work.${RESET}"
+    fi
+    echo -e "  ${GRAY}Testing key...${RESET}"
+    local test_resp
+    test_resp=$(curl -s -w "\n%{http_code}" https://api.anthropic.com/v1/messages \
+        -H "Content-Type: application/json" \
+        -H "x-api-key: $api_key" \
+        -H "anthropic-version: 2023-06-01" \
+        -d '{"model":"claude-sonnet-5-5","max_tokens":32,"messages":[{"role":"user","content":"Say OK"}]}' 2>/dev/null)
+    local http_code
+    http_code=$(echo "$test_resp" | tail -1)
+    if [ "$http_code" = "200" ]; then
+        echo -e "  ${GREEN}Key is valid!${RESET}"
+        sudo bash -c "echo 'ANTHROPIC_API_KEY=${api_key}' > '$CLAUDE_CONFIG'"
+        sudo chmod 600 "$CLAUDE_CONFIG"
+        echo -e "  ${GREEN}Key saved securely.${RESET}"
+        return 0
+    else
+        echo -e "  ${RED}Key test failed (HTTP $http_code).${RESET}"
+        local err_body
+        err_body=$(echo "$test_resp" | head -n -1)
+        local err_msg
+        err_msg=$(echo "$err_body" | jq -r '.error.message // empty' 2>/dev/null)
+        [ -n "$err_msg" ] && echo -e "  ${RED}$err_msg${RESET}"
+        return 1
+    fi
+}
+
+claude_select_model() {
+    echo ""
+    echo -e "  ${LAVENDER}── Select Model ──${RESET}"
+    echo ""
+    echo -e "  ${LAVENDER}[1]${RESET}  Claude Sonnet 5.5  ${GRAY}(\$2/\$10 per MTok — fast, smart)${RESET}"
+    echo -e "  ${LAVENDER}[2]${RESET}  Claude Opus 5.5    ${GRAY}(\$4/\$20 per MTok — most capable)${RESET}"
+    echo -e "  ${LAVENDER}[3]${RESET}  Claude Haiku 4.5   ${GRAY}(\$1/\$5 per MTok — cheapest)${RESET}"
+    echo ""
+    echo -ne "  ${WHITE}Choice [1]: ${RESET}"
+    read -r model_choice
+    case $model_choice in
+        2) echo "claude-opus-5-5" ;;
+        3) echo "claude-haiku-4-5" ;;
+        *) echo "claude-sonnet-5-5" ;;
+    esac
+}
+
+claude_chat_session() {
+    local api_key="$1"
+    local chat_file="$2"
+    local model="$3"
+    local model_display
+    case $model in
+        claude-opus-5-5) model_display="Opus 5.5" ;;
+        claude-haiku-4-5) model_display="Haiku 4.5" ;;
+        *) model_display="Sonnet 5.5" ;;
+    esac
+
+    local messages="[]"
+    if [ -f "$chat_file" ] && [ -s "$chat_file" ]; then
+        messages=$(cat "$chat_file")
+    fi
+
+    local msg_count
+    msg_count=$(echo "$messages" | jq 'length' 2>/dev/null || echo 0)
+
+    clear
+    echo ""
+    echo -e "  ${LAVENDER}── Claude AI Chat ──${RESET}"
+    echo -e "  ${GRAY}Model: ${model_display} | Messages: ${msg_count} | Type 'exit' to go back${RESET}"
+    echo ""
+
+    if [ "$msg_count" -gt 0 ]; then
+        echo -e "  ${GRAY}(Continuing previous conversation)${RESET}"
+        echo ""
+    fi
+
+    while true; do
+        echo -ne "  ${GREEN}You: ${RESET}"
+        read -r user_input
+        [ -z "$user_input" ] && continue
+        if [ "$user_input" = "exit" ] || [ "$user_input" = "quit" ]; then
+            echo "$messages" > "$chat_file"
+            echo ""
+            echo -e "  ${GRAY}Chat saved.${RESET}"
+            echo ""
+            break
+        fi
+        if [ "$user_input" = "clear" ]; then
+            messages="[]"
+            echo "[]" > "$chat_file"
+            echo -e "  ${GRAY}Conversation cleared.${RESET}"
+            echo ""
+            continue
+        fi
+
+        messages=$(echo "$messages" | jq --arg msg "$user_input" '. + [{"role":"user","content":$msg}]')
+
+        echo -ne "  ${LAVENDER}Claude: ${RESET}"
+
+        local full_response=""
+        local line
+        while IFS= read -r line; do
+            if [[ "$line" == data:* ]]; then
+                local data="${line#data: }"
+                local event_type
+                event_type=$(echo "$data" | jq -r '.type // empty' 2>/dev/null)
+                if [ "$event_type" = "content_block_delta" ]; then
+                    local chunk
+                    chunk=$(echo "$data" | jq -r '.delta.text // empty' 2>/dev/null)
+                    if [ -n "$chunk" ]; then
+                        printf '%s' "$chunk"
+                        full_response="${full_response}${chunk}"
+                    fi
+                elif [ "$event_type" = "error" ]; then
+                    local err_msg
+                    err_msg=$(echo "$data" | jq -r '.error.message // "Unknown error"' 2>/dev/null)
+                    echo -e "\n  ${RED}Error: $err_msg${RESET}"
+                    full_response=""
+                    break
+                fi
+            fi
+        done < <(curl -sN https://api.anthropic.com/v1/messages \
+            -H "Content-Type: application/json" \
+            -H "x-api-key: $api_key" \
+            -H "anthropic-version: 2023-06-01" \
+            -d "$(jq -n --arg model "$model" --argjson msgs "$messages" '{
+                model: $model,
+                max_tokens: 4096,
+                stream: true,
+                messages: $msgs
+            }')" 2>/dev/null)
+
+        echo ""
+        echo ""
+
+        if [ -n "$full_response" ]; then
+            messages=$(echo "$messages" | jq --arg msg "$full_response" '. + [{"role":"assistant","content":$msg}]')
+            echo "$messages" > "$chat_file"
+        fi
+    done
+}
+
+claude_submenu() {
+    if ! claude_ensure_deps; then
+        echo -ne "  ${GRAY}Press Enter to continue...${RESET}"
+        read -r
+        return
+    fi
+
+    local api_key
+    api_key=$(claude_get_api_key)
+    if [ -z "$api_key" ]; then
+        if ! claude_setup_key; then
+            echo ""
+            echo -ne "  ${GRAY}Press Enter to continue...${RESET}"
+            read -r
+            return
+        fi
+        api_key=$(claude_get_api_key)
+    fi
+
+    while true; do
+        clear
+        echo ""
+        echo -e "  ${LAVENDER}── Claude AI ──${RESET}"
+        echo ""
+
+        local chat_files=()
+        local chat_names=()
+        if [ -d "$CLAUDE_CHAT_DIR" ]; then
+            while IFS= read -r -d '' f; do
+                chat_files+=("$f")
+                local bname
+                bname=$(basename "$f" .json)
+                local msg_count
+                msg_count=$(jq 'length' "$f" 2>/dev/null || echo 0)
+                local modified
+                modified=$(stat -c '%Y' "$f" 2>/dev/null || echo 0)
+                local date_str
+                date_str=$(date -d "@$modified" '+%d %b %H:%M' 2>/dev/null || echo "unknown")
+                chat_names+=("$bname ($msg_count msgs, $date_str)")
+            done < <(find "$CLAUDE_CHAT_DIR" -name '*.json' -print0 2>/dev/null | sort -z -r)
+        fi
+
+        if [ ${#chat_files[@]} -gt 0 ]; then
+            echo -e "  ${WHITE}Existing chats:${RESET}"
+            echo ""
+            local idx=1
+            for name in "${chat_names[@]}"; do
+                echo -e "  ${LAVENDER}[$idx]${RESET}  $name"
+                idx=$((idx + 1))
+            done
+            echo ""
+        fi
+
+        echo -e "  ${LAVENDER}[n]${RESET}  New Chat"
+        echo -e "  ${LAVENDER}[d]${RESET}  Delete a Chat"
+        echo -e "  ${LAVENDER}[k]${RESET}  Change API Key"
+        echo -e "  ${LAVENDER}[m]${RESET}  Back to Main Menu"
+        echo ""
+        echo -ne "  ${WHITE}➤ ${RESET}"
+        read -r claude_choice
+
+        case $claude_choice in
+            n|N)
+                echo ""
+                echo -ne "  ${WHITE}Chat name: ${RESET}"
+                read -r chat_name
+                if [ -z "$chat_name" ]; then
+                    chat_name="chat-$(date '+%Y%m%d-%H%M%S')"
+                fi
+                chat_name=$(echo "$chat_name" | tr ' ' '-' | tr -cd 'a-zA-Z0-9_-')
+                local model
+                model=$(claude_select_model)
+                echo "[]" > "$CLAUDE_CHAT_DIR/${chat_name}.json"
+                claude_chat_session "$api_key" "$CLAUDE_CHAT_DIR/${chat_name}.json" "$model"
+                ;;
+            d|D)
+                if [ ${#chat_files[@]} -eq 0 ]; then
+                    echo -e "  ${GRAY}No chats to delete.${RESET}"
+                    sleep 1
+                    continue
+                fi
+                echo ""
+                echo -ne "  ${WHITE}Chat number to delete: ${RESET}"
+                read -r del_num
+                if [[ "$del_num" =~ ^[0-9]+$ ]] && [ "$del_num" -ge 1 ] && [ "$del_num" -le ${#chat_files[@]} ]; then
+                    local del_file="${chat_files[$((del_num - 1))]}"
+                    echo -ne "  ${RED}Delete $(basename "$del_file" .json)? [y/N]: ${RESET}"
+                    read -r confirm
+                    if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
+                        rm -f "$del_file"
+                        echo -e "  ${GREEN}Deleted.${RESET}"
+                    fi
+                else
+                    echo -e "  ${GRAY}Invalid number.${RESET}"
+                fi
+                sleep 1
+                ;;
+            k|K)
+                claude_setup_key
+                api_key=$(claude_get_api_key)
+                echo ""
+                echo -ne "  ${GRAY}Press Enter to continue...${RESET}"
+                read -r
+                ;;
+            m|M)
+                return
+                ;;
+            *)
+                if [[ "$claude_choice" =~ ^[0-9]+$ ]] && [ "$claude_choice" -ge 1 ] && [ "$claude_choice" -le ${#chat_files[@]} ]; then
+                    local selected_file="${chat_files[$((claude_choice - 1))]}"
+                    local model
+                    model=$(claude_select_model)
+                    claude_chat_session "$api_key" "$selected_file" "$model"
+                else
+                    echo -e "  ${GRAY}Invalid option.${RESET}"
+                    sleep 1
+                fi
+                ;;
+        esac
+    done
+}
+
 while true; do
     show_menu
     echo -ne "  ${WHITE}➤ ${RESET}"
@@ -793,6 +1102,9 @@ while true; do
             echo ""
             echo -ne "  ${GRAY}Press Enter to continue...${RESET}"
             read -r
+            ;;
+        c|C)
+            claude_submenu
             ;;
         l|L)
             echo -e "\n  ${GRAY}Logging out...${RESET}\n"
