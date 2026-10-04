@@ -384,18 +384,19 @@ show_menu() {
     [ "$col_w" -gt 35 ] && col_w=35
     [ "$col_w" -lt 20 ] && col_w=20
 
-    local items_l=("Open Console" "Services" "Updates" "Network Info" "Claude AI")
-    local items_r=("System Status" "Horizon Advertising" "View Logs" "User Management" "Log Out All Sessions")
-    local nums_l=(1 3 5 7 c)
-    local nums_r=(2 4 6 8 9)
+    local items_l=("Open Console" "Services" "Updates" "Network Info")
+    local items_r=("System Status" "Horizon Advertising" "View Logs" "User Management")
+    local nums_l=(1 3 5 7)
+    local nums_r=(2 4 6 8)
 
     local i
-    for i in 0 1 2 3 4; do
+    for i in 0 1 2 3; do
         local left right
         left=$(printf "${LAVENDER}[%s]${RESET}  %-*s" "${nums_l[$i]}" $(( col_w - 6 )) "${items_l[$i]}")
         right=$(printf "${LAVENDER}[%s]${RESET}  %s" "${nums_r[$i]}" "${items_r[$i]}")
         echo -e "  ${left}${right}"
     done
+    echo -e "  $(printf "${LAVENDER}[9]${RESET}  %s" "Log Out All Sessions")"
     echo ""
     local lo exit_opt
     lo=$(printf "${LAVENDER}[l]${RESET}  %-*s" $(( col_w - 6 )) "Log Out")
@@ -655,30 +656,6 @@ updates_submenu() {
     done
 }
 
-claude_submenu() {
-    if ! command -v claude &>/dev/null; then
-        clear
-        echo ""
-        echo -e "  ${LAVENDER}── Claude Code ──${RESET}"
-        echo ""
-        echo -e "  ${RED}Claude Code is not installed.${RESET}"
-        echo ""
-        echo -e "  ${WHITE}To install, run as root:${RESET}"
-        echo -e "  ${GRAY}  npm install -g @anthropic-ai/claude-code${RESET}"
-        echo ""
-        echo -e "  ${WHITE}Then log in:${RESET}"
-        echo -e "  ${GRAY}  claude login${RESET}"
-        echo ""
-        echo -ne "  ${GRAY}Press Enter to continue...${RESET}"
-        read -r
-        return
-    fi
-    clear
-    echo ""
-    echo -e "  ${LAVENDER}Launching Claude Code...${RESET}"
-    echo ""
-    claude
-}
 
 while true; do
     show_menu
@@ -815,9 +792,6 @@ while true; do
             echo ""
             echo -ne "  ${GRAY}Press Enter to continue...${RESET}"
             read -r
-            ;;
-        c|C)
-            claude_submenu
             ;;
         l|L)
             echo -e "\n  ${GRAY}Logging out...${RESET}\n"
