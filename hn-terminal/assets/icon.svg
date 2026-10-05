@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
-  <rect width="256" height="256" rx="32" fill="#0c0c0c"/>
-  <rect x="16" y="16" width="224" height="224" rx="24" fill="#1a1a2e" stroke="#3b82f6" stroke-width="4"/>
-  <text x="128" y="148" text-anchor="middle" fill="#38bdf8" font-size="96" font-weight="800" font-family="Segoe UI, sans-serif">HN</text>
-  <rect x="40" y="32" width="176" height="4" rx="2" fill="#3b82f6" opacity="0.5"/>
-</svg>
