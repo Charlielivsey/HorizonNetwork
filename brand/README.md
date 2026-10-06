@@ -14,7 +14,7 @@ The `-white` versions have white text for dark backgrounds, and the last bar tur
 
 ## Other divisions: roundels
 
-These follow the BT roundel: a thick indigo (`#5514B4`) ring with heavy initials inside.
+These follow the BT roundel: a thick ring with heavy initials inside. Horizon Advertising is lavender (`#A47DDB`); the others are indigo (`#5514B4`).
 
 | Division | Initials |
 |---|---|
@@ -33,6 +33,7 @@ The SVGs use outlined paths, so they don't depend on installed fonts. To regener
 
 ## Email signatures
 
+- `email-signature/horizon-advertising.html` – Executive Director, Horizon Advertising Limited (horizonadvertising.co.uk)
 - `email-signature/horizon-network.html` – President, Horizon Network Limited (horizon-network.co.uk)
 
 To install one, open it in a browser, select all, copy, and paste into Gmail or Outlook signature settings.

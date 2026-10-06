@@ -17,6 +17,7 @@ FONT_BOLD = "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
 INDIGO = "#5514B4"
 WHITE = "#FFFFFF"
 INK = "#1A1A1A"
+LAVENDER = "#A47DDB"  # Horizon Advertising
 
 # --- Roundel (100 x 100 box), proportions taken from the BT roundel -------------
 RING = 6.2                # ring thickness, ~6% of the diameter
@@ -41,11 +42,11 @@ GLYPHS = {
 }
 
 ROUNDEL_BRANDS = {
-    # slug: (initials, line 1, line 2)
-    "horizon-advertising": ("HA", "Horizon", "Advertising"),
-    "horizon-development": ("HD", "Horizon", "Development"),
-    "horizon-media-group": ("HM", "Horizon", "Media Group"),
-    "horizon-holding-co":  ("HH", "Horizon", "Holding Co"),
+    # slug: (initials, line 1, line 2, colour)
+    "horizon-advertising": ("HA", "Horizon", "Advertising", LAVENDER),
+    "horizon-development": ("HD", "Horizon", "Development", INDIGO),
+    "horizon-media-group": ("HM", "Horizon", "Media Group", INDIGO),
+    "horizon-holding-co":  ("HH", "Horizon", "Holding Co", INDIGO),
 }
 
 # --- Wordmarks with the stepped colour line -------------------------------------
@@ -146,12 +147,12 @@ def main():
             for ink, suffix in ((INK, ""), (WHITE, "-white")):
                 w, h, body = wordmark(lines, ink)
                 files[f"{slug}-{name}{suffix}.svg"] = svg(w, h, body, title)
-    for slug, (ini, l1, l2) in ROUNDEL_BRANDS.items():
+    for slug, (ini, l1, l2, color) in ROUNDEL_BRANDS.items():
         title = f"{l1} {l2}"
-        files[f"{slug}-roundel.svg"] = svg(100, 100, roundel(ini, INDIGO), title)
+        files[f"{slug}-roundel.svg"] = svg(100, 100, roundel(ini, color), title)
         files[f"{slug}-roundel-white.svg"] = svg(100, 100, roundel(ini, WHITE), title)
-        files[f"{slug}-app-icon.svg"] = svg(100, 100, f'<g transform="translate(15 15) scale(0.7)">\n  {roundel(ini, WHITE)}\n  </g>', title, bg=INDIGO)
-        w, b = roundel_lockup(ini, l1, l2, INDIGO)
+        files[f"{slug}-app-icon.svg"] = svg(100, 100, f'<g transform="translate(15 15) scale(0.7)">\n  {roundel(ini, WHITE)}\n  </g>', title, bg=color)
+        w, b = roundel_lockup(ini, l1, l2, color)
         files[f"{slug}-logo.svg"] = svg(w, 100, b, title)
         w, b = roundel_lockup(ini, l1, l2, WHITE)
         files[f"{slug}-logo-white.svg"] = svg(w, 100, b, title)
