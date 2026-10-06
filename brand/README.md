@@ -1,21 +1,21 @@
 # HN Group brand logos
 
-A family of logos in the style of the BT roundel: a solid circle holding bold initials, with a wordmark beside it.
+Logos modelled on the BT / BT Group roundel: a thin indigo ring with the initials inside, in BT indigo `#5514B4`. As with BT Business and BT Sport, each division is the same roundel with its name written beside it.
 
-| Brand | Mark | Colour |
-|---|---|---|
-| HN Group | `HN` + "Group" | Deep violet `#4C1D95` |
-| Horizon Network | `HN` | Violet `#6D28D9` |
-| Horizon Advertising | `HA` | Magenta `#C026D3` |
-| Horizon Development | `HD` | Teal `#0F766E` |
+| Brand | Logo |
+|---|---|
+| HN Group | (HN) Group |
+| Horizon Network | (HN) on its own, the main brand mark like the BT roundel |
+| Horizon Advertising | (HN) Advertising |
+| Horizon Development | (HN) Development |
 
-Each brand has these files in `logos/` (SVG) and `png/` (512px high):
+For each brand, `logos/` (SVG) and `png/` (512px high, transparent) contain:
 
-- `*-roundel` – coloured circle with white letters (favicons, app icons, social avatars)
-- `*-roundel-reversed` – white circle with coloured letters, for coloured or photo backgrounds
-- `*-lockup` – roundel plus wordmark, for light backgrounds
-- `*-lockup-on-dark` – the same with white text, for dark backgrounds
+- `*-logo` – indigo logo for light backgrounds
+- `*-logo-white` – white logo for indigo, dark or photo backgrounds
+- `*-roundel` / `*-roundel-white` – the ring and initials only
+- `*-app-icon` – white roundel on an indigo square
 
-The letters are custom geometric paths and the wordmark text is converted to outlines, so the SVGs look the same everywhere without needing fonts installed.
+There are also alternative roundels, `horizon-advertising-roundel-alt-HA` and `horizon-development-roundel-alt-HD`, if a division should use its own initials.
 
-To regenerate after changing colours or glyphs: `pip install fonttools && python3 brand/tools/generate.py`
+The SVGs use outlined paths, so they don't depend on installed fonts. To regenerate: `pip install fonttools && python3 brand/tools/generate.py`

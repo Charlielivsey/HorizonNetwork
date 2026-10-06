@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100.0 100" width="100" height="100" role="img" aria-label="Horizon Advertising">
+  <title>Horizon Advertising</title>
+  <rect width="100.0" height="100" fill="#5514B4"/>
+  <circle cx="50" cy="50" r="44.7" fill="none" stroke="#FFFFFF" stroke-width="4.6"/>
+  <path transform="translate(26.00 35.50)" fill="#FFFFFF" fill-rule="evenodd" d="M0 0h6.0v11.50h10.00V0h6.0v29.0h-6.0v-11.50h-10.00v11.50H0z"/>
+  <path transform="translate(51.00 35.50)" fill="#FFFFFF" fill-rule="evenodd" d="M0 0h6.0l11.00 18.6V0h6.0v29.0h-6.0L6.0 10.4V29.0H0z"/>
+</svg>
