@@ -14,7 +14,7 @@ The `-white` versions have white text for dark backgrounds, and the last bar tur
 
 ## Other divisions: roundels
 
-These follow the BT roundel: a thick ring with heavy initials inside. Horizon Advertising is lavender (`#A47DDB`); the others are indigo (`#5514B4`).
+These follow the BT roundel: a thick ring with heavy initials inside. Horizon Advertising is lavender (`#7B52C4`); the others are indigo (`#5514B4`).
 
 | Division | Initials |
 |---|---|

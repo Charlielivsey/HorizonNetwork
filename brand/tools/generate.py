@@ -17,7 +17,7 @@ FONT_BOLD = "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
 INDIGO = "#5514B4"
 WHITE = "#FFFFFF"
 INK = "#1A1A1A"
-LAVENDER = "#A47DDB"  # Horizon Advertising
+LAVENDER = "#7B52C4"  # Horizon Advertising
 
 # --- Roundel (100 x 100 box), proportions taken from the BT roundel -------------
 RING = 6.2                # ring thickness, ~6% of the diameter
