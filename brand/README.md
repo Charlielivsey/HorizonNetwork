@@ -19,3 +19,9 @@ For each brand, `logos/` (SVG) and `png/` (512px high, transparent) contain:
 There are also alternative roundels, `horizon-advertising-roundel-alt-HA` and `horizon-development-roundel-alt-HD`, if a division should use its own initials.
 
 The SVGs use outlined paths, so they don't depend on installed fonts. To regenerate: `pip install fonttools && python3 brand/tools/generate.py`
+
+## HN Group multicolour versions
+
+- `hn-group-bars` / `-white` – six multicolour vertical bars before the roundel and "Group"
+- `hn-group-ring` / `-white` – roundel ring split into six coloured segments, plus "Group"
+- `hn-group-ring-roundel` / `-white` – the multicolour ring on its own

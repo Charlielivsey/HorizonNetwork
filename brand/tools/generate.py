@@ -1,6 +1,7 @@
 """Generate the HN Group brand logo family (SVG), modelled on the BT roundel.
 Run: pip install fonttools && python3 brand/tools/generate.py"""
 import os
+import re
 from fontTools.ttLib import TTFont
 from fontTools.pens.svgPathPen import SVGPathPen
 from fontTools.pens.transformPen import TransformPen
@@ -68,6 +69,42 @@ def lockup(initials, word, color):
     body += f'\n  <path fill="{color}" stroke="{color}" stroke-width="0.9" stroke-linejoin="round" d="{d}"/>'
     return end + 3, body
 
+BARS = ["#5514B4", "#8A2BE2", "#E6007E", "#FF6A3D", "#FFB000", "#00B2E3"]
+
+def group_bar_logos():
+    """HN Group: multicolour bars versions."""
+    out = {}
+    # A: block of vertical multicolour bars, then the HN roundel and "Group"
+    bw, gap, x0 = 7.0, 2.6, 4.0
+    bars = []
+    for i, c in enumerate(BARS):
+        bars.append(f'<rect x="{x0 + i*(bw+gap):.1f}" y="6" width="{bw}" height="88" rx="1.2" fill="{c}"/>')
+    shift = x0 + len(BARS) * (bw + gap) + 6
+    for ink, suffix in ((INDIGO, ""), (WHITE, "-white")):
+        w, body = lockup("HN", "Group", ink)
+        bar_svg = "\n  ".join(bars)
+        if ink == WHITE:  # the indigo bar would vanish on an indigo background
+            bar_svg = bar_svg.replace(f'fill="{INDIGO}"', f'fill="{WHITE}"')
+        body = bar_svg + f'\n  <g transform="translate({shift:.1f} 0)">\n  {body}\n  </g>'
+        out[f"hn-group-bars{suffix}.svg"] = svg(w + shift, 100, body, "HN Group")
+    # B: roundel ring built from multicolour arc segments, HN inside, "Group" beside
+    import math
+    r = R - RING / 2
+    n, seg_gap = len(BARS), 6.0  # degrees between segments
+    arcs = []
+    for i, c in enumerate(BARS):
+        a0 = math.radians(-90 + i * 360 / n + seg_gap / 2)
+        a1 = math.radians(-90 + (i + 1) * 360 / n - seg_gap / 2)
+        x1, y1 = 50 + r * math.cos(a0), 50 + r * math.sin(a0)
+        x2, y2 = 50 + r * math.cos(a1), 50 + r * math.sin(a1)
+        arcs.append(f'<path d="M{x1:.2f} {y1:.2f}A{r} {r} 0 0 1 {x2:.2f} {y2:.2f}" fill="none" stroke="{c}" stroke-width="{RING + 1.4}" stroke-linecap="butt"/>')
+    for ink, suffix in ((INDIGO, ""), (WHITE, "-white")):
+        w, body = lockup("HN", "Group", ink)
+        body = re.sub(r'<circle[^>]*/>', "\n  ".join(arcs), body, count=1)
+        out[f"hn-group-ring{suffix}.svg"] = svg(w, 100, body, "HN Group")
+        out[f"hn-group-ring-roundel{suffix}.svg"] = svg(100, 100, re.sub(r'<circle[^>]*/>', "\n  ".join(arcs), roundel("HN", ink), count=1), "HN Group")
+    return out
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     files = {}
@@ -83,6 +120,7 @@ def main():
     # Alternative roundels with the division's own initials
     files["horizon-advertising-roundel-alt-HA.svg"] = svg(100, 100, roundel("HA", INDIGO), "Horizon Advertising")
     files["horizon-development-roundel-alt-HD.svg"] = svg(100, 100, roundel("HD", INDIGO), "Horizon Development")
+    files.update(group_bar_logos())
     for name, content in files.items():
         with open(os.path.join(OUT, name), "w") as f:
             f.write(content)
