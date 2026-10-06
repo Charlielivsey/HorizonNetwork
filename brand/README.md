@@ -1,34 +1,41 @@
 # HN Group brand logos
 
-Logos modelled on the BT / BT Group roundel: a thin indigo ring with the initials inside, in BT indigo `#5514B4`. As with BT Business and BT Sport, each division is the same roundel with its name written beside it.
+All files are in `logos/` (SVG) and `png/` (512px high, transparent).
 
-| Brand | Logo |
+## HN Group and Horizon Network: wordmarks
+
+These follow the BT Group style: a heavy black wordmark above a stepped line of eight colour bars.
+
+- `hn-group-wordmark` / `-white`
+- `horizon-network-wordmark` / `-white` – on one line
+- `horizon-network-wordmark-stacked` / `-white` – "Horizon" over "Network", for small spaces such as email
+
+The `-white` versions have white text for dark backgrounds, and the last bar turns white.
+
+## Other divisions: roundels
+
+These follow the BT roundel: a thick indigo (`#5514B4`) ring with heavy initials inside.
+
+| Division | Initials |
 |---|---|
-| HN Group | (HN) Group |
-| Horizon Network | (HN) on its own, the main brand mark like the BT roundel |
-| Horizon Advertising | (HN) Advertising |
-| Horizon Development | (HN) Development |
+| Horizon Advertising | HA |
+| Horizon Development | HD |
+| Horizon Media Group | HM |
+| Horizon Holding Co | HH |
 
-For each brand, `logos/` (SVG) and `png/` (512px high, transparent) contain:
+Each division has:
 
-- `*-logo` – indigo logo for light backgrounds
-- `*-logo-white` – white logo for indigo, dark or photo backgrounds
 - `*-roundel` / `*-roundel-white` – the ring and initials only
-- `*-app-icon` – white roundel on an indigo square
-
-There are also alternative roundels, `horizon-advertising-roundel-alt-HA` and `horizon-development-roundel-alt-HD`, if a division should use its own initials.
+- `*-logo` / `*-logo-white` – the roundel with the division name beside it
+- `*-app-icon` – a white roundel on an indigo square
 
 The SVGs use outlined paths, so they don't depend on installed fonts. To regenerate: `pip install fonttools && python3 brand/tools/generate.py`
 
-## HN Group wordmark (main group logo)
+## Email signatures
 
-Modelled on the BT Group logo: a heavy "HN Group" wordmark above a stepped line of eight colour bars.
+- `email-signature/hn-group.html` – Chief Executive Officer, HN Group Limited (hngroup.org.uk)
+- `email-signature/horizon-network.html` – President, Horizon Network Limited (horizon-network.co.uk)
 
-- `hn-group-wordmark` – black text, for light backgrounds
-- `hn-group-wordmark-white` – white text, for dark backgrounds (the last bar turns white)
+To install one, open it in a browser, select all, copy, and paste into Gmail or Outlook signature settings.
 
-## Email signature
-
-`email-signature/signature.html` uses the HN Group logo on a white background. To install it, open the file in a browser, select all, copy, and paste into Gmail or Outlook signature settings.
-
-The logo image loads from `website/public/brand/hn-group-email-logo.png`, served by the website at `http://217.154.34.205/brand/hn-group-email-logo.png`. Once the site is on hngroup.org.uk over HTTPS, update the `img src` to that address.
+The logo images load from `website/public/brand/`, served by the website at `http://217.154.34.205/brand/`. Redeploy the website so the images exist. Once the domains run over HTTPS, update each `img src`.
