@@ -29,6 +29,6 @@ Modelled on the BT Group logo: a heavy "HN Group" wordmark above a stepped line 
 
 ## Email signature
 
-`email-signature/signature.html` uses the white HN Group logo on a dark panel. To install it, open the file in a browser, select all, copy, and paste into Gmail or Outlook signature settings. Before using it, replace `[Job title]` and `[Phone number]`.
+`email-signature/signature.html` uses the HN Group logo on a white background. To install it, open the file in a browser, select all, copy, and paste into Gmail or Outlook signature settings. Before using it, replace `[Job title]`.
 
 The logo image loads from `website/public/brand/hn-group-email-logo.png`, served by the website at `http://217.154.34.205/brand/hn-group-email-logo.png`. Once the site is on hngroup.org.uk over HTTPS, update the `img src` to that address.
