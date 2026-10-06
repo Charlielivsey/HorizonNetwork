@@ -35,6 +35,7 @@ The SVGs use outlined paths, so they don't depend on installed fonts. To regener
 
 - `email-signature/horizon-advertising.html` – Executive Director, Horizon Advertising Limited (horizonadvertising.co.uk)
 - `email-signature/horizon-network.html` – President, Horizon Network Limited (horizon-network.co.uk)
+- `email-signature/horizon-network-jack-vinckx.html` – Jack Vinckx, Vice President, Horizon Network Limited
 
 To install one, open it in a browser, select all, copy, and paste into Gmail or Outlook signature settings.
 
