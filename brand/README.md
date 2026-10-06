@@ -20,8 +20,9 @@ There are also alternative roundels, `horizon-advertising-roundel-alt-HA` and `h
 
 The SVGs use outlined paths, so they don't depend on installed fonts. To regenerate: `pip install fonttools && python3 brand/tools/generate.py`
 
-## HN Group multicolour versions
+## HN Group wordmark (main group logo)
 
-- `hn-group-bars` / `-white` – six multicolour vertical bars before the roundel and "Group"
-- `hn-group-ring` / `-white` – roundel ring split into six coloured segments, plus "Group"
-- `hn-group-ring-roundel` / `-white` – the multicolour ring on its own
+Modelled on the BT Group logo: a heavy "HN Group" wordmark above a stepped line of eight colour bars.
+
+- `hn-group-wordmark` – black text, for light backgrounds
+- `hn-group-wordmark-white` – white text, for dark backgrounds (the last bar turns white)
