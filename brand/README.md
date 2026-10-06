@@ -33,7 +33,6 @@ The SVGs use outlined paths, so they don't depend on installed fonts. To regener
 
 ## Email signatures
 
-- `email-signature/hn-group.html` – Chief Executive Officer, HN Group Limited (hngroup.org.uk)
 - `email-signature/horizon-network.html` – President, Horizon Network Limited (horizon-network.co.uk)
 
 To install one, open it in a browser, select all, copy, and paste into Gmail or Outlook signature settings.
