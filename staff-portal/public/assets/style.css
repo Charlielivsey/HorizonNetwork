@@ -1464,3 +1464,13 @@ legend { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-
     .doc-row { flex-wrap: wrap; }
     .doc-side { width: 100%; align-items: flex-start; }
 }
+
+/* Home: announcements front and centre */
+.home-announcements { margin-bottom: 2rem; }
+.home-announcements .section-title { display: flex; align-items: center; gap: 0.45rem; }
+.home-announcements .section-title .icon { width: 16px; height: 16px; color: var(--primary); }
+.announcements.wide { max-width: none; }
+.read-more { display: inline-block; margin-top: 0.4rem; font-weight: 600; }
+.more-link { align-self: flex-start; }
+.popup-list { margin-top: 1rem; max-height: 60vh; overflow-y: auto; }
+.popup-list .announcement { box-shadow: none; }

@@ -58,7 +58,7 @@ Sign-ins are saved in `sessions.json`, so restarting the app or running the inst
 
 ### Workplace
 
-- **Announcements.** Leadership and HR can post announcements to everyone or to particular companies. They can also pin them to the top, mark them as important, and edit or delete them. Everyone else sees the ones meant for them. Unread announcements are counted in the **Workplace** menu, and the latest three appear on the home page.
+- **Announcements.** Leadership and HR can post announcements to everyone or to particular companies. They can also pin them to the top, mark them as important, and edit or delete them. Everyone else sees the ones meant for them. Unread announcements are counted in the **Workplace** menu. The latest five are shown in full on the home page, and any you haven't seen yet pop up when you open the home page. Closing the pop-up marks them as read.
 - **Documents & Policies.** Leadership and HR can upload PDF, Word, Excel, PowerPoint, text, CSV or image files up to 20 MB. Each document has a category (Policies, Handbooks, Forms, Templates, Guides or Other) and can be shared with everyone or with particular companies. Staff can view or download documents, and search or filter them.
   - Ticking **Staff must read and acknowledge this** asks everyone in the document's audience to confirm they've read it. Until they do, it shows under "Needs your attention" on their home page.
   - Managers can see who has and hasn't acknowledged a document. Uploading a new version asks everyone to acknowledge it again.

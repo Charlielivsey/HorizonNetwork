@@ -542,6 +542,10 @@
             (me.location ? "" : ' · <a href="/settings" data-link>Set your location</a>') + "</div></div>" +
             "</section>" +
 
+            '<section class="home-announcements"><div class="panel-head tight"><h2 class="section-title">' + icon("bell") + "Announcements</h2>" +
+            '<a class="small" href="/announcements" data-link>View all</a></div>' +
+            '<div id="home-news" class="announcements wide"><p class="muted small">Loading…</p></div></section>' +
+
             '<div class="home-grid">' +
             '<section class="panel"><h2 class="section-title">Your details</h2>' +
             '<div class="me-card">' + avatar(me, "lg") + '<div><div class="me-name">' + esc(me.displayName) + "</div>" +
@@ -550,8 +554,6 @@
             (primaryEmail(me) ? '<dl class="facts"><dt>Email</dt><dd>' + esc(primaryEmail(me)) + "</dd></dl>" : "") +
             '<a class="btn btn-ghost btn-block-sm" href="/settings" data-link>Edit profile</a></section>' +
             '<section class="panel" id="home-todo" hidden></section>' +
-            '<section class="panel"><div class="panel-head tight"><h2 class="section-title">Latest announcements</h2>' +
-            '<a class="small" href="/announcements" data-link>View all</a></div><div id="home-news"><p class="muted small">Loading…</p></div></section>' +
             '<section class="panel"><h2 class="section-title">Need help?</h2>' +
             '<p class="muted">For access problems or anything IT related, contact the IT team.</p></section>' +
             "</div>";
@@ -560,14 +562,14 @@
         api("/api/announcements").then(function (d) {
             const box = $("#home-news");
             if (!box) return;
-            const latest = d.announcements.slice(0, 3);
-            box.innerHTML = latest.length ? latest.map(function (a) {
-                return '<a class="news-item" href="/announcements" data-link>' +
-                    '<span class="news-date">' + esc(fmtDate(a.createdAt)) + (a.unread ? ' <span class="badge badge-new">New</span>' : "") +
-                    (a.important ? ' <span class="badge badge-red">Important</span>' : "") + "</span>" +
-                    '<span class="news-title">' + esc(a.title) + "</span>" +
-                    '<span class="muted small news-snippet">' + esc(a.body.length > 140 ? a.body.slice(0, 140).trim() + "…" : a.body) + "</span></a>";
-            }).join("") : '<p class="muted small">No announcements yet.</p>';
+            const latest = d.announcements.slice(0, 5);
+            box.innerHTML = latest.length
+                ? latest.map(function (a) { return announcementHtml(a, { clamp: true }); }).join("") +
+                  (d.announcements.length > latest.length ? '<a class="btn btn-ghost more-link" href="/announcements" data-link>See all ' + d.announcements.length + " announcements</a>" : "")
+                : '<div class="panel muted small">No announcements yet.</div>';
+            // Show anything new as soon as you land on the home page.
+            const unread = d.announcements.filter(function (a) { return a.unread; });
+            if (unread.length && !$(".modal-backdrop")) showNewAnnouncements(unread);
         }).catch(function () {});
 
         if (me.pendingAcks) {
@@ -1368,6 +1370,52 @@
         return $$(".audience input:checked", el).map(function (cb) { return cb.value; });
     }
 
+    // One announcement card. `clamp` shortens long messages (used on the home page).
+    function announcementHtml(a, opts) {
+        opts = opts || {};
+        const long = opts.clamp && a.body.length > 400;
+        return '<article class="announcement' + (a.important ? " important" : "") + (a.unread ? " unread" : "") + '" data-id="' + a.id + '">' +
+            '<header class="ann-head">' + avatar(a.author, "md") +
+            '<div class="ann-meta"><div class="ann-author">' + esc(a.author.displayName) + "</div>" +
+            '<div class="muted small">' + esc(a.author.jobTitle || "") + (a.author.jobTitle ? " · " : "") + esc(fmtDateTime(a.createdAt)) +
+            (a.updatedAt !== a.createdAt ? " · edited" : "") + "</div></div>" +
+            '<div class="ann-flags">' +
+            (a.unread ? '<span class="badge badge-new">New</span>' : "") +
+            (a.pinned ? '<span class="badge">' + icon("pinned") + "Pinned</span>" : "") +
+            (a.important ? '<span class="badge badge-red">Important</span>' : "") +
+            (opts.menu || "") +
+            "</div></header>" +
+            '<h2 class="ann-title">' + esc(a.title) + "</h2>" +
+            '<div class="ann-body">' + richText(long ? a.body.slice(0, 400).trim() + "…" : a.body) + "</div>" +
+            (long ? '<a class="small read-more" href="/announcements" data-link>Read more</a>' : "") +
+            '<footer class="chips">' + audienceChips(a.companies) + "</footer>" +
+            "</article>";
+    }
+
+    // Pop-up of announcements the user hasn't seen yet. Closing it marks them as read.
+    function showNewAnnouncements(unread) {
+        openModal(
+            '<h2 class="modal-title">' + (unread.length === 1 ? "New announcement" : unread.length + " new announcements") + "</h2>" +
+            '<div class="announcements popup-list">' + unread.map(function (a) { return announcementHtml(a); }).join("") + "</div>" +
+            '<div class="modal-actions"><a class="btn btn-ghost" href="/announcements" data-link>Open Announcements</a>' +
+            '<button type="button" class="btn btn-primary" data-close>Got it</button></div>',
+            {
+                wide: true,
+                onClose: function () {
+                    api("/api/announcements/seen", {}).then(function (r) {
+                        state.me = r.user;
+                        renderChrome();
+                        $$("#home-news .announcement.unread").forEach(function (el) {
+                            el.classList.remove("unread");
+                            const b = $(".badge-new", el);
+                            if (b) b.remove();
+                        });
+                    }).catch(function () {});
+                },
+            }
+        );
+    }
+
     async function viewAnnouncements(root, current) {
         const data = await api("/api/announcements");
         if (!current()) return;
@@ -1378,24 +1426,12 @@
             (data.canPost ? '<div class="page-actions"><button type="button" class="btn btn-primary" id="new-announcement">' + icon("plus") + "New announcement</button></div>" : "") +
             "</div>" +
             '<div class="announcements">' + (list.length ? list.map(function (a) {
-                return '<article class="announcement' + (a.important ? " important" : "") + (a.unread ? " unread" : "") + '" data-id="' + a.id + '">' +
-                    '<header class="ann-head">' + avatar(a.author, "md") +
-                    '<div class="ann-meta"><div class="ann-author">' + esc(a.author.displayName) + "</div>" +
-                    '<div class="muted small">' + esc(a.author.jobTitle || "") + (a.author.jobTitle ? " · " : "") + esc(fmtDateTime(a.createdAt)) +
-                    (a.updatedAt !== a.createdAt ? " · edited" : "") + "</div></div>" +
-                    '<div class="ann-flags">' +
-                    (a.unread ? '<span class="badge badge-new">New</span>' : "") +
-                    (a.pinned ? '<span class="badge">' + icon("pinned") + "Pinned</span>" : "") +
-                    (a.important ? '<span class="badge badge-red">Important</span>' : "") +
-                    (data.canPost ? '<div class="nav-item row-menu"><button type="button" class="icon-btn" data-menu aria-haspopup="true" aria-expanded="false" aria-label="Announcement options">' + icon("more") + "</button>" +
+                return announcementHtml(a, {
+                    menu: data.canPost ? '<div class="nav-item row-menu"><button type="button" class="icon-btn" data-menu aria-haspopup="true" aria-expanded="false" aria-label="Announcement options">' + icon("more") + "</button>" +
                         '<div class="menu menu-right menu-row" role="menu" hidden>' +
                         '<button type="button" class="menu-item compact" data-act="edit">' + icon("edit") + "<span>Edit</span></button>" +
-                        '<button type="button" class="menu-item compact danger" data-act="delete">' + icon("trash") + "<span>Delete</span></button></div></div>" : "") +
-                    "</div></header>" +
-                    '<h2 class="ann-title">' + esc(a.title) + "</h2>" +
-                    '<div class="ann-body">' + richText(a.body) + "</div>" +
-                    '<footer class="chips">' + audienceChips(a.companies) + "</footer>" +
-                    "</article>";
+                        '<button type="button" class="menu-item compact danger" data-act="delete">' + icon("trash") + "<span>Delete</span></button></div></div>" : "",
+                });
             }).join("") : '<div class="empty-page">' + icon("bell", "big") + "<h2>No announcements yet</h2>" +
                 '<p class="muted">' + (data.canPost ? "Post the first one with <strong>New announcement</strong>." : "Check back soon.") + "</p></div>") + "</div>";
 
