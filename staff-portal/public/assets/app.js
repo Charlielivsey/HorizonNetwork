@@ -34,6 +34,12 @@
         key: '<circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/>',
         ban: '<circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 14.14 14.14"/>',
         check: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/>',
+        settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+        upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5M12 3v12"/>',
+        download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/>',
+        pinned: '<path d="M12 17v5M9 10.76V4h6v6.76l3 4.24H6z"/><path d="M7 2h10"/>',
+        eye: '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
+        alert: '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01"/>',
         palette: '<circle cx="13.5" cy="6.5" r="1.5"/><circle cx="17.5" cy="10.5" r="1.5"/><circle cx="8.5" cy="7.5" r="1.5"/><circle cx="6.5" cy="12.5" r="1.5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.93 0 1.5-.75 1.5-1.6 0-.42-.16-.8-.42-1.08-.26-.28-.41-.65-.41-1.07 0-.88.71-1.6 1.6-1.6H16c3.31 0 6-2.69 6-6 0-4.96-4.48-9-10-9z"/>',
         tick: '<path d="M20 6 9 17l-5-5"/>',
         grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
@@ -221,8 +227,8 @@
         },
         {
             label: "Workplace", items: [
-                { title: "Announcements", desc: "Group-wide news and updates", icon: "bell", soon: true },
-                { title: "Documents & Policies", desc: "Handbooks, forms and templates", icon: "file", soon: true },
+                { title: "Announcements", desc: "Group-wide news and updates", href: "/announcements", icon: "bell", badge: "unreadAnnouncements" },
+                { title: "Documents & Policies", desc: "Handbooks, policies, forms and templates", href: "/documents", icon: "file", badge: "pendingAcks" },
             ],
         },
         {
@@ -244,8 +250,9 @@
     }
 
     function menuItemHtml(it) {
+        const count = it.badge ? state.me[it.badge] || 0 : 0;
         const inner = '<span class="mi-icon">' + icon(it.icon) + '</span><span class="mi-text"><span class="mi-title">' + esc(it.title) +
-            (it.soon ? ' <span class="soon">Soon</span>' : "") + '</span><span class="mi-desc">' + esc(it.desc) + "</span></span>";
+            (it.soon ? ' <span class="soon">Soon</span>' : "") + (count ? ' <span class="count-badge">' + count + "</span>" : "") + '</span><span class="mi-desc">' + esc(it.desc) + "</span></span>";
         return it.soon
             ? '<button type="button" class="menu-item" role="menuitem" data-soon="' + esc(it.title) + '">' + inner + "</button>"
             : '<a class="menu-item" role="menuitem" href="' + it.href + '" data-link>' + inner + "</a>";
@@ -260,7 +267,9 @@
                 const paths = items.map(function (it) { return it.href; }).filter(Boolean).join(" ");
                 return '<div class="nav-item">' +
                     '<button type="button" class="nav-link" data-menu aria-haspopup="true" aria-expanded="false" data-section="' + paths + '">' +
-                    "<span>" + esc(section.label) + "</span>" + icon("chevron", "chev") + "</button>" +
+                    "<span>" + esc(section.label) + "</span>" +
+                    (items.some(function (it) { return it.badge && state.me[it.badge]; }) ? '<span class="nav-dot" aria-label="New items"></span>' : "") +
+                    icon("chevron", "chev") + "</button>" +
                     '<div class="menu" role="menu" hidden>' + items.map(menuItemHtml).join("") + "</div></div>";
             }).join("");
 
@@ -273,10 +282,8 @@
             '<div class="menu-header">' + avatar(me, "md") + '<div class="menu-header-text"><div class="mh-name">' + esc(me.displayName) +
             '</div><div class="mh-email">' + esc(me.username) + "</div></div></div>" +
             '<div class="menu-sep"></div>' +
-            '<a class="menu-item compact" role="menuitem" href="/settings" data-link>' + icon("user") + "<span>Profile &amp; settings</span></a>" +
+            '<a class="menu-item compact" role="menuitem" href="/settings" data-link>' + icon("settings") + "<span>Settings</span></a>" +
             (me.isOwner && !me.impersonatedBy ? '<a class="menu-item compact" role="menuitem" href="/system" data-link>' + icon("shield") + "<span>System Admin</span></a>" : "") +
-            '<a class="menu-item compact" role="menuitem" href="/settings#appearance" data-link>' + icon("palette") + "<span>Appearance</span></a>" +
-            '<a class="menu-item compact" role="menuitem" href="/settings#password" data-link>' + icon("lock") + "<span>Change password</span></a>" +
             '<div class="menu-sep"></div>' +
             '<button type="button" class="menu-item compact danger" role="menuitem" data-action="logout">' + icon("logout") + "<span>Sign out</span></button>" +
             "</div>";
@@ -388,6 +395,8 @@
         "/employees": viewEmployees,
         "/settings": viewSettings,
         "/system": viewSystem,
+        "/announcements": viewAnnouncements,
+        "/documents": viewDocuments,
     };
 
     function navigate(href, replace) {
@@ -540,12 +549,43 @@
             rolesHtml(me) +
             (primaryEmail(me) ? '<dl class="facts"><dt>Email</dt><dd>' + esc(primaryEmail(me)) + "</dd></dl>" : "") +
             '<a class="btn btn-ghost btn-block-sm" href="/settings" data-link>Edit profile</a></section>' +
-            '<section class="panel"><h2 class="section-title">Latest news</h2>' +
-            '<article class="news"><h3>Welcome to the new Staff Portal</h3>' +
-            '<p class="muted">This is the new home for HN Group staff. More tools will be added over the coming weeks.</p></article></section>' +
+            '<section class="panel" id="home-todo" hidden></section>' +
+            '<section class="panel"><div class="panel-head tight"><h2 class="section-title">Latest announcements</h2>' +
+            '<a class="small" href="/announcements" data-link>View all</a></div><div id="home-news"><p class="muted small">Loading…</p></div></section>' +
             '<section class="panel"><h2 class="section-title">Need help?</h2>' +
             '<p class="muted">For access problems or anything IT related, contact the IT team.</p></section>' +
             "</div>";
+
+        // Live panels: the latest announcements, and anything waiting for the user to acknowledge.
+        api("/api/announcements").then(function (d) {
+            const box = $("#home-news");
+            if (!box) return;
+            const latest = d.announcements.slice(0, 3);
+            box.innerHTML = latest.length ? latest.map(function (a) {
+                return '<a class="news-item" href="/announcements" data-link>' +
+                    '<span class="news-date">' + esc(fmtDate(a.createdAt)) + (a.unread ? ' <span class="badge badge-new">New</span>' : "") +
+                    (a.important ? ' <span class="badge badge-red">Important</span>' : "") + "</span>" +
+                    '<span class="news-title">' + esc(a.title) + "</span>" +
+                    '<span class="muted small news-snippet">' + esc(a.body.length > 140 ? a.body.slice(0, 140).trim() + "…" : a.body) + "</span></a>";
+            }).join("") : '<p class="muted small">No announcements yet.</p>';
+        }).catch(function () {});
+
+        if (me.pendingAcks) {
+            api("/api/documents").then(function (d) {
+                const box = $("#home-todo");
+                if (!box) return;
+                const todo = d.documents.filter(function (x) { return x.needsAck; });
+                if (!todo.length) return;
+                box.hidden = false;
+                box.classList.add("todo-panel");
+                box.innerHTML = '<h2 class="section-title">' + icon("alert") + "Needs your attention</h2>" +
+                    '<p class="muted small">Please read and acknowledge:</p>' +
+                    '<ul class="todo-list">' + todo.map(function (x) {
+                        return '<li>' + fileBadge(x.file.ext) + '<span>' + esc(x.title) + "</span></li>";
+                    }).join("") + "</ul>" +
+                    '<a class="btn btn-primary btn-block-sm" href="/documents" data-link>Go to Documents &amp; Policies</a>';
+            }).catch(function () {});
+        }
     }
 
     // ================= Staff directory =================
@@ -1289,6 +1329,412 @@
         });
     }
 
+    // ================= Workplace: announcements =================
+
+    function fmtDate(iso) {
+        return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    }
+
+    function fmtDateTime(iso) {
+        return new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    }
+
+    function fileSize(bytes) {
+        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + " KB";
+        return (bytes / 1024 / 1024).toFixed(1) + " MB";
+    }
+
+    // Escapes text, keeps line breaks and turns web addresses into links.
+    function richText(text) {
+        return esc(text).replace(/(https?:\/\/[^\s<]+[^\s<.,;:!?)\]'"])/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>').replace(/\n/g, "<br>");
+    }
+
+    function audienceChips(companies) {
+        return companies.length
+            ? companies.map(function (c) { return '<span class="chip">' + esc(c) + "</span>"; }).join("")
+            : '<span class="chip chip-all">Everyone</span>';
+    }
+
+    // Audience picker used by the announcement and document forms. Nothing ticked = everyone.
+    function audienceField(selected) {
+        return '<label>Who can see this</label><div class="check-chips audience">' +
+            state.meta.companies.map(function (c) {
+                return '<label class="check-chip"><input type="checkbox" value="' + esc(c) + '"' + (selected.indexOf(c) !== -1 ? " checked" : "") + "><span>" + esc(c) + "</span></label>";
+            }).join("") + '</div><p class="hint">Leave all unticked to share with everyone in HN Group.</p>';
+    }
+
+    function readAudience(el) {
+        return $$(".audience input:checked", el).map(function (cb) { return cb.value; });
+    }
+
+    async function viewAnnouncements(root, current) {
+        const data = await api("/api/announcements");
+        if (!current()) return;
+        const list = data.announcements;
+
+        root.innerHTML =
+            '<div class="page-head"><div><h1>Announcements</h1><p class="muted">News and updates from across HN Group.</p></div>' +
+            (data.canPost ? '<div class="page-actions"><button type="button" class="btn btn-primary" id="new-announcement">' + icon("plus") + "New announcement</button></div>" : "") +
+            "</div>" +
+            '<div class="announcements">' + (list.length ? list.map(function (a) {
+                return '<article class="announcement' + (a.important ? " important" : "") + (a.unread ? " unread" : "") + '" data-id="' + a.id + '">' +
+                    '<header class="ann-head">' + avatar(a.author, "md") +
+                    '<div class="ann-meta"><div class="ann-author">' + esc(a.author.displayName) + "</div>" +
+                    '<div class="muted small">' + esc(a.author.jobTitle || "") + (a.author.jobTitle ? " · " : "") + esc(fmtDateTime(a.createdAt)) +
+                    (a.updatedAt !== a.createdAt ? " · edited" : "") + "</div></div>" +
+                    '<div class="ann-flags">' +
+                    (a.unread ? '<span class="badge badge-new">New</span>' : "") +
+                    (a.pinned ? '<span class="badge">' + icon("pinned") + "Pinned</span>" : "") +
+                    (a.important ? '<span class="badge badge-red">Important</span>' : "") +
+                    (data.canPost ? '<div class="nav-item row-menu"><button type="button" class="icon-btn" data-menu aria-haspopup="true" aria-expanded="false" aria-label="Announcement options">' + icon("more") + "</button>" +
+                        '<div class="menu menu-right menu-row" role="menu" hidden>' +
+                        '<button type="button" class="menu-item compact" data-act="edit">' + icon("edit") + "<span>Edit</span></button>" +
+                        '<button type="button" class="menu-item compact danger" data-act="delete">' + icon("trash") + "<span>Delete</span></button></div></div>" : "") +
+                    "</div></header>" +
+                    '<h2 class="ann-title">' + esc(a.title) + "</h2>" +
+                    '<div class="ann-body">' + richText(a.body) + "</div>" +
+                    '<footer class="chips">' + audienceChips(a.companies) + "</footer>" +
+                    "</article>";
+            }).join("") : '<div class="empty-page">' + icon("bell", "big") + "<h2>No announcements yet</h2>" +
+                '<p class="muted">' + (data.canPost ? "Post the first one with <strong>New announcement</strong>." : "Check back soon.") + "</p></div>") + "</div>";
+
+        if ($("#new-announcement")) $("#new-announcement").addEventListener("click", function () { openAnnouncementForm(null); });
+        root.addEventListener("click", async function (e) {
+            const btn = e.target.closest("[data-act]");
+            if (!btn) return;
+            closeMenus();
+            const a = list.find(function (x) { return x.id === btn.closest("[data-id]").dataset.id; });
+            if (btn.dataset.act === "edit") return openAnnouncementForm(a);
+            if (!(await confirmDialog({ title: "Delete this announcement?", message: "“" + a.title + "” will be removed for everyone.", confirmLabel: "Delete", danger: true }))) return;
+            try {
+                await api("/api/announcements/" + a.id + "/delete", {});
+                toast("Announcement deleted.");
+                render();
+            } catch (err) { toast(err.message); }
+        });
+
+        // Opening the page marks everything as read.
+        if (list.some(function (a) { return a.unread; })) {
+            api("/api/announcements/seen", {}).then(function (r) { state.me = r.user; renderChrome(); }).catch(function () {});
+        }
+    }
+
+    function openAnnouncementForm(a) {
+        const v = a || { title: "", body: "", companies: [], pinned: false, important: false };
+        const m = openModal(
+            '<h2 class="modal-title">' + (a ? "Edit announcement" : "New announcement") + "</h2>" +
+            '<form novalidate id="ann-form">' +
+            '<label for="ann-title">Title</label><input type="text" id="ann-title" maxlength="150" value="' + esc(v.title) + '">' +
+            '<label for="ann-body">Message</label><textarea id="ann-body" rows="8" maxlength="10000">' + esc(v.body) + "</textarea>" +
+            '<p class="hint">Line breaks are kept and web links become clickable.</p>' +
+            audienceField(v.companies) +
+            '<div class="option-row"><label class="inline-check"><input type="checkbox" id="ann-pinned"' + (v.pinned ? " checked" : "") + "> Pin to the top</label>" +
+            '<label class="inline-check"><input type="checkbox" id="ann-important"' + (v.important ? " checked" : "") + "> Mark as important</label></div>" +
+            '<div class="form-error" id="ann-error" hidden></div>' +
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button>' +
+            '<button type="submit" class="btn btn-primary" id="ann-save">' + (a ? "Save changes" : "Post announcement") + "</button></div></form>",
+            { wide: true }
+        );
+        $("#ann-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            formError($("#ann-error", m.el), "");
+            $("#ann-save", m.el).disabled = true;
+            try {
+                await api(a ? "/api/announcements/" + a.id : "/api/announcements", {
+                    title: $("#ann-title", m.el).value,
+                    body: $("#ann-body", m.el).value,
+                    companies: readAudience(m.el),
+                    pinned: $("#ann-pinned", m.el).checked,
+                    important: $("#ann-important", m.el).checked,
+                });
+                closeModal();
+                toast(a ? "Announcement updated." : "Announcement posted.");
+                render();
+            } catch (err) {
+                formError($("#ann-error", m.el), err.message);
+                $("#ann-save", m.el).disabled = false;
+            }
+        });
+    }
+
+    // ================= Workplace: documents & policies =================
+
+    const FILE_KINDS = {
+        pdf: "PDF", doc: "Word", docx: "Word", odt: "Doc", rtf: "Doc", txt: "Text", csv: "CSV",
+        xls: "Excel", xlsx: "Excel", ods: "Sheet", ppt: "PowerPoint", pptx: "PowerPoint", odp: "Slides",
+        png: "Image", jpg: "Image", jpeg: "Image",
+    };
+    const ACCEPT = ".pdf,.doc,.docx,.odt,.rtf,.txt,.csv,.xls,.xlsx,.ods,.ppt,.pptx,.odp,.png,.jpg,.jpeg";
+
+    function fileBadge(ext) {
+        return '<span class="file-badge file-' + esc(ext) + '">' + esc((ext || "file").toUpperCase()) + "</span>";
+    }
+
+    async function viewDocuments(root, current) {
+        const data = await api("/api/documents");
+        if (!current()) return;
+        const docs = data.documents;
+        let category = "";
+        const pending = docs.filter(function (d) { return d.needsAck; });
+
+        root.innerHTML =
+            '<div class="page-head"><div><h1>Documents &amp; Policies</h1><p class="muted">Handbooks, policies, forms and templates for HN Group staff.</p></div>' +
+            (data.canManage ? '<div class="page-actions"><button type="button" class="btn btn-primary" id="upload-doc">' + icon("upload") + "Upload document</button></div>" : "") +
+            "</div>" +
+            (pending.length ? '<div class="banner banner-warn"><div>' + icon("alert") + " <strong>" + pending.length +
+                (pending.length === 1 ? " document needs" : " documents need") + " your acknowledgement.</strong> Please read " + (pending.length === 1 ? "it" : "them") + " and confirm.</div>" +
+                '<button type="button" class="btn btn-small btn-dark" id="show-pending">Show me</button></div>' : "") +
+            '<div class="company-tabs" id="doc-cats">' +
+            '<button type="button" data-cat="">All <span class="tab-count">' + docs.length + "</span></button>" +
+            data.categories.map(function (c) {
+                const n = docs.filter(function (d) { return d.category === c; }).length;
+                return n || data.canManage ? '<button type="button" data-cat="' + esc(c) + '">' + esc(c) + ' <span class="tab-count">' + n + "</span></button>" : "";
+            }).join("") +
+            (pending.length ? '<button type="button" data-cat="__pending">To acknowledge <span class="tab-count">' + pending.length + "</span></button>" : "") +
+            "</div>" +
+            '<div class="toolbar"><label class="search">' + icon("search") + '<input type="search" id="doc-search" placeholder="Search documents" aria-label="Search documents"></label></div>' +
+            '<div id="doc-list"></div>';
+
+        function draw() {
+            $$("#doc-cats [data-cat]").forEach(function (b) { b.classList.toggle("active", b.dataset.cat === category); });
+            const q = $("#doc-search").value.trim().toLowerCase();
+            const list = docs.filter(function (d) {
+                if (category === "__pending" && !d.needsAck) return false;
+                if (category && category !== "__pending" && d.category !== category) return false;
+                return !q || [d.title, d.description, d.category, d.file.name].join(" ").toLowerCase().indexOf(q) !== -1;
+            });
+            $("#doc-list").innerHTML = list.length ? '<div class="doc-list">' + list.map(function (d) {
+                const status = d.requiresAck
+                    ? (d.acknowledgedAt
+                        ? '<span class="badge badge-green">' + icon("tick") + "Acknowledged " + esc(fmtDate(d.acknowledgedAt)) + "</span>"
+                        : d.needsAck ? '<button type="button" class="btn btn-small btn-primary" data-act="ack">Read &amp; acknowledge</button>' : "")
+                    : "";
+                const progress = data.canManage && d.requiresAck
+                    ? '<button type="button" class="ack-progress" data-act="acks" title="See who has acknowledged"><span class="ack-bar"><span data-pct="' +
+                        (d.audienceCount ? Math.round(d.ackCount / d.audienceCount * 100) : 0) + '"></span></span>' + d.ackCount + "/" + d.audienceCount + " acknowledged</button>"
+                    : "";
+                return '<div class="doc-row' + (d.needsAck ? " needs-ack" : "") + '" data-id="' + d.id + '">' +
+                    fileBadge(d.file.ext) +
+                    '<div class="doc-main"><div class="doc-title">' + esc(d.title) + (d.requiresAck ? ' <span class="badge">Must read</span>' : "") + "</div>" +
+                    (d.description ? '<div class="doc-desc muted small">' + esc(d.description) + "</div>" : "") +
+                    '<div class="doc-meta muted small">' + esc(d.category) + " · " + esc(FILE_KINDS[d.file.ext] || d.file.ext) + " · " + fileSize(d.file.size) +
+                    " · Updated " + esc(fmtDate(d.updatedAt)) + (d.version > 1 ? " · Version " + d.version : "") + "</div>" +
+                    '<div class="chips">' + audienceChips(d.companies) + "</div></div>" +
+                    '<div class="doc-side">' + status + progress +
+                    '<div class="btn-row">' +
+                    (d.file.inline ? '<a class="btn btn-ghost btn-small" href="/api/documents/' + d.id + '/file" target="_blank" rel="noopener">' + icon("eye") + "View</a>" : "") +
+                    '<a class="btn btn-ghost btn-small" href="/api/documents/' + d.id + '/file?download=1">' + icon("download") + "Download</a>" +
+                    (data.canManage ? '<div class="nav-item row-menu"><button type="button" class="icon-btn" data-menu aria-haspopup="true" aria-expanded="false" aria-label="Document options">' + icon("more") + "</button>" +
+                        '<div class="menu menu-right menu-row" role="menu" hidden>' +
+                        '<button type="button" class="menu-item compact" data-act="edit">' + icon("edit") + "<span>Edit details</span></button>" +
+                        '<button type="button" class="menu-item compact" data-act="replace">' + icon("upload") + "<span>Upload new version</span></button>" +
+                        (d.requiresAck ? '<button type="button" class="menu-item compact" data-act="acks">' + icon("users") + "<span>Who has acknowledged</span></button>" : "") +
+                        '<div class="menu-sep"></div><button type="button" class="menu-item compact danger" data-act="delete">' + icon("trash") + "<span>Delete</span></button></div></div>" : "") +
+                    "</div></div></div>";
+            }).join("") + "</div>"
+                : '<div class="empty-page">' + icon("file", "big") + "<h2>" + (docs.length ? "No matching documents" : "No documents yet") + "</h2>" +
+                  '<p class="muted">' + (docs.length ? "Try a different search or category." : data.canManage ? "Upload the first one with <strong>Upload document</strong>." : "Check back soon.") + "</p></div>";
+            $$(".ack-bar [data-pct]").forEach(function (b) { b.style.width = b.dataset.pct + "%"; });
+        }
+
+        root.addEventListener("click", async function (e) {
+            const cat = e.target.closest("[data-cat]");
+            if (cat) { category = cat.dataset.cat; return draw(); }
+            if (e.target.closest("#show-pending")) { category = "__pending"; return draw(); }
+            if (e.target.closest("#upload-doc")) return openDocumentForm(null, data.categories);
+            const btn = e.target.closest("[data-act]");
+            if (!btn) return;
+            closeMenus();
+            const d = docs.find(function (x) { return x.id === btn.closest("[data-id]").dataset.id; });
+            const act = btn.dataset.act;
+            if (act === "ack") return openAcknowledge(d);
+            if (act === "edit") return openDocumentForm(d, data.categories);
+            if (act === "replace") return openReplaceFile(d);
+            if (act === "acks") return openAcknowledgements(d);
+            if (act === "delete") {
+                if (!(await confirmDialog({ title: "Delete “" + d.title + "”?", message: "The document and its acknowledgements will be removed for everyone.", confirmLabel: "Delete", danger: true }))) return;
+                try {
+                    await api("/api/documents/" + d.id + "/delete", {});
+                    toast("Document deleted.");
+                    render();
+                } catch (err) { toast(err.message); }
+            }
+        });
+        $("#doc-search").addEventListener("input", draw);
+        draw();
+    }
+
+    // Sends a file as the raw request body, with progress.
+    function uploadFile(url, file, meta, onProgress) {
+        return new Promise(function (resolve, reject) {
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", url);
+            xhr.setRequestHeader("Content-Type", "application/octet-stream");
+            xhr.setRequestHeader("X-Document", encodeURIComponent(JSON.stringify(Object.assign({ fileName: file.name }, meta))));
+            xhr.upload.onprogress = function (e) { if (e.lengthComputable) onProgress(Math.round(e.loaded / e.total * 100)); };
+            xhr.onload = function () {
+                let body = {};
+                try { body = JSON.parse(xhr.responseText); } catch (e) { /* ignore */ }
+                if (xhr.status === 401) { window.location.href = "/login"; return; }
+                if (xhr.status >= 200 && xhr.status < 300) resolve(body);
+                else reject(new Error(body.error || "Upload failed. Please try again."));
+            };
+            xhr.onerror = function () { reject(new Error("Upload failed. Check your connection and try again.")); };
+            xhr.send(file);
+        });
+    }
+
+    function fileDropField(id) {
+        return '<label class="drop-zone" for="' + id + '">' + icon("upload") +
+            '<span class="dz-text"><strong>Choose a file</strong> or drag it here</span>' +
+            '<span class="muted small dz-hint">PDF, Word, Excel, PowerPoint, text, CSV or image · up to 20 MB</span>' +
+            '<input type="file" id="' + id + '" accept="' + ACCEPT + '" hidden></label>' +
+            '<div class="upload-progress" hidden><span></span></div>';
+    }
+
+    function wireDropZone(el, input, onFile) {
+        const zone = $(".drop-zone", el);
+        ["dragenter", "dragover"].forEach(function (t) { zone.addEventListener(t, function (e) { e.preventDefault(); zone.classList.add("dragging"); }); });
+        ["dragleave", "drop"].forEach(function (t) { zone.addEventListener(t, function (e) { e.preventDefault(); zone.classList.remove("dragging"); }); });
+        zone.addEventListener("drop", function (e) { if (e.dataTransfer.files[0]) onFile(e.dataTransfer.files[0]); });
+        input.addEventListener("change", function () { if (input.files[0]) onFile(input.files[0]); });
+    }
+
+    function showProgress(el, pct) {
+        const bar = $(".upload-progress", el);
+        bar.hidden = false;
+        $("span", bar).style.width = pct + "%";
+    }
+
+    function openDocumentForm(d, categories) {
+        const v = d || { title: "", description: "", category: "Policies", companies: [], requiresAck: false };
+        let file = null;
+        const m = openModal(
+            '<h2 class="modal-title">' + (d ? "Edit document" : "Upload document") + "</h2>" +
+            '<form novalidate id="doc-form">' +
+            (d ? "" : fileDropField("doc-file")) +
+            '<label for="doc-title">Title</label><input type="text" id="doc-title" maxlength="150" value="' + esc(v.title) + '">' +
+            '<label for="doc-desc">Description <span class="muted small">(optional)</span></label><textarea id="doc-desc" rows="3" maxlength="1000">' + esc(v.description) + "</textarea>" +
+            '<label for="doc-cat">Category</label><select id="doc-cat">' + categories.map(function (c) {
+                return '<option' + (c === v.category ? " selected" : "") + ">" + esc(c) + "</option>";
+            }).join("") + "</select>" +
+            audienceField(v.companies) +
+            '<label class="inline-check option-row"><input type="checkbox" id="doc-ack"' + (v.requiresAck ? " checked" : "") +
+            "> Staff must read and acknowledge this</label>" +
+            '<p class="hint">They\'ll see it on their home page until they confirm they\'ve read it. Uploading a new version asks everyone again.</p>' +
+            '<div class="form-error" id="doc-error" hidden></div>' +
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button>' +
+            '<button type="submit" class="btn btn-primary" id="doc-save">' + (d ? "Save changes" : "Upload") + "</button></div></form>",
+            { wide: true }
+        );
+        if (!d) {
+            wireDropZone(m.el, $("#doc-file", m.el), function (f) {
+                file = f;
+                $(".dz-text", m.el).innerHTML = "<strong>" + esc(f.name) + "</strong> · " + fileSize(f.size);
+                if (!$("#doc-title", m.el).value.trim()) $("#doc-title", m.el).value = f.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ");
+            });
+        }
+        $("#doc-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            formError($("#doc-error", m.el), "");
+            const meta = {
+                title: $("#doc-title", m.el).value,
+                description: $("#doc-desc", m.el).value,
+                category: $("#doc-cat", m.el).value,
+                companies: readAudience(m.el),
+                requiresAck: $("#doc-ack", m.el).checked,
+            };
+            if (!d && !file) return formError($("#doc-error", m.el), "Choose a file to upload.");
+            if (!meta.title.trim()) return formError($("#doc-error", m.el), "Give the document a title.");
+            $("#doc-save", m.el).disabled = true;
+            try {
+                if (d) await api("/api/documents/" + d.id, meta);
+                else await uploadFile("/api/documents/upload", file, meta, function (pct) { showProgress(m.el, pct); });
+                closeModal();
+                toast(d ? "Document updated." : "Document uploaded.");
+                render();
+            } catch (err) {
+                formError($("#doc-error", m.el), err.message);
+                $("#doc-save", m.el).disabled = false;
+            }
+        });
+    }
+
+    function openReplaceFile(d) {
+        let file = null;
+        const m = openModal(
+            '<h2 class="modal-title">Upload a new version</h2>' +
+            '<p class="muted">Replaces the file for “' + esc(d.title) + "” (currently " + esc(d.file.name) + ")." +
+            (d.requiresAck ? " Everyone will be asked to acknowledge the new version." : "") + "</p>" +
+            fileDropField("rep-file") +
+            '<div class="form-error" id="rep-error" hidden></div>' +
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button>' +
+            '<button type="button" class="btn btn-primary" id="rep-save">Upload new version</button></div>'
+        );
+        wireDropZone(m.el, $("#rep-file", m.el), function (f) {
+            file = f;
+            $(".dz-text", m.el).innerHTML = "<strong>" + esc(f.name) + "</strong> · " + fileSize(f.size);
+        });
+        $("#rep-save", m.el).addEventListener("click", async function () {
+            if (!file) return formError($("#rep-error", m.el), "Choose a file to upload.");
+            $("#rep-save", m.el).disabled = true;
+            try {
+                await uploadFile("/api/documents/" + d.id + "/file", file, {}, function (pct) { showProgress(m.el, pct); });
+                closeModal();
+                toast("New version uploaded.");
+                render();
+            } catch (err) {
+                formError($("#rep-error", m.el), err.message);
+                $("#rep-save", m.el).disabled = false;
+            }
+        });
+    }
+
+    function openAcknowledge(d) {
+        const m = openModal(
+            '<div class="success-mark">' + icon("file") + "</div>" +
+            '<h2 class="modal-title center">' + esc(d.title) + "</h2>" +
+            '<p class="muted center">Please read this document in full, then confirm below.</p>' +
+            '<div class="center btn-row ack-open">' +
+            (d.file.inline ? '<a class="btn btn-ghost" href="/api/documents/' + d.id + '/file" target="_blank" rel="noopener">' + icon("eye") + "Open document</a>" : "") +
+            '<a class="btn btn-ghost" href="/api/documents/' + d.id + '/file?download=1">' + icon("download") + "Download</a></div>" +
+            '<label class="inline-check ack-confirm"><input type="checkbox" id="ack-check"> I have read and understood this document.</label>' +
+            '<div class="form-error" id="ack-error" hidden></div>' +
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Not yet</button>' +
+            '<button type="button" class="btn btn-primary" id="ack-go" disabled>Acknowledge</button></div>'
+        );
+        $("#ack-check", m.el).addEventListener("change", function (e) { $("#ack-go", m.el).disabled = !e.target.checked; });
+        $("#ack-go", m.el).addEventListener("click", async function () {
+            try {
+                const r = await api("/api/documents/" + d.id + "/acknowledge", {});
+                state.me = r.user;
+                renderChrome();
+                closeModal();
+                toast("Thanks — acknowledgement recorded.");
+                render();
+            } catch (err) { formError($("#ack-error", m.el), err.message); }
+        });
+    }
+
+    async function openAcknowledgements(d) {
+        const data = await api("/api/documents/" + d.id + "/acknowledgements");
+        const done = data.people.filter(function (p) { return p.acknowledgedAt; });
+        const waiting = data.people.filter(function (p) { return !p.acknowledgedAt; });
+        const row = function (p) {
+            return '<li class="ack-row">' + avatar(p, "sm") + '<div class="ack-who"><div class="emp-name">' + esc(p.displayName) + '</div><div class="muted small">' + esc(p.jobTitle) + "</div></div>" +
+                (p.acknowledgedAt ? '<span class="badge badge-green">' + esc(fmtDate(p.acknowledgedAt)) + "</span>" : '<span class="badge badge-yellow">Not yet</span>') + "</li>";
+        };
+        openModal(
+            '<h2 class="modal-title">Who has acknowledged</h2>' +
+            '<p class="muted">' + esc(d.title) + (data.version > 1 ? " · version " + data.version : "") + " · " + done.length + " of " + data.people.length + " people</p>" +
+            (waiting.length ? '<h3 class="detail-head">Still to acknowledge (' + waiting.length + ")</h3><ul class=\"ack-list\">" + waiting.map(row).join("") + "</ul>" : "") +
+            (done.length ? '<h3 class="detail-head">Acknowledged (' + done.length + ")</h3><ul class=\"ack-list\">" + done.map(row).join("") + "</ul>" : "") +
+            (data.people.length ? "" : '<p class="muted">No staff are in this document\'s audience yet.</p>') +
+            '<div class="modal-actions"><button type="button" class="btn btn-primary" data-close>Done</button></div>'
+        );
+    }
+
     // ================= Settings =================
 
     async function refreshMe() {
@@ -1320,17 +1766,16 @@
         const me = state.me;
 
         root.innerHTML =
-            '<div class="page-head"><div><h1>Profile &amp; settings</h1><p class="muted">Manage how you appear to colleagues across HN Group.</p></div></div>' +
-            '<section class="panel sys-section" id="appearance"><h2 class="panel-title">' + icon("palette") + "Appearance</h2>" +
-            '<p class="muted small">Choose how the portal looks for you. Your theme is saved to your account, so it follows you to any device.</p>' +
-            '<div class="theme-grid" role="radiogroup" aria-label="Theme">' + THEMES.map(function (t) {
-                return '<button type="button" class="theme-option" role="radio" data-theme-key="' + t.key + '">' +
-                    '<span class="theme-preview' + (t.dark ? " split" : "") + '"><span class="tp-bar"></span><span class="tp-card"></span><span class="tp-line"></span><span class="tp-dot"></span>' +
-                    (t.dark ? '<span class="tp-half"></span>' : "") + "</span>" +
-                    '<span class="theme-name"><span>' + esc(t.name) + "</span>" + icon("tick") + "</span></button>";
-            }).join("") + "</div></section>" +
-            '<div class="settings-grid">' +
+            '<div class="page-head"><div><h1>Settings</h1><p class="muted">Your profile, how the portal looks and your password.</p></div></div>' +
+            '<div class="settings-layout">' +
+            '<nav class="settings-nav" role="tablist" aria-label="Settings">' +
+            '<button type="button" role="tab" data-tab="profile">' + icon("user") + "<span>Profile</span></button>" +
+            '<button type="button" role="tab" data-tab="appearance">' + icon("palette") + "<span>Appearance</span></button>" +
+            '<button type="button" role="tab" data-tab="security">' + icon("lock") + "<span>Security</span></button>" +
+            "</nav>" +
+            '<div class="settings-body">' +
 
+            '<div data-pane="profile" class="settings-grid">' +
             '<section class="panel"><h2 class="panel-title">Profile picture</h2>' +
             '<div class="avatar-edit">' + avatar(me, "xl") + "<div>" +
             '<div class="btn-row"><label class="btn btn-primary" for="avatar-file">' + icon("camera") + "Upload photo</label>" +
@@ -1349,7 +1794,7 @@
             '<div class="form-actions"><button type="submit" class="btn btn-primary" id="p-save">Save changes</button></div>' +
             "</form></section>" +
 
-            '<section class="panel"><h2 class="panel-title">Employment details</h2>' +
+            '<section class="panel span-2"><h2 class="panel-title">Employment details</h2>' +
             '<dl class="facts">' +
             (me.system ? "" : "<dt>Name</dt><dd>" + esc(me.firstName + " " + me.lastName) + "</dd>") +
             "<dt>Roles</dt><dd>" + rolesHtml(me) + "</dd>" +
@@ -1359,8 +1804,19 @@
             }).join("<br>") + "</dd>" : "") +
             "</dl>" +
             '<p class="hint">These details are managed by HR. Contact them if anything needs changing.</p></section>' +
+            "</div>" +
 
-            '<section class="panel" id="password"><h2 class="panel-title">Change password</h2>' +
+            '<div data-pane="appearance" hidden><section class="panel"><h2 class="panel-title">' + icon("palette") + "Theme</h2>" +
+            '<p class="muted small">Choose how the portal looks for you. Your theme is saved to your account, so it follows you to any device.</p>' +
+            '<div class="theme-grid" role="radiogroup" aria-label="Theme">' + THEMES.map(function (t) {
+                return '<button type="button" class="theme-option" role="radio" data-theme-key="' + t.key + '">' +
+                    '<span class="theme-preview' + (t.dark ? " split" : "") + '"><span class="tp-bar"></span><span class="tp-card"></span><span class="tp-line"></span><span class="tp-dot"></span>' +
+                    (t.dark ? '<span class="tp-half"></span>' : "") + "</span>" +
+                    '<span class="theme-name"><span>' + esc(t.name) + "</span>" + icon("tick") + "</span></button>";
+            }).join("") + "</div></section></div>" +
+
+            '<div data-pane="security" hidden><section class="panel narrow-panel"><h2 class="panel-title">' + icon("lock") + "Change password</h2>" +
+            (me.impersonatedBy ? '<p class="muted small">Passwords can\'t be changed while you\'re logged in as someone else.</p>' : "") +
             '<form id="pw-form" novalidate>' +
             '<label for="pw-current">Current password</label><input type="password" id="pw-current" autocomplete="current-password">' +
             '<label for="pw-new">New password</label><input type="password" id="pw-new" autocomplete="new-password">' +
@@ -1368,8 +1824,27 @@
             '<p class="hint">At least 8 characters.</p>' +
             '<div class="form-error" id="pw-error" hidden></div>' +
             '<div class="form-actions"><button type="submit" class="btn btn-primary" id="pw-save">Update password</button></div>' +
-            "</form></section>" +
-            "</div>";
+            "</form></section></div>" +
+
+            "</div></div>";
+
+        // Tabs: #appearance and #security (or the older #password) open those tabs directly.
+        function showTab(name) {
+            $$(".settings-nav [data-tab]").forEach(function (b) {
+                const on = b.dataset.tab === name;
+                b.classList.toggle("active", on);
+                b.setAttribute("aria-selected", String(on));
+            });
+            $$("[data-pane]").forEach(function (p) { p.hidden = p.dataset.pane !== name; });
+        }
+        const hash = window.location.hash.slice(1);
+        showTab(hash === "appearance" ? "appearance" : hash === "security" || hash === "password" ? "security" : "profile");
+        $(".settings-nav").addEventListener("click", function (e) {
+            const b = e.target.closest("[data-tab]");
+            if (!b) return;
+            showTab(b.dataset.tab);
+            history.replaceState({}, "", "/settings" + (b.dataset.tab === "profile" ? "" : "#" + b.dataset.tab));
+        });
 
         // Theme previews are painted from the catalogue (inline styles aren't allowed by the CSP).
         $$(".theme-option").forEach(function (btn) {
@@ -1516,6 +1991,14 @@
         "photo-updated": ["changed their profile picture", "profiles"],
         "photo-removed": ["removed their profile picture", "profiles"],
         "theme-changed": ["changed their theme to", "profiles"],
+        "announcement-posted": ["posted the announcement", "workplace"],
+        "announcement-updated": ["edited the announcement", "workplace"],
+        "announcement-deleted": ["deleted the announcement", "workplace"],
+        "document-uploaded": ["uploaded the document", "workplace"],
+        "document-updated": ["edited the document", "workplace"],
+        "document-replaced": ["uploaded a new version of", "workplace"],
+        "document-deleted": ["deleted the document", "workplace"],
+        "document-acknowledged": ["acknowledged", "workplace"],
         "panel-unlocked": ["unlocked System Admin", "system"],
         "pin-failed": ["entered a wrong System Admin PIN", "system"],
         "pin-changed": ["changed the System Admin PIN", "system"],
@@ -1532,6 +2015,7 @@
         ["accounts", "Logins & passwords"],
         ["staff", "Staff records"],
         ["profiles", "Profiles"],
+        ["workplace", "Announcements & documents"],
         ["system", "System Admin"],
     ];
 
@@ -1789,6 +2273,10 @@
                 const was = state.me;
                 state.me = d.user;
                 if (!!was.impersonatedBy !== !!d.user.impersonatedBy || was.id !== d.user.id) window.location.reload();
+                if (was.unreadAnnouncements !== d.user.unreadAnnouncements || was.pendingAcks !== d.user.pendingAcks) {
+                    const open = $(".menu:not([hidden])");
+                    if (!open) renderChrome();
+                }
             }).catch(function () {});
         }, 30000);
     }

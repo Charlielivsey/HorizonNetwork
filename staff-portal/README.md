@@ -2,7 +2,7 @@
 
 Internal staff portal for the whole of HN Group, served at **https://staff.hngroup.org.uk**.
 
-**Default login:** `admin@hngroup.org.uk` / `admin`. Change this straight away under **Profile & settings**. Staff sign in with their work email address.
+**Default login:** `admin@hngroup.org.uk` / `admin`. Change this straight away under **Settings → Security**. Staff sign in with their work email address.
 
 ## Features
 
@@ -17,7 +17,7 @@ Internal staff portal for the whole of HN Group, served at **https://staff.hngro
     - The **primary** address is their login username.
   - After adding someone, you're asked whether to create their login account. A temporary password is shown once on screen, and the employee must create their own password the first time they sign in.
   - You can reset a password, disable or re-enable a login, edit details and delete employees.
-- **Profile & settings.** Opened by clicking your name. Upload or remove a profile picture, change your display name, phone, location and time zone, and change your password.
+- **Settings.** Opened by clicking your name. It has three tabs: **Profile** (picture, display name, phone, location and time zone), **Appearance** (theme) and **Security** (password).
 
 **Companies:** HN Group Limited, Horizon Network Limited, Horizon Advertising, Horizon Development and Horizon Media Group.
 
@@ -50,9 +50,22 @@ The directory follows the selected company tab. Job titles, "Reports to" and the
 - **List** for scanning.
 - **Org chart** showing reporting lines for the selected company. Teams can be collapsed.
 
+### Staying signed in
+
+The sign-in page has **Keep me signed in**, which is ticked by default. With it on, you stay signed in on that browser for 30 days, and the 30 days restart every time you use the portal. With it off, the sign-in ends when the browser closes, or after 12 hours.
+
+Sign-ins are saved in `sessions.json`, so restarting the app or running the installer doesn't sign anyone out. Only a hash of each sign-in token is stored, so the file can't be used to sign in.
+
+### Workplace
+
+- **Announcements.** Leadership and HR can post announcements to everyone or to particular companies. They can also pin them to the top, mark them as important, and edit or delete them. Everyone else sees the ones meant for them. Unread announcements are counted in the **Workplace** menu, and the latest three appear on the home page.
+- **Documents & Policies.** Leadership and HR can upload PDF, Word, Excel, PowerPoint, text, CSV or image files up to 20 MB. Each document has a category (Policies, Handbooks, Forms, Templates, Guides or Other) and can be shared with everyone or with particular companies. Staff can view or download documents, and search or filter them.
+  - Ticking **Staff must read and acknowledge this** asks everyone in the document's audience to confirm they've read it. Until they do, it shows under "Needs your attention" on their home page.
+  - Managers can see who has and hasn't acknowledged a document. Uploading a new version asks everyone to acknowledge it again.
+
 ### Themes
 
-Everyone can pick a theme under **Profile & settings → Appearance**, or from **Appearance** in the menu under their name. The choice is saved to their account, so it follows them to any device, and the sign-in page remembers the last theme used on that browser.
+Everyone can pick a theme under **Settings → Appearance**. Settings is in the menu under their name. The choice is saved to their account, so it follows them to any device, and the sign-in page remembers the last theme used on that browser.
 
 | Theme           | Style                                    |
 |-----------------|------------------------------------------|
@@ -131,6 +144,8 @@ Everything lives in `/var/lib/hn-staff-portal`:
 |-------------------|-----------------------------------------------------------------|
 | `people.json`     | Employees and login accounts. Passwords are stored as scrypt hashes. |
 | `settings.json`   | Access rules, the system owner and the system PIN (hashed).     |
+| `announcements.json`, `documents.json`, `documents/` | Announcements, the document library and the uploaded files. |
+| `sessions.json`   | Signed-in sessions (hashed).                                     |
 | `audit.log`       | Activity log of every action in the portal.                     |
 | `avatars/`        | Profile pictures.                                               |
 

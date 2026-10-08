@@ -6,6 +6,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const store = require("./lib/store");
+const workplace = require("./lib/workplace");
 
 const PORT = parseInt(process.env.PORT || "3200", 10);
 const HOST = process.env.HOST || "127.0.0.1";
@@ -13,14 +14,15 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
 const PUBLIC_DIR = path.join(__dirname, "public");
 
 const SESSION_COOKIE = "hn_staff_session";
-const SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
+const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours when "Keep me signed in" is off
+const REMEMBER_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days when it's on (renewed whenever the portal is used)
 const MAX_FAILED_ATTEMPTS = 10;
 const LOCKOUT_WINDOW_MS = 15 * 60 * 1000;
 const MAX_BODY_BYTES = 64 * 1024;
 const MAX_AVATAR_BODY_BYTES = 2 * 1024 * 1024;
 
 // Pages of the single-page app; the browser handles routing between them.
-const APP_ROUTES = new Set(["/home", "/directory", "/employees", "/settings", "/system"]);
+const APP_ROUTES = new Set(["/home", "/directory", "/employees", "/settings", "/system", "/announcements", "/documents"]);
 const SYSTEM_UNLOCK_MS = 15 * 60 * 1000; // System Admin stays unlocked for 15 minutes of inactivity
 const MAX_PIN_ATTEMPTS = 5;
 
@@ -34,45 +36,106 @@ const MIME_TYPES = {
 };
 
 store.init(DATA_DIR);
+workplace.init(DATA_DIR);
 
 // ---------- Sessions & rate limiting ----------
 
-const sessions = new Map(); // token -> { id, personId, expires, ip, userAgent, createdAt, lastSeen, impersonatorId?, returnToken? }
+// Sessions are kept on disk (sessions.json) so people stay signed in across restarts and updates.
+// They're stored under a SHA-256 hash of the cookie token, so the file can't be used to sign in.
+const SESSIONS_FILE = path.join(DATA_DIR, "sessions.json");
+
+class SessionStore extends Map {
+  constructor(file) {
+    super();
+    this.file = file;
+    this.timer = null;
+    try {
+      const saved = JSON.parse(fs.readFileSync(file, "utf8"));
+      const now = Date.now();
+      for (const [key, s] of Object.entries(saved)) if (s.expires > now) super.set(key, s);
+    } catch {
+      /* no saved sessions yet */
+    }
+  }
+  set(key, value) { super.set(key, value); this.save(); return this; }
+  delete(key) { const had = super.delete(key); if (had) this.save(); return had; }
+  // Writes are batched; a crash loses at most a couple of seconds of "last active" times.
+  save(delay = 1000) {
+    if (this.timer) return;
+    this.timer = setTimeout(() => {
+      this.timer = null;
+      const tmp = this.file + ".tmp";
+      fs.writeFileSync(tmp, JSON.stringify(Object.fromEntries(this)), { mode: 0o600 });
+      fs.renameSync(tmp, this.file);
+    }, delay);
+    this.timer.unref();
+  }
+  flush() {
+    if (!this.timer) return;
+    clearTimeout(this.timer);
+    this.timer = null;
+    fs.writeFileSync(this.file, JSON.stringify(Object.fromEntries(this)), { mode: 0o600 });
+  }
+}
+
+const sessions = new SessionStore(SESSIONS_FILE); // tokenHash -> { id, personId, expires, remember, ip, userAgent, createdAt, lastSeen, impersonatorId?, returnKey? }
 const failedAttempts = new Map(); // ip -> { count, first }
 const pinFailures = new Map(); // personId -> { count, first }
+
+for (const signal of ["SIGINT", "SIGTERM"]) {
+  process.on(signal, () => {
+    sessions.flush();
+    process.exit(0);
+  });
+}
+
+function hashToken(token) {
+  return crypto.createHash("sha256").update(String(token)).digest("hex");
+}
+
+function sessionTtl(s) {
+  return s.remember ? REMEMBER_TTL_MS : SESSION_TTL_MS;
+}
 
 function createSession(personId, req, extra = {}) {
   const token = crypto.randomBytes(32).toString("hex");
   const now = Date.now();
-  sessions.set(token, {
+  const data = {
     id: crypto.randomBytes(6).toString("hex"),
     personId,
-    expires: now + SESSION_TTL_MS,
+    remember: false,
     ip: clientIp(req),
     userAgent: String(req.headers["user-agent"] || "").slice(0, 200),
     createdAt: now,
     lastSeen: now,
     ...extra,
-  });
+  };
+  data.expires = now + sessionTtl(data);
+  sessions.set(hashToken(token), data);
   return token;
 }
 
 function getSession(req) {
-  const token = parseCookies(req)[SESSION_COOKIE];
-  if (!token) return null;
-  const session = sessions.get(token);
+  const raw = parseCookies(req)[SESSION_COOKIE];
+  if (!raw) return null;
+  const key = hashToken(raw);
+  const session = sessions.get(key);
   if (!session || session.expires < Date.now()) {
-    sessions.delete(token);
+    sessions.delete(key);
     return null;
   }
   const person = store.getPerson(session.personId);
   if (!person || !person.account || !person.account.enabled) {
-    sessions.delete(token);
+    sessions.delete(key);
     return null;
   }
-  session.expires = Date.now() + SESSION_TTL_MS; // sliding expiry
-  session.lastSeen = Date.now();
-  return { token, person, data: session };
+  const now = Date.now();
+  session.expires = now + sessionTtl(session); // sliding expiry
+  if (now - session.lastSeen > 30 * 1000) {
+    session.lastSeen = now;
+    sessions.save(60 * 1000);
+  }
+  return { token: key, raw, person, data: session };
 }
 
 function endSessionsFor(personId, exceptToken) {
@@ -127,8 +190,15 @@ function clientIp(req) {
   return remote;
 }
 
+// Lax (not Strict) so arriving from a link in an email or another site keeps you signed in.
+// Cross-site POSTs are still blocked by the JSON content-type check.
+function cookieFor(req, token, s) {
+  return sessionCookie(req, token, s.remember ? Math.floor(REMEMBER_TTL_MS / 1000) : null);
+}
+
 function sessionCookie(req, token, maxAgeSeconds) {
-  const parts = [`${SESSION_COOKIE}=${token}`, "Path=/", "HttpOnly", "SameSite=Strict", `Max-Age=${maxAgeSeconds}`];
+  const parts = [`${SESSION_COOKIE}=${token}`, "Path=/", "HttpOnly", "SameSite=Lax"];
+  if (maxAgeSeconds != null) parts.push(`Max-Age=${maxAgeSeconds}`);
   if (req.headers["x-forwarded-proto"] === "https") parts.push("Secure");
   return parts.join("; ");
 }
@@ -240,6 +310,41 @@ function changedFields(before, person) {
   return Object.keys(TRACKED_FIELDS).filter((k) => before[k] !== after[k]).map((k) => TRACKED_FIELDS[k]);
 }
 
+// Reads an uploaded file sent as the raw request body. Requiring application/octet-stream means a
+// cross-site form can't send it (browsers would need a CORS preflight, which this server never allows).
+function readRawBody(req, limit) {
+  return new Promise((resolve, reject) => {
+    if (!String(req.headers["content-type"] || "").startsWith("application/octet-stream")) {
+      return reject(httpError(415, "Expected a file upload."));
+    }
+    if (Number(req.headers["content-length"] || 0) > limit) {
+      req.resume();
+      return reject(httpError(413, "That file is too large (max 20 MB)."));
+    }
+    let size = 0;
+    const chunks = [];
+    req.on("data", (chunk) => {
+      size += chunk.length;
+      if (size > limit) {
+        reject(httpError(413, "That file is too large (max 20 MB)."));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on("end", () => resolve(Buffer.concat(chunks)));
+    req.on("error", reject);
+  });
+}
+
+function headerJson(req, name) {
+  try {
+    return JSON.parse(decodeURIComponent(String(req.headers[name] || "")));
+  } catch {
+    throw httpError(400, "Missing upload details.");
+  }
+}
+
 // ---------- API handlers ----------
 
 async function handleLogin(req, res) {
@@ -248,7 +353,7 @@ async function handleLogin(req, res) {
     logEvent(req, null, "sign-in-blocked", { actor: "(locked out)" });
     return sendJson(res, 429, { error: "Too many failed attempts. Please try again in 15 minutes." });
   }
-  const { username, password } = await readJsonBody(req);
+  const { username, password, remember } = await readJsonBody(req);
   const person = store.findByLogin(username);
   if (!person || !store.verifyPassword(person, password)) {
     recordFailure(ip);
@@ -258,16 +363,18 @@ async function handleLogin(req, res) {
   }
   failedAttempts.delete(ip);
   store.recordLogin(person);
-  const token = createSession(person.id, req);
+  const token = createSession(person.id, req, { remember: remember !== false });
   console.log(`${store.meView(person).username} signed in from ${ip}`);
   logEvent(req, null, "signed-in", { actor: store.loginName(person) });
   sendJson(res, 200, { user: store.meView(person) }, {
-    "Set-Cookie": sessionCookie(req, token, SESSION_TTL_MS / 1000),
+    "Set-Cookie": cookieFor(req, token, { remember: remember !== false }),
   });
 }
 
 function meResponse(session) {
   const user = store.meView(session.person);
+  user.unreadAnnouncements = workplace.unreadAnnouncements(session.person);
+  user.pendingAcks = workplace.pendingAcks(session.person);
   if (session.data.impersonatorId) {
     const by = store.getPerson(session.data.impersonatorId);
     user.impersonatedBy = by ? by.displayName : "System owner";
@@ -308,6 +415,117 @@ function requireEmployee(id, me, action) {
     throw httpError(403, "Only the system owner can change the system owner's record.");
   }
   return person;
+}
+
+// ---------- Workplace: announcements, documents & policies ----------
+
+async function routeWorkplace(req, res, pathname, session) {
+  const me = session.person;
+  const method = req.method;
+  const manager = store.canManage(me);
+  const requireManage = () => {
+    if (!manager) throw httpError(403, "Only the leadership and HR teams can do that.");
+  };
+  let m;
+
+  // Announcements
+  if (method === "GET" && pathname === "/api/announcements") {
+    return sendJson(res, 200, { announcements: workplace.listAnnouncements(me), canPost: manager });
+  }
+  if (method === "POST" && pathname === "/api/announcements/seen") {
+    store.markAnnouncementsSeen(me);
+    return sendJson(res, 200, { user: meResponse(session) });
+  }
+  if (method === "POST" && pathname === "/api/announcements") {
+    requireManage();
+    const a = workplace.saveAnnouncement(await readJsonBody(req), me, null);
+    logEvent(req, session, "announcement-posted", { target: a.title, detail: a.companies.length ? a.companies.join(", ") : "Everyone" });
+    return sendJson(res, 201, { ok: true });
+  }
+  if (method === "POST" && (m = /^\/api\/announcements\/([a-f0-9]{16})(\/delete)?$/.exec(pathname))) {
+    requireManage();
+    const a = workplace.getAnnouncement(m[1]);
+    if (!a) throw httpError(404, "Announcement not found.");
+    if (m[2]) {
+      workplace.deleteAnnouncement(a);
+      logEvent(req, session, "announcement-deleted", { target: a.title });
+    } else {
+      workplace.saveAnnouncement(await readJsonBody(req), me, a);
+      logEvent(req, session, "announcement-updated", { target: a.title });
+    }
+    return sendJson(res, 200, { ok: true });
+  }
+
+  // Documents & policies
+  if (method === "GET" && pathname === "/api/documents") {
+    return sendJson(res, 200, { documents: workplace.listDocuments(me), canManage: manager, categories: workplace.CATEGORIES });
+  }
+  if (method === "POST" && pathname === "/api/documents/upload") {
+    requireManage();
+    const meta = headerJson(req, "x-document");
+    const buffer = await readRawBody(req, workplace.MAX_FILE_BYTES);
+    const doc = workplace.createDocument(meta, meta.fileName, buffer, me);
+    logEvent(req, session, "document-uploaded", { target: doc.title, detail: `${doc.category} · ${doc.file.name}` });
+    return sendJson(res, 201, { document: workplace.documentView(doc, me) });
+  }
+  if ((m = /^\/api\/documents\/([a-f0-9]{16})(?:\/(file|delete|acknowledge|acknowledgements))?$/.exec(pathname))) {
+    const doc = workplace.getDocument(m[1]);
+    if (!doc || !workplace.canSee(me, doc)) throw httpError(404, "Document not found.");
+    const action = m[2];
+
+    if (method === "GET" && action === "file") {
+      const file = workplace.fileFor(doc);
+      const download = new URL(req.url, "http://localhost").searchParams.has("download") || !file.inline;
+      const encoded = encodeURIComponent(file.name);
+      return fs.readFile(file.path, (err, content) => {
+        if (err) return sendJson(res, 404, { error: "The file is missing." });
+        const headers = {
+          "X-Content-Type-Options": "nosniff",
+          "Referrer-Policy": "same-origin",
+          "Content-Type": file.mime,
+          "Content-Length": content.length,
+          "Content-Disposition": `${download ? "attachment" : "inline"}; filename="${encoded}"; filename*=UTF-8''${encoded}`,
+          "Cache-Control": "private, no-store",
+        };
+        // Only PDFs, images and plain text ever open in the browser (none can run scripts);
+        // anything else is a download and is sandboxed as well, just in case.
+        if (download) headers["Content-Security-Policy"] = "sandbox; default-src 'none'";
+        res.writeHead(200, headers);
+        res.end(content);
+      });
+    }
+    if (method === "GET" && action === "acknowledgements") {
+      requireManage();
+      return sendJson(res, 200, { people: workplace.acknowledgements(doc), version: doc.version });
+    }
+    if (method === "POST" && action === "acknowledge") {
+      workplace.acknowledge(doc, me);
+      logEvent(req, session, "document-acknowledged", { target: doc.title });
+      return sendJson(res, 200, { document: workplace.documentView(doc, me), user: meResponse(session) });
+    }
+    if (method === "POST" && action === "file") {
+      requireManage();
+      const { fileName } = headerJson(req, "x-document");
+      const buffer = await readRawBody(req, workplace.MAX_FILE_BYTES);
+      workplace.replaceFile(doc, fileName, buffer);
+      logEvent(req, session, "document-replaced", { target: doc.title, detail: `Version ${doc.version} · ${doc.file.name}` });
+      return sendJson(res, 200, { document: workplace.documentView(doc, me) });
+    }
+    if (method === "POST" && action === "delete") {
+      requireManage();
+      workplace.deleteDocument(doc);
+      logEvent(req, session, "document-deleted", { target: doc.title });
+      return sendJson(res, 200, { ok: true });
+    }
+    if (method === "POST" && !action) {
+      requireManage();
+      workplace.updateDocument(doc, await readJsonBody(req));
+      logEvent(req, session, "document-updated", { target: doc.title });
+      return sendJson(res, 200, { document: workplace.documentView(doc, me) });
+    }
+  }
+
+  sendJson(res, 404, { error: "Not found." });
 }
 
 // ---------- System Admin (owner only, PIN protected) ----------
@@ -416,9 +634,9 @@ async function routeSystem(req, res, pathname, session) {
     if (!target || target.id === me.id) throw httpError(404, "User not found.");
     if (!target.account) throw httpError(400, `${target.displayName} doesn't have a login account yet.`);
     if (!target.account.enabled) throw httpError(400, `${target.displayName}'s login is disabled.`);
-    const token = createSession(target.id, req, { impersonatorId: me.id, returnToken: session.token });
+    const token = createSession(target.id, req, { impersonatorId: me.id, returnKey: session.token, remember: session.data.remember });
     logEvent(req, session, "logged-in-as", { target: store.loginName(target) });
-    return sendJson(res, 200, { ok: true }, { "Set-Cookie": sessionCookie(req, token, SESSION_TTL_MS / 1000) });
+    return sendJson(res, 200, { ok: true }, { "Set-Cookie": cookieFor(req, token, session.data) });
   }
 
   if (method === "POST" && pathname === "/api/system/pin") {
@@ -434,14 +652,18 @@ async function routeSystem(req, res, pathname, session) {
 
 // Ends a "log in as" session and puts the owner back into their own session.
 function stopImpersonating(req, res, session) {
-  const { impersonatorId, returnToken } = session.data;
+  const { impersonatorId, returnKey } = session.data;
   if (!impersonatorId) throw httpError(400, "You're not logged in as someone else.");
   sessions.delete(session.token);
-  const back = returnToken && sessions.get(returnToken);
+  const back = returnKey && sessions.get(returnKey);
   const owner = store.getPerson(impersonatorId);
   logEvent(req, null, "returned-from", { actor: owner ? store.loginName(owner) : impersonatorId, target: store.loginName(session.person) });
   if (back && back.expires > Date.now() && back.personId === impersonatorId) {
-    return sendJson(res, 200, { ok: true, redirect: "/system" }, { "Set-Cookie": sessionCookie(req, returnToken, SESSION_TTL_MS / 1000) });
+    // Only a hash of the owner's original token is kept, so hand them a fresh token for the same session.
+    const token = crypto.randomBytes(32).toString("hex");
+    sessions.delete(returnKey);
+    sessions.set(hashToken(token), back);
+    return sendJson(res, 200, { ok: true, redirect: "/system" }, { "Set-Cookie": cookieFor(req, token, back) });
   }
   sendJson(res, 200, { ok: true, redirect: "/login" }, { "Set-Cookie": sessionCookie(req, "", 0) });
 }
@@ -461,7 +683,11 @@ async function routeApi(req, res, pathname, session) {
   if (!session) return sendJson(res, 401, { error: "Not signed in." });
   const me = session.person;
 
-  if (method === "GET" && pathname === "/api/me") return sendJson(res, 200, { user: meResponse(session) });
+  if (method === "GET" && pathname === "/api/me") {
+    // Renew the "keep me signed in" cookie so it only runs out after 30 days of not using the portal.
+    const headers = session.data.remember ? { "Set-Cookie": cookieFor(req, session.raw, session.data) } : {};
+    return sendJson(res, 200, { user: meResponse(session) }, headers);
+  }
   if (method === "POST" && pathname === "/api/stop-impersonating") return stopImpersonating(req, res, session);
   if (method === "POST" && pathname === "/api/me/password") return handleChangePassword(req, res, session);
 
@@ -566,6 +792,10 @@ async function routeApi(req, res, pathname, session) {
       if (action === "account/disable") endSessionsFor(person.id);
       return sendJson(res, 200, { employee: store.manageView(person) });
     }
+  }
+
+  if (pathname.startsWith("/api/announcements") || pathname.startsWith("/api/documents")) {
+    return routeWorkplace(req, res, pathname, session);
   }
 
   if (pathname.startsWith("/api/system/")) return routeSystem(req, res, pathname, session);

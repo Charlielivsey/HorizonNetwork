@@ -556,6 +556,11 @@ function updateOwnProfile(person, input) {
   savePeople();
 }
 
+function markAnnouncementsSeen(person) {
+  person.announcementsSeenAt = new Date().toISOString();
+  savePeople();
+}
+
 function setTheme(person, theme) {
   if (!THEMES.includes(theme)) throw new ValidationError("Choose a theme from the list.");
   person.theme = theme;
@@ -673,6 +678,7 @@ module.exports = {
   recordLogin,
   updateOwnProfile,
   setTheme,
+  markAnnouncementsSeen,
   saveAvatar,
   removeAvatar,
   avatarFile,
