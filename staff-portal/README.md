@@ -2,39 +2,61 @@
 
 Internal staff portal for the whole of HN Group, served at **https://staff.hngroup.org.uk**.
 
-So far it has:
-- **Login page.** Passwords are hashed with scrypt, sessions last 8 hours, and an IP is locked out for 15 minutes after 10 failed attempts.
-- **Landing page.** It has a greeting, quick-access tiles for upcoming modules, links to the group companies, a news panel and a password-change dialog.
+**Default login:** `admin` / `admin`. Change this straight away under **Profile & settings**. Staff sign in with their work email address.
 
-There are no npm dependencies. It only needs Node.js.
+## Features
 
-**Default login:** `admin` / `admin`. The portal shows a banner until you change it.
+- **Home page.** Shows the current date and time on your device, and the time where your profile location is set, with the difference between the two. It also has quick-access tiles, your details and company news.
+- **Dropdown navigation.** People (Staff Directory, Employee Management), Workplace, HR and Support. Sections that aren't built yet are marked *Soon*.
+- **Staff Directory.** Every employee with their photo, job title, company, emails, location and live local time. You can search and filter by company. Click someone to see who they report to and who reports to them.
+- **Employee Management.** Only shown to the leadership and HR teams.
+  - Add employees with their first and last name, display name, job title, company, other companies they work at, supervisor, location, time zone and phone.
+  - **Emails** are generated as `firstname.lastname@domain`. If that address is taken, a number is added (`firstname.42.lastname@domain`).
+    - Each address can be overridden with a custom one.
+    - Employees can have several addresses on different brand domains.
+    - The **primary** address is their login username.
+  - After adding someone, you're asked whether to create their login account. A temporary password is shown once on screen, and the employee must create their own password the first time they sign in.
+  - You can reset a password, disable or re-enable a login, edit details and delete employees.
+- **Profile & settings.** Opened by clicking your name. Upload or remove a profile picture, change your display name, phone, location and time zone, and change your password.
+
+**Companies:** HN Group Limited, Horizon Network Limited, Horizon Advertising, Horizon Development and Horizon Media Group.
+
+**Email domains:** `hngroup.org.uk`, `horizon-network.co.uk`, `horizonadvertising.co.uk` and `media.hngroup.org.uk`.
+
+Both lists are at the top of `lib/store.js` if you need to change them.
+
+### Who can see Employee Management
+
+Access is decided by **job title**. Anyone whose title contains one of the listed words or phrases gets access. The defaults are *Chief, Director, Head of, Founder, Leadership, Human Resources* and *HR*.
+
+The `admin` account can change the list in the portal under **Employee Management → Access rules**. That screen also shows who currently has access. The `admin` account always has access.
 
 ## Install on the VPS
 
 ### 1. Point the domain at the VPS (one-off)
 
-Wherever `hngroup.org.uk`'s DNS is managed (your domain registrar or Cloudflare), add this record:
+Wherever `hngroup.org.uk`'s DNS is managed, add this record:
 
-| Type | Name / Host | Value             | TTL  |
-|------|-------------|-------------------|------|
-| A    | `staff`     | `217.154.34.205`  | Auto |
+| Type | Name / Host | Value             |
+|------|-------------|-------------------|
+| A    | `staff`     | `217.154.34.205`  |
 
-If you use Cloudflare, set the record to **DNS only** (grey cloud) for the first install so the HTTPS certificate can be issued. You can turn the proxy back on afterwards and set SSL mode to *Full (strict)*.
+If you use Cloudflare, set the record to **DNS only** (grey cloud) for the first install so the HTTPS certificate can be issued.
 
-Check that it has propagated (usually a few minutes):
+To check it has taken effect, run `getent hosts staff.hngroup.org.uk`. It should print `217.154.34.205`.
 
-```bash
-getent hosts staff.hngroup.org.uk     # should print 217.154.34.205
-```
+### 2. Get the code and run the installer
 
-### 2. Run the installer
-
-SSH into the VPS as root, then:
+As root on the VPS:
 
 ```bash
-cd /path/to/HorizonNetwork        # wherever this repo is cloned on the VPS
-git pull
+if [ -d /root/HorizonNetwork/.git ]; then
+  cd /root/HorizonNetwork && git fetch origin
+else
+  git clone https://github.com/Charlielivsey/HorizonNetwork.git /root/HorizonNetwork && cd /root/HorizonNetwork
+fi
+git checkout claude/confident-volta-gxjboo
+git pull origin claude/confident-volta-gxjboo
 sudo bash staff-portal/install.sh staff.hngroup.org.uk you@hngroup.org.uk
 ```
 
@@ -42,37 +64,45 @@ The email is only used by Let's Encrypt for certificate expiry notices.
 
 The installer:
 1. Installs nginx, certbot, Node.js and PM2 if they are missing.
-2. Copies the app to `/opt/hn-staff-portal`. User accounts are stored separately in `/var/lib/hn-staff-portal/users.json`, so updates never wipe them.
-3. Starts it under PM2 as `hn-staff-portal`, listening on `127.0.0.1:3200` only.
-4. Adds an nginx site for `staff.hngroup.org.uk`. This sits alongside the existing Horizon Network site and does not change it.
-5. Opens ports 80 and 443 if `ufw` is active.
-6. Gets a free HTTPS certificate, redirects HTTP to HTTPS, and sets the certificate to auto-renew.
-
-### 3. Log in
-
-Go to **https://staff.hngroup.org.uk**, sign in with `admin` / `admin`, and click **Change password** straight away.
+2. Copies the app to `/opt/hn-staff-portal`.
+3. Keeps staff data in `/var/lib/hn-staff-portal`, so updates never wipe it.
+4. Runs the app under PM2 as `hn-staff-portal`, listening on `127.0.0.1:3200` only.
+5. Adds an nginx site for the domain. The existing Horizon Network sites are left alone.
+6. Opens ports 80 and 443 if `ufw` is active.
+7. Gets a free HTTPS certificate that renews automatically.
 
 ## Updating
 
 ```bash
-cd /path/to/HorizonNetwork && git pull
-sudo bash staff-portal/install.sh
+cd /root/HorizonNetwork && git pull && sudo bash staff-portal/install.sh
 ```
 
-Re-running the installer is safe. It keeps user accounts and re-applies the existing HTTPS certificate.
+Re-running the installer is safe. Staff records, accounts, photos and the HTTPS certificate are all kept.
+
+When you update from the first version, existing logins are carried over automatically, so your admin password stays the same.
+
+## Data & backups
+
+Everything lives in `/var/lib/hn-staff-portal`:
+
+| Path              | Contents                                                        |
+|-------------------|-----------------------------------------------------------------|
+| `people.json`     | Employees and login accounts. Passwords are stored as scrypt hashes. |
+| `settings.json`   | Access rules.                                                   |
+| `avatars/`        | Profile pictures.                                               |
+
+To back it up:
+
+```bash
+sudo tar czf ~/staff-portal-backup-$(date +%F).tgz -C /var/lib hn-staff-portal
+```
 
 ## Useful commands
 
 ```bash
-pm2 logs hn-staff-portal          # logs, including sign-ins and failed attempts
+pm2 logs hn-staff-portal          # logs, including sign-ins and staff changes
 pm2 restart hn-staff-portal
 sudo certbot renew --dry-run      # test certificate renewal
-```
-
-**Forgot the admin password?** Delete the user file and restart. This recreates `admin` / `admin`.
-
-```bash
-sudo rm /var/lib/hn-staff-portal/users.json && pm2 restart hn-staff-portal
 ```
 
 ## Troubleshooting
@@ -80,3 +110,7 @@ sudo rm /var/lib/hn-staff-portal/users.json && pm2 restart hn-staff-portal
 - **The installer says DNS doesn't point at this server.** Wait for the A record to propagate, then re-run the installer.
 - **The site shows the main Horizon Network page.** Check that `/etc/nginx/sites-enabled/hn-staff-portal` exists, then run `sudo nginx -t && sudo systemctl reload nginx`.
 - **502 Bad Gateway.** The app isn't running. Check `pm2 status` and `pm2 logs hn-staff-portal`.
+- **Forgot the admin password.** This resets it to `admin` and leaves every other account and record alone:
+  ```bash
+  sudo DATA_DIR=/var/lib/hn-staff-portal node /opt/hn-staff-portal/reset-admin.js && pm2 restart hn-staff-portal
+  ```

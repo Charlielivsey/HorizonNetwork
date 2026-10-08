@@ -57,9 +57,9 @@ ok "PM2 installed"
 # ---- App files ----
 mkdir -p "$APP_DIR" "$DATA_DIR"
 chmod 700 "$DATA_DIR"
-rm -rf "$APP_DIR/public"
-cp "$SCRIPT_DIR/server.js" "$APP_DIR/"
-cp -r "$SCRIPT_DIR/public" "$APP_DIR/"
+rm -rf "$APP_DIR/public" "$APP_DIR/lib"
+cp "$SCRIPT_DIR/server.js" "$SCRIPT_DIR/reset-admin.js" "$APP_DIR/"
+cp -r "$SCRIPT_DIR/lib" "$SCRIPT_DIR/public" "$APP_DIR/"
 ok "Portal deployed to $APP_DIR (user data kept in $DATA_DIR)"
 
 # ---- Run under PM2 ----
@@ -129,6 +129,6 @@ if [ "$HTTPS_OK" = 1 ]; then
 else
     echo -e "  ${CYAN}Staff Portal:${RESET}  http://$DOMAIN  (once DNS points at $SERVER_IP)"
 fi
-echo -e "  ${CYAN}Default login:${RESET} admin / admin — you'll be prompted to change it."
+echo -e "  ${CYAN}Default login:${RESET} admin / admin (if you haven't changed it yet)"
 echo -e "  ${CYAN}Logs:${RESET}          pm2 logs $PM2_NAME"
 echo ""

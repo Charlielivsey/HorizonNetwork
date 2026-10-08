@@ -23,7 +23,7 @@
 
         const username = form.username.value.trim();
         if (!username || !password.value) {
-            showError("Enter your username and password.");
+            showError("Enter your email address and password.");
             return;
         }
 
@@ -37,7 +37,7 @@
             });
             const data = await res.json().catch(function () { return {}; });
             if (!res.ok) throw new Error(data.error || "Sign in failed. Please try again.");
-            window.location.href = "/dashboard";
+            window.location.href = "/home";
         } catch (err) {
             showError(err.message === "Failed to fetch" ? "Can't reach the server. Check your connection." : err.message);
             password.value = "";

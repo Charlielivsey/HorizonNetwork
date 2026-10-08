@@ -1,22 +1,26 @@
 // HN Group Staff Portal — zero-dependency Node.js server.
-// Handles authentication (scrypt-hashed passwords, cookie sessions) and serves the portal pages.
+// Handles authentication (scrypt-hashed passwords, cookie sessions), the staff API and the portal pages.
 
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const store = require("./lib/store");
 
 const PORT = parseInt(process.env.PORT || "3200", 10);
 const HOST = process.env.HOST || "127.0.0.1";
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
-const USERS_FILE = path.join(DATA_DIR, "users.json");
 const PUBLIC_DIR = path.join(__dirname, "public");
 
 const SESSION_COOKIE = "hn_staff_session";
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
 const MAX_FAILED_ATTEMPTS = 10;
 const LOCKOUT_WINDOW_MS = 15 * 60 * 1000;
-const MAX_BODY_BYTES = 16 * 1024;
+const MAX_BODY_BYTES = 64 * 1024;
+const MAX_AVATAR_BODY_BYTES = 2 * 1024 * 1024;
+
+// Pages of the single-page app; the browser handles routing between them.
+const APP_ROUTES = new Set(["/home", "/directory", "/employees", "/settings"]);
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -27,69 +31,16 @@ const MIME_TYPES = {
   ".ico": "image/x-icon",
 };
 
-// ---------- Users ----------
-
-function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
-  const hash = crypto.scryptSync(password, salt, 64).toString("hex");
-  return { salt, hash };
-}
-
-function verifyPassword(password, user) {
-  const { hash } = hashPassword(password, user.salt);
-  return crypto.timingSafeEqual(Buffer.from(hash, "hex"), Buffer.from(user.hash, "hex"));
-}
-
-function loadUsers() {
-  if (!fs.existsSync(USERS_FILE)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
-    const users = [
-      {
-        username: "admin",
-        displayName: "Administrator",
-        role: "Administrator",
-        company: "HN Group",
-        mustChangePassword: true,
-        ...hashPassword("admin"),
-      },
-    ];
-    saveUsers(users);
-    console.log("Created default user admin/admin — change this password after first login.");
-    return users;
-  }
-  return JSON.parse(fs.readFileSync(USERS_FILE, "utf8"));
-}
-
-function saveUsers(users) {
-  const tmp = USERS_FILE + ".tmp";
-  fs.writeFileSync(tmp, JSON.stringify(users, null, 2), { mode: 0o600 });
-  fs.renameSync(tmp, USERS_FILE);
-}
-
-let users = loadUsers();
-
-function findUser(username) {
-  const name = String(username || "").trim().toLowerCase();
-  return users.find((u) => u.username.toLowerCase() === name);
-}
-
-function publicUser(user) {
-  return {
-    username: user.username,
-    displayName: user.displayName,
-    role: user.role,
-    company: user.company,
-    mustChangePassword: !!user.mustChangePassword,
-  };
-}
+store.init(DATA_DIR);
 
 // ---------- Sessions & rate limiting ----------
 
-const sessions = new Map(); // token -> { username, expires }
+const sessions = new Map(); // token -> { personId, expires }
 const failedAttempts = new Map(); // ip -> { count, first }
 
-function createSession(username) {
+function createSession(personId) {
   const token = crypto.randomBytes(32).toString("hex");
-  sessions.set(token, { username, expires: Date.now() + SESSION_TTL_MS });
+  sessions.set(token, { personId, expires: Date.now() + SESSION_TTL_MS });
   return token;
 }
 
@@ -101,10 +52,19 @@ function getSession(req) {
     sessions.delete(token);
     return null;
   }
-  const user = findUser(session.username);
-  if (!user) return null;
+  const person = store.getPerson(session.personId);
+  if (!person || !person.account || !person.account.enabled) {
+    sessions.delete(token);
+    return null;
+  }
   session.expires = Date.now() + SESSION_TTL_MS; // sliding expiry
-  return { token, user };
+  return { token, person };
+}
+
+function endSessionsFor(personId, exceptToken) {
+  for (const [token, s] of sessions) {
+    if (s.personId === personId && token !== exceptToken) sessions.delete(token);
+  }
 }
 
 function isLockedOut(ip) {
@@ -152,19 +112,9 @@ function clientIp(req) {
   return remote;
 }
 
-function isHttps(req) {
-  return req.headers["x-forwarded-proto"] === "https";
-}
-
 function sessionCookie(req, token, maxAgeSeconds) {
-  const parts = [
-    `${SESSION_COOKIE}=${token}`,
-    "Path=/",
-    "HttpOnly",
-    "SameSite=Strict",
-    `Max-Age=${maxAgeSeconds}`,
-  ];
-  if (isHttps(req)) parts.push("Secure");
+  const parts = [`${SESSION_COOKIE}=${token}`, "Path=/", "HttpOnly", "SameSite=Strict", `Max-Age=${maxAgeSeconds}`];
+  if (req.headers["x-forwarded-proto"] === "https") parts.push("Secure");
   return parts.join("; ");
 }
 
@@ -173,7 +123,7 @@ const SECURITY_HEADERS = {
   "X-Frame-Options": "DENY",
   "Referrer-Policy": "same-origin",
   "Content-Security-Policy":
-    "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; form-action 'self'",
+    "default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; form-action 'self'",
 };
 
 function send(res, status, body, headers = {}) {
@@ -201,18 +151,22 @@ function sendFile(res, filePath, extraHeaders = {}) {
   });
 }
 
-function readJsonBody(req) {
+function httpError(status, message) {
+  return Object.assign(new Error(message), { status });
+}
+
+function readJsonBody(req, limit = MAX_BODY_BYTES) {
   return new Promise((resolve, reject) => {
     // Requiring a JSON content type blocks cross-site form posts (CSRF) on top of SameSite=Strict.
     if (!String(req.headers["content-type"] || "").startsWith("application/json")) {
-      return reject(Object.assign(new Error("Expected JSON"), { status: 415 }));
+      return reject(httpError(415, "Expected JSON"));
     }
     let size = 0;
     const chunks = [];
     req.on("data", (chunk) => {
       size += chunk.length;
-      if (size > MAX_BODY_BYTES) {
-        reject(Object.assign(new Error("Body too large"), { status: 413 }));
+      if (size > limit) {
+        reject(httpError(413, "That upload is too large."));
         req.destroy();
         return;
       }
@@ -220,16 +174,17 @@ function readJsonBody(req) {
     });
     req.on("end", () => {
       try {
-        resolve(JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"));
+        const body = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+        resolve(body && typeof body === "object" ? body : {});
       } catch {
-        reject(Object.assign(new Error("Invalid JSON"), { status: 400 }));
+        reject(httpError(400, "Invalid JSON"));
       }
     });
     req.on("error", reject);
   });
 }
 
-// ---------- Routes ----------
+// ---------- API handlers ----------
 
 async function handleLogin(req, res) {
   const ip = clientIp(req);
@@ -237,83 +192,186 @@ async function handleLogin(req, res) {
     return sendJson(res, 429, { error: "Too many failed attempts. Please try again in 15 minutes." });
   }
   const { username, password } = await readJsonBody(req);
-  const user = findUser(username);
-  if (!user || typeof password !== "string" || !verifyPassword(password, user)) {
+  const person = store.findByLogin(username);
+  if (!person || !store.verifyPassword(person, password)) {
     recordFailure(ip);
     console.warn(`Failed login for "${String(username).slice(0, 64)}" from ${ip}`);
-    return sendJson(res, 401, { error: "Incorrect username or password." });
+    return sendJson(res, 401, { error: "Incorrect email or password." });
   }
   failedAttempts.delete(ip);
-  const token = createSession(user.username);
-  console.log(`User ${user.username} signed in from ${ip}`);
-  sendJson(res, 200, { user: publicUser(user) }, {
+  store.recordLogin(person);
+  const token = createSession(person.id);
+  console.log(`${store.meView(person).username} signed in from ${ip}`);
+  sendJson(res, 200, { user: store.meView(person) }, {
     "Set-Cookie": sessionCookie(req, token, SESSION_TTL_MS / 1000),
   });
 }
 
-function handleLogout(req, res) {
-  const session = getSession(req);
-  if (session) sessions.delete(session.token);
-  sendJson(res, 200, { ok: true }, { "Set-Cookie": sessionCookie(req, "", 0) });
-}
-
 async function handleChangePassword(req, res, session) {
   const { currentPassword, newPassword } = await readJsonBody(req);
-  if (typeof currentPassword !== "string" || !verifyPassword(currentPassword, session.user)) {
+  const person = session.person;
+  // Someone who has just signed in with a temporary password doesn't need to type it again.
+  if (!person.account.passwordTemporary && !store.verifyPassword(person, currentPassword)) {
     return sendJson(res, 400, { error: "Your current password is incorrect." });
   }
-  if (typeof newPassword !== "string" || newPassword.length < 8) {
-    return sendJson(res, 400, { error: "New password must be at least 8 characters." });
+  store.validateNewPassword(newPassword, person.account.passwordTemporary ? undefined : currentPassword);
+  if (person.account.passwordTemporary && store.verifyPassword(person, newPassword)) {
+    return sendJson(res, 400, { error: "Choose a new password rather than reusing the temporary one." });
   }
-  if (newPassword === currentPassword) {
-    return sendJson(res, 400, { error: "New password must be different from the current one." });
-  }
-  Object.assign(session.user, hashPassword(newPassword), { mustChangePassword: false });
-  saveUsers(users);
-  // Sign out every other session for this user.
-  for (const [token, s] of sessions) {
-    if (s.username === session.user.username && token !== session.token) sessions.delete(token);
-  }
-  console.log(`User ${session.user.username} changed their password`);
-  sendJson(res, 200, { user: publicUser(session.user) });
+  store.setPassword(person, newPassword);
+  endSessionsFor(person.id, session.token);
+  console.log(`${store.meView(person).username} changed their password`);
+  sendJson(res, 200, { user: store.meView(person) });
 }
 
+function requireManager(session) {
+  if (!store.canManage(session.person)) throw httpError(403, "You don't have access to employee management.");
+}
+
+function requireEmployee(id) {
+  const person = store.getPerson(id);
+  if (!person || person.system) throw httpError(404, "Employee not found.");
+  return person;
+}
+
+async function routeApi(req, res, pathname, session) {
+  const method = req.method;
+
+  if (method === "POST" && pathname === "/api/login") return handleLogin(req, res);
+  if (method === "POST" && pathname === "/api/logout") {
+    if (session) sessions.delete(session.token);
+    return sendJson(res, 200, { ok: true }, { "Set-Cookie": sessionCookie(req, "", 0) });
+  }
+
+  if (!session) return sendJson(res, 401, { error: "Not signed in." });
+  const me = session.person;
+
+  if (method === "GET" && pathname === "/api/me") return sendJson(res, 200, { user: store.meView(me) });
+  if (method === "POST" && pathname === "/api/me/password") return handleChangePassword(req, res, session);
+
+  // Everything else waits until a temporary password has been replaced.
+  if (me.account.passwordTemporary) {
+    return sendJson(res, 403, { error: "Please create a new password first.", code: "PASSWORD_CHANGE_REQUIRED" });
+  }
+
+  if (method === "GET" && pathname === "/api/meta") {
+    return sendJson(res, 200, {
+      companies: store.COMPANIES,
+      domains: store.DOMAINS,
+      companyDomains: store.COMPANY_DOMAINS,
+      defaultTimezone: store.DEFAULT_TIMEZONE,
+    });
+  }
+
+  if (method === "POST" && pathname === "/api/me/profile") {
+    store.updateOwnProfile(me, await readJsonBody(req));
+    return sendJson(res, 200, { user: store.meView(me) });
+  }
+  if (method === "POST" && pathname === "/api/me/avatar") {
+    const { image } = await readJsonBody(req, MAX_AVATAR_BODY_BYTES);
+    store.saveAvatar(me, image);
+    return sendJson(res, 200, { user: store.meView(me) });
+  }
+  if (method === "POST" && pathname === "/api/me/avatar/remove") {
+    store.removeAvatar(me);
+    return sendJson(res, 200, { user: store.meView(me) });
+  }
+
+  let m;
+  if (method === "GET" && (m = /^\/api\/avatars\/([a-f0-9]{16})$/.exec(pathname))) {
+    const avatar = store.avatarFile(store.getPerson(m[1]));
+    if (!avatar) return send(res, 404, "Not found", { "Content-Type": "text/plain" });
+    return sendFile(res, avatar.file, { "Content-Type": avatar.mime, "Cache-Control": "private, max-age=86400" });
+  }
+
+  if (method === "GET" && pathname === "/api/directory") {
+    return sendJson(res, 200, { people: store.employees().map(store.publicView) });
+  }
+
+  // ----- Employee management (leadership & HR) -----
+  if (pathname.startsWith("/api/employees")) {
+    requireManager(session);
+
+    if (method === "GET" && pathname === "/api/employees") {
+      return sendJson(res, 200, { employees: store.employees().map(store.manageView) });
+    }
+    if (method === "POST" && pathname === "/api/employees/preview-emails") {
+      const body = await readJsonBody(req);
+      return sendJson(res, 200, store.resolveEmails(body.firstName, body.lastName, body.emails, body.excludeId));
+    }
+    if (method === "POST" && pathname === "/api/employees") {
+      const person = store.saveEmployee(await readJsonBody(req), null);
+      console.log(`${store.meView(me).username} added employee ${person.displayName}`);
+      return sendJson(res, 201, { employee: store.manageView(person) });
+    }
+    if (method === "POST" && (m = /^\/api\/employees\/([a-f0-9]{16})(?:\/(delete|account|account\/disable|account\/enable))?$/.exec(pathname))) {
+      const person = requireEmployee(m[1]);
+      const action = m[2];
+
+      if (!action) {
+        store.saveEmployee(await readJsonBody(req), person);
+        return sendJson(res, 200, { employee: store.manageView(person) });
+      }
+      if (action === "delete") {
+        if (person.id === me.id) throw httpError(400, "You can't delete your own record.");
+        store.deleteEmployee(person);
+        endSessionsFor(person.id);
+        console.log(`${store.meView(me).username} deleted employee ${person.displayName}`);
+        return sendJson(res, 200, { ok: true });
+      }
+      if (action === "account") {
+        if (person.id === me.id) throw httpError(400, "Use Profile & settings to change your own password.");
+        const credentials = store.issueTemporaryPassword(person);
+        endSessionsFor(person.id);
+        console.log(`${store.meView(me).username} issued a temporary password for ${credentials.username}`);
+        return sendJson(res, 200, { ...credentials, employee: store.manageView(person) });
+      }
+      if (!person.account) throw httpError(400, "This employee doesn't have a login account.");
+      if (person.id === me.id) throw httpError(400, "You can't disable your own account.");
+      store.setAccountEnabled(person, action === "account/enable");
+      if (action === "account/disable") endSessionsFor(person.id);
+      return sendJson(res, 200, { employee: store.manageView(person) });
+    }
+  }
+
+  // ----- Access rules (system admin only) -----
+  if (pathname === "/api/settings/access") {
+    if (!me.system) throw httpError(403, "Only the system administrator can change access rules.");
+    if (method === "POST") store.setManagementTitles((await readJsonBody(req)).managementTitles);
+    if (method === "GET" || method === "POST") {
+      return sendJson(res, 200, {
+        managementTitles: store.getManagementTitles(),
+        managers: store.employees().filter(store.canManage).map((p) => ({ displayName: p.displayName, jobTitle: p.jobTitle })),
+      });
+    }
+  }
+
+  sendJson(res, 404, { error: "Not found." });
+}
+
+// ---------- Routing ----------
+
 async function route(req, res) {
-  const url = new URL(req.url, "http://localhost");
-  const pathname = url.pathname;
+  const pathname = new URL(req.url, "http://localhost").pathname;
   const session = getSession(req);
 
-  if (req.method === "POST") {
-    if (pathname === "/api/login") return handleLogin(req, res);
-    if (pathname === "/api/logout") return handleLogout(req, res);
-    if (pathname === "/api/change-password") {
-      if (!session) return sendJson(res, 401, { error: "Not signed in." });
-      return handleChangePassword(req, res, session);
-    }
-    return sendJson(res, 404, { error: "Not found." });
-  }
+  if (pathname.startsWith("/api/")) return routeApi(req, res, pathname, session);
 
   if (req.method !== "GET" && req.method !== "HEAD") {
-    return send(res, 405, "Method not allowed", { Allow: "GET, HEAD, POST" });
-  }
-
-  if (pathname === "/api/me") {
-    if (!session) return sendJson(res, 401, { error: "Not signed in." });
-    return sendJson(res, 200, { user: publicUser(session.user) });
+    return send(res, 405, "Method not allowed", { Allow: "GET, HEAD" });
   }
 
   if (pathname === "/healthz") return sendJson(res, 200, { ok: true });
-
-  if (pathname === "/") return redirect(res, session ? "/dashboard" : "/login");
+  if (pathname === "/" || pathname === "/dashboard") return redirect(res, session ? "/home" : "/login");
 
   if (pathname === "/login") {
-    if (session) return redirect(res, "/dashboard");
+    if (session) return redirect(res, "/home");
     return sendFile(res, path.join(PUBLIC_DIR, "login.html"), { "Cache-Control": "no-store" });
   }
 
-  if (pathname === "/dashboard") {
+  if (APP_ROUTES.has(pathname)) {
     if (!session) return redirect(res, "/login");
-    return sendFile(res, path.join(PUBLIC_DIR, "dashboard.html"), { "Cache-Control": "no-store" });
+    return sendFile(res, path.join(PUBLIC_DIR, "app.html"), { "Cache-Control": "no-store" });
   }
 
   if (pathname.startsWith("/assets/")) {
@@ -321,7 +379,7 @@ async function route(req, res) {
     if (!filePath.startsWith(path.join(PUBLIC_DIR, "assets") + path.sep)) {
       return send(res, 404, "Not found", { "Content-Type": "text/plain" });
     }
-    return sendFile(res, filePath, { "Cache-Control": "public, max-age=300" });
+    return sendFile(res, filePath, { "Cache-Control": "no-cache" });
   }
 
   send(res, 404, "Not found", { "Content-Type": "text/plain" });
