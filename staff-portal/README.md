@@ -25,18 +25,18 @@ Internal staff portal for the whole of HN Group, served at **https://staff.hngro
 
 Both lists are at the top of `lib/store.js` if you need to change them.
 
-### System owner & system admin panel
+### System owner & System Admin
 
 The **system owner** has access to everything. The owner is whoever has the email `charlie.livsey@hngroup.org.uk`, set in `settings.json` as `ownerEmail`.
 
 The owner's record is locked to everyone else. HR, leadership and the admin account can create the owner's first login, but they can't edit, reset, disable or delete the owner after that.
 
-The owner can open the **System admin panel** from the menu under their name. It's protected by the master system PIN, which starts as `0103`. The panel locks itself after 15 minutes of inactivity, and 5 wrong PINs lock it for 15 minutes. The panel has:
+The owner can open **System Admin** from the menu under their name. It's protected by the master system PIN, which starts as `0103`. It locks itself after 15 minutes of inactivity, and 5 wrong PINs lock it for 15 minutes. It has:
 
 - **Active sessions.** Everyone signed in, with their device, IP address and last activity. You can end one session, **log out everyone else**, or **force log out everyone**, including yourself. Disconnected users are sent back to the sign-in page within about 30 seconds.
 - **Log in as.** Open the portal as any user with a login, without their password. A banner shows the whole time with a **Return to my account** button. Passwords can't be changed while you're logged in as someone else.
-- **Change system PIN.**
-- **Activity log.** Every panel action, including wrong PINs and "log in as", is recorded in `audit.log`.
+- **Change System Admin PIN.**
+- **Activity log.** Every action across the portal is recorded in `audit.log`. That covers sign-ins (including failed ones), sign-outs, password changes and resets, login accounts being created, disabled or enabled, staff added, edited or deleted (with which fields changed), profile and photo changes, access rule changes and every System Admin action. Actions done through "log in as" are marked with who was really doing them. You can search and filter the log by type.
 
 ### Working at more than one company
 
@@ -114,7 +114,7 @@ Everything lives in `/var/lib/hn-staff-portal`:
 |-------------------|-----------------------------------------------------------------|
 | `people.json`     | Employees and login accounts. Passwords are stored as scrypt hashes. |
 | `settings.json`   | Access rules, the system owner and the system PIN (hashed).     |
-| `audit.log`       | System panel activity log.                                      |
+| `audit.log`       | Activity log of every action in the portal.                     |
 | `avatars/`        | Profile pictures.                                               |
 
 To back it up:

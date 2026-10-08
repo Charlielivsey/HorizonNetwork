@@ -256,7 +256,7 @@
             '</div><div class="mh-email">' + esc(me.username) + "</div></div></div>" +
             '<div class="menu-sep"></div>' +
             '<a class="menu-item compact" role="menuitem" href="/settings" data-link>' + icon("user") + "<span>Profile &amp; settings</span></a>" +
-            (me.isOwner && !me.impersonatedBy ? '<a class="menu-item compact" role="menuitem" href="/system" data-link>' + icon("shield") + "<span>System admin panel</span></a>" : "") +
+            (me.isOwner && !me.impersonatedBy ? '<a class="menu-item compact" role="menuitem" href="/system" data-link>' + icon("shield") + "<span>System Admin</span></a>" : "") +
             '<a class="menu-item compact" role="menuitem" href="/settings#password" data-link>' + icon("lock") + "<span>Change password</span></a>" +
             '<div class="menu-sep"></div>' +
             '<button type="button" class="menu-item compact danger" role="menuitem" data-action="logout">' + icon("logout") + "<span>Sign out</span></button>" +
@@ -1418,11 +1418,11 @@
         });
     }
 
-    // ================= System admin panel (owner only) =================
+    // ================= System Admin (owner only) =================
 
     function viewNoSystemAccess(root) {
         root.innerHTML = '<div class="empty-page">' + icon("lock", "big") + "<h1>No access</h1>" +
-            '<p class="muted">The system admin panel is only available to the system owner.</p>' +
+            '<p class="muted">System Admin is only available to the system owner.</p>' +
             '<a class="btn btn-primary" href="/home" data-link>Back to home</a></div>';
     }
 
@@ -1443,22 +1443,52 @@
         return browser + (os ? " on " + os : "");
     }
 
-    const AUDIT_LABELS = {
-        "panel-unlocked": "Unlocked the system panel",
-        "pin-failed": "Entered a wrong system PIN",
-        "pin-changed": "Changed the system PIN",
-        "logged-in-as": "Logged in as",
-        "returned-from": "Returned from",
-        "session-ended": "Ended a session for",
-        "force-logout-others": "Logged out everyone else",
-        "force-logout-all": "Logged out everyone",
+    // Activity log wording and filter groups, keyed by the action recorded on the server.
+    const AUDIT_ACTIONS = {
+        "signed-in": ["signed in", "signin"],
+        "signed-out": ["signed out", "signin"],
+        "sign-in-failed": ["failed to sign in", "signin"],
+        "sign-in-blocked": ["was blocked after too many failed sign-ins", "signin"],
+        "password-changed": ["changed their password", "accounts"],
+        "login-created": ["created a login for", "accounts"],
+        "password-reset": ["reset the password for", "accounts"],
+        "login-disabled": ["disabled the login for", "accounts"],
+        "login-enabled": ["enabled the login for", "accounts"],
+        "employee-added": ["added employee", "staff"],
+        "employee-updated": ["updated employee", "staff"],
+        "employee-deleted": ["deleted employee", "staff"],
+        "access-rules-changed": ["changed the Employee Management access rules", "staff"],
+        "profile-updated": ["updated their profile", "profiles"],
+        "photo-updated": ["changed their profile picture", "profiles"],
+        "photo-removed": ["removed their profile picture", "profiles"],
+        "panel-unlocked": ["unlocked System Admin", "system"],
+        "pin-failed": ["entered a wrong System Admin PIN", "system"],
+        "pin-changed": ["changed the System Admin PIN", "system"],
+        "system-admin-denied": ["tried to open System Admin without access", "system"],
+        "logged-in-as": ["logged in as", "system"],
+        "returned-from": ["returned from being logged in as", "system"],
+        "session-ended": ["ended a session for", "system"],
+        "force-logout-others": ["logged out everyone else", "system"],
+        "force-logout-all": ["force logged out everyone", "system"],
     };
+    const AUDIT_FILTERS = [
+        ["", "All activity"],
+        ["signin", "Sign-ins"],
+        ["accounts", "Logins & passwords"],
+        ["staff", "Staff records"],
+        ["profiles", "Profiles"],
+        ["system", "System Admin"],
+    ];
+
+    function auditTime(iso) {
+        return new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    }
 
     function viewSystemPin(root) {
         root.innerHTML =
             '<div class="force-wrap"><div class="force-card">' +
             '<div class="success-mark">' + icon("shield") + "</div>" +
-            '<h1 class="center">System admin panel</h1>' +
+            '<h1 class="center">System Admin</h1>' +
             '<p class="muted center">Enter the master system PIN to continue.</p>' +
             '<form id="pin-form" novalidate>' +
             '<input type="password" id="pin" class="pin-input" inputmode="numeric" autocomplete="off" maxlength="8" aria-label="System PIN" autofocus>' +
@@ -1489,7 +1519,7 @@
             const body = await res.json().catch(function () { return {}; });
             if (res.status === 403 && body.code === "PIN_REQUIRED") return viewSystemPin(root);
             if (res.status === 401) { window.location.href = "/login"; return; }
-            if (!res.ok) throw new Error(body.error || "Couldn't load the system panel.");
+            if (!res.ok) throw new Error(body.error || "Couldn't load System Admin.");
             data = body;
         } catch (err) {
             root.innerHTML = '<div class="empty">' + esc(err.message) + "</div>";
@@ -1500,9 +1530,9 @@
         const others = data.sessions.filter(function (s) { return !s.current; }).length;
 
         root.innerHTML =
-            '<div class="page-head"><div><h1>System admin panel</h1><p class="muted">Sessions, user access and security for the whole portal. Every action here is recorded in the activity log.</p></div>' +
+            '<div class="page-head"><div><h1>System Admin</h1><p class="muted">Sessions, user access, security and a full activity log for the whole portal.</p></div>' +
             '<div class="page-actions"><button type="button" class="btn btn-ghost" id="sys-refresh">Refresh</button>' +
-            '<button type="button" class="btn btn-dark" id="sys-lock">' + icon("lock") + "Lock panel</button></div></div>" +
+            '<button type="button" class="btn btn-dark" id="sys-lock">' + icon("lock") + "Lock</button></div></div>" +
 
             '<div class="stat-row">' +
             '<div class="stat"><div class="stat-value">' + data.sessions.length + '</div><div class="stat-label">Active sessions</div></div>' +
@@ -1531,21 +1561,23 @@
             '<label class="search sys-search">' + icon("search") + '<input type="search" id="sys-user-search" placeholder="Search users" aria-label="Search users"></label>' +
             '<div class="user-pick" id="sys-users"></div></section>' +
 
-            '<div class="settings-grid">' +
-            '<section class="panel"><h2 class="panel-title">' + icon("key") + "Change system PIN</h2>" +
+            '<section class="panel sys-section"><div class="panel-head"><h2 class="panel-title">' + icon("activity") + "Activity log</h2>" +
+            '<span class="muted small" id="audit-count"></span></div>' +
+            '<p class="muted small">Every action taken across the portal: sign-ins, password and login changes, staff record changes, profile updates and System Admin actions.</p>' +
+            '<div class="toolbar audit-tools"><label class="search">' + icon("search") + '<input type="search" id="audit-search" placeholder="Search by person, action or IP address" aria-label="Search activity"></label>' +
+            '<select id="audit-filter" aria-label="Filter activity">' + AUDIT_FILTERS.map(function (f) { return '<option value="' + f[0] + '">' + f[1] + "</option>"; }).join("") + "</select></div>" +
+            '<div class="table-card flat audit-table"><table class="table"><thead><tr><th>When</th><th>Who</th><th>What</th><th>IP address</th></tr></thead><tbody id="audit-body"></tbody></table></div>' +
+            '<button type="button" class="btn btn-ghost btn-small audit-more" id="audit-more" hidden>Show more</button>' +
+            "</section>" +
+
+            '<section class="panel sys-section sys-pin"><h2 class="panel-title">' + icon("key") + "Change System Admin PIN</h2>" +
             '<form id="sys-pin-form" novalidate>' +
             '<div class="grid-2"><div><label for="sp-current">Current PIN</label><input type="password" id="sp-current" inputmode="numeric" maxlength="8" autocomplete="off"></div>' +
             '<div><label for="sp-new">New PIN</label><input type="password" id="sp-new" inputmode="numeric" maxlength="8" autocomplete="off"></div></div>' +
             '<p class="hint">4 to 8 digits.</p><div class="form-error" id="sp-error" hidden></div>' +
             '<div class="form-actions"><button type="submit" class="btn btn-primary">Update PIN</button></div></form></section>' +
 
-            '<section class="panel"><h2 class="panel-title">' + icon("activity") + "Activity log</h2>" +
-            '<ul class="audit">' + (data.audit.length ? data.audit.map(function (a) {
-                return '<li><div><strong>' + esc(a.actor || "System") + "</strong> " + esc((AUDIT_LABELS[a.action] || a.action).toLowerCase()) +
-                    (a.target ? " <strong>" + esc(a.target) + "</strong>" : "") + (a.detail ? " (" + esc(a.detail) + ")" : "") + "</div>" +
-                    '<div class="muted small">' + esc(timeAgo(a.at)) + (a.ip ? " · " + esc(a.ip) : "") + "</div></li>";
-            }).join("") : '<li class="muted">Nothing yet.</li>') + "</ul></section>" +
-            "</div>";
+            "";
 
         function drawUsers() {
             const q = $("#sys-user-search").value.trim().toLowerCase();
@@ -1611,7 +1643,33 @@
             }
         });
 
+        let auditShown = 100;
+        function drawAudit() {
+            const q = $("#audit-search").value.trim().toLowerCase();
+            const cat = $("#audit-filter").value;
+            const list = data.audit.filter(function (a) {
+                const def = AUDIT_ACTIONS[a.action] || [a.action, "system"];
+                if (cat && def[1] !== cat) return false;
+                return !q || [a.actor, a.target, a.detail, a.ip, a.via, def[0]].join(" ").toLowerCase().indexOf(q) !== -1;
+            });
+            $("#audit-count").textContent = list.length + (list.length === 1 ? " entry" : " entries");
+            $("#audit-body").innerHTML = list.length ? list.slice(0, auditShown).map(function (a) {
+                const def = AUDIT_ACTIONS[a.action] || [a.action, "system"];
+                const bad = /failed|blocked|denied/.test(a.action);
+                return "<tr" + (bad ? ' class="audit-bad"' : "") + '><td class="nowrap small">' + esc(auditTime(a.at)) + "</td>" +
+                    '<td data-label="Who"><strong>' + esc(a.actor || "System") + "</strong>" + (a.via ? '<div class="muted small">via log in as by ' + esc(a.via) + "</div>" : "") + "</td>" +
+                    '<td data-label="What">' + esc(def[0]) + (a.target ? " <strong>" + esc(a.target) + "</strong>" : "") +
+                    (a.detail ? '<div class="muted small">' + esc(a.detail) + "</div>" : "") + "</td>" +
+                    '<td data-label="IP address" class="mono small">' + esc(a.ip || "") + "</td></tr>";
+            }).join("") : '<tr><td colspan="4"><div class="empty">No matching activity.</div></td></tr>';
+            $("#audit-more").hidden = list.length <= auditShown;
+        }
+        $("#audit-search").addEventListener("input", function () { auditShown = 100; drawAudit(); });
+        $("#audit-filter").addEventListener("change", function () { auditShown = 100; drawAudit(); });
+        $("#audit-more").addEventListener("click", function () { auditShown += 200; drawAudit(); });
+
         drawUsers();
+        drawAudit();
     }
 
     // ================= First sign-in =================

@@ -43,7 +43,7 @@ const DEFAULT_MANAGEMENT_TITLES = [
 
 const DEFAULT_TIMEZONE = "Europe/London";
 const ADMIN_USERNAME = "admin@hngroup.org.uk";
-// The system owner has access to everything, including the PIN-protected system panel.
+// The system owner has access to everything, including PIN-protected System Admin.
 const DEFAULT_OWNER_EMAIL = "charlie.livsey@hngroup.org.uk";
 const DEFAULT_SYSTEM_PIN = "0103";
 const TIMEZONES = new Set([...Intl.supportedValuesOf("timeZone"), "UTC"]);
@@ -606,7 +606,7 @@ function setManagementTitles(list) {
   writeJson(settingsFile, settings);
 }
 
-// ---------- System panel ----------
+// ---------- System Admin ----------
 
 function verifySystemPin(pin) {
   if (typeof pin !== "string" || !settings.systemPin) return false;
