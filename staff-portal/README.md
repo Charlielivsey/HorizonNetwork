@@ -2,7 +2,7 @@
 
 Internal staff portal for the whole of HN Group, served at **https://staff.hngroup.org.uk**.
 
-**Default login:** `admin` / `admin`. Change this straight away under **Profile & settings**. Staff sign in with their work email address.
+**Default login:** `admin@hngroup.org.uk` / `admin`. Change this straight away under **Profile & settings**. Staff sign in with their work email address.
 
 ## Features
 
@@ -29,7 +29,7 @@ Both lists are at the top of `lib/store.js` if you need to change them.
 
 Access is decided by **job title**. Anyone whose title contains one of the listed words or phrases gets access. The defaults are *Chief, Director, Head of, Founder, Leadership, Human Resources* and *HR*.
 
-The `admin` account can change the list in the portal under **Employee Management → Access rules**. That screen also shows who currently has access. The `admin` account always has access.
+The admin account (`admin@hngroup.org.uk`) can change the list in the portal under **Employee Management → Access rules**. That screen also shows who currently has access. The admin account always has access.
 
 ## Install on the VPS
 
@@ -79,7 +79,7 @@ cd /root/HorizonNetwork && git pull && sudo bash staff-portal/install.sh
 
 Re-running the installer is safe. Staff records, accounts, photos and the HTTPS certificate are all kept.
 
-When you update from the first version, existing logins are carried over automatically, so your admin password stays the same.
+When you update from an earlier version, existing logins are carried over automatically. The old `admin` login is renamed to `admin@hngroup.org.uk` and keeps its password.
 
 ## Data & backups
 
@@ -110,7 +110,7 @@ sudo certbot renew --dry-run      # test certificate renewal
 - **The installer says DNS doesn't point at this server.** Wait for the A record to propagate, then re-run the installer.
 - **The site shows the main Horizon Network page.** Check that `/etc/nginx/sites-enabled/hn-staff-portal` exists, then run `sudo nginx -t && sudo systemctl reload nginx`.
 - **502 Bad Gateway.** The app isn't running. Check `pm2 status` and `pm2 logs hn-staff-portal`.
-- **Forgot the admin password.** This resets it to `admin` and leaves every other account and record alone:
+- **Forgot the admin password.** This resets the login to `admin@hngroup.org.uk` / `admin` and leaves every other account and record alone:
   ```bash
   sudo DATA_DIR=/var/lib/hn-staff-portal node /opt/hn-staff-portal/reset-admin.js && pm2 restart hn-staff-portal
   ```

@@ -129,6 +129,6 @@ if [ "$HTTPS_OK" = 1 ]; then
 else
     echo -e "  ${CYAN}Staff Portal:${RESET}  http://$DOMAIN  (once DNS points at $SERVER_IP)"
 fi
-echo -e "  ${CYAN}Default login:${RESET} admin / admin (if you haven't changed it yet)"
+echo -e "  ${CYAN}Default login:${RESET} admin@hngroup.org.uk / admin (if you haven't changed it yet)"
 echo -e "  ${CYAN}Logs:${RESET}          pm2 logs $PM2_NAME"
 echo ""

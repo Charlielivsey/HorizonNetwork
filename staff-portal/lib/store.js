@@ -42,6 +42,7 @@ const DEFAULT_MANAGEMENT_TITLES = [
 ];
 
 const DEFAULT_TIMEZONE = "Europe/London";
+const ADMIN_USERNAME = "admin@hngroup.org.uk";
 const TIMEZONES = new Set([...Intl.supportedValuesOf("timeZone"), "UTC"]);
 const LOCAL_PART_RE = /^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/;
 const MAX_EMAILS = 10;
@@ -87,14 +88,24 @@ function init(dir) {
 }
 
 function loadPeople() {
-  if (fs.existsSync(peopleFile)) return JSON.parse(fs.readFileSync(peopleFile, "utf8"));
+  if (fs.existsSync(peopleFile)) {
+    const list = JSON.parse(fs.readFileSync(peopleFile, "utf8"));
+    // The built-in admin used to sign in as plain "admin"; it now uses an email address.
+    const oldAdmin = list.find((p) => p.system && p.username === "admin");
+    if (oldAdmin && !list.some((p) => p.system && p.username === ADMIN_USERNAME)) {
+      oldAdmin.username = ADMIN_USERNAME;
+      writeJson(peopleFile, list);
+      console.log(`Renamed the admin login to ${ADMIN_USERNAME}`);
+    }
+    return list;
+  }
 
   // First run of this version: carry over accounts from the original users.json, if any.
   const legacyFile = path.join(dataDir, "users.json");
   let list;
   if (fs.existsSync(legacyFile)) {
     list = JSON.parse(fs.readFileSync(legacyFile, "utf8")).map((u) =>
-      systemPerson(u.username, u.displayName, {
+      systemPerson(u.username === "admin" ? ADMIN_USERNAME : u.username, u.displayName, {
         salt: u.salt,
         hash: u.hash,
         mustChangePassword: !!u.mustChangePassword,
@@ -102,8 +113,8 @@ function loadPeople() {
     );
     console.log(`Migrated ${list.length} account(s) from users.json`);
   } else {
-    list = [systemPerson("admin", "Administrator", { ...hashPassword("admin"), mustChangePassword: true })];
-    console.log("Created default user admin/admin — change this password after first login.");
+    list = [systemPerson(ADMIN_USERNAME, "Administrator", { ...hashPassword("admin"), mustChangePassword: true })];
+    console.log(`Created default login ${ADMIN_USERNAME} / admin — change this password after first login.`);
   }
   writeJson(peopleFile, list);
   if (fs.existsSync(legacyFile)) fs.renameSync(legacyFile, legacyFile + ".migrated");
@@ -302,7 +313,9 @@ function nameSlug(s) {
 }
 
 function emailInUse(address, excludeId) {
-  return people.some((p) => p.id !== excludeId && p.emails.some((e) => e.address === address));
+  return people.some(
+    (p) => p.id !== excludeId && (p.emails.some((e) => e.address === address) || (p.system && p.username.toLowerCase() === address))
+  );
 }
 
 // Resolves the email rows from the employee form. "auto" rows become firstname.lastname@domain,
@@ -535,6 +548,7 @@ function setManagementTitles(list) {
 }
 
 module.exports = {
+  ADMIN_USERNAME,
   COMPANIES,
   DOMAINS,
   COMPANY_DOMAINS,
