@@ -506,8 +506,6 @@
         const profileTz = me.timezone || state.meta.defaultTimezone;
         const placeName = me.location || tzCity(profileTz);
 
-        const tiles = [];
-        NAV.forEach(function (s) { visibleItems(s).forEach(function (it) { tiles.push(it); }); });
 
         root.innerHTML =
             (me.mustChangePassword
@@ -535,18 +533,7 @@
             (me.location ? "" : ' · <a href="/settings" data-link>Set your location</a>') + "</div></div>" +
             "</section>" +
 
-            '<div class="layout">' +
-            '<div class="main-col"><section><h2 class="section-title">Quick access</h2><div class="tiles">' +
-            tiles.map(function (it, i) {
-                const inner = '<span class="tile-icon">' + icon(it.icon) + '</span><span class="tile-title">' + esc(it.title) + "</span>" +
-                    '<span class="tile-desc">' + esc(it.desc) + "</span>" + (it.soon ? '<span class="tag">Coming soon</span>' : '<span class="tag tag-live">Open</span>');
-                return it.soon
-                    ? '<button type="button" class="tile tile-c' + (i % 6) + '" data-soon="' + esc(it.title) + '">' + inner + "</button>"
-                    : '<a class="tile tile-c' + (i % 6) + '" href="' + it.href + '" data-link>' + inner + "</a>";
-            }).join("") +
-            "</div></section></div>" +
-
-            '<aside class="side-col">' +
+            '<div class="home-grid">' +
             '<section class="panel"><h2 class="section-title">Your details</h2>' +
             '<div class="me-card">' + avatar(me, "lg") + '<div><div class="me-name">' + esc(me.displayName) + "</div>" +
             '<div class="muted small">' + esc(me.jobTitle) + "</div>" + (me.isOwner ? '<span class="badge badge-owner">System owner</span>' : "") + "</div></div>" +
@@ -558,7 +545,7 @@
             '<p class="muted">This is the new home for HN Group staff. More tools will be added over the coming weeks.</p></article></section>' +
             '<section class="panel"><h2 class="section-title">Need help?</h2>' +
             '<p class="muted">For access problems or anything IT related, contact the IT team.</p></section>' +
-            "</aside></div>";
+            "</div>";
     }
 
     // ================= Staff directory =================

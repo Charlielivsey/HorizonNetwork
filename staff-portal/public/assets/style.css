@@ -1290,3 +1290,8 @@ legend { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-
 .theme-preview.split .tp-half { position: absolute; top: 0; bottom: 0; right: 0; width: 50%; }
 .theme-name { display: flex; align-items: center; justify-content: space-between; font-weight: 600; font-size: 0.875rem; padding: 0 0.15rem; }
 .theme-name .icon { width: 16px; height: 16px; color: var(--primary); }
+
+/* Home: your details beside news and help */
+.home-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; align-items: start; }
+.home-grid > .panel:first-child { grid-row: span 2; }
+@media (max-width: 700px) { .home-grid > .panel:first-child { grid-row: auto; } }
