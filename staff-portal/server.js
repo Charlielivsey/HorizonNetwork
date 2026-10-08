@@ -20,7 +20,9 @@ const MAX_BODY_BYTES = 64 * 1024;
 const MAX_AVATAR_BODY_BYTES = 2 * 1024 * 1024;
 
 // Pages of the single-page app; the browser handles routing between them.
-const APP_ROUTES = new Set(["/home", "/directory", "/employees", "/settings"]);
+const APP_ROUTES = new Set(["/home", "/directory", "/employees", "/settings", "/system"]);
+const SYSTEM_UNLOCK_MS = 15 * 60 * 1000; // system panel stays unlocked for 15 minutes of inactivity
+const MAX_PIN_ATTEMPTS = 5;
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -35,12 +37,23 @@ store.init(DATA_DIR);
 
 // ---------- Sessions & rate limiting ----------
 
-const sessions = new Map(); // token -> { personId, expires }
+const sessions = new Map(); // token -> { id, personId, expires, ip, userAgent, createdAt, lastSeen, impersonatorId?, returnToken? }
 const failedAttempts = new Map(); // ip -> { count, first }
+const pinFailures = new Map(); // personId -> { count, first }
 
-function createSession(personId) {
+function createSession(personId, req, extra = {}) {
   const token = crypto.randomBytes(32).toString("hex");
-  sessions.set(token, { personId, expires: Date.now() + SESSION_TTL_MS });
+  const now = Date.now();
+  sessions.set(token, {
+    id: crypto.randomBytes(6).toString("hex"),
+    personId,
+    expires: now + SESSION_TTL_MS,
+    ip: clientIp(req),
+    userAgent: String(req.headers["user-agent"] || "").slice(0, 200),
+    createdAt: now,
+    lastSeen: now,
+    ...extra,
+  });
   return token;
 }
 
@@ -58,7 +71,8 @@ function getSession(req) {
     return null;
   }
   session.expires = Date.now() + SESSION_TTL_MS; // sliding expiry
-  return { token, person };
+  session.lastSeen = Date.now();
+  return { token, person, data: session };
 }
 
 function endSessionsFor(personId, exceptToken) {
@@ -90,6 +104,7 @@ setInterval(() => {
   const now = Date.now();
   for (const [token, s] of sessions) if (s.expires < now) sessions.delete(token);
   for (const [ip, e] of failedAttempts) if (now - e.first > LOCKOUT_WINDOW_MS) failedAttempts.delete(ip);
+  for (const [id, e] of pinFailures) if (now - e.first > LOCKOUT_WINDOW_MS) pinFailures.delete(id);
 }, 10 * 60 * 1000).unref();
 
 // ---------- HTTP helpers ----------
@@ -200,14 +215,25 @@ async function handleLogin(req, res) {
   }
   failedAttempts.delete(ip);
   store.recordLogin(person);
-  const token = createSession(person.id);
+  const token = createSession(person.id, req);
   console.log(`${store.meView(person).username} signed in from ${ip}`);
   sendJson(res, 200, { user: store.meView(person) }, {
     "Set-Cookie": sessionCookie(req, token, SESSION_TTL_MS / 1000),
   });
 }
 
+function meResponse(session) {
+  const user = store.meView(session.person);
+  if (session.data.impersonatorId) {
+    const by = store.getPerson(session.data.impersonatorId);
+    user.impersonatedBy = by ? by.displayName : "System owner";
+    user.passwordTemporary = false; // the owner can look around without setting the user's password
+  }
+  return user;
+}
+
 async function handleChangePassword(req, res, session) {
+  if (session.data.impersonatorId) throw httpError(403, "You can't change passwords while logged in as someone else.");
   const { currentPassword, newPassword } = await readJsonBody(req);
   const person = session.person;
   // Someone who has just signed in with a temporary password doesn't need to type it again.
@@ -221,17 +247,158 @@ async function handleChangePassword(req, res, session) {
   store.setPassword(person, newPassword);
   endSessionsFor(person.id, session.token);
   console.log(`${store.meView(person).username} changed their password`);
-  sendJson(res, 200, { user: store.meView(person) });
+  sendJson(res, 200, { user: meResponse(session) });
 }
 
 function requireManager(session) {
   if (!store.canManage(session.person)) throw httpError(403, "You don't have access to employee management.");
 }
 
-function requireEmployee(id) {
+function requireEmployee(id, me, action) {
   const person = store.getPerson(id);
   if (!person || person.system) throw httpError(404, "Employee not found.");
+  // The owner's record is locked to everyone else, except for setting up their first login.
+  const firstLogin = action === "account" && !person.account;
+  if (store.isOwner(person) && !store.isOwner(me) && !firstLogin) {
+    throw httpError(403, "Only the system owner can change the system owner's record.");
+  }
   return person;
+}
+
+// ---------- System panel (owner only, PIN protected) ----------
+
+async function routeSystem(req, res, pathname, session) {
+  const me = session.person;
+  const method = req.method;
+  if (!store.isOwner(me) || session.data.impersonatorId) throw httpError(403, "Only the system owner can use the system panel.");
+  const ip = clientIp(req);
+  const actor = store.loginName(me);
+
+  if (method === "POST" && pathname === "/api/system/unlock") {
+    const entry = pinFailures.get(me.id);
+    if (entry && entry.count >= MAX_PIN_ATTEMPTS && Date.now() - entry.first < LOCKOUT_WINDOW_MS) {
+      throw httpError(429, "Too many wrong PINs. Try again in 15 minutes.");
+    }
+    const { pin } = await readJsonBody(req);
+    if (!store.verifySystemPin(String(pin || ""))) {
+      if (!entry || Date.now() - entry.first > LOCKOUT_WINDOW_MS) pinFailures.set(me.id, { count: 1, first: Date.now() });
+      else entry.count++;
+      store.audit({ actor, action: "pin-failed", ip });
+      throw httpError(401, "Incorrect PIN.");
+    }
+    pinFailures.delete(me.id);
+    session.data.systemUnlockedUntil = Date.now() + SYSTEM_UNLOCK_MS;
+    store.audit({ actor, action: "panel-unlocked", ip });
+    return sendJson(res, 200, { ok: true });
+  }
+
+  if (method === "POST" && pathname === "/api/system/lock") {
+    session.data.systemUnlockedUntil = 0;
+    return sendJson(res, 200, { ok: true });
+  }
+
+  if (!session.data.systemUnlockedUntil || session.data.systemUnlockedUntil < Date.now()) {
+    return sendJson(res, 403, { error: "Enter the system PIN to continue.", code: "PIN_REQUIRED" });
+  }
+  session.data.systemUnlockedUntil = Date.now() + SYSTEM_UNLOCK_MS;
+
+  if (method === "GET" && pathname === "/api/system/overview") {
+    const list = [];
+    for (const [token, s] of sessions) {
+      if (s.expires < Date.now()) continue;
+      const p = store.getPerson(s.personId);
+      const by = s.impersonatorId ? store.getPerson(s.impersonatorId) : null;
+      list.push({
+        id: s.id,
+        displayName: p ? p.displayName : "Unknown",
+        username: p ? store.loginName(p) : "",
+        avatarUrl: p ? store.publicView(p).avatarUrl : null,
+        personId: s.personId,
+        ip: s.ip,
+        userAgent: s.userAgent,
+        createdAt: new Date(s.createdAt).toISOString(),
+        lastSeen: new Date(s.lastSeen).toISOString(),
+        current: token === session.token,
+        impersonatedBy: by ? by.displayName : null,
+      });
+    }
+    list.sort((a, b) => b.lastSeen.localeCompare(a.lastSeen));
+    const users = store.allPeople().filter((p) => p.id !== me.id).map((p) => ({
+      id: p.id,
+      displayName: p.displayName,
+      username: store.loginName(p),
+      jobTitle: p.jobTitle,
+      company: p.company,
+      system: !!p.system,
+      avatarUrl: store.publicView(p).avatarUrl,
+      account: p.account ? (p.account.enabled ? "active" : "disabled") : "none",
+    }));
+    return sendJson(res, 200, {
+      sessions: list,
+      users,
+      audit: store.readAudit(100),
+      unlockedUntil: new Date(session.data.systemUnlockedUntil).toISOString(),
+    });
+  }
+
+  let m;
+  if (method === "POST" && (m = /^\/api\/system\/sessions\/([a-f0-9]{12})\/end$/.exec(pathname))) {
+    for (const [token, s] of sessions) {
+      if (s.id === m[1]) {
+        const p = store.getPerson(s.personId);
+        sessions.delete(token);
+        store.audit({ actor, action: "session-ended", target: p ? store.loginName(p) : s.personId, ip });
+      }
+    }
+    return sendJson(res, 200, { ok: true });
+  }
+
+  if (method === "POST" && pathname === "/api/system/force-logout") {
+    const { includeSelf } = await readJsonBody(req);
+    let count = 0;
+    for (const token of [...sessions.keys()]) {
+      if (token === session.token && !includeSelf) continue;
+      sessions.delete(token);
+      count++;
+    }
+    store.audit({ actor, action: includeSelf ? "force-logout-all" : "force-logout-others", detail: `${count} session(s)`, ip });
+    const headers = includeSelf ? { "Set-Cookie": sessionCookie(req, "", 0) } : {};
+    return sendJson(res, 200, { ok: true, count }, headers);
+  }
+
+  if (method === "POST" && (m = /^\/api\/system\/impersonate\/([a-f0-9]{16})$/.exec(pathname))) {
+    const target = store.getPerson(m[1]);
+    if (!target || target.id === me.id) throw httpError(404, "User not found.");
+    if (!target.account) throw httpError(400, `${target.displayName} doesn't have a login account yet.`);
+    if (!target.account.enabled) throw httpError(400, `${target.displayName}'s login is disabled.`);
+    const token = createSession(target.id, req, { impersonatorId: me.id, returnToken: session.token });
+    store.audit({ actor, action: "logged-in-as", target: store.loginName(target), ip });
+    return sendJson(res, 200, { ok: true }, { "Set-Cookie": sessionCookie(req, token, SESSION_TTL_MS / 1000) });
+  }
+
+  if (method === "POST" && pathname === "/api/system/pin") {
+    const { currentPin, newPin } = await readJsonBody(req);
+    if (!store.verifySystemPin(String(currentPin || ""))) throw httpError(400, "The current PIN is incorrect.");
+    store.setSystemPin(String(newPin || ""));
+    store.audit({ actor, action: "pin-changed", ip });
+    return sendJson(res, 200, { ok: true });
+  }
+
+  sendJson(res, 404, { error: "Not found." });
+}
+
+// Ends a "log in as" session and puts the owner back into their own session.
+function stopImpersonating(req, res, session) {
+  const { impersonatorId, returnToken } = session.data;
+  if (!impersonatorId) throw httpError(400, "You're not logged in as someone else.");
+  sessions.delete(session.token);
+  const back = returnToken && sessions.get(returnToken);
+  const owner = store.getPerson(impersonatorId);
+  store.audit({ actor: owner ? store.loginName(owner) : impersonatorId, action: "returned-from", target: store.loginName(session.person), ip: clientIp(req) });
+  if (back && back.expires > Date.now() && back.personId === impersonatorId) {
+    return sendJson(res, 200, { ok: true, redirect: "/system" }, { "Set-Cookie": sessionCookie(req, returnToken, SESSION_TTL_MS / 1000) });
+  }
+  sendJson(res, 200, { ok: true, redirect: "/login" }, { "Set-Cookie": sessionCookie(req, "", 0) });
 }
 
 async function routeApi(req, res, pathname, session) {
@@ -246,11 +413,12 @@ async function routeApi(req, res, pathname, session) {
   if (!session) return sendJson(res, 401, { error: "Not signed in." });
   const me = session.person;
 
-  if (method === "GET" && pathname === "/api/me") return sendJson(res, 200, { user: store.meView(me) });
+  if (method === "GET" && pathname === "/api/me") return sendJson(res, 200, { user: meResponse(session) });
+  if (method === "POST" && pathname === "/api/stop-impersonating") return stopImpersonating(req, res, session);
   if (method === "POST" && pathname === "/api/me/password") return handleChangePassword(req, res, session);
 
   // Everything else waits until a temporary password has been replaced.
-  if (me.account.passwordTemporary) {
+  if (me.account.passwordTemporary && !session.data.impersonatorId) {
     return sendJson(res, 403, { error: "Please create a new password first.", code: "PASSWORD_CHANGE_REQUIRED" });
   }
 
@@ -265,16 +433,16 @@ async function routeApi(req, res, pathname, session) {
 
   if (method === "POST" && pathname === "/api/me/profile") {
     store.updateOwnProfile(me, await readJsonBody(req));
-    return sendJson(res, 200, { user: store.meView(me) });
+    return sendJson(res, 200, { user: meResponse(session) });
   }
   if (method === "POST" && pathname === "/api/me/avatar") {
     const { image } = await readJsonBody(req, MAX_AVATAR_BODY_BYTES);
     store.saveAvatar(me, image);
-    return sendJson(res, 200, { user: store.meView(me) });
+    return sendJson(res, 200, { user: meResponse(session) });
   }
   if (method === "POST" && pathname === "/api/me/avatar/remove") {
     store.removeAvatar(me);
-    return sendJson(res, 200, { user: store.meView(me) });
+    return sendJson(res, 200, { user: meResponse(session) });
   }
 
   let m;
@@ -305,8 +473,8 @@ async function routeApi(req, res, pathname, session) {
       return sendJson(res, 201, { employee: store.manageView(person) });
     }
     if (method === "POST" && (m = /^\/api\/employees\/([a-f0-9]{16})(?:\/(delete|account|account\/disable|account\/enable))?$/.exec(pathname))) {
-      const person = requireEmployee(m[1]);
       const action = m[2];
+      const person = requireEmployee(m[1], me, action);
 
       if (!action) {
         store.saveEmployee(await readJsonBody(req), person);
@@ -334,9 +502,11 @@ async function routeApi(req, res, pathname, session) {
     }
   }
 
-  // ----- Access rules (system admin only) -----
+  if (pathname.startsWith("/api/system/")) return routeSystem(req, res, pathname, session);
+
+  // ----- Access rules (admin account and system owner) -----
   if (pathname === "/api/settings/access") {
-    if (!me.system) throw httpError(403, "Only the system administrator can change access rules.");
+    if (!me.system && !store.isOwner(me)) throw httpError(403, "Only the system administrator can change access rules.");
     if (method === "POST") store.setManagementTitles((await readJsonBody(req)).managementTitles);
     if (method === "GET" || method === "POST") {
       return sendJson(res, 200, {

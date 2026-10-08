@@ -25,6 +25,31 @@ Internal staff portal for the whole of HN Group, served at **https://staff.hngro
 
 Both lists are at the top of `lib/store.js` if you need to change them.
 
+### System owner & system admin panel
+
+The **system owner** has access to everything. The owner is whoever has the email `charlie.livsey@hngroup.org.uk`, set in `settings.json` as `ownerEmail`.
+
+The owner's record is locked to everyone else. HR, leadership and the admin account can create the owner's first login, but they can't edit, reset, disable or delete the owner after that.
+
+The owner can open the **System admin panel** from the menu under their name. It's protected by the master system PIN, which starts as `0103`. The panel locks itself after 15 minutes of inactivity, and 5 wrong PINs lock it for 15 minutes. The panel has:
+
+- **Active sessions.** Everyone signed in, with their device, IP address and last activity. You can end one session, **log out everyone else**, or **force log out everyone**, including yourself. Disconnected users are sent back to the sign-in page within about 30 seconds.
+- **Log in as.** Open the portal as any user with a login, without their password. A banner shows the whole time with a **Return to my account** button. Passwords can't be changed while you're logged in as someone else.
+- **Change system PIN.**
+- **Activity log.** Every panel action, including wrong PINs and "log in as", is recorded in `audit.log`.
+
+### Working at more than one company
+
+In the employee form, ticking a company under **Also works at** lets you set a separate **job title** and **supervisor** for that company. Leave either blank to use the main company's details.
+
+The directory follows the selected company tab. Job titles, "Reports to" and the org chart use that company's details where they exist, and the main company's otherwise.
+
+### Staff Directory views
+
+- **Cards** for browsing.
+- **List** for scanning.
+- **Org chart** showing reporting lines for the selected company. Teams can be collapsed.
+
 ### Who can see Employee Management
 
 Access is decided by **job title**. Anyone whose title contains one of the listed words or phrases gets access. The defaults are *Chief, Director, Head of, Founder, Leadership, Human Resources* and *HR*.
@@ -88,7 +113,8 @@ Everything lives in `/var/lib/hn-staff-portal`:
 | Path              | Contents                                                        |
 |-------------------|-----------------------------------------------------------------|
 | `people.json`     | Employees and login accounts. Passwords are stored as scrypt hashes. |
-| `settings.json`   | Access rules.                                                   |
+| `settings.json`   | Access rules, the system owner and the system PIN (hashed).     |
+| `audit.log`       | System panel activity log.                                      |
 | `avatars/`        | Profile pictures.                                               |
 
 To back it up:

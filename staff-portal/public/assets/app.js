@@ -34,6 +34,12 @@
         key: '<circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/>',
         ban: '<circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 14.14 14.14"/>',
         check: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/>',
+        grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+        list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+        tree: '<rect x="9" y="2" width="6" height="5" rx="1"/><rect x="2" y="17" width="6" height="5" rx="1"/><rect x="16" y="17" width="6" height="5" rx="1"/><path d="M12 7v5M5 17v-2.5a1.5 1.5 0 0 1 1.5-1.5h11a1.5 1.5 0 0 1 1.5 1.5V17"/>',
+        login: '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5M15 12H3"/>',
+        power: '<path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><path d="M12 2v10"/>',
+        activity: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
         building: '<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M16 6h.01M12 6h.01M12 10h.01M12 14h.01M16 10h.01M16 14h.01M8 10h.01M8 14h.01"/>',
     };
 
@@ -250,6 +256,7 @@
             '</div><div class="mh-email">' + esc(me.username) + "</div></div></div>" +
             '<div class="menu-sep"></div>' +
             '<a class="menu-item compact" role="menuitem" href="/settings" data-link>' + icon("user") + "<span>Profile &amp; settings</span></a>" +
+            (me.isOwner && !me.impersonatedBy ? '<a class="menu-item compact" role="menuitem" href="/system" data-link>' + icon("shield") + "<span>System admin panel</span></a>" : "") +
             '<a class="menu-item compact" role="menuitem" href="/settings#password" data-link>' + icon("lock") + "<span>Change password</span></a>" +
             '<div class="menu-sep"></div>' +
             '<button type="button" class="menu-item compact danger" role="menuitem" data-action="logout">' + icon("logout") + "<span>Sign out</span></button>" +
@@ -257,6 +264,14 @@
 
         $("#nav-toggle").innerHTML = icon("menu");
         highlightNav();
+
+        const banner = $("#imp-banner");
+        banner.hidden = !me.impersonatedBy;
+        if (me.impersonatedBy) {
+            banner.innerHTML = '<div class="imp-inner">' + icon("login") + "<span>You're logged in as <strong>" + esc(me.displayName) + "</strong> (" + esc(me.username) +
+                "). Everything you do is recorded as them.</span>" +
+                '<button type="button" class="btn btn-small btn-light" data-action="stop-impersonating">Return to my account</button></div>';
+        }
     }
 
     function highlightNav() {
@@ -319,6 +334,12 @@
             return;
         }
 
+        if (e.target.closest("[data-action='stop-impersonating']")) {
+            api("/api/stop-impersonating", {}).then(function (r) { window.location.href = r.redirect || "/home"; })
+                .catch(function (err) { toast(err.message); });
+            return;
+        }
+
         if (e.target.closest("[data-action='logout']")) {
             api("/api/logout", {}).catch(function () {}).then(function () { window.location.href = "/login"; });
             return;
@@ -347,6 +368,7 @@
         "/directory": viewDirectory,
         "/employees": viewEmployees,
         "/settings": viewSettings,
+        "/system": viewSystem,
     };
 
     function navigate(href, replace) {
@@ -361,7 +383,10 @@
         const seq = ++renderSeq;
         closeMenus();
         closeModal();
-        const root = $("#view");
+        // A fresh container each time, so listeners from the previous page don't pile up.
+        const old = $("#view");
+        const root = old.cloneNode(false);
+        old.replaceWith(root);
 
         if (state.me.passwordTemporary) {
             document.body.classList.add("locked");
@@ -373,6 +398,7 @@
         let view = ROUTES[path];
         if (!view) return navigate("/home", true);
         if (path === "/employees" && !state.me.canManage) view = viewNoAccess;
+        if (path === "/system" && (!state.me.isOwner || state.me.impersonatedBy)) view = viewNoSystemAccess;
 
         highlightNav();
         root.innerHTML = '<div class="loading">Loading…</div>';
@@ -504,12 +530,9 @@
             '<aside class="side-col">' +
             '<section class="panel"><h2 class="section-title">Your details</h2>' +
             '<div class="me-card">' + avatar(me, "lg") + '<div><div class="me-name">' + esc(me.displayName) + "</div>" +
-            '<div class="muted small">' + esc(me.jobTitle) + "</div></div></div>" +
-            '<dl class="facts">' +
-            "<dt>Company</dt><dd>" + esc(me.company) + "</dd>" +
-            (me.supervisor ? "<dt>Reports to</dt><dd>" + esc(me.supervisor.displayName) + "</dd>" : "") +
-            (primaryEmail(me) ? "<dt>Email</dt><dd>" + esc(primaryEmail(me)) + "</dd>" : "") +
-            "</dl>" +
+            '<div class="muted small">' + esc(me.jobTitle) + "</div>" + (me.isOwner ? '<span class="badge badge-owner">System owner</span>' : "") + "</div></div>" +
+            rolesHtml(me) +
+            (primaryEmail(me) ? '<dl class="facts"><dt>Email</dt><dd>' + esc(primaryEmail(me)) + "</dd></dl>" : "") +
             '<a class="btn btn-ghost btn-block-sm" href="/settings" data-link>Edit profile</a></section>' +
             '<section class="panel"><h2 class="section-title">Latest news</h2>' +
             '<article class="news"><h3>Welcome to the new Staff Portal</h3>' +
@@ -521,66 +544,238 @@
 
     // ================= Staff directory =================
 
+    // The job title and supervisor someone has at a given company. Anything not set for that
+    // company comes from their main company.
+    function roleFor(p, company) {
+        if (company && company !== p.company) {
+            const r = (p.otherRoles || []).find(function (x) { return x.company === company; });
+            if (r) return { company: company, jobTitle: r.jobTitle || p.jobTitle, supervisorId: r.supervisorId || p.supervisorId, main: false };
+        }
+        return { company: p.company, jobTitle: p.jobTitle, supervisorId: p.supervisorId, main: true };
+    }
+
+    function worksAt(p, company) {
+        return p.company === company || (p.otherRoles || []).some(function (r) { return r.company === company; });
+    }
+
+    function companiesOf(p) {
+        return [p.company].concat((p.otherRoles || []).map(function (r) { return r.company; }));
+    }
+
+    function ownerBadge(p) {
+        return p.isOwner ? ' <span class="badge badge-owner">System owner</span>' : "";
+    }
+
+    // The signed-in user's roles: job title and supervisor at each company they work for.
+    function rolesHtml(me) {
+        return '<div class="role-list compact">' + (me.roles || []).map(function (r) {
+            return '<div class="role-item"><div><div class="role-company">' + esc(r.company) + (r.main && me.roles.length > 1 ? ' <span class="badge">Main</span>' : "") + "</div>" +
+                '<div class="small">' + esc(r.jobTitle) + '</div></div><div class="small muted">' + (r.supervisor ? "Reports to " + esc(r.supervisor.displayName) : "No supervisor") + "</div></div>";
+        }).join("") + "</div>";
+    }
+
+    const DIR_VIEWS = [
+        { key: "grid", label: "Cards", icon: "grid" },
+        { key: "list", label: "List", icon: "list" },
+        { key: "tree", label: "Org chart", icon: "tree" },
+    ];
+
+    function savedPref(key, fallback) {
+        try { return localStorage.getItem(key) || fallback; } catch (e) { return fallback; }
+    }
+    function savePref(key, value) {
+        try { localStorage.setItem(key, value); } catch (e) { /* ignore */ }
+    }
+
     async function viewDirectory(root, current) {
         const data = await api("/api/directory");
         if (!current()) return;
         const people = data.people.sort(function (a, b) { return a.displayName.localeCompare(b.displayName); });
+        const byId = {};
+        people.forEach(function (p) { byId[p.id] = p; });
+        let view = savedPref("hn-dir-view", "grid");
+        if (!DIR_VIEWS.some(function (v) { return v.key === view; })) view = "grid";
+        const collapsed = {};
 
         root.innerHTML =
-            '<div class="page-head"><div><h1>Staff Directory</h1><p class="muted">Find and contact colleagues across HN Group.</p></div></div>' +
+            '<div class="page-head"><div><h1>Staff Directory</h1><p class="muted">Find colleagues and see how teams fit together across HN Group.</p></div>' +
+            '<div class="segmented" role="tablist" aria-label="Directory view">' +
+            DIR_VIEWS.map(function (v) {
+                return '<button type="button" role="tab" data-view="' + v.key + '">' + icon(v.icon) + "<span>" + v.label + "</span></button>";
+            }).join("") + "</div></div>" +
+            '<div class="company-tabs" id="dir-companies" role="tablist" aria-label="Company">' +
+            '<button type="button" data-company="">All companies <span class="tab-count">' + people.length + "</span></button>" +
+            state.meta.companies.map(function (c) {
+                const n = people.filter(function (p) { return worksAt(p, c); }).length;
+                return '<button type="button" data-company="' + esc(c) + '">' + esc(c) + ' <span class="tab-count">' + n + "</span></button>";
+            }).join("") + "</div>" +
             '<div class="toolbar">' +
             '<label class="search">' + icon("search") + '<input type="search" id="dir-search" placeholder="Search by name, job title, email or location" aria-label="Search"></label>' +
-            '<select id="dir-company" aria-label="Filter by company"><option value="">All companies</option>' +
-            state.meta.companies.map(function (c) { return '<option value="' + esc(c) + '">' + esc(c) + "</option>"; }).join("") + "</select>" +
             "</div>" +
             '<p class="muted small" id="dir-count"></p>' +
-            '<div class="people-grid" id="dir-grid"></div>';
+            '<div id="dir-body"></div>';
 
-        function draw() {
+        let company = "";
+
+        function matches(p) {
             const q = $("#dir-search").value.trim().toLowerCase();
-            const company = $("#dir-company").value;
-            const list = people.filter(function (p) {
-                if (company && p.company !== company && p.otherCompanies.indexOf(company) === -1) return false;
-                if (!q) return true;
-                return [p.displayName, p.firstName, p.lastName, p.jobTitle, p.company, p.location]
-                    .concat(p.emails.map(function (e) { return e.address; }))
-                    .join(" ").toLowerCase().indexOf(q) !== -1;
-            });
-            $("#dir-count").textContent = list.length + (list.length === 1 ? " person" : " people");
-            $("#dir-grid").innerHTML = list.length
-                ? list.map(function (p) {
-                    return '<button type="button" class="person-card" data-person="' + p.id + '">' + avatar(p, "lg") +
-                        '<span class="pc-name">' + esc(p.displayName) + "</span>" +
-                        '<span class="pc-title">' + esc(p.jobTitle) + "</span>" +
-                        '<span class="pc-company">' + esc(p.company) + "</span>" +
-                        '<span class="pc-meta">' + icon("clock") + clock(p.timezone, "short") + " · " + esc(p.location || tzCity(p.timezone)) + "</span>" +
-                        "</button>";
-                }).join("")
-                : '<div class="empty">' + (people.length ? "No one matches your search." : "No staff have been added yet.") + "</div>";
+            if (company && !worksAt(p, company)) return false;
+            if (!q) return true;
+            const role = roleFor(p, company);
+            return [p.displayName, p.firstName, p.lastName, role.jobTitle, p.jobTitle, p.location]
+                .concat(companiesOf(p))
+                .concat(p.emails.map(function (e) { return e.address; }))
+                .join(" ").toLowerCase().indexOf(q) !== -1;
         }
 
-        $("#dir-search").addEventListener("input", draw);
-        $("#dir-company").addEventListener("change", draw);
-        $("#dir-grid").addEventListener("click", function (e) {
-            const card = e.target.closest("[data-person]");
-            if (card) openPersonModal(card.dataset.person, people);
+        function card(p) {
+            const role = roleFor(p, company);
+            const sup = byId[role.supervisorId];
+            return '<button type="button" class="person-card" data-person="' + p.id + '">' + avatar(p, "lg") +
+                '<span class="pc-name">' + esc(p.displayName) + "</span>" +
+                '<span class="pc-title">' + esc(role.jobTitle) + "</span>" +
+                '<span class="pc-company">' + esc(role.company) +
+                (!company && p.otherRoles && p.otherRoles.length ? ' <span class="count-pill">+' + p.otherRoles.length + "</span>" : "") + "</span>" +
+                (sup ? '<span class="pc-reports">Reports to ' + esc(sup.displayName) + "</span>" : "") +
+                '<span class="pc-meta">' + icon("clock") + clock(p.timezone, "short") + " · " + esc(p.location || tzCity(p.timezone)) + "</span>" +
+                "</button>";
+        }
+
+        function row(p) {
+            const role = roleFor(p, company);
+            const sup = byId[role.supervisorId];
+            const email = primaryEmail(p);
+            return '<tr data-person="' + p.id + '" tabindex="0">' +
+                '<td><div class="emp-cell">' + avatar(p, "sm") + '<div><div class="emp-name">' + esc(p.displayName) + ownerBadge(p) + '</div><div class="muted small">' + esc(role.jobTitle) + "</div></div></div></td>" +
+                '<td data-label="Company">' + esc(role.company) + "</td>" +
+                '<td data-label="Reports to">' + (sup ? esc(sup.displayName) : '<span class="muted">—</span>') + "</td>" +
+                '<td data-label="Email">' + (email ? '<a href="mailto:' + esc(email) + '" data-stop>' + esc(email) + "</a>" : "") + "</td>" +
+                '<td data-label="Local time" class="nowrap">' + clock(p.timezone, "short") + ' <span class="muted small">' + esc(p.location || tzCity(p.timezone)) + "</span></td>" +
+                "</tr>";
+        }
+
+        // Builds the reporting tree for the selected company (or main roles for "All companies").
+        function drawTree(list) {
+            const inSet = {};
+            list.forEach(function (p) { inSet[p.id] = true; });
+            const kids = {};
+            const roots = [];
+            list.forEach(function (p) {
+                const sup = roleFor(p, company).supervisorId;
+                if (sup && inSet[sup] && sup !== p.id) (kids[sup] = kids[sup] || []).push(p);
+                else roots.push(p);
+            });
+            // Anyone caught in a reporting loop can't be reached from the top, so show them as a root.
+            const reached = {};
+            (function reach(list) {
+                list.forEach(function (p) {
+                    if (reached[p.id]) return;
+                    reached[p.id] = true;
+                    reach(kids[p.id] || []);
+                });
+            })(roots);
+            list.forEach(function (p) {
+                if (!reached[p.id]) {
+                    roots.push(p);
+                    (function reach(x) {
+                        if (reached[x.id]) return;
+                        reached[x.id] = true;
+                        (kids[x.id] || []).forEach(reach);
+                    })(p);
+                }
+            });
+            const placed = {};
+            function node(p, depth) {
+                if (placed[p.id] || depth > 50) return "";
+                placed[p.id] = true;
+                const role = roleFor(p, company);
+                const children = (kids[p.id] || []).filter(function (c) { return !placed[c.id]; });
+                const isCollapsed = collapsed[p.id];
+                const childHtml = children.length && !isCollapsed ? "<ul>" + children.map(function (c) { return node(c, depth + 1); }).join("") + "</ul>" : "";
+                return "<li>" +
+                    '<div class="org-node' + (p.isOwner ? " is-owner" : "") + '">' +
+                    '<button type="button" class="org-card" data-person="' + p.id + '">' + avatar(p, "md") +
+                    '<span class="org-text"><span class="org-name">' + esc(p.displayName) + '</span><span class="org-title">' + esc(role.jobTitle) + "</span>" +
+                    (company ? "" : '<span class="org-company">' + esc(role.company) + "</span>") + "</span></button>" +
+                    (children.length ? '<button type="button" class="org-toggle" data-toggle="' + p.id + '" aria-label="' + (isCollapsed ? "Show" : "Hide") + " reports of " + esc(p.displayName) + '">' +
+                        (isCollapsed ? "+" + children.length : "−") + "</button>" : "") +
+                    "</div>" + childHtml + "</li>";
+            }
+            const html = roots.map(function (r) { return node(r, 0); }).join("");
+            return '<div class="org-hint muted small">' + icon("tree") + "Showing reporting lines" + (company ? " within " + esc(company) : " for each person's main company") +
+                ". Click a person for details, or −/+ to collapse a team.</div>" +
+                '<div class="org-scroll"><div class="org"><ul class="org-roots">' + html + "</ul></div></div>";
+        }
+
+        function draw() {
+            $$("[data-view]", root).forEach(function (b) {
+                b.classList.toggle("active", b.dataset.view === view);
+                b.setAttribute("aria-selected", String(b.dataset.view === view));
+            });
+            $$("#dir-companies [data-company]").forEach(function (b) { b.classList.toggle("active", b.dataset.company === company); });
+
+            const list = people.filter(matches);
+            $("#dir-count").textContent = list.length + (list.length === 1 ? " person" : " people") + (company ? " at " + company : "");
+            const body = $("#dir-body");
+            if (!list.length) {
+                body.innerHTML = '<div class="empty">' + (people.length ? "No one matches your search." : "No staff have been added yet.") + "</div>";
+                return;
+            }
+            if (view === "list") {
+                body.innerHTML = '<div class="table-card"><table class="table table-click"><thead><tr><th>Name</th><th>Company</th><th>Reports to</th><th>Email</th><th>Local time</th></tr></thead><tbody>' +
+                    list.map(row).join("") + "</tbody></table></div>";
+            } else if (view === "tree") {
+                body.innerHTML = drawTree(list);
+                const scroller = $(".org-scroll", body);
+                scroller.scrollLeft = (scroller.scrollWidth - scroller.clientWidth) / 2;
+            } else {
+                body.innerHTML = '<div class="people-grid">' + list.map(card).join("") + "</div>";
+            }
+        }
+
+        root.addEventListener("click", function (e) {
+            const v = e.target.closest("[data-view]");
+            if (v) { view = v.dataset.view; savePref("hn-dir-view", view); return draw(); }
+            const c = e.target.closest("[data-company]");
+            if (c) { company = c.dataset.company; return draw(); }
+            const t = e.target.closest("[data-toggle]");
+            if (t) { collapsed[t.dataset.toggle] = !collapsed[t.dataset.toggle]; return draw(); }
+            if (e.target.closest("[data-stop]")) return;
+            const p = e.target.closest("[data-person]");
+            if (p) openPersonModal(p.dataset.person, people, company);
         });
+        root.addEventListener("keydown", function (e) {
+            const tr = e.target.closest("tr[data-person]");
+            if (tr && e.key === "Enter") openPersonModal(tr.dataset.person, people, company);
+        });
+        $("#dir-search").addEventListener("input", draw);
         draw();
     }
 
-    function openPersonModal(id, people) {
+    // Shows someone's profile. `company` is the company being looked at (e.g. the directory
+    // filter); their title and supervisor for that company are shown first when it applies.
+    function openPersonModal(id, people, company) {
         const p = people.find(function (x) { return x.id === id; });
         if (!p) return;
-        const supervisor = people.find(function (x) { return x.id === p.supervisorId; });
-        const reports = people.filter(function (x) { return x.supervisorId === p.id; });
+        const byId = {};
+        people.forEach(function (x) { byId[x.id] = x; });
+        const ctx = company && worksAt(p, company) ? company : p.company;
+        const role = roleFor(p, ctx);
+        const supervisor = byId[role.supervisorId];
+        const reports = people.filter(function (x) {
+            if (company) return worksAt(x, company) && roleFor(x, company).supervisorId === p.id;
+            return companiesOf(x).some(function (c) { return roleFor(x, c).supervisorId === p.id; });
+        });
         const personLink = function (x) {
-            return '<button type="button" class="person-chip" data-person="' + x.id + '">' + avatar(x, "xs") + "<span>" + esc(x.displayName) + "</span></button>";
+            return '<button type="button" class="person-chip" data-person="' + x.id + '">' + avatar(x, "xs") + "<span>" + esc(x.displayName) +
+                '<span class="muted small"> · ' + esc(roleFor(x, ctx).jobTitle) + "</span></span></button>";
         };
+        const allRoles = companiesOf(p).map(function (c) { return roleFor(p, c); });
 
         const m = openModal(
             '<div class="profile-head">' + avatar(p, "xl") + '<div><h2 class="modal-title">' + esc(p.displayName) + "</h2>" +
-            '<div class="muted">' + esc(p.jobTitle) + "</div>" +
-            '<div class="chips">' + [p.company].concat(p.otherCompanies).map(function (c) { return '<span class="chip">' + esc(c) + "</span>"; }).join("") + "</div></div></div>" +
+            '<div class="muted">' + esc(role.jobTitle) + " · " + esc(role.company) + "</div>" +
+            (p.isOwner ? '<div class="chips"><span class="badge badge-owner">System owner</span></div>' : "") + "</div></div>" +
             '<div class="profile-body">' +
             '<div class="detail-row">' + icon("mail") + "<div>" + p.emails.map(function (e) {
                 return '<a href="mailto:' + esc(e.address) + '">' + esc(e.address) + "</a>";
@@ -588,13 +783,22 @@
             (p.phone ? '<div class="detail-row">' + icon("phone") + '<div><a href="tel:' + esc(p.phone.replace(/\s+/g, "")) + '">' + esc(p.phone) + "</a></div></div>" : "") +
             '<div class="detail-row">' + icon("pin") + "<div>" + esc(p.location || tzCity(p.timezone)) +
             '<div class="muted small">' + clock(p.timezone, "short") + " local time · " + esc(tzDifference(p.timezone)) + "</div></div></div>" +
-            (supervisor ? '<h3 class="detail-head">Reports to</h3><div class="chips">' + personLink(supervisor) + "</div>" : "") +
-            (reports.length ? '<h3 class="detail-head">Direct reports</h3><div class="chips">' + reports.map(personLink).join("") + "</div>" : "") +
+            '<h3 class="detail-head">Reports to' + (allRoles.length > 1 ? " at " + esc(role.company) : "") + "</h3>" +
+            (supervisor ? '<div class="chips">' + personLink(supervisor) + "</div>" : '<p class="muted small">No one</p>') +
+            (reports.length ? '<h3 class="detail-head">Direct reports' + (company ? " at " + esc(company) : "") + '</h3><div class="chips">' + reports.map(personLink).join("") + "</div>" : "") +
+            (allRoles.length > 1
+                ? '<h3 class="detail-head">Roles across the group</h3><div class="role-list">' + allRoles.map(function (r) {
+                    const s = byId[r.supervisorId];
+                    return '<div class="role-item' + (r.company === role.company ? " current" : "") + '"><div><div class="role-company">' + esc(r.company) +
+                        (r.main ? ' <span class="badge">Main</span>' : "") + '</div><div class="small">' + esc(r.jobTitle) + "</div></div>" +
+                        '<div class="small muted">' + (s ? "Reports to " + esc(s.displayName) : "No supervisor") + "</div></div>";
+                }).join("") + "</div>"
+                : "") +
             "</div>"
         );
         m.el.addEventListener("click", function (e) {
             const chip = e.target.closest("[data-person]");
-            if (chip) openPersonModal(chip.dataset.person, people);
+            if (chip) openPersonModal(chip.dataset.person, people, company);
         });
     }
 
@@ -632,10 +836,15 @@
             $("#emp-body").innerHTML = list.length ? list.map(function (e) {
                 const sup = byId[e.supervisorId];
                 const isMe = e.id === state.me.id;
+                const locked = e.isOwner && !state.me.isOwner;
                 const actions = [
                     '<button type="button" class="menu-item compact" data-act="edit">' + icon("edit") + "<span>Edit details</span></button>",
                 ];
-                if (!isMe) {
+                if (locked && !e.account) {
+                    actions.length = 0;
+                    actions.push('<button type="button" class="menu-item compact" data-act="account">' + icon("key") + "<span>Create login account</span></button>");
+                }
+                if (!isMe && !locked) {
                     actions.push(e.account
                         ? '<button type="button" class="menu-item compact" data-act="reset">' + icon("key") + "<span>Reset password</span></button>"
                         : '<button type="button" class="menu-item compact" data-act="account">' + icon("key") + "<span>Create login account</span></button>");
@@ -647,14 +856,15 @@
                     actions.push('<div class="menu-sep"></div><button type="button" class="menu-item compact danger" data-act="delete">' + icon("trash") + "<span>Delete employee</span></button>");
                 }
                 return '<tr data-id="' + e.id + '">' +
-                    '<td><div class="emp-cell">' + avatar(e, "sm") + '<div><div class="emp-name">' + esc(e.displayName) + (isMe ? ' <span class="muted small">(you)</span>' : "") +
+                    '<td><div class="emp-cell">' + avatar(e, "sm") + '<div><div class="emp-name">' + esc(e.displayName) + ownerBadge(e) + (isMe ? ' <span class="muted small">(you)</span>' : "") +
                     '</div><div class="muted small">' + esc(e.loginUsername) + (e.emails.length > 1 ? ' <span class="count-pill">+' + (e.emails.length - 1) + "</span>" : "") + "</div></div></div></td>" +
                     '<td data-label="Job title">' + esc(e.jobTitle) + "</td>" +
-                    '<td data-label="Company">' + esc(e.company) + (e.otherCompanies.length ? ' <span class="count-pill" title="' + esc(e.otherCompanies.join(", ")) + '">+' + e.otherCompanies.length + "</span>" : "") + "</td>" +
+                    '<td data-label="Company">' + esc(e.company) + (e.otherRoles.length ? ' <span class="count-pill" title="' + esc(e.otherRoles.map(function (r) { return r.company + (r.jobTitle ? " — " + r.jobTitle : ""); }).join(", ")) + '">+' + e.otherRoles.length + "</span>" : "") + "</td>" +
                     '<td data-label="Reports to">' + (sup ? esc(sup.displayName) : '<span class="muted">—</span>') + "</td>" +
                     '<td data-label="Login">' + accountBadge(e) + "</td>" +
+                    (locked && e.account ? '<td class="col-actions"><span class="icon-btn" title="Only the system owner can change this record">' + icon("lock") + "</span></td></tr>" :
                     '<td class="col-actions"><div class="nav-item row-menu"><button type="button" class="icon-btn" data-menu aria-haspopup="true" aria-expanded="false" aria-label="Actions for ' + esc(e.displayName) + '">' + icon("more") + "</button>" +
-                    '<div class="menu menu-right menu-row" role="menu" hidden>' + actions.join("") + "</div></div></td></tr>";
+                    '<div class="menu menu-right menu-row" role="menu" hidden>' + actions.join("") + "</div></div></td></tr>");
             }).join("") : '<tr><td colspan="6"><div class="empty">' +
                 (employees.length ? "No employees match your search." : 'No employees yet. Click <strong>Add employee</strong> to add the first one.') + "</div></td></tr>";
         }
@@ -730,6 +940,14 @@
 
         const v = emp || {};
         const supervisors = employees.filter(function (p) { return !emp || p.id !== emp.id; });
+        // Job title and supervisor for each extra company; blank means "same as main company".
+        const roleState = {};
+        (v.otherRoles || []).forEach(function (r) { roleState[r.company] = { jobTitle: r.jobTitle || "", supervisorId: r.supervisorId || "" }; });
+        const supervisorOptions = function (selected, emptyLabel) {
+            return '<option value="">' + esc(emptyLabel) + "</option>" + supervisors.map(function (p) {
+                return '<option value="' + p.id + '"' + (p.id === selected ? " selected" : "") + ">" + esc(p.displayName) + " — " + esc(p.jobTitle) + "</option>";
+            }).join("");
+        };
         const companyOptions = meta.companies.map(function (c) {
             return '<option value="' + esc(c) + '"' + (c === v.company ? " selected" : "") + ">" + esc(c) + "</option>";
         }).join("");
@@ -757,8 +975,9 @@
             }).join("") + "</select></div></div>" +
             '<label>Also works at <span class="muted small">(optional)</span></label><div class="check-chips" id="f-other">' +
             meta.companies.map(function (c) {
-                return '<label class="check-chip"><input type="checkbox" value="' + esc(c) + '"' + ((v.otherCompanies || []).indexOf(c) !== -1 ? " checked" : "") + "><span>" + esc(c) + "</span></label>";
+                return '<label class="check-chip"><input type="checkbox" value="' + esc(c) + '"' + (roleState[c] ? " checked" : "") + "><span>" + esc(c) + "</span></label>";
             }).join("") + "</div>" +
+            '<div id="f-roles"></div>' +
             "</fieldset>" +
 
             '<fieldset><legend>Email addresses</legend>' +
@@ -791,8 +1010,32 @@
                 cb.disabled = own;
                 if (own) cb.checked = false;
                 cb.parentNode.classList.toggle("disabled", own);
+                if (cb.checked && !roleState[cb.value]) roleState[cb.value] = { jobTitle: "", supervisorId: "" };
+                if (!cb.checked) delete roleState[cb.value];
             });
+            drawRoles();
         }
+
+        function drawRoles() {
+            const list = meta.companies.filter(function (c) { return roleState[c]; });
+            f("f-roles").innerHTML = list.map(function (c) {
+                const r = roleState[c];
+                return '<div class="role-row" data-company="' + esc(c) + '"><div class="role-row-head">' + icon("building") + esc(c) + "</div>" +
+                    '<div class="grid-2"><div><label>Job title at ' + esc(c) + '</label><input type="text" class="role-title" maxlength="100" value="' + esc(r.jobTitle) +
+                    '" placeholder="Same as main job title"></div>' +
+                    "<div><label>Supervisor at " + esc(c) + '</label><select class="role-sup">' + supervisorOptions(r.supervisorId, "Same as main supervisor") + "</select></div></div></div>";
+            }).join("");
+        }
+
+        f("f-roles").addEventListener("input", function (e) {
+            const row = e.target.closest(".role-row");
+            if (row && e.target.classList.contains("role-title")) roleState[row.dataset.company].jobTitle = e.target.value;
+        });
+        f("f-roles").addEventListener("change", function (e) {
+            const row = e.target.closest(".role-row");
+            if (row && e.target.classList.contains("role-sup")) roleState[row.dataset.company].supervisorId = e.target.value;
+        });
+        f("f-other").addEventListener("change", syncOtherCompanies);
 
         function domainOptions(selected) {
             return meta.domains.map(function (d) {
@@ -930,7 +1173,9 @@
                 jobTitle: f("f-title").value,
                 company: f("f-company").value,
                 supervisorId: f("f-supervisor").value || null,
-                otherCompanies: $$("#f-other input:checked", el).map(function (cb) { return cb.value; }),
+                otherRoles: meta.companies.filter(function (c) { return roleState[c] && c !== f("f-company").value; }).map(function (c) {
+                    return { company: c, jobTitle: roleState[c].jobTitle, supervisorId: roleState[c].supervisorId || null };
+                }),
                 emails: rows.map(function (r) { return { local: r.local, domain: r.domain, auto: r.auto, primary: r.primary }; }),
                 location: f("f-location").value,
                 timezone: f("f-tz").value,
@@ -1067,7 +1312,6 @@
 
     function viewSettings(root) {
         const me = state.me;
-        const companies = [me.company].concat(me.otherCompanies || []);
 
         root.innerHTML =
             '<div class="page-head"><div><h1>Profile &amp; settings</h1><p class="muted">Manage how you appear to colleagues across HN Group.</p></div></div>' +
@@ -1094,9 +1338,7 @@
             '<section class="panel"><h2 class="panel-title">Employment details</h2>' +
             '<dl class="facts">' +
             (me.system ? "" : "<dt>Name</dt><dd>" + esc(me.firstName + " " + me.lastName) + "</dd>") +
-            "<dt>Job title</dt><dd>" + esc(me.jobTitle) + "</dd>" +
-            "<dt>Company</dt><dd>" + companies.map(esc).join("<br>") + "</dd>" +
-            "<dt>Reports to</dt><dd>" + (me.supervisor ? esc(me.supervisor.displayName) : "—") + "</dd>" +
+            "<dt>Roles</dt><dd>" + rolesHtml(me) + "</dd>" +
             "<dt>Sign-in</dt><dd>" + esc(me.username) + "</dd>" +
             (me.emails.length ? "<dt>Email</dt><dd>" + me.emails.map(function (e) {
                 return esc(e.address) + (e.primary ? ' <span class="badge badge-grey">Login</span>' : "");
@@ -1176,6 +1418,202 @@
         });
     }
 
+    // ================= System admin panel (owner only) =================
+
+    function viewNoSystemAccess(root) {
+        root.innerHTML = '<div class="empty-page">' + icon("lock", "big") + "<h1>No access</h1>" +
+            '<p class="muted">The system admin panel is only available to the system owner.</p>' +
+            '<a class="btn btn-primary" href="/home" data-link>Back to home</a></div>';
+    }
+
+    function timeAgo(iso) {
+        const secs = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+        if (secs < 60) return "just now";
+        const mins = Math.round(secs / 60);
+        if (mins < 60) return mins + " min ago";
+        const hrs = Math.round(mins / 60);
+        if (hrs < 24) return hrs + (hrs === 1 ? " hour ago" : " hours ago");
+        return new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    }
+
+    function deviceName(ua) {
+        ua = ua || "";
+        const browser = /Edg\//.test(ua) ? "Edge" : /Chrome\//.test(ua) ? "Chrome" : /Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : "Browser";
+        const os = /iPhone|iPad/.test(ua) ? "iOS" : /Android/.test(ua) ? "Android" : /Mac OS X/.test(ua) ? "macOS" : /Windows/.test(ua) ? "Windows" : /Linux/.test(ua) ? "Linux" : "";
+        return browser + (os ? " on " + os : "");
+    }
+
+    const AUDIT_LABELS = {
+        "panel-unlocked": "Unlocked the system panel",
+        "pin-failed": "Entered a wrong system PIN",
+        "pin-changed": "Changed the system PIN",
+        "logged-in-as": "Logged in as",
+        "returned-from": "Returned from",
+        "session-ended": "Ended a session for",
+        "force-logout-others": "Logged out everyone else",
+        "force-logout-all": "Logged out everyone",
+    };
+
+    function viewSystemPin(root) {
+        root.innerHTML =
+            '<div class="force-wrap"><div class="force-card">' +
+            '<div class="success-mark">' + icon("shield") + "</div>" +
+            '<h1 class="center">System admin panel</h1>' +
+            '<p class="muted center">Enter the master system PIN to continue.</p>' +
+            '<form id="pin-form" novalidate>' +
+            '<input type="password" id="pin" class="pin-input" inputmode="numeric" autocomplete="off" maxlength="8" aria-label="System PIN" autofocus>' +
+            '<div class="form-error" id="pin-error" hidden></div>' +
+            '<button type="submit" class="btn btn-primary btn-block" id="pin-go">Unlock</button>' +
+            "</form></div></div>";
+        $("#pin").addEventListener("input", function (e) { e.target.value = e.target.value.replace(/\D/g, ""); });
+        $("#pin-form").addEventListener("submit", async function (e) {
+            e.preventDefault();
+            formError($("#pin-error"), "");
+            $("#pin-go").disabled = true;
+            try {
+                await api("/api/system/unlock", { pin: $("#pin").value });
+                render();
+            } catch (err) {
+                formError($("#pin-error"), err.message);
+                $("#pin").value = "";
+                $("#pin").focus();
+                $("#pin-go").disabled = false;
+            }
+        });
+    }
+
+    async function viewSystem(root, current) {
+        let data;
+        try {
+            const res = await fetch("/api/system/overview", { headers: { Accept: "application/json" } });
+            const body = await res.json().catch(function () { return {}; });
+            if (res.status === 403 && body.code === "PIN_REQUIRED") return viewSystemPin(root);
+            if (res.status === 401) { window.location.href = "/login"; return; }
+            if (!res.ok) throw new Error(body.error || "Couldn't load the system panel.");
+            data = body;
+        } catch (err) {
+            root.innerHTML = '<div class="empty">' + esc(err.message) + "</div>";
+            return;
+        }
+        if (!current()) return;
+
+        const others = data.sessions.filter(function (s) { return !s.current; }).length;
+
+        root.innerHTML =
+            '<div class="page-head"><div><h1>System admin panel</h1><p class="muted">Sessions, user access and security for the whole portal. Every action here is recorded in the activity log.</p></div>' +
+            '<div class="page-actions"><button type="button" class="btn btn-ghost" id="sys-refresh">Refresh</button>' +
+            '<button type="button" class="btn btn-dark" id="sys-lock">' + icon("lock") + "Lock panel</button></div></div>" +
+
+            '<div class="stat-row">' +
+            '<div class="stat"><div class="stat-value">' + data.sessions.length + '</div><div class="stat-label">Active sessions</div></div>' +
+            '<div class="stat"><div class="stat-value">' + new Set(data.sessions.map(function (s) { return s.personId; })).size + '</div><div class="stat-label">People signed in</div></div>' +
+            '<div class="stat"><div class="stat-value">' + data.users.filter(function (u) { return u.account === "active"; }).length + '</div><div class="stat-label">Active logins</div></div>' +
+            "</div>" +
+
+            '<section class="panel sys-section"><div class="panel-head"><h2 class="panel-title">' + icon("power") + 'Active sessions</h2><div class="btn-row">' +
+            '<button type="button" class="btn btn-ghost btn-small" id="sys-logout-others"' + (others ? "" : " disabled") + ">Log out everyone else</button>" +
+            '<button type="button" class="btn btn-danger btn-small" id="sys-logout-all">' + icon("power") + "Force log out everyone</button></div></div>" +
+            '<div class="table-card flat"><table class="table"><thead><tr><th>User</th><th>Device</th><th>IP address</th><th>Signed in</th><th>Last active</th><th class="col-actions"></th></tr></thead><tbody>' +
+            data.sessions.map(function (s) {
+                return "<tr>" +
+                    '<td><div class="emp-cell">' + avatar({ id: s.personId, displayName: s.displayName, avatarUrl: s.avatarUrl }, "sm") +
+                    '<div><div class="emp-name">' + esc(s.displayName) + (s.current ? ' <span class="badge badge-green">This session</span>' : "") + "</div>" +
+                    '<div class="muted small">' + esc(s.username) + (s.impersonatedBy ? " · logged in as by " + esc(s.impersonatedBy) : "") + "</div></div></div></td>" +
+                    '<td data-label="Device">' + esc(deviceName(s.userAgent)) + "</td>" +
+                    '<td data-label="IP address" class="mono small">' + esc(s.ip) + "</td>" +
+                    '<td data-label="Signed in">' + esc(timeAgo(s.createdAt)) + "</td>" +
+                    '<td data-label="Last active">' + esc(timeAgo(s.lastSeen)) + "</td>" +
+                    '<td class="col-actions">' + (s.current ? "" : '<button type="button" class="btn btn-ghost btn-small" data-end="' + s.id + '">End</button>') + "</td></tr>";
+            }).join("") + "</tbody></table></div></section>" +
+
+            '<section class="panel sys-section"><div class="panel-head"><h2 class="panel-title">' + icon("login") + "Log in as</h2></div>" +
+            '<p class="muted small">Open the portal as another user without their password. You\'ll see a banner the whole time, and can return to your own account from it.</p>' +
+            '<label class="search sys-search">' + icon("search") + '<input type="search" id="sys-user-search" placeholder="Search users" aria-label="Search users"></label>' +
+            '<div class="user-pick" id="sys-users"></div></section>' +
+
+            '<div class="settings-grid">' +
+            '<section class="panel"><h2 class="panel-title">' + icon("key") + "Change system PIN</h2>" +
+            '<form id="sys-pin-form" novalidate>' +
+            '<div class="grid-2"><div><label for="sp-current">Current PIN</label><input type="password" id="sp-current" inputmode="numeric" maxlength="8" autocomplete="off"></div>' +
+            '<div><label for="sp-new">New PIN</label><input type="password" id="sp-new" inputmode="numeric" maxlength="8" autocomplete="off"></div></div>' +
+            '<p class="hint">4 to 8 digits.</p><div class="form-error" id="sp-error" hidden></div>' +
+            '<div class="form-actions"><button type="submit" class="btn btn-primary">Update PIN</button></div></form></section>' +
+
+            '<section class="panel"><h2 class="panel-title">' + icon("activity") + "Activity log</h2>" +
+            '<ul class="audit">' + (data.audit.length ? data.audit.map(function (a) {
+                return '<li><div><strong>' + esc(a.actor || "System") + "</strong> " + esc((AUDIT_LABELS[a.action] || a.action).toLowerCase()) +
+                    (a.target ? " <strong>" + esc(a.target) + "</strong>" : "") + (a.detail ? " (" + esc(a.detail) + ")" : "") + "</div>" +
+                    '<div class="muted small">' + esc(timeAgo(a.at)) + (a.ip ? " · " + esc(a.ip) : "") + "</div></li>";
+            }).join("") : '<li class="muted">Nothing yet.</li>') + "</ul></section>" +
+            "</div>";
+
+        function drawUsers() {
+            const q = $("#sys-user-search").value.trim().toLowerCase();
+            const list = data.users.filter(function (u) {
+                return !q || [u.displayName, u.username, u.jobTitle, u.company].join(" ").toLowerCase().indexOf(q) !== -1;
+            });
+            $("#sys-users").innerHTML = list.length ? list.map(function (u) {
+                const can = u.account === "active";
+                return '<div class="user-pick-row"><div class="emp-cell">' + avatar(u, "sm") + '<div><div class="emp-name">' + esc(u.displayName) +
+                    (u.system ? ' <span class="badge">System account</span>' : "") + '</div><div class="muted small">' + esc(u.username || "No email") + " · " + esc(u.jobTitle) + "</div></div></div>" +
+                    (can ? '<button type="button" class="btn btn-ghost btn-small" data-as="' + u.id + '">' + icon("login") + "Log in as</button>"
+                        : '<span class="muted small">' + (u.account === "disabled" ? "Login disabled" : "No login account") + "</span>") + "</div>";
+            }).join("") : '<p class="muted small">No users match.</p>';
+        }
+
+        const reload = function () { render(); };
+        $("#sys-user-search").addEventListener("input", drawUsers);
+        $("#sys-refresh").addEventListener("click", reload);
+        $("#sys-lock").addEventListener("click", async function () {
+            await api("/api/system/lock", {});
+            viewSystemPin(root);
+        });
+
+        root.addEventListener("click", async function handler(e) {
+            if (!document.body.contains(root) || !$("#sys-users")) return root.removeEventListener("click", handler);
+            const end = e.target.closest("[data-end]");
+            const as = e.target.closest("[data-as]");
+            try {
+                if (end) {
+                    await api("/api/system/sessions/" + end.dataset.end + "/end", {});
+                    toast("Session ended.");
+                    reload();
+                } else if (as) {
+                    const u = data.users.find(function (x) { return x.id === as.dataset.as; });
+                    if (!(await confirmDialog({ title: "Log in as " + u.displayName + "?", message: "You'll see the portal exactly as they do. This is recorded in the activity log.", confirmLabel: "Log in as " + u.displayName }))) return;
+                    await api("/api/system/impersonate/" + u.id, {});
+                    window.location.href = "/home";
+                } else if (e.target.closest("#sys-logout-others")) {
+                    if (!(await confirmDialog({ title: "Log out everyone else?", message: "Every other session will be signed out straight away. You'll stay signed in.", confirmLabel: "Log out everyone else", danger: true }))) return;
+                    const r = await api("/api/system/force-logout", { includeSelf: false });
+                    toast(r.count + (r.count === 1 ? " session" : " sessions") + " signed out.");
+                    reload();
+                } else if (e.target.closest("#sys-logout-all")) {
+                    if (!(await confirmDialog({ title: "Force log out everyone?", message: "Every session, including yours, will be disconnected straight away. Everyone will need to sign in again.", confirmLabel: "Log out everyone", danger: true }))) return;
+                    await api("/api/system/force-logout", { includeSelf: true });
+                    window.location.href = "/login";
+                }
+            } catch (err) {
+                if (/PIN/.test(err.message)) return viewSystemPin(root);
+                toast(err.message);
+            }
+        });
+
+        $("#sys-pin-form").addEventListener("submit", async function (e) {
+            e.preventDefault();
+            formError($("#sp-error"), "");
+            try {
+                await api("/api/system/pin", { currentPin: $("#sp-current").value, newPin: $("#sp-new").value });
+                $("#sys-pin-form").reset();
+                toast("System PIN updated.");
+            } catch (err) {
+                formError($("#sp-error"), err.message);
+            }
+        });
+
+        drawUsers();
+    }
+
     // ================= First sign-in =================
 
     function viewForcePassword(root) {
@@ -1229,6 +1667,16 @@
         renderChrome();
         document.body.classList.remove("app-loading");
         render();
+
+        // Notice quickly if this session is ended from the system panel.
+        setInterval(function () {
+            if (document.hidden) return;
+            api("/api/me").then(function (d) {
+                const was = state.me;
+                state.me = d.user;
+                if (!!was.impersonatedBy !== !!d.user.impersonatedBy || was.id !== d.user.id) window.location.reload();
+            }).catch(function () {});
+        }, 30000);
     }
 
     start();

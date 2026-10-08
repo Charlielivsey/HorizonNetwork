@@ -43,6 +43,9 @@ const DEFAULT_MANAGEMENT_TITLES = [
 
 const DEFAULT_TIMEZONE = "Europe/London";
 const ADMIN_USERNAME = "admin@hngroup.org.uk";
+// The system owner has access to everything, including the PIN-protected system panel.
+const DEFAULT_OWNER_EMAIL = "charlie.livsey@hngroup.org.uk";
+const DEFAULT_SYSTEM_PIN = "0103";
 const TIMEZONES = new Set([...Intl.supportedValuesOf("timeZone"), "UTC"]);
 const LOCAL_PART_RE = /^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/;
 const MAX_EMAILS = 10;
@@ -50,6 +53,7 @@ const MAX_EMAILS = 10;
 let dataDir;
 let peopleFile;
 let settingsFile;
+let auditFile;
 let avatarDir;
 let people = [];
 let settings = {};
@@ -77,6 +81,7 @@ function init(dir) {
   dataDir = dir;
   peopleFile = path.join(dataDir, "people.json");
   settingsFile = path.join(dataDir, "settings.json");
+  auditFile = path.join(dataDir, "audit.log");
   avatarDir = path.join(dataDir, "avatars");
   fs.mkdirSync(avatarDir, { recursive: true, mode: 0o700 });
 
@@ -84,7 +89,9 @@ function init(dir) {
   settings = fs.existsSync(settingsFile)
     ? JSON.parse(fs.readFileSync(settingsFile, "utf8"))
     : { managementTitles: DEFAULT_MANAGEMENT_TITLES };
-  if (!fs.existsSync(settingsFile)) writeJson(settingsFile, settings);
+  if (!settings.ownerEmail) settings.ownerEmail = DEFAULT_OWNER_EMAIL;
+  if (!settings.systemPin) settings.systemPin = hashPassword(DEFAULT_SYSTEM_PIN);
+  writeJson(settingsFile, settings);
 }
 
 function loadPeople() {
@@ -97,6 +104,16 @@ function loadPeople() {
       writeJson(peopleFile, list);
       console.log(`Renamed the admin login to ${ADMIN_USERNAME}`);
     }
+    // Extra companies used to be a plain list; they now carry their own job title and supervisor.
+    let migrated = false;
+    for (const p of list) {
+      if (!p.otherRoles) {
+        p.otherRoles = (p.otherCompanies || []).map((company) => ({ company, jobTitle: "", supervisorId: null }));
+        delete p.otherCompanies;
+        migrated = true;
+      }
+    }
+    if (migrated) writeJson(peopleFile, list);
     return list;
   }
 
@@ -136,7 +153,7 @@ function systemPerson(username, displayName, account) {
     displayName: displayName || username,
     jobTitle: "System Administrator",
     company: "HN Group Limited",
-    otherCompanies: [],
+    otherRoles: [],
     supervisorId: null,
     emails: [],
     phone: "",
@@ -245,8 +262,17 @@ function titleGrantsManagement(title) {
   );
 }
 
+function isOwner(person) {
+  const owner = String(settings.ownerEmail || "").toLowerCase();
+  return !!person && !person.system && !!owner && person.emails.some((e) => e.address === owner);
+}
+
+function allJobTitles(person) {
+  return [person.jobTitle].concat((person.otherRoles || []).map((r) => r.jobTitle)).filter(Boolean);
+}
+
 function canManage(person) {
-  return !!person && (person.system || titleGrantsManagement(person.jobTitle));
+  return !!person && (person.system || isOwner(person) || allJobTitles(person).some(titleGrantsManagement));
 }
 
 function avatarUrl(person) {
@@ -261,8 +287,9 @@ function publicView(p) {
     displayName: p.displayName,
     jobTitle: p.jobTitle,
     company: p.company,
-    otherCompanies: p.otherCompanies,
+    otherRoles: p.otherRoles || [],
     supervisorId: p.supervisorId,
+    isOwner: isOwner(p),
     emails: p.emails,
     phone: p.phone,
     location: p.location,
@@ -286,15 +313,33 @@ function manageView(p) {
   };
 }
 
+// Every company someone works at, with the job title and supervisor that apply there.
+// Extra companies fall back to the main job title and supervisor when theirs are left blank.
+function rolesOf(p) {
+  const brief = (id) => {
+    const s = id ? getPerson(id) : null;
+    return s ? { id: s.id, displayName: s.displayName, jobTitle: s.jobTitle } : null;
+  };
+  return [{ company: p.company, jobTitle: p.jobTitle, supervisor: brief(p.supervisorId), main: true }].concat(
+    (p.otherRoles || []).map((r) => ({
+      company: r.company,
+      jobTitle: r.jobTitle || p.jobTitle,
+      supervisor: brief(r.supervisorId || p.supervisorId),
+      main: false,
+    }))
+  );
+}
+
 function meView(p) {
   const supervisor = p.supervisorId ? getPerson(p.supervisorId) : null;
   return {
     ...publicView(p),
+    roles: rolesOf(p),
     system: !!p.system,
     username: loginName(p),
     supervisor: supervisor ? { id: supervisor.id, displayName: supervisor.displayName } : null,
     canManage: canManage(p),
-    isAdmin: !!p.system,
+    isAdmin: !!p.system || isOwner(p),
     mustChangePassword: !!p.account.mustChangePassword,
     passwordTemporary: !!p.account.passwordTemporary,
   };
@@ -392,9 +437,20 @@ function saveEmployee(input, existing) {
   const jobTitle = str(input.jobTitle, 100);
   const company = str(input.company, 60);
   const timezone = TIMEZONES.has(input.timezone) ? input.timezone : DEFAULT_TIMEZONE;
-  const otherCompanies = (Array.isArray(input.otherCompanies) ? input.otherCompanies : []).filter(
-    (c, i, arr) => COMPANIES.includes(c) && c !== company && arr.indexOf(c) === i
-  );
+  const otherRoles = [];
+  for (const r of Array.isArray(input.otherRoles) ? input.otherRoles.slice(0, COMPANIES.length) : []) {
+    const roleCompany = str(r && r.company, 60);
+    if (!COMPANIES.includes(roleCompany) || roleCompany === company || otherRoles.some((x) => x.company === roleCompany)) continue;
+    let roleSupervisor = (r && r.supervisorId) || null;
+    if (roleSupervisor) {
+      const sup = getPerson(roleSupervisor);
+      if (!sup || sup.system || (existing && sup.id === existing.id)) {
+        errors.push(`Choose a valid supervisor for ${roleCompany}.`);
+        roleSupervisor = null;
+      }
+    }
+    otherRoles.push({ company: roleCompany, jobTitle: str(r.jobTitle, 100), supervisorId: roleSupervisor });
+  }
 
   if (!firstName) errors.push("First name is required.");
   if (!lastName) errors.push("Last name is required.");
@@ -404,7 +460,7 @@ function saveEmployee(input, existing) {
   let supervisorId = input.supervisorId || null;
   if (supervisorId) {
     const sup = getPerson(supervisorId);
-    if (!sup || sup.system) errors.push("Choose a valid supervisor.");
+    if (!sup || sup.system || (existing && sup.id === existing.id)) errors.push("Choose a valid supervisor.");
     else if (existing) {
       // Prevent loops (someone supervising their own manager).
       for (let cur = sup, hops = 0; cur && hops < 1000; cur = getPerson(cur.supervisorId), hops++) {
@@ -427,7 +483,7 @@ function saveEmployee(input, existing) {
     displayName,
     jobTitle,
     company,
-    otherCompanies,
+    otherRoles,
     supervisorId,
     emails: resolved.emails.map((e) => ({ address: e.address, primary: e.primary })),
     phone: str(input.phone, 40),
@@ -449,7 +505,10 @@ function saveEmployee(input, existing) {
 
 function deleteEmployee(person) {
   people = people.filter((p) => p.id !== person.id);
-  for (const p of people) if (p.supervisorId === person.id) p.supervisorId = null;
+  for (const p of people) {
+    if (p.supervisorId === person.id) p.supervisorId = null;
+    for (const r of p.otherRoles || []) if (r.supervisorId === person.id) r.supervisorId = null;
+  }
   removeAvatar(person, false);
   savePeople();
 }
@@ -547,6 +606,37 @@ function setManagementTitles(list) {
   writeJson(settingsFile, settings);
 }
 
+// ---------- System panel ----------
+
+function verifySystemPin(pin) {
+  if (typeof pin !== "string" || !settings.systemPin) return false;
+  const { hash } = hashPassword(pin, settings.systemPin.salt);
+  return crypto.timingSafeEqual(Buffer.from(hash, "hex"), Buffer.from(settings.systemPin.hash, "hex"));
+}
+
+function setSystemPin(pin) {
+  if (!/^\d{4,8}$/.test(String(pin || ""))) throw new ValidationError("The PIN must be 4 to 8 digits.");
+  settings.systemPin = hashPassword(pin);
+  writeJson(settingsFile, settings);
+}
+
+function audit(entry) {
+  const line = JSON.stringify({ at: new Date().toISOString(), ...entry });
+  fs.appendFileSync(auditFile, line + "\n", { mode: 0o600 });
+}
+
+function readAudit(limit) {
+  if (!fs.existsSync(auditFile)) return [];
+  const lines = fs.readFileSync(auditFile, "utf8").trim().split("\n").filter(Boolean);
+  return lines.slice(-limit).reverse().map((l) => {
+    try { return JSON.parse(l); } catch { return null; }
+  }).filter(Boolean);
+}
+
+function allPeople() {
+  return people;
+}
+
 module.exports = {
   ADMIN_USERNAME,
   COMPANIES,
@@ -579,4 +669,11 @@ module.exports = {
   avatarFile,
   getManagementTitles,
   setManagementTitles,
+  isOwner,
+  verifySystemPin,
+  setSystemPin,
+  audit,
+  readAudit,
+  allPeople,
+  loginName,
 };
