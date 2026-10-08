@@ -486,6 +486,14 @@ async function routeApi(req, res, pathname, session) {
     if (changed.length) logEvent(req, session, "profile-updated", { detail: changed.join(", ") });
     return sendJson(res, 200, { user: meResponse(session) });
   }
+  if (method === "POST" && pathname === "/api/me/theme") {
+    const { theme } = await readJsonBody(req);
+    if (theme !== me.theme) {
+      store.setTheme(me, theme);
+      logEvent(req, session, "theme-changed", { target: theme });
+    }
+    return sendJson(res, 200, { user: meResponse(session) });
+  }
   if (method === "POST" && pathname === "/api/me/avatar") {
     const { image } = await readJsonBody(req, MAX_AVATAR_BODY_BYTES);
     store.saveAvatar(me, image);

@@ -34,6 +34,8 @@
         key: '<circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/>',
         ban: '<circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 14.14 14.14"/>',
         check: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/>',
+        palette: '<circle cx="13.5" cy="6.5" r="1.5"/><circle cx="17.5" cy="10.5" r="1.5"/><circle cx="8.5" cy="7.5" r="1.5"/><circle cx="6.5" cy="12.5" r="1.5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.93 0 1.5-.75 1.5-1.6 0-.42-.16-.8-.42-1.08-.26-.28-.41-.65-.41-1.07 0-.88.71-1.6 1.6-1.6H16c3.31 0 6-2.69 6-6 0-4.96-4.48-9-10-9z"/>',
+        tick: '<path d="M20 6 9 17l-5-5"/>',
         grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
         list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
         tree: '<rect x="9" y="2" width="6" height="5" rx="1"/><rect x="2" y="17" width="6" height="5" rx="1"/><rect x="16" y="17" width="6" height="5" rx="1"/><path d="M12 7v5M5 17v-2.5a1.5 1.5 0 0 1 1.5-1.5h11a1.5 1.5 0 0 1 1.5 1.5V17"/>',
@@ -57,6 +59,22 @@
     const $$ = function (sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); };
 
     const state = { me: null, meta: null };
+
+    // Themes on offer. Preview colours: page background, card, accent, and a text line.
+    const THEMES = [
+        { key: "system", name: "Match my device", preview: ["#f5f6f9", "#ffffff", "#5514b4", "#1a1a1a"], dark: ["#0f1117", "#171a22", "#9a6cf0", "#eceef4"] },
+        { key: "light", name: "HN Light", preview: ["#f5f6f9", "#ffffff", "#5514b4", "#1a1a1a"] },
+        { key: "dark", name: "HN Dark", preview: ["#0f1117", "#171a22", "#9a6cf0", "#eceef4"] },
+        { key: "lavender", name: "Lavender", preview: ["#f5f1fc", "#ffffff", "#7c5cc4", "#241b35"] },
+        { key: "lavender-dusk", name: "Lavender Dusk", preview: ["#17121f", "#201a2b", "#b79cf2", "#efe9fb"] },
+        { key: "ocean", name: "Ocean", preview: ["#f0f6f8", "#ffffff", "#1f7a8c", "#12262c"] },
+        { key: "forest", name: "Forest", preview: ["#f2f6f1", "#ffffff", "#2f7d4f", "#17261c"] },
+        { key: "midnight", name: "Midnight", preview: ["#0a0f1c", "#111a2c", "#5ea8ff", "#e7eefb"] },
+    ];
+
+    function applyTheme(theme) {
+        if (window.hnApplyTheme) window.hnApplyTheme(theme);
+    }
 
     async function api(path, body) {
         const res = await fetch(path, body === undefined ? { headers: { Accept: "application/json" } } : {
@@ -257,6 +275,7 @@
             '<div class="menu-sep"></div>' +
             '<a class="menu-item compact" role="menuitem" href="/settings" data-link>' + icon("user") + "<span>Profile &amp; settings</span></a>" +
             (me.isOwner && !me.impersonatedBy ? '<a class="menu-item compact" role="menuitem" href="/system" data-link>' + icon("shield") + "<span>System Admin</span></a>" : "") +
+            '<a class="menu-item compact" role="menuitem" href="/settings#appearance" data-link>' + icon("palette") + "<span>Appearance</span></a>" +
             '<a class="menu-item compact" role="menuitem" href="/settings#password" data-link>' + icon("lock") + "<span>Change password</span></a>" +
             '<div class="menu-sep"></div>' +
             '<button type="button" class="menu-item compact danger" role="menuitem" data-action="logout">' + icon("logout") + "<span>Sign out</span></button>" +
@@ -1315,6 +1334,14 @@
 
         root.innerHTML =
             '<div class="page-head"><div><h1>Profile &amp; settings</h1><p class="muted">Manage how you appear to colleagues across HN Group.</p></div></div>' +
+            '<section class="panel sys-section" id="appearance"><h2 class="panel-title">' + icon("palette") + "Appearance</h2>" +
+            '<p class="muted small">Choose how the portal looks for you. Your theme is saved to your account, so it follows you to any device.</p>' +
+            '<div class="theme-grid" role="radiogroup" aria-label="Theme">' + THEMES.map(function (t) {
+                return '<button type="button" class="theme-option" role="radio" data-theme-key="' + t.key + '">' +
+                    '<span class="theme-preview' + (t.dark ? " split" : "") + '"><span class="tp-bar"></span><span class="tp-card"></span><span class="tp-line"></span><span class="tp-dot"></span>' +
+                    (t.dark ? '<span class="tp-half"></span>' : "") + "</span>" +
+                    '<span class="theme-name"><span>' + esc(t.name) + "</span>" + icon("tick") + "</span></button>";
+            }).join("") + "</div></section>" +
             '<div class="settings-grid">' +
 
             '<section class="panel"><h2 class="panel-title">Profile picture</h2>' +
@@ -1356,6 +1383,46 @@
             '<div class="form-actions"><button type="submit" class="btn btn-primary" id="pw-save">Update password</button></div>' +
             "</form></section>" +
             "</div>";
+
+        // Theme previews are painted from the catalogue (inline styles aren't allowed by the CSP).
+        $$(".theme-option").forEach(function (btn) {
+            const t = THEMES.find(function (x) { return x.key === btn.dataset.themeKey; });
+            const paint = function (scope, c) {
+                $(".tp-bar", scope).style.background = "linear-gradient(90deg,#e97de8 0 14%,#5514b4 14% 26%,#e3e65b 26% 31%,#3e9ba3 31% 49%,#7a1f6c 49% 57%,#c2306b 57% 66%,#5fae7b 66% 78%,#1c2135 78%)";
+                scope.style.background = c[0];
+                $(".tp-card", scope).style.background = c[1];
+                $(".tp-dot", scope).style.background = c[2];
+                $(".tp-line", scope).style.background = c[3];
+            };
+            const preview = $(".theme-preview", btn);
+            paint(preview, t.preview);
+            if (t.dark) $(".tp-half", btn).style.background = "linear-gradient(" + t.dark[0] + "," + t.dark[0] + ")";
+        });
+        function markTheme() {
+            $$(".theme-option").forEach(function (btn) {
+                const on = btn.dataset.themeKey === (state.me.theme || "light");
+                btn.classList.toggle("active", on);
+                btn.setAttribute("aria-checked", String(on));
+                $(".theme-name .icon", btn).style.visibility = on ? "visible" : "hidden";
+            });
+        }
+        markTheme();
+        $(".theme-grid").addEventListener("click", async function (e) {
+            const btn = e.target.closest("[data-theme-key]");
+            if (!btn) return;
+            const previous = state.me.theme;
+            state.me.theme = btn.dataset.themeKey;
+            applyTheme(state.me.theme);
+            markTheme();
+            try {
+                state.me = (await api("/api/me/theme", { theme: btn.dataset.themeKey })).user;
+            } catch (err) {
+                state.me.theme = previous;
+                applyTheme(previous);
+                markTheme();
+                toast(err.message);
+            }
+        });
 
         $("#avatar-file").addEventListener("change", async function (e) {
             const file = e.target.files[0];
@@ -1461,6 +1528,7 @@
         "profile-updated": ["updated their profile", "profiles"],
         "photo-updated": ["changed their profile picture", "profiles"],
         "photo-removed": ["removed their profile picture", "profiles"],
+        "theme-changed": ["changed their theme to", "profiles"],
         "panel-unlocked": ["unlocked System Admin", "system"],
         "pin-failed": ["entered a wrong System Admin PIN", "system"],
         "pin-changed": ["changed the System Admin PIN", "system"],
@@ -1718,6 +1786,7 @@
         $("#year").textContent = new Date().getFullYear();
         try {
             state.me = (await api("/api/me")).user;
+            applyTheme(state.me.theme);
             if (!state.me.passwordTemporary) state.meta = await api("/api/meta");
         } catch (e) {
             return;

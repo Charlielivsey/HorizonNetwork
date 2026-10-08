@@ -50,6 +50,23 @@ The directory follows the selected company tab. Job titles, "Reports to" and the
 - **List** for scanning.
 - **Org chart** showing reporting lines for the selected company. Teams can be collapsed.
 
+### Themes
+
+Everyone can pick a theme under **Profile & settings → Appearance**, or from **Appearance** in the menu under their name. The choice is saved to their account, so it follows them to any device, and the sign-in page remembers the last theme used on that browser.
+
+| Theme           | Style                                    |
+|-----------------|------------------------------------------|
+| Match my device | Switches between HN Light and HN Dark to follow the device's setting |
+| HN Light        | The default, in HN Group purple          |
+| HN Dark         | Dark, with a lighter purple accent       |
+| Lavender        | Soft lavender                            |
+| Lavender Dusk   | Dark lavender                            |
+| Ocean           | Teal and blue                            |
+| Forest          | Green                                    |
+| Midnight        | Dark navy with a blue accent             |
+
+The logo colour stripe always stays in the HN Group brand colours. Dark themes use a white version of the logo.
+
 ### Who can see Employee Management
 
 Access is decided by **job title**. Anyone whose title contains one of the listed words or phrases gets access. The defaults are *Chief, Director, Head of, Founder, Leadership, Human Resources* and *HR*.

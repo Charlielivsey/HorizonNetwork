@@ -42,6 +42,7 @@ const DEFAULT_MANAGEMENT_TITLES = [
 ];
 
 const DEFAULT_TIMEZONE = "Europe/London";
+const THEMES = ["system", "light", "dark", "lavender", "lavender-dusk", "ocean", "forest", "midnight"];
 const ADMIN_USERNAME = "admin@hngroup.org.uk";
 // The system owner has access to everything, including PIN-protected System Admin.
 const DEFAULT_OWNER_EMAIL = "charlie.livsey@hngroup.org.uk";
@@ -335,6 +336,7 @@ function meView(p) {
   return {
     ...publicView(p),
     roles: rolesOf(p),
+    theme: THEMES.includes(p.theme) ? p.theme : "light",
     system: !!p.system,
     username: loginName(p),
     supervisor: supervisor ? { id: supervisor.id, displayName: supervisor.displayName } : null,
@@ -554,6 +556,12 @@ function updateOwnProfile(person, input) {
   savePeople();
 }
 
+function setTheme(person, theme) {
+  if (!THEMES.includes(theme)) throw new ValidationError("Choose a theme from the list.");
+  person.theme = theme;
+  savePeople();
+}
+
 // ---------- Avatars ----------
 
 const IMAGE_TYPES = {
@@ -664,6 +672,7 @@ module.exports = {
   setAccountEnabled,
   recordLogin,
   updateOwnProfile,
+  setTheme,
   saveAvatar,
   removeAvatar,
   avatarFile,
