@@ -18,15 +18,15 @@ A Google Sheets add-on script that tracks job applications across job sites.
 | **Set Up Sheet** | Creates/formats `MAIN`, `Indeed`, `CV-Library`, `GOV.UK`, `OTHER`, trims spare rows/columns, and schedules the hourly email. Safe to re-run; it keeps your data. |
 | **Archive Sheet** | Copies the open sheet into a new `<name> Archive <date>` tab, then clears and reformats it. Archiving a job-site sheet also removes those jobs from `MAIN`; archiving `MAIN` clears every tracker sheet. |
 | **New Job** | Form for Job Title, Company, Location, Salary, Date Applied and job site. The job is added to its job-site sheet and to `MAIN`. |
-| **Update Job** | Pick a job (pre-selects the row you're on) and tick Phone Interview / Interview / Job Offer / Rejected, plus a rejection reason. |
+| **Update Job** | Pick a job (pre-selects the row you're on) and tick Phone Interview / Video Recording (for one-way recorded video interviews) / Interview / Job Offer / Rejected, plus a rejection reason. |
 | **Send Update Email Now** | Sends the summary email immediately (handy for testing). |
 
 ## Columns
 
-Job Title · Company · Location · Salary · Date Applied · Phone Interview ☐ · Interview ☐ · Job Offer ☐ · Rejected ☐ · Reason for Rejection
+Job Title · Company · Location · Salary · Date Applied · Phone Interview ☐ · Video Recording ☐ · Interview ☐ · Job Offer ☐ · Rejected ☐ · Reason for Rejection
 
-Rows are coloured by status (green offer, red rejected, amber interview, blue phone interview).
-Columns K–M (Source, ID, Last Emailed Status) are hidden helpers – don't delete them.
+Rows are coloured by status (green offer, red rejected, amber interview, purple video recording, blue phone interview).
+Columns L–N (Source, ID, Last Emailed Status) are hidden helpers – don't delete them.
 Edits made directly in a sheet are mirrored between the job-site sheet and `MAIN`.
 
 ## Hourly email

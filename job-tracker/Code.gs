@@ -34,19 +34,19 @@ const TAB_COLOURS = {
 
 const HEADERS = [
   'Job Title', 'Company', 'Location', 'Salary', 'Date Applied',
-  'Phone Interview', 'Interview', 'Job Offer', 'Rejected', 'Reason for Rejection',
+  'Phone Interview', 'Video Recording', 'Interview', 'Job Offer', 'Rejected', 'Reason for Rejection',
   'Source', 'ID', 'Last Emailed Status', // hidden helper columns
 ];
 
 const COL = {
   TITLE: 1, COMPANY: 2, LOCATION: 3, SALARY: 4, DATE: 5,
-  PHONE: 6, INTERVIEW: 7, OFFER: 8, REJECTED: 9, REASON: 10,
-  SOURCE: 11, ID: 12, EMAILED: 13,
+  PHONE: 6, VIDEO: 7, INTERVIEW: 8, OFFER: 9, REJECTED: 10, REASON: 11,
+  SOURCE: 12, ID: 13, EMAILED: 14,
 };
 
-const NUM_COLS = HEADERS.length;   // 13
-const VISIBLE_COLS = 10;           // A:J are shown, K:M are hidden helpers
-const COLUMN_WIDTHS = [230, 190, 150, 120, 115, 125, 95, 95, 90, 280];
+const NUM_COLS = HEADERS.length;   // 14
+const VISIBLE_COLS = 11;           // A:K are shown, L:N are hidden helpers
+const COLUMN_WIDTHS = [230, 190, 150, 120, 115, 125, 125, 95, 95, 90, 280];
 const MIN_DATA_ROWS = 100;         // empty rows kept ready for new jobs
 const SPARE_ROWS = 25;             // spare rows kept below the last job
 
@@ -69,6 +69,7 @@ function onOpen() {
     .addSeparator()
     .addItem('Send Update Email Now', 'sendUpdateEmailNow')
     .addToUi();
+  migrateAllSheets_(SpreadsheetApp.getActive());
 }
 
 // ---------------------------------------------------------------------------
@@ -109,6 +110,8 @@ function removeBlankDefaultSheets_(ss) {
 
 /** Applies headers, column layout, checkboxes, banding and colour rules. */
 function formatTrackerSheet_(sheet) {
+  migrateLayout_(sheet);
+
   // Columns: keep exactly NUM_COLS.
   const maxCols = sheet.getMaxColumns();
   if (maxCols > NUM_COLS) sheet.deleteColumns(NUM_COLS + 1, maxCols - NUM_COLS);
@@ -160,7 +163,7 @@ function formatTrackerSheet_(sheet) {
     .setDataValidation(SpreadsheetApp.newDataValidation()
       .requireDate().setAllowInvalid(false).setHelpText('Enter a date, e.g. 10/10/2026').build());
   // Checkbox validation (not insertCheckboxes, which would untick existing statuses).
-  sheet.getRange(2, COL.PHONE, dataRows, 4)
+  sheet.getRange(2, COL.PHONE, dataRows, 5)
     .setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build())
     .setHorizontalAlignment('center');
   sheet.getRange(2, COL.REASON, dataRows, 1).setWrap(true).setFontStyle('italic');
@@ -182,9 +185,10 @@ function formatTrackerSheet_(sheet) {
       .setRanges([rulesRange]).build();
   };
   sheet.setConditionalFormatRules([
-    rule('=$H2=TRUE', '#d9ead3', '#274e13'), // Job Offer – green
-    rule('=$I2=TRUE', '#f4cccc', '#660000'), // Rejected  – red
-    rule('=$G2=TRUE', '#fff2cc', '#7f6000'), // Interview – amber
+    rule('=$I2=TRUE', '#d9ead3', '#274e13'), // Job Offer – green
+    rule('=$J2=TRUE', '#f4cccc', '#660000'), // Rejected  – red
+    rule('=$H2=TRUE', '#fff2cc', '#7f6000'), // Interview – amber
+    rule('=$G2=TRUE', '#d9d2e9', '#20124d'), // Video recording – purple
     rule('=$F2=TRUE', '#cfe2f3', '#073763'), // Phone interview – blue
   ]);
 
@@ -207,6 +211,7 @@ function archiveSheet() {
   const sheet = ss.getActiveSheet();
   const name = sheet.getName();
 
+  migrateAllSheets_(ss);
   if (TRACKER_SHEETS.indexOf(name) === -1) {
     ui.alert('Archive Sheet', 'Open one of the tracker sheets (' + TRACKER_SHEETS.join(', ') +
       ') and run Archive Sheet again.', ui.ButtonSet.OK);
@@ -298,7 +303,7 @@ function addJob(form) {
   try {
     const row = [
       title, company, String(form.location || '').trim(), String(form.salary || '').trim(), date,
-      false, false, false, false, '',
+      false, false, false, false, false, '',
       source, Utilities.getUuid(), '',
     ];
     appendJob_(ss.getSheetByName(source), row);
@@ -340,7 +345,7 @@ function getJobsForUpdate() {
       return {
         id: j.id,
         label: j.title + ' – ' + j.company + (j.source ? ' (' + j.source + ')' : ''),
-        phone: j.phone, interview: j.interview, offer: j.offer, rejected: j.rejected,
+        phone: j.phone, video: j.video, interview: j.interview, offer: j.offer, rejected: j.rejected,
         reason: j.reason,
       };
     });
@@ -358,7 +363,7 @@ function getJobsForUpdate() {
 /** Called from the Update Job dialog. */
 function updateJob(form) {
   if (!form.id) throw new Error('Please choose a job.');
-  const values = [[!!form.phone, !!form.interview, !!form.offer, !!form.rejected,
+  const values = [[!!form.phone, !!form.video, !!form.interview, !!form.offer, !!form.rejected,
     form.rejected ? String(form.reason || '').trim() : '']];
 
   const ss = SpreadsheetApp.getActive();
@@ -370,7 +375,7 @@ function updateJob(form) {
       const sheet = ss.getSheetByName(name);
       const row = sheet ? findRowById_(sheet, form.id) : -1;
       if (row > 0) {
-        sheet.getRange(row, COL.PHONE, 1, 5).setValues(values);
+        sheet.getRange(row, COL.PHONE, 1, 6).setValues(values);
         found = true;
       }
     });
@@ -462,6 +467,7 @@ function sendStatusEmail() {
   const ss = SpreadsheetApp.getActive();
   const main = ss.getSheetByName(MAIN_SHEET);
   if (!main) return false;
+  migrateAllSheets_(ss);
   registerManualEntries_(ss);
 
   const jobs = getJobRows_(main).filter(function (j) { return j.id; });
@@ -470,10 +476,10 @@ function sendStatusEmail() {
 
   jobs.forEach(function (j) {
     j.state = stateKey_(j);
-    const noStatus = !j.phone && !j.interview && !j.offer && !j.rejected;
+    const noStatus = !j.phone && !j.video && !j.interview && !j.offer && !j.rejected;
     if (noStatus) {
       awaiting.push(j);
-    } else if (j.state !== j.emailed) {
+    } else if (!j.emailed || j.state !== stateKey_(parseState_(j.emailed))) {
       j.previous = j.emailed ? statusLabel_(parseState_(j.emailed)) : 'No response yet';
       changed.push(j);
     }
@@ -502,13 +508,15 @@ function sendStatusEmail() {
 }
 
 function stateKey_(j) {
-  return JSON.stringify([j.phone, j.interview, j.offer, j.rejected, j.reason]);
+  return JSON.stringify([j.phone, j.video, j.interview, j.offer, j.rejected, j.reason]);
 }
 
 function parseState_(key) {
   try {
     const s = JSON.parse(key);
-    return { phone: s[0], interview: s[1], offer: s[2], rejected: s[3], reason: s[4] };
+    // Older saved states have no video entry.
+    if (s.length === 5) s.splice(1, 0, false);
+    return { phone: s[0], video: s[1], interview: s[2], offer: s[3], rejected: s[4], reason: s[5] };
   } catch (err) {
     return {};
   }
@@ -518,6 +526,7 @@ function statusLabel_(j) {
   if (j.offer) return 'Job Offer 🎉';
   if (j.rejected) return 'Rejected';
   if (j.interview) return 'Interview';
+  if (j.video) return 'Video Recording';
   if (j.phone) return 'Phone Interview';
   return 'No response yet';
 }
@@ -526,6 +535,7 @@ function statusColour_(j) {
   if (j.offer) return '#d9ead3';
   if (j.rejected) return '#f4cccc';
   if (j.interview) return '#fff2cc';
+  if (j.video) return '#d9d2e9';
   if (j.phone) return '#cfe2f3';
   return '#f3f3f3';
 }
@@ -590,6 +600,23 @@ function esc_(s) {
 function ensureTrackerSheetsExist_(ss) {
   const missing = TRACKER_SHEETS.some(function (n) { return !ss.getSheetByName(n); });
   if (missing) throw new Error('Run Job Tracker → Set Up Sheet first.');
+  migrateAllSheets_(ss);
+}
+
+function migrateAllSheets_(ss) {
+  TRACKER_SHEETS.forEach(function (n) {
+    const sheet = ss.getSheetByName(n);
+    if (sheet && migrateLayout_(sheet)) formatTrackerSheet_(sheet);
+  });
+}
+
+/** Adds the Video Recording column to sheets set up before it existed. Returns true if it changed. */
+function migrateLayout_(sheet) {
+  const headers = sheet.getRange(1, COL.PHONE, 1, 2).getValues()[0];
+  if (headers[0] !== 'Phone Interview' || headers[1] !== 'Interview') return false;
+  sheet.insertColumnBefore(COL.VIDEO);
+  sheet.getRange(1, COL.VIDEO).setValue('Video Recording');
+  return true;
 }
 
 /** Last row with text in any of A:E (checkbox columns always hold FALSE, so getLastRow() is no use). */
@@ -626,6 +653,7 @@ function getJobRows_(sheet) {
         salary: String(v[COL.SALARY - 1]).trim(),
         dateText: date instanceof Date ? Utilities.formatDate(date, tz, 'dd/MM/yyyy') : String(date),
         phone: v[COL.PHONE - 1] === true,
+        video: v[COL.VIDEO - 1] === true,
         interview: v[COL.INTERVIEW - 1] === true,
         offer: v[COL.OFFER - 1] === true,
         rejected: v[COL.REJECTED - 1] === true,
@@ -716,6 +744,7 @@ const UPDATE_JOB_HTML = DIALOG_CSS + `
   <select id="job" size="6" onchange="showJob()"></select>
   <div class="checks">
     <label class="check"><input type="checkbox" id="phone"> Phone Interview</label>
+    <label class="check"><input type="checkbox" id="video"> Video Recording</label>
     <label class="check"><input type="checkbox" id="interview"> Interview</label>
     <label class="check"><input type="checkbox" id="offer"> Job Offer</label>
     <label class="check"><input type="checkbox" id="rejected" onchange="toggleReason()"> Rejected</label>
@@ -767,7 +796,7 @@ const UPDATE_JOB_HTML = DIALOG_CSS + `
   function showJob() {
     const id = document.getElementById('job').value;
     const j = jobs.find(function (x) { return x.id === id; }) || {};
-    ['phone', 'interview', 'offer', 'rejected'].forEach(function (k) {
+    ['phone', 'video', 'interview', 'offer', 'rejected'].forEach(function (k) {
       document.getElementById(k).checked = !!j[k];
     });
     document.getElementById('reason').value = j.reason || '';
@@ -781,7 +810,7 @@ const UPDATE_JOB_HTML = DIALOG_CSS + `
   function submitForm(e) {
     e.preventDefault();
     const data = { id: document.getElementById('job').value, reason: document.getElementById('reason').value };
-    ['phone', 'interview', 'offer', 'rejected'].forEach(function (k) {
+    ['phone', 'video', 'interview', 'offer', 'rejected'].forEach(function (k) {
       data[k] = document.getElementById(k).checked;
     });
     document.getElementById('save').disabled = true;
