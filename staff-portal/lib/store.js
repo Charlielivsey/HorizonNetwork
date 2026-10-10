@@ -6,8 +6,8 @@ const path = require("path");
 const crypto = require("crypto");
 
 const COMPANIES = [
-  "HN Group Limited",
-  "Horizon Network Limited",
+  "HN Group",
+  "Horizon Network",
   "Horizon Advertising",
   "Horizon Development",
   "Horizon Media Group",
@@ -22,8 +22,8 @@ const DOMAINS = [
 
 // Domain pre-selected for a new employee's first email, based on their company.
 const COMPANY_DOMAINS = {
-  "HN Group Limited": "hngroup.org.uk",
-  "Horizon Network Limited": "horizon-network.co.uk",
+  "HN Group": "hngroup.org.uk",
+  "Horizon Network": "horizon-network.co.uk",
   "Horizon Advertising": "horizonadvertising.co.uk",
   "Horizon Development": "hngroup.org.uk",
   "Horizon Media Group": "media.hngroup.org.uk",
@@ -40,6 +40,9 @@ const DEFAULT_MANAGEMENT_TITLES = [
   "Human Resources",
   "HR",
 ];
+
+// Company names that have changed; old values in saved data are updated on startup.
+const RENAMED_COMPANIES = { "HN Group Limited": "HN Group", "Horizon Network Limited": "Horizon Network" };
 
 const DEFAULT_TIMEZONE = "Europe/London";
 const THEMES = ["system", "light", "dark", "lavender", "lavender-dusk", "ocean", "forest", "midnight"];
@@ -114,6 +117,12 @@ function loadPeople() {
         migrated = true;
       }
     }
+    for (const p of list) {
+      if (RENAMED_COMPANIES[p.company]) { p.company = RENAMED_COMPANIES[p.company]; migrated = true; }
+      for (const r of p.otherRoles || []) {
+        if (RENAMED_COMPANIES[r.company]) { r.company = RENAMED_COMPANIES[r.company]; migrated = true; }
+      }
+    }
     if (migrated) writeJson(peopleFile, list);
     return list;
   }
@@ -153,7 +162,7 @@ function systemPerson(username, displayName, account) {
     lastName: "",
     displayName: displayName || username,
     jobTitle: "System Administrator",
-    company: "HN Group Limited",
+    company: "HN Group",
     otherRoles: [],
     supervisorId: null,
     emails: [],
@@ -317,15 +326,24 @@ function manageView(p) {
 // Every company someone works at, with the job title and supervisor that apply there.
 // Extra companies fall back to the main job title and supervisor when theirs are left blank.
 function rolesOf(p) {
-  const brief = (id) => {
+  // A supervisor is shown in their role at the same company, or their main role if they don't work there.
+  const brief = (id, company) => {
     const s = id ? getPerson(id) : null;
-    return s ? { id: s.id, displayName: s.displayName, jobTitle: s.jobTitle } : null;
+    if (!s) return null;
+    const other = s.company === company ? null : (s.otherRoles || []).find((r) => r.company === company);
+    const sameCompany = s.company === company || !!other;
+    return {
+      id: s.id,
+      displayName: s.displayName,
+      jobTitle: other ? other.jobTitle || s.jobTitle : s.jobTitle,
+      company: sameCompany ? company : s.company,
+    };
   };
-  return [{ company: p.company, jobTitle: p.jobTitle, supervisor: brief(p.supervisorId), main: true }].concat(
+  return [{ company: p.company, jobTitle: p.jobTitle, supervisor: brief(p.supervisorId, p.company), main: true }].concat(
     (p.otherRoles || []).map((r) => ({
       company: r.company,
       jobTitle: r.jobTitle || p.jobTitle,
-      supervisor: brief(r.supervisorId || p.supervisorId),
+      supervisor: brief(r.supervisorId || p.supervisorId, r.company),
       main: false,
     }))
   );
@@ -652,6 +670,7 @@ function allPeople() {
 
 module.exports = {
   ADMIN_USERNAME,
+  RENAMED_COMPANIES,
   COMPANIES,
   DOMAINS,
   COMPANY_DOMAINS,

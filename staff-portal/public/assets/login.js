@@ -37,6 +37,7 @@
             });
             const data = await res.json().catch(function () { return {}; });
             if (!res.ok) throw new Error(data.error || "Sign in failed. Please try again.");
+            try { sessionStorage.setItem("hn-just-signed-in", "1"); } catch (e) { /* ignore */ }
             window.location.href = "/home";
         } catch (err) {
             showError(err.message === "Failed to fetch" ? "Can't reach the server. Check your connection." : err.message);

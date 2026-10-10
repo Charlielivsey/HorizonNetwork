@@ -19,7 +19,7 @@ Internal staff portal for the whole of HN Group, served at **https://staff.hngro
   - You can reset a password, disable or re-enable a login, edit details and delete employees.
 - **Settings.** Opened by clicking your name. It has three tabs: **Profile** (picture, display name, phone, location and time zone), **Appearance** (theme) and **Security** (password).
 
-**Companies:** HN Group Limited, Horizon Network Limited, Horizon Advertising, Horizon Development and Horizon Media Group.
+**Companies:** HN Group, Horizon Network, Horizon Advertising, Horizon Development and Horizon Media Group.
 
 **Email domains:** `hngroup.org.uk`, `horizon-network.co.uk`, `horizonadvertising.co.uk` and `media.hngroup.org.uk`.
 
@@ -42,7 +42,11 @@ The owner can open **System Admin** from the menu under their name. It's protect
 
 In the employee form, ticking a company under **Also works at** lets you set a separate **job title** and **supervisor** for that company. Leave either blank to use the main company's details.
 
-The directory follows the selected company tab. Job titles, "Reports to" and the org chart use that company's details where they exist, and the main company's otherwise.
+Each role is its own profile. Someone who works at three companies has three profiles in the directory and three places in the org chart.
+
+A supervisor is always shown in their role at the same company as the person reporting to them. For example, Jack is VP at Horizon Network, which is his main company, and reports to Charlie. Charlie is CEO of HN Group but also President of Horizon Network, so Jack's profile and the org chart show Charlie as President of Horizon Network. If the supervisor doesn't work at that company, their main role is shown instead.
+
+Staff see their main role under the greeting on the home page, and in a short "Signed in as…" message when they sign in.
 
 ### Staff Directory views
 

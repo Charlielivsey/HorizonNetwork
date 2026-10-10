@@ -507,6 +507,18 @@
 
     // ================= Home =================
 
+    // "Main role: Chief Executive Officer at HN Group", plus any other roles.
+    function mainRoleHtml(me) {
+        const roles = me.roles || [];
+        const main = roles.find(function (r) { return r.main; });
+        if (!main || me.system) return '<p class="muted">Everything you need across HN Group, in one place.</p>';
+        const others = roles.filter(function (r) { return !r.main; });
+        return '<div class="main-role"><span class="main-role-label">Your main role</span>' +
+            "<strong>" + esc(main.jobTitle) + "</strong> at <strong>" + esc(main.company) + "</strong>" +
+            (others.length ? '<span class="muted"> · also ' + others.map(function (r) { return esc(r.jobTitle) + " at " + esc(r.company); }).join(", ") + "</span>" : "") +
+            "</div>";
+    }
+
     async function viewHome(root) {
         const me = state.me;
         const hour = Number(fmt(deviceTz, { hour: "2-digit", hourCycle: "h23" }));
@@ -524,7 +536,7 @@
             '<section class="hero">' +
             '<p class="eyebrow">' + clock(deviceTz, "date") + "</p>" +
             "<h1>" + esc(greeting) + ", " + esc(firstName) + "</h1>" +
-            '<p class="muted">Everything you need across HN Group, in one place.</p></section>' +
+            mainRoleHtml(me) + "</section>" +
 
             '<section class="clocks">' +
             '<div class="clock-card">' +
@@ -614,11 +626,32 @@
         return p.isOwner ? ' <span class="badge badge-owner">System owner</span>' : "";
     }
 
+    // Every role is its own profile: one entry per person per company they work at.
+    function roleEntries(people) {
+        const out = [];
+        people.forEach(function (p) {
+            companiesOf(p).forEach(function (c) {
+                const r = roleFor(p, c);
+                out.push({ key: p.id + "|" + c, person: p, company: c, jobTitle: r.jobTitle, supervisorId: r.supervisorId, main: r.main });
+            });
+        });
+        return out;
+    }
+
+    // The profile an entry reports to: the supervisor's role at the same company, or their main
+    // role if they don't work there. E.g. Jack (Horizon Network) reports to Charlie's Horizon Network role.
+    function supervisorKey(entry, byId) {
+        const s = byId[entry.supervisorId];
+        if (!s || s.id === entry.person.id) return null;
+        return s.id + "|" + (worksAt(s, entry.company) ? entry.company : s.company);
+    }
+
     // The signed-in user's roles: job title and supervisor at each company they work for.
     function rolesHtml(me) {
         return '<div class="role-list compact">' + (me.roles || []).map(function (r) {
             return '<div class="role-item"><div><div class="role-company">' + esc(r.company) + (r.main && me.roles.length > 1 ? ' <span class="badge">Main</span>' : "") + "</div>" +
-                '<div class="small">' + esc(r.jobTitle) + '</div></div><div class="small muted">' + (r.supervisor ? "Reports to " + esc(r.supervisor.displayName) : "No supervisor") + "</div></div>";
+                '<div class="small">' + esc(r.jobTitle) + '</div></div><div class="small muted">' +
+                (r.supervisor ? "Reports to " + esc(r.supervisor.displayName) + " (" + esc(r.supervisor.jobTitle) + ")" : "No supervisor") + "</div></div>";
         }).join("") + "</div>";
     }
 
@@ -635,18 +668,29 @@
         try { localStorage.setItem(key, value); } catch (e) { /* ignore */ }
     }
 
+    // Everything the directory and profile pop-ups need to look people and roles up.
+    function directoryContext(people) {
+        const byId = {};
+        people.forEach(function (p) { byId[p.id] = p; });
+        const entries = roleEntries(people).sort(function (a, b) {
+            return a.person.displayName.localeCompare(b.person.displayName) || (b.main - a.main) || a.company.localeCompare(b.company);
+        });
+        const byKey = {};
+        entries.forEach(function (e) { byKey[e.key] = e; });
+        return { people: people, byId: byId, entries: entries, byKey: byKey };
+    }
+
     async function viewDirectory(root, current) {
         const data = await api("/api/directory");
         if (!current()) return;
-        const people = data.people.sort(function (a, b) { return a.displayName.localeCompare(b.displayName); });
-        const byId = {};
-        people.forEach(function (p) { byId[p.id] = p; });
+        const ctx = directoryContext(data.people);
+        const people = ctx.people;
         let view = savedPref("hn-dir-view", "grid");
         if (!DIR_VIEWS.some(function (v) { return v.key === view; })) view = "grid";
         const collapsed = {};
 
         root.innerHTML =
-            '<div class="page-head"><div><h1>Staff Directory</h1><p class="muted">Find colleagues and see how teams fit together across HN Group.</p></div>' +
+            '<div class="page-head"><div><h1>Staff Directory</h1><p class="muted">Find colleagues and see how teams fit together across HN Group. Someone with roles at several companies has a profile for each.</p></div>' +
             '<div class="segmented" role="tablist" aria-label="Directory view">' +
             DIR_VIEWS.map(function (v) {
                 return '<button type="button" role="tab" data-view="' + v.key + '">' + icon(v.icon) + "<span>" + v.label + "</span></button>";
@@ -654,7 +698,7 @@
             '<div class="company-tabs" id="dir-companies" role="tablist" aria-label="Company">' +
             '<button type="button" data-company="">All companies <span class="tab-count">' + people.length + "</span></button>" +
             state.meta.companies.map(function (c) {
-                const n = people.filter(function (p) { return worksAt(p, c); }).length;
+                const n = ctx.entries.filter(function (e) { return e.company === c; }).length;
                 return '<button type="button" data-company="' + esc(c) + '">' + esc(c) + ' <span class="tab-count">' + n + "</span></button>";
             }).join("") + "</div>" +
             '<div class="toolbar">' +
@@ -665,93 +709,92 @@
 
         let company = "";
 
-        function matches(p) {
+        function matches(e) {
+            if (company && e.company !== company) return false;
             const q = $("#dir-search").value.trim().toLowerCase();
-            if (company && !worksAt(p, company)) return false;
             if (!q) return true;
-            const role = roleFor(p, company);
-            return [p.displayName, p.firstName, p.lastName, role.jobTitle, p.jobTitle, p.location]
-                .concat(companiesOf(p))
-                .concat(p.emails.map(function (e) { return e.address; }))
+            const p = e.person;
+            return [p.displayName, p.firstName, p.lastName, e.jobTitle, e.company, p.location]
+                .concat(p.emails.map(function (x) { return x.address; }))
                 .join(" ").toLowerCase().indexOf(q) !== -1;
         }
 
-        function card(p) {
-            const role = roleFor(p, company);
-            const sup = byId[role.supervisorId];
-            return '<button type="button" class="person-card" data-person="' + p.id + '">' + avatar(p, "lg") +
+        function supLabel(e) {
+            const s = ctx.byKey[supervisorKey(e, ctx.byId)];
+            return s ? esc(s.person.displayName) + ' <span class="muted">· ' + esc(s.jobTitle) + "</span>" : "";
+        }
+
+        function roleTag(e) {
+            return companiesOf(e.person).length > 1 ? (e.main ? '<span class="badge">Main role</span>' : '<span class="badge badge-soft">Additional role</span>') : "";
+        }
+
+        function card(e) {
+            const p = e.person;
+            const sup = supLabel(e);
+            return '<button type="button" class="person-card" data-entry="' + esc(e.key) + '">' + avatar(p, "lg") +
                 '<span class="pc-name">' + esc(p.displayName) + "</span>" +
-                '<span class="pc-title">' + esc(role.jobTitle) + "</span>" +
-                '<span class="pc-company">' + esc(role.company) +
-                (!company && p.otherRoles && p.otherRoles.length ? ' <span class="count-pill">+' + p.otherRoles.length + "</span>" : "") + "</span>" +
-                (sup ? '<span class="pc-reports">Reports to ' + esc(sup.displayName) + "</span>" : "") +
+                '<span class="pc-title">' + esc(e.jobTitle) + "</span>" +
+                '<span class="pc-company">' + esc(e.company) + "</span>" +
+                roleTag(e) +
+                (sup ? '<span class="pc-reports">Reports to ' + sup + "</span>" : "") +
                 '<span class="pc-meta">' + icon("clock") + clock(p.timezone, "short") + " · " + esc(p.location || tzCity(p.timezone)) + "</span>" +
                 "</button>";
         }
 
-        function row(p) {
-            const role = roleFor(p, company);
-            const sup = byId[role.supervisorId];
+        function row(e) {
+            const p = e.person;
+            const sup = supLabel(e);
             const email = primaryEmail(p);
-            return '<tr data-person="' + p.id + '" tabindex="0">' +
-                '<td><div class="emp-cell">' + avatar(p, "sm") + '<div><div class="emp-name">' + esc(p.displayName) + ownerBadge(p) + '</div><div class="muted small">' + esc(role.jobTitle) + "</div></div></div></td>" +
-                '<td data-label="Company">' + esc(role.company) + "</td>" +
-                '<td data-label="Reports to">' + (sup ? esc(sup.displayName) : '<span class="muted">—</span>') + "</td>" +
+            return '<tr data-entry="' + esc(e.key) + '" tabindex="0">' +
+                '<td><div class="emp-cell">' + avatar(p, "sm") + '<div><div class="emp-name">' + esc(p.displayName) + ownerBadge(p) + '</div><div class="muted small">' + esc(e.jobTitle) + "</div></div></div></td>" +
+                '<td data-label="Company">' + esc(e.company) + " " + roleTag(e) + "</td>" +
+                '<td data-label="Reports to">' + (sup || '<span class="muted">—</span>') + "</td>" +
                 '<td data-label="Email">' + (email ? '<a href="mailto:' + esc(email) + '" data-stop>' + esc(email) + "</a>" : "") + "</td>" +
                 '<td data-label="Local time" class="nowrap">' + clock(p.timezone, "short") + ' <span class="muted small">' + esc(p.location || tzCity(p.timezone)) + "</span></td>" +
                 "</tr>";
         }
 
-        // Builds the reporting tree for the selected company (or main roles for "All companies").
+        // Org chart of role profiles: each one sits under the supervisor's role at the same company.
         function drawTree(list) {
             const inSet = {};
-            list.forEach(function (p) { inSet[p.id] = true; });
+            list.forEach(function (e) { inSet[e.key] = true; });
             const kids = {};
             const roots = [];
-            list.forEach(function (p) {
-                const sup = roleFor(p, company).supervisorId;
-                if (sup && inSet[sup] && sup !== p.id) (kids[sup] = kids[sup] || []).push(p);
-                else roots.push(p);
+            list.forEach(function (e) {
+                const parent = supervisorKey(e, ctx.byId);
+                if (parent && inSet[parent]) (kids[parent] = kids[parent] || []).push(e);
+                else roots.push(e);
             });
             // Anyone caught in a reporting loop can't be reached from the top, so show them as a root.
             const reached = {};
-            (function reach(list) {
-                list.forEach(function (p) {
-                    if (reached[p.id]) return;
-                    reached[p.id] = true;
-                    reach(kids[p.id] || []);
-                });
-            })(roots);
-            list.forEach(function (p) {
-                if (!reached[p.id]) {
-                    roots.push(p);
-                    (function reach(x) {
-                        if (reached[x.id]) return;
-                        reached[x.id] = true;
-                        (kids[x.id] || []).forEach(reach);
-                    })(p);
-                }
-            });
+            function reach(e) {
+                if (reached[e.key]) return;
+                reached[e.key] = true;
+                (kids[e.key] || []).forEach(reach);
+            }
+            roots.forEach(reach);
+            list.forEach(function (e) { if (!reached[e.key]) { roots.push(e); reach(e); } });
+
             const placed = {};
-            function node(p, depth) {
-                if (placed[p.id] || depth > 50) return "";
-                placed[p.id] = true;
-                const role = roleFor(p, company);
-                const children = (kids[p.id] || []).filter(function (c) { return !placed[c.id]; });
-                const isCollapsed = collapsed[p.id];
+            function node(e, depth) {
+                if (placed[e.key] || depth > 50) return "";
+                placed[e.key] = true;
+                const p = e.person;
+                const children = (kids[e.key] || []).filter(function (c) { return !placed[c.key]; });
+                const isCollapsed = collapsed[e.key];
                 const childHtml = children.length && !isCollapsed ? "<ul>" + children.map(function (c) { return node(c, depth + 1); }).join("") + "</ul>" : "";
                 return "<li>" +
                     '<div class="org-node' + (p.isOwner ? " is-owner" : "") + '">' +
-                    '<button type="button" class="org-card" data-person="' + p.id + '">' + avatar(p, "md") +
-                    '<span class="org-text"><span class="org-name">' + esc(p.displayName) + '</span><span class="org-title">' + esc(role.jobTitle) + "</span>" +
-                    (company ? "" : '<span class="org-company">' + esc(role.company) + "</span>") + "</span></button>" +
-                    (children.length ? '<button type="button" class="org-toggle" data-toggle="' + p.id + '" aria-label="' + (isCollapsed ? "Show" : "Hide") + " reports of " + esc(p.displayName) + '">' +
+                    '<button type="button" class="org-card" data-entry="' + esc(e.key) + '">' + avatar(p, "md") +
+                    '<span class="org-text"><span class="org-name">' + esc(p.displayName) + '</span><span class="org-title">' + esc(e.jobTitle) + "</span>" +
+                    (company ? "" : '<span class="org-company">' + esc(e.company) + "</span>") + "</span></button>" +
+                    (children.length ? '<button type="button" class="org-toggle" data-toggle="' + esc(e.key) + '" aria-label="' + (isCollapsed ? "Show" : "Hide") + " reports of " + esc(p.displayName) + '">' +
                         (isCollapsed ? "+" + children.length : "−") + "</button>" : "") +
                     "</div>" + childHtml + "</li>";
             }
             const html = roots.map(function (r) { return node(r, 0); }).join("");
-            return '<div class="org-hint muted small">' + icon("tree") + "Showing reporting lines" + (company ? " within " + esc(company) : " for each person's main company") +
-                ". Click a person for details, or −/+ to collapse a team.</div>" +
+            return '<div class="org-hint muted small">' + icon("tree") + "Showing reporting lines" + (company ? " within " + esc(company) : " for every role across HN Group") +
+                ". Someone with several roles appears once per role. Click a person for details, or −/+ to collapse a team.</div>" +
                 '<div class="org-scroll"><div class="org"><ul class="org-roots">' + html + "</ul></div></div>";
         }
 
@@ -762,8 +805,10 @@
             });
             $$("#dir-companies [data-company]").forEach(function (b) { b.classList.toggle("active", b.dataset.company === company); });
 
-            const list = people.filter(matches);
-            $("#dir-count").textContent = list.length + (list.length === 1 ? " person" : " people") + (company ? " at " + company : "");
+            const list = ctx.entries.filter(matches);
+            const nPeople = new Set(list.map(function (e) { return e.person.id; })).size;
+            $("#dir-count").textContent = nPeople + (nPeople === 1 ? " person" : " people") +
+                (list.length !== nPeople ? " · " + list.length + " roles" : "") + (company ? " at " + company : "");
             const body = $("#dir-body");
             if (!list.length) {
                 body.innerHTML = '<div class="empty">' + (people.length ? "No one matches your search." : "No staff have been added yet.") + "</div>";
@@ -789,64 +834,60 @@
             const t = e.target.closest("[data-toggle]");
             if (t) { collapsed[t.dataset.toggle] = !collapsed[t.dataset.toggle]; return draw(); }
             if (e.target.closest("[data-stop]")) return;
-            const p = e.target.closest("[data-person]");
-            if (p) openPersonModal(p.dataset.person, people, company);
+            const p = e.target.closest("[data-entry]");
+            if (p) openPersonModal(p.dataset.entry, ctx);
         });
         root.addEventListener("keydown", function (e) {
-            const tr = e.target.closest("tr[data-person]");
-            if (tr && e.key === "Enter") openPersonModal(tr.dataset.person, people, company);
+            const tr = e.target.closest("tr[data-entry]");
+            if (tr && e.key === "Enter") openPersonModal(tr.dataset.entry, ctx);
         });
         $("#dir-search").addEventListener("input", draw);
         draw();
     }
 
-    // Shows someone's profile. `company` is the company being looked at (e.g. the directory
-    // filter); their title and supervisor for that company are shown first when it applies.
-    function openPersonModal(id, people, company) {
-        const p = people.find(function (x) { return x.id === id; });
-        if (!p) return;
-        const byId = {};
-        people.forEach(function (x) { byId[x.id] = x; });
-        const ctx = company && worksAt(p, company) ? company : p.company;
-        const role = roleFor(p, ctx);
-        const supervisor = byId[role.supervisorId];
-        const reports = people.filter(function (x) {
-            if (company) return worksAt(x, company) && roleFor(x, company).supervisorId === p.id;
-            return companiesOf(x).some(function (c) { return roleFor(x, c).supervisorId === p.id; });
-        });
-        const personLink = function (x) {
-            return '<button type="button" class="person-chip" data-person="' + x.id + '">' + avatar(x, "xs") + "<span>" + esc(x.displayName) +
-                '<span class="muted small"> · ' + esc(roleFor(x, ctx).jobTitle) + "</span></span></button>";
+    // Shows one role profile (a person at one company): their title there, who they report to
+    // there (in that supervisor's matching role), their direct reports there, and their other roles.
+    function openPersonModal(key, ctx) {
+        const e = ctx.byKey[key];
+        if (!e) return;
+        const p = e.person;
+        const supervisor = ctx.byKey[supervisorKey(e, ctx.byId)];
+        const reports = ctx.entries.filter(function (x) { return supervisorKey(x, ctx.byId) === key; });
+        const roles = ctx.entries.filter(function (x) { return x.person.id === p.id; });
+        const chip = function (x) {
+            return '<button type="button" class="person-chip" data-entry="' + esc(x.key) + '">' + avatar(x.person, "xs") + "<span>" + esc(x.person.displayName) +
+                '<span class="muted small"> · ' + esc(x.jobTitle) + (x.company !== e.company ? ", " + esc(x.company) : "") + "</span></span></button>";
         };
-        const allRoles = companiesOf(p).map(function (c) { return roleFor(p, c); });
 
         const m = openModal(
             '<div class="profile-head">' + avatar(p, "xl") + '<div><h2 class="modal-title">' + esc(p.displayName) + "</h2>" +
-            '<div class="muted">' + esc(role.jobTitle) + " · " + esc(role.company) + "</div>" +
-            (p.isOwner ? '<div class="chips"><span class="badge badge-owner">System owner</span></div>' : "") + "</div></div>" +
+            '<div class="profile-role">' + esc(e.jobTitle) + '</div><div class="muted">' + esc(e.company) + "</div>" +
+            '<div class="chips">' + (roles.length > 1 ? (e.main ? '<span class="badge">Main role</span>' : '<span class="badge badge-soft">Additional role</span>') : "") +
+            (p.isOwner ? '<span class="badge badge-owner">System owner</span>' : "") + "</div></div></div>" +
             '<div class="profile-body">' +
-            '<div class="detail-row">' + icon("mail") + "<div>" + p.emails.map(function (e) {
-                return '<a href="mailto:' + esc(e.address) + '">' + esc(e.address) + "</a>";
+            '<div class="detail-row">' + icon("mail") + "<div>" + p.emails.map(function (x) {
+                return '<a href="mailto:' + esc(x.address) + '">' + esc(x.address) + "</a>";
             }).join("<br>") + "</div></div>" +
             (p.phone ? '<div class="detail-row">' + icon("phone") + '<div><a href="tel:' + esc(p.phone.replace(/\s+/g, "")) + '">' + esc(p.phone) + "</a></div></div>" : "") +
             '<div class="detail-row">' + icon("pin") + "<div>" + esc(p.location || tzCity(p.timezone)) +
             '<div class="muted small">' + clock(p.timezone, "short") + " local time · " + esc(tzDifference(p.timezone)) + "</div></div></div>" +
-            '<h3 class="detail-head">Reports to' + (allRoles.length > 1 ? " at " + esc(role.company) : "") + "</h3>" +
-            (supervisor ? '<div class="chips">' + personLink(supervisor) + "</div>" : '<p class="muted small">No one</p>') +
-            (reports.length ? '<h3 class="detail-head">Direct reports' + (company ? " at " + esc(company) : "") + '</h3><div class="chips">' + reports.map(personLink).join("") + "</div>" : "") +
-            (allRoles.length > 1
-                ? '<h3 class="detail-head">Roles across the group</h3><div class="role-list">' + allRoles.map(function (r) {
-                    const s = byId[r.supervisorId];
-                    return '<div class="role-item' + (r.company === role.company ? " current" : "") + '"><div><div class="role-company">' + esc(r.company) +
-                        (r.main ? ' <span class="badge">Main</span>' : "") + '</div><div class="small">' + esc(r.jobTitle) + "</div></div>" +
-                        '<div class="small muted">' + (s ? "Reports to " + esc(s.displayName) : "No supervisor") + "</div></div>";
-                }).join("") + "</div>"
+            '<h3 class="detail-head">Reports to</h3>' +
+            (supervisor ? '<div class="chips">' + chip(supervisor) + "</div>" : '<p class="muted small">No one</p>') +
+            (reports.length ? '<h3 class="detail-head">Direct reports (' + reports.length + ')</h3><div class="chips">' + reports.map(chip).join("") + "</div>" : "") +
+            (roles.length > 1
+                ? '<h3 class="detail-head">' + esc(p.firstName || p.displayName) + "’s roles</h3>" +
+                  '<div class="role-list">' + roles.map(function (r) {
+                      const s = ctx.byKey[supervisorKey(r, ctx.byId)];
+                      return '<button type="button" class="role-item role-switch' + (r.key === key ? " current" : "") + '" data-entry="' + esc(r.key) + '">' +
+                          '<div><div class="role-company">' + esc(r.company) + (r.main ? ' <span class="badge">Main</span>' : "") + '</div><div class="small">' + esc(r.jobTitle) + "</div></div>" +
+                          '<div class="small muted">' + (s ? "Reports to " + esc(s.person.displayName) + " (" + esc(s.jobTitle) + ")" : "No supervisor") + "</div></button>";
+                  }).join("") + "</div>"
                 : "") +
             "</div>"
         );
-        m.el.addEventListener("click", function (e) {
-            const chip = e.target.closest("[data-person]");
-            if (chip) openPersonModal(chip.dataset.person, people, company);
+        m.el.addEventListener("click", function (ev) {
+            const target = ev.target.closest("[data-entry]");
+            if (target && target.dataset.entry !== key) openPersonModal(target.dataset.entry, ctx);
         });
     }
 
@@ -2301,6 +2342,13 @@
         renderChrome();
         document.body.classList.remove("app-loading");
         render();
+
+        let justSignedIn = false;
+        try { justSignedIn = sessionStorage.getItem("hn-just-signed-in") === "1"; sessionStorage.removeItem("hn-just-signed-in"); } catch (e) { /* ignore */ }
+        const mainRole = (state.me.roles || []).find(function (r) { return r.main; });
+        if (justSignedIn && mainRole && !state.me.system && !state.me.passwordTemporary) {
+            toast("Signed in as " + mainRole.jobTitle + ", " + mainRole.company);
+        }
 
         // Notice quickly if this session is ended from the system panel.
         setInterval(function () {

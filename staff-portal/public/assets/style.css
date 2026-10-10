@@ -1474,3 +1474,33 @@ legend { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-
 .more-link { align-self: flex-start; }
 .popup-list { margin-top: 1rem; max-height: 60vh; overflow-y: auto; }
 .popup-list .announcement { box-shadow: none; }
+
+/* Main role under the greeting */
+.main-role {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.35rem;
+    margin-top: 0.6rem;
+    padding: 0.45rem 0.85rem;
+    border-radius: 999px;
+    background: var(--primary-tint);
+    border: 1px solid var(--primary-soft-border);
+    font-size: 0.925rem;
+}
+.main-role-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--primary);
+    margin-right: 0.25rem;
+}
+@media (max-width: 600px) { .main-role { border-radius: 12px; } }
+
+/* Role profiles */
+.badge-soft { background: var(--surface-2); color: var(--text-muted); }
+.person-card .badge { margin-top: 0.15rem; }
+.profile-role { font-weight: 600; font-size: 1.05rem; }
+.role-switch { width: 100%; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.role-switch:hover { border-color: var(--primary); }

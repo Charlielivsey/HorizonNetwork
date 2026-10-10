@@ -42,6 +42,17 @@ function init(dataDir) {
   fs.mkdirSync(filesDir, { recursive: true, mode: 0o700 });
   announcements = fs.existsSync(announcementsFile) ? JSON.parse(fs.readFileSync(announcementsFile, "utf8")) : [];
   documents = fs.existsSync(documentsFile) ? JSON.parse(fs.readFileSync(documentsFile, "utf8")) : [];
+  // Update audiences saved under old company names.
+  const rename = (items, save) => {
+    let changed = false;
+    for (const item of items) {
+      const next = item.companies.map((c) => store.RENAMED_COMPANIES[c] || c);
+      if (next.join() !== item.companies.join()) { item.companies = next; changed = true; }
+    }
+    if (changed) save();
+  };
+  rename(announcements, () => writeJson(announcementsFile, announcements));
+  rename(documents, () => writeJson(documentsFile, documents));
 }
 
 function writeJson(file, data) {
