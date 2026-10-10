@@ -118,6 +118,20 @@
         return '<span class="' + cls + " avatar-c" + (hash % 6) + '" aria-hidden="true">' + esc(initials(person.displayName)) + "</span>";
     }
 
+    const BANNER_PRESETS = [
+        { key: "aurora", name: "Aurora" }, { key: "sunset", name: "Sunset" }, { key: "ocean", name: "Ocean" },
+        { key: "forest", name: "Forest" }, { key: "lavender", name: "Lavender" }, { key: "midnight", name: "Midnight" },
+        { key: "ember", name: "Ember" }, { key: "slate", name: "Slate" },
+    ];
+
+    // A person's profile banner: their uploaded image, a preset gradient, or the default.
+    function bannerHtml(person, cls, tag) {
+        tag = tag || "span";
+        const b = person.banner;
+        if (b && b.url) return "<" + tag + ' class="' + cls + ' has-image"><img src="' + esc(b.url) + '" alt="" loading="lazy"></' + tag + ">";
+        return "<" + tag + ' class="' + cls + (b && b.preset ? " banner-" + esc(b.preset) : "") + '"></' + tag + ">";
+    }
+
     function primaryEmail(person) {
         const e = (person.emails || []).find(function (x) { return x.primary; }) || (person.emails || [])[0];
         return e ? e.address : "";
@@ -752,7 +766,7 @@
         function card(e) {
             const p = e.person;
             const sup = supLabel(e);
-            return '<button type="button" class="person-card" data-entry="' + esc(e.key) + '"><span class="pc-band"></span>' + avatar(p, "lg") +
+            return '<button type="button" class="person-card" data-entry="' + esc(e.key) + '">' + bannerHtml(p, "pc-band") + avatar(p, "lg") +
                 '<span class="pc-name">' + esc(p.displayName) + "</span>" +
                 '<span class="pc-title">' + esc(e.jobTitle) + "</span>" +
                 '<span class="pc-company">' + esc(e.company) + "</span>" +
@@ -883,7 +897,7 @@
         };
 
         const m = openModal(
-            '<div class="profile-cover"></div>' +
+            bannerHtml(p, "profile-cover", "div") +
             '<div class="profile-top">' +
             '<div class="profile-avatar">' + avatar(p, "xl") + "</div>" +
             '<div class="profile-id"><h2 class="modal-title">' + esc(p.displayName) + "</h2>" +
@@ -1896,6 +1910,27 @@
         }
     }
 
+    // Crops an image to a 3:1 banner, 1500 pixels wide.
+    async function resizeBanner(file) {
+        const url = URL.createObjectURL(file);
+        try {
+            const img = new Image();
+            img.src = url;
+            await img.decode();
+            const w = 1500, h = 500;
+            const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
+            const sw = w / scale, sh = h / scale;
+            const canvas = document.createElement("canvas");
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, (img.naturalWidth - sw) / 2, (img.naturalHeight - sh) / 2, sw, sh, 0, 0, w, h);
+            return canvas.toDataURL("image/jpeg", 0.85);
+        } finally {
+            URL.revokeObjectURL(url);
+        }
+    }
+
     function viewSettings(root) {
         const me = state.me;
 
@@ -1916,6 +1951,18 @@
             (me.avatarUrl ? '<button type="button" class="btn btn-ghost" id="avatar-remove">Remove</button>' : "") + "</div>" +
             '<input type="file" id="avatar-file" accept="image/png,image/jpeg,image/webp" hidden>' +
             '<p class="hint">JPG, PNG or WebP. Your photo will be cropped to a square.</p></div></div></section>' +
+
+            '<section class="panel span-2"><h2 class="panel-title">Profile banner</h2>' +
+            '<p class="muted small">Shown at the top of your profile and on your card in the Staff Directory.</p>' +
+            '<div class="banner-preview">' + bannerHtml(me, "bp-cover", "div") + '<div class="bp-avatar">' + avatar(me, "lg") + "</div></div>" +
+            '<div class="banner-presets" role="radiogroup" aria-label="Banner style">' + BANNER_PRESETS.map(function (b) {
+                const on = me.banner && me.banner.preset === b.key;
+                return '<button type="button" class="banner-swatch banner-' + b.key + (on ? " active" : "") + '" data-preset="' + b.key + '" role="radio" aria-checked="' + on + '" title="' + b.name + '"><span>' + b.name + "</span></button>";
+            }).join("") + "</div>" +
+            '<div class="btn-row banner-actions"><label class="btn btn-ghost" for="banner-file">' + icon("camera") + "Upload your own image</label>" +
+            (me.banner ? '<button type="button" class="btn btn-ghost" id="banner-remove">Use the default</button>' : "") + "</div>" +
+            '<input type="file" id="banner-file" accept="image/png,image/jpeg,image/webp" hidden>' +
+            '<p class="hint">Wide images work best (about 1500 \u00d7 500). Your image will be cropped to fit.</p></section>' +
 
             '<section class="panel"><h2 class="panel-title">Basic information</h2>' +
             '<form id="profile-form" novalidate>' +
@@ -2051,6 +2098,29 @@
             }
         });
 
+        async function saveBanner(body, message) {
+            try {
+                state.me = (await api(body ? "/api/me/banner" : "/api/me/banner/remove", body || {})).user;
+                renderChrome();
+                viewSettings(root);
+                toast(message);
+            } catch (err) { toast(err.message); }
+        }
+        $(".banner-presets").addEventListener("click", function (e) {
+            const b = e.target.closest("[data-preset]");
+            if (b) saveBanner({ preset: b.dataset.preset }, "Banner updated.");
+        });
+        $("#banner-file").addEventListener("change", async function (e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            try {
+                saveBanner({ image: await resizeBanner(file) }, "Banner updated.");
+            } catch (err) {
+                toast("That image couldn\u2019t be read. Try a JPG or PNG.");
+            }
+        });
+        if ($("#banner-remove")) $("#banner-remove").addEventListener("click", function () { saveBanner(null, "Banner reset to the default."); });
+
         $("#avatar-file").addEventListener("change", async function (e) {
             const file = e.target.files[0];
             if (!file) return;
@@ -2160,6 +2230,8 @@
         "photo-updated": ["changed their profile picture", "profiles"],
         "photo-removed": ["removed their profile picture", "profiles"],
         "theme-changed": ["changed their theme to", "profiles"],
+        "banner-updated": ["changed their profile banner", "profiles"],
+        "banner-removed": ["reset their profile banner", "profiles"],
         "announcement-posted": ["posted the announcement", "workplace"],
         "announcement-updated": ["edited the announcement", "workplace"],
         "announcement-deleted": ["deleted the announcement", "workplace"],

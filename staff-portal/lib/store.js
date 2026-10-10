@@ -340,6 +340,7 @@ function publicView(p) {
     location: p.location,
     timezone: p.timezone,
     avatarUrl: avatarUrl(p),
+    banner: bannerView(p),
   };
 }
 
@@ -567,6 +568,7 @@ function deleteEmployee(person) {
     for (const r of p.otherRoles || []) if (r.supervisorId === person.id) r.supervisorId = null;
   }
   removeAvatar(person, false);
+  removeBanner(person, false);
   savePeople();
 }
 
@@ -649,6 +651,50 @@ function removeAvatar(person, save = true) {
   fs.rmSync(path.join(avatarDir, `${person.id}.${person.avatar.ext}`), { force: true });
   person.avatar = null;
   if (save) savePeople();
+}
+
+// ---------- Profile banners: a preset gradient or an uploaded image ----------
+
+const BANNER_PRESETS = ["aurora", "sunset", "ocean", "forest", "lavender", "midnight", "ember", "slate"];
+
+function bannerView(person) {
+  const b = person.banner;
+  if (!b) return null;
+  if (b.preset) return { preset: b.preset };
+  return { url: `/api/banners/${person.id}?v=${b.version}` };
+}
+
+function setBannerPreset(person, preset) {
+  if (!BANNER_PRESETS.includes(preset)) throw new ValidationError("Choose one of the banner styles.");
+  removeBanner(person, false);
+  person.banner = { preset };
+  savePeople();
+}
+
+function saveBanner(person, dataUrl) {
+  const match = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl || ""));
+  if (!match) throw new ValidationError("Upload a JPG, PNG or WebP image.");
+  const type = IMAGE_TYPES[match[1]];
+  const buffer = Buffer.from(match[2], "base64");
+  if (buffer.length > 1.5 * 1024 * 1024) throw new ValidationError("That image is too large (max 1.5 MB).");
+  if (!type.magic(buffer)) throw new ValidationError("That file doesn't look like a valid image.");
+  removeBanner(person, false);
+  fs.writeFileSync(path.join(avatarDir, `${person.id}-banner.${type.ext}`), buffer, { mode: 0o600 });
+  person.banner = { ext: type.ext, version: Date.now() };
+  savePeople();
+}
+
+function removeBanner(person, save = true) {
+  if (!person.banner) return;
+  if (person.banner.ext) fs.rmSync(path.join(avatarDir, `${person.id}-banner.${person.banner.ext}`), { force: true });
+  person.banner = null;
+  if (save) savePeople();
+}
+
+function bannerFile(person) {
+  if (!person || !person.banner || !person.banner.ext) return null;
+  const type = Object.values(IMAGE_TYPES).find((t) => t.ext === person.banner.ext);
+  return { file: path.join(avatarDir, `${person.id}-banner.${person.banner.ext}`), mime: type.mime };
 }
 
 function avatarFile(person) {
@@ -742,6 +788,11 @@ module.exports = {
   saveAvatar,
   removeAvatar,
   avatarFile,
+  BANNER_PRESETS,
+  setBannerPreset,
+  saveBanner,
+  removeBanner,
+  bannerFile,
   getManagementTitles,
   setManagementTitles,
   isOwner,

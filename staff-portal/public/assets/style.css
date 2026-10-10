@@ -2074,3 +2074,46 @@ a.hero-chip:hover { background: rgba(255, 255, 255, 0.2); transform: translateY(
 .toast { border-radius: 12px; font-weight: 600; }
 .imp-banner { background: linear-gradient(90deg, #7a1f6c, #c2306b); color: #fff; }
 .imp-banner .btn-light { background: #fff; color: #7a1f6c; }
+
+/* No colour stripe along the bottom of the home banner, page headers or profile covers */
+.home-hero::after, .page-head::after, .profile-cover::after { display: none; }
+
+/* ---------- Profile banners ---------- */
+.pc-band, .profile-cover, .bp-cover { position: relative; overflow: hidden; }
+.has-image img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.banner-aurora { background: radial-gradient(circle at 20% 20%, rgba(233, 125, 232, 0.7), transparent 50%), radial-gradient(circle at 80% 40%, rgba(62, 155, 163, 0.7), transparent 50%), linear-gradient(135deg, #1c2135, #3d1a6e) !important; }
+.banner-sunset { background: linear-gradient(120deg, #ff9a5a 0%, #e9547c 45%, #7a1f6c 100%) !important; }
+.banner-ocean { background: radial-gradient(circle at 80% 10%, rgba(125, 211, 252, 0.6), transparent 50%), linear-gradient(130deg, #0b3b5c 0%, #1f7a8c 60%, #3e9ba3 100%) !important; }
+.banner-forest { background: radial-gradient(circle at 15% 85%, rgba(227, 230, 91, 0.35), transparent 45%), linear-gradient(130deg, #13301f 0%, #2f7d4f 60%, #5fae7b 100%) !important; }
+.banner-lavender { background: radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.45), transparent 45%), linear-gradient(130deg, #7c5cc4 0%, #b79cf2 60%, #e3d6fb 100%) !important; }
+.banner-midnight { background: radial-gradient(circle at 75% 25%, rgba(94, 168, 255, 0.5), transparent 45%), linear-gradient(140deg, #050814 0%, #111a2c 50%, #1f3a6b 100%) !important; }
+.banner-ember { background: radial-gradient(circle at 30% 80%, rgba(227, 230, 91, 0.45), transparent 45%), linear-gradient(130deg, #3a0d0d 0%, #c2306b 55%, #ff7a45 100%) !important; }
+.banner-slate { background: linear-gradient(130deg, #2b3040 0%, #4a5168 60%, #8b93b0 100%) !important; }
+
+.banner-preview { position: relative; margin-top: 1rem; border-radius: 16px; overflow: hidden; border: 1px solid var(--border); }
+.bp-cover { height: 140px; background: radial-gradient(circle at 15% 20%, rgba(233, 125, 232, 0.55), transparent 45%), radial-gradient(circle at 85% 30%, rgba(62, 155, 163, 0.5), transparent 45%), linear-gradient(135deg, #1c2135, #3d1a6e); }
+.bp-avatar { position: absolute; left: 1.25rem; bottom: -0px; transform: translateY(35%); }
+.banner-preview { padding-bottom: 2rem; background: var(--surface-2); }
+.bp-avatar .avatar { box-shadow: 0 0 0 4px var(--surface-2); }
+.banner-presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 0.6rem; margin-top: 1rem; }
+.banner-swatch {
+    position: relative;
+    height: 56px;
+    border-radius: 12px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    overflow: hidden;
+    display: flex;
+    align-items: flex-end;
+    padding: 0.35rem 0.5rem;
+    font: inherit;
+    transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.banner-swatch span { font-size: 0.72rem; font-weight: 700; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); }
+.banner-swatch:hover { transform: translateY(-2px); box-shadow: var(--card-shadow-hover); }
+.banner-swatch.active { border-color: var(--primary); box-shadow: 0 0 0 3px var(--focus-ring); }
+.banner-actions { margin-top: 1rem; }
+.banner-actions label.btn { margin: 0; }
+.person-card .avatar, .profile-avatar { position: relative; z-index: 1; }
+.banner-preview { padding-bottom: 2.6rem; }
+.bp-avatar { position: absolute; left: 1.25rem; top: 112px; bottom: auto; transform: none; z-index: 1; }

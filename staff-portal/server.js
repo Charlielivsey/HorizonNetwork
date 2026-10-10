@@ -790,6 +790,18 @@ async function routeApi(req, res, pathname, session) {
     logEvent(req, session, "photo-updated");
     return sendJson(res, 200, { user: meResponse(session) });
   }
+  if (method === "POST" && pathname === "/api/me/banner") {
+    const { image, preset } = await readJsonBody(req, MAX_AVATAR_BODY_BYTES * 2);
+    if (preset) store.setBannerPreset(me, preset);
+    else store.saveBanner(me, image);
+    logEvent(req, session, "banner-updated", { detail: preset || "uploaded image" });
+    return sendJson(res, 200, { user: meResponse(session) });
+  }
+  if (method === "POST" && pathname === "/api/me/banner/remove") {
+    store.removeBanner(me);
+    logEvent(req, session, "banner-removed");
+    return sendJson(res, 200, { user: meResponse(session) });
+  }
   if (method === "POST" && pathname === "/api/me/avatar/remove") {
     store.removeAvatar(me);
     logEvent(req, session, "photo-removed");
@@ -801,6 +813,12 @@ async function routeApi(req, res, pathname, session) {
     const avatar = store.avatarFile(store.getPerson(m[1]));
     if (!avatar) return send(res, 404, "Not found", { "Content-Type": "text/plain" });
     return sendFile(res, avatar.file, { "Content-Type": avatar.mime, "Cache-Control": "private, max-age=86400" });
+  }
+
+  if (method === "GET" && (m = /^\/api\/banners\/([a-f0-9]{16})$/.exec(pathname))) {
+    const banner = store.bannerFile(store.getPerson(m[1]));
+    if (!banner) return send(res, 404, "Not found", { "Content-Type": "text/plain" });
+    return sendFile(res, banner.file, { "Content-Type": banner.mime, "Cache-Control": "private, max-age=86400" });
   }
 
   if (method === "GET" && pathname === "/api/directory") {

@@ -18,6 +18,7 @@ Internal staff portal for the whole of HN Group, served at **https://staff.hngro
   - After adding someone, you're asked whether to create their login account. A temporary password is shown once on screen, and the employee must create their own password the first time they sign in.
   - You can reset a password, disable or re-enable a login, edit details and delete employees.
 - **Settings.** Opened by clicking your name. It has three tabs: **Profile** (picture, display name, phone, location and time zone), **Appearance** (theme) and **Security** (password).
+- **Profile banners.** Under **Settings → Profile**, everyone can choose one of eight preset gradient banners or upload their own wide image, which is cropped to 3:1. The banner shows at the top of their profile and on their Staff Directory card.
 
 **Companies:** HN Group, Horizon Network, Horizon Advertising, Horizon Development and Horizon Media Group.
 
