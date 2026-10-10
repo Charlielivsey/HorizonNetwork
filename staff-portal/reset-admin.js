@@ -1,4 +1,5 @@
-// Resets the built-in admin login to admin@hngroup.org.uk / admin without touching any other data.
+// Resets the built-in admin login to admin@hngroup.org.uk / admin and clears its sign-in code
+// (a new one is set at the next sign-in), without touching any other data.
 // Usage on the VPS:  sudo DATA_DIR=/var/lib/hn-staff-portal node /opt/hn-staff-portal/reset-admin.js && pm2 restart hn-staff-portal
 
 const path = require("path");
@@ -13,5 +14,6 @@ if (!admin) {
 store.setPassword(admin, "admin");
 admin.account.enabled = true;
 admin.account.mustChangePassword = true;
+delete admin.account.code;
 store.savePeople();
 console.log(`Admin login reset to: ${store.ADMIN_USERNAME} / admin`);

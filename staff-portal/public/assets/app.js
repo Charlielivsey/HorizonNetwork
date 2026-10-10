@@ -97,6 +97,10 @@
             state.me.passwordTemporary = true;
             render();
         }
+        if (res.status === 403 && data.code === "CODE_SETUP_REQUIRED") {
+            state.me.codeSetupRequired = true;
+            render();
+        }
         if (!res.ok) throw new Error(data.error || "Something went wrong. Please try again.");
         return data;
     }
@@ -420,6 +424,10 @@
             document.body.classList.add("locked");
             return viewForcePassword(root);
         }
+        if (state.me.codeSetupRequired) {
+            document.body.classList.add("locked");
+            return viewSetCode(root);
+        }
         document.body.classList.remove("locked");
 
         const path = window.location.pathname;
@@ -430,6 +438,7 @@
 
         highlightNav();
         root.innerHTML = '<div class="loading">Loading…</div>';
+        root.classList.add("view-enter");
         try {
             await view(root, function () { return seq === renderSeq; });
         } catch (err) {
@@ -453,7 +462,7 @@
         opts = opts || {};
         const backdrop = document.createElement("div");
         backdrop.className = "modal-backdrop";
-        backdrop.innerHTML = '<div class="modal' + (opts.wide ? " modal-wide" : "") + '" role="dialog" aria-modal="true">' +
+        backdrop.innerHTML = '<div class="modal' + (opts.wide ? " modal-wide" : "") + (opts.cls ? " " + opts.cls : "") + '" role="dialog" aria-modal="true">' +
             '<button type="button" class="icon-btn modal-close" aria-label="Close" data-close>' + icon("x") + "</button>" + html + "</div>";
         $("#modal-root").appendChild(backdrop);
         document.body.classList.add("modal-open");
@@ -507,16 +516,11 @@
 
     // ================= Home =================
 
-    // "Main role: Chief Executive Officer at HN Group", plus any other roles.
+    // The user's main role, shown quietly under the greeting.
     function mainRoleHtml(me) {
-        const roles = me.roles || [];
-        const main = roles.find(function (r) { return r.main; });
-        if (!main || me.system) return '<p class="muted">Everything you need across HN Group, in one place.</p>';
-        const others = roles.filter(function (r) { return !r.main; });
-        return '<div class="main-role"><span class="main-role-label">Your main role</span>' +
-            "<strong>" + esc(main.jobTitle) + "</strong> at <strong>" + esc(main.company) + "</strong>" +
-            (others.length ? '<span class="muted"> · also ' + others.map(function (r) { return esc(r.jobTitle) + " at " + esc(r.company); }).join(", ") + "</span>" : "") +
-            "</div>";
+        const main = (me.roles || []).find(function (r) { return r.main; });
+        if (!main || me.system) return '<p class="muted hero-sub">Everything you need across HN Group, in one place.</p>';
+        return '<p class="muted hero-sub">' + esc(main.jobTitle) + " \u00b7 " + esc(main.company) + "</p>";
     }
 
     async function viewHome(root) {
@@ -846,7 +850,7 @@
     }
 
     // Shows one role profile (a person at one company): their title there, who they report to
-    // there (in that supervisor's matching role), their direct reports there, and their other roles.
+    // there (in that supervisor's matching role), their team there, and tabs for their other roles.
     function openPersonModal(key, ctx) {
         const e = ctx.byKey[key];
         if (!e) return;
@@ -854,38 +858,60 @@
         const supervisor = ctx.byKey[supervisorKey(e, ctx.byId)];
         const reports = ctx.entries.filter(function (x) { return supervisorKey(x, ctx.byId) === key; });
         const roles = ctx.entries.filter(function (x) { return x.person.id === p.id; });
-        const chip = function (x) {
-            return '<button type="button" class="person-chip" data-entry="' + esc(x.key) + '">' + avatar(x.person, "xs") + "<span>" + esc(x.person.displayName) +
-                '<span class="muted small"> · ' + esc(x.jobTitle) + (x.company !== e.company ? ", " + esc(x.company) : "") + "</span></span></button>";
+        const email = primaryEmail(p);
+        const personRow = function (x) {
+            return '<button type="button" class="person-row" data-entry="' + esc(x.key) + '">' + avatar(x.person, "sm") +
+                '<span class="pr-text"><span class="pr-name">' + esc(x.person.displayName) + '</span><span class="pr-title">' + esc(x.jobTitle) +
+                (x.company !== e.company ? " \u00b7 " + esc(x.company) : "") + "</span></span>" + icon("chevron", "pr-chev") + "</button>";
         };
 
         const m = openModal(
-            '<div class="profile-head">' + avatar(p, "xl") + '<div><h2 class="modal-title">' + esc(p.displayName) + "</h2>" +
-            '<div class="profile-role">' + esc(e.jobTitle) + '</div><div class="muted">' + esc(e.company) + "</div>" +
-            '<div class="chips">' + (roles.length > 1 ? (e.main ? '<span class="badge">Main role</span>' : '<span class="badge badge-soft">Additional role</span>') : "") +
-            (p.isOwner ? '<span class="badge badge-owner">System owner</span>' : "") + "</div></div></div>" +
-            '<div class="profile-body">' +
-            '<div class="detail-row">' + icon("mail") + "<div>" + p.emails.map(function (x) {
-                return '<a href="mailto:' + esc(x.address) + '">' + esc(x.address) + "</a>";
-            }).join("<br>") + "</div></div>" +
-            (p.phone ? '<div class="detail-row">' + icon("phone") + '<div><a href="tel:' + esc(p.phone.replace(/\s+/g, "")) + '">' + esc(p.phone) + "</a></div></div>" : "") +
-            '<div class="detail-row">' + icon("pin") + "<div>" + esc(p.location || tzCity(p.timezone)) +
-            '<div class="muted small">' + clock(p.timezone, "short") + " local time · " + esc(tzDifference(p.timezone)) + "</div></div></div>" +
-            '<h3 class="detail-head">Reports to</h3>' +
-            (supervisor ? '<div class="chips">' + chip(supervisor) + "</div>" : '<p class="muted small">No one</p>') +
-            (reports.length ? '<h3 class="detail-head">Direct reports (' + reports.length + ')</h3><div class="chips">' + reports.map(chip).join("") + "</div>" : "") +
+            '<div class="profile-cover"></div>' +
+            '<div class="profile-top">' +
+            '<div class="profile-avatar">' + avatar(p, "xl") + "</div>" +
+            '<div class="profile-id"><h2 class="modal-title">' + esc(p.displayName) + "</h2>" +
+            '<div class="profile-role">' + esc(e.jobTitle) + "</div>" +
+            '<div class="profile-company">' + icon("building") + esc(e.company) + "</div></div>" +
+            '<div class="profile-badges">' + (roles.length > 1 ? (e.main ? '<span class="badge">Main role</span>' : '<span class="badge badge-soft">Additional role</span>') : "") +
+            (p.isOwner ? '<span class="badge badge-owner">System owner</span>' : "") + "</div>" +
+            "</div>" +
+
             (roles.length > 1
-                ? '<h3 class="detail-head">' + esc(p.firstName || p.displayName) + "’s roles</h3>" +
-                  '<div class="role-list">' + roles.map(function (r) {
-                      const s = ctx.byKey[supervisorKey(r, ctx.byId)];
-                      return '<button type="button" class="role-item role-switch' + (r.key === key ? " current" : "") + '" data-entry="' + esc(r.key) + '">' +
-                          '<div><div class="role-company">' + esc(r.company) + (r.main ? ' <span class="badge">Main</span>' : "") + '</div><div class="small">' + esc(r.jobTitle) + "</div></div>" +
-                          '<div class="small muted">' + (s ? "Reports to " + esc(s.person.displayName) + " (" + esc(s.jobTitle) + ")" : "No supervisor") + "</div></button>";
-                  }).join("") + "</div>"
+                ? '<div class="role-tabs" role="tablist" aria-label="Roles">' + roles.map(function (r) {
+                    return '<button type="button" role="tab" class="role-tab' + (r.key === key ? " active" : "") + '" aria-selected="' + (r.key === key) + '" data-entry="' + esc(r.key) + '">' +
+                        '<span class="rt-company">' + esc(r.company) + '</span><span class="rt-title">' + esc(r.jobTitle) + "</span></button>";
+                }).join("") + "</div>"
                 : "") +
-            "</div>"
+
+            '<div class="profile-content">' +
+            '<div class="profile-grid">' +
+            '<div class="info-card"><div class="info-label">' + icon("mail") + "Email</div>" +
+            p.emails.map(function (x) {
+                return '<div class="email-line"><a href="mailto:' + esc(x.address) + '">' + esc(x.address) + "</a>" +
+                    '<button type="button" class="icon-btn icon-btn-sm" data-copy="' + esc(x.address) + '" aria-label="Copy ' + esc(x.address) + '">' + icon("copy") + "</button></div>";
+            }).join("") +
+            (p.phone ? '<div class="info-sub">' + icon("phone") + '<a href="tel:' + esc(p.phone.replace(/\s+/g, "")) + '">' + esc(p.phone) + "</a></div>" : "") +
+            "</div>" +
+            '<div class="info-card"><div class="info-label">' + icon("clock") + "Local time</div>" +
+            '<div class="info-time">' + clock(p.timezone, "short") + "</div>" +
+            '<div class="info-sub">' + icon("pin") + esc(p.location || tzCity(p.timezone)) + "</div>" +
+            '<div class="muted small">' + esc(tzDifference(p.timezone)) + "</div></div>" +
+            "</div>" +
+
+            '<div class="profile-section"><h3 class="detail-head">Reports to</h3>' +
+            (supervisor ? personRow(supervisor) : '<div class="top-of-org">' + icon("tree") + "Top of " + esc(e.company) + "</div>") + "</div>" +
+            (reports.length
+                ? '<div class="profile-section"><h3 class="detail-head">Team <span class="tab-count">' + reports.length + "</span></h3>" +
+                  '<div class="team-grid">' + reports.map(personRow).join("") + "</div></div>"
+                : "") +
+            "</div>" +
+
+            (email ? '<div class="profile-actions"><a class="btn btn-primary" href="mailto:' + esc(email) + '">' + icon("mail") + "Email " + esc(p.firstName || p.displayName) + "</a></div>" : ""),
+            { cls: "modal-profile" }
         );
         m.el.addEventListener("click", function (ev) {
+            const copy = ev.target.closest("[data-copy]");
+            if (copy) return copyText(copy.dataset.copy);
             const target = ev.target.closest("[data-entry]");
             if (target && target.dataset.entry !== key) openPersonModal(target.dataset.entry, ctx);
         });
@@ -897,6 +923,7 @@
         if (!emp.account) return '<span class="badge badge-grey">No account</span>';
         if (!emp.account.enabled) return '<span class="badge badge-red">Disabled</span>';
         if (emp.account.passwordTemporary) return '<span class="badge badge-yellow">Awaiting first sign-in</span>';
+        if (!emp.account.hasCode) return '<span class="badge badge-yellow">Code not set</span>';
         return '<span class="badge badge-green">Active</span>';
     }
 
@@ -937,6 +964,9 @@
                     actions.push(e.account
                         ? '<button type="button" class="menu-item compact" data-act="reset">' + icon("key") + "<span>Reset password</span></button>"
                         : '<button type="button" class="menu-item compact" data-act="account">' + icon("key") + "<span>Create login account</span></button>");
+                    if (e.account && e.account.hasCode) {
+                        actions.push('<button type="button" class="menu-item compact" data-act="code-reset">' + icon("shield") + "<span>Reset sign-in code</span></button>");
+                    }
                     if (e.account) {
                         actions.push(e.account.enabled
                             ? '<button type="button" class="menu-item compact" data-act="disable">' + icon("ban") + "<span>Disable login</span></button>"
@@ -982,6 +1012,16 @@
                     if (!ok) return;
                     const res = await api("/api/employees/" + emp.id + "/account", {});
                     showCredentials(emp, res, reload);
+                }
+                if (act === "code-reset") {
+                    if (!(await confirmDialog({
+                        title: "Reset " + emp.displayName + "\u2019s sign-in code?",
+                        message: "They\u2019ll be signed out and asked to choose a new code the next time they sign in with their password.",
+                        confirmLabel: "Reset code",
+                    }))) return;
+                    await api("/api/employees/" + emp.id + "/code/reset", {});
+                    toast("Sign-in code reset.");
+                    reload();
                 }
                 if (act === "disable" || act === "enable") {
                     if (act === "disable" && !(await confirmDialog({
@@ -1901,9 +1941,40 @@
             '<p class="hint">At least 8 characters.</p>' +
             '<div class="form-error" id="pw-error" hidden></div>' +
             '<div class="form-actions"><button type="submit" class="btn btn-primary" id="pw-save">Update password</button></div>' +
+            "</form></section>" +
+            '<section class="panel narrow-panel code-setup"><h2 class="panel-title">' + icon("shield") + "Sign-in code</h2>" +
+            '<p class="muted small">The 6-digit code you enter after your password when you sign in.</p>' +
+            (me.impersonatedBy ? '<p class="muted small">Codes can\'t be changed while you\'re logged in as someone else.</p>' : "") +
+            '<form id="code-change-form" novalidate>' +
+            '<label for="cc-password">Current password</label><input type="password" id="cc-password" autocomplete="current-password">' +
+            '<div class="code-label">New code</div>' + codeBoxesHtml("cc-new", "New code") +
+            '<div class="code-label">Type it again</div>' + codeBoxesHtml("cc-confirm", "Confirm code") +
+            '<div class="form-error" id="cc-error" hidden></div>' +
+            '<div class="form-actions"><button type="submit" class="btn btn-primary" id="cc-save">Update code</button></div>' +
             "</form></section></div>" +
 
             "</div></div>";
+
+        const ccNew = wireCodeBoxes($("#cc-new"), function () { $("#cc-confirm input").focus(); });
+        const ccConfirm = wireCodeBoxes($("#cc-confirm"));
+        $("#code-change-form").addEventListener("submit", async function (e) {
+            e.preventDefault();
+            const err = $("#cc-error");
+            formError(err, "");
+            if (ccNew.value().length !== 6) return formError(err, "Enter all 6 digits of your new code.");
+            if (ccNew.value() !== ccConfirm.value()) return formError(err, "The codes don\u2019t match.");
+            $("#cc-save").disabled = true;
+            try {
+                state.me = (await api("/api/me/code", { code: ccNew.value(), currentPassword: $("#cc-password").value })).user;
+                $("#cc-password").value = "";
+                ccNew.clear();
+                ccConfirm.clear();
+                toast("Sign-in code updated.");
+            } catch (ex) {
+                formError(err, ex.message);
+            }
+            $("#cc-save").disabled = false;
+        });
 
         // Tabs: #appearance and #security (or the older #password) open those tabs directly.
         function showTab(name) {
@@ -2056,6 +2127,10 @@
         "sign-in-failed": ["failed to sign in", "signin"],
         "sign-in-blocked": ["was blocked after too many failed sign-ins", "signin"],
         "password-changed": ["changed their password", "accounts"],
+        "code-set": ["set their sign-in code", "accounts"],
+        "code-changed": ["changed their sign-in code", "accounts"],
+        "code-reset": ["reset the sign-in code for", "accounts"],
+        "sign-in-code-failed": ["entered a wrong sign-in code", "signin"],
         "login-created": ["created a login for", "accounts"],
         "password-reset": ["reset the password for", "accounts"],
         "login-disabled": ["disabled the login for", "accounts"],
@@ -2290,6 +2365,102 @@
 
     // ================= First sign-in =================
 
+    // Six single-digit boxes. Typing moves along; pasting fills them all.
+    function codeBoxesHtml(id, label) {
+        let html = '<div class="code-boxes" id="' + id + '" role="group" aria-label="' + esc(label) + '">';
+        for (let i = 0; i < 6; i++) html += '<input type="password" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="' + esc(label) + " digit " + (i + 1) + '">';
+        return html + "</div>";
+    }
+
+    function wireCodeBoxes(container, onComplete) {
+        const boxes = $$("input", container);
+        const value = function () { return boxes.map(function (b) { return b.value; }).join(""); };
+        const fill = function (text, from) {
+            text.split("").forEach(function (d, j) {
+                const b = boxes[from + j];
+                if (b) { b.value = d; b.classList.add("filled"); }
+            });
+        };
+        boxes.forEach(function (box, i) {
+            box.addEventListener("input", function () {
+                const digits = box.value.replace(/\D/g, "");
+                if (digits.length > 1) fill(digits.slice(0, 6 - i), i); else box.value = digits;
+                box.classList.toggle("filled", !!box.value);
+                const next = boxes.find(function (b) { return !b.value; });
+                if (box.value && next) next.focus();
+                if (value().length === 6 && onComplete) onComplete();
+            });
+            box.addEventListener("keydown", function (e) {
+                if (e.key === "Backspace" && !box.value && i > 0) {
+                    boxes[i - 1].value = "";
+                    boxes[i - 1].classList.remove("filled");
+                    boxes[i - 1].focus();
+                    e.preventDefault();
+                }
+            });
+            box.addEventListener("paste", function (e) {
+                const text = (e.clipboardData || window.clipboardData).getData("text").replace(/\D/g, "").slice(0, 6);
+                if (!text) return;
+                e.preventDefault();
+                fill(text, 0);
+                (boxes[text.length] || boxes[5]).focus();
+                if (value().length === 6 && onComplete) onComplete();
+            });
+        });
+        return {
+            value: value,
+            clear: function () { boxes.forEach(function (b) { b.value = ""; b.classList.remove("filled"); }); },
+            focus: function () { boxes[0].focus(); },
+        };
+    }
+
+    // Everyone sets a 6-digit sign-in code, asked for after their password each time they sign in.
+    function viewSetCode(root) {
+        const me = state.me;
+        root.innerHTML =
+            '<div class="force-wrap"><div class="force-card code-setup">' +
+            '<div class="success-mark">' + icon("shield") + "</div>" +
+            '<h1 class="center">Set your sign-in code</h1>' +
+            '<p class="muted center">' + esc(me.firstName || me.displayName) + ", the portal now asks for a personal 6-digit code as well as your password each time you sign in. Choose one you\u2019ll remember.</p>" +
+            '<form id="setcode-form" novalidate>' +
+            '<div class="code-label">Choose a 6-digit code</div>' + codeBoxesHtml("sc-new", "New code") +
+            '<div class="code-label">Type it again</div>' + codeBoxesHtml("sc-confirm", "Confirm code") +
+            '<p class="hint">Avoid easy codes like 123456 or 000000, and don\u2019t reuse a bank PIN.</p>' +
+            '<div class="form-error" id="sc-error" hidden></div>' +
+            '<button type="submit" class="btn btn-primary btn-block" id="sc-save">Save code and continue</button>' +
+            "</form>" +
+            '<p class="center small"><button type="button" class="btn btn-link" data-action="logout">Sign out</button></p>' +
+            "</div></div>";
+        const first = wireCodeBoxes($("#sc-new"), function () { $("#sc-confirm input").focus(); });
+        const second = wireCodeBoxes($("#sc-confirm"), function () { $("#setcode-form").requestSubmit(); });
+        first.focus();
+        $("#setcode-form").addEventListener("submit", async function (e) {
+            e.preventDefault();
+            const err = $("#sc-error");
+            formError(err, "");
+            if (first.value().length !== 6) return formError(err, "Enter all 6 digits of your new code.");
+            if (first.value() !== second.value()) {
+                second.clear();
+                second.focus();
+                return formError(err, "The codes don\u2019t match. Please type it again.");
+            }
+            $("#sc-save").disabled = true;
+            try {
+                state.me = (await api("/api/me/code", { code: first.value() })).user;
+                if (!state.meta) state.meta = await api("/api/meta");
+                renderChrome();
+                navigate("/home", true);
+                toast("Sign-in code saved. You\u2019ll be asked for it each time you sign in.");
+            } catch (ex) {
+                formError(err, ex.message);
+                first.clear();
+                second.clear();
+                first.focus();
+                $("#sc-save").disabled = false;
+            }
+        });
+    }
+
     function viewForcePassword(root) {
         const me = state.me;
         root.innerHTML =
@@ -2317,6 +2488,7 @@
             $("#fp-save").disabled = true;
             try {
                 state.me = (await api("/api/me/password", { newPassword: next })).user;
+                if (state.me.codeSetupRequired) return render();
                 if (!state.meta) state.meta = await api("/api/meta");
                 renderChrome();
                 navigate("/home", true);
@@ -2335,7 +2507,7 @@
         try {
             state.me = (await api("/api/me")).user;
             applyTheme(state.me.theme);
-            if (!state.me.passwordTemporary) state.meta = await api("/api/meta");
+            if (!state.me.passwordTemporary && !state.me.codeSetupRequired) state.meta = await api("/api/meta");
         } catch (e) {
             return;
         }
@@ -2346,7 +2518,7 @@
         let justSignedIn = false;
         try { justSignedIn = sessionStorage.getItem("hn-just-signed-in") === "1"; sessionStorage.removeItem("hn-just-signed-in"); } catch (e) { /* ignore */ }
         const mainRole = (state.me.roles || []).find(function (r) { return r.main; });
-        if (justSignedIn && mainRole && !state.me.system && !state.me.passwordTemporary) {
+        if (justSignedIn && mainRole && !state.me.system && !state.me.passwordTemporary && !state.me.codeSetupRequired) {
             toast("Signed in as " + mainRole.jobTitle + ", " + mainRole.company);
         }
 

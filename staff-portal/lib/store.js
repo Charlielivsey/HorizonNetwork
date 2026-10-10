@@ -215,6 +215,41 @@ function setPassword(person, newPassword) {
   savePeople();
 }
 
+// ---------- Sign-in codes (asked for after the password) ----------
+
+function hasCode(person) {
+  return !!(person && person.account && person.account.code);
+}
+
+function verifyCode(person, code) {
+  if (!hasCode(person) || typeof code !== "string") return false;
+  const { hash } = hashPassword(code, person.account.code.salt);
+  return crypto.timingSafeEqual(Buffer.from(hash, "hex"), Buffer.from(person.account.code.hash, "hex"));
+}
+
+function validateNewCode(code) {
+  code = String(code || "");
+  if (!/^\d{6}$/.test(code)) throw new ValidationError("Your code must be exactly 6 digits.");
+  const ascending = "01234567890123456789";
+  const descending = "98765432109876543210";
+  if (/^(\d)\1{5}$/.test(code) || ascending.includes(code) || descending.includes(code)) {
+    throw new ValidationError("That code is too easy to guess. Avoid repeated or sequential digits.");
+  }
+  return code;
+}
+
+function setCode(person, code) {
+  person.account.code = hashPassword(validateNewCode(code));
+  person.updatedAt = new Date().toISOString();
+  savePeople();
+}
+
+function clearCode(person) {
+  if (!person.account) return;
+  delete person.account.code;
+  savePeople();
+}
+
 function validateNewPassword(newPassword, currentPassword) {
   if (typeof newPassword !== "string" || newPassword.length < 8) {
     throw new ValidationError("New password must be at least 8 characters.");
@@ -315,6 +350,7 @@ function manageView(p) {
     account: p.account
       ? {
           enabled: p.account.enabled,
+          hasCode: hasCode(p),
           passwordTemporary: p.account.passwordTemporary,
           createdAt: p.account.createdAt,
           lastLoginAt: p.account.lastLoginAt,
@@ -362,6 +398,7 @@ function meView(p) {
     isAdmin: !!p.system || isOwner(p),
     mustChangePassword: !!p.account.mustChangePassword,
     passwordTemporary: !!p.account.passwordTemporary,
+    codeSetupRequired: !hasCode(p),
   };
 }
 
@@ -685,6 +722,10 @@ module.exports = {
   verifyPassword,
   validateNewPassword,
   setPassword,
+  hasCode,
+  verifyCode,
+  setCode,
+  clearCode,
   canManage,
   publicView,
   manageView,

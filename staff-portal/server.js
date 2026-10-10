@@ -14,8 +14,8 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
 const PUBLIC_DIR = path.join(__dirname, "public");
 
 const SESSION_COOKIE = "hn_staff_session";
-const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours when "Keep me signed in" is off
-const REMEMBER_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days when it's on (renewed whenever the portal is used)
+// A sign-in ends when the browser closes, or after 12 hours without using the portal.
+const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const MAX_FAILED_ATTEMPTS = 10;
 const LOCKOUT_WINDOW_MS = 15 * 60 * 1000;
 const MAX_BODY_BYTES = 64 * 1024;
@@ -52,7 +52,14 @@ class SessionStore extends Map {
     try {
       const saved = JSON.parse(fs.readFileSync(file, "utf8"));
       const now = Date.now();
-      for (const [key, s] of Object.entries(saved)) if (s.expires > now) super.set(key, s);
+      for (const [key, s] of Object.entries(saved)) {
+        // Sign-ins from the old "keep me signed in" option are cut back to the normal limit.
+        if (s.remember) {
+          delete s.remember;
+          s.expires = Math.min(s.expires, s.lastSeen + SESSION_TTL_MS);
+        }
+        if (s.expires > now) super.set(key, s);
+      }
     } catch {
       /* no saved sessions yet */
     }
@@ -78,9 +85,12 @@ class SessionStore extends Map {
   }
 }
 
-const sessions = new SessionStore(SESSIONS_FILE); // tokenHash -> { id, personId, expires, remember, ip, userAgent, createdAt, lastSeen, impersonatorId?, returnKey? }
+const sessions = new SessionStore(SESSIONS_FILE); // tokenHash -> { id, personId, expires, ip, userAgent, createdAt, lastSeen, impersonatorId?, returnKey? }
 const failedAttempts = new Map(); // ip -> { count, first }
 const pinFailures = new Map(); // personId -> { count, first }
+const codeChallenges = new Map(); // challenge -> { personId, expires, attempts } (password accepted, waiting for the code)
+const CODE_CHALLENGE_MS = 5 * 60 * 1000;
+const MAX_CODE_ATTEMPTS = 5;
 
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, () => {
@@ -93,24 +103,19 @@ function hashToken(token) {
   return crypto.createHash("sha256").update(String(token)).digest("hex");
 }
 
-function sessionTtl(s) {
-  return s.remember ? REMEMBER_TTL_MS : SESSION_TTL_MS;
-}
-
 function createSession(personId, req, extra = {}) {
   const token = crypto.randomBytes(32).toString("hex");
   const now = Date.now();
   const data = {
     id: crypto.randomBytes(6).toString("hex"),
     personId,
-    remember: false,
     ip: clientIp(req),
     userAgent: String(req.headers["user-agent"] || "").slice(0, 200),
     createdAt: now,
     lastSeen: now,
     ...extra,
   };
-  data.expires = now + sessionTtl(data);
+  data.expires = now + SESSION_TTL_MS;
   sessions.set(hashToken(token), data);
   return token;
 }
@@ -130,7 +135,7 @@ function getSession(req) {
     return null;
   }
   const now = Date.now();
-  session.expires = now + sessionTtl(session); // sliding expiry
+  session.expires = now + SESSION_TTL_MS; // sliding expiry
   if (now - session.lastSeen > 30 * 1000) {
     session.lastSeen = now;
     sessions.save(60 * 1000);
@@ -168,6 +173,7 @@ setInterval(() => {
   for (const [token, s] of sessions) if (s.expires < now) sessions.delete(token);
   for (const [ip, e] of failedAttempts) if (now - e.first > LOCKOUT_WINDOW_MS) failedAttempts.delete(ip);
   for (const [id, e] of pinFailures) if (now - e.first > LOCKOUT_WINDOW_MS) pinFailures.delete(id);
+  for (const [c, e] of codeChallenges) if (e.expires < now) codeChallenges.delete(c);
 }, 10 * 60 * 1000).unref();
 
 // ---------- HTTP helpers ----------
@@ -192,8 +198,9 @@ function clientIp(req) {
 
 // Lax (not Strict) so arriving from a link in an email or another site keeps you signed in.
 // Cross-site POSTs are still blocked by the JSON content-type check.
-function cookieFor(req, token, s) {
-  return sessionCookie(req, token, s.remember ? Math.floor(REMEMBER_TTL_MS / 1000) : null);
+// No Max-Age: the browser forgets the sign-in when it closes.
+function cookieFor(req, token) {
+  return sessionCookie(req, token, null);
 }
 
 function sessionCookie(req, token, maxAgeSeconds) {
@@ -353,7 +360,7 @@ async function handleLogin(req, res) {
     logEvent(req, null, "sign-in-blocked", { actor: "(locked out)" });
     return sendJson(res, 429, { error: "Too many failed attempts. Please try again in 15 minutes." });
   }
-  const { username, password, remember } = await readJsonBody(req);
+  const { username, password } = await readJsonBody(req);
   const person = store.findByLogin(username);
   if (!person || !store.verifyPassword(person, password)) {
     recordFailure(ip);
@@ -362,13 +369,64 @@ async function handleLogin(req, res) {
     return sendJson(res, 401, { error: "Incorrect email or password." });
   }
   failedAttempts.delete(ip);
+  // Step two: anyone with a sign-in code has to enter it before they're signed in.
+  if (store.hasCode(person)) {
+    const challenge = crypto.randomBytes(24).toString("hex");
+    codeChallenges.set(challenge, { personId: person.id, expires: Date.now() + CODE_CHALLENGE_MS, attempts: 0 });
+    return sendJson(res, 200, { codeRequired: true, challenge });
+  }
+  completeLogin(req, res, person);
+}
+
+function completeLogin(req, res, person) {
   store.recordLogin(person);
-  const token = createSession(person.id, req, { remember: remember !== false });
-  console.log(`${store.meView(person).username} signed in from ${ip}`);
+  const token = createSession(person.id, req);
+  console.log(`${store.meView(person).username} signed in from ${clientIp(req)}`);
   logEvent(req, null, "signed-in", { actor: store.loginName(person) });
-  sendJson(res, 200, { user: store.meView(person) }, {
-    "Set-Cookie": cookieFor(req, token, { remember: remember !== false }),
-  });
+  sendJson(res, 200, { user: store.meView(person) }, { "Set-Cookie": cookieFor(req, token) });
+}
+
+async function handleLoginCode(req, res) {
+  const ip = clientIp(req);
+  if (isLockedOut(ip)) {
+    logEvent(req, null, "sign-in-blocked", { actor: "(locked out)" });
+    return sendJson(res, 429, { error: "Too many failed attempts. Please try again in 15 minutes.", restart: true });
+  }
+  const { challenge, code } = await readJsonBody(req);
+  const entry = codeChallenges.get(String(challenge || ""));
+  const person = entry && entry.expires > Date.now() ? store.getPerson(entry.personId) : null;
+  if (!person || !person.account || !person.account.enabled) {
+    codeChallenges.delete(String(challenge || ""));
+    return sendJson(res, 401, { error: "Your sign-in timed out. Please enter your email and password again.", restart: true });
+  }
+  if (!store.verifyCode(person, String(code || ""))) {
+    recordFailure(ip);
+    entry.attempts++;
+    logEvent(req, null, "sign-in-code-failed", { actor: store.loginName(person) });
+    if (entry.attempts >= MAX_CODE_ATTEMPTS) {
+      codeChallenges.delete(challenge);
+      return sendJson(res, 401, { error: "Too many wrong codes. Please sign in again.", restart: true });
+    }
+    return sendJson(res, 401, { error: "That code isn't right. Please try again." });
+  }
+  codeChallenges.delete(challenge);
+  failedAttempts.delete(ip);
+  completeLogin(req, res, person);
+}
+
+async function handleSetCode(req, res, session) {
+  if (session.data.impersonatorId) throw httpError(403, "You can't change sign-in codes while logged in as someone else.");
+  const person = session.person;
+  if (person.account.passwordTemporary) throw httpError(403, "Please create your password first.");
+  const { code, currentPassword } = await readJsonBody(req);
+  const changing = store.hasCode(person);
+  // Changing an existing code needs the password; setting the first one happens straight after signing in.
+  if (changing && !store.verifyPassword(person, currentPassword)) {
+    return sendJson(res, 400, { error: "Your current password is incorrect." });
+  }
+  store.setCode(person, code);
+  logEvent(req, session, changing ? "code-changed" : "code-set");
+  sendJson(res, 200, { user: meResponse(session) });
 }
 
 function meResponse(session) {
@@ -378,7 +436,8 @@ function meResponse(session) {
   if (session.data.impersonatorId) {
     const by = store.getPerson(session.data.impersonatorId);
     user.impersonatedBy = by ? by.displayName : "System owner";
-    user.passwordTemporary = false; // the owner can look around without setting the user's password
+    user.passwordTemporary = false; // the owner can look around without setting the user's password or code
+    user.codeSetupRequired = false;
   }
   return user;
 }
@@ -634,9 +693,9 @@ async function routeSystem(req, res, pathname, session) {
     if (!target || target.id === me.id) throw httpError(404, "User not found.");
     if (!target.account) throw httpError(400, `${target.displayName} doesn't have a login account yet.`);
     if (!target.account.enabled) throw httpError(400, `${target.displayName}'s login is disabled.`);
-    const token = createSession(target.id, req, { impersonatorId: me.id, returnKey: session.token, remember: session.data.remember });
+    const token = createSession(target.id, req, { impersonatorId: me.id, returnKey: session.token });
     logEvent(req, session, "logged-in-as", { target: store.loginName(target) });
-    return sendJson(res, 200, { ok: true }, { "Set-Cookie": cookieFor(req, token, session.data) });
+    return sendJson(res, 200, { ok: true }, { "Set-Cookie": cookieFor(req, token) });
   }
 
   if (method === "POST" && pathname === "/api/system/pin") {
@@ -663,7 +722,7 @@ function stopImpersonating(req, res, session) {
     const token = crypto.randomBytes(32).toString("hex");
     sessions.delete(returnKey);
     sessions.set(hashToken(token), back);
-    return sendJson(res, 200, { ok: true, redirect: "/system" }, { "Set-Cookie": cookieFor(req, token, back) });
+    return sendJson(res, 200, { ok: true, redirect: "/system" }, { "Set-Cookie": cookieFor(req, token) });
   }
   sendJson(res, 200, { ok: true, redirect: "/login" }, { "Set-Cookie": sessionCookie(req, "", 0) });
 }
@@ -672,6 +731,7 @@ async function routeApi(req, res, pathname, session) {
   const method = req.method;
 
   if (method === "POST" && pathname === "/api/login") return handleLogin(req, res);
+  if (method === "POST" && pathname === "/api/login/code") return handleLoginCode(req, res);
   if (method === "POST" && pathname === "/api/logout") {
     if (session) {
       sessions.delete(session.token);
@@ -684,16 +744,19 @@ async function routeApi(req, res, pathname, session) {
   const me = session.person;
 
   if (method === "GET" && pathname === "/api/me") {
-    // Renew the "keep me signed in" cookie so it only runs out after 30 days of not using the portal.
-    const headers = session.data.remember ? { "Set-Cookie": cookieFor(req, session.raw, session.data) } : {};
-    return sendJson(res, 200, { user: meResponse(session) }, headers);
+    return sendJson(res, 200, { user: meResponse(session) });
   }
   if (method === "POST" && pathname === "/api/stop-impersonating") return stopImpersonating(req, res, session);
   if (method === "POST" && pathname === "/api/me/password") return handleChangePassword(req, res, session);
+  if (method === "POST" && pathname === "/api/me/code") return handleSetCode(req, res, session);
 
   // Everything else waits until a temporary password has been replaced.
   if (me.account.passwordTemporary && !session.data.impersonatorId) {
     return sendJson(res, 403, { error: "Please create a new password first.", code: "PASSWORD_CHANGE_REQUIRED" });
+  }
+  // ...and until a sign-in code has been set.
+  if (!store.hasCode(me) && !session.data.impersonatorId) {
+    return sendJson(res, 403, { error: "Please set your sign-in code first.", code: "CODE_SETUP_REQUIRED" });
   }
 
   if (method === "GET" && pathname === "/api/meta") {
@@ -759,7 +822,7 @@ async function routeApi(req, res, pathname, session) {
       logEvent(req, session, "employee-added", { target: person.displayName, detail: `${person.jobTitle}, ${person.company}` });
       return sendJson(res, 201, { employee: store.manageView(person) });
     }
-    if (method === "POST" && (m = /^\/api\/employees\/([a-f0-9]{16})(?:\/(delete|account|account\/disable|account\/enable))?$/.exec(pathname))) {
+    if (method === "POST" && (m = /^\/api\/employees\/([a-f0-9]{16})(?:\/(delete|account|account\/disable|account\/enable|code\/reset))?$/.exec(pathname))) {
       const action = m[2];
       const person = requireEmployee(m[1], me, action);
 
@@ -786,6 +849,13 @@ async function routeApi(req, res, pathname, session) {
         return sendJson(res, 200, { ...credentials, employee: store.manageView(person) });
       }
       if (!person.account) throw httpError(400, "This employee doesn't have a login account.");
+      if (action === "code/reset") {
+        if (person.id === me.id) throw httpError(400, "Change your own code under Settings → Security.");
+        store.clearCode(person);
+        endSessionsFor(person.id);
+        logEvent(req, session, "code-reset", { target: store.loginName(person) });
+        return sendJson(res, 200, { employee: store.manageView(person) });
+      }
       if (person.id === me.id) throw httpError(400, "You can't disable your own account.");
       store.setAccountEnabled(person, action === "account/enable");
       logEvent(req, session, action === "account/enable" ? "login-enabled" : "login-disabled", { target: store.loginName(person) });

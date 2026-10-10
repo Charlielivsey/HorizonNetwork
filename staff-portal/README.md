@@ -54,11 +54,18 @@ Staff see their main role under the greeting on the home page, and in a short "S
 - **List** for scanning.
 - **Org chart** showing reporting lines for the selected company. Teams can be collapsed.
 
-### Staying signed in
+### Signing in
 
-The sign-in page has **Keep me signed in**, which is ticked by default. With it on, you stay signed in on that browser for 30 days, and the 30 days restart every time you use the portal. With it off, the sign-in ends when the browser closes, or after 12 hours.
+Signing in has two steps: your **email and password**, then your personal **6-digit sign-in code**.
 
-Sign-ins are saved in `sessions.json`, so restarting the app or running the installer doesn't sign anyone out. Only a hash of each sign-in token is stored, so the file can't be used to sign in.
+- **Setting a code.** Everyone sets their code the first time they sign in after this feature was added, or straight after creating their password if they're new. Until they do, nothing else in the portal works for them.
+- **Rules.** Codes must be exactly 6 digits. Easy ones like `123456` or `000000` are refused.
+- **Changing your code.** Go to **Settings → Security**. You'll need your current password.
+- **Forgotten codes.** HR and leadership can use **Reset sign-in code** in Employee Management. The person then chooses a new code at their next sign-in.
+- **Wrong codes.** Five wrong codes mean starting again from the password step. Wrong codes count towards the 15-minute lockout on that network address, and they're recorded in the activity log.
+- **Log in as.** "Log in as" in System Admin skips both the password and the code.
+
+**How long a sign-in lasts.** A sign-in ends when the browser is closed, or after 12 hours without using the portal. Sign-ins are saved in `sessions.json`, so restarting the app or running the installer doesn't sign anyone out. Only a hash of each sign-in token is stored, so the file can't be used to sign in.
 
 ### Workplace
 
@@ -149,7 +156,7 @@ Everything lives in `/var/lib/hn-staff-portal`:
 | `people.json`     | Employees and login accounts. Passwords are stored as scrypt hashes. |
 | `settings.json`   | Access rules, the system owner and the system PIN (hashed).     |
 | `announcements.json`, `documents.json`, `documents/` | Announcements, the document library and the uploaded files. |
-| `sessions.json`   | Signed-in sessions (hashed).                                     |
+| `sessions.json`   | Signed-in sessions (hashed tokens).                              |
 | `audit.log`       | Activity log of every action in the portal.                     |
 | `avatars/`        | Profile pictures.                                               |
 
@@ -172,7 +179,7 @@ sudo certbot renew --dry-run      # test certificate renewal
 - **The installer says DNS doesn't point at this server.** Wait for the A record to propagate, then re-run the installer.
 - **The site shows the main Horizon Network page.** Check that `/etc/nginx/sites-enabled/hn-staff-portal` exists, then run `sudo nginx -t && sudo systemctl reload nginx`.
 - **502 Bad Gateway.** The app isn't running. Check `pm2 status` and `pm2 logs hn-staff-portal`.
-- **Forgot the admin password.** This resets the login to `admin@hngroup.org.uk` / `admin` and leaves every other account and record alone:
+- **Forgot the admin password.** This resets the login to `admin@hngroup.org.uk` / `admin`, clears its sign-in code so a new one is set at the next sign-in, and leaves every other account and record alone:
   ```bash
   sudo DATA_DIR=/var/lib/hn-staff-portal node /opt/hn-staff-portal/reset-admin.js && pm2 restart hn-staff-portal
   ```

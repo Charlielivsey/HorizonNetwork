@@ -10,38 +10,97 @@
     <script src="/assets/theme-boot.js"></script>
 </head>
 <body class="login-page">
-    <main class="login-wrap">
-        <div class="login-card">
-            <div class="brand brand-lg">
-                <img src="/assets/hn-group-logo.png" alt="HN Group" class="brand-logo logo-light-theme">
-            <img src="/assets/hn-group-logo-white.png" alt="HN Group" class="brand-logo logo-dark-theme">
-                <span class="brand-sub">Staff Portal</span>
+    <div class="login-shell">
+        <aside class="login-brand" aria-hidden="true">
+            <div class="login-glow g1"></div>
+            <div class="login-glow g2"></div>
+            <div class="login-glow g3"></div>
+            <div class="login-brand-inner">
+                <img src="/assets/hn-group-logo-white.png" alt="" class="login-brand-logo">
+                <div class="login-brand-copy">
+                    <p class="login-kicker">Staff Portal</p>
+                    <h2>Everything you need across HN Group, in one place.</h2>
+                    <p>News, documents and policies, and your colleagues across every company in the group.</p>
+                </div>
+                <ul class="login-companies">
+                    <li>HN Group</li>
+                    <li>Horizon Network</li>
+                    <li>Horizon Advertising</li>
+                    <li>Horizon Development</li>
+                    <li>Horizon Media Group</li>
+                </ul>
+                <div class="login-stripes"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
             </div>
+        </aside>
 
-            <h1>Sign in</h1>
-            <p class="muted">Sign in with your work email address.</p>
-
-            <form id="login-form" novalidate>
-                <label for="username">Email</label>
-                <input id="username" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus>
-
-                <label for="password">Password</label>
-                <div class="password-field">
-                    <input id="password" name="password" type="password" autocomplete="current-password" required>
-                    <button type="button" class="toggle-pw" id="toggle-pw" aria-label="Show password">Show</button>
+        <main class="login-main">
+            <div class="login-card">
+                <div class="login-card-logo">
+                    <img src="/assets/hn-group-logo.png" alt="HN Group" class="logo-light-theme">
+                    <img src="/assets/hn-group-logo-white.png" alt="HN Group" class="logo-dark-theme">
                 </div>
 
-                <label class="inline-check remember"><input type="checkbox" id="remember" checked> Keep me signed in</label>
+                <div id="step-password" class="login-step">
+                    <h1>Welcome back</h1>
+                    <p class="muted">Sign in with your work email address.</p>
 
-                <div class="form-error" id="login-error" role="alert" hidden></div>
+                    <form id="login-form" novalidate>
+                        <label for="username">Email</label>
+                        <div class="field-icon">
+                            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="m22 6-10 7L2 6"/></svg>
+                            <input id="username" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus>
+                        </div>
 
-                <button type="submit" class="btn btn-primary btn-block" id="login-btn">Sign in</button>
-            </form>
+                        <label for="password">Password</label>
+                        <div class="field-icon password-field">
+                            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                            <input id="password" name="password" type="password" autocomplete="current-password" required>
+                            <button type="button" class="toggle-pw" id="toggle-pw" aria-label="Show password">Show</button>
+                        </div>
 
-            <p class="login-foot muted">Having trouble signing in? Contact the IT team.</p>
-        </div>
-        <p class="legal">Authorised HN Group staff only. Activity on this system is logged.</p>
-    </main>
+                        <div class="form-error" id="login-error" role="alert" hidden></div>
+
+                        <button type="submit" class="btn btn-primary btn-block btn-login" id="login-btn">
+                            <span class="btn-label">Continue</span>
+                            <svg class="icon btn-arrow" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+                            <span class="spinner" aria-hidden="true"></span>
+                        </button>
+                    </form>
+                </div>
+
+                <div id="step-code" class="login-step" hidden>
+                    <div class="code-mark">
+                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+                    </div>
+                    <h1>Enter your code</h1>
+                    <p class="muted">Enter your 6-digit sign-in code for <strong id="code-email"></strong>.</p>
+
+                    <form id="code-form" novalidate>
+                        <div class="code-boxes" id="code-boxes" role="group" aria-label="Sign-in code">
+                            <input type="password" inputmode="numeric" maxlength="1" autocomplete="one-time-code" aria-label="Digit 1">
+                            <input type="password" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Digit 2">
+                            <input type="password" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Digit 3">
+                            <input type="password" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Digit 4">
+                            <input type="password" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Digit 5">
+                            <input type="password" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Digit 6">
+                        </div>
+
+                        <div class="form-error" id="code-error" role="alert" hidden></div>
+
+                        <button type="submit" class="btn btn-primary btn-block btn-login" id="code-btn">
+                            <span class="btn-label">Sign in</span>
+                            <svg class="icon btn-arrow" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+                            <span class="spinner" aria-hidden="true"></span>
+                        </button>
+                        <button type="button" class="btn btn-link code-back" id="code-back">← Use a different account</button>
+                    </form>
+                </div>
+
+                <p class="login-foot muted">Having trouble signing in? Contact the IT team.</p>
+            </div>
+            <p class="legal">Authorised HN Group staff only. Activity on this system is logged.</p>
+        </main>
+    </div>
     <script src="/assets/login.js"></script>
 </body>
 </html>
