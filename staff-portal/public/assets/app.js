@@ -410,6 +410,22 @@
 
     window.addEventListener("popstate", render);
 
+    // Each page's header gets its own icon.
+    const PAGE_ICONS = {
+        "/directory": "users",
+        "/employees": "briefcase",
+        "/announcements": "bell",
+        "/documents": "file",
+        "/settings": "settings",
+        "/system": "shield",
+    };
+
+    function decoratePageHead(root, path) {
+        const head = $(".page-head", root);
+        if (!head || !PAGE_ICONS[path] || $(".page-icon", head)) return;
+        head.insertAdjacentHTML("afterbegin", '<span class="page-icon">' + icon(PAGE_ICONS[path]) + "</span>");
+    }
+
     let renderSeq = 0;
     async function render() {
         const seq = ++renderSeq;
@@ -445,6 +461,7 @@
             if (seq === renderSeq) root.innerHTML = '<div class="empty">' + esc(err.message) + "</div>";
         }
         if (seq !== renderSeq) return;
+        decoratePageHead(root, path);
         if (window.location.hash) {
             const target = document.getElementById(window.location.hash.slice(1));
             if (target) target.scrollIntoView({ block: "start" });
@@ -537,42 +554,42 @@
                 ? '<div class="banner banner-warn"><div><strong>You\'re using the default password.</strong> Please change it now to keep the portal secure.</div>' +
                   '<a class="btn btn-small btn-dark" href="/settings#password" data-link>Change password</a></div>'
                 : "") +
-            '<section class="hero">' +
-            '<p class="eyebrow">' + clock(deviceTz, "date") + "</p>" +
+            '<section class="home-hero">' +
+            '<div class="hero-glow g1"></div><div class="hero-glow g2"></div>' +
+            '<div class="hero-main">' +
+            '<p class="hero-date">' + clock(deviceTz, "date") + "</p>" +
             "<h1>" + esc(greeting) + ", " + esc(firstName) + "</h1>" +
-            mainRoleHtml(me) + "</section>" +
+            mainRoleHtml(me) +
+            '<div class="hero-chips">' +
+            (me.unreadAnnouncements ? '<a class="hero-chip" href="/announcements" data-link>' + icon("bell") + me.unreadAnnouncements + " new announcement" + (me.unreadAnnouncements === 1 ? "" : "s") + "</a>" : "") +
+            (me.pendingAcks ? '<a class="hero-chip warn" href="/documents" data-link>' + icon("file") + me.pendingAcks + " document" + (me.pendingAcks === 1 ? "" : "s") + " to acknowledge</a>" : "") +
+            (!me.unreadAnnouncements && !me.pendingAcks ? '<span class="hero-chip calm">' + icon("tick") + "You\u2019re all caught up</span>" : "") +
+            "</div></div>" +
+            '<div class="hero-clocks">' +
+            '<div class="glass-clock"><div class="gc-label">' + icon("monitor") + "Your time \u00b7 " + esc(tzCity(deviceTz)) + "</div>" +
+            '<div class="gc-time">' + clock(deviceTz, "time") + "</div>" +
+            '<div class="gc-sub">' + clock(deviceTz, "zone") + "</div></div>" +
+            '<div class="glass-clock"><div class="gc-label">' + icon("pin") + esc(placeName) + "</div>" +
+            '<div class="gc-time">' + clock(profileTz, "time") + "</div>" +
+            '<div class="gc-sub">' + clock(profileTz, "zone") + " \u00b7 " + esc(tzDifference(profileTz)) +
+            (me.location ? "" : ' \u00b7 <a href="/settings" data-link>Set location</a>') + "</div></div>" +
+            "</div></section>" +
 
-            '<section class="clocks">' +
-            '<div class="clock-card">' +
-            '<div class="clock-head"><span class="clock-icon">' + icon("monitor") + '</span><div><div class="clock-label">Your local time</div>' +
-            '<div class="clock-sub">' + esc(tzCity(deviceTz)) + " · " + clock(deviceTz, "zone") + "</div></div></div>" +
-            '<div class="clock-time">' + clock(deviceTz, "time") + "</div>" +
-            '<div class="clock-date">' + clock(deviceTz, "date") + "</div></div>" +
-
-            '<div class="clock-card clock-card-alt">' +
-            '<div class="clock-head"><span class="clock-icon">' + icon("pin") + '</span><div><div class="clock-label">' + esc(placeName) + "</div>" +
-            '<div class="clock-sub">Your profile location · ' + clock(profileTz, "zone") + "</div></div></div>" +
-            '<div class="clock-time">' + clock(profileTz, "time") + "</div>" +
-            '<div class="clock-date">' + clock(profileTz, "date") + "</div>" +
-            '<div class="clock-note">' + esc(tzDifference(profileTz)) +
-            (me.location ? "" : ' · <a href="/settings" data-link>Set your location</a>') + "</div></div>" +
-            "</section>" +
-
+            '<div class="home-layout">' +
             '<section class="home-announcements"><div class="panel-head tight"><h2 class="section-title">' + icon("bell") + "Announcements</h2>" +
-            '<a class="small" href="/announcements" data-link>View all</a></div>' +
-            '<div id="home-news" class="announcements wide"><p class="muted small">Loading…</p></div></section>' +
+            '<a class="small link-arrow" href="/announcements" data-link>View all</a></div>' +
+            '<div id="home-news" class="announcements wide"><p class="muted small">Loading\u2026</p></div></section>' +
 
-            '<div class="home-grid">' +
-            '<section class="panel"><h2 class="section-title">Your details</h2>' +
-            '<div class="me-card">' + avatar(me, "lg") + '<div><div class="me-name">' + esc(me.displayName) + "</div>" +
+            '<aside class="home-side">' +
+            '<section class="panel" id="home-todo" hidden></section>' +
+            '<section class="panel me-panel"><div class="me-card">' + avatar(me, "lg") + '<div><div class="me-name">' + esc(me.displayName) + "</div>" +
             '<div class="muted small">' + esc(me.jobTitle) + "</div>" + (me.isOwner ? '<span class="badge badge-owner">System owner</span>' : "") + "</div></div>" +
             rolesHtml(me) +
-            (primaryEmail(me) ? '<dl class="facts"><dt>Email</dt><dd>' + esc(primaryEmail(me)) + "</dd></dl>" : "") +
-            '<a class="btn btn-ghost btn-block-sm" href="/settings" data-link>Edit profile</a></section>' +
-            '<section class="panel" id="home-todo" hidden></section>' +
-            '<section class="panel"><h2 class="section-title">Need help?</h2>' +
-            '<p class="muted">For access problems or anything IT related, contact the IT team.</p></section>' +
-            "</div>";
+            (primaryEmail(me) ? '<div class="me-email">' + icon("mail") + esc(primaryEmail(me)) + "</div>" : "") +
+            '<a class="btn btn-ghost btn-block-sm" href="/settings" data-link>' + icon("settings") + "Settings</a></section>" +
+            '<section class="panel help-panel">' + icon("lifebuoy") + '<div><h2 class="section-title">Need help?</h2>' +
+            '<p class="muted small">For access problems or anything IT related, contact the IT team.</p></div></section>' +
+            "</aside></div>";
 
         // Live panels: the latest announcements, and anything waiting for the user to acknowledge.
         api("/api/announcements").then(function (d) {
@@ -735,7 +752,7 @@
         function card(e) {
             const p = e.person;
             const sup = supLabel(e);
-            return '<button type="button" class="person-card" data-entry="' + esc(e.key) + '">' + avatar(p, "lg") +
+            return '<button type="button" class="person-card" data-entry="' + esc(e.key) + '"><span class="pc-band"></span>' + avatar(p, "lg") +
                 '<span class="pc-name">' + esc(p.displayName) + "</span>" +
                 '<span class="pc-title">' + esc(e.jobTitle) + "</span>" +
                 '<span class="pc-company">' + esc(e.company) + "</span>" +
