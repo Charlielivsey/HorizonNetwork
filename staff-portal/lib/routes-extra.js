@@ -12,6 +12,11 @@ const leave = require("./leave");
 const training = require("./training");
 const cases = require("./cases");
 const recruitment = require("./recruitment");
+const notifications = require("./notifications");
+const kudos = require("./kudos");
+const ideas = require("./ideas");
+const workplace = require("./workplace");
+const calendar = require("./calendar");
 
 let ctx;
 function init(helpers) {
@@ -400,6 +405,113 @@ async function handle(req, res, pathname, session) {
       logEvent(req, session, "applicant-" + m[2], { target: a.name, detail: v.title + (m[2] === "stage" ? ` → ${recruitment.STAGES[a.stage]}` : "") });
       return sendJson(res, 200, { ok: true }), true;
     }
+  }
+
+  // ----- Notifications -----
+  if (pathname === "/api/notifications" && method === "GET") {
+    return sendJson(res, 200, { items: notifications.forPerson(me.id), unread: notifications.unreadCount(me.id) }), true;
+  }
+  if ((pathname === "/api/notifications/read" || pathname === "/api/notifications/clear") && method === "POST") {
+    const body = await readJsonBody(req);
+    if (pathname.endsWith("/clear")) notifications.clear(me.id);
+    else notifications.markRead(me.id, body.id || null);
+    return sendJson(res, 200, { ok: true, unread: notifications.unreadCount(me.id) }), true;
+  }
+
+  // ----- Kudos and milestones -----
+  if (pathname.startsWith("/api/kudos")) {
+    if (method === "GET" && pathname === "/api/kudos") {
+      return sendJson(res, 200, {
+        posts: kudos.list(me), leaders: kudos.leaders(), milestones: kudos.milestones(me, { ahead: 14 }),
+        values: kudos.VALUES, reactions: kudos.REACTIONS,
+        people: store.employees().filter((p) => p.id !== me.id).map((p) => ({ id: p.id, displayName: p.displayName, jobTitle: p.jobTitle, avatarUrl: store.publicView(p).avatarUrl })),
+      }), true;
+    }
+    if (method === "POST" && pathname === "/api/kudos") {
+      const post = kudos.give(me, await readJsonBody(req));
+      logEvent(req, session, "kudos-given", { target: post.to.map((id) => (store.getPerson(id) || {}).displayName).join(", ") });
+      if (notify) notify(post.to, { type: "kudos", title: `${me.displayName} gave you kudos: ${kudos.VALUES[post.value]}`, body: post.message, link: "/kudos" }, me);
+      return sendJson(res, 201, { ok: true }), true;
+    }
+    if (method === "POST" && pathname === "/api/kudos/congrats") {
+      const body = await readJsonBody(req);
+      const personId = String(body.key || "").split(":")[1];
+      if (personId === me.id) throw httpError(400, "You can't congratulate yourself!");
+      const added = kudos.congratulate(body.key, me);
+      if (added && notify) notify([personId], { type: "kudos", title: `${me.displayName} says congratulations! 🎉`, body: { birthday: "Happy birthday!", anniversary: "Happy work anniversary!", starter: "Welcome to HN Group!" }[String(body.key).split(":")[0]], link: "/kudos" }, me);
+      return sendJson(res, 200, { ok: true, added }), true;
+    }
+    if ((m = /^\/api\/kudos\/([a-f0-9]{16})\/(react|delete)$/.exec(pathname)) && method === "POST") {
+      const post = kudos.get(m[1]);
+      if (!post) throw httpError(404, "Not found.");
+      if (m[2] === "react") kudos.react(post, me, (await readJsonBody(req)).emoji);
+      else {
+        if (!kudos.canDelete(me, post)) throw httpError(403, "You can't delete that.");
+        kudos.remove(post);
+        logEvent(req, session, "kudos-deleted");
+      }
+      return sendJson(res, 200, { ok: true, post: m[2] === "react" ? kudos.list(me).find((p) => p.id === post.id) : null }), true;
+    }
+  }
+
+  // ----- Ideas box -----
+  if (pathname.startsWith("/api/ideas")) {
+    if (method === "GET" && pathname === "/api/ideas") {
+      return sendJson(res, 200, { ideas: ideas.list(me), statuses: ideas.STATUSES, categories: ideas.CATEGORIES, canManage: can(ideas.MANAGE) }), true;
+    }
+    if (method === "POST" && pathname === "/api/ideas") {
+      const idea = ideas.create(me, await readJsonBody(req));
+      logEvent(req, session, "idea-posted", { target: idea.title, detail: idea.anonymous ? "Anonymous" : undefined, actor: idea.anonymous ? "Anonymous" : undefined });
+      if (notify) notify(store.employees().filter((p) => store.can(p, ideas.MANAGE)).map((p) => p.id), { type: "idea", title: `New idea: ${idea.title}`, body: idea.anonymous ? "Posted anonymously" : `From ${me.displayName}`, link: "/ideas" }, me);
+      return sendJson(res, 201, { ok: true }), true;
+    }
+    if ((m = /^\/api\/ideas\/([a-f0-9]{16})\/(vote|comment|status|delete)$/.exec(pathname)) && method === "POST") {
+      const idea = ideas.get(m[1]);
+      if (!idea) throw httpError(404, "Idea not found.");
+      const body = await readJsonBody(req);
+      if (m[2] === "vote") ideas.vote(idea, me);
+      else if (m[2] === "comment") {
+        ideas.comment(idea, me, body.text);
+        if (notify && idea.by !== me.id) notify([idea.by], { type: "idea", title: `${me.displayName} commented on your idea`, body: idea.title, link: "/ideas" }, me);
+      } else if (m[2] === "status") {
+        if (!can(ideas.MANAGE)) throw httpError(403, "Only leadership can change an idea's status.");
+        ideas.setStatus(idea, body.status, body.note, me);
+        logEvent(req, session, "idea-status-changed", { target: idea.title, detail: ideas.STATUSES[idea.status] });
+        if (notify) notify(idea.votes.concat(idea.by), { type: "idea", title: `Idea ${ideas.STATUSES[idea.status].toLowerCase()}: ${idea.title}`, body: idea.statusNote, link: "/ideas" }, me);
+      } else {
+        if (!ideas.canDelete(me, idea)) throw httpError(403, "You can't delete that idea.");
+        ideas.remove(idea);
+        logEvent(req, session, "idea-deleted", { target: idea.title });
+        return sendJson(res, 200, { ok: true }), true;
+      }
+      return sendJson(res, 200, { idea: ideas.view(idea, me) }), true;
+    }
+  }
+
+  // ----- Team pages: one per company -----
+  if ((m = /^\/api\/teams\/(.+)$/.exec(pathname)) && method === "GET") {
+    const company = decodeURIComponent(m[1]);
+    if (!store.COMPANIES.includes(company)) throw httpError(404, "Team not found.");
+    const members = store.employees().filter((p) => p.company === company || (p.otherRoles || []).some((r) => r.company === company));
+    const ids = members.map((p) => p.id);
+    const t = new Date().toISOString().slice(0, 10);
+    const in30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+    const roleOf = (p) => (p.company === company ? { jobTitle: p.jobTitle, supervisorId: p.supervisorId } : (p.otherRoles || []).find((r) => r.company === company) || {});
+    return sendJson(res, 200, {
+      company,
+      people: members.map((p) => {
+        const v = store.publicView(p);
+        const r = roleOf(p);
+        return { id: p.id, displayName: p.displayName, jobTitle: r.jobTitle || p.jobTitle, avatarUrl: v.avatarUrl, status: store.currentStatus(p), main: p.company === company, supervisorId: r.supervisorId || p.supervisorId, offToday: leave.isOffToday(p.id) };
+      }).sort((a, b) => a.displayName.localeCompare(b.displayName)),
+      announcements: workplace.listAnnouncements(me).filter((a) => a.state === "live" && a.companies.includes(company)).slice(0, 5)
+        .map((a) => ({ id: a.id, title: a.title, body: a.body, createdAt: a.publishAt || a.createdAt, author: a.author, pinned: a.pinned })),
+      leave: leave.calendarItems(t, in30).filter((x) => ids.includes(x.personId)),
+      events: calendar.itemsBetween(me, t, in30).filter((e) => e.kind === "event" && (!e.companies.length || e.companies.includes(company))),
+      kudos: kudos.list(me, { people: ids, limit: 6 }),
+      milestones: kudos.milestones(me, { people: ids, ahead: 30 }),
+      vacancies: recruitment.forViewer(me).vacancies.filter((v) => v.open && v.company === company).map((v) => ({ id: v.id, title: v.title, location: v.location })),
+    }), true;
   }
 
   return false;

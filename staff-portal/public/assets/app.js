@@ -343,6 +343,8 @@
         {
             label: "People", items: [
                 { title: "Staff Directory", desc: "Find colleagues across the group", href: "/directory", icon: "users" },
+                { title: "Teams", desc: "Each company’s people, news and plans", href: "/team", icon: "building" },
+                { title: "Kudos", desc: "Thank colleagues and celebrate milestones", href: "/kudos", icon: "heart" },
                 { title: "Employee Management", desc: "Add and manage staff records", href: "/employees", icon: "briefcase", requires: "staff.manage" },
                 { title: "Joiners & leavers", desc: "Onboarding and leaving checklists", href: "/onboarding", icon: "check", requires: "onboarding.manage" },
                 { title: "Jobs", desc: "Open roles, applications and referrals", href: "/jobs", icon: "briefcase", badge: "newApplicants" },
@@ -355,6 +357,7 @@
                 { title: "Documents & Policies", desc: "Handbooks, policies, forms and templates", href: "/documents", icon: "file", badge: "pendingAcks" },
                 { title: "Calendar", desc: "Events, bank holidays and celebrations", href: "/calendar", icon: "calendar" },
                 { title: "Polls & surveys", desc: "Have your say", href: "/polls", icon: "chart", badge: "openPolls" },
+                { title: "Ideas", desc: "Suggest improvements and vote", href: "/ideas", icon: "flag", badge: "newIdeas" },
                 { title: "Email signature", desc: "Make your branded email signature", href: "/signature", icon: "mail" },
             ],
         },
@@ -428,6 +431,8 @@
             '<button type="button" class="menu-item compact danger" role="menuitem" data-action="logout">' + icon("logout") + "<span>Sign out</span></button>" +
             "</div>";
 
+        const bell = $("#bell-menu");
+        if (bell) bell.innerHTML = bellHtml();
         $("#nav-toggle").innerHTML = icon("menu");
         $("#search-btn").innerHTML = icon("search") + '<span class="sb-text">Search</span><kbd>' + (/Mac|iPhone|iPad/.test(navigator.platform) ? "\u2318" : "Ctrl") + " K</kbd>";
         highlightNav();
@@ -482,6 +487,7 @@
         if (menuBtn) {
             e.preventDefault();
             toggleMenu(menuBtn);
+            if (menuBtn.id === "bell-btn" && !menuBtn.nextElementSibling.hidden) loadBell();
             return;
         }
 
@@ -569,6 +575,10 @@
         "/training": viewTraining,
         "/cases": viewCases,
         "/jobs": viewJobs,
+        "/notifications": viewNotifications,
+        "/kudos": viewKudos,
+        "/ideas": viewIdeas,
+        "/team": viewTeam,
     };
 
     function navigate(href, replace) {
@@ -606,6 +616,10 @@
         "/training": "star",
         "/cases": "shield",
         "/jobs": "briefcase",
+        "/notifications": "bell",
+        "/kudos": "heart",
+        "/ideas": "flag",
+        "/team": "building",
     };
 
     function decoratePageHead(root, path) {
@@ -791,6 +805,7 @@
             '<aside class="home-side">' +
             '<section class="panel" id="home-todo" hidden></section>' +
             '<section class="panel" id="home-onboarding" hidden></section>' +
+            '<section class="panel" id="home-celebrate" hidden></section>' +
             '<section class="panel" id="home-coming"><p class="muted small">Loading\u2026</p></section>' +
             '<section class="panel me-panel"><div class="me-card">' + avatar(me, "lg") + '<div><div class="me-name">' + esc(me.displayName) + "</div>" +
             '<div class="muted small">' + esc(me.jobTitle) + "</div>" + (me.isOwner ? '<span class="badge badge-owner">System owner</span>' : "") + "</div></div>" +
@@ -833,6 +848,7 @@
             });
         });
         loadComingUp($("#home-coming"));
+        loadCelebrations($("#home-celebrate"));
         loadMyOnboarding($("#home-onboarding"));
 
         if (me.pendingAcks) {
@@ -6396,7 +6412,7 @@
                 const was = state.me;
                 state.me = d.user;
                 if (!!was.impersonatedBy !== !!d.user.impersonatedBy || was.id !== d.user.id) { renderChrome(); render(); return; }
-                if (was.unreadAnnouncements !== d.user.unreadAnnouncements || was.pendingAcks !== d.user.pendingAcks) {
+                if (was.unreadAnnouncements !== d.user.unreadAnnouncements || was.pendingAcks !== d.user.pendingAcks || was.notificationsUnread !== d.user.notificationsUnread) {
                     const open = $(".menu:not([hidden])");
                     if (!open) renderChrome();
                 }
@@ -7483,6 +7499,360 @@
                 toast(a.personId ? "Marked as hired." : "Hired. Their employee record is ready" + (r.onboarding ? " and onboarding has started." : "."));
                 render();
             } catch (err) { formError($("#hf-error", m.el), err.message); }
+        });
+    }
+
+    // ================= Notifications =================
+
+    const NOTE_ICONS = { leave: "sun", expense: "pound", payslip: "card", review: "star", helpdesk: "lifebuoy", kudos: "heart", idea: "flag", jobs: "briefcase", timesheet: "clock", status: "activity", training: "star", info: "bell" };
+
+    function timeAgo(iso) {
+        const s = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
+        if (s < 60) return "just now";
+        if (s < 3600) return Math.floor(s / 60) + " min ago";
+        if (s < 86400) return Math.floor(s / 3600) + " hr ago";
+        if (s < 7 * 86400) return Math.floor(s / 86400) + (s < 2 * 86400 ? " day ago" : " days ago");
+        return fmtDate(iso);
+    }
+
+    function noteItemHtml(n) {
+        return '<button type="button" class="note-item' + (n.read ? "" : " unread") + '" data-note="' + esc(n.id) + '" data-href="' + esc(n.link || "") + '">' +
+            '<span class="note-icon">' + icon(NOTE_ICONS[n.type] || "bell") + '</span><span class="note-text"><span class="note-title">' + esc(n.title) + "</span>" +
+            (n.body ? '<span class="note-body">' + esc(n.body) + "</span>" : "") + '<span class="note-time">' + esc(timeAgo(n.at)) + "</span></span></button>";
+    }
+
+    function bellHtml() {
+        const n = state.me.notificationsUnread || 0;
+        return '<button type="button" class="bell-btn" id="bell-btn" data-menu aria-haspopup="true" aria-expanded="false" aria-label="Notifications' + (n ? ", " + n + " unread" : "") + '">' + icon("bell") +
+            (n ? '<span class="bell-count">' + (n > 99 ? "99+" : n) + "</span>" : "") + "</button>" +
+            '<div class="menu menu-right bell-menu-panel" role="menu" hidden><div class="bell-head"><strong>Notifications</strong><button type="button" class="btn btn-link btn-small" data-bell="read-all">Mark all as read</button></div>' +
+            '<div class="bell-list" id="bell-list"><p class="muted small">Loading…</p></div>' +
+            '<a class="bell-foot" href="/notifications" data-link>See all notifications</a></div>';
+    }
+
+    async function loadBell() {
+        const box = $("#bell-list");
+        if (!box) return;
+        try {
+            const r = await api("/api/notifications");
+            const extra = state.me.unreadAnnouncements ? '<a class="note-item unread" href="/announcements" data-link><span class="note-icon">' + icon("bell") + '</span><span class="note-text"><span class="note-title">' +
+                state.me.unreadAnnouncements + " new announcement" + (state.me.unreadAnnouncements === 1 ? "" : "s") + '</span><span class="note-time">Workplace</span></span></a>' : "";
+            box.innerHTML = extra + (r.items.length ? r.items.slice(0, 12).map(noteItemHtml).join("") : extra ? "" : '<div class="bell-empty">' + icon("bell") + "<p>You’re all caught up.</p></div>");
+        } catch (err) { box.innerHTML = '<p class="muted small">' + esc(err.message) + "</p>"; }
+    }
+
+    async function openNote(el) {
+        closeMenus();
+        try {
+            const r = await api("/api/notifications/read", { id: el.dataset.note });
+            state.me.notificationsUnread = r.unread;
+            renderChrome();
+        } catch (e) { /* ignore */ }
+        if (el.dataset.href) navigate(el.dataset.href);
+        else if (window.location.pathname === "/notifications") render();
+    }
+
+    document.addEventListener("click", async function (e) {
+        const n = e.target.closest("[data-note]");
+        if (n) { e.preventDefault(); return openNote(n); }
+        const b = e.target.closest("[data-bell]");
+        if (b) {
+            e.preventDefault();
+            try {
+                const r = await api("/api/notifications/" + (b.dataset.bell === "clear" ? "clear" : "read"), {});
+                state.me.notificationsUnread = r.unread;
+                renderChrome();
+                if (window.location.pathname === "/notifications") render();
+                else { const btn = $("#bell-btn"); if (btn) { toggleMenu(btn); loadBell(); } }
+            } catch (err) { toast(err.message); }
+        }
+    });
+
+    async function viewNotifications(root, current) {
+        const r = await api("/api/notifications");
+        if (!current()) return;
+        root.innerHTML = '<div class="page-head"><div><h1>Notifications</h1><p class="muted">Everything that’s happened that involves you: approvals, replies, payslips, kudos and more. Kept for 90 days.</p></div>' +
+            '<div class="page-actions"><button type="button" class="btn btn-ghost" data-bell="read-all">' + icon("tick") + "Mark all as read</button>" +
+            (r.items.length ? '<button type="button" class="btn btn-ghost danger-text" data-bell="clear">' + icon("trash") + "Clear all</button>" : "") + "</div></div>" +
+            (r.items.length ? '<section class="panel note-page">' + r.items.map(noteItemHtml).join("") + "</section>"
+                : '<div class="empty-page">' + icon("bell", "big") + '<h2>Nothing yet</h2><p class="muted">When something needs you or happens to you, it’ll show up here and on the bell.</p></div>');
+    }
+
+    // ================= Kudos and milestones =================
+
+    const MILESTONE_ICONS = { birthday: "gift", anniversary: "star", starter: "smile" };
+
+    function milestoneHtml(x) {
+        const day = x.today ? "Today" : new Date(x.date + "T12:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+        return '<div class="ms-item ms-' + x.type + (x.today ? " ms-today" : "") + '">' + avatar(x.person, "md") +
+            '<div class="ms-text"><span class="ms-title">' + icon(MILESTONE_ICONS[x.type]) + esc(x.title) + '</span><span class="muted small">' + esc(day) +
+            (x.congrats ? " · " + x.congrats + " congratulation" + (x.congrats === 1 ? "" : "s") : "") + "</span></div>" +
+            (x.self ? "" : '<button type="button" class="btn btn-small ms-congrats ' + (x.mine ? "btn-primary" : "btn-ghost") + '" data-congrats="' + esc(x.key) + '" title="' + (x.mine ? "Congratulations sent" : "Say congratulations") + '" aria-label="Say congratulations">🎉</button>') + "</div>";
+    }
+
+    function kudosCardHtml(k) {
+        return '<article class="kudos-card kv-' + esc(k.value) + '" data-kudos="' + k.id + '"><div class="kc-head"><span class="kc-value">' + esc(k.valueLabel) + "</span>" +
+            '<span class="muted small">' + esc(timeAgo(k.at)) + "</span>" + (k.canDelete ? '<button type="button" class="icon-btn icon-btn-sm" data-kd="delete" aria-label="Delete">' + icon("trash") + "</button>" : "") + "</div>" +
+            '<div class="kc-people">' + avatar(k.from, "sm") + '<span class="kc-arrow">' + icon("chevronRight") + "</span>" + k.to.map(function (p) { return avatar(p, "sm"); }).join("") +
+            '<span class="kc-names"><strong>' + esc(k.from.displayName) + "</strong> thanked <strong>" + k.to.map(function (p) { return esc(p.displayName); }).join(", ") + "</strong></span></div>" +
+            '<p class="kc-msg">' + esc(k.message) + "</p>" +
+            '<div class="kc-reacts">' + k.reactions.map(function (r) {
+                return '<button type="button" class="react-btn' + (r.mine ? " mine" : "") + '" data-kr="' + r.emoji + '">' + r.emoji + (r.count ? " " + r.count : "") + "</button>";
+            }).join("") + "</div></article>";
+    }
+
+    async function viewKudos(root, current) {
+        const d = await api("/api/kudos");
+        if (!current()) return;
+        root.innerHTML = '<div class="page-head"><div><h1>Kudos</h1><p class="muted">Thank a colleague publicly for something great. Birthdays, work anniversaries and new starters show up here too.</p></div>' +
+            (state.me.system ? "" : '<div class="page-actions"><button type="button" class="btn btn-primary" id="kd-new">' + icon("heart") + "Give kudos</button></div>") + "</div>" +
+            '<div class="kudos-layout"><div class="kudos-feed" id="kd-feed">' + (d.posts.length ? d.posts.map(kudosCardHtml).join("") :
+                '<div class="empty-page">' + icon("heart", "big") + '<h2>No kudos yet</h2><p class="muted">Be the first to thank someone.</p></div>') + "</div>" +
+            '<aside class="kudos-side"><section class="panel"><h2 class="panel-title">' + icon("gift") + "Celebrations</h2>" +
+            (d.milestones.length ? '<div class="ms-list">' + d.milestones.map(milestoneHtml).join("") + "</div>" : '<p class="muted small">No birthdays, anniversaries or new starters in the next two weeks.</p>') + "</section>" +
+            (d.leaders.length ? '<section class="panel"><h2 class="panel-title">' + icon("star") + "Most thanked this month</h2><ol class=\"kd-leaders\">" + d.leaders.map(function (p) {
+                return "<li>" + avatar(p, "sm") + '<span class="emp-name">' + esc(p.displayName) + '</span><span class="badge badge-soft">' + p.count + "</span></li>";
+            }).join("") + "</ol></section>" : "") + "</aside></div>";
+        root.addEventListener("click", async function (e) {
+            if (e.target.closest("#kd-new")) return openKudosForm(d);
+            const cg = e.target.closest("[data-congrats]");
+            if (cg) return sendCongrats(cg);
+            const card = e.target.closest("[data-kudos]");
+            if (!card) return;
+            const id = card.dataset.kudos;
+            const r = e.target.closest("[data-kr]");
+            try {
+                if (r) {
+                    const res = await api("/api/kudos/" + id + "/react", { emoji: r.dataset.kr });
+                    if (res.post) card.outerHTML = kudosCardHtml(res.post);
+                } else if (e.target.closest('[data-kd="delete"]')) {
+                    if (!(await confirmDialog({ title: "Delete this kudos?", message: "It’ll be removed for everyone.", confirmLabel: "Delete", danger: true }))) return;
+                    await api("/api/kudos/" + id + "/delete", {});
+                    card.remove();
+                }
+            } catch (err) { toast(err.message); }
+        });
+    }
+
+    async function sendCongrats(btn) {
+        try {
+            const r = await api("/api/kudos/congrats", { key: btn.dataset.congrats });
+            btn.classList.toggle("btn-primary", r.added);
+            btn.classList.toggle("btn-ghost", !r.added);
+            btn.title = r.added ? "Congratulations sent" : "Say congratulations";
+            if (r.added) toast("Congratulations sent!");
+        } catch (err) { toast(err.message); }
+    }
+
+    function openKudosForm(d, preset) {
+        const chosen = preset ? [preset] : [];
+        const m = openModal(
+            '<h2 class="modal-title">Give kudos</h2><form id="kf-form" novalidate>' +
+            '<label for="kf-search">Who are you thanking?</label><div class="kf-chosen" id="kf-chosen"></div>' +
+            '<input type="search" id="kf-search" placeholder="Search for a colleague" autocomplete="off"><div class="kf-results" id="kf-results"></div>' +
+            '<label>For</label><div class="kf-values">' + Object.keys(d.values).map(function (k, i) {
+                return '<label class="kf-value kv-' + k + '"><input type="radio" name="kf-value" value="' + k + '"' + (i === 0 ? " checked" : "") + "><span>" + esc(d.values[k]) + "</span></label>";
+            }).join("") + "</div>" +
+            '<label for="kf-msg">What did they do?</label><textarea id="kf-msg" rows="3" maxlength="600" placeholder="Thanks for staying late to get the launch over the line!"></textarea>' +
+            '<div class="form-error" id="kf-error" hidden></div>' +
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">' + icon("heart") + "Send kudos</button></div></form>"
+        );
+        function drawChosen() {
+            $("#kf-chosen", m.el).innerHTML = chosen.map(function (id) {
+                const p = d.people.find(function (x) { return x.id === id; });
+                return '<span class="kf-chip">' + avatar(p, "sm") + esc(p.displayName) + '<button type="button" data-unpick="' + id + '" aria-label="Remove">' + icon("x") + "</button></span>";
+            }).join("");
+        }
+        function search() {
+            const q = $("#kf-search", m.el).value.trim().toLowerCase();
+            $("#kf-results", m.el).innerHTML = q ? d.people.filter(function (p) { return chosen.indexOf(p.id) === -1 && (p.displayName + " " + p.jobTitle).toLowerCase().indexOf(q) !== -1; }).slice(0, 6).map(function (p) {
+                return '<button type="button" class="kf-result" data-pick="' + p.id + '">' + avatar(p, "sm") + "<span>" + esc(p.displayName) + ' <span class="muted small">' + esc(p.jobTitle) + "</span></span></button>";
+            }).join("") : "";
+        }
+        $("#kf-search", m.el).addEventListener("input", search);
+        m.el.addEventListener("click", function (e) {
+            const pick = e.target.closest("[data-pick]");
+            if (pick) { chosen.push(pick.dataset.pick); $("#kf-search", m.el).value = ""; search(); drawChosen(); $("#kf-search", m.el).focus(); }
+            const un = e.target.closest("[data-unpick]");
+            if (un) { chosen.splice(chosen.indexOf(un.dataset.unpick), 1); drawChosen(); }
+        });
+        drawChosen();
+        $("#kf-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try {
+                await api("/api/kudos", { to: chosen, value: $("input[name=kf-value]:checked", m.el).value, message: $("#kf-msg", m.el).value });
+                closeModal();
+                toast("Kudos sent! 👏");
+                if (window.location.pathname === "/kudos") render(); else navigate("/kudos");
+            } catch (err) { formError($("#kf-error", m.el), err.message); }
+        });
+    }
+
+    // Home page: celebrations this week and the latest kudos.
+    function loadCelebrations(box) {
+        if (!box) return;
+        api("/api/kudos").then(function (d) {
+            const soon = d.milestones.filter(function (x) { return x.date <= isoDay(new Date(Date.now() + 7 * 86400000)); });
+            const latest = d.posts.slice(0, 2);
+            if (!soon.length && !latest.length) return;
+            box.hidden = false;
+            box.innerHTML = '<div class="panel-head tight"><h2 class="section-title">' + icon("gift") + "Celebrations &amp; kudos</h2>" +
+                '<a class="small link-arrow" href="/kudos" data-link>See all</a></div>' +
+                (soon.length ? '<div class="ms-list">' + soon.slice(0, 4).map(milestoneHtml).join("") + "</div>" : "") +
+                latest.map(function (k) {
+                    return '<a class="home-kudos" href="/kudos" data-link><span class="kc-value">' + esc(k.valueLabel) + "</span><span><strong>" + esc(k.from.displayName) + "</strong> → <strong>" +
+                        k.to.map(function (p) { return esc(p.displayName); }).join(", ") + '</strong></span><span class="muted small">' + esc(k.message.length > 90 ? k.message.slice(0, 90) + "…" : k.message) + "</span></a>";
+                }).join("");
+            box.addEventListener("click", function (e) {
+                const cg = e.target.closest("[data-congrats]");
+                if (cg) { e.preventDefault(); sendCongrats(cg); }
+            });
+        }).catch(function () {});
+    }
+
+    // ================= Ideas box =================
+
+    async function viewIdeas(root, current) {
+        const d = await api("/api/ideas");
+        if (!current()) return;
+        let filter = state.ideaFilter || "open";
+        let sort = state.ideaSort || "votes";
+        root.innerHTML = '<div class="page-head"><div><h1>Ideas</h1><p class="muted">Suggest ways to make HN Group better and vote for the ideas you like. Leadership reviews them and says what’s happening.</p></div>' +
+            (state.me.system ? "" : '<div class="page-actions"><button type="button" class="btn btn-primary" id="id-new">' + icon("plus") + "Share an idea</button></div>") + "</div>" +
+            '<div class="toolbar"><div class="company-tabs" id="id-tabs"><button type="button" data-f="open">Open</button><button type="button" data-f="planned">Planned &amp; in progress</button><button type="button" data-f="done">Done</button><button type="button" data-f="declined">Not going ahead</button><button type="button" data-f="mine">Mine</button></div>' +
+            '<select id="id-sort" aria-label="Sort"><option value="votes">Most votes</option><option value="new">Newest</option></select></div>' +
+            '<div id="id-list" class="idea-list"></div>';
+        $("#id-sort").value = sort;
+        function draw() {
+            $$("#id-tabs [data-f]").forEach(function (b) { b.classList.toggle("active", b.dataset.f === filter); });
+            const match = { open: ["new", "review"], planned: ["planned", "progress"], done: ["done"], declined: ["declined"] };
+            const list = d.ideas.filter(function (i) { return filter === "mine" ? i.mine : match[filter].indexOf(i.status) !== -1; })
+                .sort(function (a, b) { return sort === "votes" ? b.votes - a.votes || b.createdAt.localeCompare(a.createdAt) : b.createdAt.localeCompare(a.createdAt); });
+            $("#id-list").innerHTML = list.length ? list.map(ideaHtml).join("") : '<div class="empty-page">' + icon("flag", "big") + '<h2>No ideas here yet</h2><p class="muted">Use <strong>Share an idea</strong> to get things started.</p></div>';
+        }
+        function ideaHtml(i) {
+            return '<article class="idea-card" data-idea="' + i.id + '"><button type="button" class="vote-btn' + (i.voted ? " voted" : "") + '" data-ia="vote"' + (i.status === "done" || i.status === "declined" ? " disabled" : "") + ' aria-label="Vote">' +
+                icon("chevronRight", "vote-up") + "<strong>" + i.votes + "</strong><span>vote" + (i.votes === 1 ? "" : "s") + "</span></button>" +
+                '<div class="idea-main"><div class="idea-head"><h3>' + esc(i.title) + '</h3><span class="badge idea-st-' + i.status + '">' + esc(i.statusLabel) + "</span></div>" +
+                (i.body ? '<p class="idea-body">' + esc(i.body).replace(/\n/g, "<br>") + "</p>" : "") +
+                '<div class="idea-meta muted small"><span class="badge badge-soft">' + esc(i.categoryLabel) + "</span>" + (i.author ? esc(i.author.displayName) : "Anonymous") + " · " + esc(timeAgo(i.createdAt)) +
+                " · " + i.comments.length + " comment" + (i.comments.length === 1 ? "" : "s") + "</div>" +
+                (i.statusNote ? '<div class="idea-response">' + icon("message") + "<div><strong>" + esc(i.statusByName || "Leadership") + ":</strong> " + esc(i.statusNote) + "</div></div>" : "") +
+                '<details class="idea-comments"><summary>Comments</summary>' + i.comments.map(function (c) {
+                    return '<div class="ic-row">' + avatar(c.author, "sm") + "<div><strong>" + esc(c.author.displayName) + '</strong> <span class="muted small">' + esc(timeAgo(c.at)) + "</span><p>" + esc(c.text) + "</p></div></div>";
+                }).join("") + '<form class="inline-form" data-ia-form><input type="text" maxlength="1500" placeholder="Add a comment" aria-label="Comment"><button type="submit" class="btn btn-ghost btn-small">Post</button></form></details>' +
+                '<div class="idea-actions">' + (d.canManage ? '<button type="button" class="btn btn-ghost btn-small" data-ia="status">' + icon("edit") + "Update status</button>" : "") +
+                (i.canDelete ? '<button type="button" class="btn btn-link btn-small danger-text" data-ia="delete">Delete</button>' : "") + "</div></div></article>";
+        }
+        $("#id-sort").addEventListener("change", function (e) { sort = state.ideaSort = e.target.value; draw(); });
+        async function act(id, path, body) {
+            const r = await api("/api/ideas/" + id + "/" + path, body || {});
+            const i = d.ideas.findIndex(function (x) { return x.id === id; });
+            if (r.idea) d.ideas[i] = r.idea; else d.ideas.splice(i, 1);
+            draw();
+        }
+        root.addEventListener("submit", async function (e) {
+            const f = e.target.closest("[data-ia-form]");
+            if (!f) return;
+            e.preventDefault();
+            const id = f.closest("[data-idea]").dataset.idea;
+            try { await act(id, "comment", { text: $("input", f).value }); const card = $('[data-idea="' + id + '"] details'); if (card) card.open = true; } catch (err) { toast(err.message); }
+        });
+        root.addEventListener("click", async function (e) {
+            const t = e.target.closest("[data-f]");
+            if (t) { filter = state.ideaFilter = t.dataset.f; return draw(); }
+            if (e.target.closest("#id-new")) return openIdeaForm(d);
+            const b = e.target.closest("[data-ia]");
+            if (!b) return;
+            const id = b.closest("[data-idea]").dataset.idea;
+            try {
+                if (b.dataset.ia === "vote") return act(id, "vote");
+                if (b.dataset.ia === "status") return openIdeaStatus(d, d.ideas.find(function (x) { return x.id === id; }), act);
+                if (b.dataset.ia === "delete" && await confirmDialog({ title: "Delete this idea?", message: "Its votes and comments go too.", confirmLabel: "Delete", danger: true })) await act(id, "delete");
+            } catch (err) { toast(err.message); }
+        });
+        draw();
+    }
+
+    function openIdeaForm(d) {
+        const m = openModal(
+            '<h2 class="modal-title">Share an idea</h2><form id="if-form" novalidate>' +
+            '<label for="if-title">Your idea in a sentence</label><input type="text" id="if-title" maxlength="150" placeholder="e.g. A quiet room for focused work">' +
+            '<label for="if-body">More detail <span class="muted small">(optional)</span></label><textarea id="if-body" rows="4" maxlength="3000"></textarea>' +
+            '<label for="if-cat">Category</label><select id="if-cat">' + Object.keys(d.categories).map(function (k) { return '<option value="' + k + '">' + esc(d.categories[k]) + "</option>"; }).join("") + "</select>" +
+            '<label class="inline-check"><input type="checkbox" id="if-anon"> Post anonymously (nobody, including leadership, will see it was you)</label>' +
+            '<div class="form-error" id="if-error" hidden></div>' +
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">Share idea</button></div></form>'
+        );
+        $("#if-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try {
+                await api("/api/ideas", { title: $("#if-title", m.el).value, body: $("#if-body", m.el).value, category: $("#if-cat", m.el).value, anonymous: $("#if-anon", m.el).checked });
+                closeModal();
+                toast("Idea shared. Thank you!");
+                state.ideaFilter = "open";
+                render();
+            } catch (err) { formError($("#if-error", m.el), err.message); }
+        });
+    }
+
+    function openIdeaStatus(d, idea, act) {
+        const m = openModal(
+            '<h2 class="modal-title">Update “' + esc(idea.title) + "”</h2><form id=\"is2-form\" novalidate>" +
+            '<label for="is2-st">Status</label><select id="is2-st">' + Object.keys(d.statuses).map(function (k) { return '<option value="' + k + '"' + (k === idea.status ? " selected" : "") + ">" + esc(d.statuses[k]) + "</option>"; }).join("") + "</select>" +
+            '<label for="is2-note">Note to everyone <span class="muted small">(what’s happening and why)</span></label><textarea id="is2-note" rows="3" maxlength="1000">' + esc(idea.statusNote || "") + "</textarea>" +
+            '<p class="muted small">The person who shared it and everyone who voted gets a notification.</p>' +
+            '<div class="form-error" id="is2-error" hidden></div>' +
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">Update</button></div></form>'
+        );
+        $("#is2-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try { await act(idea.id, "status", { status: $("#is2-st", m.el).value, note: $("#is2-note", m.el).value }); closeModal(); toast("Idea updated."); } catch (err) { formError($("#is2-error", m.el), err.message); }
+        });
+    }
+
+    // ================= Team pages =================
+
+    async function viewTeam(root, current) {
+        const params = new URLSearchParams(window.location.search);
+        const mine = (state.me.roles || []).find(function (r) { return r.main; });
+        const company = state.meta.companies.indexOf(params.get("company")) !== -1 ? params.get("company") : (mine && state.meta.companies.indexOf(mine.company) !== -1 ? mine.company : state.meta.companies[0]);
+        const d = await api("/api/teams/" + encodeURIComponent(company));
+        if (!current()) return;
+        const off = d.people.filter(function (p) { return p.offToday; });
+        root.innerHTML = '<div class="page-head"><div><h1>' + esc(company) + '</h1><p class="muted">The team, what’s coming up and the latest news for ' + esc(company) + ".</p></div></div>" +
+            '<div class="company-tabs" id="tm-tabs">' + state.meta.companies.map(function (c) { return '<button type="button" data-team="' + esc(c) + '" class="' + (c === company ? "active" : "") + '">' + esc(c) + "</button>"; }).join("") + "</div>" +
+            '<div class="stat-row"><div class="stat"><div class="stat-value">' + d.people.length + '</div><div class="stat-label">People</div></div>' +
+            '<div class="stat"><div class="stat-value">' + off.length + '</div><div class="stat-label">Off today</div></div>' +
+            '<div class="stat"><div class="stat-value">' + d.vacancies.length + '</div><div class="stat-label">Open roles</div></div></div>' +
+            '<div class="team-layout"><div class="team-main">' +
+            '<section class="panel"><h2 class="panel-title">' + icon("users") + "The team</h2><div class=\"team-grid\">" + d.people.map(function (p) {
+                return '<div class="team-person' + (p.offToday ? " is-off" : "") + '">' + avatar(p, "md") + '<div><div class="emp-name">' + esc(p.displayName) + '</div><div class="muted small">' + esc(p.jobTitle) + "</div>" +
+                    (p.offToday ? '<span class="badge badge-soft">Off today</span>' : statusPill(p.status)) + "</div></div>";
+            }).join("") + "</div></section>" +
+            '<section class="panel"><div class="panel-head"><h2 class="panel-title">' + icon("bell") + "News for " + esc(company) + '</h2><a class="small link-arrow" href="/announcements" data-link>All announcements</a></div>' +
+            (d.announcements.length ? d.announcements.map(function (a) {
+                return '<div class="team-news"><strong>' + esc(a.title) + '</strong><span class="muted small">' + esc(a.author ? a.author.displayName : "") + " · " + esc(fmtDate(a.createdAt)) + "</span><p>" + esc(a.body.length > 220 ? a.body.slice(0, 220) + "…" : a.body) + "</p></div>";
+            }).join("") : '<p class="muted small">No announcements just for ' + esc(company) + " right now.</p>") + "</section>" +
+            '<section class="panel"><div class="panel-head"><h2 class="panel-title">' + icon("heart") + 'Kudos</h2><a class="small link-arrow" href="/kudos" data-link>Kudos wall</a></div>' +
+            (d.kudos.length ? '<div class="kudos-feed compact">' + d.kudos.map(kudosCardHtml).join("") + "</div>" : '<p class="muted small">No kudos for this team yet.</p>') + "</section>" +
+            "</div><aside class=\"team-side\">" +
+            '<section class="panel"><h2 class="panel-title">' + icon("gift") + "Celebrations</h2>" + (d.milestones.length ? '<div class="ms-list">' + d.milestones.map(milestoneHtml).join("") + "</div>" : '<p class="muted small">Nothing in the next month.</p>') + "</section>" +
+            '<section class="panel"><h2 class="panel-title">' + icon("sun") + "Leave in the next 30 days</h2>" + (d.leave.length ? '<ul class="team-list">' + d.leave.map(function (l) {
+                return "<li><strong>" + esc(l.title.split(" – ")[0]) + '</strong><span class="muted small">' + esc(dateRange(l.startDate, l.endDate)) + "</span></li>";
+            }).join("") + "</ul>" : '<p class="muted small">Nobody has leave booked.</p>') + "</section>" +
+            '<section class="panel"><h2 class="panel-title">' + icon("calendar") + "Upcoming events</h2>" + (d.events.length ? '<ul class="team-list">' + d.events.map(function (e) {
+                return "<li><strong>" + esc(e.title) + '</strong><span class="muted small">' + esc(dateRange(e.startDate, e.endDate)) + (e.location ? " · " + esc(e.location) : "") + "</span></li>";
+            }).join("") + "</ul>" : '<p class="muted small">No events coming up.</p>') + "</section>" +
+            (d.vacancies.length ? '<section class="panel"><h2 class="panel-title">' + icon("briefcase") + "We’re hiring</h2><ul class=\"team-list\">" + d.vacancies.map(function (v) {
+                return '<li><a href="/jobs" data-link><strong>' + esc(v.title) + "</strong></a>" + (v.location ? '<span class="muted small">' + esc(v.location) + "</span>" : "") + "</li>";
+            }).join("") + "</ul></section>" : "") +
+            "</aside></div>";
+        root.addEventListener("click", function (e) {
+            const t = e.target.closest("[data-team]");
+            if (t) return navigate("/team?company=" + encodeURIComponent(t.dataset.team));
+            const cg = e.target.closest("[data-congrats]");
+            if (cg) return sendCongrats(cg);
         });
     }
 

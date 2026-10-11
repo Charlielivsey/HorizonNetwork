@@ -25,6 +25,8 @@ const notifications = require("./lib/notifications");
 const training = require("./lib/training");
 const cases = require("./lib/cases");
 const recruitment = require("./lib/recruitment");
+const kudos = require("./lib/kudos");
+const ideas = require("./lib/ideas");
 const extraRoutes = require("./lib/routes-extra");
 
 const PORT = parseInt(process.env.PORT || "3200", 10);
@@ -45,7 +47,7 @@ const APP_ROUTES = new Set([
   "/home", "/directory", "/employees", "/settings", "/system", "/announcements", "/documents",
   "/calendar", "/polls", "/onboarding", "/roles", "/about", "/signature",
   "/leave", "/rotas", "/payslips", "/payroll", "/funds", "/helpdesk", "/reviews", "/staff-files", "/status",
-  "/expenses", "/invoices", "/notifications", "/training", "/cases", "/jobs",
+  "/expenses", "/invoices", "/notifications", "/training", "/cases", "/jobs", "/kudos", "/ideas", "/team",
 ]);
 const SYSTEM_UNLOCK_MS = 15 * 60 * 1000; // System Admin stays unlocked for 15 minutes of inactivity
 const MAX_PIN_ATTEMPTS = 5;
@@ -81,6 +83,8 @@ notifications.init(DATA_DIR);
 training.init(DATA_DIR);
 cases.init(DATA_DIR);
 recruitment.init(DATA_DIR);
+kudos.init(DATA_DIR);
+ideas.init(DATA_DIR);
 
 // Re-reads every data file, e.g. after a backup is restored.
 function reloadAll() {
@@ -103,6 +107,8 @@ function reloadAll() {
   training.init(DATA_DIR);
   cases.init(DATA_DIR);
   recruitment.init(DATA_DIR);
+  kudos.init(DATA_DIR);
+  ideas.init(DATA_DIR);
 }
 
 backup.scheduleNightly((err, name) => {
@@ -524,6 +530,7 @@ function meResponse(session) {
   user.jobsOpen = recruitment.openCount();
   if (store.can(session.person, cases.MANAGE)) user.casesOpen = cases.openCount();
   if (store.can(session.person, recruitment.MANAGE)) user.newApplicants = recruitment.newApplicantsCount();
+  if (store.can(session.person, ideas.MANAGE)) user.newIdeas = ideas.newCount();
   if (store.can(session.person, payslips.MANAGE)) {
     const b = funds.balances();
     user.payrollOverdrawn = b.payroll < 0 || b.main < 0;
@@ -1303,6 +1310,7 @@ async function routeApi(req, res, pathname, session) {
       } else {
         const { shared } = await readJsonBody(req);
         reviews.setShared(r, shared);
+        if (shared) notifications.notify([r.personId], { type: "review", title: `${me.displayName} shared a ${reviews.TYPES[r.type].toLowerCase()} with you`, link: "/reviews" }, me);
         logEvent(req, session, shared ? "review-shared" : "review-unshared", { target: p.displayName });
       }
       return sendJson(res, 200, { ok: true });
@@ -1443,6 +1451,17 @@ async function routeApi(req, res, pathname, session) {
         if (!person || person.system || !(leaveManager || store.supervises(me, person))) throw httpError(403, "You can't book leave for that person.");
       }
       const r = leave.createRequest(person, body, me);
+      const when = `${r.startDate}${r.endDate !== r.startDate ? " to " + r.endDate : ""}`;
+      if (r.status === "pending") {
+        // Their supervisor(s) approve; anyone who manages leave if they have none.
+        const sups = [person.supervisorId].concat((person.otherRoles || []).map((x) => x.supervisorId)).filter(Boolean);
+        const to = sups.length ? sups : store.employees().filter((p) => store.can(p, leave.MANAGE)).map((p) => p.id);
+        notifications.notify(to, { type: "leave", title: `${person.displayName} asked for ${leave.TYPES[r.type].toLowerCase()}`, body: `${when} (${r.days} day${r.days === 1 ? "" : "s"})`, link: "/leave" }, me);
+      } else if (person.id !== me.id) {
+        notifications.notify([person.id], { type: "leave", title: `${me.displayName} booked ${leave.TYPES[r.type].toLowerCase()} for you`, body: when, link: "/leave" }, me);
+      } else if (r.type === "sick" && person.supervisorId) {
+        notifications.notify([person.supervisorId], { type: "leave", title: `${person.displayName} is off sick`, body: when, link: "/leave" }, me);
+      }
       logEvent(req, session, r.type === "sick" ? "absence-reported" : "leave-requested", {
         target: person.id === me.id ? undefined : person.displayName,
         detail: `${leave.TYPES[r.type]}, ${r.startDate}${r.endDate !== r.startDate ? " to " + r.endDate : ""} (${r.days} day${r.days === 1 ? "" : "s"})${r.status === "approved" ? ", recorded" : ""}`,
@@ -1467,6 +1486,7 @@ async function routeApi(req, res, pathname, session) {
         logEvent(req, session, "leave-cancelled", { target: who, detail: `${leave.TYPES[r.type]}, ${r.startDate}` });
       } else {
         leave.decide(r, m[2] === "approve", me, body.note, body.allowOver === true);
+        notifications.notify([r.personId], { type: "leave", title: `Your ${leave.TYPES[r.type].toLowerCase()} was ${m[2] === "approve" ? "approved" : "declined"}`, body: `${r.startDate}${r.endDate !== r.startDate ? " to " + r.endDate : ""}${body.note ? ` · ${body.note}` : ""}`, link: "/leave" }, me);
         logEvent(req, session, m[2] === "approve" ? "leave-approved" : "leave-declined", { target: who, detail: `${leave.TYPES[r.type]}, ${r.startDate}${r.endDate !== r.startDate ? " to " + r.endDate : ""}` });
       }
       return sendJson(res, 200, { ok: true, user: meResponse(session) });
@@ -1717,6 +1737,7 @@ async function routeApi(req, res, pathname, session) {
       if (method === "POST") {
         if (m[2] === "issue" || m[2] === "withdraw") {
           payslips.setIssued(slip, m[2] === "issue", me);
+          if (m[2] === "issue") notifications.notify([slip.personId], { type: "payslip", title: `Your payslip for ${label} is ready`, link: "/payslips" }, me);
           logEvent(req, session, m[2] === "issue" ? "payslip-issued" : "payslip-withdrawn", { target: who, detail: label });
         } else if (m[2] === "delete") {
           payslips.deletePayslip(slip, me);
@@ -1734,6 +1755,7 @@ async function routeApi(req, res, pathname, session) {
       for (const s of payslips.forPeriod(period)) {
         if (s.status !== "draft") continue;
         payslips.setIssued(payslips.getPayslip(s.id), true, me);
+        notifications.notify([s.personId], { type: "payslip", title: `Your payslip for ${payslips.periodLabel(period)} is ready`, link: "/payslips" }, me);
         n++;
       }
       if (n) logEvent(req, session, "payslip-issued", { detail: `${payslips.periodLabel(period)}: ${n} payslip${n === 1 ? "" : "s"}` });
@@ -1756,6 +1778,7 @@ async function routeApi(req, res, pathname, session) {
     if (method === "POST" && pathname === "/api/helpdesk") {
       const t = helpdesk.createTicket(me, await readJsonBody(req));
       logEvent(req, session, "ticket-raised", { target: `#${t.number}`, detail: t.subject });
+      notifications.notify(helpdesk.agents().map((a) => a.id), { type: "helpdesk", title: `New IT ticket #${t.number} from ${me.displayName}`, body: t.subject, link: "/helpdesk" }, me);
       return sendJson(res, 201, { ticket: helpdesk.fullView(t, me), user: meResponse(session) });
     }
     if ((m = /^\/api\/helpdesk\/([a-f0-9]{16})(?:\/(reply|update))?$/.exec(pathname))) {
@@ -1765,6 +1788,10 @@ async function routeApi(req, res, pathname, session) {
       if (method === "POST" && m[2] === "reply") {
         const body = await readJsonBody(req);
         helpdesk.reply(t, me, body);
+        if (!(body.internal && helpdesk.isAgent(me))) {
+          const to = me.id === t.createdBy ? (t.assigneeId ? [t.assigneeId] : helpdesk.agents().map((a) => a.id)) : [t.createdBy];
+          notifications.notify(to, { type: "helpdesk", title: `${me.displayName} replied on ticket #${t.number}`, body: t.subject, link: "/helpdesk" }, me);
+        }
         logEvent(req, session, body.internal && helpdesk.isAgent(me) ? "ticket-note-added" : "ticket-replied", { target: `#${t.number}` });
         return sendJson(res, 200, { ticket: helpdesk.fullView(t, me), user: meResponse(session) });
       }
