@@ -9,6 +9,7 @@ Internal staff portal for the whole of HN Group, served at **https://staff.hngro
 - **Home page.** Shows the current date and time on your device, and the time where your profile location is set, with the difference between the two. It also shows the latest announcements, anything you need to acknowledge, your onboarding tasks, what's coming up on the calendar and your status.
 - **Dropdown navigation.** People (Staff Directory, Employee Management), Workplace, HR and Support. Sections that aren't built yet are marked *Soon*.
 - **Staff Directory.** Every employee with their photo, job title, company, emails, location and live local time. You can search and filter by company. Click someone to see who they report to and who reports to them.
+- **About HN Group** (Support → About HN Group). It covers the companies in the group with how many people work at each, the brand colours (click to copy) and every logo, with SVG and PNG downloads. The logo files are in `public/assets/brand/`.
 - **Global search.** Use the search box in the top bar, or press **Ctrl+K** (**⌘K** on a Mac) or **/**. It searches people, pages, documents, announcements, events and polls.
 - **Status.** Click your name, then the status line, to set Available, Busy, Away or Out of office. You can add a message and a date it clears on. Your status shows on your profile and in the Staff Directory.
 - **Employee Management.** Only shown to people with the *Manage staff* permission. Click any row to edit that person.
@@ -118,10 +119,14 @@ What people can manage is set by **roles**, under **People → Roles & permissio
 - Manage the calendar
 - Run polls & surveys
 - Run onboarding
+- System Admin: open System Admin with the PIN. Only people who already have it can give it out.
 
 You then choose who has each role. Someone with several roles gets every permission from all of them.
 
-- The **system owner** (charlie.livsey@hngroup.org.uk) and the **admin account** always have every permission, whatever roles they have.
+- The **system owner** (charlie.livsey@hngroup.org.uk) always has every permission. The built-in **admin account** has every permission except System Admin.
+- A **Super Admin** role with every permission, including System Admin, is created automatically.
+  - Super admins can use everything in System Admin except changing the PIN.
+  - They can't log in as the system owner or end the owner's sessions.
 - On the first start after upgrading, three roles are created: **Leadership & HR** (everything), **Communications** and **Documents**. Everyone who previously had access through their job title is given *Leadership & HR*.
 
 ## Install on the VPS

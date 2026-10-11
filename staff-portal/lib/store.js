@@ -96,6 +96,13 @@ function init(dir) {
   if (!settings.ownerEmail) settings.ownerEmail = DEFAULT_OWNER_EMAIL;
   if (!settings.systemPin) settings.systemPin = hashPassword(DEFAULT_SYSTEM_PIN);
   if (!settings.roles) migrateToRoles();
+  if (!settings.superAdminRoleAdded) {
+    // Added once; if it's deleted later it stays deleted.
+    if (!settings.roles.some((r) => r.name.toLowerCase() === "super admin")) {
+      settings.roles.unshift({ id: newId(), name: "Super Admin", permissions: PERMISSION_KEYS.slice() });
+    }
+    settings.superAdminRoleAdded = true;
+  }
   writeJson(settingsFile, settings);
 }
 
@@ -109,7 +116,9 @@ const PERMISSIONS = [
   { key: "events.manage", name: "Manage the calendar", description: "Add, edit and delete calendar events and company holidays." },
   { key: "polls.manage", name: "Run polls & surveys", description: "Create polls and surveys and see the results." },
   { key: "onboarding.manage", name: "Run onboarding", description: "Start onboarding checklists and edit the templates." },
+  { key: "system.admin", name: "System Admin", description: "Open System Admin with the PIN: sessions, log in as, backups and the full activity log. Only people who already have it can give it out." },
 ];
+const SYSTEM_ADMIN = "system.admin";
 const PERMISSION_KEYS = PERMISSIONS.map((p) => p.key);
 
 // First run with roles: create sensible defaults, and give anyone who had access through their
@@ -178,11 +187,12 @@ function setRoleMembers(role, personIds) {
   savePeople();
 }
 
-// The owner and the built-in admin account can do everything; everyone else gets the
-// permissions of the roles they've been given.
+// The owner can do everything. The built-in admin account can do everything except open
+// System Admin. Everyone else gets the permissions of the roles they've been given.
 function permissionsOf(person) {
   if (!person) return [];
-  if (person.system || isOwner(person)) return PERMISSION_KEYS.slice();
+  if (isOwner(person)) return PERMISSION_KEYS.slice();
+  if (person.system) return PERMISSION_KEYS.filter((k) => k !== SYSTEM_ADMIN);
   const out = new Set();
   for (const id of person.roleIds || []) {
     const role = getRole(id);

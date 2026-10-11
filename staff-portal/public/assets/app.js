@@ -277,6 +277,7 @@
         },
         {
             label: "Support", items: [
+                { title: "About HN Group", desc: "Our companies, brand colours and logos", href: "/about", icon: "building" },
                 { title: "IT Helpdesk", desc: "Raise and track support tickets", icon: "lifebuoy", soon: true },
             ],
         },
@@ -322,7 +323,7 @@
                 (me.status ? statusPill(me.status) : '<span class="status-pill st-none"><span class="status-dot"></span>Set a status</span>') + "</button>") +
             '<div class="menu-sep"></div>' +
             '<a class="menu-item compact" role="menuitem" href="/settings" data-link>' + icon("settings") + "<span>Settings</span></a>" +
-            (me.isOwner && !me.impersonatedBy ? '<a class="menu-item compact" role="menuitem" href="/system" data-link>' + icon("shield") + "<span>System Admin</span></a>" : "") +
+            (can("system.admin") && !me.impersonatedBy ? '<a class="menu-item compact" role="menuitem" href="/system" data-link>' + icon("shield") + "<span>System Admin</span></a>" : "") +
             '<div class="menu-sep"></div>' +
             '<button type="button" class="menu-item compact danger" role="menuitem" data-action="logout">' + icon("logout") + "<span>Sign out</span></button>" +
             "</div>";
@@ -452,6 +453,7 @@
         "/polls": viewPolls,
         "/onboarding": viewOnboarding,
         "/roles": viewRoles,
+        "/about": viewAbout,
     };
 
     function navigate(href, replace) {
@@ -473,6 +475,7 @@
         "/polls": "chart",
         "/onboarding": "check",
         "/roles": "key",
+        "/about": "building",
     };
 
     function decoratePageHead(root, path) {
@@ -506,7 +509,7 @@
         if (!view) return navigate("/home", true);
         const NEEDS = { "/employees": "staff.manage", "/onboarding": "onboarding.manage", "/roles": "access.manage" };
         if (NEEDS[path] && !can(NEEDS[path])) view = viewNoAccess;
-        if (path === "/system" && (!state.me.isOwner || state.me.impersonatedBy)) view = viewNoSystemAccess;
+        if (path === "/system" && (!can("system.admin") || state.me.impersonatedBy)) view = viewNoSystemAccess;
 
         highlightNav();
         root.innerHTML = '<div class="loading">Loading…</div>';
@@ -948,6 +951,10 @@
             if (tr && e.key === "Enter") openPersonModal(tr.dataset.entry, ctx);
         });
         $("#dir-search").addEventListener("input", draw);
+        if (state.pendingCompany) {
+            company = state.pendingCompany;
+            state.pendingCompany = null;
+        }
         draw();
         if (state.pendingPerson) {
             const p = ctx.byId[state.pendingPerson];
@@ -2851,7 +2858,8 @@
         root.innerHTML =
             '<div class="page-head"><div><h1>Roles &amp; permissions</h1><p class="muted">Give people a role to let them manage parts of the portal. Everyone can still use the portal without a role.</p></div>' +
             '<div class="page-actions"><button type="button" class="btn btn-primary" id="new-role">' + icon("plus") + "New role</button></div></div>" +
-            '<div class="banner info-banner">' + icon("shield") + "<div>The system owner and the built-in admin account always have every permission.</div></div>" +
+            '<div class="banner info-banner">' + icon("shield") + "<div>The system owner always has every permission. The built-in admin account has every permission except System Admin." +
+            (can("system.admin") ? "" : " Only people with System Admin access can change roles that include it.") + "</div></div>" +
             '<div class="role-grid">' + data.roles.map(function (r) {
                 return '<section class="panel role-card" data-role="' + r.id + '">' +
                     '<div class="panel-head"><h2 class="panel-title">' + icon("shield") + esc(r.name) + "</h2>" +
@@ -2859,7 +2867,8 @@
                     '<button type="button" class="btn btn-ghost btn-small danger-text" data-delete-role>' + icon("trash") + "</button></div></div>" +
                     '<div class="perm-list">' + data.permissions.map(function (p) {
                         const on = r.permissions.indexOf(p.key) !== -1;
-                        return '<label class="perm"><span class="switch"><input type="checkbox" data-perm="' + p.key + '"' + (on ? " checked" : "") + '><span class="slider"></span></span>' +
+                        const locked = !can("system.admin") && (p.key === "system.admin" || r.permissions.indexOf("system.admin") !== -1);
+                        return '<label class="perm' + (p.key === "system.admin" ? " perm-super" : "") + (locked ? " locked" : "") + '"><span class="switch"><input type="checkbox" data-perm="' + p.key + '"' + (on ? " checked" : "") + (locked ? " disabled" : "") + '><span class="slider"></span></span>' +
                             '<span><span class="perm-name">' + esc(p.name) + '</span><span class="muted small">' + esc(p.description) + "</span></span></label>";
                     }).join("") + "</div>" +
                     '<div class="role-members"><div class="rm-head"><h3 class="detail-head">People <span class="tab-count">' + r.members.length + "</span></h3>" +
@@ -3125,6 +3134,151 @@
             openSearch();
         }
     });
+
+    // ================= About HN Group =================
+
+    // Logos live in /assets/brand/svg and /assets/brand/png. "dark" files are white, for dark backgrounds;
+    // "pngOnly" files have no SVG version.
+    const BRANDS = [
+        {
+            name: "HN Group", logo: "hn-group-wordmark", domain: "hngroup.org.uk",
+            about: "The parent company that brings all of the Horizon businesses together under one group, with shared leadership, people and standards.",
+            files: [
+                ["hn-group-wordmark", "Wordmark"], ["hn-group-wordmark-white", "Wordmark – white", true],
+                ["hn-group-email-logo", "Email signature logo", false, true], ["hn-group-google-workspace", "Google Workspace logo", false, true],
+            ],
+        },
+        {
+            name: "Horizon Network", logo: "horizon-network-wordmark", domain: "horizon-network.co.uk",
+            about: "A growing network of digital services and solutions, building the infrastructure for tomorrow's businesses. UK based, with 24/7 monitoring and 99.9% uptime.",
+            points: ["Horizon Hosting (coming soon): VPS, dedicated servers and managed cloud"],
+            files: [
+                ["horizon-network-wordmark", "Wordmark"], ["horizon-network-wordmark-white", "Wordmark – white", true],
+                ["horizon-network-wordmark-stacked", "Stacked wordmark"], ["horizon-network-wordmark-stacked-white", "Stacked wordmark – white", true],
+                ["horizon-network-email-logo", "Email signature logo", false, true],
+            ],
+        },
+        {
+            name: "Horizon Advertising", logo: "horizon-advertising-logo", domain: "horizonadvertising.co.uk",
+            about: "Digital advertising solutions powered by the Horizon Network. Reaching audiences with precision and scale, with measurable results.",
+            points: ["Display advertising", "Campaign management", "Analytics & reporting"],
+            files: roundelSet("horizon-advertising").concat([["horizon-advertising-email-logo", "Email signature logo", false, true]]),
+        },
+        {
+            name: "Horizon Development", logo: "horizon-development-logo",
+            about: "Custom software development and web applications, from concept to deployment, built with modern technologies.",
+            files: roundelSet("horizon-development"),
+        },
+        {
+            name: "Horizon Media Group", logo: "horizon-media-group-logo", domain: "media.hngroup.org.uk",
+            about: "The media arm of HN Group.",
+            files: roundelSet("horizon-media-group"),
+        },
+        {
+            name: "Horizon Holding Co", logo: "horizon-holding-co-logo", logosOnly: true,
+            files: roundelSet("horizon-holding-co"),
+        },
+    ];
+
+    function roundelSet(key) {
+        return [
+            [key + "-logo", "Logo"], [key + "-logo-white", "Logo – white", true],
+            [key + "-roundel", "Roundel"], [key + "-roundel-white", "Roundel – white", true],
+            [key + "-app-icon", "App icon"],
+        ];
+    }
+
+    const BRAND_COLOURS = [
+        ["Pink", "#E97DE8"], ["Purple", "#5514B4"], ["Yellow", "#E3E65B"], ["Teal", "#3E9BA3"],
+        ["Plum", "#7A1F6C"], ["Raspberry", "#C2306B"], ["Green", "#5FAE7B"], ["Navy", "#1C2135"],
+    ];
+
+    function brandImg(file, cls, alt) {
+        return '<img src="/assets/brand/' + (file[3] ? "png/" + file[0] + ".png" : "svg/" + file[0] + ".svg") + '" alt="' + esc(alt || "") + '"' + (cls ? ' class="' + cls + '"' : "") + ' loading="lazy">';
+    }
+
+    async function viewAbout(root, current) {
+        let counts = {};
+        try {
+            const d = await api("/api/directory");
+            d.people.forEach(function (p) { companiesOf(p).forEach(function (c) { counts[c] = (counts[c] || 0) + 1; }); });
+        } catch (e) { counts = {}; }
+        if (!current()) return;
+        const companies = BRANDS.filter(function (b) { return !b.logosOnly; });
+        let brandFilter = "";
+
+        root.innerHTML =
+            '<div class="page-head"><div><h1>About HN Group</h1><p class="muted">Who we are, the companies in the group, and the brand colours and logos to use.</p></div>' +
+            '<div class="page-actions"><a class="btn btn-ghost" href="#brand-logos">' + icon("download") + "Logos</a></div></div>" +
+
+            '<section class="about-hero">' +
+            '<div class="about-hero-text"><p class="eyebrow">One group, ' + companies.length + " companies</p>" +
+            "<h2>Building the digital infrastructure, products and media for tomorrow’s businesses.</h2>" +
+            '<p class="muted">HN Group brings together Horizon Network, Horizon Advertising, Horizon Development and Horizon Media Group. Each company has its own focus, and they share people, systems and standards across the group.</p></div>' +
+            '<div class="about-hero-logo">' + brandImg(["hn-group-wordmark"], "logo-light-theme", "HN Group") + brandImg(["hn-group-wordmark-white"], "logo-dark-theme", "HN Group") + "</div>" +
+            "</section>" +
+
+            '<h2 class="section-title about-title">' + icon("building") + "Our companies</h2>" +
+            '<div class="company-grid">' + companies.map(function (b) {
+                const n = counts[b.name] || 0;
+                return '<article class="company-card">' +
+                    '<div class="cc-logo">' + brandImg([b.logo], "logo-light-theme", b.name) + brandImg([b.logo + "-white"], "logo-dark-theme", b.name) + "</div>" +
+                    '<h3 class="cc-name">' + esc(b.name) + "</h3>" +
+                    '<p class="cc-about">' + esc(b.about) + "</p>" +
+                    (b.points ? '<ul class="cc-points">' + b.points.map(function (p) { return "<li>" + icon("tick") + esc(p) + "</li>"; }).join("") + "</ul>" : "") +
+                    '<div class="cc-meta">' +
+                    (n ? '<a class="chip" href="/directory" data-link data-company-link="' + esc(b.name) + '">' + icon("users") + n + (n === 1 ? " person" : " people") + "</a>" : "") +
+                    (b.domain ? '<span class="chip chip-all">' + icon("mail") + "@" + esc(b.domain) + "</span>" : "") +
+                    "</div></article>";
+            }).join("") + "</div>" +
+
+            '<h2 class="section-title about-title" id="brand-colours">' + icon("palette") + "Brand colours</h2>" +
+            '<p class="muted small about-sub">The eight colours from the stripe under the HN Group and Horizon Network wordmarks. Click a colour to copy its code.</p>' +
+            '<div class="swatch-row">' + BRAND_COLOURS.map(function (c) {
+                return '<button type="button" class="swatch" data-copy="' + c[1] + '"><span class="swatch-chip" data-colour="' + c[1] + '"></span>' +
+                    '<span class="swatch-name">' + c[0] + '</span><span class="swatch-hex mono">' + c[1] + "</span></button>";
+            }).join("") + "</div>" +
+
+            '<h2 class="section-title about-title" id="brand-logos">' + icon("download") + "Logos</h2>" +
+            '<div class="brand-notes">' +
+            '<div class="info-card"><div class="info-label">' + icon("tree") + "Wordmarks</div><p class=\"small\">HN Group and Horizon Network use a heavy wordmark above a stepped line of the eight brand colours. Use the stacked version where space is tight, such as email.</p></div>" +
+            '<div class="info-card"><div class="info-label">' + icon("star") + "Roundels</div><p class=\"small\">The other companies use a thick ring with their initials. Horizon Advertising is lavender (#7B52C4); the others are indigo (#5514B4).</p></div>" +
+            '<div class="info-card"><div class="info-label">' + icon("eye") + "Light or dark</div><p class=\"small\">Use the <strong>white</strong> versions on dark or photo backgrounds. SVG is best for print and the web; PNG works everywhere else.</p></div>" +
+            "</div>" +
+            '<div class="company-tabs" id="brand-tabs"><button type="button" data-brand="">All logos</button>' +
+            BRANDS.map(function (b) { return '<button type="button" data-brand="' + esc(b.name) + '">' + esc(b.name) + "</button>"; }).join("") + "</div>" +
+            '<div id="brand-library"></div>';
+
+        $$(".swatch-chip", root).forEach(function (el) { el.style.background = el.dataset.colour; });
+
+        function drawLibrary() {
+            $$("#brand-tabs [data-brand]").forEach(function (b) { b.classList.toggle("active", b.dataset.brand === brandFilter); });
+            $("#brand-library").innerHTML = BRANDS.filter(function (b) { return !brandFilter || b.name === brandFilter; }).map(function (b) {
+                return '<section class="brand-group"><h3 class="detail-head">' + esc(b.name) + '</h3><div class="logo-grid">' + b.files.map(function (f) {
+                    return '<div class="logo-tile"><div class="logo-preview' + (f[2] ? " on-dark" : "") + (/app-icon/.test(f[0]) ? " is-icon" : "") + '">' + brandImg(f, "", b.name + " " + f[1]) + "</div>" +
+                        '<div class="logo-info"><span class="logo-name">' + esc(f[1]) + "</span>" +
+                        '<span class="logo-dl">' + (f[3] ? "" : '<a class="btn btn-ghost btn-small" href="/assets/brand/svg/' + f[0] + '.svg" download>SVG</a>') +
+                        '<a class="btn btn-ghost btn-small" href="/assets/brand/png/' + f[0] + '.png" download>PNG</a></span></div></div>';
+                }).join("") + "</div></section>";
+            }).join("");
+        }
+        drawLibrary();
+
+        root.addEventListener("click", function (e) {
+            const tab = e.target.closest("[data-brand]");
+            if (tab) { brandFilter = tab.dataset.brand; return drawLibrary(); }
+            const co = e.target.closest("[data-company-link]");
+            if (co) state.pendingCompany = co.dataset.companyLink;
+            const sw = e.target.closest(".swatch[data-copy]");
+            if (sw) return copyText(sw.dataset.copy);
+            const jump = e.target.closest('a[href^="#brand-"]');
+            if (jump) {
+                e.preventDefault();
+                const t = $(jump.getAttribute("href"));
+                if (t) t.scrollIntoView({ behavior: "smooth", block: "start" });
+            }
+        });
+    }
 
     // ================= Settings =================
 
@@ -3439,7 +3593,7 @@
 
     function viewNoSystemAccess(root) {
         root.innerHTML = '<div class="empty-page">' + icon("lock", "big") + "<h1>No access</h1>" +
-            '<p class="muted">System Admin is only available to the system owner.</p>' +
+            '<p class="muted">System Admin is only available to the system owner and people with the System Admin permission.</p>' +
             '<a class="btn btn-primary" href="/home" data-link>Back to home</a></div>';
     }
 
@@ -3620,7 +3774,7 @@
                     '<td data-label="IP address" class="mono small">' + esc(s.ip) + "</td>" +
                     '<td data-label="Signed in">' + esc(timeAgo(s.createdAt)) + "</td>" +
                     '<td data-label="Last active">' + esc(timeAgo(s.lastSeen)) + "</td>" +
-                    '<td class="col-actions">' + (s.current ? "" : '<button type="button" class="btn btn-ghost btn-small" data-end="' + s.id + '">End</button>') + "</td></tr>";
+                    '<td class="col-actions">' + (s.current || s.protected ? "" : '<button type="button" class="btn btn-ghost btn-small" data-end="' + s.id + '">End</button>') + "</td></tr>";
             }).join("") + "</tbody></table></div></section>" +
 
             '<section class="panel sys-section"><div class="panel-head"><h2 class="panel-title">' + icon("login") + "Log in as</h2></div>" +
@@ -3639,12 +3793,12 @@
 
             '<section class="panel sys-section" id="sys-backups"></section>' +
 
-            '<section class="panel sys-section sys-pin"><h2 class="panel-title">' + icon("key") + "Change System Admin PIN</h2>" +
+            (data.isOwner ? '<section class="panel sys-section sys-pin"><h2 class="panel-title">' + icon("key") + "Change System Admin PIN</h2>" +
             '<form id="sys-pin-form" novalidate>' +
             '<div class="grid-2"><div><label for="sp-current">Current PIN</label><input type="password" id="sp-current" inputmode="numeric" maxlength="8" autocomplete="off"></div>' +
             '<div><label for="sp-new">New PIN</label><input type="password" id="sp-new" inputmode="numeric" maxlength="8" autocomplete="off"></div></div>' +
             '<p class="hint">4 to 8 digits.</p><div class="form-error" id="sp-error" hidden></div>' +
-            '<div class="form-actions"><button type="submit" class="btn btn-primary">Update PIN</button></div></form></section>' +
+            '<div class="form-actions"><button type="submit" class="btn btn-primary">Update PIN</button></div></form></section>' : "") +
 
             "";
 
@@ -3659,7 +3813,8 @@
                 const can = u.account === "active";
                 return '<div class="user-pick-row"><div class="emp-cell">' + avatar(u, "sm") + '<div><div class="emp-name">' + esc(u.displayName) +
                     (u.system ? ' <span class="badge">System account</span>' : "") + '</div><div class="muted small">' + esc(u.username || "No email") + " · " + esc(u.jobTitle) + "</div></div></div>" +
-                    (can ? '<button type="button" class="btn btn-ghost btn-small" data-as="' + u.id + '">' + icon("login") + "Log in as</button>"
+                    (u.protected ? '<span class="muted small">' + icon("lock") + "System owner</span>"
+                        : can ? '<button type="button" class="btn btn-ghost btn-small" data-as="' + u.id + '">' + icon("login") + "Log in as</button>"
                         : '<span class="muted small">' + (u.account === "disabled" ? "Login disabled" : "No login account") + "</span>") + "</div>";
             }).join("") : '<p class="muted small">No users match.</p>';
         }
@@ -3702,7 +3857,7 @@
             }
         });
 
-        $("#sys-pin-form").addEventListener("submit", async function (e) {
+        if ($("#sys-pin-form")) $("#sys-pin-form").addEventListener("submit", async function (e) {
             e.preventDefault();
             formError($("#sp-error"), "");
             try {

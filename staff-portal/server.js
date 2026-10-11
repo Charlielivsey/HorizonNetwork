@@ -28,7 +28,7 @@ const MAX_AVATAR_BODY_BYTES = 2 * 1024 * 1024;
 // Pages of the single-page app; the browser handles routing between them.
 const APP_ROUTES = new Set([
   "/home", "/directory", "/employees", "/settings", "/system", "/announcements", "/documents",
-  "/calendar", "/polls", "/onboarding", "/roles",
+  "/calendar", "/polls", "/onboarding", "/roles", "/about",
 ]);
 const SYSTEM_UNLOCK_MS = 15 * 60 * 1000; // System Admin stays unlocked for 15 minutes of inactivity
 const MAX_PIN_ATTEMPTS = 5;
@@ -646,15 +646,19 @@ async function routeWorkplace(req, res, pathname, session) {
   sendJson(res, 404, { error: "Not found." });
 }
 
-// ---------- System Admin (owner only, PIN protected) ----------
+// ---------- System Admin (owner and super admins, PIN protected) ----------
+// Super admins can do everything here except change the PIN, and they can't act on the owner:
+// no logging in as them and no ending their sessions.
 
 async function routeSystem(req, res, pathname, session) {
   const me = session.person;
   const method = req.method;
-  if (!store.isOwner(me) || session.data.impersonatorId) {
+  const owner = store.isOwner(me);
+  if (!store.can(me, "system.admin") || session.data.impersonatorId) {
     logEvent(req, session, "system-admin-denied");
-    throw httpError(403, "Only the system owner can use System Admin.");
+    throw httpError(403, "You don't have access to System Admin.");
   }
+  const protectedPerson = (personId) => !owner && store.isOwner(store.getPerson(personId));
   if (method === "POST" && pathname === "/api/system/unlock") {
     const entry = pinFailures.get(me.id);
     if (entry && entry.count >= MAX_PIN_ATTEMPTS && Date.now() - entry.first < LOCKOUT_WINDOW_MS) {
@@ -701,6 +705,7 @@ async function routeSystem(req, res, pathname, session) {
         lastSeen: new Date(s.lastSeen).toISOString(),
         current: token === session.token,
         impersonatedBy: by ? by.displayName : null,
+        protected: protectedPerson(s.personId),
       });
     }
     list.sort((a, b) => b.lastSeen.localeCompare(a.lastSeen));
@@ -713,10 +718,12 @@ async function routeSystem(req, res, pathname, session) {
       system: !!p.system,
       avatarUrl: store.publicView(p).avatarUrl,
       account: p.account ? (p.account.enabled ? "active" : "disabled") : "none",
+      protected: protectedPerson(p.id),
     }));
     return sendJson(res, 200, {
       sessions: list,
       users,
+      isOwner: owner,
       audit: store.readAudit(2000),
       unlockedUntil: new Date(session.data.systemUnlockedUntil).toISOString(),
     });
@@ -726,6 +733,7 @@ async function routeSystem(req, res, pathname, session) {
   if (method === "POST" && (m = /^\/api\/system\/sessions\/([a-f0-9]{12})\/end$/.exec(pathname))) {
     for (const [token, s] of sessions) {
       if (s.id === m[1]) {
+        if (protectedPerson(s.personId)) throw httpError(403, "Only the system owner can end the system owner's sessions.");
         const p = store.getPerson(s.personId);
         sessions.delete(token);
         logEvent(req, session, "session-ended", { target: p ? store.loginName(p) : s.personId });
@@ -737,8 +745,9 @@ async function routeSystem(req, res, pathname, session) {
   if (method === "POST" && pathname === "/api/system/force-logout") {
     const { includeSelf } = await readJsonBody(req);
     let count = 0;
-    for (const token of [...sessions.keys()]) {
+    for (const [token, s] of [...sessions]) {
       if (token === session.token && !includeSelf) continue;
+      if (protectedPerson(s.personId)) continue;
       sessions.delete(token);
       count++;
     }
@@ -750,6 +759,7 @@ async function routeSystem(req, res, pathname, session) {
   if (method === "POST" && (m = /^\/api\/system\/impersonate\/([a-f0-9]{16})$/.exec(pathname))) {
     const target = store.getPerson(m[1]);
     if (!target || target.id === me.id) throw httpError(404, "User not found.");
+    if (protectedPerson(target.id)) throw httpError(403, "Only the system owner can log in as the system owner.");
     if (!target.account) throw httpError(400, `${target.displayName} doesn't have a login account yet.`);
     if (!target.account.enabled) throw httpError(400, `${target.displayName}'s login is disabled.`);
     const token = createSession(target.id, req, { impersonatorId: me.id, returnKey: session.token, allowPageLoad: true });
@@ -758,6 +768,7 @@ async function routeSystem(req, res, pathname, session) {
   }
 
   if (method === "POST" && pathname === "/api/system/pin") {
+    if (!owner) throw httpError(403, "Only the system owner can change the PIN.");
     const { currentPin, newPin } = await readJsonBody(req);
     if (!store.verifySystemPin(String(currentPin || ""))) throw httpError(400, "The current PIN is incorrect.");
     store.setSystemPin(String(newPin || ""));
@@ -1180,22 +1191,33 @@ async function routeApi(req, res, pathname, session) {
         people: store.employees().map((p) => ({ id: p.id, displayName: p.displayName, jobTitle: p.jobTitle, avatarUrl: store.publicView(p).avatarUrl, isOwner: store.isOwner(p) })),
       });
     }
+    // Only people who can open System Admin can give that permission out, or change who has it.
+    const guardSystemAdmin = (role, body) => {
+      if (store.can(me, "system.admin")) return;
+      const before = role ? role.permissions.includes("system.admin") : false;
+      const after = body && Array.isArray(body.permissions) ? body.permissions.includes("system.admin") : before;
+      if (before || after) throw httpError(403, "Only people with System Admin access can change roles that include it.");
+    };
     if (method === "POST" && pathname === "/api/roles") {
-      const r = store.saveRole(await readJsonBody(req), null);
+      const body = await readJsonBody(req);
+      guardSystemAdmin(null, body);
+      const r = store.saveRole(body, null);
       logEvent(req, session, "role-created", { target: r.name, detail: r.permissions.join(", ") });
       return sendJson(res, 201, { ok: true });
     }
     if (method === "POST" && (m = /^\/api\/roles\/([a-f0-9]{16})(?:\/(delete|members))?$/.exec(pathname))) {
       const r = store.getRole(m[1]);
       if (!r) throw httpError(404, "Role not found.");
+      const body = m[2] === "delete" ? null : await readJsonBody(req);
+      guardSystemAdmin(r, body);
       if (m[2] === "delete") {
         store.deleteRole(r);
         logEvent(req, session, "role-deleted", { target: r.name });
       } else if (m[2] === "members") {
-        store.setRoleMembers(r, (await readJsonBody(req)).personIds);
+        store.setRoleMembers(r, body.personIds);
         logEvent(req, session, "role-members-changed", { target: r.name });
       } else {
-        store.saveRole(await readJsonBody(req), r);
+        store.saveRole(body, r);
         logEvent(req, session, "role-updated", { target: r.name, detail: r.permissions.join(", ") });
       }
       return sendJson(res, 200, { ok: true });
