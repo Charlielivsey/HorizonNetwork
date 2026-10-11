@@ -277,13 +277,13 @@
                 { title: "Documents & Policies", desc: "Handbooks, policies, forms and templates", href: "/documents", icon: "file", badge: "pendingAcks" },
                 { title: "Calendar", desc: "Events, bank holidays and celebrations", href: "/calendar", icon: "calendar" },
                 { title: "Polls & surveys", desc: "Have your say", href: "/polls", icon: "chart", badge: "openPolls" },
+                { title: "Email signature", desc: "Make your branded email signature", href: "/signature", icon: "mail" },
             ],
         },
         {
             label: "HR", items: [
                 { title: "Leave & Absence", desc: "Book holidays and report absence", icon: "calendar", soon: true },
                 { title: "Rotas & Timesheets", desc: "Shifts, hours and approvals", icon: "clock", soon: true },
-                { title: "Payslips", desc: "View and download your payslips", icon: "card", soon: true },
             ],
         },
         {
@@ -334,6 +334,7 @@
                 (me.status ? statusPill(me.status) : '<span class="status-pill st-none"><span class="status-dot"></span>Set a status</span>') + "</button>") +
             '<div class="menu-sep"></div>' +
             '<a class="menu-item compact" role="menuitem" href="/settings" data-link>' + icon("settings") + "<span>Settings</span></a>" +
+            '<a class="menu-item compact" role="menuitem" href="/signature" data-link>' + icon("mail") + "<span>Email signature</span></a>" +
             (can("system.admin") && !me.impersonatedBy ? '<a class="menu-item compact" role="menuitem" href="/system" data-link>' + icon("shield") + "<span>System Admin</span></a>" : "") +
             '<div class="menu-sep"></div>' +
             '<button type="button" class="menu-item compact danger" role="menuitem" data-action="logout">' + icon("logout") + "<span>Sign out</span></button>" +
@@ -465,6 +466,7 @@
         "/onboarding": viewOnboarding,
         "/roles": viewRoles,
         "/about": viewAbout,
+        "/signature": viewSignature,
     };
 
     function navigate(href, replace) {
@@ -487,6 +489,7 @@
         "/onboarding": "check",
         "/roles": "key",
         "/about": "building",
+        "/signature": "mail",
     };
 
     function decoratePageHead(root, path) {
@@ -3200,16 +3203,16 @@
         {
             name: "Horizon Development", logo: "horizon-development-logo",
             about: "Custom software development and web applications, from concept to deployment, built with modern technologies.",
-            files: roundelSet("horizon-development"),
+            files: roundelSet("horizon-development").concat([["horizon-development-email-logo", "Email signature logo", false, true]]),
         },
         {
             name: "Horizon Media Group", logo: "horizon-media-group-logo", domain: "media.hngroup.org.uk",
             about: "The media arm of HN Group.",
-            files: roundelSet("horizon-media-group"),
+            files: roundelSet("horizon-media-group").concat([["horizon-media-group-email-logo", "Email signature logo", false, true]]),
         },
         {
             name: "Horizon Holding Co", logo: "horizon-holding-co-logo", logosOnly: true,
-            files: roundelSet("horizon-holding-co"),
+            files: roundelSet("horizon-holding-co").concat([["horizon-holding-co-email-logo", "Email signature logo", false, true]]),
         },
     ];
 
@@ -3310,6 +3313,202 @@
                 const t = $(jump.getAttribute("href"));
                 if (t) t.scrollIntoView({ behavior: "smooth", block: "start" });
             }
+        });
+    }
+
+    // ================= Email signature generator =================
+
+    // Same layout as the signatures in brand/email-signature: logo on the left, details on the right,
+    // the eight-colour stripe, the parent company line and the confidentiality notice.
+    const SIGNATURE_COMPANIES = {
+        "HN Group": { logo: "hn-group-email-logo", accent: "#5514B4", web: "hngroup.org.uk", domain: "hngroup.org.uk", legal: "HN Group Limited" },
+        "Horizon Network": { logo: "horizon-network-email-logo", accent: "#5514B4", web: "horizon-network.co.uk", domain: "horizon-network.co.uk", legal: "Horizon Network Limited", parent: "HN Group", parentLegal: "HN Group Limited" },
+        "Horizon Advertising": { logo: "horizon-advertising-email-logo", accent: "#7B52C4", web: "horizonadvertising.co.uk", domain: "horizonadvertising.co.uk", legal: "Horizon Advertising Limited", parent: "Horizon Network", parentLegal: "Horizon Network Limited" },
+        "Horizon Development": { logo: "horizon-development-email-logo", accent: "#5514B4", web: "horizon-network.co.uk", legal: "Horizon Development", parent: "Horizon Network", parentLegal: "Horizon Network Limited" },
+        "Horizon Media Group": { logo: "horizon-media-group-email-logo", accent: "#5514B4", web: "hngroup.org.uk", domain: "media.hngroup.org.uk", legal: "Horizon Media Group", parent: "HN Group", parentLegal: "HN Group Limited" },
+    };
+    const SIG_STRIPE = [["#E97DE8", 14], ["#5514B4", 14], ["#E3E65B", 6], ["#3E9BA3", 20], ["#7A1F6C", 10], ["#C2306B", 10], ["#5FAE7B", 13], ["#1C2235", 13]];
+
+    function signatureHtml(v) {
+        const c = SIGNATURE_COMPANIES[v.company] || SIGNATURE_COMPANIES["HN Group"];
+        const web = v.website.replace(/^https?:\/\//, "").replace(/\/$/, "");
+        const href = "https://" + web;
+        const logo = window.location.origin + "/assets/brand/png/" + c.logo + ".png";
+        const line = function (letter, inner) { return '<span style="color:#1A1A1A;font-weight:bold;">' + letter + "</span>&nbsp; " + inner; };
+        const lines = [];
+        if (v.email) lines.push(line("E", '<a href="mailto:' + esc(v.email) + '" style="color:#4A4A4A;text-decoration:none;">' + esc(v.email) + "</a>"));
+        if (v.phone) lines.push(line("T", '<a href="tel:' + esc(v.phone.replace(/[^\d+]/g, "")) + '" style="color:#4A4A4A;text-decoration:none;">' + esc(v.phone) + "</a>"));
+        if (web) lines.push(line("W", '<a href="' + esc(href) + '" style="color:#4A4A4A;text-decoration:none;">' + esc(web) + "</a>"));
+        return '<table cellpadding="0" cellspacing="0" border="0" role="presentation" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;color:#1A1A1A;max-width:560px;">' +
+            "<tr>" +
+            '<td valign="middle" style="padding:0 20px 0 0;width:200px;border-right:2px solid ' + c.accent + ';">' +
+            '<a href="' + esc(href) + '" style="text-decoration:none;"><img src="' + esc(logo) + '" width="200" height="100" alt="' + esc(v.company) + '" style="display:block;border:0;width:200px;height:100px;"></a></td>' +
+            '<td valign="middle" style="padding:0 0 0 20px;">' +
+            '<p style="margin:0;font-size:17px;line-height:22px;font-weight:bold;color:#1A1A1A;">' + esc(v.name) + "</p>" +
+            '<p style="margin:4px 0 10px;font-size:12px;line-height:18px;"><span style="color:' + c.accent + ';font-weight:bold;">' + esc(v.title) + "</span> &nbsp;" +
+            '<span style="color:#4A4A4A;">' + esc(c.legal) + "</span></p>" +
+            '<p style="margin:0;font-size:12px;line-height:19px;color:#4A4A4A;">' + lines.join("<br>") + "</p>" +
+            "</td></tr>" +
+            '<tr><td colspan="2" style="padding:14px 0 0;"><table cellpadding="0" cellspacing="0" border="0" role="presentation" width="100%" style="border-collapse:collapse;"><tr>' +
+            SIG_STRIPE.map(function (s) { return '<td height="3" width="' + s[1] + '%" bgcolor="' + s[0] + '" style="font-size:0;line-height:0;">&nbsp;</td>'; }).join("") +
+            "</tr></table></td></tr>" +
+            (c.parent ? '<tr><td colspan="2" style="padding:10px 0 0;font-size:11px;line-height:18px;color:#1A1A1A;">A <strong>' + esc(c.parent) + "</strong> company</td></tr>" : "") +
+            '<tr><td colspan="2" style="padding:12px 0 0;font-size:10px;line-height:14px;color:#9A9A9A;">' +
+            "This email and any attachments are confidential and intended only for the named recipient. If you have received it in error, please tell the sender and delete it." +
+            (c.parent ? " " + esc(v.company) + " is a subsidiary of " + esc(c.parentLegal) + "." : "") +
+            "</td></tr></table>";
+    }
+
+    // The portal's security policy blocks style attributes in page markup, so the preview is parsed
+    // separately and each element's styles are applied through the DOM (which is allowed).
+    function renderSignaturePreview(box, html) {
+        // Our own markup, with attribute values escaped, so renaming style="…" is safe.
+        box.innerHTML = html.replace(/ style="/g, ' data-sig-style="');
+        $$("[data-sig-style]", box).forEach(function (el) {
+            el.style.cssText = el.getAttribute("data-sig-style");
+            el.removeAttribute("data-sig-style");
+        });
+    }
+
+    async function viewSignature(root, current) {
+        const me = state.me;
+        const manager = can("staff.manage");
+        let people = [];
+        if (manager) {
+            try { people = (await api("/api/directory")).people; } catch (e) { people = []; }
+            if (!current()) return;
+        }
+        const self = people.find(function (p) { return p.id === me.id; }) || me;
+        let person = me.system && people.length ? people[0] : self;
+
+        root.innerHTML =
+            '<div class="page-head"><div><h1>Email signature</h1><p class="muted">Your branded signature, built from your staff profile. Copy it straight into Gmail or Outlook.</p></div></div>' +
+            '<div class="sig-layout">' +
+            '<section class="panel sig-form"><h2 class="panel-title">' + icon("edit") + "Details</h2>" +
+            (manager ? '<label for="sig-person">Person</label><select id="sig-person">' + people.map(function (p) {
+                return '<option value="' + p.id + '"' + (p.id === person.id ? " selected" : "") + ">" + esc(p.displayName) + (p.id === me.id ? " (you)" : "") + "</option>";
+            }).join("") + "</select>" : "") +
+            '<label for="sig-role">Company</label><select id="sig-role"></select>' +
+            '<label for="sig-name">Name</label><input type="text" id="sig-name" maxlength="80">' +
+            '<label for="sig-title">Job title</label><input type="text" id="sig-title" maxlength="100">' +
+            '<label for="sig-email">Email</label><select id="sig-email"></select>' +
+            '<div class="grid-2"><div><label for="sig-phone">Phone <span class="muted small">(optional)</span></label><input type="tel" id="sig-phone" maxlength="40"></div>' +
+            '<div><label for="sig-web">Website</label><input type="text" id="sig-web" maxlength="80"></div></div>' +
+            '<p class="hint">Changes here only affect the signature, not the staff profile.</p>' +
+            "</section>" +
+            '<section class="sig-right">' +
+            '<div class="panel sig-preview-panel"><div class="panel-head"><h2 class="panel-title">' + icon("eye") + "Preview</h2>" +
+            '<div class="btn-row"><button type="button" class="btn btn-ghost btn-small" id="sig-download">' + icon("download") + "Download</button>" +
+            '<button type="button" class="btn btn-ghost btn-small" id="sig-copy-code">' + icon("copy") + "Copy HTML</button>" +
+            '<button type="button" class="btn btn-primary btn-small" id="sig-copy">' + icon("copy") + "Copy signature</button></div></div>" +
+            '<div class="sig-mail"><div class="sig-mail-bar"><span></span><span></span><span></span></div>' +
+            '<div class="sig-mail-body"><p class="sig-mail-text">Kind regards,</p><div id="sig-preview"></div></div></div></div>' +
+            '<div class="panel sig-help"><h2 class="panel-title">' + icon("lifebuoy") + "Adding it to your email</h2>" +
+            '<div class="segmented sig-tabs" role="tablist"><button type="button" data-help="gmail" class="active">Gmail</button><button type="button" data-help="outlook">Outlook</button><button type="button" data-help="apple">Apple Mail</button></div>' +
+            '<ol class="sig-steps" data-steps="gmail"><li>Click <strong>Copy signature</strong> above.</li><li>In Gmail, open <strong>Settings</strong> (the cog) → <strong>See all settings</strong>.</li><li>Under <strong>Signature</strong>, click <strong>Create new</strong>, name it, and paste into the box.</li><li>Set it as the default for new emails and replies, then click <strong>Save changes</strong> at the bottom.</li></ol>' +
+            '<ol class="sig-steps" data-steps="outlook" hidden><li>Click <strong>Copy signature</strong> above.</li><li>In Outlook, go to <strong>Settings</strong> → <strong>Mail</strong> (or <strong>Accounts</strong>) → <strong>Signatures</strong>.</li><li>Click <strong>New signature</strong>, name it, and paste into the box.</li><li>Choose it as the default for new messages and replies, then <strong>Save</strong>.</li></ol>' +
+            '<ol class="sig-steps" data-steps="apple" hidden><li>Click <strong>Download</strong> above and open the file in Safari.</li><li>Press <strong>⌘A</strong> then <strong>⌘C</strong> to copy it.</li><li>In Mail, open <strong>Settings</strong> → <strong>Signatures</strong>, click <strong>+</strong> and paste.</li><li>Untick <strong>Always match my default message font</strong>.</li></ol>' +
+            "</div></section></div>";
+
+        const f = function (id) { return $("#" + id); };
+
+        function rolesOf(p) {
+            const list = [{ company: p.company, jobTitle: p.jobTitle }];
+            (p.otherRoles || []).forEach(function (r) { list.push({ company: r.company, jobTitle: r.jobTitle || p.jobTitle }); });
+            return list;
+        }
+
+        function pickEmail(p, company) {
+            const domain = (SIGNATURE_COMPANIES[company] || {}).domain;
+            const emails = p.emails || [];
+            const match = domain && emails.find(function (e) { return e.address.toLowerCase().endsWith("@" + domain); });
+            return (match || emails.find(function (e) { return e.primary; }) || emails[0] || {}).address || "";
+        }
+
+        function fillRole() {
+            const role = rolesOf(person)[f("sig-role").selectedIndex] || rolesOf(person)[0];
+            f("sig-title").value = role.jobTitle || "";
+            const emails = person.emails || [];
+            f("sig-email").innerHTML = emails.map(function (e) { return '<option value="' + esc(e.address) + '">' + esc(e.address) + "</option>"; }).join("") +
+                '<option value="">No email</option>';
+            f("sig-email").value = pickEmail(person, role.company);
+            f("sig-web").value = (SIGNATURE_COMPANIES[role.company] || SIGNATURE_COMPANIES["HN Group"]).web;
+        }
+
+        function fillPerson() {
+            const roles = rolesOf(person);
+            f("sig-role").innerHTML = roles.map(function (r, i) {
+                return '<option value="' + i + '">' + esc(r.company) + " — " + esc(r.jobTitle) + "</option>";
+            }).join("");
+            f("sig-name").value = person.displayName || "";
+            f("sig-phone").value = person.phone || "";
+            fillRole();
+        }
+
+        function values() {
+            const role = rolesOf(person)[f("sig-role").selectedIndex] || rolesOf(person)[0];
+            return {
+                company: role.company,
+                name: f("sig-name").value.trim(),
+                title: f("sig-title").value.trim(),
+                email: f("sig-email").value,
+                phone: f("sig-phone").value.trim(),
+                website: f("sig-web").value.trim(),
+            };
+        }
+
+        function draw() {
+            renderSignaturePreview(f("sig-preview"), signatureHtml(values()));
+        }
+
+        fillPerson();
+        draw();
+
+        if (manager) f("sig-person").addEventListener("change", function (e) {
+            person = people.find(function (p) { return p.id === e.target.value; });
+            fillPerson();
+            draw();
+        });
+        f("sig-role").addEventListener("change", function () { fillRole(); draw(); });
+        $(".sig-form").addEventListener("input", draw);
+        $(".sig-form").addEventListener("change", draw);
+
+        f("sig-copy").addEventListener("click", async function () {
+            const html = signatureHtml(values());
+            try {
+                await navigator.clipboard.write([new ClipboardItem({
+                    "text/html": new Blob([html], { type: "text/html" }),
+                    "text/plain": new Blob([f("sig-preview").innerText], { type: "text/plain" }),
+                })]);
+            } catch (e) {
+                // Older browsers: copy the rendered preview as a selection.
+                const range = document.createRange();
+                range.selectNodeContents(f("sig-preview"));
+                const sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+                document.execCommand("copy");
+                sel.removeAllRanges();
+            }
+            toast("Signature copied. Paste it into your email signature settings.");
+        });
+        f("sig-copy-code").addEventListener("click", function () { copyText(signatureHtml(values())); });
+        f("sig-download").addEventListener("click", function () {
+            const v = values();
+            const doc = '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<title>' + esc(v.company) + " email signature</title>\n</head>\n" +
+                '<body style="margin:0;padding:24px;background:#ffffff;">\n' + signatureHtml(v) + "\n</body>\n</html>\n";
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(new Blob([doc], { type: "text/html" }));
+            a.download = (v.name || "signature").toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-" + v.company.toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-signature.html";
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+        });
+        $(".sig-tabs").addEventListener("click", function (e) {
+            const b = e.target.closest("[data-help]");
+            if (!b) return;
+            $$(".sig-tabs [data-help]").forEach(function (x) { x.classList.toggle("active", x === b); });
+            $$("[data-steps]").forEach(function (o) { o.hidden = o.dataset.steps !== b.dataset.help; });
         });
     }
 

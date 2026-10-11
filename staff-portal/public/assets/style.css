@@ -2567,3 +2567,22 @@ body.is-scrolling #view { pointer-events: none; }
     .hero-glow { animation: none; }
     *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* ================= Email signature ================= */
+.sig-layout { display: grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); gap: 1.25rem; align-items: start; }
+.sig-form .panel-title, .sig-preview-panel .panel-title, .sig-help .panel-title { display: flex; align-items: center; gap: 0.45rem; margin: 0; }
+.sig-form .panel-title { margin-bottom: 0.25rem; }
+.sig-right { display: flex; flex-direction: column; gap: 1.25rem; min-width: 0; }
+.sig-mail { border: 1px solid var(--border); border-radius: 14px; overflow: hidden; background: #ffffff; box-shadow: 0 10px 30px -18px rgba(28, 33, 53, 0.35); }
+.sig-mail-bar { display: flex; gap: 6px; padding: 0.6rem 0.8rem; background: #f1f2f6; border-bottom: 1px solid #e3e5ec; }
+.sig-mail-bar span { width: 10px; height: 10px; border-radius: 50%; background: #d4d7e2; }
+.sig-mail-bar span:first-child { background: #f06a6a; }
+.sig-mail-bar span:nth-child(2) { background: #f4c04e; }
+.sig-mail-bar span:nth-child(3) { background: #5fc27e; }
+.sig-mail-body { padding: 1.5rem 1.6rem 1.8rem; color: #1a1a1a; overflow-x: auto; }
+.sig-mail-text { font-family: Arial, Helvetica, sans-serif; font-size: 14px; margin-bottom: 1.1rem; color: #1a1a1a; }
+#sig-preview a { pointer-events: none; }
+.sig-tabs { margin: 0.9rem 0 0.4rem; }
+.sig-steps { padding-left: 1.3rem; display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.9rem; margin-top: 0.6rem; }
+.sig-steps li::marker { color: var(--primary); font-weight: 800; }
+@media (max-width: 900px) { .sig-layout { grid-template-columns: 1fr; } }

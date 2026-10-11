@@ -10,6 +10,12 @@ Internal staff portal for the whole of HN Group, served at **https://staff.hngro
 - **Dropdown navigation.** People (Staff Directory, Employee Management), Workplace, HR and Support. Sections that aren't built yet are marked *Soon*.
 - **Staff Directory.** Every employee with their photo, job title, company, emails, location and live local time. You can search and filter by company. Click someone to see who they report to and who reports to them.
 - **About HN Group** (Support → About HN Group). It covers the companies in the group with how many people work at each, the brand colours (click to copy) and every logo, with SVG and PNG downloads. The logo files are in `public/assets/brand/`.
+- **Email signature** (Workplace → Email signature, or the menu under your name).
+  - Builds a branded signature in the same layout as the brand email signatures: the company logo, name, job title, company, email, optional phone, website, the colour stripe, the parent company line and the confidentiality notice.
+  - Pick which company role to use; the logo, colour, email address and website follow it.
+  - **Copy signature** pastes straight into Gmail or Outlook. You can also copy the HTML or download it as a file, and there are step-by-step instructions for Gmail, Outlook and Apple Mail.
+  - People with *Manage staff* can make a signature for anyone.
+  - The logo images load from the portal (`/assets/brand/png/`), so recipients need to be able to reach staff.hngroup.org.uk.
 - **Global search.** Use the search box in the top bar, or press **Ctrl+K** (**⌘K** on a Mac) or **/**. It searches people, pages, documents, announcements, events and polls.
 - **Status.** Click your name, then the status line, to set Available, Busy, Away or Out of office. You can add a message and a date it clears on. Your status shows on your profile and in the Staff Directory.
 - **Employee Management.** Only shown to people with the *Manage staff* permission. Click any row to edit that person.

@@ -28,7 +28,7 @@ const MAX_AVATAR_BODY_BYTES = 2 * 1024 * 1024;
 // Pages of the single-page app; the browser handles routing between them.
 const APP_ROUTES = new Set([
   "/home", "/directory", "/employees", "/settings", "/system", "/announcements", "/documents",
-  "/calendar", "/polls", "/onboarding", "/roles", "/about",
+  "/calendar", "/polls", "/onboarding", "/roles", "/about", "/signature",
 ]);
 const SYSTEM_UNLOCK_MS = 15 * 60 * 1000; // System Admin stays unlocked for 15 minutes of inactivity
 const MAX_PIN_ATTEMPTS = 5;
