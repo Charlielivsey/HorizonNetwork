@@ -2430,3 +2430,6 @@ body.locked .search-btn { display: none; }
 .cl-more { margin-top: 0.25rem; }
 .status-pill { display: inline-block; }
 .status-pill .status-dot { display: inline-block; vertical-align: 0; margin-right: 0.35rem; }
+/* Role tabs wrap onto extra rows instead of scrolling sideways. */
+.role-tabs { flex-wrap: wrap; overflow: visible; }
+.role-tab { flex: 1 1 180px; max-width: 100%; }
