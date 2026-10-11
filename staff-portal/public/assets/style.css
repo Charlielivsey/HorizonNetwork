@@ -3142,3 +3142,8 @@ input[type="date"], input[type="time"], input[type="month"], input[type="datetim
 .mon-error .icon { width: 15px; height: 15px; }
 .mon-actions { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.85rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
 @media (max-width: 640px) { .mon-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .mon-bar { gap: 1px; } }
+.lv-count.lv-over { background: var(--warn-bg); color: var(--warn-text); border: 1px solid var(--warn-border); }
+.lv-count.lv-over .icon { color: var(--warn-text); }
+.lr-over { display: inline-flex; align-items: center; gap: 0.3rem; white-space: nowrap; }
+.lr-over .icon { width: 12px; height: 12px; }
+.lv-count strong { white-space: nowrap; }

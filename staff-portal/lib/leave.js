@@ -128,10 +128,7 @@ function createRequest(person, input, by) {
   if (!days) throw new store.ValidationError("Those dates are all weekends or bank holidays, so there's nothing to book.");
   const overlap = db.data.requests.find((r) => r.personId === person.id && (r.status === "pending" || r.status === "approved") && r.startDate <= endDate && r.endDate >= startDate);
   if (overlap) throw new store.ValidationError(`That overlaps ${overlap.status === "pending" ? "a pending request" : "leave already booked"} (${overlap.startDate} to ${overlap.endDate}).`);
-  if (type === "annual") {
-    const s = summary(person.id, startDate.slice(0, 4));
-    if (days > s.remaining) throw new store.ValidationError(`That's ${days} days, but only ${s.remaining} ${s.remaining === 1 ? "day is" : "days are"} left for ${startDate.slice(0, 4)}.`);
-  }
+  // Going over the allowance is allowed, but it always needs approving by hand (see decide).
   // Sickness is a record rather than a request; HR or a supervisor recording leave for someone approves it too.
   const autoApprove = type === "sick" || (by && by.id !== person.id && canApprove(by, { personId: person.id }));
   const r = {
@@ -159,14 +156,18 @@ function getRequest(id) {
   return db.data.requests.find((r) => r.id === id) || null;
 }
 
-function decide(request, approve, approver, note) {
+// How many days of an active annual leave request go beyond the person's allowance for that year.
+function overBy(r) {
+  if (r.type !== "annual" || (r.status !== "pending" && r.status !== "approved")) return 0;
+  const s = summary(r.personId, r.startDate.slice(0, 4));
+  return Math.min(r.days, Math.max(0, -s.remaining));
+}
+
+function decide(request, approve, approver, note, allowOver) {
   if (request.status !== "pending") throw new store.ValidationError("That request has already been dealt with.");
   if (!canApprove(approver, request)) throw new store.ValidationError("You can't approve that request.");
-  if (approve && request.type === "annual") {
-    const s = summary(request.personId, request.startDate.slice(0, 4));
-    // `remaining` already counts this pending request, so it only fails if the allowance was lowered since.
-    if (s.remaining < 0) throw new store.ValidationError("Approving this would take them over their allowance.");
-  }
+  const over = approve ? overBy(request) : 0;
+  if (over && !allowOver) throw new store.ValidationError(`This takes them ${over} ${over === 1 ? "day" : "days"} over their allowance. Confirm to approve it anyway.`);
   request.status = approve ? "approved" : "declined";
   request.decidedBy = approver.id;
   request.decidedAt = new Date().toISOString();
@@ -214,6 +215,7 @@ function view(r, viewer) {
     decidedBy: r.decidedBy ? personBrief(r.decidedBy).displayName : null,
     decidedAt: r.decidedAt,
     decisionNote: own || manager ? r.decisionNote : "",
+    overBy: own || manager ? overBy(r) : 0,
     canApprove: r.status === "pending" && canApprove(viewer, r),
     canCancel: (r.status === "pending" || r.status === "approved") && (store.can(viewer, MANAGE) || (own && (r.status === "pending" || r.startDate > today()))),
     // Return-to-work forms: the details are for managers; the person just sees it was done.

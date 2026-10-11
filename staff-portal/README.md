@@ -20,7 +20,9 @@ Internal staff portal for the whole of HN Group, served at **https://staff.hngro
   - Staff request annual, compassionate, unpaid or other leave, with half days for single days. Sickness is reported and recorded straight away.
   - Only working days count: weekends and UK bank holidays are skipped. Annual leave comes out of a yearly allowance (January to December, 25 days by default).
   - Requests go to the person's supervisor, or anyone with *Manage leave*. Approved leave shows on the company calendar and the rota (without the reason).
-  - People with *Manage leave* can set the default allowance and individual allowances, see everyone's leave and record leave for others.
+  - Staff can request more leave than they have left. The form warns them, the request is marked "over allowance", and the approver has to confirm before approving it.
+  - **Set leave** places someone on leave straight away, with no approval step. People with *Manage leave* can do it for anyone; supervisors can do it for their own team. **Request leave** is always for yourself.
+  - People with *Manage leave* can set the default allowance and individual allowances and see everyone's leave.
   - **Carry-over.** Unused annual leave carries into the next year, up to a maximum (5 days by default, set under *Allowances & absence*). It starts from the year this feature was added.
   - **Return to work.** Once approved sickness ends, the person's supervisor (or anyone with *Manage leave*) gets a return-to-work form to fill in, shown on the *Return to work* tab and their home page.
   - **Absence.** *Allowances & absence* shows each person's sickness occurrences, days and **Bradford score** (occurrences² × days over the last 52 weeks).

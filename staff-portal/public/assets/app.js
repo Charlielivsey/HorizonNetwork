@@ -3755,7 +3755,8 @@
         root.innerHTML =
             '<div class="page-head"><div><h1>Leave &amp; Absence</h1><p class="muted">Book holidays, report sickness and see who’s off. Weekends and bank holidays never count against your allowance.</p></div>' +
             '<div class="page-actions">' + (s ? '<button type="button" class="btn btn-ghost" id="lv-sick">' + icon("thermometer") + "Report sickness</button>" : "") +
-            '<button type="button" class="btn btn-primary" id="lv-new">' + icon("plus") + (s ? "Request leave" : "Record leave") + "</button></div></div>" +
+            (d.setPeople.length ? '<button type="button" class="btn ' + (s ? "btn-ghost" : "btn-primary") + '" id="lv-set">' + icon("calendar") + "Set leave</button>" : "") +
+            (s ? '<button type="button" class="btn btn-primary" id="lv-new">' + icon("plus") + "Request leave</button>" : "") + "</div></div>" +
             (s ? '<section class="leave-summary">' +
                 '<div class="ls-main"><div class="ls-year"><button type="button" class="icon-btn icon-btn-sm" data-year="' + (year - 1) + '" aria-label="Previous year">' + icon("chevronLeft") + "</button>" +
                 "<span>" + year + " holiday allowance</span>" +
@@ -3786,6 +3787,7 @@
                 (r.returnToWork ? '<div class="lr-note rtw-done">' + icon("check") + "Return-to-work form done" + (r.returnToWork.byName ? " by " + esc(r.returnToWork.byName) + (r.returnToWork.fitForWork === false ? " \u00b7 not yet fit for work" : "") : "") + "</div>" : "") +
                 "</div>" +
                 '<div class="lr-side">' + (opts.noStatus ? "" : statusBadge(r.status)) +
+                (r.overBy ? '<span class="badge badge-yellow lr-over">' + icon("alert") + fmtDays(r.overBy) + " over allowance</span>" : "") +
                 (r.canApprove && opts.actions ? '<div class="btn-row"><button type="button" class="btn btn-ghost btn-small" data-act="decline">Decline</button><button type="button" class="btn btn-primary btn-small" data-act="approve">' + icon("tick") + "Approve</button></div>" : "") +
                 (r.canCancel && opts.cancel ? '<button type="button" class="btn btn-link btn-small" data-act="cancel">Cancel</button>' : "") +
                 "</div></div>";
@@ -3852,6 +3854,7 @@
             if (y) { state.leaveYear = Number(y.dataset.year); return render(); }
             if (e.target.closest("#lv-new")) return openLeaveForm(d, "annual");
             if (e.target.closest("#lv-sick")) return openLeaveForm(d, "sick");
+            if (e.target.closest("#lv-set")) return openLeaveForm(d, "annual", true);
             const rtw = e.target.closest("[data-rtw]");
             if (rtw) return openReturnToWork(d.returnToWork.find(function (x) { return x.id === rtw.dataset.rtw; }));
             const act = e.target.closest("[data-act]");
@@ -3865,7 +3868,13 @@
                 } else if (act.dataset.act === "cancel") {
                     if (!(await confirmDialog({ title: "Cancel this leave?", message: "The days go back into the allowance.", confirmLabel: "Cancel leave", danger: true }))) return;
                 }
-                const r = await api("/api/leave/" + id + "/" + act.dataset.act, { note: note });
+                let allowOver = false;
+                const row = (d.approvals || []).find(function (x) { return x.id === id; });
+                if (act.dataset.act === "approve" && row && row.overBy) {
+                    if (!(await confirmDialog({ title: "Approve leave over allowance?", message: esc(row.person.displayName) + " doesn’t have enough holiday left. Approving this takes them " + fmtDays(row.overBy) + " over their allowance.", confirmLabel: "Approve anyway" }))) return;
+                    allowOver = true;
+                }
+                const r = await api("/api/leave/" + id + "/" + act.dataset.act, { note: note, allowOver: allowOver });
                 state.me = r.user;
                 renderChrome();
                 toast({ approve: "Leave approved.", decline: "Request declined.", cancel: "Leave cancelled." }[act.dataset.act]);
@@ -3906,15 +3915,17 @@
         });
     }
 
-    function openLeaveForm(d, type) {
+    // "Request leave" and "Report sickness" are for yourself. "Set leave" places someone else on
+    // leave straight away (HR for anyone, supervisors for their team), with no approval step.
+    function openLeaveForm(d, type, setFor) {
         const t0 = isoDay(new Date());
-        const forOthers = d.canManage && d.people.length;
         const m = openModal(
-            '<h2 class="modal-title">' + (type === "sick" ? "Report sickness" : d.summary ? "Request leave" : "Record leave") + "</h2>" +
-            (type === "sick" ? '<p class="muted">Let your team know you’re off sick. It’s recorded straight away and doesn’t come out of your holiday allowance.</p>' : "") +
+            '<h2 class="modal-title">' + (setFor ? "Set leave" : type === "sick" ? "Report sickness" : "Request leave") + "</h2>" +
+            (setFor ? '<p class="muted">Place someone on leave. It’s booked straight away, with no approval needed.</p>'
+                : type === "sick" ? '<p class="muted">Let your team know you’re off sick. It’s recorded straight away and doesn’t come out of your holiday allowance.</p>' : "") +
             '<form id="lv-form" novalidate>' +
-            (forOthers ? '<label for="lv-person">Who for</label><select id="lv-person">' + (d.summary ? '<option value="">Me</option>' : "") + d.people.map(function (p) {
-                return '<option value="' + p.id + '">' + esc(p.displayName) + "</option>";
+            (setFor ? '<label for="lv-person">Who</label><select id="lv-person" required><option value="">Choose someone…</option>' + d.setPeople.map(function (p) {
+                return '<option value="' + p.id + '">' + esc(p.displayName) + (p.jobTitle ? " \u00b7 " + esc(p.jobTitle) : "") + "</option>";
             }).join("") + "</select>" : "") +
             '<label for="lv-type">Type</label><select id="lv-type">' + Object.keys(d.types).map(function (k) {
                 return '<option value="' + k + '"' + (k === type ? " selected" : "") + ">" + esc(d.types[k]) + "</option>";
@@ -3926,7 +3937,7 @@
             '<div class="lv-count" id="lv-count"></div>' +
             '<label for="lv-note">Note <span class="muted small">(optional' + (type === "sick" ? ", only your manager and HR see it" : "") + ')</span></label><textarea id="lv-note" rows="2" maxlength="500"></textarea>' +
             '<div class="form-error" id="lv-error" hidden></div>' +
-            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary" id="lv-submit">' + (type === "sick" ? "Report sickness" : "Send request") + "</button></div></form>"
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary" id="lv-submit">' + (setFor ? "Set leave" : type === "sick" ? "Report sickness" : "Send request") + "</button></div></form>"
         );
         let seq = 0;
         async function recount() {
@@ -3934,17 +3945,25 @@
             const to = $("#lv-end", m.el).value;
             $("#lv-half-row", m.el).hidden = from !== to;
             const mySeq = ++seq;
-            let days = 0;
-            try { days = (await api("/api/leave/working-days", { startDate: from, endDate: to })).days; } catch (e) { days = 0; }
+            const who = setFor ? $("#lv-person", m.el).value : "";
+            let days = 0, remaining = null;
+            try {
+                const w = await api("/api/leave/working-days", { startDate: from, endDate: to, personId: who });
+                days = w.days; remaining = w.remaining;
+            } catch (e) { days = 0; }
             if (mySeq !== seq) return;
             const half = from === to && $("input[name=lv-half]:checked", m.el).value;
             if (half && days) days = 0.5;
             const typ = $("#lv-type", m.el).value;
-            const someoneElse = $("#lv-person", m.el) && $("#lv-person", m.el).value;
-            $("#lv-count", m.el).innerHTML = !days ? icon("alert") + "These dates are all weekends or bank holidays."
-                : icon("calendar") + "<strong>" + fmtDays(days) + "</strong>" + (typ === "annual" && d.summary && !someoneElse ? " · " + Math.max(0, d.summary.remaining - days) + " left afterwards" : "") +
-                  (typ === "annual" ? "" : typ === "sick" ? " · not taken from holiday" : "");
-            $("#lv-submit", m.el).textContent = $("#lv-type", m.el).value === "sick" ? "Report sickness" : someoneElse ? "Record leave" : "Send request";
+            const over = typ === "annual" && remaining !== null && days > remaining ? Math.round((days - Math.max(0, remaining)) * 2) / 2 : 0;
+            const count = $("#lv-count", m.el);
+            count.classList.toggle("lv-over", !!over && !!days);
+            count.innerHTML = !days ? icon("alert") + "These dates are all weekends or bank holidays."
+                : icon(over ? "alert" : "calendar") + "<strong>" + fmtDays(days) + "</strong>" +
+                  (typ === "annual" && remaining !== null && !over ? " · " + (Math.round((remaining - days) * 2) / 2) + " left afterwards" : "") +
+                  (over ? " · " + fmtDays(over) + " over " + (setFor ? "their" : "your") + " allowance" + (setFor ? "" : ", so your supervisor will need to approve it") : "") +
+                  (typ === "sick" ? " · not taken from holiday" : "");
+            $("#lv-submit", m.el).textContent = setFor ? "Set leave" : typ === "sick" ? "Report sickness" : "Send request";
         }
         $("#lv-start", m.el).addEventListener("change", function (e) { if ($("#lv-end", m.el).value < e.target.value) $("#lv-end", m.el).value = e.target.value; recount(); });
         m.el.addEventListener("change", function (e) { if (e.target.id !== "lv-start") recount(); });
@@ -3952,20 +3971,20 @@
         $("#lv-form", m.el).addEventListener("submit", async function (e) {
             e.preventDefault();
             try {
+                if (setFor && !$("#lv-person", m.el).value) return formError($("#lv-error", m.el), "Choose who to put on leave.");
                 const r = await api("/api/leave", {
-                    personId: $("#lv-person", m.el) ? $("#lv-person", m.el).value : "",
+                    personId: setFor ? $("#lv-person", m.el).value : "",
                     type: $("#lv-type", m.el).value,
                     startDate: $("#lv-start", m.el).value,
                     endDate: $("#lv-end", m.el).value,
                     halfDay: $("#lv-start", m.el).value === $("#lv-end", m.el).value ? $("input[name=lv-half]:checked", m.el).value : "",
                     note: $("#lv-note", m.el).value,
                 });
-                const someoneElse = $("#lv-person", m.el) && $("#lv-person", m.el).value;
                 state.me = r.user;
                 renderChrome();
                 closeModal();
-                toast(someoneElse ? "Leave recorded." : $("#lv-type", m.el).value === "sick" ? "Sickness recorded. Get well soon." : "Request sent for approval.");
-                state.leaveTab = "mine";
+                toast(setFor ? "Leave set." : $("#lv-type", m.el).value === "sick" ? "Sickness recorded. Get well soon." : "Request sent for approval.");
+                state.leaveTab = setFor ? "off" : "mine";
                 render();
             } catch (err) { formError($("#lv-error", m.el), err.message); }
         });

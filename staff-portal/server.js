@@ -1387,13 +1387,22 @@ async function routeApi(req, res, pathname, session) {
         isApprover: leaveManager || store.employees().some((p) => store.supervises(me, p)),
         people: leaveManager ? store.employees().map((p) => ({ id: p.id, displayName: p.displayName, jobTitle: p.jobTitle, avatarUrl: store.publicView(p).avatarUrl, summary: leave.summary(p.id, year), absence: leave.absenceStats(p.id) })) : [],
         returnToWork: leave.pendingReturnToWork(me),
+        // People this viewer can place on leave with "Set leave": everyone for HR, or their own team.
+        setPeople: store.employees().filter((p) => p.id !== me.id && (leaveManager || store.supervises(me, p)))
+          .map((p) => ({ id: p.id, displayName: p.displayName, jobTitle: p.jobTitle })),
         allowances: leaveManager ? leave.allowances() : null,
       });
     }
     if (method === "POST" && pathname === "/api/leave/working-days") {
-      const { startDate, endDate } = await readJsonBody(req);
+      const { startDate, endDate, personId } = await readJsonBody(req);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate || "") || !/^\d{4}-\d{2}-\d{2}$/.test(endDate || "") || endDate < startDate) return sendJson(res, 200, { days: 0 });
-      return sendJson(res, 200, { days: leave.workingDays(startDate, endDate) });
+      // Also say how much annual leave is left that year, for the person the form is for.
+      let who = me.system ? null : me;
+      if (personId && personId !== me.id) {
+        const p = store.getPerson(personId);
+        who = p && !p.system && (leaveManager || store.supervises(me, p)) ? p : null;
+      }
+      return sendJson(res, 200, { days: leave.workingDays(startDate, endDate), remaining: who ? leave.summary(who.id, startDate.slice(0, 4)).remaining : null });
     }
     if (method === "POST" && pathname === "/api/leave") {
       const body = await readJsonBody(req);
@@ -1427,7 +1436,7 @@ async function routeApi(req, res, pathname, session) {
         leave.cancel(r, me);
         logEvent(req, session, "leave-cancelled", { target: who, detail: `${leave.TYPES[r.type]}, ${r.startDate}` });
       } else {
-        leave.decide(r, m[2] === "approve", me, body.note);
+        leave.decide(r, m[2] === "approve", me, body.note, body.allowOver === true);
         logEvent(req, session, m[2] === "approve" ? "leave-approved" : "leave-declined", { target: who, detail: `${leave.TYPES[r.type]}, ${r.startDate}${r.endDate !== r.startDate ? " to " + r.endDate : ""}` });
       }
       return sendJson(res, 200, { ok: true, user: meResponse(session) });
