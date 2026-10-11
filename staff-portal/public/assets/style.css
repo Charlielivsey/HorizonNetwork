@@ -3466,3 +3466,5 @@ input[type="date"], input[type="time"], input[type="month"], input[type="datetim
 .rp-activity div { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.4rem 0.6rem; border-radius: 8px; background: var(--surface-2); font-size: 0.85rem; }
 @media (max-width: 760px) { .rp-cols { grid-template-columns: 1fr; } }
 @media print { .rp-bar i { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+.job-list { grid-template-columns: minmax(0, 1fr); }
+.job-card { grid-template-columns: minmax(0, 1fr); min-width: 0; }
