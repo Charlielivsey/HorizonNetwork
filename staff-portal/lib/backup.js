@@ -8,7 +8,7 @@ const path = require("path");
 const zlib = require("zlib");
 
 const KEEP_AUTOMATIC = 14;
-const SKIP = new Set(["backups", "sessions.json"]);
+const SKIP = new Set(["backups", "sessions.json", "resume.json"]);
 
 let dataDir;
 let backupDir;

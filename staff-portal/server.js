@@ -28,6 +28,7 @@ const recruitment = require("./lib/recruitment");
 const kudos = require("./lib/kudos");
 const ideas = require("./lib/ideas");
 const extraRoutes = require("./lib/routes-extra");
+const resume = require("./lib/resume");
 
 const PORT = parseInt(process.env.PORT || "3200", 10);
 const HOST = process.env.HOST || "127.0.0.1";
@@ -89,6 +90,7 @@ backup.init(DATA_DIR);
 expenses.init(DATA_DIR);
 invoices.init(DATA_DIR);
 notifications.init(DATA_DIR);
+resume.init(DATA_DIR);
 training.init(DATA_DIR);
 cases.init(DATA_DIR);
 recruitment.init(DATA_DIR);
@@ -235,6 +237,8 @@ function getSession(req) {
 }
 
 function endSessionsFor(personId, exceptToken) {
+  // Remembered browsers ("Resume session") go too: password changes, disabled logins and so on.
+  resume.revokeFor(personId);
   for (const [token, s] of sessions) {
     if (s.personId === personId && token !== exceptToken) sessions.delete(token);
   }
@@ -445,6 +449,18 @@ function headerJson(req, name) {
 
 // ---------- API handlers ----------
 
+// During maintenance only the system owner gets in; everyone else is shown the message instead
+// (after their password is checked, so the message isn't shown to just anyone).
+function blockedByMaintenance(person) {
+  return store.maintenance().on && !store.isOwner(person);
+}
+
+function maintenanceReply(req, res, person) {
+  logEvent(req, null, "sign-in-maintenance", { actor: store.loginName(person) });
+  const m = store.maintenance();
+  return sendJson(res, 503, { maintenance: { message: m.message, since: m.since }, error: "The staff portal is in maintenance mode." });
+}
+
 async function handleLogin(req, res) {
   const ip = clientIp(req);
   if (isLockedOut(ip)) {
@@ -460,6 +476,7 @@ async function handleLogin(req, res) {
     return sendJson(res, 401, { error: "Incorrect email or password." });
   }
   failedAttempts.delete(ip);
+  if (blockedByMaintenance(person)) return maintenanceReply(req, res, person);
   // Step two: anyone with a sign-in code has to enter it before they're signed in.
   if (store.hasCode(person)) {
     const challenge = crypto.randomBytes(24).toString("hex");
@@ -469,12 +486,57 @@ async function handleLogin(req, res) {
   completeLogin(req, res, person);
 }
 
-function completeLogin(req, res, person) {
+function completeLogin(req, res, person, how) {
   store.recordLogin(person);
   const token = createSession(person.id, req, { allowPageLoad: true });
-  console.log(`${store.meView(person).username} signed in from ${clientIp(req)}`);
-  logEvent(req, null, "signed-in", { actor: store.loginName(person) });
-  sendJson(res, 200, { user: store.meView(person) }, { "Set-Cookie": cookieFor(req, token) });
+  console.log(`${store.meView(person).username} signed in from ${clientIp(req)}${how ? ` (${how})` : ""}`);
+  logEvent(req, null, "signed-in", { actor: store.loginName(person), detail: how || undefined });
+  const cookies = [cookieFor(req, token)];
+  // Remember this browser for "Resume session" (only for people with a sign-in code, which it asks for).
+  if (store.hasCode(person)) cookies.push(resume.cookie(req, resume.issue(person.id, parseCookies(req)[resume.COOKIE], req.headers["user-agent"])));
+  sendJson(res, 200, { user: store.meView(person) }, { "Set-Cookie": cookies });
+}
+
+// ----- Resume session: the remembered person on this browser, signing back in with just their code -----
+function resumePerson(req) {
+  const raw = parseCookies(req)[resume.COOKIE];
+  const t = resume.lookup(raw);
+  const person = t ? store.getPerson(t.personId) : null;
+  if (!person || person.system || !person.account || !person.account.enabled || !store.hasCode(person)) return { raw, person: null };
+  return { raw, person };
+}
+
+async function handleResume(req, res, pathname) {
+  const { raw, person } = resumePerson(req);
+  if (req.method === "GET" && pathname === "/api/resume/avatar") {
+    const avatar = person && store.avatarFile(person);
+    if (!avatar) return send(res, 404, "Not found", { "Content-Type": "text/plain" });
+    return sendFile(res, avatar.file, { "Content-Type": avatar.mime, "Cache-Control": "private, max-age=86400" });
+  }
+  if (req.method === "GET") {
+    if (!person) return sendJson(res, 200, { available: false }, raw ? { "Set-Cookie": resume.cookie(req, "", true) } : {});
+    const v = store.publicView(person);
+    return sendJson(res, 200, { available: true, displayName: person.displayName, firstName: person.firstName || person.displayName.split(" ")[0], username: store.meView(person).username, avatarUrl: v.avatarUrl ? "/api/resume/avatar?v=" + person.avatar.version : null, id: person.id });
+  }
+  if (pathname === "/api/resume/forget") {
+    resume.forget(raw);
+    return sendJson(res, 200, { ok: true }, { "Set-Cookie": resume.cookie(req, "", true) });
+  }
+  const ip = clientIp(req);
+  if (isLockedOut(ip)) return sendJson(res, 429, { error: "Too many failed attempts. Please try again in 15 minutes.", restart: true });
+  if (!person) return sendJson(res, 401, { error: "This browser doesn't remember you any more. Please sign in with your email and password.", restart: true }, { "Set-Cookie": resume.cookie(req, "", true) });
+  const { code } = await readJsonBody(req);
+  if (!store.verifyCode(person, String(code || ""))) {
+    recordFailure(ip);
+    logEvent(req, null, "sign-in-code-failed", { actor: store.loginName(person), detail: "Resume session" });
+    if (resume.fail(raw)) {
+      return sendJson(res, 401, { error: "Too many wrong codes. Please sign in with your email and password.", restart: true }, { "Set-Cookie": resume.cookie(req, "", true) });
+    }
+    return sendJson(res, 401, { error: "That code isn't right. Please try again." });
+  }
+  failedAttempts.delete(ip);
+  if (blockedByMaintenance(person)) return maintenanceReply(req, res, person);
+  completeLogin(req, res, person, "resumed");
 }
 
 async function handleLoginCode(req, res) {
@@ -502,6 +564,7 @@ async function handleLoginCode(req, res) {
   }
   codeChallenges.delete(challenge);
   failedAttempts.delete(ip);
+  if (blockedByMaintenance(person)) return maintenanceReply(req, res, person);
   completeLogin(req, res, person);
 }
 
@@ -535,6 +598,7 @@ function meResponse(session) {
   if (store.can(session.person, uptime.MANAGE)) user.servicesDown = uptime.downCount();
   user.serviceAlerts = uptime.alerts(store.can(session.person, uptime.MANAGE));
   if (store.can(session.person, "system.admin")) user.backupStale = backup.health().stale;
+  if (store.maintenance().on) user.maintenance = store.maintenance();
   user.expenseApprovals = expenses.approvalCount(session.person);
   user.notificationsUnread = notifications.unreadCount(session.person.id);
   user.trainingDue = training.dueCount(session.person);
@@ -868,6 +932,24 @@ async function routeSystem(req, res, pathname, session) {
     logEvent(req, session, "backup-created", { target: name, detail: "Manual" });
     return sendJson(res, 201, { name, backups: backup.listBackups() });
   }
+  if (method === "GET" && pathname === "/api/system/maintenance") {
+    return sendJson(res, 200, { ...store.maintenance(), canChange: owner });
+  }
+  if (method === "POST" && pathname === "/api/system/maintenance") {
+    if (!owner) throw httpError(403, "Only the system owner can turn maintenance mode on or off.");
+    const body = await readJsonBody(req);
+    const m = store.setMaintenance(!!body.on, body.message, me);
+    let ended = 0;
+    if (m.on) {
+      // Sign out everyone except the owner straight away.
+      for (const [token, s] of sessions) {
+        const p = store.getPerson(s.personId);
+        if (!p || !store.isOwner(p) || s.impersonatorId) { sessions.delete(token); ended++; }
+      }
+    }
+    logEvent(req, session, m.on ? "maintenance-on" : "maintenance-off", { detail: m.on ? `${m.message}${ended ? ` (${ended} signed out)` : ""}` : undefined });
+    return sendJson(res, 200, { ...m, canChange: true, ended });
+  }
   if (method === "POST" && pathname === "/api/system/backups/upload") {
     const buffer = await readRawBody(req, 500 * 1024 * 1024);
     const r = backup.saveUploaded(buffer);
@@ -960,6 +1042,11 @@ async function routeApi(req, res, pathname, session) {
 
   if (method === "POST" && pathname === "/api/login") return handleLogin(req, res);
   if (method === "POST" && pathname === "/api/login/code") return handleLoginCode(req, res);
+  if (pathname === "/api/resume" || pathname === "/api/resume/forget" || pathname === "/api/resume/avatar") return handleResume(req, res, pathname);
+  if (method === "GET" && pathname === "/api/maintenance") {
+    const mt = store.maintenance();
+    return sendJson(res, 200, { on: mt.on, message: mt.on ? mt.message : "" });
+  }
   if (method === "POST" && pathname === "/api/logout") {
     if (session) {
       sessions.delete(session.token);
@@ -970,6 +1057,11 @@ async function routeApi(req, res, pathname, session) {
 
   if (!session) return sendJson(res, 401, { error: "Not signed in." });
   const me = session.person;
+  // Maintenance mode signs everyone but the owner out (the owner logged in as someone is fine).
+  if (store.maintenance().on && !store.isOwner(me) && !session.data.impersonatorId) {
+    sessions.delete(session.token);
+    return sendJson(res, 503, { error: "The staff portal is in maintenance mode.", code: "MAINTENANCE" }, { "Set-Cookie": sessionCookie(req, "", 0) });
+  }
 
   if (method === "GET" && pathname === "/api/me") {
     return sendJson(res, 200, { user: meResponse(session) });
@@ -1932,6 +2024,10 @@ async function route(req, res) {
   // doesn't reload the page, so it isn't affected.
   if (APP_ROUTES.has(pathname)) {
     if (!session) return redirect(res, "/login");
+    if (store.maintenance().on && !store.isOwner(session.person) && !session.data.impersonatorId) {
+      sessions.delete(session.token);
+      return send(res, 302, "", { Location: "/login?maintenance=1", "Cache-Control": "no-store", "Set-Cookie": sessionCookie(req, "", 0) });
+    }
     if (!session.data.allowPageLoad) {
       sessions.delete(session.token);
       logEvent(req, session, "signed-out-refresh");

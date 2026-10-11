@@ -2,6 +2,10 @@
     const card = document.querySelector(".login-card");
     const stepPassword = document.getElementById("step-password");
     const stepCode = document.getElementById("step-code");
+    const stepMaint = document.getElementById("step-maint");
+    // "code" after a password, or "resume" when this browser remembers who signed in last.
+    let codeMode = "code";
+    let remembered = null;
     const form = document.getElementById("login-form");
     const codeForm = document.getElementById("code-form");
     const password = document.getElementById("password");
@@ -43,7 +47,9 @@
     function showStep(step) {
         stepPassword.hidden = step !== "password";
         stepCode.hidden = step !== "code";
-        (step === "code" ? stepCode : stepPassword).classList.add("step-enter");
+        stepMaint.hidden = step !== "maint";
+        ({ code: stepCode, maint: stepMaint, password: stepPassword })[step].classList.add("step-enter");
+        if (step === "maint") return;
         if (step === "code") {
             boxes.forEach(function (b) { b.value = ""; b.classList.remove("filled"); });
             boxes[0].focus();
@@ -60,7 +66,7 @@
             body: JSON.stringify(body),
         });
         const data = await res.json().catch(function () { return {}; });
-        if (!res.ok) throw Object.assign(new Error(data.error || "Sign in failed. Please try again."), { restart: data.restart });
+        if (!res.ok) throw Object.assign(new Error(data.error || "Sign in failed. Please try again."), { restart: data.restart, maintenance: data.maintenance });
         return data;
     }
 
@@ -88,6 +94,8 @@
                 finish(button);
             }
         } catch (err) {
+            setBusy(button, false, "Continue");
+            if (err.maintenance) return showMaintenance(err.maintenance);
             showError("login-error", friendly(err));
             password.value = "";
             password.focus();
@@ -143,11 +151,15 @@
         if (button.disabled) return;
         setBusy(button, true, "Sign in");
         try {
-            await post("/api/login/code", { challenge: challenge, code: code() });
+            if (codeMode === "resume") await post("/api/resume", { code: code() });
+            else await post("/api/login/code", { challenge: challenge, code: code() });
             finish(button);
         } catch (err) {
-            setBusy(button, false, "Sign in");
+            setBusy(button, false, codeMode === "resume" ? "Resume session" : "Sign in");
+            if (err.maintenance) return showMaintenance(err.maintenance);
             if (err.restart) {
+                if (codeMode === "resume") forgetLocally();
+                setCodeMode("code");
                 showStep("password");
                 showError("login-error", friendly(err));
             } else {
@@ -161,6 +173,90 @@
     document.getElementById("code-back").addEventListener("click", function () {
         challenge = null;
         document.getElementById("code-error").hidden = true;
+        setCodeMode("code");
         showStep("password");
     });
+
+    // ----- Resume session -----
+
+    function avatarHtml(p) {
+        if (p.avatarUrl) return '<img src="' + p.avatarUrl + '" alt="">';
+        const parts = p.displayName.trim().split(/\s+/);
+        return (parts[0].charAt(0) + (parts.length > 1 ? parts[parts.length - 1].charAt(0) : "")).toUpperCase().replace(/[^\p{L}\p{N}]/gu, "");
+    }
+
+    function setCodeMode(mode) {
+        codeMode = mode;
+        const resumeMode = mode === "resume" && remembered;
+        document.getElementById("code-mark").hidden = !!resumeMode;
+        document.getElementById("resume-avatar").hidden = !resumeMode;
+        document.getElementById("code-forget").hidden = !resumeMode;
+        document.getElementById("code-title").textContent = resumeMode ? "Welcome back, " + remembered.firstName : "Enter your code";
+        document.getElementById("code-sub").innerHTML = "";
+        const sub = document.getElementById("code-sub");
+        sub.appendChild(document.createTextNode(resumeMode ? "Enter your 6-digit sign-in code to carry on as " : "Enter your 6-digit sign-in code for "));
+        const strong = document.createElement("strong");
+        strong.id = "code-email";
+        strong.textContent = resumeMode ? remembered.username : (form.username.value.trim());
+        sub.appendChild(strong);
+        sub.appendChild(document.createTextNode("."));
+        document.getElementById("code-back").textContent = resumeMode ? "Not you? Sign in with a different account" : "\u2190 Use a different account";
+        document.getElementById("code-btn").querySelector(".btn-label").textContent = resumeMode ? "Resume session" : "Sign in";
+    }
+
+    function startResume() {
+        document.getElementById("code-error").hidden = true;
+        setCodeMode("resume");
+        showStep("code");
+    }
+
+    function forgetLocally() {
+        remembered = null;
+        document.getElementById("resume-offer").hidden = true;
+    }
+
+    document.getElementById("resume-offer").addEventListener("click", startResume);
+    document.getElementById("code-forget").addEventListener("click", async function () {
+        try { await post("/api/resume/forget", {}); } catch (e) { /* ignore */ }
+        forgetLocally();
+        setCodeMode("code");
+        showStep("password");
+        form.username.focus();
+    });
+
+    // ----- Maintenance -----
+
+    function showMaintenance(m) {
+        document.getElementById("maint-msg").textContent = m.message || "";
+        document.getElementById("maint-since").textContent = m.since ? "Since " + new Date(m.since).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
+        card.classList.add("maint-card");
+        showStep("maint");
+    }
+    document.getElementById("maint-back").addEventListener("click", function () {
+        card.classList.remove("maint-card");
+        try { history.replaceState(null, "", "/login"); } catch (e) { /* ignore */ }
+        setCodeMode("code");
+        showStep("password");
+    });
+
+    // On load: were we sent here by maintenance mode, and does this browser remember someone?
+    (async function () {
+        if (/[?&]maintenance=1/.test(window.location.search)) {
+            try {
+                const m = await (await fetch("/api/maintenance")).json();
+                if (m.on) return showMaintenance(m);
+            } catch (e) { /* ignore */ }
+        }
+        try {
+            const r = await (await fetch("/api/resume", { headers: { Accept: "application/json" } })).json();
+            if (!r.available) return;
+            remembered = r;
+            const offer = document.getElementById("resume-offer");
+            document.getElementById("offer-avatar").innerHTML = avatarHtml(r);
+            document.getElementById("resume-avatar").innerHTML = avatarHtml(r);
+            document.getElementById("offer-name").textContent = r.displayName;
+            offer.hidden = false;
+            startResume();
+        } catch (e) { /* ignore */ }
+    })();
 })();

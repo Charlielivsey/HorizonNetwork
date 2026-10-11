@@ -110,6 +110,10 @@
             body: JSON.stringify(body),
         });
         const data = await res.json().catch(function () { return {}; });
+        if (res.status === 503 && data.code === "MAINTENANCE") {
+            window.location.href = "/login?maintenance=1";
+            throw new Error("The portal is in maintenance mode.");
+        }
         if (res.status === 401 && path !== "/api/login") {
             window.location.href = "/login";
             throw new Error("Signed out");
@@ -411,7 +415,8 @@
                     "<span>" + esc(section.label) + "</span>" +
                     (items.some(function (it) { return it.badge && state.me[it.badge]; }) ? '<span class="nav-dot" aria-label="New items"></span>' : "") +
                     icon("chevron", "chev") + "</button>" +
-                    '<div class="menu" role="menu" hidden>' + items.map(menuItemHtml).join("") + "</div></div>";
+                    // Long menus go into two columns so they fit on the screen.
+                    '<div class="menu' + (items.length > 6 ? " menu-cols" : "") + '" role="menu" hidden>' + items.map(menuItemHtml).join("") + "</div></div>";
             }).join("");
 
         $("#user-menu").innerHTML =
@@ -471,6 +476,12 @@
         menu.hidden = !open;
         btn.setAttribute("aria-expanded", String(open));
         if (open) {
+            // Keep dropdowns inside the window: shift left if they'd go off the right-hand edge.
+            menu.style.transform = "";
+            if (window.innerWidth > 900) {
+                const r = menu.getBoundingClientRect();
+                if (r.right > window.innerWidth - 8) menu.style.transform = "translateX(" + Math.round(window.innerWidth - 8 - r.right) + "px)";
+            }
             // Keep row menus inside the viewport.
             menu.classList.remove("flip-up");
             const rect = menu.getBoundingClientRect();
@@ -6104,6 +6115,9 @@
         "idea-deleted": ["deleted the idea", "workplace"],
         "report-viewed": ["viewed the activity report for", "system"],
         "backup-uploaded": ["uploaded the backup", "system"],
+        "maintenance-on": ["turned maintenance mode on", "system"],
+        "maintenance-off": ["turned maintenance mode off", "system"],
+        "sign-in-maintenance": ["tried to sign in during maintenance", "signin"],
         "service-down": ["\u2014 a service went down:", "helpdesk"],
         "service-up": ["\u2014 a service came back up:", "helpdesk"],
     };
@@ -6215,6 +6229,7 @@
             '<button type="button" class="btn btn-ghost btn-small audit-more" id="audit-more" hidden>Show more</button>' +
             "</section>" +
 
+            '<section class="panel sys-section" id="sys-maint"></section>' +
             '<section class="panel sys-section" id="sys-backups"></section>' +
 
             (data.isOwner ? '<section class="panel sys-section sys-pin"><h2 class="panel-title">' + icon("key") + "Change System Admin PIN</h2>" +
@@ -6227,6 +6242,7 @@
             "";
 
         mountBackups($("#sys-backups"));
+        mountMaintenance($("#sys-maint"));
 
         function drawUsers() {
             const q = $("#sys-user-search").value.trim().toLowerCase();
@@ -7932,6 +7948,38 @@
         });
     }
 
+    // ================= Maintenance mode =================
+
+    function mountMaintenance(box) {
+        async function draw() {
+            let m;
+            try { m = await api("/api/system/maintenance"); } catch (err) { box.innerHTML = '<p class="muted">' + esc(err.message) + "</p>"; return; }
+            box.innerHTML = '<div class="panel-head"><h2 class="panel-title">' + icon("settings") + "Maintenance mode</h2>" +
+                '<span class="badge ' + (m.on ? "badge-red" : "badge-green") + '">' + (m.on ? "On" : "Off") + "</span></div>" +
+                '<p class="muted small">While maintenance mode is on, only the system owner can sign in. Everyone else is signed out straight away, and when they sign in they see the HN Group logo and this message instead of the portal.</p>' +
+                (m.on ? '<div class="banner banner-warn">' + icon("alert") + "<div><strong>Maintenance mode has been on since " + esc(fmtDateTime(m.since)) + ".</strong> Turned on by " + esc(m.by || "the owner") + ".</div></div>" : "") +
+                '<form id="mt-form" novalidate><label for="mt-msg">Message</label><textarea id="mt-msg" rows="3" maxlength="600"' + (m.canChange ? "" : " disabled") + ">" + esc(m.message) + "</textarea>" +
+                (m.canChange ? '<div class="form-actions">' + (m.on
+                    ? '<button type="button" class="btn btn-ghost" id="mt-save">Update message</button><button type="button" class="btn btn-primary" id="mt-off">' + icon("power") + "Turn maintenance mode off</button>"
+                    : '<button type="button" class="btn btn-danger" id="mt-on">' + icon("power") + "Turn maintenance mode on</button>") + "</div>"
+                    : '<p class="hint">Only the system owner can turn maintenance mode on or off.</p>') + "</form>";
+        }
+        box.addEventListener("click", async function (e) {
+            const b = e.target.closest("#mt-on, #mt-off, #mt-save");
+            if (!b) return;
+            const on = b.id !== "mt-off";
+            if (b.id === "mt-on" && !(await confirmDialog({ title: "Turn on maintenance mode?", message: "Everyone except you will be signed out now and won’t be able to sign in until you turn it off.", confirmLabel: "Turn on", danger: true }))) return;
+            try {
+                const r = await api("/api/system/maintenance", { on: on, message: $("#mt-msg", box).value });
+                toast(b.id === "mt-save" ? "Message updated." : on ? "Maintenance mode is on" + (r.ended ? ": " + r.ended + " signed out." : ".") : "Maintenance mode is off. Everyone can sign in again.");
+                state.me = (await api("/api/me")).user;
+                renderChrome();
+                draw();
+            } catch (err) { toast(err.message); }
+        });
+        draw();
+    }
+
     // ================= Service outage banner =================
 
     // Shown on every page while a monitored service is down: IT see every outage, everyone else
@@ -7939,6 +7987,14 @@
     function renderStatusBanner() {
         const box = $("#status-banner");
         if (!box) return;
+        if (state.me && state.me.maintenance && state.me.maintenance.on) {
+            box.hidden = false;
+            box.className = "status-banner maint-banner";
+            box.innerHTML = '<div class="sb-inner">' + icon("settings") + "<span><strong>Maintenance mode is on.</strong> Only you can sign in; everyone else sees the maintenance message.</span>" +
+                (can("system.admin") ? '<a class="btn btn-small btn-light" href="/system#sys-maint" data-link>Turn off</a>' : "") + "</div>";
+            return;
+        }
+        box.className = "status-banner";
         const alerts = (state.me && state.me.serviceAlerts) || [];
         const key = alerts.map(function (a) { return a.id + a.since; }).join("|");
         let dismissed = "";

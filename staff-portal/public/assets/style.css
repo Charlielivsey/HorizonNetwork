@@ -3468,3 +3468,38 @@ input[type="date"], input[type="time"], input[type="month"], input[type="datetim
 @media print { .rp-bar i { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 .job-list { grid-template-columns: minmax(0, 1fr); }
 .job-card { grid-template-columns: minmax(0, 1fr); min-width: 0; }
+
+/* Dropdown menus never run off the bottom of the screen; long ones use two columns. */
+@media (min-width: 901px) {
+    .mainnav .menu { max-height: calc(100vh - var(--topbar-h) - 24px); overflow-y: auto; overscroll-behavior: contain; }
+    .mainnav .menu.menu-cols { display: grid; grid-template-columns: repeat(2, minmax(270px, 1fr)); gap: 0 0.2rem; width: min(640px, calc(100vw - 24px)); }
+    .mainnav .menu.menu-cols[hidden] { display: none; }
+}
+
+/* ---------- Resume session and maintenance (sign-in page) ---------- */
+.resume-offer {
+    display: flex; align-items: center; gap: 0.8rem; width: 100%; margin: 0 0 1.2rem; padding: 0.7rem 0.9rem;
+    border: 1px solid var(--primary-soft-border); border-radius: 14px; background: var(--primary-tint); color: var(--text);
+    font: inherit; text-align: left; cursor: pointer; transition: box-shadow 0.15s, border-color 0.15s;
+}
+.resume-offer:hover { border-color: var(--primary); box-shadow: 0 0 0 3px var(--focus-ring); }
+.resume-offer > .icon { margin-left: auto; width: 18px; height: 18px; color: var(--primary); }
+.resume-offer[hidden] { display: none; }
+.resume-text { display: flex; flex-direction: column; }
+.resume-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--primary); }
+.resume-avatar {
+    flex: none; display: inline-grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; overflow: hidden;
+    background: linear-gradient(135deg, var(--primary), #e97de8); color: #fff; font-weight: 800; font-size: 0.95rem;
+}
+.resume-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.resume-avatar.resume-big { width: 76px; height: 76px; font-size: 1.6rem; margin: 0 auto 0.8rem; display: grid; box-shadow: 0 0 0 4px var(--surface), 0 0 0 6px var(--primary-soft-border); }
+.resume-avatar.resume-big[hidden] { display: none; }
+.code-forget { display: block; margin: 0.2rem auto 0; font-size: 0.82rem; color: var(--text-muted); }
+.maint-step { text-align: center; }
+.maint-logo { display: flex; justify-content: center; margin: 0.4rem 0 1.4rem; }
+.maint-logo img { max-width: 260px; width: 80%; height: auto; }
+.maint-mark { display: inline-grid; place-items: center; width: 56px; height: 56px; border-radius: 16px; background: var(--warn-bg); color: var(--warn-text); border: 1px solid var(--warn-border); margin-bottom: 0.8rem; }
+.maint-mark .icon { width: 26px; height: 26px; }
+.maint-msg { font-size: 1.02rem; line-height: 1.55; margin: 0.6rem 0 0.4rem; white-space: pre-line; }
+.login-card.maint-card .login-card-logo { display: none; }
+.status-banner.maint-banner { background: #5514b4; }

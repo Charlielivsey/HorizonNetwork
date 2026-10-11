@@ -964,11 +964,31 @@ function readAudit(limit) {
   }).filter(Boolean);
 }
 
+// ---------- Maintenance mode ----------
+// While it's on, only the system owner can sign in; everyone else sees the message.
+
+const DEFAULT_MAINTENANCE_MESSAGE = "The staff portal is having some planned maintenance. Please try again a little later.";
+
+function maintenance() {
+  const m = settings.maintenance || {};
+  return { on: !!m.on, message: m.message || DEFAULT_MAINTENANCE_MESSAGE, since: m.since || null, by: m.by || null };
+}
+
+function setMaintenance(on, message, by) {
+  const text = str(message, 600) || DEFAULT_MAINTENANCE_MESSAGE;
+  const was = maintenance();
+  settings.maintenance = { on: !!on, message: text, since: on ? (was.on ? was.since : new Date().toISOString()) : null, by: on ? loginName(by) : null };
+  writeJson(settingsFile, settings);
+  return maintenance();
+}
+
 function allPeople() {
   return people;
 }
 
 module.exports = {
+  maintenance,
+  setMaintenance,
   ADMIN_USERNAME,
   PERMISSIONS,
   GUARDED_PERMISSIONS,

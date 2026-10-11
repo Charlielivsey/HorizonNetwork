@@ -131,6 +131,9 @@ Staff see their main role under the greeting on the home page, and in a short "S
 
 ### Signing in
 
+- **Resume session.** After a full sign-in, the browser remembers who signed in (for 30 days). Next time the sign-in page shows **Welcome back** with the person's photo and only asks for their 6-digit sign-in code; **Resume session** also appears above the email box. "Not you?" signs in as someone else and **Forget me on this browser** removes it. It stops working after 5 wrong codes, or when the person's password or code changes, their login is disabled or they're signed out everywhere. Only a hash of the remembered token is stored (`resume.json`, not included in backups).
+- **Maintenance mode** (System Admin → Maintenance mode, system owner only). While it's on, everyone except the system owner is signed out straight away. When they sign in (after their password, or their code for Resume session) they see the HN Group logo and your maintenance message instead of the portal. The owner sees a purple reminder banner until it's turned off.
+
 Signing in has two steps: your **email and password**, then your personal **6-digit sign-in code**.
 
 - **Setting a code.** Everyone sets their code the first time they sign in after this feature was added, or straight after creating their password if they're new. Until they do, nothing else in the portal works for them.
