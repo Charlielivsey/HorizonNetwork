@@ -48,6 +48,24 @@ let db;
 
 function init(dataDir) {
   db = datafile.open(dataDir, "payslips.json", () => ({ payDetails: {}, payslips: [] }));
+  // Company pension: 5% from the employee and 10% from HN Group, for everyone. Applied once to
+  // anyone whose pay details were already saved; HR can change individuals afterwards.
+  if (!db.data.pensionRatesSet) {
+    for (const d of Object.values(db.data.payDetails)) {
+      d.pensionEmployeePct = 5;
+      d.pensionEmployerPct = 10;
+    }
+    db.data.pensionRatesSet = true;
+    db.save();
+  }
+}
+
+// Payroll can't run while the payroll fund is overdrawn.
+function assertCanRun() {
+  const b = funds.balances().payroll;
+  if (b < 0) {
+    throw new store.ValidationError(`The payroll fund is overdrawn by ${funds.fmt(Math.round(-b * 100))}, so payroll can't run. Move money in from the main balance first.`);
+  }
 }
 
 const newId = () => crypto.randomBytes(8).toString("hex");
@@ -94,7 +112,7 @@ function taxMonth(date) {
 
 const PAY_DEFAULTS = {
   employeeNumber: "", niNumber: "", taxCode: "1257L", niCategory: "A", payType: "salary",
-  monthlySalary: STANDARD_MONTHLY_SALARY, hourlyRate: 0, pensionEmployeePct: 0, pensionEmployerPct: 0, studentLoan: "",
+  monthlySalary: STANDARD_MONTHLY_SALARY, hourlyRate: 0, pensionEmployeePct: 5, pensionEmployerPct: 10, studentLoan: "",
   // Pay and tax earlier in the current tax year that isn't on a portal payslip (from a P45, or an
   // older payroll), so cumulative tax is right. Only counts in the tax year it was entered for.
   previousPay: 0, previousTax: 0, previousTaxYear: "",
@@ -313,6 +331,7 @@ function costPence(slip) {
 }
 
 function createDraft(personId, input, by, opts) {
+  if (!(opts && opts.deferCharge)) assertCanRun();
   const person = store.getPerson(personId);
   if (!person || person.system) throw new store.ValidationError("Choose an employee.");
   const period = validPeriod(input.period);
@@ -454,6 +473,7 @@ function peopleList() {
       id: p.id, displayName: p.displayName, jobTitle: p.jobTitle, company: p.company,
       avatarUrl: store.publicView(p).avatarUrl,
       payType: d.payType, monthlySalary: d.monthlySalary, hourlyRate: d.hourlyRate, isStandard: d.isStandard,
+      pensionEmployerPct: d.pensionEmployerPct,
     };
   }).sort((a, b) => a.displayName.localeCompare(b.displayName));
 }
@@ -469,5 +489,5 @@ function removePerson(personId) {
 module.exports = {
   MANAGE, RATES, EMPLOYER, STANDARD_MONTHLY_SALARY, init, payDetails, savePayDetails, estimate, calculate, createDraft,
   updateDraft, setIssued, getPayslip, deletePayslip, fullView, summaryView, mine, forPeriod, peopleList, periodLabel,
-  removePerson, forecastMonthlyCost, payeTax, employeeNi, taxMonth,
+  removePerson, forecastMonthlyCost, payeTax, employeeNi, taxMonth, assertCanRun,
 };

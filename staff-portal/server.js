@@ -1410,6 +1410,7 @@ async function routeApi(req, res, pathname, session) {
     }
     if (method === "POST" && pathname === "/api/payroll/run") {
       const { period, payDate, personIds } = await readJsonBody(req);
+      payslips.assertCanRun();
       const made = [];
       const skipped = [];
       for (const id of Array.isArray(personIds) ? personIds : []) {

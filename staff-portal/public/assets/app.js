@@ -4212,8 +4212,9 @@
     function fundsWarningHtml(f) {
         if (!f.warning) return "";
         return '<div class="banner funds-warning ' + (f.warning.level === "danger" ? "is-danger" : "is-warn") + '">' + icon("alert") +
-            "<div><strong>" + (f.warning.level === "danger" ? "Next payroll cannot be met." : "Payroll fund is running low.") + "</strong> " + esc(f.warning.message) + "</div>" +
-            (window.location.pathname === "/funds" ? "" : '<a class="btn btn-small ' + (f.warning.level === "danger" ? "btn-danger" : "btn-ghost") + '" href="/funds" data-link>Add funds</a>') + "</div>";
+            "<div><strong>" + (f.warning.level === "danger" ? "Next payroll cannot be met." : "Payroll fund is running low.") + "</strong> " + esc(f.warning.message) +
+            (f.warning.level === "danger" && window.location.pathname === "/payroll" ? " Running payroll is locked until then." : "") + "</div>" +
+            (window.location.pathname === "/funds" ? "" : '<a class="btn btn-small ' + (f.warning.level === "danger" ? "btn-danger" : "btn-ghost") + '" href="/funds" data-link>Move money in</a>') + "</div>";
     }
 
     function fundCardsHtml(f, actions) {
@@ -4342,11 +4343,12 @@
         const sumOf = function (list, k) { return list.reduce(function (n, s) { return n + s[k]; }, 0); };
         const withSlip = {};
         d.payslips.forEach(function (s) { withSlip[s.personId] = true; });
+        const overdrawn = d.funds.balances.payroll < 0;
 
         root.innerHTML =
             '<div class="page-head"><div><h1>Run payroll</h1><p class="muted">Payslips are paid by ' + esc(d.employer) + ". Tax and National Insurance are worked out automatically. Only Human Resources can see this page.</p></div>" +
-            '<div class="page-actions"><button type="button" class="btn btn-ghost" id="pr-single">' + icon("plus") + "Single payslip</button>" +
-            '<button type="button" class="btn btn-primary" id="pr-run">' + icon("wallet") + "Run payroll</button></div></div>" +
+            '<div class="page-actions"><button type="button" class="btn btn-ghost" id="pr-single"' + (overdrawn ? " disabled" : "") + ">" + icon("plus") + "Single payslip</button>" +
+            '<button type="button" class="btn btn-primary" id="pr-run"' + (overdrawn ? ' disabled title="The payroll fund is overdrawn"' : "") + ">" + icon(overdrawn ? "lock" : "wallet") + "Run payroll</button></div></div>" +
             fundsWarningHtml(d.funds) +
             '<div class="payroll-funds"><div><span class="pf-label">Payroll fund</span><strong class="' + (d.funds.balances.payroll < 0 ? "danger-text" : "") + '">' + fmtMoney(d.funds.balances.payroll) + "</strong></div>" +
             '<div><span class="pf-label">Next payroll needs about</span><strong>' + fmtMoney(d.funds.nextPayroll) + "</strong></div>" +
@@ -4439,10 +4441,11 @@
         // A rough cost for the summary: salaried pay for the people ticked (hourly pay depends on timesheets).
         function summary() {
             const ids = $$(".run-list input:checked", m.el).map(function (c) { return c.value; });
-            const est = d.people.filter(function (p) { return ids.indexOf(p.id) !== -1 && p.payType === "salary"; }).reduce(function (n, p) { return n + p.monthlySalary; }, 0);
+            const est = d.people.filter(function (p) { return ids.indexOf(p.id) !== -1 && p.payType === "salary"; })
+                .reduce(function (n, p) { return n + p.monthlySalary * (1 + (p.pensionEmployerPct || 0) / 100); }, 0);
             const after = d.funds.balances.payroll - est;
             $("#run-summary", m.el).innerHTML = ids.length ? '<div><span>Payroll fund now</span><strong>' + fmtMoney(d.funds.balances.payroll) + "</strong></div>" +
-                "<div><span>About to pay (before employer costs)</span><strong>−" + fmtMoney(est) + "</strong></div>" +
+                "<div><span>About to pay (pay and employer pension)</span><strong>−" + fmtMoney(est) + "</strong></div>" +
                 '<div class="' + (after < 0 ? "danger-text" : "") + '"><span>Left afterwards</span><strong>' + fmtMoney(after) + "</strong></div>" +
                 (after < 0 ? '<p class="run-warn">' + icon("alert") + "The payroll fund will go negative. Payroll can still run, but the next one cannot be met until money is moved in.</p>" : "") : "";
         }
