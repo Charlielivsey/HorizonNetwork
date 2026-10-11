@@ -2433,3 +2433,11 @@ body.locked .search-btn { display: none; }
 /* Role tabs wrap onto extra rows instead of scrolling sideways. */
 .role-tabs { flex-wrap: wrap; overflow: visible; }
 .role-tab { flex: 1 1 180px; max-width: 100%; }
+
+/* ----- Top bar and home banner follow the theme ----- */
+:root[data-theme="lavender"] { --brand-deep: linear-gradient(120deg, #3b2a6b 0%, #5b42a0 50%, #8a6fd0 100%); }
+:root[data-theme="ocean"] { --brand-deep: linear-gradient(120deg, #0c2f3a 0%, #13505e 50%, #1f7a8c 100%); }
+:root[data-theme="forest"] { --brand-deep: linear-gradient(120deg, #13301f 0%, #1f5034 50%, #2f7d4f 100%); }
+:root[data-theme="dark"] { --brand-deep: linear-gradient(120deg, #11131b 0%, #1a1530 50%, #2a1d4d 100%); }
+:root[data-theme="lavender-dusk"] { --brand-deep: linear-gradient(120deg, #1a1426 0%, #2c2142 50%, #4a3870 100%); }
+:root[data-theme="midnight"] { --brand-deep: linear-gradient(120deg, #070c18 0%, #0e1d38 50%, #173a6b 100%); }
