@@ -23,6 +23,25 @@ const DEFAULT_TEMPLATE = {
   ],
 };
 
+// Leavers: the same kind of checklist, for when someone leaves. Ticking a task with the
+// "disable-login" action switches their login off.
+const KINDS = { starter: "New starter", leaver: "Leaver" };
+const ACTIONS = { "disable-login": "Disables their login when ticked" };
+
+const LEAVER_TEMPLATE = {
+  name: "Leaver",
+  kind: "leaver",
+  tasks: [
+    { title: "Confirm their last working day", description: "", owner: "hr" },
+    { title: "Hand over work and passwords", description: "Pass on anything others will need.", owner: "employee" },
+    { title: "Exit interview", description: "A short chat about their time here.", owner: "supervisor" },
+    { title: "Return laptop, phone and other equipment", description: "", owner: "employee" },
+    { title: "Final payslip, including any holiday owed", description: "Check their leave balance before running it.", owner: "hr" },
+    { title: "Remove from roles and shared accounts", description: "", owner: "hr" },
+    { title: "Disable their login", description: "Do this on or after their last day.", owner: "hr", action: "disable-login" },
+  ],
+};
+
 let file;
 let data = { templates: [], checklists: [] };
 
@@ -33,7 +52,12 @@ function init(dataDir) {
   file = path.join(dataDir, "onboarding.json");
   data = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : { templates: [], checklists: [] };
   if (!data.templates.length) {
-    data.templates.push({ id: newId(), name: DEFAULT_TEMPLATE.name, tasks: DEFAULT_TEMPLATE.tasks.map((t) => ({ id: newId(), ...t })) });
+    data.templates.push({ id: newId(), name: DEFAULT_TEMPLATE.name, kind: "starter", tasks: DEFAULT_TEMPLATE.tasks.map((t) => ({ id: newId(), ...t })) });
+    save();
+  }
+  if (!data.leaverTemplateAdded) {
+    data.templates.push({ id: newId(), name: LEAVER_TEMPLATE.name, kind: "leaver", tasks: LEAVER_TEMPLATE.tasks.map((t) => ({ id: newId(), ...t })) });
+    data.leaverTemplateAdded = true;
     save();
   }
 }
@@ -50,6 +74,7 @@ function cleanTasks(list) {
     title: str(t && t.title, 150),
     description: str(t && t.description, 500),
     owner: OWNERS.includes(t && t.owner) ? t.owner : "employee",
+    action: t && ACTIONS[t.action] ? t.action : undefined,
   })).filter((t) => t.title);
   if (!tasks.length) throw new store.ValidationError("Add at least one task.");
   return tasks;
@@ -62,7 +87,7 @@ function listTemplates() {
 function saveTemplate(input, existing) {
   const name = str(input.name, 80);
   if (!name) throw new store.ValidationError("Give the checklist a name.");
-  const fields = { name, tasks: cleanTasks(input.tasks) };
+  const fields = { name, kind: KINDS[input.kind] ? input.kind : "starter", tasks: cleanTasks(input.tasks) };
   if (existing) Object.assign(existing, fields);
   else data.templates.push((existing = { id: newId(), ...fields }));
   save();
@@ -78,14 +103,19 @@ function deleteTemplate(t) {
   save();
 }
 
-function startChecklist(template, person, by) {
-  if (data.checklists.some((c) => c.personId === person.id && !c.completedAt)) {
-    throw new store.ValidationError(`${person.displayName} already has an onboarding checklist in progress.`);
+function startChecklist(template, person, by, extra) {
+  const kind = template.kind || "starter";
+  if (data.checklists.some((c) => c.personId === person.id && !c.completedAt && (c.kind || "starter") === kind)) {
+    throw new store.ValidationError(`${person.displayName} already has a ${kind === "leaver" ? "leaving" : "onboarding"} checklist in progress.`);
   }
+  const lastDay = extra && /^\d{4}-\d{2}-\d{2}$/.test(extra.lastDay || "") ? extra.lastDay : null;
+  if (kind === "leaver" && !lastDay) throw new store.ValidationError("Choose their last working day.");
   const c = {
     id: newId(),
     personId: person.id,
     name: template.name,
+    kind,
+    lastDay,
     tasks: template.tasks.map((t) => ({ ...t, id: newId(), doneAt: null, doneBy: null })),
     startedBy: by.id,
     createdAt: new Date().toISOString(),
@@ -132,10 +162,12 @@ function view(c, viewer) {
   return {
     id: c.id,
     name: c.name,
+    kind: c.kind || "starter",
+    lastDay: c.lastDay || null,
     person: p ? { id: p.id, displayName: p.displayName, jobTitle: p.jobTitle, company: p.company, avatarUrl: store.publicView(p).avatarUrl } : { displayName: "Former staff" },
     tasks: c.tasks.map((t) => {
       const by = t.doneBy ? store.getPerson(t.doneBy) : null;
-      return { ...t, doneByName: by ? by.displayName : null, canTick: viewer ? canTick(viewer, c, t) : false };
+      return { ...t, doneByName: by ? by.displayName : null, canTick: viewer ? canTick(viewer, c, t) : false, actionLabel: t.action ? ACTIONS[t.action] : null };
     }),
     done: c.tasks.filter((t) => t.doneAt).length,
     total: c.tasks.length,
@@ -162,6 +194,8 @@ function removePerson(personId) {
 }
 
 module.exports = {
+  KINDS,
+  ACTIONS,
   OWNERS, init, listTemplates, saveTemplate, getTemplate, deleteTemplate,
   startChecklist, getChecklist, setTask, deleteChecklist, listChecklists, forPerson, removePerson, view,
 };

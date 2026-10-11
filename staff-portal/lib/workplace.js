@@ -421,6 +421,8 @@ module.exports = {
   CATEGORIES,
   MAX_FILE_BYTES,
   FILE_TYPES,
+  fileExt,
+  cleanFileName,
   init,
   canSee,
   REACTIONS,

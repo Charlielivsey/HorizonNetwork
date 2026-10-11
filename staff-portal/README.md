@@ -21,6 +21,13 @@ Internal staff portal for the whole of HN Group, served at **https://staff.hngro
   - Only working days count: weekends and UK bank holidays are skipped. Annual leave comes out of a yearly allowance (January to December, 25 days by default).
   - Requests go to the person's supervisor, or anyone with *Manage leave*. Approved leave shows on the company calendar and the rota (without the reason).
   - People with *Manage leave* can set the default allowance and individual allowances, see everyone's leave and record leave for others.
+  - **Carry-over.** Unused annual leave carries into the next year, up to a maximum (5 days by default, set under *Allowances & absence*). It starts from the year this feature was added.
+  - **Return to work.** Once approved sickness ends, the person's supervisor (or anyone with *Manage leave*) gets a return-to-work form to fill in, shown on the *Return to work* tab and their home page.
+  - **Absence.** *Allowances & absence* shows each person's sickness occurrences, days and **Bradford score** (occurrences² × days over the last 52 weeks).
+- **Probation & reviews** (HR → Probation & reviews).
+  - Probation ends 3 months after the start date by default and can be changed. Reviews due in the next 14 days, or overdue, are listed and counted in the menu.
+  - Supervisors and people with *Manage staff* record probation, annual, one-to-one or other reviews. A probation review's outcome (passed, extended or failed) updates the probation. Reviews can be shared with the employee.
+- **Staff documents** (HR → Staff documents). People with *Manage staff* keep contracts, right-to-work checks, ID, qualifications, letters and other files against each person. Files marked *shared* can be seen and downloaded by that person.
 - **Rotas & Timesheets** (HR → Rotas & Timesheets).
   - A weekly rota everyone can see. People with *Manage rotas & timesheets* add, edit and delete shifts, and can copy last week's rota.
   - Staff fill in a weekly timesheet, prefilled from their shifts, and submit it. Their supervisor or a rota manager approves it or sends it back with a note.
@@ -36,6 +43,7 @@ Internal staff portal for the whole of HN Group, served at **https://staff.hngro
   - While either balance is negative, **payroll can't be run** and a warning says the next payroll cannot be met (on the funds and payroll pages, and on HR's home page). Warnings also show when the payroll fund won't cover the next payroll (the rest will come from the main balance), or when there isn't enough money in total.
   - Every movement is listed with who made it and the balance afterwards.
   - **Statement** makes a branded monthly statement: opening balance, money in, what's been spent (payroll and removals), how much is left, and an **estimated balance at the end of the month** (what's left now, less the payroll still to run that month). A **next month estimate** carries that on: next month's starting point less its payroll, plus what it would be if money comes in like the last three months. It also covers both accounts and every transaction. **Download PDF** opens the print window; choose *Save as PDF*.
+- **Service status** (Support → Service status). Checks websites and services every few minutes and shows whether each is up, uptime over 24 hours and 7 days, response time and recent errors. The staff portal itself is checked automatically. People with *Handle IT tickets* add and remove services, and down services are counted in the menu.
 - **IT Helpdesk** (Support → IT Helpdesk). Anyone can raise a ticket with a category and urgency and follow the conversation. People with *Handle IT tickets* (the **IT Support** role) see every ticket, reply, add internal notes, assign tickets and change their status.
 - **Global search.** Use the search box in the top bar, or press **Ctrl+K** (**⌘K** on a Mac) or **/**. It searches people, pages, documents, announcements, events and polls.
 - **Status.** Click your name, then the status line, to set Available, Busy, Away or Out of office. You can add a message and a date it clears on. Your status shows on your profile and in the Staff Directory.
@@ -114,9 +122,10 @@ Signing in has two steps: your **email and password**, then your personal **6-di
   - Questions can be single choice, multiple choice, a 1–5 rating or a written answer.
   - **Anonymous** polls never store who gave which answer.
   - You choose whether staff see the results after answering, and you can set a closing date.
-- **Onboarding.**
+- **Joiners & leavers.**
   - People with *Run onboarding* start a checklist for a new starter from a template. A default "New starter" template is included, and templates can be edited.
-  - Each task belongs to the new starter, their supervisor or HR, and each person sees their own tasks on their home page.
+  - **Start leaving process** starts a leaver checklist with the person's last day, from the default "Leaver" template. Its final task, ticked by HR, **disables their login** (unticking it turns it back on). The owner's login can't be disabled.
+  - Each task belongs to the employee, their supervisor or HR, and each person sees their own tasks on their home page.
 
 ### Themes
 

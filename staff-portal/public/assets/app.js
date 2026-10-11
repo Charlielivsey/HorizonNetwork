@@ -271,7 +271,7 @@
     // when scrolling up. Cards already on screen when a page opens are left alone.
     const reducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const REVEAL = ".panel, .person-card, .announcement, .ticket-row, .slip-row, .poll-card, .company-card, .logo-tile, .leave-row, " +
-        ".checklist-grid > .checklist, .stat, .fund-card, .role-card, .doc-row, .ts-review, .theme-option, .clock-card";
+        ".checklist-grid > .checklist, .stat, .fund-card, .role-card, .doc-row, .ts-review, .theme-option, .clock-card, .monitor, .review-card, .sf-row";
     if (!reducedMotion && "IntersectionObserver" in window) {
         const io = new IntersectionObserver(function (entries) {
             entries.forEach(function (en) {
@@ -344,7 +344,7 @@
             label: "People", items: [
                 { title: "Staff Directory", desc: "Find colleagues across the group", href: "/directory", icon: "users" },
                 { title: "Employee Management", desc: "Add and manage staff records", href: "/employees", icon: "briefcase", requires: "staff.manage" },
-                { title: "Onboarding", desc: "Checklists for new starters", href: "/onboarding", icon: "check", requires: "onboarding.manage" },
+                { title: "Joiners & leavers", desc: "Onboarding and leaving checklists", href: "/onboarding", icon: "check", requires: "onboarding.manage" },
                 { title: "Roles & permissions", desc: "Choose who can do what", href: "/roles", icon: "shield", requires: "access.manage" },
             ],
         },
@@ -361,6 +361,8 @@
             label: "HR", items: [
                 { title: "Leave & Absence", desc: "Book holidays and report absence", href: "/leave", icon: "sun", badge: "leaveApprovals" },
                 { title: "Rotas & Timesheets", desc: "Shifts, hours and approvals", href: "/rotas", icon: "clock", badge: "timesheetApprovals" },
+                { title: "Probation & reviews", desc: "Probation dates and reviews", href: "/reviews", icon: "star", badge: "reviewsDue" },
+                { title: "Staff documents", desc: "Contracts and personal documents", href: "/staff-files", icon: "file" },
                 { title: "Payslips", desc: "View and download your payslips", href: "/payslips", icon: "card" },
                 { title: "Run payroll", desc: "Generate and issue payslips", href: "/payroll", icon: "wallet", requires: "payroll.manage" },
                 { title: "Company funds", desc: "Main balance and payroll fund", href: "/funds", icon: "pound", requires: "payroll.manage" },
@@ -368,6 +370,7 @@
         },
         {
             label: "Support", items: [
+                { title: "Service status", desc: "Are our websites up?", href: "/status", icon: "activity", badge: "servicesDown" },
                 { title: "About HN Group", desc: "Our companies, brand colours and logos", href: "/about", icon: "building" },
                 { title: "IT Helpdesk", desc: "Raise and track support tickets", href: "/helpdesk", icon: "lifebuoy", badge: "helpdeskBadge" },
             ],
@@ -553,6 +556,9 @@
         "/payroll": viewPayroll,
         "/funds": viewFunds,
         "/helpdesk": viewHelpdesk,
+        "/reviews": viewReviews,
+        "/staff-files": viewStaffFiles,
+        "/status": viewStatus,
     };
 
     function navigate(href, replace) {
@@ -582,6 +588,9 @@
         "/payroll": "wallet",
         "/funds": "pound",
         "/helpdesk": "lifebuoy",
+        "/reviews": "star",
+        "/staff-files": "file",
+        "/status": "activity",
     };
 
     function decoratePageHead(root, path) {
@@ -736,10 +745,13 @@
             (me.openPolls ? '<a class="hero-chip" href="/polls" data-link>' + icon("chart") + me.openPolls + (me.openPolls === 1 ? " poll" : " polls") + " to answer</a>" : "") +
             (me.onboardingTasks ? '<a class="hero-chip" href="#home-onboarding">' + icon("check") + me.onboardingTasks + " onboarding task" + (me.onboardingTasks === 1 ? "" : "s") + "</a>" : "") +
             (me.payrollOverdrawn ? '<a class="hero-chip danger" href="/funds" data-link>' + icon("alert") + "Company funds overdrawn \u2013 next payroll can\u2019t be met</a>" : "") +
+            (me.reviewsDue ? '<a class="hero-chip" href="/reviews" data-link>' + icon("star") + me.reviewsDue + (me.reviewsDue === 1 ? " probation or review" : " probations or reviews") + " coming up</a>" : "") +
+            (me.returnToWorkDue ? '<a class="hero-chip" href="/leave" data-link data-rtw-chip>' + icon("thermometer") + me.returnToWorkDue + " return-to-work form" + (me.returnToWorkDue === 1 ? "" : "s") + " to do</a>" : "") +
+            (me.servicesDown ? '<a class="hero-chip danger" href="/status" data-link>' + icon("alert") + me.servicesDown + (me.servicesDown === 1 ? " service is" : " services are") + " down</a>" : "") +
             (me.leaveApprovals ? '<a class="hero-chip" href="/leave" data-link>' + icon("sun") + me.leaveApprovals + " leave request" + (me.leaveApprovals === 1 ? "" : "s") + " to approve</a>" : "") +
             (me.timesheetApprovals ? '<a class="hero-chip" href="/rotas" data-link data-rota-approvals>' + icon("clock") + me.timesheetApprovals + " timesheet" + (me.timesheetApprovals === 1 ? "" : "s") + " to approve</a>" : "") +
             (me.helpdeskBadge ? '<a class="hero-chip" href="/helpdesk" data-link>' + icon("lifebuoy") + me.helpdeskBadge + " IT ticket" + (me.helpdeskBadge === 1 ? "" : "s") + " need" + (me.helpdeskBadge === 1 ? "s" : "") + " attention</a>" : "") +
-            (!me.unreadAnnouncements && !me.pendingAcks && !me.openPolls && !me.onboardingTasks && !me.leaveApprovals && !me.timesheetApprovals && !me.helpdeskBadge && !me.payrollOverdrawn ? '<span class="hero-chip calm">' + icon("tick") + "You\u2019re all caught up</span>" : "") +
+            (!me.unreadAnnouncements && !me.pendingAcks && !me.openPolls && !me.onboardingTasks && !me.leaveApprovals && !me.timesheetApprovals && !me.helpdeskBadge && !me.payrollOverdrawn && !me.reviewsDue && !me.returnToWorkDue && !me.servicesDown ? '<span class="hero-chip calm">' + icon("tick") + "You\u2019re all caught up</span>" : "") +
             "</div></div>" +
             '<div class="hero-clocks">' +
             '<div class="glass-clock"><div class="gc-label">' + icon("monitor") + "Your time \u00b7 " + esc(tzCity(deviceTz)) + "</div>" +
@@ -791,6 +803,7 @@
 
         $("#home-status").addEventListener("click", openStatusModal);
         if ($("[data-rota-approvals]", root)) $("[data-rota-approvals]", root).addEventListener("click", function () { state.rotaTab = "approvals"; });
+        if ($("[data-rtw-chip]", root)) $("[data-rtw-chip]", root).addEventListener("click", function () { state.leaveTab = "rtw"; });
         if (me.leaveApprovals) $('.hero-chip[href="/leave"]', root).addEventListener("click", function () { state.leaveTab = "approvals"; });
         $$('a[href^="#home-"]', root).forEach(function (a) {
             a.addEventListener("click", function (e) {
@@ -2394,7 +2407,8 @@
         const pct = c.total ? Math.round(c.done / c.total * 100) : 0;
         return '<div class="checklist" data-checklist="' + c.id + '">' +
             '<div class="cl-head">' + avatar(c.person, "sm") + '<div class="cl-who"><div class="emp-name">' + esc(c.person.displayName) + "</div>" +
-            '<div class="muted small">' + esc(c.name) + " · " + c.done + " of " + c.total + " done</div></div>" +
+            '<div class="muted small">' + esc(c.name) + " · " + c.done + " of " + c.total + " done</div>" +
+            (c.kind === "leaver" ? '<span class="badge badge-red leaver-badge">' + icon("logout") + "Leaving" + (c.lastDay ? " \u00b7 last day " + esc(fmtDate(c.lastDay + "T12:00:00")) : "") + "</span>" : "") + "</div>" +
             (opts.menu || "") + "</div>" +
             '<div class="progress"><span data-pct="' + pct + '"></span></div>' +
             '<ul class="cl-tasks">' + (opts.compact ? c.tasks.filter(function (t) { return !t.doneAt && t.canTick; }).slice(0, 4) : c.tasks).map(function (t) {
@@ -2403,8 +2417,9 @@
                     '<span class="cl-box">' + icon("tick") + "</span>" +
                     '<span class="cl-text"><span class="cl-title">' + esc(t.title) + "</span>" +
                     (t.description ? '<span class="muted small">' + esc(t.description) + "</span>" : "") +
+                    (t.actionLabel ? '<span class="cl-action">' + icon("lock") + esc(t.actionLabel) + "</span>" : "") +
                     (t.doneAt ? '<span class="muted small">Done ' + esc(fmtDate(t.doneAt)) + (t.doneByName ? " by " + esc(t.doneByName) : "") + "</span>" : "") +
-                    '</span><span class="badge owner-' + t.owner + '">' + esc(OWNER_LABELS[t.owner] || t.owner) + "</span></label></li>";
+                    '</span><span class="badge owner-' + t.owner + '">' + esc(t.owner === "employee" && c.kind === "leaver" ? "Leaver" : (OWNER_LABELS[t.owner] || t.owner)) + "</span></label></li>";
             }).join("") + "</ul>" +
             (opts.compact ? (function () {
                 const left = c.tasks.filter(function (t) { return !t.doneAt && t.canTick; }).length;
@@ -2885,18 +2900,20 @@
             '<div class="menu menu-right menu-row" role="menu" hidden><button type="button" class="menu-item compact danger" data-act="remove">' + icon("trash") + "<span>Remove checklist</span></button></div></div>";
 
         root.innerHTML =
-            '<div class="page-head"><div><h1>Onboarding</h1><p class="muted">Checklists that help new starters settle in. Tasks are shared between the new starter, their supervisor and HR.</p></div>' +
+            '<div class="page-head"><div><h1>Joiners &amp; leavers</h1><p class="muted">Checklists for new starters and for people leaving. Tasks are shared between the person, their supervisor and HR.</p></div>' +
             '<div class="page-actions"><button type="button" class="btn btn-ghost" id="ob-templates">' + icon("edit") + "Edit checklists</button>" +
+            '<button type="button" class="btn btn-ghost" id="ob-leave">' + icon("logout") + "Start leaving process</button>" +
             '<button type="button" class="btn btn-primary" id="ob-start">' + icon("plus") + "Start onboarding</button></div></div>" +
             '<h2 class="section-title">In progress <span class="tab-count">' + active.length + "</span></h2>" +
             '<div class="checklist-grid" id="ob-active">' + (active.length ? active.map(function (c) { return checklistHtml(c, { menu: menu }); }).join("")
-                : '<div class="panel muted small">No one is onboarding right now. Use <strong>Start onboarding</strong> when someone joins.</div>') + "</div>" +
+                : '<div class="panel muted small">No checklists in progress. Use <strong>Start onboarding</strong> when someone joins, or <strong>Start leaving process</strong> when someone leaves.</div>') + "</div>" +
             (done.length ? '<h2 class="section-title ob-done-title">Completed <span class="tab-count">' + done.length + "</span></h2>" +
                 '<div class="checklist-grid compact">' + done.map(function (c) { return checklistHtml(c, { menu: menu }); }).join("") + "</div>" : "");
         paintProgress(root);
 
         wireChecklists(root, function () { render(); });
-        $("#ob-start").addEventListener("click", function () { openStartOnboarding(data); });
+        $("#ob-start").addEventListener("click", function () { openStartOnboarding(data, null, "starter"); });
+        $("#ob-leave").addEventListener("click", function () { openStartOnboarding(data, null, "leaver"); });
         $("#ob-templates").addEventListener("click", function () { openOnboardingTemplates(data.templates); });
         root.addEventListener("click", async function (e) {
             const act = e.target.closest("[data-act='remove']");
@@ -2912,14 +2929,18 @@
         });
     }
 
-    function openStartOnboarding(data, personId) {
+    function openStartOnboarding(data, personId, kind) {
+        kind = kind || "starter";
+        const templates = data.templates.filter(function (t) { return (t.kind || "starter") === kind; });
         const m = openModal(
-            '<h2 class="modal-title">Start onboarding</h2>' +
+            '<h2 class="modal-title">' + (kind === "leaver" ? "Start leaving process" : "Start onboarding") + "</h2>" +
+            (kind === "leaver" ? '<p class="muted">A checklist for handing over, returning equipment, the final payslip and switching off their login.</p>' : "") +
             '<form id="obs-form" novalidate>' +
             '<label for="obs-person">Employee</label><select id="obs-person">' + data.people.map(function (p) {
                 return '<option value="' + p.id + '"' + (p.id === personId ? " selected" : "") + ">" + esc(p.displayName) + " — " + esc(p.jobTitle) + "</option>";
             }).join("") + "</select>" +
-            '<label for="obs-template">Checklist</label><select id="obs-template">' + data.templates.map(function (t) {
+            (kind === "leaver" ? '<label for="obs-lastday">Last working day</label><input type="date" id="obs-lastday">' : "") +
+            '<label for="obs-template">Checklist</label><select id="obs-template">' + templates.map(function (t) {
                 return '<option value="' + t.id + '">' + esc(t.name) + " (" + t.tasks.length + " tasks)</option>";
             }).join("") + "</select>" +
             '<div class="form-error" id="obs-error" hidden></div>' +
@@ -2928,9 +2949,9 @@
         $("#obs-form", m.el).addEventListener("submit", async function (e) {
             e.preventDefault();
             try {
-                await api("/api/onboarding/start", { personId: $("#obs-person", m.el).value, templateId: $("#obs-template", m.el).value });
+                await api("/api/onboarding/start", { personId: $("#obs-person", m.el).value, templateId: $("#obs-template", m.el).value, lastDay: $("#obs-lastday", m.el) ? $("#obs-lastday", m.el).value : "" });
                 closeModal();
-                toast("Onboarding started.");
+                toast(kind === "leaver" ? "Leaving process started." : "Onboarding started.");
                 if (window.location.pathname === "/onboarding") render();
             } catch (err) { formError($("#obs-error", m.el), err.message); }
         });
@@ -2940,7 +2961,7 @@
         const m = openModal(
             '<h2 class="modal-title">Onboarding checklists</h2><p class="muted">Templates used when you start onboarding someone.</p>' +
             '<ul class="plain-list tpl-list">' + templates.map(function (t) {
-                return '<li><div><strong>' + esc(t.name) + '</strong> <span class="muted small">' + t.tasks.length + " tasks</span></div>" +
+                return '<li><div><strong>' + esc(t.name) + '</strong> <span class="badge' + ((t.kind || "starter") === "leaver" ? " badge-red" : "") + '">' + ((t.kind || "starter") === "leaver" ? "Leaver" : "New starter") + '</span> <span class="muted small">' + t.tasks.length + " tasks</span></div>" +
                     '<div class="btn-row"><button type="button" class="btn btn-ghost btn-small" data-edit="' + t.id + '">Edit</button>' +
                     (templates.length > 1 ? '<button type="button" class="btn btn-ghost btn-small danger-text" data-del="' + t.id + '">Delete</button>' : "") + "</div></li>";
             }).join("") + "</ul>" +
@@ -2963,7 +2984,8 @@
         let tasks = t ? t.tasks.map(function (x) { return Object.assign({}, x); }) : [{ title: "", description: "", owner: "employee" }];
         const m = openModal(
             '<h2 class="modal-title">' + (t ? "Edit checklist" : "New checklist") + "</h2>" +
-            '<form id="tpl-form" novalidate><label for="tpl-name">Name</label><input type="text" id="tpl-name" maxlength="80" value="' + esc(t ? t.name : "") + '">' +
+            '<form id="tpl-form" novalidate><div class="grid-2"><div><label for="tpl-name">Name</label><input type="text" id="tpl-name" maxlength="80" value="' + esc(t ? t.name : "") + '"></div>' +
+            '<div><label for="tpl-kind">Used for</label><select id="tpl-kind"><option value="starter">New starters</option><option value="leaver"' + (t && t.kind === "leaver" ? " selected" : "") + ">Leavers</option></select></div></div>" +
             '<h3 class="detail-head">Tasks</h3><div id="tpl-tasks"></div>' +
             '<button type="button" class="btn btn-link" id="tpl-add">' + icon("plus") + "Add a task</button>" +
             '<div class="form-error" id="tpl-error" hidden></div>' +
@@ -3003,7 +3025,7 @@
         $("#tpl-form", m.el).addEventListener("submit", async function (e) {
             e.preventDefault();
             try {
-                await api(t ? "/api/onboarding/templates/" + t.id : "/api/onboarding/templates", { name: $("#tpl-name", m.el).value, tasks: tasks });
+                await api(t ? "/api/onboarding/templates/" + t.id : "/api/onboarding/templates", { name: $("#tpl-name", m.el).value, kind: $("#tpl-kind", m.el).value, tasks: tasks });
                 closeModal();
                 toast("Checklist saved.");
                 render();
@@ -3721,12 +3743,14 @@
         let tab = state.leaveTab || (d.approvals.length ? "approvals" : "mine");
         if (tab === "approvals" && !d.isApprover) tab = "mine";
         if (tab === "allowances" && !d.canManage) tab = "mine";
+        if (tab === "rtw" && !d.returnToWork.length && !d.canManage) tab = "mine";
         const s = d.summary;
 
         const tabs = [["mine", "My leave", d.mine.length]];
         if (d.isApprover) tabs.push(["approvals", "To approve", d.approvals.length]);
         tabs.push(["off", "Who’s off", d.whosOff.length]);
-        if (d.canManage) tabs.push(["allowances", "Allowances", null]);
+        if (d.returnToWork.length || d.canManage) tabs.push(["rtw", "Return to work", d.returnToWork.length]);
+        if (d.canManage) tabs.push(["allowances", "Allowances & absence", null]);
 
         root.innerHTML =
             '<div class="page-head"><div><h1>Leave &amp; Absence</h1><p class="muted">Book holidays, report sickness and see who’s off. Weekends and bank holidays never count against your allowance.</p></div>' +
@@ -3736,7 +3760,8 @@
                 '<div class="ls-main"><div class="ls-year"><button type="button" class="icon-btn icon-btn-sm" data-year="' + (year - 1) + '" aria-label="Previous year">' + icon("chevronLeft") + "</button>" +
                 "<span>" + year + " holiday allowance</span>" +
                 '<button type="button" class="icon-btn icon-btn-sm" data-year="' + (year + 1) + '" aria-label="Next year">' + icon("chevronRight") + "</button></div>" +
-                '<div class="ls-remaining"><span class="ls-big">' + (Math.round(s.remaining * 2) / 2) + '</span><span class="muted">of ' + s.allowance + " days left</span></div>" +
+                '<div class="ls-remaining"><span class="ls-big">' + (Math.round(s.remaining * 2) / 2) + '</span><span class="muted">of ' + s.allowance + " days left</span>" +
+                (s.carried ? '<span class="badge badge-soft">Includes ' + s.carried + (s.carried === 1 ? " day" : " days") + " carried over from " + (year - 1) + "</span>" : "") + "</div>" +
                 '<div class="ls-bar"><span class="ls-taken" data-pct="' + pct(s.taken, s.allowance) + '"></span><span class="ls-booked" data-pct="' + pct(s.booked, s.allowance) + '"></span><span class="ls-pending" data-pct="' + pct(s.pending, s.allowance) + '"></span></div>' +
                 '<div class="ls-legend"><span class="ls-k taken">Taken ' + s.taken + '</span><span class="ls-k booked">Booked ' + s.booked + '</span><span class="ls-k pending">Waiting for approval ' + s.pending + "</span></div></div>" +
                 '<div class="ls-side"><div class="stat"><div class="stat-value">' + s.sickDays + '</div><div class="stat-label">Sick days in ' + year + "</div></div>" +
@@ -3758,6 +3783,7 @@
                 '<div class="muted small">' + esc(dateRange(r.startDate, r.endDate)) + (r.halfDay ? " (" + (r.halfDay === "am" ? "morning" : "afternoon") + ")" : "") + " · " + fmtDays(r.days) + "</div>" +
                 (r.note ? '<div class="lr-note">' + esc(r.note) + "</div>" : "") +
                 (r.decisionNote ? '<div class="lr-note decision">' + icon("message") + esc(r.decidedBy || "") + ": " + esc(r.decisionNote) + "</div>" : "") +
+                (r.returnToWork ? '<div class="lr-note rtw-done">' + icon("check") + "Return-to-work form done" + (r.returnToWork.byName ? " by " + esc(r.returnToWork.byName) + (r.returnToWork.fitForWork === false ? " \u00b7 not yet fit for work" : "") : "") + "</div>" : "") +
                 "</div>" +
                 '<div class="lr-side">' + (opts.noStatus ? "" : statusBadge(r.status)) +
                 (r.canApprove && opts.actions ? '<div class="btn-row"><button type="button" class="btn btn-ghost btn-small" data-act="decline">Decline</button><button type="button" class="btn btn-primary btn-small" data-act="approve">' + icon("tick") + "Approve</button></div>" : "") +
@@ -3774,22 +3800,39 @@
             } else if (tab === "approvals") {
                 body.innerHTML = d.approvals.length ? '<div class="panel leave-list">' + d.approvals.map(function (r) { return requestRow(r, { person: true, actions: true, noStatus: true }); }).join("") + "</div>"
                     : '<div class="empty-page">' + icon("check", "big") + "<h2>Nothing to approve</h2><p class=\"muted\">Requests from your team will appear here.</p></div>";
+            } else if (tab === "rtw") {
+                body.innerHTML = d.returnToWork.length ? '<div class="panel leave-list">' + d.returnToWork.map(function (r) {
+                    return '<div class="leave-row" data-id="' + r.id + '">' + avatar(r.person, "md") +
+                        '<div class="lr-main"><div class="lr-title">' + esc(r.person.displayName) + ' <span class="muted">\u00b7 off sick</span></div>' +
+                        '<div class="muted small">' + esc(dateRange(r.startDate, r.endDate)) + " \u00b7 " + fmtDays(r.days) + "</div>" +
+                        (r.note ? '<div class="lr-note">' + esc(r.note) + "</div>" : "") + "</div>" +
+                        '<div class="lr-side"><button type="button" class="btn btn-primary btn-small" data-rtw="' + r.id + '">' + icon("edit") + "Complete form</button></div></div>";
+                }).join("") + "</div>"
+                    : '<div class="empty-page">' + icon("check", "big") + "<h2>No forms to complete</h2><p class=\"muted\">When someone you look after comes back from sickness, a return-to-work form appears here.</p></div>";
             } else if (tab === "off") {
                 body.innerHTML = d.whosOff.length ? '<div class="panel leave-list">' + d.whosOff.map(function (r) { return requestRow(r, { person: true, noStatus: true, cancel: d.canManage }); }).join("") + "</div>"
                     : '<div class="empty-page">' + icon("users", "big") + "<h2>Nobody’s off</h2><p class=\"muted\">" + (d.canManage ? "No approved leave in the next 60 days." : "No approved leave for you or your team in the next 60 days.") + "</p></div>";
             } else {
                 body.innerHTML = '<section class="panel"><div class="panel-head"><h2 class="panel-title">' + icon("sun") + year + " allowances</h2>" +
-                    '<form class="allow-default" id="lv-default"><label for="lv-def">Default for everyone</label><input type="number" id="lv-def" min="0" max="100" step="0.5" value="' + d.allowances.defaultAllowance + '"><span class="muted small">days</span>' +
-                    '<button type="submit" class="btn btn-ghost btn-small">Save</button></form></div>' +
+                    '<div class="allow-forms"><form class="allow-default" id="lv-default"><label for="lv-def">Default for everyone</label><input type="number" id="lv-def" min="0" max="100" step="0.5" value="' + d.allowances.defaultAllowance + '"><span class="muted small">days</span>' +
+                    '<button type="submit" class="btn btn-ghost btn-small">Save</button></form>' +
+                    '<form class="allow-default" id="lv-carry"><label for="lv-carry-n">Carry over up to</label><input type="number" id="lv-carry-n" min="0" max="50" step="0.5" value="' + d.allowances.maxCarryOver + '"><span class="muted small">days into next year</span>' +
+                    '<button type="submit" class="btn btn-ghost btn-small">Save</button></form></div></div>' +
                     '<p class="muted small">Annual leave days per year, not counting bank holidays. Leave a person’s box empty to use the default.</p>' +
-                    '<div class="table-card flat"><table class="table"><thead><tr><th>Person</th><th>Allowance</th><th>Taken</th><th>Booked</th><th>Waiting</th><th>Left</th></tr></thead><tbody>' +
+                    '<div class="table-card flat"><table class="table"><thead><tr><th>Person</th><th>Allowance</th><th>Carried</th><th>Taken</th><th>Booked</th><th>Waiting</th><th>Left</th><th title="Sickness in the last 52 weeks">Sickness (52 wks)</th><th title="Occurrences squared × days. Higher scores mean frequent short absences.">Bradford</th></tr></thead><tbody>' +
                     d.people.map(function (p) {
                         const custom = d.allowances.custom[p.id];
                         return '<tr><td><div class="emp-cell">' + avatar(p, "sm") + '<div><div class="emp-name">' + esc(p.displayName) + '</div><div class="muted small">' + esc(p.jobTitle) + "</div></div></div></td>" +
                             '<td data-label="Allowance"><input type="number" class="allow-input" data-allow="' + p.id + '" min="0" max="100" step="0.5" value="' + (custom === undefined ? "" : custom) + '" placeholder="' + d.allowances.defaultAllowance + '" aria-label="Allowance for ' + esc(p.displayName) + '"></td>' +
-                            '<td data-label="Taken">' + p.summary.taken + '</td><td data-label="Booked">' + p.summary.booked + '</td><td data-label="Waiting">' + p.summary.pending + "</td>" +
-                            '<td data-label="Left"><strong' + (p.summary.remaining < 0 ? ' class="danger-text"' : "") + ">" + p.summary.remaining + "</strong></td></tr>";
+                            '<td data-label="Carried">' + (p.summary.carried || '<span class="muted">\u2013</span>') + '</td><td data-label="Taken">' + p.summary.taken + '</td><td data-label="Booked">' + p.summary.booked + '</td><td data-label="Waiting">' + p.summary.pending + "</td>" +
+                            '<td data-label="Left"><strong' + (p.summary.remaining < 0 ? ' class="danger-text"' : "") + ">" + p.summary.remaining + "</strong></td>" +
+                            '<td data-label="Sickness">' + (p.absence.occurrences ? p.absence.occurrences + (p.absence.occurrences === 1 ? " time, " : " times, ") + fmtDays(p.absence.days) : '<span class="muted">None</span>') + "</td>" +
+                            '<td data-label="Bradford"><span class="bradford ' + (p.absence.bradford >= 200 ? "b-high" : p.absence.bradford >= 50 ? "b-mid" : "b-low") + '">' + p.absence.bradford + "</span></td></tr>";
                     }).join("") + "</tbody></table></div></section>";
+                $("#lv-carry").addEventListener("submit", async function (e) {
+                    e.preventDefault();
+                    try { await api("/api/leave/allowances", { maxCarryOver: $("#lv-carry-n").value }); toast("Carry-over limit saved."); render(); } catch (err) { toast(err.message); }
+                });
                 $("#lv-default").addEventListener("submit", async function (e) {
                     e.preventDefault();
                     try { await api("/api/leave/allowances", { defaultAllowance: $("#lv-def").value }); toast("Default allowance saved."); render(); } catch (err) { toast(err.message); }
@@ -3809,6 +3852,8 @@
             if (y) { state.leaveYear = Number(y.dataset.year); return render(); }
             if (e.target.closest("#lv-new")) return openLeaveForm(d, "annual");
             if (e.target.closest("#lv-sick")) return openLeaveForm(d, "sick");
+            const rtw = e.target.closest("[data-rtw]");
+            if (rtw) return openReturnToWork(d.returnToWork.find(function (x) { return x.id === rtw.dataset.rtw; }));
             const act = e.target.closest("[data-act]");
             if (!act) return;
             const id = act.closest("[data-id]").dataset.id;
@@ -3828,6 +3873,37 @@
             } catch (err) { toast(err.message); }
         });
         draw();
+    }
+
+    function openReturnToWork(r) {
+        const m = openModal(
+            '<h2 class="modal-title">Return-to-work form</h2>' +
+            '<p class="muted">' + esc(r.person.displayName) + " was off sick " + esc(dateRange(r.startDate, r.endDate)) + " (" + fmtDays(r.days) + "). Have a short chat with them, then record it here. Only their managers and HR see this.</p>" +
+            '<form id="rtw-form" novalidate>' +
+            '<div class="grid-2"><div><label for="rtw-date">Date of the chat</label><input type="date" id="rtw-date" value="' + isoDay(new Date()) + '"></div><div></div></div>' +
+            '<label for="rtw-reason">What was the absence for?</label><input type="text" id="rtw-reason" maxlength="300" placeholder="e.g. Cold and flu">' +
+            '<div class="option-row"><label class="inline-check"><input type="checkbox" id="rtw-fit" checked> Fit to return to work</label>' +
+            '<label class="inline-check"><input type="checkbox" id="rtw-work"> Caused or made worse by work</label>' +
+            '<label class="inline-check"><input type="checkbox" id="rtw-note"> Fit note provided</label></div>' +
+            '<label for="rtw-adj">Support or adjustments agreed <span class="muted small">(optional)</span></label><textarea id="rtw-adj" rows="2" maxlength="1000" placeholder="e.g. Shorter days for the first week"></textarea>' +
+            '<label for="rtw-notes">Other notes <span class="muted small">(optional)</span></label><textarea id="rtw-notes" rows="2" maxlength="2000"></textarea>' +
+            '<div class="form-error" id="rtw-error" hidden></div>' +
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">' + icon("tick") + "Save form</button></div></form>"
+        );
+        $("#rtw-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try {
+                const res = await api("/api/leave/" + r.id + "/return-to-work", {
+                    meetingDate: $("#rtw-date", m.el).value, reason: $("#rtw-reason", m.el).value, fitForWork: $("#rtw-fit", m.el).checked,
+                    workRelated: $("#rtw-work", m.el).checked, fitNote: $("#rtw-note", m.el).checked, adjustments: $("#rtw-adj", m.el).value, notes: $("#rtw-notes", m.el).value,
+                });
+                state.me = res.user;
+                renderChrome();
+                closeModal();
+                toast("Return-to-work form saved.");
+                render();
+            } catch (err) { formError($("#rtw-error", m.el), err.message); }
+        });
     }
 
     function openLeaveForm(d, type) {
@@ -5013,6 +5089,379 @@
         });
     }
 
+    // ================= Probation & reviews =================
+
+    const PROBATION_STATUS = { "in-progress": ["In probation", "badge-yellow"], due: ["Probation ending", "badge-red"], extended: ["Probation extended", "badge-yellow"], passed: ["Passed probation", "badge-green"], failed: ["Didn’t pass", "badge-red"], none: ["No probation", ""], unknown: ["No start date", ""] };
+
+    function dueText(days) {
+        if (days < 0) return Math.abs(days) + (days === -1 ? " day" : " days") + " overdue";
+        if (days === 0) return "today";
+        return "in " + days + (days === 1 ? " day" : " days");
+    }
+
+    function probationBadge(p) {
+        const s = PROBATION_STATUS[p.status] || PROBATION_STATUS.unknown;
+        return '<span class="badge ' + s[1] + '">' + esc(s[0]) + "</span>";
+    }
+
+    function reviewCardHtml(r, manage) {
+        return '<article class="review-card" data-review="' + r.id + '">' +
+            '<div class="rc-head"><span class="rc-type">' + esc(r.typeLabel) + "</span>" +
+            (r.outcomeLabel ? '<span class="badge ' + (r.outcome === "passed" ? "badge-green" : r.outcome === "failed" ? "badge-red" : "badge-yellow") + '">' + esc(r.outcomeLabel) + "</span>" : "") +
+            (manage ? (r.shared ? '<span class="badge badge-soft">' + icon("eye") + "Shared</span>" : '<span class="badge">' + icon("lock") + "Private</span>") : "") +
+            '<span class="rc-date">' + esc(fmtDate(r.date + "T12:00:00")) + "</span></div>" +
+            (r.rating ? '<div class="rc-rating" aria-label="' + r.rating + ' out of 5">' + [1, 2, 3, 4, 5].map(function (n) { return '<span class="' + (n <= r.rating ? "on" : "") + '">' + icon("star") + "</span>"; }).join("") + "</div>" : "") +
+            '<div class="rc-body">' + richText(r.summary) + "</div>" +
+            (r.strengths ? '<div class="rc-part"><h4>Going well</h4>' + richText(r.strengths) + "</div>" : "") +
+            (r.improvements ? '<div class="rc-part"><h4>To work on</h4>' + richText(r.improvements) + "</div>" : "") +
+            '<div class="rc-foot"><span class="muted small">By ' + esc(r.reviewer.displayName) + (r.nextReviewDate ? " · next review " + esc(fmtDate(r.nextReviewDate + "T12:00:00")) : "") + "</span>" +
+            (manage ? '<span class="btn-row"><button type="button" class="btn btn-ghost btn-small" data-share="' + (r.shared ? "0" : "1") + '">' + (r.shared ? "Make private" : "Share with them") + "</button>" +
+                '<button type="button" class="btn btn-ghost btn-small danger-text" data-del-review aria-label="Delete review">' + icon("trash") + "</button></span>" : "") + "</div>" +
+            "</article>";
+    }
+
+    async function viewReviews(root, current) {
+        const d = await api("/api/reviews");
+        if (!current()) return;
+        let tab = state.reviewsTab || (d.isManager ? (d.due.length ? "due" : "team") : "mine");
+        if (!d.isManager && tab !== "mine") tab = "mine";
+        const tabs = d.isManager ? [["due", "Coming up", d.due.length], ["team", "My team", d.team.length], ["mine", "My reviews", d.mine.length]] : [["mine", "My reviews", d.mine.length]];
+        const mp = d.myProbation;
+        root.innerHTML =
+            '<div class="page-head"><div><h1>Probation &amp; reviews</h1><p class="muted">' + (d.isManager ? "Probation dates and reviews for the people you look after, and your own reviews." : "Your probation and the reviews your manager has shared with you.") + "</p></div></div>" +
+            (mp && mp.endDate && ["in-progress", "due", "extended"].indexOf(mp.status) !== -1 ? '<section class="panel probation-banner">' + icon("clock") + '<div><strong>Your probation ' + (mp.status === "extended" ? "has been extended and now ends" : "ends") + " on " + esc(fmtDate(mp.endDate + "T12:00:00")) + ".</strong> " +
+                '<span class="muted">Your supervisor will review it with you around then.</span></div></section>' : "") +
+            '<div class="company-tabs" id="rv-tabs">' + tabs.map(function (t) { return '<button type="button" data-tab="' + t[0] + '">' + esc(t[1]) + ' <span class="tab-count">' + t[2] + "</span></button>"; }).join("") + "</div>" +
+            '<div id="rv-body"></div>';
+
+        function draw() {
+            $$("#rv-tabs [data-tab]").forEach(function (b) { b.classList.toggle("active", b.dataset.tab === tab); });
+            const body = $("#rv-body");
+            if (tab === "due") {
+                body.innerHTML = d.due.length ? '<div class="panel leave-list">' + d.due.map(function (x) {
+                    return '<div class="leave-row">' + avatar(x.person, "md") + '<div class="lr-main"><div class="lr-title">' + esc(x.person.displayName) + "</div>" +
+                        '<div class="muted small">' + (x.kind === "probation" ? "Probation ends " : "Review due ") + esc(fmtDate(x.date + "T12:00:00")) + "</div></div>" +
+                        '<div class="lr-side"><span class="badge ' + (x.days < 0 ? "badge-red" : "badge-yellow") + '">' + esc(dueText(x.days)) + "</span>" +
+                        '<button type="button" class="btn btn-primary btn-small" data-person="' + x.person.id + '">' + (x.kind === "probation" ? "Review probation" : "Open") + "</button></div></div>";
+                }).join("") + "</div>" : '<div class="empty-page">' + icon("check", "big") + "<h2>Nothing coming up</h2><p class=\"muted\">Probations ending and reviews due in the next two weeks show here.</p></div>";
+            } else if (tab === "team") {
+                body.innerHTML = '<div class="table-card"><table class="table table-click"><thead><tr><th>Person</th><th>Probation</th><th>Last review</th><th>Next review</th><th class="col-actions"></th></tr></thead><tbody>' +
+                    d.team.map(function (t) {
+                        return '<tr data-person="' + t.person.id + '" tabindex="0"><td><div class="emp-cell">' + avatar(t.person, "sm") + '<div><div class="emp-name">' + esc(t.person.displayName) + '</div><div class="muted small">' + esc(t.person.jobTitle || "") + "</div></div></div></td>" +
+                            '<td data-label="Probation">' + probationBadge(t.probation) + (t.probation.endDate && ["in-progress", "due", "extended"].indexOf(t.probation.status) !== -1 ? '<div class="muted small">ends ' + esc(fmtDate(t.probation.endDate + "T12:00:00")) + "</div>" : "") + "</td>" +
+                            '<td data-label="Last review">' + (t.lastReview ? esc(t.lastReview.typeLabel) + '<div class="muted small">' + esc(fmtDate(t.lastReview.date + "T12:00:00")) + "</div>" : '<span class="muted">None yet</span>') + "</td>" +
+                            '<td data-label="Next review">' + (t.nextReviewDate ? esc(fmtDate(t.nextReviewDate + "T12:00:00")) : '<span class="muted">–</span>') + "</td>" +
+                            '<td class="col-actions">' + icon("chevronRight") + "</td></tr>";
+                    }).join("") + "</tbody></table></div>";
+            } else {
+                body.innerHTML = d.mine.length ? '<div class="review-list">' + d.mine.map(function (r) { return reviewCardHtml(r, false); }).join("") + "</div>"
+                    : '<div class="empty-page">' + icon("star", "big") + "<h2>No reviews yet</h2><p class=\"muted\">Reviews your manager shares with you will appear here.</p></div>";
+            }
+        }
+        root.addEventListener("click", function (e) {
+            const t = e.target.closest("[data-tab]");
+            if (t) { tab = state.reviewsTab = t.dataset.tab; return draw(); }
+            const p = e.target.closest("[data-person]");
+            if (p) openPersonReviews(p.dataset.person, d);
+        });
+        draw();
+    }
+
+    async function openPersonReviews(personId, d) {
+        let r;
+        try { r = await api("/api/reviews/person/" + personId); } catch (err) { return toast(err.message); }
+        const pr = r.probation;
+        const m = openModal(
+            '<h2 class="modal-title">' + esc(r.person.displayName) + '</h2><p class="muted">' + esc(r.person.jobTitle || "") + (r.person.startDate ? " · started " + esc(fmtDate(r.person.startDate + "T12:00:00")) : "") + "</p>" +
+            '<section class="probation-box"><div><div class="pb-label">Probation</div>' + probationBadge(pr) +
+            (pr.endDate ? ' <span class="muted small">' + (pr.status === "passed" || pr.status === "failed" ? "ended " : "ends ") + esc(fmtDate(pr.endDate + "T12:00:00")) + (pr.custom ? "" : " (3 months after their start date)") + "</span>" : ' <span class="muted small">Add a start date in Employee Management, or set a date here.</span>') +
+            '</div><button type="button" class="btn btn-ghost btn-small" id="pr-edit">' + icon("edit") + "Change</button></section>" +
+            '<div class="rm-head rv-head"><h3 class="detail-head">Reviews <span class="tab-count">' + r.reviews.length + '</span></h3><button type="button" class="btn btn-primary btn-small" id="rv-add">' + icon("plus") + "Add review</button></div>" +
+            (r.reviews.length ? '<div class="review-list">' + r.reviews.map(function (x) { return reviewCardHtml(x, true); }).join("") + "</div>" : '<p class="muted small">No reviews yet.</p>') +
+            '<div class="modal-actions"><button type="button" class="btn btn-primary" data-close>Done</button></div>',
+            { wide: true }
+        );
+        const reopen = function () { closeModal(); openPersonReviews(personId, d); };
+        m.el.addEventListener("click", async function (e) {
+            if (e.target.closest("#rv-add")) return openReviewForm(r, d, reopen);
+            if (e.target.closest("#pr-edit")) return openProbationForm(r, reopen);
+            const card = e.target.closest("[data-review]");
+            if (!card) return;
+            const id = card.dataset.review;
+            try {
+                if (e.target.closest("[data-share]")) {
+                    await api("/api/reviews/" + id + "/share", { shared: e.target.closest("[data-share]").dataset.share === "1" });
+                    toast(e.target.closest("[data-share]").dataset.share === "1" ? "Shared with " + r.person.displayName + "." : "Review made private.");
+                    return reopen();
+                }
+                if (e.target.closest("[data-del-review]")) {
+                    if (!(await confirmDialog({ title: "Delete this review?", message: "It can’t be recovered.", confirmLabel: "Delete", danger: true }))) return reopen();
+                    await api("/api/reviews/" + id + "/delete", {});
+                    toast("Review deleted.");
+                    reopen();
+                }
+            } catch (err) { toast(err.message); }
+        });
+    }
+
+    function openProbationForm(r, after) {
+        const pr = r.probation;
+        const m = openModal(
+            '<h2 class="modal-title">Probation · ' + esc(r.person.displayName) + "</h2>" +
+            '<form id="prb-form" novalidate><div class="grid-2"><div><label for="prb-date">Ends on</label><input type="date" id="prb-date" value="' + esc(pr.endDate || "") + '"></div>' +
+            '<div><label for="prb-status">Status</label><select id="prb-status">' + ["in-progress", "extended", "passed", "failed", "none"].map(function (k) {
+                return '<option value="' + k + '"' + ((pr.status === k || (pr.status === "due" && k === "in-progress")) ? " selected" : "") + ">" + esc(PROBATION_STATUS[k][0]) + "</option>";
+            }).join("") + "</select></div></div>" +
+            '<p class="hint">Recording a probation review with an outcome updates this for you.</p>' +
+            '<div class="form-error" id="prb-error" hidden></div>' +
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">Save</button></div></form>'
+        );
+        $("#prb-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try {
+                const res = await api("/api/reviews/person/" + r.person.id + "/probation", { endDate: $("#prb-date", m.el).value, status: $("#prb-status", m.el).value });
+                state.me = res.user;
+                renderChrome();
+                toast("Probation updated.");
+                after();
+            } catch (err) { formError($("#prb-error", m.el), err.message); }
+        });
+    }
+
+    function openReviewForm(r, d, after) {
+        const probationOpen = ["in-progress", "due", "extended"].indexOf(r.probation.status) !== -1;
+        const m = openModal(
+            '<h2 class="modal-title">Add review · ' + esc(r.person.displayName) + "</h2>" +
+            '<form id="rvf-form" novalidate>' +
+            '<div class="grid-2"><div><label for="rvf-type">Type</label><select id="rvf-type">' + Object.keys(d.types).map(function (k) {
+                return '<option value="' + k + '"' + ((probationOpen ? k === "probation" : k === "one-to-one") ? " selected" : "") + ">" + esc(d.types[k]) + "</option>";
+            }).join("") + "</select></div>" +
+            '<div><label for="rvf-date">Date</label><input type="date" id="rvf-date" value="' + isoDay(new Date()) + '"></div></div>' +
+            '<div id="rvf-outcome-box"><label for="rvf-outcome">Outcome</label><select id="rvf-outcome"><option value="">No decision yet</option>' + Object.keys(d.outcomes).map(function (k) {
+                return '<option value="' + k + '">' + esc(d.outcomes[k]) + "</option>";
+            }).join("") + '</select><div id="rvf-extend-box" hidden><label for="rvf-extend">Extend probation to</label><input type="date" id="rvf-extend"></div></div>' +
+            '<label for="rvf-summary">Summary</label><textarea id="rvf-summary" rows="3" maxlength="3000" placeholder="How things are going overall"></textarea>' +
+            '<div class="grid-2"><div><label for="rvf-good">Going well <span class="muted small">(optional)</span></label><textarea id="rvf-good" rows="3" maxlength="2000"></textarea></div>' +
+            '<div><label for="rvf-improve">To work on <span class="muted small">(optional)</span></label><textarea id="rvf-improve" rows="3" maxlength="2000"></textarea></div></div>' +
+            '<div class="grid-2"><div><label>Rating <span class="muted small">(optional)</span></label><div class="rating" id="rvf-rating">' + [1, 2, 3, 4, 5].map(function (n) {
+                return '<button type="button" class="rating-star" data-value="' + n + '" aria-label="' + n + ' out of 5">' + icon("star") + "</button>";
+            }).join("") + "</div></div>" +
+            '<div><label for="rvf-next">Next review <span class="muted small">(optional)</span></label><input type="date" id="rvf-next"></div></div>' +
+            '<label class="inline-check option-row"><input type="checkbox" id="rvf-share"> Share this review with ' + esc(r.person.displayName) + "</label>" +
+            '<div class="form-error" id="rvf-error" hidden></div>' +
+            '<div class="modal-actions sticky-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">Save review</button></div></form>',
+            { wide: true }
+        );
+        let rating = 0;
+        const sync = function () {
+            $("#rvf-outcome-box", m.el).hidden = $("#rvf-type", m.el).value !== "probation";
+            $("#rvf-extend-box", m.el).hidden = $("#rvf-outcome", m.el).value !== "extended";
+        };
+        m.el.addEventListener("change", sync);
+        sync();
+        $("#rvf-rating", m.el).addEventListener("click", function (e) {
+            const s = e.target.closest(".rating-star");
+            if (!s) return;
+            rating = Number(s.dataset.value) === rating ? 0 : Number(s.dataset.value);
+            $$(".rating-star", m.el).forEach(function (b) { b.classList.toggle("on", Number(b.dataset.value) <= rating); });
+        });
+        $("#rvf-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            const type = $("#rvf-type", m.el).value;
+            try {
+                const res = await api("/api/reviews/person/" + r.person.id, {
+                    type: type, date: $("#rvf-date", m.el).value, summary: $("#rvf-summary", m.el).value,
+                    strengths: $("#rvf-good", m.el).value, improvements: $("#rvf-improve", m.el).value, rating: rating || "",
+                    outcome: type === "probation" ? $("#rvf-outcome", m.el).value : "", extendTo: $("#rvf-extend", m.el).value,
+                    nextReviewDate: $("#rvf-next", m.el).value, shared: $("#rvf-share", m.el).checked,
+                });
+                state.me = res.user;
+                renderChrome();
+                toast("Review saved.");
+                after();
+            } catch (err) { formError($("#rvf-error", m.el), err.message); }
+        });
+    }
+
+    // ================= Staff documents =================
+
+    async function viewStaffFiles(root, current) {
+        const personId = state.staffFilesPerson || "";
+        const d = await api("/api/staff-files" + (personId ? "?person=" + personId : ""));
+        if (!current()) return;
+        const own = d.person.id === state.me.id;
+        const list = '<section class="panel sf-files"><div class="panel-head"><h2 class="panel-title">' + icon("file") + (own ? "Your documents" : esc(d.person.displayName)) + "</h2>" +
+            (d.canManage ? '<button type="button" class="btn btn-primary btn-small" id="sf-upload">' + icon("upload") + "Upload</button>" : "") + "</div>" +
+            (d.files.length ? '<div class="sf-list">' + d.files.map(function (f) {
+                return '<div class="sf-row" data-file="' + f.id + '">' + fileBadge(f.ext) +
+                    '<div class="sf-main"><div class="emp-name">' + esc(f.title) + "</div>" +
+                    '<div class="muted small">' + esc(f.category) + " · " + esc(fileSize(f.size)) + " · added " + esc(fmtDate(f.uploadedAt)) + (d.canManage ? " by " + esc(f.uploadedByName) : "") + "</div>" +
+                    (f.note ? '<div class="lr-note">' + esc(f.note) + "</div>" : "") + "</div>" +
+                    '<div class="sf-actions">' + (d.canManage ? (f.shared ? '<span class="badge badge-soft">' + icon("eye") + "They can see it</span>" : '<span class="badge">' + icon("lock") + "HR only</span>") : "") +
+                    (f.inline ? '<a class="btn btn-ghost btn-small" href="/api/staff-files/' + f.id + '/file" target="_blank" rel="noopener">' + icon("eye") + "View</a>" : "") +
+                    '<a class="btn btn-ghost btn-small" href="/api/staff-files/' + f.id + '/file?download">' + icon("download") + "</a>" +
+                    (d.canManage ? '<button type="button" class="btn btn-ghost btn-small" data-sf-share="' + (f.shared ? "0" : "1") + '">' + (f.shared ? "Hide from them" : "Show to them") + "</button>" +
+                        '<button type="button" class="btn btn-ghost btn-small danger-text" data-sf-del aria-label="Delete">' + icon("trash") + "</button>" : "") + "</div></div>";
+            }).join("") + "</div>" : '<p class="muted small">' + (own ? "HR hasn’t added any documents for you yet. Your contract and other personal documents will appear here." : "No documents for " + esc(d.person.displayName) + " yet.") + "</p>") +
+            "</section>";
+        root.innerHTML =
+            '<div class="page-head"><div><h1>Staff documents</h1><p class="muted">' + (d.canManage ? "Private documents for each member of staff, such as contracts and right-to-work checks. Only HR and the person can see them." : "Your contract and other personal documents. Only you and HR can see these.") + "</p></div></div>" +
+            (d.canManage ? '<div class="sf-layout"><aside class="panel sf-people"><label class="search">' + icon("search") + '<input type="search" id="sf-search" placeholder="Find someone" aria-label="Find someone"></label><div class="sf-people-list" id="sf-people"></div></aside>' + list + "</div>" : list);
+
+        function drawPeople() {
+            const q = ($("#sf-search").value || "").trim().toLowerCase();
+            $("#sf-people").innerHTML = d.people.filter(function (p) { return !q || (p.displayName + " " + p.jobTitle).toLowerCase().indexOf(q) !== -1; }).map(function (p) {
+                return '<button type="button" class="sf-person' + (p.id === d.person.id ? " active" : "") + '" data-sf-person="' + p.id + '">' + avatar(p, "sm") +
+                    '<span class="mr-text"><span class="emp-name">' + esc(p.displayName) + '</span><span class="muted small">' + esc(p.jobTitle) + "</span></span>" +
+                    (p.count ? '<span class="tab-count">' + p.count + "</span>" : "") + "</button>";
+            }).join("");
+        }
+        if (d.canManage) {
+            drawPeople();
+            $("#sf-search").addEventListener("input", drawPeople);
+        }
+        root.addEventListener("click", async function (e) {
+            const p = e.target.closest("[data-sf-person]");
+            if (p) { state.staffFilesPerson = p.dataset.sfPerson; return render(); }
+            if (e.target.closest("#sf-upload")) return openStaffUpload(d);
+            const row = e.target.closest("[data-file]");
+            if (!row) return;
+            const id = row.dataset.file;
+            try {
+                const share = e.target.closest("[data-sf-share]");
+                if (share) {
+                    await api("/api/staff-files/" + id, { shared: share.dataset.sfShare === "1" });
+                    toast(share.dataset.sfShare === "1" ? "They can now see it." : "Now only HR can see it.");
+                    return render();
+                }
+                if (e.target.closest("[data-sf-del]")) {
+                    if (!(await confirmDialog({ title: "Delete this document?", message: "It will be removed for good.", confirmLabel: "Delete", danger: true }))) return;
+                    await api("/api/staff-files/" + id + "/delete", {});
+                    toast("Document deleted.");
+                    render();
+                }
+            } catch (err) { toast(err.message); }
+        });
+    }
+
+    function openStaffUpload(d) {
+        const m = openModal(
+            '<h2 class="modal-title">Upload a document for ' + esc(d.person.displayName) + "</h2>" +
+            '<form id="sfu-form" novalidate><label for="sfu-file">File</label><input type="file" id="sfu-file">' +
+            '<div class="grid-2"><div><label for="sfu-title">Title</label><input type="text" id="sfu-title" maxlength="150" placeholder="e.g. Employment contract"></div>' +
+            '<div><label for="sfu-cat">Type</label><select id="sfu-cat">' + d.categories.map(function (c) { return "<option>" + esc(c) + "</option>"; }).join("") + "</select></div></div>" +
+            '<label for="sfu-note">Note <span class="muted small">(optional)</span></label><input type="text" id="sfu-note" maxlength="500">' +
+            '<label class="inline-check option-row"><input type="checkbox" id="sfu-shared" checked> Let ' + esc(d.person.displayName) + " see this document</label>" +
+            '<div class="progress" id="sfu-progress" hidden><span></span></div>' +
+            '<div class="form-error" id="sfu-error" hidden></div>' +
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">' + icon("upload") + "Upload</button></div></form>"
+        );
+        $("#sfu-file", m.el).addEventListener("change", function (e) {
+            const f = e.target.files[0];
+            if (f && !$("#sfu-title", m.el).value) $("#sfu-title", m.el).value = f.name.replace(/\.[^.]+$/, "");
+        });
+        $("#sfu-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            const file = $("#sfu-file", m.el).files[0];
+            if (!file) return formError($("#sfu-error", m.el), "Choose a file.");
+            $("#sfu-progress", m.el).hidden = false;
+            try {
+                await uploadFile("/api/staff-files/upload", file, {
+                    personId: d.person.id, title: $("#sfu-title", m.el).value, category: $("#sfu-cat", m.el).value,
+                    note: $("#sfu-note", m.el).value, shared: $("#sfu-shared", m.el).checked,
+                }, function (pct) { $("#sfu-progress span", m.el).style.width = pct + "%"; });
+                closeModal();
+                toast("Document uploaded.");
+                render();
+            } catch (err) { formError($("#sfu-error", m.el), err.message); $("#sfu-progress", m.el).hidden = true; }
+        });
+    }
+
+    // ================= Service status =================
+
+    let statusTimer = null;
+
+    async function viewStatus(root, current) {
+        clearInterval(statusTimer);
+        const d = await api("/api/status");
+        if (!current()) return;
+        const down = d.monitors.filter(function (x) { return x.state === "down"; });
+        root.innerHTML =
+            '<div class="page-head"><div><h1>Service status</h1><p class="muted">Our websites and services, checked automatically every few minutes.</p></div>' +
+            (d.canManage ? '<div class="page-actions"><button type="button" class="btn btn-primary" id="st-add">' + icon("plus") + "Add a website</button></div>" : "") + "</div>" +
+            '<section class="status-hero ' + (!d.monitors.length ? "sh-empty" : down.length ? "sh-down" : "sh-up") + '"><span class="sh-icon">' + icon(down.length ? "alert" : "check") + "</span><div>" +
+            "<h2>" + (!d.monitors.length ? "Nothing monitored yet" : down.length ? down.length + (down.length === 1 ? " service is down" : " services are down") : "All systems operational") + "</h2>" +
+            '<p>' + (down.length ? esc(down.map(function (x) { return x.name; }).join(", ")) + ". The IT team has been alerted on their home page." : d.monitors.length ? "Everything we monitor is up and responding." : (d.canManage ? "Add the websites you want to keep an eye on." : "The IT team hasn’t added anything yet.")) + "</p></div></section>" +
+            '<div class="monitor-list">' + d.monitors.map(function (x) {
+                return '<article class="monitor m-' + x.state + '" data-mon="' + x.id + '">' +
+                    '<div class="mon-head"><span class="mon-dot"></span><div class="mon-name"><strong>' + esc(x.name) + '</strong><a class="muted small" href="' + esc(x.url) + '" target="_blank" rel="noopener noreferrer">' + esc(x.url.replace(/^https?:\/\//, "").replace(/\/$/, "")) + "</a></div>" +
+                    '<span class="mon-state">' + (x.state === "up" ? "Up" : x.state === "down" ? "Down" : "Checking…") + "</span></div>" +
+                    '<div class="mon-bar" aria-label="Last 24 hours">' + x.timeline.map(function (b) { return '<span class="mb-' + b + '"></span>'; }).join("") + "</div>" +
+                    '<div class="mon-bar-labels"><span>24 hours ago</span><span>Now</span></div>' +
+                    '<div class="mon-stats">' +
+                    "<div><span>Uptime (24h)</span><strong>" + (x.uptime24h === null ? "–" : x.uptime24h + "%") + "</strong></div>" +
+                    "<div><span>Uptime (7 days)</span><strong>" + (x.uptime7d === null ? "–" : x.uptime7d + "%") + "</strong></div>" +
+                    "<div><span>Response time</span><strong>" + (x.avgMs === null ? "–" : x.avgMs + " ms") + "</strong></div>" +
+                    "<div><span>" + (x.state === "down" ? "Down since" : "Up since") + "</span><strong>" + (x.since ? esc(timeAgo(x.since).replace(" ago", "")) : "–") + "</strong></div>" +
+                    "</div>" +
+                    (x.state === "down" && x.last ? '<p class="mon-error">' + icon("alert") + esc(x.last.error || "Responded with status " + x.last.status) + "</p>" : "") +
+                    (d.canManage ? '<div class="mon-actions"><span class="muted small">Checked ' + (x.last ? esc(timeAgo(x.last.at)) : "not yet") + " · every " + x.intervalMin + " min</span>" +
+                        '<span class="btn-row"><button type="button" class="btn btn-ghost btn-small" data-mon-act="check">' + icon("refresh") + "Check now</button>" +
+                        '<button type="button" class="btn btn-ghost btn-small" data-mon-act="edit">' + icon("edit") + "</button>" +
+                        (x.self ? "" : '<button type="button" class="btn btn-ghost btn-small danger-text" data-mon-act="delete" aria-label="Delete">' + icon("trash") + "</button>") + "</span></div>" : "") +
+                    "</article>";
+            }).join("") + "</div>";
+
+        root.addEventListener("click", async function (e) {
+            if (e.target.closest("#st-add")) return openMonitorForm(null);
+            const act = e.target.closest("[data-mon-act]");
+            if (!act) return;
+            const id = act.closest("[data-mon]").dataset.mon;
+            const mon = d.monitors.find(function (x) { return x.id === id; });
+            try {
+                if (act.dataset.monAct === "edit") return openMonitorForm(mon);
+                if (act.dataset.monAct === "delete") {
+                    if (!(await confirmDialog({ title: "Stop monitoring " + mon.name + "?", message: "Its history will be deleted.", confirmLabel: "Delete", danger: true }))) return;
+                    await api("/api/status/monitors/" + id + "/delete", {});
+                    toast("Removed.");
+                } else {
+                    act.disabled = true;
+                    const r = await api("/api/status/monitors/" + id + "/check", {});
+                    toast(r.monitor.name + " is " + (r.monitor.state === "up" ? "up (" + r.monitor.last.ms + " ms)." : "down."));
+                }
+                render();
+            } catch (err) { toast(err.message); }
+        });
+        // Keep it fresh while the page is open.
+        statusTimer = setInterval(function () {
+            if (window.location.pathname !== "/status") return clearInterval(statusTimer);
+            if (!$(".modal-backdrop") && !document.hidden) render();
+        }, 60000);
+    }
+
+    function openMonitorForm(mon) {
+        const m = openModal(
+            '<h2 class="modal-title">' + (mon ? "Edit " + esc(mon.name) : "Add a website") + "</h2>" +
+            '<form id="mon-form" novalidate><label for="mon-name">Name</label><input type="text" id="mon-name" maxlength="80" value="' + esc(mon ? mon.name : "") + '" placeholder="e.g. Horizon Network website">' +
+            '<label for="mon-url">Address</label><input type="text" id="mon-url" value="' + esc(mon ? mon.url : "https://") + '" placeholder="https://horizon-network.co.uk"' + (mon && mon.self ? " readonly" : "") + ">" +
+            '<label for="mon-int">Check every</label><select id="mon-int">' + [1, 5, 10, 15, 30, 60].map(function (n) {
+                return '<option value="' + n + '"' + ((mon ? mon.intervalMin : 5) === n ? " selected" : "") + ">" + (n === 60 ? "hour" : n + (n === 1 ? " minute" : " minutes")) + "</option>";
+            }).join("") + "</select>" +
+            '<p class="hint">It counts as up if it responds within 10 seconds without an error.</p>' +
+            '<div class="form-error" id="mon-error" hidden></div>' +
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">' + (mon ? "Save" : "Add and check") + "</button></div></form>"
+        );
+        $("#mon-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try {
+                const r = await api("/api/status/monitors" + (mon ? "/" + mon.id : ""), { name: $("#mon-name", m.el).value, url: $("#mon-url", m.el).value, intervalMin: $("#mon-int", m.el).value });
+                closeModal();
+                toast(mon ? "Saved." : r.monitor.name + " added: " + (r.monitor.state === "up" ? "it’s up." : "it’s not responding."));
+                render();
+            } catch (err) { formError($("#mon-error", m.el), err.message); }
+        });
+    }
+
     // ================= Settings =================
 
     async function refreshMe() {
@@ -5446,6 +5895,20 @@
         "funds-returned": ["moved money back to the main balance", "payroll"],
         "funds-statement": ["produced a funds statement for", "payroll"],
         "ticket-raised": ["raised IT ticket", "helpdesk"],
+        "probation-updated": ["updated the probation of", "staff"],
+        "review-added": ["added a review for", "staff"],
+        "review-deleted": ["deleted a review for", "staff"],
+        "review-shared": ["shared a review with", "staff"],
+        "review-unshared": ["made a review private for", "staff"],
+        "return-to-work-completed": ["completed a return-to-work form for", "leave"],
+        "leaving-started": ["started the leaving process for", "staff"],
+        "staff-file-uploaded": ["uploaded a staff document for", "staff"],
+        "staff-file-updated": ["changed a staff document for", "staff"],
+        "staff-file-deleted": ["deleted a staff document for", "staff"],
+        "staff-file-opened": ["opened a staff document for", "staff"],
+        "monitor-added": ["started monitoring", "helpdesk"],
+        "monitor-updated": ["changed the monitor for", "helpdesk"],
+        "monitor-deleted": ["stopped monitoring", "helpdesk"],
         "ticket-replied": ["replied to IT ticket", "helpdesk"],
         "ticket-note-added": ["added an internal note to IT ticket", "helpdesk"],
         "ticket-updated": ["updated IT ticket", "helpdesk"],

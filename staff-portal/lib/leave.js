@@ -22,6 +22,14 @@ let db;
 
 function init(dataDir) {
   db = datafile.open(dataDir, "leave.json", () => ({ requests: [], allowances: {}, defaultAllowance: DEFAULT_ALLOWANCE }));
+  // Carry-over and return-to-work forms only apply from the year/date they were switched on, so
+  // years before the portal was used don't carry holiday forward.
+  let changed = false;
+  if (db.data.maxCarryOver === undefined) { db.data.maxCarryOver = 5; changed = true; }
+  if (!db.data.carryOverFrom) { db.data.carryOverFrom = new Date().getFullYear(); changed = true; }
+  if (!db.data.rtwFrom) { db.data.rtwFrom = new Date().toISOString().slice(0, 10); changed = true; }
+  if (!db.data.rtw) { db.data.rtw = {}; changed = true; }
+  if (changed) db.save();
 }
 
 const newId = () => crypto.randomBytes(8).toString("hex");
@@ -43,9 +51,30 @@ function workingDays(from, to) {
   return n;
 }
 
-function allowanceFor(personId) {
+// The base allowance for a year (custom or the default), before any carry-over.
+function baseAllowance(personId) {
   const a = db.data.allowances[personId];
   return typeof a === "number" ? a : db.data.defaultAllowance;
+}
+
+// Unused annual leave from the year before, up to the carry-over limit.
+function carriedInto(personId, year) {
+  const prev = Number(year) - 1;
+  if (prev < db.data.carryOverFrom || !db.data.maxCarryOver) return 0;
+  const used = usedIn(personId, prev);
+  const left = allowanceFor(personId, prev) - used.approved - used.pending;
+  return Math.max(0, Math.min(db.data.maxCarryOver, left));
+}
+
+function allowanceFor(personId, year) {
+  return baseAllowance(personId) + carriedInto(personId, year || new Date().getFullYear());
+}
+
+function usedIn(personId, year) {
+  const y = String(year);
+  const annual = db.data.requests.filter((r) => r.personId === personId && r.type === "annual" && r.startDate.startsWith(y));
+  const total = (list) => list.reduce((n, r) => n + r.days, 0);
+  return { approved: total(annual.filter((r) => r.status === "approved")), pending: total(annual.filter((r) => r.status === "pending")) };
 }
 
 function setAllowance(personId, days) {
@@ -71,12 +100,13 @@ function summary(personId, year) {
   const annual = db.data.requests.filter((r) => r.personId === personId && r.type === "annual" && r.startDate.startsWith(y));
   const sum = (list) => list.reduce((n, r) => n + r.days, 0);
   const approved = annual.filter((r) => r.status === "approved");
-  const allowance = allowanceFor(personId);
+  const allowance = allowanceFor(personId, y);
+  const carried = carriedInto(personId, y);
   const taken = sum(approved.filter((r) => r.endDate < today()));
   const booked = sum(approved.filter((r) => r.endDate >= today()));
   const pending = sum(annual.filter((r) => r.status === "pending"));
   const sickDays = sum(db.data.requests.filter((r) => r.personId === personId && r.type === "sick" && r.status === "approved" && r.startDate.startsWith(y)));
-  return { year: Number(y), allowance, taken, booked, pending, remaining: allowance - taken - booked - pending, sickDays };
+  return { year: Number(y), allowance, base: allowance - carried, carried, taken, booked, pending, remaining: allowance - taken - booked - pending, sickDays };
 }
 
 function canApprove(approver, request) {
@@ -186,6 +216,8 @@ function view(r, viewer) {
     decisionNote: own || manager ? r.decisionNote : "",
     canApprove: r.status === "pending" && canApprove(viewer, r),
     canCancel: (r.status === "pending" || r.status === "approved") && (store.can(viewer, MANAGE) || (own && (r.status === "pending" || r.startDate > today()))),
+    // Return-to-work forms: the details are for managers; the person just sees it was done.
+    returnToWork: r.type === "sick" && db.data.rtw[r.id] ? (manager && !own ? returnToWorkFor(r.id) : { done: true }) : null,
   };
 }
 
@@ -240,10 +272,67 @@ function isOffToday(personId) {
 }
 
 function allowances() {
-  return { defaultAllowance: db.data.defaultAllowance, custom: db.data.allowances };
+  return { defaultAllowance: db.data.defaultAllowance, custom: db.data.allowances, maxCarryOver: db.data.maxCarryOver };
+}
+
+function setMaxCarryOver(days) {
+  const n = Number(days);
+  if (!(n >= 0 && n <= 50)) throw new store.ValidationError("Enter a carry-over limit between 0 and 50 days.");
+  db.data.maxCarryOver = Math.round(n * 2) / 2;
+  db.save();
+}
+
+// ---------- Return to work ----------
+
+// Sickness that has ended and still needs a return-to-work form, for people the viewer looks after.
+function pendingReturnToWork(viewer) {
+  const t = today();
+  return db.data.requests
+    // Anything recorded since forms were switched on (or ending after), so old absences don't flood in.
+    .filter((r) => r.type === "sick" && r.status === "approved" && r.endDate < t && (r.endDate >= db.data.rtwFrom || r.createdAt.slice(0, 10) >= db.data.rtwFrom) && !db.data.rtw[r.id])
+    .filter((r) => { const p = store.getPerson(r.personId); return p && r.personId !== viewer.id && (store.can(viewer, MANAGE) || store.supervises(viewer, p)); })
+    .sort((a, b) => a.endDate.localeCompare(b.endDate))
+    .map((r) => view(r, viewer));
+}
+
+function completeReturnToWork(request, input, by) {
+  if (request.type !== "sick" || request.status !== "approved") throw new store.ValidationError("Return-to-work forms are only for sickness.");
+  const p = store.getPerson(request.personId);
+  if (!p || request.personId === by.id || !(store.can(by, MANAGE) || store.supervises(by, p))) throw new store.ValidationError("You can't complete this form.");
+  const str = (v, max) => String(v == null ? "" : v).trim().slice(0, max);
+  if (!str(input.reason, 300)) throw new store.ValidationError("Say briefly what the absence was for.");
+  db.data.rtw[request.id] = {
+    meetingDate: /^\d{4}-\d{2}-\d{2}$/.test(input.meetingDate || "") ? input.meetingDate : today(),
+    reason: str(input.reason, 300),
+    workRelated: !!input.workRelated,
+    fitForWork: input.fitForWork !== false,
+    fitNote: !!input.fitNote,
+    adjustments: str(input.adjustments, 1000),
+    notes: str(input.notes, 2000),
+    by: by.id,
+    at: new Date().toISOString(),
+  };
+  db.save();
+}
+
+function returnToWorkFor(requestId) {
+  const f = db.data.rtw[requestId];
+  if (!f) return null;
+  const by = store.getPerson(f.by);
+  return { ...f, byName: by ? by.displayName : "Former staff" };
+}
+
+// Sickness over the last 52 weeks: occurrences (separate absences), days, and the Bradford Factor
+// (occurrences² × days), which weights frequent short absences more heavily.
+function absenceStats(personId) {
+  const from = new Date(Date.now() - 364 * 86400000).toISOString().slice(0, 10);
+  const list = db.data.requests.filter((r) => r.personId === personId && r.type === "sick" && r.status === "approved" && r.endDate >= from);
+  const days = list.reduce((n, r) => n + r.days, 0);
+  return { occurrences: list.length, days, bradford: list.length * list.length * days };
 }
 
 module.exports = {
   TYPES, MANAGE, init, workingDays, summary, createRequest, getRequest, decide, cancel, mine, approvals,
   pendingApprovalCount, team, calendarItems, isOffToday, allowances, setAllowance, setDefaultAllowance, allowanceFor,
+  setMaxCarryOver, pendingReturnToWork, completeReturnToWork, returnToWorkFor, absenceStats,
 };

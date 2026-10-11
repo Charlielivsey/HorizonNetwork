@@ -16,6 +16,9 @@ const rotas = require("./lib/rotas");
 const funds = require("./lib/funds");
 const payslips = require("./lib/payslips");
 const helpdesk = require("./lib/helpdesk");
+const reviews = require("./lib/reviews");
+const stafffiles = require("./lib/stafffiles");
+const uptime = require("./lib/uptime");
 
 const PORT = parseInt(process.env.PORT || "3200", 10);
 const HOST = process.env.HOST || "127.0.0.1";
@@ -34,7 +37,7 @@ const MAX_AVATAR_BODY_BYTES = 2 * 1024 * 1024;
 const APP_ROUTES = new Set([
   "/home", "/directory", "/employees", "/settings", "/system", "/announcements", "/documents",
   "/calendar", "/polls", "/onboarding", "/roles", "/about", "/signature",
-  "/leave", "/rotas", "/payslips", "/payroll", "/funds", "/helpdesk",
+  "/leave", "/rotas", "/payslips", "/payroll", "/funds", "/helpdesk", "/reviews", "/staff-files", "/status",
 ]);
 const SYSTEM_UNLOCK_MS = 15 * 60 * 1000; // System Admin stays unlocked for 15 minutes of inactivity
 const MAX_PIN_ATTEMPTS = 5;
@@ -59,6 +62,10 @@ rotas.init(DATA_DIR);
 funds.init(DATA_DIR);
 payslips.init(DATA_DIR);
 helpdesk.init(DATA_DIR);
+reviews.init(DATA_DIR);
+stafffiles.init(DATA_DIR);
+uptime.init(DATA_DIR, `http://127.0.0.1:${PORT}/healthz`);
+uptime.start();
 backup.init(DATA_DIR);
 
 // Re-reads every data file, e.g. after a backup is restored.
@@ -73,6 +80,9 @@ function reloadAll() {
   funds.init(DATA_DIR);
   payslips.init(DATA_DIR);
   helpdesk.init(DATA_DIR);
+  reviews.init(DATA_DIR);
+  stafffiles.init(DATA_DIR);
+  uptime.init(DATA_DIR);
 }
 
 backup.scheduleNightly((err, name) => {
@@ -485,6 +495,9 @@ function meResponse(session) {
   user.timesheetApprovals = rotas.pendingApprovalCount(session.person);
   user.helpdeskBadge = helpdesk.badgeCount(session.person);
   user.onLeaveToday = leave.isOffToday(session.person.id);
+  user.reviewsDue = reviews.due(session.person).length;
+  user.returnToWorkDue = leave.pendingReturnToWork(session.person).length;
+  if (store.can(session.person, uptime.MANAGE)) user.servicesDown = uptime.downCount();
   if (store.can(session.person, payslips.MANAGE)) {
     const b = funds.balances();
     user.payrollOverdrawn = b.payroll < 0 || b.main < 0;
@@ -1171,12 +1184,12 @@ async function routeApi(req, res, pathname, session) {
     }
     if (method === "POST" && pathname === "/api/onboarding/start") {
       requireOb();
-      const { templateId, personId } = await readJsonBody(req);
+      const { templateId, personId, lastDay } = await readJsonBody(req);
       const t = onboarding.getTemplate(templateId);
       const p = store.getPerson(personId);
       if (!t || !p || p.system) throw httpError(400, "Choose a checklist and an employee.");
-      onboarding.startChecklist(t, p, me);
-      logEvent(req, session, "onboarding-started", { target: p.displayName, detail: t.name });
+      onboarding.startChecklist(t, p, me, { lastDay });
+      logEvent(req, session, t.kind === "leaver" ? "leaving-started" : "onboarding-started", { target: p.displayName, detail: t.name + (lastDay && t.kind === "leaver" ? `, last day ${lastDay}` : "") });
       return sendJson(res, 201, { ok: true });
     }
     if (method === "POST" && (m = /^\/api\/onboarding\/templates(?:\/([a-f0-9]{16})(\/delete)?)?$/.exec(pathname))) {
@@ -1202,9 +1215,157 @@ async function routeApi(req, res, pathname, session) {
         return sendJson(res, 200, { ok: true });
       }
       const { taskId, done } = await readJsonBody(req);
+      const leaverPerson = store.getPerson(c.personId);
+      if (done && leaverPerson && store.isOwner(leaverPerson)) {
+        const t0 = c.tasks.find((x) => x.id === taskId);
+        if (t0 && t0.action === "disable-login") throw httpError(403, "The system owner's login can't be disabled.");
+      }
       const task = onboarding.setTask(c, taskId, !!done, me);
       logEvent(req, session, done ? "onboarding-task-done" : "onboarding-task-undone", { target: (store.getPerson(c.personId) || {}).displayName, detail: task.title });
+      // The leaver checklist's "Disable their login" task switches the login off and signs them out.
+      if (task.action === "disable-login" && leaverPerson && leaverPerson.account) {
+        store.setAccountEnabled(leaverPerson, !done);
+        if (done) endSessionsFor(leaverPerson.id);
+        logEvent(req, session, done ? "login-disabled" : "login-enabled", { target: store.loginName(leaverPerson), detail: "From the leaver checklist" });
+      }
       return sendJson(res, 200, { checklist: onboarding.view(c, me), user: meResponse(session) });
+    }
+  }
+
+  // ----- Probation & reviews -----
+  if (pathname.startsWith("/api/reviews")) {
+    if (method === "GET" && pathname === "/api/reviews") {
+      const team = reviews.team(me);
+      return sendJson(res, 200, {
+        mine: me.system ? [] : reviews.forPerson(me, me),
+        myProbation: me.system ? null : reviews.probationOf(me),
+        team,
+        due: reviews.due(me),
+        isManager: team.length > 0,
+        types: reviews.TYPES,
+        outcomes: reviews.OUTCOMES,
+      });
+    }
+    if ((m = /^\/api\/reviews\/person\/([a-f0-9]{16})(\/probation)?$/.exec(pathname))) {
+      const p = store.getPerson(m[1]);
+      if (!p || !reviews.canManage(me, p)) throw httpError(404, "Person not found.");
+      if (method === "GET" && !m[2]) {
+        return sendJson(res, 200, { person: { id: p.id, displayName: p.displayName, jobTitle: p.jobTitle, startDate: p.startDate || null }, probation: reviews.probationOf(p), reviews: reviews.forPerson(p, me) });
+      }
+      if (method === "POST" && m[2]) {
+        reviews.setProbation(p, await readJsonBody(req));
+        logEvent(req, session, "probation-updated", { target: p.displayName });
+        return sendJson(res, 200, { ok: true, user: meResponse(session) });
+      }
+      if (method === "POST") {
+        const r = reviews.saveReview(p, await readJsonBody(req), me);
+        logEvent(req, session, "review-added", { target: p.displayName, detail: reviews.TYPES[r.type] + (r.outcome ? " – " + reviews.OUTCOMES[r.outcome] : "") });
+        return sendJson(res, 201, { ok: true, user: meResponse(session) });
+      }
+    }
+    if (method === "POST" && (m = /^\/api\/reviews\/([a-f0-9]{16})\/(share|delete)$/.exec(pathname))) {
+      const r = reviews.getReview(m[1]);
+      const p = r && store.getPerson(r.personId);
+      if (!r || !reviews.canManage(me, p)) throw httpError(404, "Review not found.");
+      if (m[2] === "delete") {
+        reviews.deleteReview(r);
+        logEvent(req, session, "review-deleted", { target: p.displayName });
+      } else {
+        const { shared } = await readJsonBody(req);
+        reviews.setShared(r, shared);
+        logEvent(req, session, shared ? "review-shared" : "review-unshared", { target: p.displayName });
+      }
+      return sendJson(res, 200, { ok: true });
+    }
+  }
+
+  // ----- Staff documents -----
+  if (pathname.startsWith("/api/staff-files")) {
+    const manager = stafffiles.canManage(me);
+    if (method === "GET" && pathname === "/api/staff-files") {
+      const q = new URL(req.url, "http://localhost").searchParams;
+      const personId = manager && q.get("person") ? q.get("person") : me.id;
+      const p = store.getPerson(personId);
+      if (!p) throw httpError(404, "Person not found.");
+      const counts = manager ? stafffiles.counts() : {};
+      return sendJson(res, 200, {
+        person: { id: p.id, displayName: p.displayName, jobTitle: p.jobTitle },
+        files: stafffiles.forPerson(p.id, me),
+        canManage: manager,
+        categories: stafffiles.CATEGORIES,
+        people: manager ? store.employees().map((x) => ({ id: x.id, displayName: x.displayName, jobTitle: x.jobTitle, avatarUrl: store.publicView(x).avatarUrl, count: counts[x.id] || 0 })).sort((a, b) => a.displayName.localeCompare(b.displayName)) : [],
+      });
+    }
+    if (method === "POST" && pathname === "/api/staff-files/upload") {
+      if (!manager) throw httpError(403, "Only HR can upload staff documents.");
+      const meta = headerJson(req, "x-document");
+      const buffer = await readRawBody(req, workplace.MAX_FILE_BYTES);
+      const p = store.getPerson(meta.personId);
+      const f = stafffiles.upload(p, meta, buffer, me);
+      logEvent(req, session, "staff-file-uploaded", { target: p.displayName, detail: `${f.category}: ${f.title}` });
+      return sendJson(res, 201, { ok: true });
+    }
+    if ((m = /^\/api\/staff-files\/([a-f0-9]{16})(?:\/(file|delete))?$/.exec(pathname))) {
+      const f = stafffiles.getFile(m[1]);
+      if (!f || !stafffiles.canSee(me, f)) throw httpError(404, "Document not found.");
+      const who = (store.getPerson(f.personId) || {}).displayName;
+      if (method === "GET" && m[2] === "file") {
+        const file = stafffiles.fileFor(f);
+        const download = new URL(req.url, "http://localhost").searchParams.has("download") || !file.inline;
+        const encoded = encodeURIComponent(file.name);
+        logEvent(req, session, "staff-file-opened", { target: who, detail: f.title });
+        return fs.readFile(file.path, (err, content) => {
+          if (err) return sendJson(res, 404, { error: "The file is missing." });
+          const headers = {
+            "X-Content-Type-Options": "nosniff",
+            "Referrer-Policy": "same-origin",
+            "Content-Type": file.mime,
+            "Content-Length": content.length,
+            "Content-Disposition": `${download ? "attachment" : "inline"}; filename="${encoded}"; filename*=UTF-8''${encoded}`,
+            "Cache-Control": "private, no-store",
+          };
+          if (download) headers["Content-Security-Policy"] = "sandbox; default-src 'none'";
+          res.writeHead(200, headers);
+          res.end(content);
+        });
+      }
+      if (method === "POST") {
+        if (!manager) throw httpError(403, "Only HR can change staff documents.");
+        if (m[2] === "delete") {
+          stafffiles.remove(f);
+          logEvent(req, session, "staff-file-deleted", { target: who, detail: f.title });
+        } else {
+          stafffiles.update(f, await readJsonBody(req));
+          logEvent(req, session, "staff-file-updated", { target: who, detail: f.title });
+        }
+        return sendJson(res, 200, { ok: true });
+      }
+    }
+  }
+
+  // ----- Service status -----
+  if (pathname.startsWith("/api/status")) {
+    const it = store.can(me, uptime.MANAGE);
+    if (method === "GET" && pathname === "/api/status") {
+      return sendJson(res, 200, { monitors: uptime.list(), canManage: it });
+    }
+    if (method === "POST" && (m = /^\/api\/status\/monitors(?:\/([a-f0-9]{16})(?:\/(delete|check))?)?$/.exec(pathname))) {
+      if (!it) throw httpError(403, "Only the IT team can change what's monitored.");
+      const mon = m[1] ? uptime.getMonitor(m[1]) : null;
+      if (m[1] && !mon) throw httpError(404, "Monitor not found.");
+      if (m[2] === "check") {
+        await uptime.check(mon);
+        return sendJson(res, 200, { monitor: uptime.view(mon) });
+      }
+      if (m[2] === "delete") {
+        uptime.deleteMonitor(mon);
+        logEvent(req, session, "monitor-deleted", { target: mon.name });
+        return sendJson(res, 200, { ok: true });
+      }
+      const saved = uptime.saveMonitor(await readJsonBody(req), mon);
+      logEvent(req, session, mon ? "monitor-updated" : "monitor-added", { target: saved.name, detail: saved.url });
+      if (!mon) await uptime.check(saved);
+      return sendJson(res, 200, { monitor: uptime.view(saved) });
     }
   }
 
@@ -1224,7 +1385,8 @@ async function routeApi(req, res, pathname, session) {
         whosOff: leave.team(me, t, rotas.addDays(t, 60)),
         canManage: leaveManager,
         isApprover: leaveManager || store.employees().some((p) => store.supervises(me, p)),
-        people: leaveManager ? store.employees().map((p) => ({ id: p.id, displayName: p.displayName, jobTitle: p.jobTitle, avatarUrl: store.publicView(p).avatarUrl, summary: leave.summary(p.id, year) })) : [],
+        people: leaveManager ? store.employees().map((p) => ({ id: p.id, displayName: p.displayName, jobTitle: p.jobTitle, avatarUrl: store.publicView(p).avatarUrl, summary: leave.summary(p.id, year), absence: leave.absenceStats(p.id) })) : [],
+        returnToWork: leave.pendingReturnToWork(me),
         allowances: leaveManager ? leave.allowances() : null,
       });
     }
@@ -1248,6 +1410,13 @@ async function routeApi(req, res, pathname, session) {
       });
       return sendJson(res, 201, { ok: true, user: meResponse(session) });
     }
+    if (method === "POST" && (m = /^\/api\/leave\/([a-f0-9]{16})\/return-to-work$/.exec(pathname))) {
+      const r = leave.getRequest(m[1]);
+      if (!r) throw httpError(404, "Absence not found.");
+      leave.completeReturnToWork(r, await readJsonBody(req), me);
+      logEvent(req, session, "return-to-work-completed", { target: (store.getPerson(r.personId) || {}).displayName, detail: `Absence ${r.startDate}${r.endDate !== r.startDate ? " to " + r.endDate : ""}` });
+      return sendJson(res, 200, { ok: true, user: meResponse(session) });
+    }
     if (method === "POST" && (m = /^\/api\/leave\/([a-f0-9]{16})\/(approve|decline|cancel)$/.exec(pathname))) {
       const r = leave.getRequest(m[1]);
       if (!r) throw httpError(404, "Request not found.");
@@ -1267,6 +1436,11 @@ async function routeApi(req, res, pathname, session) {
       if (!leaveManager) throw httpError(403, "You don't have permission to change allowances.");
       const body = await readJsonBody(req);
       if ("defaultAllowance" in body) leave.setDefaultAllowance(body.defaultAllowance);
+      if ("maxCarryOver" in body) {
+        leave.setMaxCarryOver(body.maxCarryOver);
+        logEvent(req, session, "leave-allowance-changed", { detail: `Carry-over limit ${body.maxCarryOver} days` });
+        return sendJson(res, 200, { ok: true });
+      }
       if (body.personId) {
         const p = store.getPerson(body.personId);
         if (!p) throw httpError(404, "Person not found.");
