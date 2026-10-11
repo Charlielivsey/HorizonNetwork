@@ -24,7 +24,7 @@ Internal staff portal for the whole of HN Group, served at **https://staff.hngro
 - **Rotas & Timesheets** (HR → Rotas & Timesheets).
   - A weekly rota everyone can see. People with *Manage rotas & timesheets* add, edit and delete shifts, and can copy last week's rota.
   - Staff fill in a weekly timesheet, prefilled from their shifts, and submit it. Their supervisor or a rota manager approves it or sends it back with a note.
-- **Payslips** (HR → Payslips). Staff see their own issued payslips, with how their pay adds up and year-to-date totals, and can print them or save them as a PDF.
+- **Payslips** (HR → Payslips). Staff see their own issued payslips, with how their pay adds up, year-to-date totals, and an *Employer deductions* section (employer NI and pension paid on top of their pay, and the total cost of their pay), and can print them or save them as a PDF.
 - **Run payroll** (HR → Run payroll). Only for people with *Run payroll*, which by default only the **Human Resources** role has.
   - Every payslip is paid by **HN Group Limited**. Everyone's standard pay is **£10 a month**, with a **5% employee and 10% employer pension**, until HR changes it in their pay details. Pay can be a monthly salary or an hourly rate; hourly staff are paid for the hours on their approved timesheets.
   - Pay details also hold the tax code, NI number and category, pension percentages, student loan plan, and any pay and tax earlier in the tax year from a P45 or an older payroll.
@@ -32,7 +32,7 @@ Internal staff portal for the whole of HN Group, served at **https://staff.hngro
   - **Run payroll** makes a payslip for everyone selected and takes the cost (pay plus employer NI and pension) out of the payroll fund. Changing a payslip adjusts the charge and deleting one refunds it. Payslips are drafts until issued; staff only see issued ones. A **single payslip** for someone who already has one that month needs the "additional payslip" override; it's marked *Additional*, and its tax takes the first one into account.
 - **Company funds** (HR → Company funds). Only for people with *Run payroll*.
   - The **main balance**: add money when it reaches the company PayPal (or a bank transfer, or manually), with a reference, or remove money with a reason.
-  - The **payroll fund**: separate, and only topped up by moving money from the main balance. Running payroll takes the cost from the payroll fund first. Anything it can't cover is taken from the **main balance**, which can go negative (the payroll fund stops at £0).
+  - The **payroll fund**: separate. Money only moves between it and the main balance ("Move from main balance" and "Move to main balance"). Running payroll takes the cost from the payroll fund first. Anything it can't cover is taken from the **main balance**, which can go negative (the payroll fund stops at £0).
   - While either balance is negative, **payroll can't be run** and a warning says the next payroll cannot be met (on the funds and payroll pages, and on HR's home page). Warnings also show when the payroll fund won't cover the next payroll (the rest will come from the main balance), or when there isn't enough money in total.
   - Every movement is listed with who made it and the balance afterwards.
 - **IT Helpdesk** (Support → IT Helpdesk). Anyone can raise a ticket with a category and urgency and follow the conversation. People with *Handle IT tickets* (the **IT Support** role) see every ticket, reply, add internal notes, assign tickets and change their status.

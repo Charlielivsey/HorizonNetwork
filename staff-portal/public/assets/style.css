@@ -2975,3 +2975,7 @@ input[type="date"], input[type="time"], input[type="month"], input[type="datetim
 .pe-override { display: flex; gap: 0.6rem; align-items: flex-start; margin-top: 0.9rem; padding: 0.75rem 0.9rem; border-radius: 12px; background: var(--warn-bg); border: 1px solid var(--warn-border); color: var(--warn-text); }
 .pe-override > .icon { width: 18px; height: 18px; flex-shrink: 0; margin-top: 2px; }
 .pe-override .inline-check { margin-top: 0.35rem; color: var(--text); font-weight: 500; }
+.ps-employer-ded { padding: 1.2rem 1.8rem 0; }
+.ps-employer-ded h4 small { font-size: 0.7rem; font-weight: 500; letter-spacing: 0; text-transform: none; margin-left: 0.35rem; }
+.ps-cost { border-bottom: 0; padding-top: 0.2rem; color: var(--ps-muted); font-size: 0.82rem; }
+@media (max-width: 760px) { .ps-employer-ded { padding-left: 1.1rem; padding-right: 1.1rem; } .ps-employer-ded h4 small { display: block; margin: 0.2rem 0 0; } }

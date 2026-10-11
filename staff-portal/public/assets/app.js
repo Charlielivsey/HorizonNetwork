@@ -4150,8 +4150,10 @@
             '<div class="ps-ytd-net"><span>Take-home pay</span><strong>' + fmtMoney(p.ytd.net) + "</strong></div>" +
             "</div></section>" +
 
-            (p.employerItems.some(function (l) { return l.amount; }) ? '<section class="ps-employer-extra">' + icon("heart") + "<div><strong>On top of your pay</strong>, " + esc(p.employer) + " also paid " +
-                p.employerItems.filter(function (l) { return l.amount; }).map(function (l) { return esc(l.label.replace(/^Employer /, "").toLowerCase()) + " of " + fmtMoney(l.amount); }).join(" and ") + ".</div></section>" : "") +
+            '<section class="ps-employer-ded"><div class="ps-col"><h4>' + icon("building") + "Employer deductions <small>paid by " + esc(p.employer) + " on top of your pay \u2013 not taken from it</small></h4>" +
+            lines(p.employerItems, "None") +
+            '<div class="ps-line ps-total"><span>Total employer deductions</span><span class="ps-amt">' + fmtMoney(t.employer) + "</span></div>" +
+            '<div class="ps-line ps-cost"><span>Total cost of your pay to ' + esc(p.employer) + '</span><span class="ps-amt">' + fmtMoney(t.cost) + "</span></div></div></section>" +
             (p.note ? '<section class="ps-note">' + icon("message") + "<div>" + richText(p.note) + "</div></section>" : "") +
             '<footer class="ps-foot"><span>' + esc(p.employer) + "</span><span>Private and confidential</span><span>Ref " + esc(p.id.slice(0, 8).toUpperCase()) + "</span></footer>" +
             "</article>";
@@ -4227,8 +4229,9 @@
             '<div class="fund-arrow" aria-hidden="true">' + icon("chevronRight") + "</div>" +
             '<section class="fund-card fund-payroll' + (f.balances.payroll < 0 ? " overdrawn" : "") + '"><div class="fc-head"><span class="fc-icon">' + icon("wallet") + '</span><span>Payroll fund</span></div>' +
             '<div class="fc-value">' + fmtMoney(f.balances.payroll) + "</div>" +
-            '<p class="fc-sub">Pays wages first; anything it can\u2019t cover is taken from the main balance. Topped up only from the main balance. Next payroll needs about <strong>' + fmtMoney(f.nextPayroll) + "</strong>.</p>" +
-            (actions ? '<div class="btn-row"><button type="button" class="btn btn-primary btn-small" data-fund="transfer">' + icon("refresh") + "Move from main balance</button></div>" : "") + "</section>" +
+            '<p class="fc-sub">Pays wages first; anything it can\u2019t cover is taken from the main balance. Money moves between it and the main balance only. Next payroll needs about <strong>' + fmtMoney(f.nextPayroll) + "</strong>.</p>" +
+            (actions ? '<div class="btn-row"><button type="button" class="btn btn-primary btn-small" data-fund="transfer">' + icon("refresh") + "Move from main balance</button>" +
+                '<button type="button" class="btn btn-ghost btn-small" data-fund="return"' + (f.balances.payroll > 0 ? "" : " disabled") + ">" + icon("chevronLeft") + "Move to main balance</button></div>" : "") + "</section>" +
             "</div>";
     }
 
@@ -4236,6 +4239,7 @@
         deposit: ["Money in", "in"], withdrawal: ["Removed", "out"], "transfer-out": ["To payroll fund", "out"],
         "transfer-in": ["From main balance", "in"], payroll: ["Payroll", "out"], "payroll-refund": ["Payroll refund", "in"],
         "payroll-shortfall": ["Payroll (the payroll fund ran out)", "out"],
+        "payroll-to-main": ["To main balance", "out"], "main-from-payroll": ["From payroll fund", "in"],
     };
 
     async function viewFunds(root, current) {
@@ -4275,14 +4279,18 @@
     }
 
     function openFundsForm(kind, d) {
-        const titles = { add: "Add funds", remove: "Remove funds", transfer: "Move money to the payroll fund" };
+        const titles = { add: "Add funds", remove: "Remove funds", transfer: "Move money to the payroll fund", return: "Move money back to the main balance" };
         const m = openModal(
             '<h2 class="modal-title">' + titles[kind] + "</h2>" +
             '<p class="muted">' + (kind === "add" ? "Record money that has reached the company, such as a PayPal payment." :
                 kind === "remove" ? "Take money out of the main balance. Main balance: <strong>" + fmtMoney(d.balances.main) + "</strong>." :
+                kind === "return" ? "Move money the payroll fund doesn\u2019t need back to the main balance. Payroll fund: <strong>" + fmtMoney(d.balances.payroll) + "</strong>." :
                 "The payroll fund can only be topped up from the main balance. Main balance: <strong>" + fmtMoney(d.balances.main) + "</strong>.") + "</p>" +
             '<form id="fd-form" novalidate>' +
             '<label for="fd-amount">Amount</label><div class="money-input"><span>£</span><input type="text" id="fd-amount" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>' +
+            (kind === "return" && d.balances.payroll > 0 ? '<div class="fd-quick"><span class="muted small">Quick amounts:</span>' +
+                '<button type="button" class="chip" data-quick="' + d.balances.payroll.toFixed(2) + '">Everything (' + fmtMoney(d.balances.payroll) + ")</button>" +
+                (d.balances.payroll > d.nextPayroll ? '<button type="button" class="chip" data-quick="' + (d.balances.payroll - d.nextPayroll).toFixed(2) + '">Keep enough for next payroll (' + fmtMoney(d.balances.payroll - d.nextPayroll) + ")</button>" : "") + "</div>" : "") +
             (kind === "transfer" && d.nextPayroll > 0 ? '<div class="fd-quick"><span class="muted small">Quick amounts:</span>' +
                 '<button type="button" class="chip" data-quick="' + d.nextPayroll.toFixed(2) + '">Next payroll (' + fmtMoney(d.nextPayroll) + ")</button>" +
                 (d.balances.payroll < 0 ? '<button type="button" class="chip" data-quick="' + (d.nextPayroll - d.balances.payroll).toFixed(2) + '">Cover the overdraft and next payroll (' + fmtMoney(d.nextPayroll - d.balances.payroll) + ")</button>" : "") + "</div>" : "") +
@@ -4291,7 +4299,7 @@
             }).join("") + '</select></div><div><label for="fd-ref">Reference <span class="muted small">(optional)</span></label><input type="text" id="fd-ref" maxlength="80" placeholder="e.g. PayPal transaction ID"></div></div>' : "") +
             '<label for="fd-note">' + (kind === "remove" ? "Reason" : 'Note <span class="muted small">(optional)</span>') + '</label><input type="text" id="fd-note" maxlength="200">' +
             '<div class="form-error" id="fd-error" hidden></div>' +
-            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn ' + (kind === "remove" ? "btn-danger" : "btn-primary") + '">' + titles[kind] + "</button></div></form>"
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn ' + (kind === "remove" ? "btn-danger" : "btn-primary") + '">' + ({ add: "Add funds", remove: "Remove funds", transfer: "Move money", return: "Move money" })[kind] + "</button></div></form>"
         );
         $("#fd-amount", m.el).focus();
         m.el.addEventListener("click", function (e) {
@@ -4310,7 +4318,7 @@
                 state.me = r.user;
                 renderChrome();
                 closeModal();
-                toast({ add: "Funds added.", remove: "Funds removed.", transfer: "Moved to the payroll fund." }[kind]);
+                toast({ add: "Funds added.", remove: "Funds removed.", transfer: "Moved to the payroll fund.", return: "Moved back to the main balance." }[kind]);
                 render();
             } catch (err) { formError($("#fd-error", m.el), err.message); }
         });
@@ -5258,6 +5266,7 @@
         "funds-added": ["added funds to the main balance", "payroll"],
         "funds-removed": ["removed funds from the main balance", "payroll"],
         "funds-transferred": ["moved money to the payroll fund", "payroll"],
+        "funds-returned": ["moved money back to the main balance", "payroll"],
         "ticket-raised": ["raised IT ticket", "helpdesk"],
         "ticket-replied": ["replied to IT ticket", "helpdesk"],
         "ticket-note-added": ["added an internal note to IT ticket", "helpdesk"],

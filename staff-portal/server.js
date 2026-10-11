@@ -1361,10 +1361,11 @@ async function routeApi(req, res, pathname, session) {
     if (method === "GET" && pathname === "/api/funds") {
       return sendJson(res, 200, { ...fundsSummary(), transactions: funds.history(300), sources: funds.SOURCES });
     }
-    if (method === "POST" && (m = /^\/api\/funds\/(add|remove|transfer)$/.exec(pathname))) {
+    if (method === "POST" && (m = /^\/api\/funds\/(add|remove|transfer|return)$/.exec(pathname))) {
       const body = await readJsonBody(req);
-      const t = m[1] === "add" ? funds.addFunds(body, me) : m[1] === "remove" ? funds.removeFunds(body, me) : funds.transferToPayroll(body, me);
-      const action = { add: "funds-added", remove: "funds-removed", transfer: "funds-transferred" }[m[1]];
+      const t = m[1] === "add" ? funds.addFunds(body, me) : m[1] === "remove" ? funds.removeFunds(body, me)
+        : m[1] === "return" ? funds.transferToMain(body, me) : funds.transferToPayroll(body, me);
+      const action = { add: "funds-added", remove: "funds-removed", transfer: "funds-transferred", return: "funds-returned" }[m[1]];
       logEvent(req, session, action, { detail: `${funds.fmt(Math.round(Math.abs(t.amount) * 100))}${m[1] === "add" ? " via " + funds.SOURCES[t.source] : ""}${t.reference ? " (ref " + t.reference + ")" : ""}${t.description ? " – " + t.description : ""}` });
       return sendJson(res, 200, { ...fundsSummary(), transactions: funds.history(300), user: meResponse(session) });
     }

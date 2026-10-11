@@ -86,6 +86,17 @@ function transferToPayroll(input, by) {
   return t;
 }
 
+// Payroll fund → main balance, for money that isn't needed for wages.
+function transferToMain(input, by) {
+  const amount = validAmount(input.amount);
+  if (amount > db.data.balances.payroll) throw new store.ValidationError(`There's only ${fmt(Math.max(0, db.data.balances.payroll))} in the payroll fund.`);
+  const note = String(input.note || "").trim();
+  record("payroll", -amount, { type: "payroll-to-main", description: note || "Moved back to the main balance" }, by);
+  const t = record("main", amount, { type: "main-from-payroll", description: note || "Moved back from the payroll fund" }, by);
+  db.save();
+  return t;
+}
+
 // Payroll costs. The payroll fund pays what it can (down to £0); any shortfall is taken from the
 // main balance, which is allowed to go negative. A negative cost (a payslip deleted or reduced)
 // goes back into the payroll fund.
@@ -121,4 +132,4 @@ function history(limit) {
   });
 }
 
-module.exports = { ACCOUNTS, SOURCES, init, balances, addFunds, removeFunds, transferToPayroll, chargePayroll, history, pence, fmt };
+module.exports = { ACCOUNTS, SOURCES, init, balances, addFunds, removeFunds, transferToPayroll, transferToMain, chargePayroll, history, pence, fmt };
