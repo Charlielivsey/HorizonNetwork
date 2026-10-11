@@ -485,7 +485,10 @@ function meResponse(session) {
   user.timesheetApprovals = rotas.pendingApprovalCount(session.person);
   user.helpdeskBadge = helpdesk.badgeCount(session.person);
   user.onLeaveToday = leave.isOffToday(session.person.id);
-  if (store.can(session.person, payslips.MANAGE)) user.payrollOverdrawn = funds.balances().payroll < 0;
+  if (store.can(session.person, payslips.MANAGE)) {
+    const b = funds.balances();
+    user.payrollOverdrawn = b.payroll < 0 || b.main < 0;
+  }
   if (session.data.impersonatorId) {
     const by = store.getPerson(session.data.impersonatorId);
     user.impersonatedBy = by ? by.displayName : "System owner";
@@ -1423,16 +1426,17 @@ async function routeApi(req, res, pathname, session) {
       }
       // One payment out of the payroll fund for the whole run.
       const cost = made.reduce((n, s) => n + s.charged, 0);
+      let paid = { fromPayroll: 0, fromMain: 0 };
       if (made.length) {
-        funds.chargePayroll(cost, `Payroll – ${payslips.periodLabel(period)}, ${made.length} payslip${made.length === 1 ? "" : "s"}`, me);
+        paid = funds.chargePayroll(cost, `Payroll – ${payslips.periodLabel(period)}, ${made.length} payslip${made.length === 1 ? "" : "s"}`, me) || paid;
         logEvent(req, session, "payroll-drafted", { detail: `${payslips.periodLabel(period)}: ${made.length} payslip${made.length === 1 ? "" : "s"}, ${funds.fmt(cost)} from the payroll fund` });
       }
-      return sendJson(res, 200, { made: made.length, skipped, cost: cost / 100, funds: fundsSummary() });
+      return sendJson(res, 200, { made: made.length, skipped, cost: cost / 100, fromPayroll: paid.fromPayroll, fromMain: paid.fromMain, funds: fundsSummary() });
     }
     if (method === "POST" && pathname === "/api/payroll/payslips") {
       const body = await readJsonBody(req);
       const slip = payslips.createDraft(body.personId, body, me);
-      logEvent(req, session, "payroll-drafted", { target: (store.getPerson(slip.personId) || {}).displayName, detail: payslips.periodLabel(slip.period) });
+      logEvent(req, session, "payroll-drafted", { target: (store.getPerson(slip.personId) || {}).displayName, detail: payslips.periodLabel(slip.period) + (slip.additional ? " (additional payslip)" : "") });
       return sendJson(res, 201, { payslip: payslips.fullView(slip) });
     }
     if ((m = /^\/api\/payroll\/payslips\/([a-f0-9]{16})(?:\/(issue|withdraw|delete))?$/.exec(pathname))) {
@@ -1559,14 +1563,25 @@ async function routeApi(req, res, pathname, session) {
   sendJson(res, 404, { error: "Not found." });
 }
 
-// Balances, the cost of the next payroll, and any warning about the payroll fund.
+// Balances, the cost of the next payroll, and any warning. Payroll takes from the payroll fund
+// first and the main balance for anything it can't cover, so both count towards the next payroll.
 function fundsSummary() {
   const b = funds.balances();
   const nextPayroll = payslips.forecastMonthlyCost();
+  const money = (n) => funds.fmt(Math.round(n * 100));
   let warning = null;
-  if (b.payroll < 0) warning = { level: "danger", message: `The payroll fund is overdrawn by ${funds.fmt(-Math.round(b.payroll * 100))}. The next payroll cannot be met until money is moved in from the main balance.` };
-  else if (b.payroll < nextPayroll) warning = { level: "warn", message: `The payroll fund has ${funds.fmt(Math.round(b.payroll * 100))}, but the next payroll needs about ${funds.fmt(Math.round(nextPayroll * 100))}.` };
-  return { balances: b, nextPayroll, warning };
+  if (b.main < 0 || b.payroll < 0) {
+    const parts = [];
+    if (b.main < 0) parts.push(`the main balance is overdrawn by ${money(-b.main)}`);
+    if (b.payroll < 0) parts.push(`the payroll fund is overdrawn by ${money(-b.payroll)}`);
+    const text = parts.join(" and ");
+    warning = { level: "danger", message: `${text.charAt(0).toUpperCase() + text.slice(1)}. The next payroll cannot be met until funds are added.` };
+  } else if (b.payroll + b.main < nextPayroll) {
+    warning = { level: "danger", message: `The next payroll needs about ${money(nextPayroll)}, but there's only ${money(b.payroll + b.main)} across the payroll fund and main balance. It will leave the main balance overdrawn.` };
+  } else if (b.payroll < nextPayroll) {
+    warning = { level: "warn", message: `The payroll fund has ${money(b.payroll)} and the next payroll needs about ${money(nextPayroll)}. The other ${money(nextPayroll - b.payroll)} will be taken from the main balance.` };
+  }
+  return { balances: b, nextPayroll, warning, overdrawn: b.main < 0 || b.payroll < 0 };
 }
 
 // ---------- Routing ----------

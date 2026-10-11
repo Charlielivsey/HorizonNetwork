@@ -664,7 +664,7 @@
             (me.pendingAcks ? '<a class="hero-chip warn" href="#home-todo">' + icon("check") + me.pendingAcks + (me.pendingAcks === 1 ? " thing" : " things") + " to acknowledge</a>" : "") +
             (me.openPolls ? '<a class="hero-chip" href="/polls" data-link>' + icon("chart") + me.openPolls + (me.openPolls === 1 ? " poll" : " polls") + " to answer</a>" : "") +
             (me.onboardingTasks ? '<a class="hero-chip" href="#home-onboarding">' + icon("check") + me.onboardingTasks + " onboarding task" + (me.onboardingTasks === 1 ? "" : "s") + "</a>" : "") +
-            (me.payrollOverdrawn ? '<a class="hero-chip danger" href="/funds" data-link>' + icon("alert") + "Payroll fund overdrawn \u2013 next payroll can\u2019t be met</a>" : "") +
+            (me.payrollOverdrawn ? '<a class="hero-chip danger" href="/funds" data-link>' + icon("alert") + "Company funds overdrawn \u2013 next payroll can\u2019t be met</a>" : "") +
             (me.leaveApprovals ? '<a class="hero-chip" href="/leave" data-link>' + icon("sun") + me.leaveApprovals + " leave request" + (me.leaveApprovals === 1 ? "" : "s") + " to approve</a>" : "") +
             (me.timesheetApprovals ? '<a class="hero-chip" href="/rotas" data-link data-rota-approvals>' + icon("clock") + me.timesheetApprovals + " timesheet" + (me.timesheetApprovals === 1 ? "" : "s") + " to approve</a>" : "") +
             (me.helpdeskBadge ? '<a class="hero-chip" href="/helpdesk" data-link>' + icon("lifebuoy") + me.helpdeskBadge + " IT ticket" + (me.helpdeskBadge === 1 ? "" : "s") + " need" + (me.helpdeskBadge === 1 ? "s" : "") + " attention</a>" : "") +
@@ -4108,7 +4108,7 @@
         return '<article class="payslip">' +
             '<header class="ps-band">' +
             '<div class="ps-brand"><img src="/assets/brand/svg/hn-group-wordmark-white.svg" alt="HN Group"></div>' +
-            '<div class="ps-title"><span class="ps-kicker">Payslip</span><span class="ps-period">' + esc(p.periodLabel) + "</span></div>" +
+            '<div class="ps-title"><span class="ps-kicker">' + (p.additional ? "Additional payslip" : "Payslip") + "</span>" + '<span class="ps-period">' + esc(p.periodLabel) + "</span></div>" +
             "</header>" +
             '<div class="ps-stripe" aria-hidden="true"></div>' +
 
@@ -4196,7 +4196,7 @@
                 '<button type="button" class="btn btn-light" data-slip="' + latest.id + '">' + icon("eye") + "Open payslip</button></div></section>" : "") +
             (d.payslips.length ? '<div class="slip-list">' + d.payslips.map(function (s) {
                 return '<button type="button" class="slip-row" data-slip="' + s.id + '"><span class="slip-icon">' + icon("card") + "</span>" +
-                    '<span class="slip-main"><strong>' + esc(s.periodLabel) + '</strong><span class="muted small">Paid ' + esc(fmtDate(s.payDate + "T12:00:00")) + " · " + esc(s.employer) + "</span></span>" +
+                    '<span class="slip-main"><strong>' + esc(s.periodLabel) + (s.additional ? ' <span class="badge badge-soft">Additional</span>' : "") + '</strong><span class="muted small">Paid ' + esc(fmtDate(s.payDate + "T12:00:00")) + " · " + esc(s.employer) + "</span></span>" +
                     '<span class="slip-gross"><small>Total pay</small>' + fmtMoney(s.gross) + '</span><span class="slip-net"><small>Take-home</small>' + fmtMoney(s.net) + "</span>" +
                     icon("chevronRight", "slip-chev") + "</button>";
             }).join("") + "</div>"
@@ -4212,14 +4212,14 @@
     function fundsWarningHtml(f) {
         if (!f.warning) return "";
         return '<div class="banner funds-warning ' + (f.warning.level === "danger" ? "is-danger" : "is-warn") + '">' + icon("alert") +
-            "<div><strong>" + (f.warning.level === "danger" ? "Next payroll cannot be met." : "Payroll fund is running low.") + "</strong> " + esc(f.warning.message) +
-            (f.warning.level === "danger" && window.location.pathname === "/payroll" ? " Running payroll is locked until then." : "") + "</div>" +
-            (window.location.pathname === "/funds" ? "" : '<a class="btn btn-small ' + (f.warning.level === "danger" ? "btn-danger" : "btn-ghost") + '" href="/funds" data-link>Move money in</a>') + "</div>";
+            "<div><strong>" + (f.overdrawn ? "Next payroll cannot be met." : f.warning.level === "danger" ? "Not enough money for the next payroll." : "Payroll fund is short.") + "</strong> " + esc(f.warning.message) +
+            (f.overdrawn && window.location.pathname === "/payroll" ? " Running payroll is locked until then." : "") + "</div>" +
+            (window.location.pathname === "/funds" ? "" : '<a class="btn btn-small ' + (f.warning.level === "danger" ? "btn-danger" : "btn-ghost") + '" href="/funds" data-link>Add funds</a>') + "</div>";
     }
 
     function fundCardsHtml(f, actions) {
         return '<div class="fund-cards">' +
-            '<section class="fund-card fund-main"><div class="fc-head"><span class="fc-icon">' + icon("pound") + '</span><span>Main balance</span></div>' +
+            '<section class="fund-card fund-main' + (f.balances.main < 0 ? " overdrawn" : "") + '"><div class="fc-head"><span class="fc-icon">' + icon("pound") + '</span><span>Main balance</span></div>' +
             '<div class="fc-value">' + fmtMoney(f.balances.main) + "</div>" +
             '<p class="fc-sub">Money the company holds. Add PayPal and bank payments here.</p>' +
             (actions ? '<div class="btn-row"><button type="button" class="btn btn-primary btn-small" data-fund="add">' + icon("plus") + "Add funds</button>" +
@@ -4227,7 +4227,7 @@
             '<div class="fund-arrow" aria-hidden="true">' + icon("chevronRight") + "</div>" +
             '<section class="fund-card fund-payroll' + (f.balances.payroll < 0 ? " overdrawn" : "") + '"><div class="fc-head"><span class="fc-icon">' + icon("wallet") + '</span><span>Payroll fund</span></div>' +
             '<div class="fc-value">' + fmtMoney(f.balances.payroll) + "</div>" +
-            '<p class="fc-sub">Pays wages. Topped up only from the main balance. Next payroll needs about <strong>' + fmtMoney(f.nextPayroll) + "</strong>.</p>" +
+            '<p class="fc-sub">Pays wages first; anything it can\u2019t cover is taken from the main balance. Topped up only from the main balance. Next payroll needs about <strong>' + fmtMoney(f.nextPayroll) + "</strong>.</p>" +
             (actions ? '<div class="btn-row"><button type="button" class="btn btn-primary btn-small" data-fund="transfer">' + icon("refresh") + "Move from main balance</button></div>" : "") + "</section>" +
             "</div>";
     }
@@ -4235,6 +4235,7 @@
     const FUND_TYPES = {
         deposit: ["Money in", "in"], withdrawal: ["Removed", "out"], "transfer-out": ["To payroll fund", "out"],
         "transfer-in": ["From main balance", "in"], payroll: ["Payroll", "out"], "payroll-refund": ["Payroll refund", "in"],
+        "payroll-shortfall": ["Payroll (the payroll fund ran out)", "out"],
     };
 
     async function viewFunds(root, current) {
@@ -4343,7 +4344,7 @@
         const sumOf = function (list, k) { return list.reduce(function (n, s) { return n + s[k]; }, 0); };
         const withSlip = {};
         d.payslips.forEach(function (s) { withSlip[s.personId] = true; });
-        const overdrawn = d.funds.balances.payroll < 0;
+        const overdrawn = d.funds.overdrawn;
 
         root.innerHTML =
             '<div class="page-head"><div><h1>Run payroll</h1><p class="muted">Payslips are paid by ' + esc(d.employer) + ". Tax and National Insurance are worked out automatically. Only Human Resources can see this page.</p></div>" +
@@ -4352,7 +4353,7 @@
             fundsWarningHtml(d.funds) +
             '<div class="payroll-funds"><div><span class="pf-label">Payroll fund</span><strong class="' + (d.funds.balances.payroll < 0 ? "danger-text" : "") + '">' + fmtMoney(d.funds.balances.payroll) + "</strong></div>" +
             '<div><span class="pf-label">Next payroll needs about</span><strong>' + fmtMoney(d.funds.nextPayroll) + "</strong></div>" +
-            '<div><span class="pf-label">Main balance</span><strong>' + fmtMoney(d.funds.balances.main) + "</strong></div>" +
+            '<div><span class="pf-label">Main balance</span><strong class="' + (d.funds.balances.main < 0 ? "danger-text" : "") + '">' + fmtMoney(d.funds.balances.main) + "</strong></div>" +
             '<a class="btn btn-ghost btn-small" href="/funds" data-link>' + icon("pound") + "Company funds</a></div>" +
             '<div class="week-nav"><button type="button" class="icon-btn" data-period="' + shiftMonth(period, -1) + '" aria-label="Previous month">' + icon("chevronLeft") + "</button>" +
             '<input type="month" id="pr-month" value="' + period + '" aria-label="Pay month">' +
@@ -4368,7 +4369,7 @@
             (drafts.length ? '<button type="button" class="btn btn-primary btn-small" id="pr-issue-all">' + icon("tick") + "Issue all " + drafts.length + " drafts</button>" : "") + "</div>" +
             (d.payslips.length ? '<div class="table-card flat"><table class="table"><thead><tr><th>Employee</th><th>Status</th><th class="num">Total pay</th><th class="num">Take-home</th><th class="num">Cost</th><th class="col-actions"></th></tr></thead><tbody>' +
                 d.payslips.map(function (s) {
-                    return '<tr data-slip="' + s.id + '"><td><div class="emp-cell">' + avatar(s.person, "sm") + '<div><div class="emp-name">' + esc(s.person.displayName) + '</div><div class="muted small">' + esc(s.person.jobTitle || "") + "</div></div></div></td>" +
+                    return '<tr data-slip="' + s.id + '"><td><div class="emp-cell">' + avatar(s.person, "sm") + '<div><div class="emp-name">' + esc(s.person.displayName) + (s.additional ? ' <span class="badge badge-soft">Additional</span>' : "") + '</div><div class="muted small">' + esc(s.person.jobTitle || "") + "</div></div></div></td>" +
                         '<td data-label="Status">' + statusBadge(s.status) + '</td><td data-label="Total pay" class="num">' + fmtMoney(s.gross) + '</td><td data-label="Take-home" class="num"><strong>' + fmtMoney(s.net) + "</strong></td>" +
                         '<td data-label="Cost" class="num muted">' + fmtMoney(s.cost) + "</td>" +
                         '<td class="col-actions nowrap"><button type="button" class="btn btn-ghost btn-small" data-pa="view" aria-label="View">' + icon("eye") + "</button>" +
@@ -4443,11 +4444,14 @@
             const ids = $$(".run-list input:checked", m.el).map(function (c) { return c.value; });
             const est = d.people.filter(function (p) { return ids.indexOf(p.id) !== -1 && p.payType === "salary"; })
                 .reduce(function (n, p) { return n + p.monthlySalary * (1 + (p.pensionEmployerPct || 0) / 100); }, 0);
-            const after = d.funds.balances.payroll - est;
-            $("#run-summary", m.el).innerHTML = ids.length ? '<div><span>Payroll fund now</span><strong>' + fmtMoney(d.funds.balances.payroll) + "</strong></div>" +
-                "<div><span>About to pay (pay and employer pension)</span><strong>−" + fmtMoney(est) + "</strong></div>" +
-                '<div class="' + (after < 0 ? "danger-text" : "") + '"><span>Left afterwards</span><strong>' + fmtMoney(after) + "</strong></div>" +
-                (after < 0 ? '<p class="run-warn">' + icon("alert") + "The payroll fund will go negative. Payroll can still run, but the next one cannot be met until money is moved in.</p>" : "") : "";
+            const fromPayroll = Math.min(est, Math.max(0, d.funds.balances.payroll));
+            const fromMain = est - fromPayroll;
+            const mainAfter = d.funds.balances.main - fromMain;
+            $("#run-summary", m.el).innerHTML = ids.length ? "<div><span>About to pay (pay and employer pension)</span><strong>" + fmtMoney(est) + "</strong></div>" +
+                "<div><span>From the payroll fund (" + fmtMoney(d.funds.balances.payroll) + ")</span><strong>\u2212" + fmtMoney(fromPayroll) + "</strong></div>" +
+                (fromMain > 0.004 ? "<div><span>From the main balance (" + fmtMoney(d.funds.balances.main) + ")</span><strong>\u2212" + fmtMoney(fromMain) + "</strong></div>" +
+                    '<div class="' + (mainAfter < 0 ? "danger-text" : "") + '"><span>Main balance afterwards</span><strong>' + fmtMoney(mainAfter) + "</strong></div>" : "") +
+                (mainAfter < 0 ? '<p class="run-warn">' + icon("alert") + "There isn\u2019t enough money, so the main balance will go negative. Payroll can still run, but the next one is locked until funds are added.</p>" : "") : "";
         }
         m.el.addEventListener("change", function (e) {
             const row = e.target.closest(".member-row");
@@ -4466,7 +4470,8 @@
             try {
                 const r = await api("/api/payroll/run", { period: period, payDate: $("#run-date", m.el).value, personIds: ids });
                 closeModal();
-                toast(r.made + (r.made === 1 ? " payslip made" : " payslips made") + ", " + fmtMoney(r.cost) + " taken from the payroll fund." + (r.skipped.length ? " " + r.skipped.length + " skipped." : ""));
+                toast(r.made + (r.made === 1 ? " payslip made: " : " payslips made: ") + fmtMoney(r.fromPayroll) + " from the payroll fund" +
+                    (r.fromMain ? " and " + fmtMoney(r.fromMain) + " from the main balance" : "") + "." + (r.skipped.length ? " " + r.skipped.length + " skipped." : ""));
                 render();
             } catch (err) { formError($("#run-error", m.el), err.message); }
         });
@@ -4536,9 +4541,11 @@
             '<h2 class="modal-title">' + (slip ? "Edit payslip · " + esc(slip.employeeName) + " · " + esc(slip.periodLabel) : "New payslip · " + esc(d.periodLabel)) + "</h2>" +
             '<form id="pe-form" novalidate>' +
             (slip ? "" : '<label for="pe-person">Employee</label><select id="pe-person"><option value="">Choose someone</option>' + d.people.map(function (p) {
-                return '<option value="' + p.id + '">' + esc(p.displayName) + " — " + payLabel(p) + "</option>";
+                return '<option value="' + p.id + '">' + esc(p.displayName) + " — " + payLabel(p) + (d.payslips.some(function (x) { return x.personId === p.id; }) ? " (already has one)" : "") + "</option>";
             }).join("") + "</select>") +
             '<div class="grid-2"><div><label for="pe-date">Pay date</label><input type="date" id="pe-date" value="' + esc(v.payDate) + '"></div><div></div></div>' +
+            (slip ? "" : '<div class="pe-override" id="pe-override" hidden>' + icon("alert") + '<div><strong>This person already has a payslip for ' + esc(d.periodLabel) + ".</strong>" +
+                '<label class="inline-check"><input type="checkbox" id="pe-override-box"> Make an additional payslip anyway (for example a bonus or a correction)</label></div></div>') +
             '<div id="pe-lines"></div>' +
             '<div class="pe-totals" id="pe-totals"></div>' +
             '<label for="pe-note">Message on the payslip <span class="muted small">(optional)</span></label><textarea id="pe-note" rows="2" maxlength="500">' + esc(v.note || "") + "</textarea>" +
@@ -4621,7 +4628,10 @@
             }
         });
         $("#pe-date", m.el).addEventListener("change", scheduleRecalc);
+        const hasSlip = function (id) { return d.payslips.some(function (x) { return x.personId === id; }); };
         if ($("#pe-person", m.el)) $("#pe-person", m.el).addEventListener("change", async function () {
+            $("#pe-override", m.el).hidden = !hasSlip(personId());
+            $("#pe-override-box", m.el).checked = false;
             if (!personId()) return;
             try {
                 const est = await api("/api/payroll/estimate", { personId: personId(), period: period, payDate: $("#pe-date", m.el).value });
@@ -4646,6 +4656,10 @@
                     body.personId = personId();
                     body.period = period;
                     if (!body.personId) return formError($("#pe-error", m.el), "Choose an employee.");
+                    if (hasSlip(body.personId) && !$("#pe-override-box", m.el).checked) {
+                        return formError($("#pe-error", m.el), "They already have a payslip this month. Tick \u201cMake an additional payslip anyway\u201d to make another one.");
+                    }
+                    body.override = hasSlip(body.personId);
                     saved = (await api("/api/payroll/payslips", body)).payslip;
                 }
                 if (issue) await api("/api/payroll/payslips/" + saved.id + "/issue", {});

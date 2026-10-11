@@ -86,13 +86,27 @@ function transferToPayroll(input, by) {
   return t;
 }
 
-// Payroll costs. Positive `costPence` takes money out of the payroll fund; negative puts it back
-// (a payslip deleted or reduced). The fund may go below zero.
+// Payroll costs. The payroll fund pays what it can (down to £0); any shortfall is taken from the
+// main balance, which is allowed to go negative. A negative cost (a payslip deleted or reduced)
+// goes back into the payroll fund.
 function chargePayroll(costPence, description, by) {
   if (!costPence) return null;
-  const t = record("payroll", -costPence, { type: costPence > 0 ? "payroll" : "payroll-refund", description }, by);
+  if (costPence < 0) {
+    const t = record("payroll", -costPence, { type: "payroll-refund", description }, by);
+    db.save();
+    return t;
+  }
+  const fromPayroll = Math.min(costPence, Math.max(0, db.data.balances.payroll));
+  const shortfall = costPence - fromPayroll;
+  if (fromPayroll) record("payroll", -fromPayroll, { type: "payroll", description }, by);
+  if (shortfall) {
+    record("main", -shortfall, {
+      type: "payroll-shortfall",
+      description: `${description} – ${fmt(shortfall)} the payroll fund couldn't cover`,
+    }, by);
+  }
   db.save();
-  return t;
+  return { fromPayroll: pounds(fromPayroll), fromMain: pounds(shortfall) };
 }
 
 function fmt(p) {

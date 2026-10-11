@@ -60,11 +60,14 @@ function init(dataDir) {
   }
 }
 
-// Payroll can't run while the payroll fund is overdrawn.
+// Payroll can't run while company money is overdrawn (after a payroll the payroll fund couldn't
+// fully cover, the main balance can be below zero).
 function assertCanRun() {
-  const b = funds.balances().payroll;
-  if (b < 0) {
-    throw new store.ValidationError(`The payroll fund is overdrawn by ${funds.fmt(Math.round(-b * 100))}, so payroll can't run. Move money in from the main balance first.`);
+  const b = funds.balances();
+  if (b.main < 0 || b.payroll < 0) {
+    const which = b.main < 0 ? "main balance" : "payroll fund";
+    const amount = b.main < 0 ? b.main : b.payroll;
+    throw new store.ValidationError(`The ${which} is overdrawn by ${funds.fmt(Math.round(-amount * 100))}, so payroll can't run. Add funds first.`);
   }
 }
 
@@ -225,9 +228,14 @@ function taxablePayOf(slip) {
 }
 
 // Earlier payslips in the same tax year (any status), for cumulative tax.
+// Earlier payslips are those paid on an earlier date, or on the same date but made before this one
+// (an additional payslip in the same month counts the first one).
 function previousInYear(personId, payDate, excludeId) {
   const from = taxYearStart(payDate);
-  const list = db.data.payslips.filter((s) => s.personId === personId && s.id !== excludeId && s.payDate >= from && s.payDate < payDate);
+  const self = excludeId ? db.data.payslips.find((s) => s.id === excludeId) : null;
+  const createdAt = self ? self.createdAt : null;
+  const earlierThis = (s) => s.payDate < payDate || (s.payDate === payDate && (!createdAt || s.createdAt < createdAt));
+  const list = db.data.payslips.filter((s) => s.personId === personId && s.id !== excludeId && s.payDate >= from && earlierThis(s));
   const d = payDetails(personId);
   const earlier = d.previousTaxYear === from ? d : { previousPay: 0, previousTax: 0 };
   return {
@@ -335,8 +343,10 @@ function createDraft(personId, input, by, opts) {
   const person = store.getPerson(personId);
   if (!person || person.system) throw new store.ValidationError("Choose an employee.");
   const period = validPeriod(input.period);
-  if (db.data.payslips.some((s) => s.personId === personId && s.period === period)) {
-    throw new store.ValidationError(`${person.displayName} already has a payslip for ${periodLabel(period)}.`);
+  // HR can deliberately make an additional payslip for a month that already has one.
+  const existing = db.data.payslips.some((s) => s.personId === personId && s.period === period);
+  if (existing && !input.override) {
+    throw new store.ValidationError(`${person.displayName} already has a payslip for ${periodLabel(period)}. Tick “Make an additional payslip anyway” to make another one.`);
   }
   const now = new Date().toISOString();
   const slip = {
@@ -352,6 +362,7 @@ function createDraft(personId, input, by, opts) {
     updatedAt: now,
     issuedAt: null,
     issuedBy: null,
+    additional: !!existing,
   };
   applyLines(slip, { payments: input.payments || standardPayments(personId, period), deductions: input.deductions });
   slip.charged = costPence(slip);
@@ -428,6 +439,7 @@ function summaryView(slip) {
     payDate: slip.payDate,
     employer: slip.employer,
     status: slip.status,
+    additional: !!slip.additional,
     gross: t.gross,
     net: t.net,
     cost: t.cost,
