@@ -14,7 +14,10 @@ const TYPES = {
   compassionate: "Compassionate leave",
   unpaid: "Unpaid leave",
   other: "Other absence",
+  toil: "Time off in lieu",
 };
+// TOIL is earned in hours and taken in days of this length.
+const TOIL_HOURS_PER_DAY = 7.5;
 const MANAGE = "leave.manage";
 const DEFAULT_ALLOWANCE = 25;
 
@@ -29,6 +32,9 @@ function init(dataDir) {
   if (!db.data.carryOverFrom) { db.data.carryOverFrom = new Date().getFullYear(); changed = true; }
   if (!db.data.rtwFrom) { db.data.rtwFrom = new Date().toISOString().slice(0, 10); changed = true; }
   if (!db.data.rtw) { db.data.rtw = {}; changed = true; }
+  if (db.data.maxOffPerCompany === undefined) { db.data.maxOffPerCompany = 3; changed = true; }
+  if (!db.data.shutdowns) { db.data.shutdowns = []; changed = true; }
+  if (!db.data.toil) { db.data.toil = {}; changed = true; }
   if (changed) db.save();
   // Leave starts and ends at midnight, so check statuses regularly as well as on every change.
   if (!statusTimer) {
@@ -166,7 +172,7 @@ function summary(personId, year) {
   const booked = sum(approved.filter((r) => r.endDate >= today()));
   const pending = sum(annual.filter((r) => r.status === "pending"));
   const sickDays = sum(db.data.requests.filter((r) => r.personId === personId && r.type === "sick" && r.status === "approved" && r.startDate.startsWith(y)));
-  return { year: Number(y), allowance, base: allowance - carried, carried, taken, booked, pending, remaining: allowance - taken - booked - pending, sickDays };
+  return { year: Number(y), allowance, base: allowance - carried, carried, taken, booked, pending, remaining: allowance - taken - booked - pending, sickDays, toilHours: toilBalance(personId) };
 }
 
 function canApprove(approver, request) {
@@ -176,7 +182,7 @@ function canApprove(approver, request) {
   return store.can(approver, MANAGE) || store.supervises(approver, person);
 }
 
-function createRequest(person, input, by) {
+function createRequest(person, input, by, opts) {
   const type = TYPES[input.type] ? input.type : "annual";
   const startDate = validDay(input.startDate, "start date");
   const endDate = input.endDate ? validDay(input.endDate, "end date") : startDate;
@@ -189,8 +195,12 @@ function createRequest(person, input, by) {
   const overlap = db.data.requests.find((r) => r.personId === person.id && (r.status === "pending" || r.status === "approved") && r.startDate <= endDate && r.endDate >= startDate);
   if (overlap) throw new store.ValidationError(`That overlaps ${overlap.status === "pending" ? "a pending request" : "leave already booked"} (${overlap.startDate} to ${overlap.endDate}).`);
   // Going over the allowance is allowed, but it always needs approving by hand (see decide).
+  if (type === "toil") {
+    const bal = toilBalance(person.id);
+    if (days * TOIL_HOURS_PER_DAY > bal + 0.001) throw new store.ValidationError(`That's ${days * TOIL_HOURS_PER_DAY} hours of time off in lieu, but ${bal} ${bal === 1 ? "hour is" : "hours are"} available.`);
+  }
   // Sickness is a record rather than a request; HR or a supervisor recording leave for someone approves it too.
-  const autoApprove = type === "sick" || (by && by.id !== person.id && canApprove(by, { personId: person.id }));
+  const autoApprove = type === "sick" || !!(opts && opts.shutdownId) || (by && by.id !== person.id && canApprove(by, { personId: person.id }));
   const r = {
     id: newId(),
     personId: person.id,
@@ -207,6 +217,7 @@ function createRequest(person, input, by) {
     decidedAt: autoApprove ? new Date().toISOString() : null,
     decisionNote: "",
   };
+  if (opts && opts.shutdownId) r.shutdownId = opts.shutdownId;
   db.data.requests.push(r);
   db.save();
   syncStatuses(person.id);
@@ -279,6 +290,8 @@ function view(r, viewer) {
     decidedAt: r.decidedAt,
     decisionNote: own || manager ? r.decisionNote : "",
     overBy: own || manager ? overBy(r) : 0,
+    clash: manager && (r.status === "pending" || r.status === "approved") && r.type !== "sick" ? clashFor(r) : null,
+    shutdown: r.shutdownId ? true : undefined,
     canApprove: r.status === "pending" && canApprove(viewer, r),
     canCancel: (r.status === "pending" || r.status === "approved") && (store.can(viewer, MANAGE) || (own && (r.status === "pending" || r.startDate > today()))),
     // Return-to-work forms: the details are for managers; the person just sees it was done.
@@ -337,7 +350,7 @@ function isOffToday(personId) {
 }
 
 function allowances() {
-  return { defaultAllowance: db.data.defaultAllowance, custom: db.data.allowances, maxCarryOver: db.data.maxCarryOver };
+  return { defaultAllowance: db.data.defaultAllowance, custom: db.data.allowances, maxCarryOver: db.data.maxCarryOver, maxOffPerCompany: db.data.maxOffPerCompany };
 }
 
 function setMaxCarryOver(days) {
@@ -396,7 +409,179 @@ function absenceStats(personId) {
   return { occurrences: list.length, days, bradford: list.length * list.length * days };
 }
 
+// ---------- Clashes: too many people from one company off at once ----------
+
+function companiesOf(p) {
+  return [p.company].concat((p.otherRoles || []).map((r) => r.company));
+}
+
+function datesOf(r) {
+  const out = [];
+  for (let d = r.startDate; d <= r.endDate; d = addDay(d, 1)) if (isWorkingDay(d)) out.push(d);
+  return out;
+}
+
+// The busiest working day of a request: how many others from the same company are off then
+// (approved or waiting), if that reaches the limit.
+function clashFor(r) {
+  const max = db.data.maxOffPerCompany;
+  const person = store.getPerson(r.personId);
+  if (!max || !person || r.shutdownId) return null;
+  const mineCo = companiesOf(person);
+  const others = db.data.requests.filter((x) => x.id !== r.id && x.personId !== r.personId && x.type !== "sick" && !x.shutdownId && (x.status === "approved" || x.status === "pending") && x.endDate >= r.startDate && x.startDate <= r.endDate);
+  let worst = null;
+  for (const d of datesOf(r)) {
+    for (const company of mineCo) {
+      const names = new Set();
+      for (const x of others) {
+        if (x.startDate > d || x.endDate < d) continue;
+        const p = store.getPerson(x.personId);
+        if (p && companiesOf(p).includes(company)) names.add(p.displayName);
+      }
+      if (names.size >= max && (!worst || names.size > worst.count)) worst = { date: d, company, count: names.size, names: [...names].slice(0, 6) };
+    }
+  }
+  return worst;
+}
+
+function setMaxOffPerCompany(n) {
+  const v = Number(n);
+  if (!(v >= 0 && v <= 100)) throw new store.ValidationError("Enter a number between 0 and 100 (0 turns the warning off).");
+  db.data.maxOffPerCompany = Math.round(v);
+  db.save();
+}
+
+// A month grid of who's off: everyone (or one company), each working day. Reasons are never
+// shown; sickness shows as plain "Off" unless the viewer manages leave.
+function grid(viewer, month, company) {
+  const [y, m] = month.split("-").map(Number);
+  const first = `${month}-01`;
+  const last = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+  const days = [];
+  for (let d = first; d <= last; d = addDay(d, 1)) days.push({ date: d, weekend: [0, 6].includes(new Date(d + "T12:00:00Z").getUTCDay()), bankHoliday: calendar.BANK_HOLIDAYS[d] || null });
+  const manager = store.can(viewer, MANAGE);
+  const people = store.employees().filter((p) => !company || companiesOf(p).includes(company))
+    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+  const ids = new Set(people.map((p) => p.id));
+  const reqs = db.data.requests.filter((r) => ids.has(r.personId) && (r.status === "approved" || r.status === "pending") && r.endDate >= first && r.startDate <= last);
+  const rows = people.map((p) => {
+    const cells = {};
+    for (const r of reqs) {
+      if (r.personId !== p.id) continue;
+      for (let d = r.startDate < first ? first : r.startDate; d <= (r.endDate > last ? last : r.endDate); d = addDay(d, 1)) {
+        if (!isWorkingDay(d)) continue;
+        const hidden = r.type === "sick" && !manager && r.personId !== viewer.id;
+        cells[d] = { type: hidden ? "off" : r.type, label: hidden ? "Off" : TYPES[r.type], pending: r.status === "pending", half: r.halfDay || "", shutdown: !!r.shutdownId };
+      }
+    }
+    const v = store.publicView(p);
+    return { id: p.id, displayName: p.displayName, jobTitle: p.jobTitle, company: p.company, avatarUrl: v.avatarUrl, cells };
+  });
+  // Days where a company hits the limit.
+  const clashes = {};
+  const max = db.data.maxOffPerCompany;
+  if (max) {
+    for (const d of days) {
+      if (d.weekend || d.bankHoliday) continue;
+      for (const c of store.COMPANIES) {
+        if (company && c !== company) continue;
+        const n = rows.filter((row) => row.cells[d.date] && row.cells[d.date].type !== "sick" && !row.cells[d.date].shutdown && companiesOf(store.getPerson(row.id)).includes(c)).length;
+        if (n > max) (clashes[d.date] = clashes[d.date] || []).push({ company: c, count: n });
+      }
+    }
+  }
+  return { month, days, rows, clashes, maxOffPerCompany: max, shutdowns: db.data.shutdowns.filter((s) => s.endDate >= first && s.startDate <= last).map(shutdownView) };
+}
+
+// ---------- Company shutdown days ----------
+
+// Books the same days off for everyone (or chosen companies) in one go. Each person gets an
+// approved annual leave booking, so it comes out of their allowance. People who already have
+// leave on those days are skipped and listed.
+function createShutdown(input, by) {
+  const name = String(input.name || "").trim().slice(0, 80);
+  if (!name) throw new store.ValidationError("Give the shutdown a name, like “Christmas closure”.");
+  const startDate = validDay(input.startDate, "first day");
+  const endDate = input.endDate ? validDay(input.endDate, "last day") : startDate;
+  if (endDate < startDate) throw new store.ValidationError("The last day can't be before the first day.");
+  if (workingDays(startDate, endDate) === 0) throw new store.ValidationError("Those dates are all weekends or bank holidays.");
+  const companies = (Array.isArray(input.companies) ? input.companies : []).filter((c) => store.COMPANIES.includes(c));
+  const s = { id: newId(), name, startDate, endDate, companies, createdBy: by.id, createdAt: new Date().toISOString(), requestIds: [], skipped: [] };
+  for (const p of store.employees()) {
+    if (companies.length && !companiesOf(p).some((c) => companies.includes(c))) continue;
+    try {
+      const r = createRequest(p, { type: "annual", startDate, endDate, note: name }, by, { shutdownId: s.id });
+      s.requestIds.push(r.id);
+    } catch (err) {
+      if (!(err instanceof store.ValidationError)) throw err;
+      s.skipped.push({ personId: p.id, displayName: p.displayName, reason: err.message });
+    }
+  }
+  db.data.shutdowns.push(s);
+  db.save();
+  return s;
+}
+
+function deleteShutdown(id) {
+  const s = db.data.shutdowns.find((x) => x.id === id);
+  if (!s) throw new store.ValidationError("That shutdown doesn't exist.");
+  const people = new Set();
+  for (const r of db.data.requests) {
+    if (r.shutdownId === s.id && r.status !== "cancelled") { r.status = "cancelled"; r.decidedAt = new Date().toISOString(); people.add(r.personId); }
+  }
+  db.data.shutdowns = db.data.shutdowns.filter((x) => x.id !== id);
+  db.save();
+  for (const p of people) syncStatuses(p);
+  return s;
+}
+
+function shutdownView(s) {
+  const by = store.getPerson(s.createdBy);
+  return { ...s, days: workingDays(s.startDate, s.endDate), people: s.requestIds.length, byName: by ? by.displayName : "Former staff" };
+}
+
+function shutdowns() {
+  return db.data.shutdowns.slice().sort((a, b) => b.startDate.localeCompare(a.startDate)).map(shutdownView);
+}
+
+// ---------- Time off in lieu ----------
+
+// Hours earned (from extra hours on approved timesheets, or added by a manager) less the hours
+// of TOIL taken or waiting for approval.
+function toilBalance(personId) {
+  const earned = (db.data.toil[personId] || []).reduce((n, t) => n + t.hours, 0);
+  const used = db.data.requests.filter((r) => r.personId === personId && r.type === "toil" && (r.status === "approved" || r.status === "pending"))
+    .reduce((n, r) => n + r.days * TOIL_HOURS_PER_DAY, 0);
+  return Math.round((earned - used) * 100) / 100;
+}
+
+function addToil(person, hours, reason, by, source) {
+  const h = Number(hours);
+  if (!(h !== 0 && h >= -500 && h <= 500)) throw new store.ValidationError("Enter a number of hours.");
+  if (h < 0 && toilBalance(person.id) + h < 0) throw new store.ValidationError("That would take their TOIL balance below zero.");
+  const list = db.data.toil[person.id] || (db.data.toil[person.id] = []);
+  list.push({ id: newId(), hours: Math.round(h * 100) / 100, reason: String(reason || "").trim().slice(0, 200) || (h > 0 ? "Extra hours" : "Adjustment"), source: source || "manual", by: by ? by.id : null, at: new Date().toISOString() });
+  db.save();
+}
+
+function toilHistory(personId) {
+  return (db.data.toil[personId] || []).slice().reverse().map((t) => {
+    const p = t.by ? store.getPerson(t.by) : null;
+    return { ...t, byName: p ? p.displayName : "System" };
+  });
+}
+
+function leaveBetween(from, to) {
+  const out = {};
+  for (const r of db.data.requests) {
+    if (r.status !== "approved" || r.endDate < from || r.startDate > to) continue;
+    out[r.type] = (out[r.type] || 0) + r.days;
+  }
+  return out;
+}
+
 module.exports = {
+  TOIL_HOURS_PER_DAY, clashFor, setMaxOffPerCompany, grid, createShutdown, deleteShutdown, shutdowns, toilBalance, addToil, toilHistory, leaveBetween,
   syncStatuses,
   TYPES, MANAGE, init, workingDays, summary, createRequest, getRequest, decide, cancel, mine, approvals,
   pendingApprovalCount, team, calendarItems, isOffToday, allowances, setAllowance, setDefaultAllowance, allowanceFor,

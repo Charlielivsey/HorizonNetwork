@@ -8,6 +8,10 @@ const funds = require("./funds");
 const payslips = require("./payslips");
 const expenses = require("./expenses");
 const invoices = require("./invoices");
+const leave = require("./leave");
+const training = require("./training");
+const cases = require("./cases");
+const recruitment = require("./recruitment");
 
 let ctx;
 function init(helpers) {
@@ -190,6 +194,211 @@ async function handle(req, res, pathname, session) {
         logEvent(req, session, "invoice-" + m[2], { target: inv.number, detail: `${inv.customer.name}, £${invoices.view(inv).total.toFixed(2)}` });
       }
       return sendJson(res, 200, { invoice: invoices.view(inv), user: meResponse(session) }), true;
+    }
+  }
+
+  // ----- Leave: calendar grid, clash limit, shutdowns and TOIL -----
+  if (pathname === "/api/leave/grid" && method === "GET") {
+    const q = query(req);
+    const month = /^\d{4}-\d{2}$/.test(q.get("month") || "") ? q.get("month") : new Date().toISOString().slice(0, 7);
+    const company = store.COMPANIES.includes(q.get("company")) ? q.get("company") : "";
+    return sendJson(res, 200, { ...leave.grid(me, month, company), companies: store.COMPANIES, types: leave.TYPES }), true;
+  }
+  if (pathname === "/api/leave/settings" && method === "POST") {
+    if (!can(leave.MANAGE)) throw httpError(403, "Only people who manage leave can change this.");
+    const body = await readJsonBody(req);
+    leave.setMaxOffPerCompany(body.maxOffPerCompany);
+    logEvent(req, session, "leave-settings-changed", { detail: `Clash warning at ${body.maxOffPerCompany} people off per company` });
+    return sendJson(res, 200, { ok: true }), true;
+  }
+  if (pathname.startsWith("/api/leave/shutdowns")) {
+    if (!can(leave.MANAGE)) throw httpError(403, "Only people who manage leave can book shutdown days.");
+    if (method === "GET" && pathname === "/api/leave/shutdowns") return sendJson(res, 200, { shutdowns: leave.shutdowns(), companies: store.COMPANIES }), true;
+    if (method === "POST" && pathname === "/api/leave/shutdowns") {
+      const s = leave.createShutdown(await readJsonBody(req), me);
+      logEvent(req, session, "shutdown-booked", { target: s.name, detail: `${s.startDate}${s.endDate !== s.startDate ? " to " + s.endDate : ""}: ${s.requestIds.length} people${s.skipped.length ? `, ${s.skipped.length} skipped` : ""}` });
+      if (notify) notify(s.requestIds.map((id) => (leave.getRequest(id) || {}).personId), { type: "leave", title: `Company shutdown booked: ${s.name}`, body: `${s.startDate}${s.endDate !== s.startDate ? " to " + s.endDate : ""}. It's been taken from your holiday allowance.`, link: "/leave" }, me);
+      return sendJson(res, 201, { shutdown: s, user: meResponse(session) }), true;
+    }
+    if (method === "POST" && (m = /^\/api\/leave\/shutdowns\/([a-f0-9]{16})\/delete$/.exec(pathname))) {
+      const s = leave.deleteShutdown(m[1]);
+      logEvent(req, session, "shutdown-cancelled", { target: s.name });
+      return sendJson(res, 200, { ok: true }), true;
+    }
+  }
+  if ((m = /^\/api\/leave\/toil\/([a-f0-9]{16})$/.exec(pathname))) {
+    const person = store.getPerson(m[1]);
+    if (!person || person.system) throw httpError(404, "Employee not found.");
+    const manager = can(leave.MANAGE) || store.supervises(me, person);
+    if (person.id !== me.id && !manager) throw httpError(403, "You can't see that.");
+    if (method === "POST") {
+      if (!manager || (person.id === me.id && !store.isOwner(me))) throw httpError(403, "Only their supervisor or HR can add time off in lieu.");
+      const body = await readJsonBody(req);
+      leave.addToil(person, body.hours, body.reason, me, "manual");
+      logEvent(req, session, "toil-added", { target: person.displayName, detail: `${body.hours} hours – ${body.reason || ""}` });
+      if (notify) notify([person.id], { type: "leave", title: `${Number(body.hours) > 0 ? "You've earned" : "Adjustment:"} ${body.hours} hours of time off in lieu`, body: body.reason || "", link: "/leave" }, me);
+    }
+    return sendJson(res, 200, { balance: leave.toilBalance(person.id), hoursPerDay: leave.TOIL_HOURS_PER_DAY, history: leave.toilHistory(person.id) }), true;
+  }
+
+  // ----- Training records -----
+  if (pathname.startsWith("/api/training")) {
+    if (method === "GET" && pathname === "/api/training") {
+      return sendJson(res, 200, { ...training.forViewer(me), people: training.canManage(me) ? store.employees().map((p) => ({ id: p.id, displayName: p.displayName })) : [], companies: store.COMPANIES }), true;
+    }
+    if (method === "POST" && pathname === "/api/training") {
+      const meta = headerJson(req, "x-training");
+      const buffer = await readRawBody(req, 10 * 1024 * 1024);
+      const existing = meta.id ? training.get(meta.id) : null;
+      if (meta.id && (!existing || !training.canEdit(me, existing))) throw httpError(404, "Record not found.");
+      const personId = existing ? existing.personId : meta.personId || me.id;
+      if (personId !== me.id && !training.canManage(me)) throw httpError(403, "You can only add your own training.");
+      const rec = training.save(store.getPerson(personId), meta, buffer, me, existing);
+      logEvent(req, session, existing ? "training-updated" : "training-added", { target: (store.getPerson(personId) || {}).displayName, detail: rec.course });
+      return sendJson(res, existing ? 200 : 201, { ok: true, user: meResponse(session) }), true;
+    }
+    if (method === "POST" && pathname === "/api/training/required") {
+      if (!training.canManage(me)) throw httpError(403, "Only HR can set required training.");
+      const body = await readJsonBody(req);
+      training.saveRequired(body);
+      logEvent(req, session, "training-required-added", { target: body.course, detail: body.company || "Everyone" });
+      return sendJson(res, 200, { ok: true, user: meResponse(session) }), true;
+    }
+    if (method === "POST" && (m = /^\/api\/training\/required\/([a-f0-9]{16})\/delete$/.exec(pathname))) {
+      if (!training.canManage(me)) throw httpError(403, "Only HR can set required training.");
+      training.deleteRequired(m[1]);
+      return sendJson(res, 200, { ok: true, user: meResponse(session) }), true;
+    }
+    if ((m = /^\/api\/training\/([a-f0-9]{16})\/(certificate|verify|delete)$/.exec(pathname))) {
+      const rec = training.get(m[1]);
+      if (!rec || !(training.canManage(me) || rec.personId === me.id)) throw httpError(404, "Record not found.");
+      if (method === "GET" && m[2] === "certificate") {
+        const file = training.certificateFile(rec);
+        if (!file) throw httpError(404, "There's no certificate.");
+        return sendFileDownload(res, file, query(req).has("download")), true;
+      }
+      if (method === "POST" && m[2] === "verify") {
+        if (!training.canManage(me)) throw httpError(403, "Only HR can check records.");
+        training.verify(rec, me);
+        return sendJson(res, 200, { ok: true }), true;
+      }
+      if (method === "POST" && m[2] === "delete") {
+        if (!training.canEdit(me, rec)) throw httpError(403, "You can't delete that.");
+        training.remove(rec);
+        logEvent(req, session, "training-deleted", { target: (store.getPerson(rec.personId) || {}).displayName, detail: rec.course });
+        return sendJson(res, 200, { ok: true, user: meResponse(session) }), true;
+      }
+    }
+  }
+
+  // ----- HR cases -----
+  if (pathname.startsWith("/api/cases")) {
+    if (!can(cases.MANAGE)) throw httpError(403, "HR cases are only for people with the HR cases permission.");
+    if (method === "GET" && pathname === "/api/cases") {
+      return sendJson(res, 200, { cases: cases.list(), types: cases.TYPES, outcomes: cases.OUTCOMES, entryKinds: cases.ENTRY_KINDS, people: store.employees().map((p) => ({ id: p.id, displayName: p.displayName, jobTitle: p.jobTitle })) }), true;
+    }
+    if (method === "POST" && pathname === "/api/cases") {
+      const c = cases.create(await readJsonBody(req), me);
+      logEvent(req, session, "case-opened", { target: c.number, detail: `${cases.TYPES[c.type]} – ${(store.getPerson(c.personId) || {}).displayName}` });
+      return sendJson(res, 201, { case: cases.view(c, true) }), true;
+    }
+    if ((m = /^\/api\/cases\/([a-f0-9]{16})(?:\/(entry|close|reopen|delete|files)(?:\/([a-f0-9]{16}))?)?$/.exec(pathname))) {
+      const c = cases.get(m[1]);
+      if (!c) throw httpError(404, "Case not found.");
+      if (method === "GET" && !m[2]) {
+        logEvent(req, session, "case-viewed", { target: c.number });
+        return sendJson(res, 200, { case: cases.view(c, true) }), true;
+      }
+      if (method === "GET" && m[2] === "files" && m[3]) {
+        const file = cases.fileFor(c, m[3]);
+        if (!file) throw httpError(404, "File not found.");
+        logEvent(req, session, "case-file-opened", { target: c.number });
+        return sendFileDownload(res, file, query(req).has("download")), true;
+      }
+      if (method === "POST" && m[2] === "files") {
+        const meta = headerJson(req, "x-document");
+        const buffer = await readRawBody(req, 20 * 1024 * 1024);
+        cases.addFile(c, meta, buffer, me);
+        logEvent(req, session, "case-file-added", { target: c.number });
+        return sendJson(res, 201, { case: cases.view(c, true) }), true;
+      }
+      if (method === "POST") {
+        const body = await readJsonBody(req);
+        if (!m[2]) cases.update(c, body);
+        else if (m[2] === "entry") cases.addEntry(c, body, me);
+        else if (m[2] === "close") cases.close(c, body);
+        else if (m[2] === "reopen") cases.reopen(c);
+        else if (m[2] === "delete") {
+          cases.remove(c);
+          logEvent(req, session, "case-deleted", { target: c.number });
+          return sendJson(res, 200, { ok: true }), true;
+        }
+        logEvent(req, session, "case-" + (m[2] || "updated"), { target: c.number, detail: m[2] === "close" ? cases.OUTCOMES[c.outcome] : undefined });
+        return sendJson(res, 200, { case: cases.view(c, true) }), true;
+      }
+    }
+  }
+
+  // ----- Jobs and recruitment -----
+  if (pathname.startsWith("/api/jobs")) {
+    const manager = recruitment.canManage(me);
+    const needManage = () => { if (!manager) throw httpError(403, "Only recruiters can do that."); };
+    if (method === "GET" && pathname === "/api/jobs") {
+      return sendJson(res, 200, { ...recruitment.forViewer(me), companies: store.COMPANIES, people: manager ? store.employees().map((p) => ({ id: p.id, displayName: p.displayName, jobTitle: p.jobTitle })) : [] }), true;
+    }
+    if (method === "POST" && pathname === "/api/jobs") {
+      needManage();
+      const v = recruitment.saveVacancy(await readJsonBody(req), me, null);
+      logEvent(req, session, "vacancy-posted", { target: v.title, detail: v.company });
+      if (notify) notify(store.employees().map((p) => p.id), { type: "jobs", title: `New vacancy: ${v.title}`, body: `${v.company}${v.location ? ` · ${v.location}` : ""}`, link: "/jobs" }, me);
+      return sendJson(res, 201, { ok: true }), true;
+    }
+    if ((m = /^\/api\/jobs\/([a-f0-9]{16})(?:\/(status|delete|apply))?$/.exec(pathname)) && method === "POST") {
+      const v = recruitment.getVacancy(m[1]);
+      if (!v) throw httpError(404, "Vacancy not found.");
+      if (m[2] === "apply") {
+        const meta = headerJson(req, "x-applicant");
+        const buffer = await readRawBody(req, 10 * 1024 * 1024);
+        const a = recruitment.addApplicant(v, meta, buffer, me);
+        logEvent(req, session, a.personId ? "job-applied" : "candidate-referred", { target: v.title, detail: a.personId ? undefined : a.name });
+        const recruiters = store.employees().filter((p) => store.can(p, recruitment.MANAGE)).map((p) => p.id);
+        if (notify) notify(recruiters.concat(v.hiringManagerId || []), { type: "jobs", title: `${a.personId ? `${me.displayName} applied` : `${me.displayName} referred ${a.name}`} for ${v.title}`, link: "/jobs" }, me);
+        return sendJson(res, 201, { ok: true }), true;
+      }
+      needManage();
+      const body = await readJsonBody(req);
+      if (!m[2]) recruitment.saveVacancy(body, me, v);
+      else if (m[2] === "status") recruitment.setVacancyStatus(v, body.status);
+      else recruitment.deleteVacancy(v);
+      logEvent(req, session, m[2] === "delete" ? "vacancy-deleted" : "vacancy-updated", { target: v.title, detail: m[2] === "status" ? body.status : undefined });
+      return sendJson(res, 200, { ok: true }), true;
+    }
+    if ((m = /^\/api\/jobs\/applicants\/([a-f0-9]{16})\/(cv|stage|note|hire|delete)$/.exec(pathname))) {
+      needManage();
+      const a = recruitment.getApplicant(m[1]);
+      if (!a) throw httpError(404, "Applicant not found.");
+      if (method === "GET" && m[2] === "cv") {
+        const file = recruitment.cvFile(a);
+        if (!file) throw httpError(404, "There's no CV.");
+        return sendFileDownload(res, file, query(req).has("download")), true;
+      }
+      if (method !== "POST") throw httpError(405, "Use POST.");
+      const body = await readJsonBody(req);
+      const v = recruitment.getVacancy(a.vacancyId);
+      if (m[2] === "stage") {
+        recruitment.setStage(a, body.stage, me);
+        if (a.personId && notify) notify([a.personId], { type: "jobs", title: `Your application for ${v.title}: ${recruitment.STAGES[a.stage]}`, link: "/jobs" }, me);
+      } else if (m[2] === "note") recruitment.addNote(a, body.text, me);
+      else if (m[2] === "delete") recruitment.deleteApplicant(a);
+      else {
+        if (!a.personId && !can("staff.manage")) throw httpError(403, "Hiring someone new creates their employee record, which needs the Manage staff permission.");
+        const r = recruitment.hire(a, body, me);
+        logEvent(req, session, "candidate-hired", { target: r.person.displayName, detail: v.title });
+        if (a.personId && notify) notify([a.personId], { type: "jobs", title: `Congratulations – you've got the ${v.title} job`, link: "/jobs" }, me);
+        return sendJson(res, 200, { ok: true, personId: r.person.id, onboarding: !!r.checklist }), true;
+      }
+      logEvent(req, session, "applicant-" + m[2], { target: a.name, detail: v.title + (m[2] === "stage" ? ` → ${recruitment.STAGES[a.stage]}` : "") });
+      return sendJson(res, 200, { ok: true }), true;
     }
   }
 

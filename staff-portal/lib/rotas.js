@@ -202,6 +202,8 @@ function sheetView(sheet, viewer) {
     person: p ? { id: p.id, displayName: p.displayName, jobTitle: p.jobTitle, avatarUrl: store.publicView(p).avatarUrl } : { displayName: "Former staff" },
     days: sheet.days.map((d) => ({ ...d, hours: hoursOf(d.start, d.end, d.breakMins) })),
     totalHours: totalHours(sheet),
+    // Hours planned on the rota that week, so approvers can see any extra time worked.
+    plannedHours: Math.round(shiftsBetween(sheet.week, addDays(sheet.week, 6), sheet.personId).reduce((n, x) => n + x.hours, 0) * 100) / 100,
     decidedByName: by ? by.displayName : null,
     canApprove: sheet.status === "submitted" && !!viewer && canApprove(viewer, sheet),
   };

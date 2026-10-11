@@ -345,6 +345,7 @@
                 { title: "Staff Directory", desc: "Find colleagues across the group", href: "/directory", icon: "users" },
                 { title: "Employee Management", desc: "Add and manage staff records", href: "/employees", icon: "briefcase", requires: "staff.manage" },
                 { title: "Joiners & leavers", desc: "Onboarding and leaving checklists", href: "/onboarding", icon: "check", requires: "onboarding.manage" },
+                { title: "Jobs", desc: "Open roles, applications and referrals", href: "/jobs", icon: "briefcase", badge: "newApplicants" },
                 { title: "Roles & permissions", desc: "Choose who can do what", href: "/roles", icon: "shield", requires: "access.manage" },
             ],
         },
@@ -363,6 +364,8 @@
                 { title: "Rotas & Timesheets", desc: "Shifts, hours and approvals", href: "/rotas", icon: "clock", badge: "timesheetApprovals" },
                 { title: "Probation & reviews", desc: "Probation dates and reviews", href: "/reviews", icon: "star", badge: "reviewsDue" },
                 { title: "Staff documents", desc: "Contracts and personal documents", href: "/staff-files", icon: "file" },
+                { title: "Training", desc: "Courses, certificates and renewals", href: "/training", icon: "star", badge: "trainingDue" },
+                { title: "HR cases", desc: "Disciplinary and grievance records", href: "/cases", icon: "shield", requires: "cases.manage", badge: "casesOpen" },
                 { title: "Payslips", desc: "View and download your payslips", href: "/payslips", icon: "card" },
                 { title: "Expenses", desc: "Claim back money you spent for work", href: "/expenses", icon: "pound", badge: "expenseApprovals" },
                 { title: "Run payroll", desc: "Generate and issue payslips", href: "/payroll", icon: "wallet", requires: "payroll.manage" },
@@ -563,6 +566,9 @@
         "/status": viewStatus,
         "/expenses": viewExpenses,
         "/invoices": viewInvoices,
+        "/training": viewTraining,
+        "/cases": viewCases,
+        "/jobs": viewJobs,
     };
 
     function navigate(href, replace) {
@@ -597,6 +603,9 @@
         "/status": "activity",
         "/expenses": "pound",
         "/invoices": "file",
+        "/training": "star",
+        "/cases": "shield",
+        "/jobs": "briefcase",
     };
 
     function decoratePageHead(root, path) {
@@ -628,7 +637,7 @@
         const path = window.location.pathname;
         let view = ROUTES[path];
         if (!view) return navigate("/home", true);
-        const NEEDS = { "/employees": "staff.manage", "/onboarding": "onboarding.manage", "/roles": "access.manage", "/payroll": "payroll.manage", "/funds": "payroll.manage", "/invoices": "payroll.manage" };
+        const NEEDS = { "/employees": "staff.manage", "/onboarding": "onboarding.manage", "/roles": "access.manage", "/payroll": "payroll.manage", "/funds": "payroll.manage", "/invoices": "payroll.manage", "/cases": "cases.manage" };
         if (NEEDS[path] && !can(NEEDS[path])) view = viewNoAccess;
         if (path === "/system" && (!can("system.admin") || state.me.impersonatedBy)) view = viewNoSystemAccess;
 
@@ -759,8 +768,10 @@
             (me.expenseApprovals ? '<a class="hero-chip" href="/expenses" data-link>' + icon("pound") + me.expenseApprovals + " expense claim" + (me.expenseApprovals === 1 ? "" : "s") + " to deal with</a>" : "") +
             (me.budgetWarnings ? '<a class="hero-chip warn" href="/funds" data-link>' + icon("flag") + me.budgetWarnings + (me.budgetWarnings === 1 ? " budget is" : " budgets are") + " nearly used up</a>" : "") +
             (me.invoicesOverdue ? '<a class="hero-chip warn" href="/invoices" data-link>' + icon("file") + me.invoicesOverdue + " overdue invoice" + (me.invoicesOverdue === 1 ? "" : "s") + "</a>" : "") +
+            (me.trainingDue ? '<a class="hero-chip warn" href="/training" data-link>' + icon("star") + me.trainingDue + " training item" + (me.trainingDue === 1 ? "" : "s") + " expiring or missing</a>" : "") +
+            (me.newApplicants ? '<a class="hero-chip" href="/jobs" data-link>' + icon("briefcase") + me.newApplicants + " new job applicant" + (me.newApplicants === 1 ? "" : "s") + "</a>" : "") +
             (me.helpdeskBadge ? '<a class="hero-chip" href="/helpdesk" data-link>' + icon("lifebuoy") + me.helpdeskBadge + " IT ticket" + (me.helpdeskBadge === 1 ? "" : "s") + " need" + (me.helpdeskBadge === 1 ? "s" : "") + " attention</a>" : "") +
-            (!me.unreadAnnouncements && !me.pendingAcks && !me.openPolls && !me.onboardingTasks && !me.leaveApprovals && !me.timesheetApprovals && !me.helpdeskBadge && !me.payrollOverdrawn && !me.reviewsDue && !me.returnToWorkDue && !me.servicesDown && !me.expenseApprovals && !me.budgetWarnings && !me.invoicesOverdue ? '<span class="hero-chip calm">' + icon("tick") + "You\u2019re all caught up</span>" : "") +
+            (!me.unreadAnnouncements && !me.pendingAcks && !me.openPolls && !me.onboardingTasks && !me.leaveApprovals && !me.timesheetApprovals && !me.helpdeskBadge && !me.payrollOverdrawn && !me.reviewsDue && !me.returnToWorkDue && !me.servicesDown && !me.expenseApprovals && !me.budgetWarnings && !me.invoicesOverdue && !me.trainingDue && !me.newApplicants ? '<span class="hero-chip calm">' + icon("tick") + "You\u2019re all caught up</span>" : "") +
             "</div></div>" +
             '<div class="hero-clocks">' +
             '<div class="glass-clock"><div class="gc-label">' + icon("monitor") + "Your time \u00b7 " + esc(tzCity(deviceTz)) + "</div>" +
@@ -3743,7 +3754,7 @@
 
     // ================= Leave & absence =================
 
-    const LEAVE_ICONS = { annual: "sun", sick: "thermometer", compassionate: "heart", unpaid: "calendar", other: "calendar" };
+    const LEAVE_ICONS = { annual: "sun", sick: "thermometer", compassionate: "heart", unpaid: "calendar", other: "calendar", toil: "clock" };
 
     async function viewLeave(root, current) {
         const year = state.leaveYear || new Date().getFullYear();
@@ -3751,15 +3762,16 @@
         if (!current()) return;
         let tab = state.leaveTab || (d.approvals.length ? "approvals" : "mine");
         if (tab === "approvals" && !d.isApprover) tab = "mine";
-        if (tab === "allowances" && !d.canManage) tab = "mine";
+        if ((tab === "allowances" || tab === "shutdowns") && !d.canManage) tab = "mine";
         if (tab === "rtw" && !d.returnToWork.length && !d.canManage) tab = "mine";
         const s = d.summary;
 
         const tabs = [["mine", "My leave", d.mine.length]];
         if (d.isApprover) tabs.push(["approvals", "To approve", d.approvals.length]);
         tabs.push(["off", "Who’s off", d.whosOff.length]);
+        tabs.push(["calendar", "Calendar", null]);
         if (d.returnToWork.length || d.canManage) tabs.push(["rtw", "Return to work", d.returnToWork.length]);
-        if (d.canManage) tabs.push(["allowances", "Allowances & absence", null]);
+        if (d.canManage) tabs.push(["allowances", "Allowances & absence", null], ["shutdowns", "Shutdown days", null]);
 
         root.innerHTML =
             '<div class="page-head"><div><h1>Leave &amp; Absence</h1><p class="muted">Book holidays, report sickness and see who’s off. Weekends and bank holidays never count against your allowance.</p></div>' +
@@ -3775,6 +3787,7 @@
                 '<div class="ls-bar"><span class="ls-taken" data-pct="' + pct(s.taken, s.allowance) + '"></span><span class="ls-booked" data-pct="' + pct(s.booked, s.allowance) + '"></span><span class="ls-pending" data-pct="' + pct(s.pending, s.allowance) + '"></span></div>' +
                 '<div class="ls-legend"><span class="ls-k taken">Taken ' + s.taken + '</span><span class="ls-k booked">Booked ' + s.booked + '</span><span class="ls-k pending">Waiting for approval ' + s.pending + "</span></div></div>" +
                 '<div class="ls-side"><div class="stat"><div class="stat-value">' + s.sickDays + '</div><div class="stat-label">Sick days in ' + year + "</div></div>" +
+                (s.toilHours ? '<button type="button" class="stat stat-btn" id="lv-mytoil"><div class="stat-value">' + s.toilHours + '<small class="stat-unit">hrs</small></div><div class="stat-label">Time off in lieu to use</div></button>' : "") +
                 (state.me.onLeaveToday ? '<div class="stat ls-today"><div class="stat-value">' + icon("sun") + '</div><div class="stat-label">You’re on leave today</div></div>' : "") + "</div>" +
                 "</section>" : "") +
             '<div class="company-tabs" id="lv-tabs">' + tabs.map(function (t) {
@@ -3793,6 +3806,8 @@
                 '<div class="muted small">' + esc(dateRange(r.startDate, r.endDate)) + (r.halfDay ? " (" + (r.halfDay === "am" ? "morning" : "afternoon") + ")" : "") + " · " + fmtDays(r.days) + "</div>" +
                 (r.note ? '<div class="lr-note">' + esc(r.note) + "</div>" : "") +
                 (r.decisionNote ? '<div class="lr-note decision">' + icon("message") + esc(r.decidedBy || "") + ": " + esc(r.decisionNote) + "</div>" : "") +
+                (r.clash ? '<div class="lr-note lr-clash">' + icon("alert") + r.clash.count + (r.clash.count === 1 ? " other person" : " others") + " from " + esc(r.clash.company) + " " + (r.clash.count === 1 ? "is" : "are") + " off on " + esc(fmtDate(r.clash.date + "T12:00:00")) + " (" + esc(r.clash.names.join(", ")) + ")</div>" : "") +
+                (r.shutdown ? '<div class="lr-note">' + icon("building") + "Company shutdown</div>" : "") +
                 (r.returnToWork ? '<div class="lr-note rtw-done">' + icon("check") + "Return-to-work form done" + (r.returnToWork.byName ? " by " + esc(r.returnToWork.byName) + (r.returnToWork.fitForWork === false ? " \u00b7 not yet fit for work" : "") : "") + "</div>" : "") +
                 "</div>" +
                 '<div class="lr-side">' + (opts.noStatus ? "" : statusBadge(r.status)) +
@@ -3823,14 +3838,20 @@
             } else if (tab === "off") {
                 body.innerHTML = d.whosOff.length ? '<div class="panel leave-list">' + d.whosOff.map(function (r) { return requestRow(r, { person: true, noStatus: true, cancel: d.canManage }); }).join("") + "</div>"
                     : '<div class="empty-page">' + icon("users", "big") + "<h2>Nobody’s off</h2><p class=\"muted\">" + (d.canManage ? "No approved leave in the next 60 days." : "No approved leave for you or your team in the next 60 days.") + "</p></div>";
+            } else if (tab === "calendar") {
+                mountLeaveCalendar(body);
+            } else if (tab === "shutdowns") {
+                mountShutdowns(body);
             } else {
                 body.innerHTML = '<section class="panel"><div class="panel-head"><h2 class="panel-title">' + icon("sun") + year + " allowances</h2>" +
                     '<div class="allow-forms"><form class="allow-default" id="lv-default"><label for="lv-def">Default for everyone</label><input type="number" id="lv-def" min="0" max="100" step="0.5" value="' + d.allowances.defaultAllowance + '"><span class="muted small">days</span>' +
                     '<button type="submit" class="btn btn-ghost btn-small">Save</button></form>' +
                     '<form class="allow-default" id="lv-carry"><label for="lv-carry-n">Carry over up to</label><input type="number" id="lv-carry-n" min="0" max="50" step="0.5" value="' + d.allowances.maxCarryOver + '"><span class="muted small">days into next year</span>' +
+                    '<button type="submit" class="btn btn-ghost btn-small">Save</button></form>' +
+                    '<form class="allow-default" id="lv-clash"><label for="lv-clash-n">Warn when more than</label><input type="number" id="lv-clash-n" min="0" max="100" value="' + d.allowances.maxOffPerCompany + '"><span class="muted small">people from one company are off (0 = never)</span>' +
                     '<button type="submit" class="btn btn-ghost btn-small">Save</button></form></div></div>' +
                     '<p class="muted small">Annual leave days per year, not counting bank holidays. Leave a person’s box empty to use the default.</p>' +
-                    '<div class="table-card flat"><table class="table"><thead><tr><th>Person</th><th>Allowance</th><th>Carried</th><th>Taken</th><th>Booked</th><th>Waiting</th><th>Left</th><th title="Sickness in the last 52 weeks">Sickness (52 wks)</th><th title="Occurrences squared × days. Higher scores mean frequent short absences.">Bradford</th></tr></thead><tbody>' +
+                    '<div class="table-card flat"><table class="table"><thead><tr><th>Person</th><th>Allowance</th><th>Carried</th><th>Taken</th><th>Booked</th><th>Waiting</th><th>Left</th><th title="Sickness in the last 52 weeks">Sickness (52 wks)</th><th title="Occurrences squared × days. Higher scores mean frequent short absences.">Bradford</th><th>TOIL</th></tr></thead><tbody>' +
                     d.people.map(function (p) {
                         const custom = d.allowances.custom[p.id];
                         return '<tr><td><div class="emp-cell">' + avatar(p, "sm") + '<div><div class="emp-name">' + esc(p.displayName) + '</div><div class="muted small">' + esc(p.jobTitle) + "</div></div></div></td>" +
@@ -3838,8 +3859,13 @@
                             '<td data-label="Carried">' + (p.summary.carried || '<span class="muted">\u2013</span>') + '</td><td data-label="Taken">' + p.summary.taken + '</td><td data-label="Booked">' + p.summary.booked + '</td><td data-label="Waiting">' + p.summary.pending + "</td>" +
                             '<td data-label="Left"><strong' + (p.summary.remaining < 0 ? ' class="danger-text"' : "") + ">" + p.summary.remaining + "</strong></td>" +
                             '<td data-label="Sickness">' + (p.absence.occurrences ? p.absence.occurrences + (p.absence.occurrences === 1 ? " time, " : " times, ") + fmtDays(p.absence.days) : '<span class="muted">None</span>') + "</td>" +
-                            '<td data-label="Bradford"><span class="bradford ' + (p.absence.bradford >= 200 ? "b-high" : p.absence.bradford >= 50 ? "b-mid" : "b-low") + '">' + p.absence.bradford + "</span></td></tr>";
+                            '<td data-label="Bradford"><span class="bradford ' + (p.absence.bradford >= 200 ? "b-high" : p.absence.bradford >= 50 ? "b-mid" : "b-low") + '">' + p.absence.bradford + "</span></td>" +
+                            '<td data-label="TOIL"><button type="button" class="btn btn-ghost btn-small" data-toil="' + p.id + '" data-name="' + esc(p.displayName) + '">' + (p.summary.toilHours || 0) + " hrs</button></td></tr>";
                     }).join("") + "</tbody></table></div></section>";
+                $("#lv-clash").addEventListener("submit", async function (e) {
+                    e.preventDefault();
+                    try { await api("/api/leave/settings", { maxOffPerCompany: $("#lv-clash-n").value }); toast("Clash warning saved."); render(); } catch (err) { toast(err.message); }
+                });
                 $("#lv-carry").addEventListener("submit", async function (e) {
                     e.preventDefault();
                     try { await api("/api/leave/allowances", { maxCarryOver: $("#lv-carry-n").value }); toast("Carry-over limit saved."); render(); } catch (err) { toast(err.message); }
@@ -3864,6 +3890,9 @@
             if (e.target.closest("#lv-new")) return openLeaveForm(d, "annual");
             if (e.target.closest("#lv-sick")) return openLeaveForm(d, "sick");
             if (e.target.closest("#lv-set")) return openLeaveForm(d, "annual", true);
+            const toil = e.target.closest("[data-toil]");
+            if (toil) return openToil(toil.dataset.toil, toil.dataset.name, true);
+            if (e.target.closest("#lv-mytoil")) return openToil(state.me.id, state.me.displayName, false);
             const rtw = e.target.closest("[data-rtw]");
             if (rtw) return openReturnToWork(d.returnToWork.find(function (x) { return x.id === rtw.dataset.rtw; }));
             const act = e.target.closest("[data-act]");
@@ -4212,12 +4241,19 @@
             if (ts) {
                 const id = ts.closest("[data-sheet]").dataset.sheet;
                 let note = "";
+                let toilHours = 0;
+                const sheet = review && review.waiting.find(function (x) { return x.id === id; });
+                if (ts.dataset.ts === "approve" && sheet && sheet.plannedHours > 0 && sheet.totalHours > sheet.plannedHours) {
+                    const extra = Math.round((sheet.totalHours - sheet.plannedHours) * 100) / 100;
+                    toilHours = await askToil(sheet.person.displayName, extra, sheet.plannedHours, sheet.totalHours);
+                    if (toilHours === null) return;
+                }
                 if (ts.dataset.ts === "reject") {
                     note = await askNote({ title: "Send this timesheet back?", message: "They can correct it and submit it again.", label: "What needs changing", required: true, confirmLabel: "Send back", danger: true });
                     if (note === null) return;
                 }
                 try {
-                    const r = await api("/api/timesheets/" + id + "/" + ts.dataset.ts, { note: note });
+                    const r = await api("/api/timesheets/" + id + "/" + ts.dataset.ts, { note: note, toilHours: toilHours });
                     state.me = r.user;
                     renderChrome();
                     toast(ts.dataset.ts === "approve" ? "Timesheet approved." : "Timesheet sent back.");
@@ -6909,6 +6945,544 @@
                     toast("Pay change scheduled.");
                 }
             } catch (err) { formError($("#pc-error", box), err.message); }
+        });
+    }
+
+    // ================= Leave calendar, shutdown days and TOIL =================
+
+    function mountLeaveCalendar(box) {
+        let month = state.leaveMonth || isoDay(new Date()).slice(0, 7);
+        let company = state.leaveCompany || "";
+        async function load() {
+            box.innerHTML = '<p class="muted small">Loading…</p>';
+            let g;
+            try { g = await api("/api/leave/grid?month=" + month + "&company=" + encodeURIComponent(company)); } catch (err) { box.innerHTML = '<p class="form-error">' + esc(err.message) + "</p>"; return; }
+            const [y, mo] = month.split("-").map(Number);
+            const label = new Date(y, mo - 1, 15).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+            const t = isoDay(new Date());
+            box.innerHTML = '<section class="panel lc-panel"><div class="lc-toolbar">' +
+                '<div class="week-nav"><button type="button" class="icon-btn" data-lcm="-1" aria-label="Previous month">' + icon("chevronLeft") + "</button>" +
+                '<h2 class="week-title">' + esc(label) + '</h2><button type="button" class="icon-btn" data-lcm="1" aria-label="Next month">' + icon("chevronRight") + "</button></div>" +
+                '<select id="lc-company" aria-label="Company"><option value="">All companies</option>' + g.companies.map(function (c) { return "<option" + (c === company ? " selected" : "") + ">" + esc(c) + "</option>"; }).join("") + "</select></div>" +
+                (Object.keys(g.clashes).length ? '<div class="banner banner-warn lc-warn">' + icon("alert") + "<div><strong>Busy days.</strong> More than " + g.maxOffPerCompany + (g.maxOffPerCompany === 1 ? " person" : " people") + " from one company are off on " +
+                    Object.keys(g.clashes).map(function (d) { return esc(new Date(d + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" })) + " (" + g.clashes[d].map(function (c) { return esc(c.company) + ", " + c.count; }).join("; ") + ")"; }).join(", ") + ".</div></div>" : "") +
+                '<div class="lc-scroll"><table class="lc-grid"><thead><tr><th class="lc-name">Person</th>' + g.days.map(function (d) {
+                    const dt = new Date(d.date + "T12:00:00");
+                    return '<th class="' + (d.weekend ? "lc-we" : "") + (d.bankHoliday ? " lc-bh" : "") + (g.clashes[d.date] ? " lc-clash" : "") + (d.date === t ? " lc-today" : "") + '"' + (d.bankHoliday ? ' title="' + esc(d.bankHoliday) + '"' : "") + "><span>" + "MTWTFSS".charAt((dt.getDay() + 6) % 7) + "</span>" + dt.getDate() + "</th>";
+                }).join("") + "</tr></thead><tbody>" +
+                g.rows.map(function (r) {
+                    return '<tr><th class="lc-name"><div class="emp-cell">' + avatar(r, "sm") + '<span class="emp-name">' + esc(r.displayName) + "</span></div></th>" + g.days.map(function (d) {
+                        const c = r.cells[d.date];
+                        return '<td class="' + (d.weekend ? "lc-we" : "") + (d.bankHoliday ? " lc-bh" : "") + (g.clashes[d.date] ? " lc-clash" : "") + '">' +
+                            (c ? '<span class="lc-cell lt-' + esc(c.type) + (c.pending ? " lc-pending" : "") + (c.half ? " lc-half" : "") + '" title="' + esc(c.label + (c.pending ? " (waiting for approval)" : "") + (c.half ? " (half day)" : "") + (c.shutdown ? " (company shutdown)" : "")) + '"></span>' : "") + "</td>";
+                    }).join("") + "</tr>";
+                }).join("") + "</tbody></table></div>" +
+                '<div class="lc-key">' + ["annual", "toil", "sick", "compassionate", "unpaid", "other"].map(function (k) {
+                    return '<span><i class="lc-cell lt-' + k + '"></i>' + esc(g.types[k]) + "</span>";
+                }).join("") + '<span><i class="lc-cell lt-annual lc-pending"></i>Waiting for approval</span><span><i class="lc-bh-key"></i>Bank holiday</span></div></section>';
+            $("#lc-company", box).addEventListener("change", function (e) { company = state.leaveCompany = e.target.value; load(); });
+        }
+        box.onclick = function (e) {
+            const b = e.target.closest("[data-lcm]");
+            if (b) { month = state.leaveMonth = shiftMonth(month, Number(b.dataset.lcm)); load(); }
+        };
+        load();
+    }
+
+    function mountShutdowns(box) {
+        api("/api/leave/shutdowns").then(function (r) {
+            box.innerHTML = '<section class="panel"><div class="panel-head"><h2 class="panel-title">' + icon("building") + "Company shutdown days</h2>" +
+                '<button type="button" class="btn btn-primary btn-small" id="sd-new">' + icon("plus") + "Book shutdown days</button></div>" +
+                '<p class="muted small">Book the same days off for everyone, like the days between Christmas and New Year. Each person gets the days as approved annual leave, so they come out of their allowance. Cancelling a shutdown gives the days back.</p>' +
+                (r.shutdowns.length ? '<div class="leave-list">' + r.shutdowns.map(function (x) {
+                    return '<div class="leave-row"><span class="leave-icon">' + icon("building") + '</span><div class="lr-main"><div class="lr-title">' + esc(x.name) + "</div>" +
+                        '<div class="muted small">' + esc(dateRange(x.startDate, x.endDate)) + " · " + fmtDays(x.days) + " · " + (x.companies.length ? esc(x.companies.join(", ")) : "Everyone") + " · booked by " + esc(x.byName) + "</div>" +
+                        '<div class="muted small">' + x.people + (x.people === 1 ? " person" : " people") + " booked" + (x.skipped.length ? " · " + x.skipped.length + " skipped (already off): " + esc(x.skipped.map(function (k) { return k.displayName; }).join(", ")) : "") + "</div></div>" +
+                        '<div class="lr-side"><button type="button" class="btn btn-ghost btn-small danger-text" data-sddel="' + x.id + '">Cancel shutdown</button></div></div>';
+                }).join("") + "</div>" : '<p class="muted small">No shutdown days booked yet.</p>') + "</section>";
+            box.onclick = async function (e) {
+                if (e.target.closest("#sd-new")) return openShutdownForm(r.companies);
+                const del = e.target.closest("[data-sddel]");
+                if (del && await confirmDialog({ title: "Cancel this shutdown?", message: "Everyone’s days go back into their allowance.", confirmLabel: "Cancel shutdown", danger: true })) {
+                    try { await api("/api/leave/shutdowns/" + del.dataset.sddel + "/delete", {}); toast("Shutdown cancelled."); render(); } catch (err) { toast(err.message); }
+                }
+            };
+        }).catch(function (err) { box.innerHTML = '<p class="form-error">' + esc(err.message) + "</p>"; });
+    }
+
+    function openShutdownForm(companies) {
+        const m = openModal(
+            '<h2 class="modal-title">Book shutdown days</h2>' +
+            '<form id="sd-form" novalidate><label for="sd-name">Name</label><input type="text" id="sd-name" maxlength="80" placeholder="e.g. Christmas closure">' +
+            '<div class="grid-2"><div><label for="sd-start">First day</label><input type="date" id="sd-start"></div><div><label for="sd-end">Last day</label><input type="date" id="sd-end"></div></div>' +
+            '<label>Who</label><div class="check-grid">' + companies.map(function (c) { return '<label class="inline-check"><input type="checkbox" value="' + esc(c) + '"> ' + esc(c) + "</label>"; }).join("") + "</div>" +
+            '<p class="muted small">Leave every company unticked to book it for everyone.</p>' +
+            '<div class="form-error" id="sd-error" hidden></div>' +
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">Book days off</button></div></form>'
+        );
+        $("#sd-start", m.el).addEventListener("change", function (e) { if (!$("#sd-end", m.el).value || $("#sd-end", m.el).value < e.target.value) $("#sd-end", m.el).value = e.target.value; });
+        $("#sd-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try {
+                const r = await api("/api/leave/shutdowns", {
+                    name: $("#sd-name", m.el).value, startDate: $("#sd-start", m.el).value, endDate: $("#sd-end", m.el).value,
+                    companies: $$(".check-grid input:checked", m.el).map(function (c) { return c.value; }),
+                });
+                state.me = r.user;
+                closeModal();
+                toast("Booked for " + r.shutdown.requestIds.length + " people" + (r.shutdown.skipped.length ? ", " + r.shutdown.skipped.length + " skipped." : "."));
+                render();
+            } catch (err) { formError($("#sd-error", m.el), err.message); }
+        });
+    }
+
+    async function openToil(personId, name, manage) {
+        let r;
+        try { r = await api("/api/leave/toil/" + personId); } catch (err) { return toast(err.message); }
+        const m = openModal(
+            '<h2 class="modal-title">Time off in lieu · ' + esc(name) + "</h2>" +
+            '<div class="toil-balance"><strong>' + r.balance + " hours</strong><span class=\"muted\">available, about " + fmtDays(Math.floor(r.balance / r.hoursPerDay * 2) / 2) + " (" + r.hoursPerDay + " hours a day)</span></div>" +
+            '<p class="muted small">Extra hours worked are banked here when a timesheet is approved, or added by a supervisor. Book it as <strong>Time off in lieu</strong> on the Leave page.</p>' +
+            (manage ? '<form id="toil-form" class="toil-form"><input type="number" id="toil-h" step="0.25" placeholder="Hours (use minus to take off)" aria-label="Hours"><input type="text" id="toil-why" maxlength="200" placeholder="Reason" aria-label="Reason"><button type="submit" class="btn btn-primary">Add</button></form><div class="form-error" id="toil-error" hidden></div>' : "") +
+            (r.history.length ? '<div class="toil-list">' + r.history.map(function (h) {
+                return '<div class="toil-row"><span class="' + (h.hours > 0 ? "fund-in" : "fund-out") + '">' + (h.hours > 0 ? "+" : "") + h.hours + " hrs</span><span>" + esc(h.reason) + '</span><span class="muted small">' + esc(fmtDate(h.at)) + " · " + esc(h.byName) + "</span></div>";
+            }).join("") + "</div>" : '<p class="muted small">Nothing banked yet.</p>') +
+            '<div class="modal-actions"><button type="button" class="btn btn-primary" data-close>Done</button></div>'
+        );
+        if (manage) $("#toil-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try { await api("/api/leave/toil/" + personId, { hours: $("#toil-h", m.el).value, reason: $("#toil-why", m.el).value }); toast("Time off in lieu updated."); openToil(personId, name, manage); } catch (err) { formError($("#toil-error", m.el), err.message); }
+        });
+    }
+
+    // Approving a timesheet with more hours than the rota planned: offer to bank them as TOIL.
+    function askToil(name, extra, planned, worked) {
+        return new Promise(function (resolve) {
+            let done = false;
+            const m = openModal(
+                '<h2 class="modal-title">Bank extra hours as time off in lieu?</h2>' +
+                '<p class="muted">' + esc(name) + " worked " + fmtHours(worked) + " against " + fmtHours(planned) + " on the rota.</p>" +
+                '<label for="at-h">Hours to bank</label><input type="number" id="at-h" min="0" step="0.25" value="' + extra + '">' +
+                '<div class="modal-actions"><button type="button" class="btn btn-ghost" id="at-no">Approve without TOIL</button><button type="button" class="btn btn-primary" id="at-yes">Approve and bank hours</button></div>',
+                { onClose: function () { if (!done) resolve(null); } }
+            );
+            $("#at-no", m.el).addEventListener("click", function () { done = true; closeModal(); resolve(0); });
+            $("#at-yes", m.el).addEventListener("click", function () { done = true; const v = Number($("#at-h", m.el).value) || 0; closeModal(); resolve(v); });
+        });
+    }
+
+    // ================= Training records =================
+
+    const TRAINING_STATES = { valid: ["Current", "badge-green"], expiring: ["Expiring soon", "badge-yellow"], expired: ["Expired", "badge-red"] };
+
+    async function viewTraining(root, current) {
+        const d = await api("/api/training");
+        if (!current()) return;
+        let tab = state.trainingTab || "mine";
+        if (!d.canManage) tab = "mine";
+        const tabs = [["mine", "My training", d.mine.length]];
+        if (d.canManage) tabs.push(["all", "Everyone", d.all.length], ["required", "Required courses", d.required.length]);
+        root.innerHTML =
+            '<div class="page-head"><div><h1>Training</h1><p class="muted">Courses, qualifications and certificates. Things that need renewing show a reminder 30 days before they expire.</p></div>' +
+            '<div class="page-actions">' + (state.me.system ? "" : '<button type="button" class="btn btn-primary" id="tr-new">' + icon("plus") + "Add training</button>") + "</div></div>" +
+            (d.myMissing.length ? '<div class="banner banner-warn">' + icon("alert") + "<div><strong>Required training missing:</strong> " + esc(d.myMissing.join(", ")) + ". Add it once you’ve done it.</div></div>" : "") +
+            '<div class="company-tabs" id="tr-tabs">' + tabs.map(function (t) { return '<button type="button" data-tab="' + t[0] + '">' + esc(t[1]) + ' <span class="tab-count">' + t[2] + "</span></button>"; }).join("") + "</div>" +
+            '<div id="tr-body"></div>';
+
+        function card(r, showPerson) {
+            const st = TRAINING_STATES[r.state];
+            return '<div class="tr-card" data-id="' + r.id + '"><div class="tr-top">' + (showPerson ? avatar(r.person, "sm") : '<span class="tr-icon">' + icon("star") + "</span>") +
+                '<div class="tr-main"><strong>' + esc(r.course) + "</strong>" + (showPerson ? '<span class="muted small">' + esc(r.person.displayName) + "</span>" : "") +
+                (r.provider ? '<span class="muted small">' + esc(r.provider) + "</span>" : "") + "</div>" +
+                '<span class="badge ' + st[1] + '">' + st[0] + "</span></div>" +
+                '<div class="tr-dates"><span>Completed <strong>' + esc(fmtDate(r.completedOn + "T12:00:00")) + "</strong></span>" +
+                (r.expiresOn ? "<span>" + (r.state === "expired" ? "Expired" : "Expires") + " <strong>" + esc(fmtDate(r.expiresOn + "T12:00:00")) + "</strong>" + (r.state === "expiring" ? " (" + r.daysLeft + " days)" : "") + "</span>" : "<span>Doesn’t expire</span>") + "</div>" +
+                (r.note ? '<p class="muted small">' + esc(r.note) + "</p>" : "") +
+                '<div class="tr-foot">' + (r.certificate ? '<a href="/api/training/' + r.id + '/certificate" target="_blank" rel="noopener" class="claim-receipt">' + icon("file") + esc(r.certificate.fileName) + "</a>" : '<span class="muted small">No certificate</span>') +
+                (r.verified ? '<span class="tr-verified">' + icon("check") + "Checked by HR</span>" : d.canManage ? '<button type="button" class="btn btn-link btn-small" data-tr="verify">Mark as checked</button>' : '<span class="muted small">Not checked yet</span>') +
+                (r.canEdit ? '<span class="tr-actions"><button type="button" class="icon-btn" data-tr="edit" aria-label="Edit">' + icon("edit") + '</button><button type="button" class="icon-btn" data-tr="delete" aria-label="Delete">' + icon("trash") + "</button></span>" : "") +
+                "</div></div>";
+        }
+
+        function draw() {
+            $$("#tr-tabs [data-tab]").forEach(function (b) { b.classList.toggle("active", b.dataset.tab === tab); });
+            const body = $("#tr-body");
+            if (tab === "mine") {
+                body.innerHTML = d.mine.length ? '<div class="tr-grid">' + d.mine.map(function (r) { return card(r, false); }).join("") + "</div>"
+                    : '<div class="empty-page">' + icon("star", "big") + '<h2>No training recorded</h2><p class="muted">Add courses and certificates with <strong>Add training</strong>.</p></div>';
+            } else if (tab === "all") {
+                const gaps = d.matrix.filter(function (p) { return p.missing.length; });
+                body.innerHTML = (gaps.length ? '<section class="panel"><h2 class="panel-title">' + icon("alert") + "Missing required training</h2><div class=\"tr-gaps\">" + gaps.map(function (p) {
+                    return '<div class="tr-gap"><strong>' + esc(p.displayName) + '</strong><span class="muted small">' + esc(p.missing.join(", ")) + "</span></div>";
+                }).join("") + "</div></section>" : "") +
+                    (d.all.length ? '<div class="tr-grid">' + d.all.map(function (r) { return card(r, true); }).join("") + "</div>" : '<p class="muted">No training recorded yet.</p>');
+            } else {
+                body.innerHTML = '<section class="panel"><h2 class="panel-title">' + icon("flag") + "Required courses</h2>" +
+                    '<p class="muted small">Everyone (or everyone at one company) should have a current record with this exact course name. People missing one get a reminder.</p>' +
+                    (d.required.length ? '<div class="pc-list">' + d.required.map(function (q) {
+                        return '<div class="pc-row"><strong>' + esc(q.course) + '</strong><span class="muted small">' + esc(q.company || "Everyone") + '</span><button type="button" class="icon-btn" data-reqdel="' + q.id + '" aria-label="Remove">' + icon("trash") + "</button></div>";
+                    }).join("") + "</div>" : "") +
+                    '<form id="req-form" class="inline-form"><input type="text" id="req-course" maxlength="120" placeholder="Course, e.g. Fire safety"><select id="req-company"><option value="">Everyone</option>' +
+                    d.companies.map(function (c) { return "<option>" + esc(c) + "</option>"; }).join("") + '</select><button type="submit" class="btn btn-ghost">' + icon("plus") + "Add</button></form></section>";
+                $("#req-form").addEventListener("submit", async function (e) {
+                    e.preventDefault();
+                    try { await api("/api/training/required", { course: $("#req-course").value, company: $("#req-company").value }); toast("Required course added."); render(); } catch (err) { toast(err.message); }
+                });
+            }
+        }
+        root.addEventListener("click", async function (e) {
+            const t = e.target.closest("[data-tab]");
+            if (t) { tab = state.trainingTab = t.dataset.tab; return draw(); }
+            if (e.target.closest("#tr-new")) return openTrainingForm(d, null);
+            const rq = e.target.closest("[data-reqdel]");
+            if (rq) { try { await api("/api/training/required/" + rq.dataset.reqdel + "/delete", {}); render(); } catch (err) { toast(err.message); } return; }
+            const b = e.target.closest("[data-tr]");
+            if (!b) return;
+            const id = b.closest("[data-id]").dataset.id;
+            const rec = d.mine.concat(d.all || []).find(function (x) { return x.id === id; });
+            try {
+                if (b.dataset.tr === "edit") return openTrainingForm(d, rec);
+                if (b.dataset.tr === "delete" && !(await confirmDialog({ title: "Delete this record?", message: rec.course + " will be removed, with its certificate.", confirmLabel: "Delete", danger: true }))) return;
+                await api("/api/training/" + id + "/" + b.dataset.tr, {});
+                toast(b.dataset.tr === "verify" ? "Marked as checked." : "Record deleted.");
+                render();
+            } catch (err) { toast(err.message); }
+        });
+        draw();
+    }
+
+    function openTrainingForm(d, rec) {
+        let file = null;
+        const v = rec || { course: "", provider: "", completedOn: isoDay(new Date()), expiresOn: "", note: "" };
+        const m = openModal(
+            '<h2 class="modal-title">' + (rec ? "Edit training" : "Add training") + "</h2><form id=\"tr-form\" novalidate>" +
+            (!rec && d.canManage ? '<label for="tr-person">Who</label><select id="tr-person">' + (state.me.system ? "" : '<option value="">Me</option>') + d.people.filter(function (p) { return p.id !== state.me.id; }).map(function (p) { return '<option value="' + p.id + '">' + esc(p.displayName) + "</option>"; }).join("") + "</select>" : "") +
+            '<label for="tr-course">Course or qualification</label><input type="text" id="tr-course" maxlength="120" list="tr-courses" value="' + esc(v.course) + '"><datalist id="tr-courses">' + d.required.map(function (q) { return '<option value="' + esc(q.course) + '">'; }).join("") + "</datalist>" +
+            '<label for="tr-provider">Provider <span class="muted small">(optional)</span></label><input type="text" id="tr-provider" maxlength="120" value="' + esc(v.provider) + '">' +
+            '<div class="grid-2"><div><label for="tr-done">Completed</label><input type="date" id="tr-done" value="' + esc(v.completedOn) + '"></div>' +
+            '<div><label for="tr-exp">Expires <span class="muted small">(if it needs renewing)</span></label><input type="date" id="tr-exp" value="' + esc(v.expiresOn || "") + '"></div></div>' +
+            '<label for="tr-note">Note <span class="muted small">(optional)</span></label><input type="text" id="tr-note" maxlength="500" value="' + esc(v.note || "") + '">' +
+            '<label>Certificate</label><label class="drop-zone"><input type="file" id="tr-file" accept=".pdf,.jpg,.jpeg,.png" hidden>' + icon("upload") + '<span id="tr-file-name">' + (rec && rec.certificate ? "Replace " + esc(rec.certificate.fileName) : "Add a PDF or photo of the certificate") + "</span></label>" +
+            '<div class="form-error" id="tr-error" hidden></div>' +
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">Save</button></div></form>'
+        );
+        $("#tr-file", m.el).addEventListener("change", function (e) { file = e.target.files[0] || null; $("#tr-file-name", m.el).textContent = file ? file.name : "Add a PDF or photo of the certificate"; });
+        $("#tr-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            const meta = {
+                id: rec ? rec.id : undefined, personId: $("#tr-person", m.el) ? $("#tr-person", m.el).value || state.me.id : undefined,
+                course: $("#tr-course", m.el).value, provider: $("#tr-provider", m.el).value, completedOn: $("#tr-done", m.el).value,
+                expiresOn: $("#tr-exp", m.el).value, note: $("#tr-note", m.el).value, fileName: file ? file.name : "", verified: rec ? rec.verified : false,
+            };
+            try {
+                const r = await uploadJson("/api/training", "X-Training", meta, file);
+                if (r.user) { state.me = r.user; renderChrome(); }
+                closeModal();
+                toast("Training saved.");
+                render();
+            } catch (err) { formError($("#tr-error", m.el), err.message); }
+        });
+    }
+
+    // Sends a file (or nothing) as the body with its details in a header.
+    async function uploadJson(path, header, meta, file) {
+        const headers = { "Content-Type": "application/octet-stream" };
+        headers[header] = encodeURIComponent(JSON.stringify(meta));
+        const res = await fetch(path, { method: "POST", headers: headers, body: file || new Blob([]) });
+        const r = await res.json().catch(function () { return {}; });
+        if (!res.ok) throw new Error(r.error || "Something went wrong.");
+        return r;
+    }
+
+    // ================= HR cases =================
+
+    async function viewCases(root, current) {
+        const d = await api("/api/cases");
+        if (!current()) return;
+        let filter = state.caseFilter || "open";
+        root.innerHTML =
+            '<div class="page-head"><div><h1>HR cases</h1><p class="muted">Disciplinary, grievance, capability and investigation records. Only people with the HR cases permission can see this page. Every time a case is opened it’s recorded in the activity log.</p></div>' +
+            '<div class="page-actions"><button type="button" class="btn btn-primary" id="cs-new">' + icon("plus") + "Open a case</button></div></div>" +
+            '<div class="company-tabs" id="cs-tabs"><button type="button" data-f="open">Open</button><button type="button" data-f="warnings">Live warnings</button><button type="button" data-f="closed">Closed</button><button type="button" data-f="">All</button></div>' +
+            '<div id="cs-body"></div>';
+        function draw() {
+            $$("#cs-tabs [data-f]").forEach(function (b) { b.classList.toggle("active", b.dataset.f === filter); });
+            const list = d.cases.filter(function (c) { return !filter || (filter === "warnings" ? c.liveWarning : c.status === filter); });
+            $("#cs-body").innerHTML = list.length ? '<div class="table-card"><table class="table"><thead><tr><th>Case</th><th>Employee</th><th>Type</th><th>Opened</th><th>Status</th><th class="col-actions"></th></tr></thead><tbody>' +
+                list.map(function (c) {
+                    return '<tr data-case="' + c.id + '"><td><strong>' + esc(c.number) + '</strong><div class="muted small">' + esc(c.title) + "</div></td>" +
+                        '<td data-label="Employee"><div class="emp-cell">' + avatar(c.person, "sm") + '<div><div class="emp-name">' + esc(c.person.displayName) + '</div><div class="muted small">' + esc(c.person.jobTitle || "") + "</div></div></div></td>" +
+                        '<td data-label="Type">' + esc(c.typeLabel) + '</td><td data-label="Opened" class="nowrap">' + esc(fmtDate(c.openedOn + "T12:00:00")) + "</td>" +
+                        '<td data-label="Status">' + (c.status === "open" ? '<span class="badge badge-yellow">Open</span>' : '<span class="badge">' + esc(c.outcomeLabel) + "</span>") +
+                        (c.liveWarning ? '<div class="small danger-text">Warning live until ' + esc(fmtDate(c.warningExpires + "T12:00:00")) + "</div>" : "") + "</td>" +
+                        '<td class="col-actions"><button type="button" class="btn btn-ghost btn-small">' + icon("eye") + "Open</button></td></tr>";
+                }).join("") + "</tbody></table></div>" : '<div class="empty-page">' + icon("shield", "big") + "<h2>No cases here</h2></div>";
+        }
+        root.addEventListener("click", function (e) {
+            const f = e.target.closest("[data-f]");
+            if (f) { filter = state.caseFilter = f.dataset.f; return draw(); }
+            if (e.target.closest("#cs-new")) return openCaseForm(d);
+            const r = e.target.closest("[data-case]");
+            if (r) openCase(d, r.dataset.case);
+        });
+        draw();
+    }
+
+    function openCaseForm(d) {
+        const m = openModal(
+            '<h2 class="modal-title">Open a case</h2><form id="cf-form" novalidate>' +
+            '<div class="grid-2"><div><label for="cf-person">Employee</label><select id="cf-person"><option value="">Choose…</option>' + d.people.map(function (p) { return '<option value="' + p.id + '">' + esc(p.displayName) + "</option>"; }).join("") + "</select></div>" +
+            '<div><label for="cf-type">Type</label><select id="cf-type">' + Object.keys(d.types).map(function (k) { return '<option value="' + k + '">' + esc(d.types[k]) + "</option>"; }).join("") + "</select></div></div>" +
+            '<label for="cf-title">Title</label><input type="text" id="cf-title" maxlength="150" placeholder="e.g. Repeated lateness">' +
+            '<label for="cf-sum">Summary</label><textarea id="cf-sum" rows="4" maxlength="3000"></textarea>' +
+            '<label for="cf-date">Opened on</label><input type="date" id="cf-date" value="' + isoDay(new Date()) + '">' +
+            '<div class="form-error" id="cf-error" hidden></div>' +
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">Open case</button></div></form>'
+        );
+        $("#cf-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try {
+                const r = await api("/api/cases", { personId: $("#cf-person", m.el).value, type: $("#cf-type", m.el).value, title: $("#cf-title", m.el).value, summary: $("#cf-sum", m.el).value, openedOn: $("#cf-date", m.el).value });
+                closeModal();
+                toast("Case " + r.case.number + " opened.");
+                render();
+            } catch (err) { formError($("#cf-error", m.el), err.message); }
+        });
+    }
+
+    async function openCase(d, id) {
+        let c;
+        try { c = (await api("/api/cases/" + id)).case; } catch (err) { return toast(err.message); }
+        const m = openModal(
+            '<div class="case-head"><div><span class="eyebrow">' + esc(c.number) + " · " + esc(c.typeLabel) + '</span><h2 class="modal-title">' + esc(c.title) + "</h2>" +
+            '<div class="emp-cell">' + avatar(c.person, "sm") + "<span>" + esc(c.person.displayName) + ' <span class="muted small">· ' + esc(c.person.jobTitle || "") + "</span></span></div></div>" +
+            (c.status === "open" ? '<span class="badge badge-yellow">Open</span>' : '<span class="badge">' + esc(c.outcomeLabel) + "</span>") + "</div>" +
+            (c.summary ? '<p class="case-summary">' + esc(c.summary).replace(/\n/g, "<br>") + "</p>" : "") +
+            (c.status === "closed" ? '<div class="banner ' + (c.liveWarning ? "banner-warn" : "") + '"><div><strong>Outcome:</strong> ' + esc(c.outcomeLabel) + " on " + esc(fmtDate(c.outcomeDate + "T12:00:00")) +
+                (c.warningExpires ? " · warning " + (c.liveWarning ? "live until " : "expired ") + esc(fmtDate(c.warningExpires + "T12:00:00")) : "") + "</div></div>" : "") +
+            '<h3 class="detail-head">Timeline</h3>' +
+            '<form id="ce-form" class="case-entry"><select id="ce-kind">' + Object.keys(d.entryKinds).map(function (k) { return '<option value="' + k + '">' + esc(d.entryKinds[k]) + "</option>"; }).join("") + '</select><input type="date" id="ce-date" value="' + isoDay(new Date()) + '">' +
+            '<textarea id="ce-text" rows="2" maxlength="5000" placeholder="What happened, who was there, what was agreed…"></textarea><button type="submit" class="btn btn-ghost">' + icon("plus") + "Add</button></form>" +
+            (c.entries.length ? '<ol class="case-timeline">' + c.entries.map(function (e) {
+                return '<li><div class="ct-head"><span class="badge badge-soft">' + esc(e.kindLabel) + "</span><strong>" + esc(fmtDate(e.date + "T12:00:00")) + '</strong><span class="muted small">' + esc(e.byName) + "</span></div><p>" + esc(e.text).replace(/\n/g, "<br>") + "</p></li>";
+            }).join("") + "</ol>" : '<p class="muted small">Nothing recorded yet.</p>') +
+            '<h3 class="detail-head">Files</h3>' +
+            (c.files.length ? '<div class="sf-files">' + c.files.map(function (f) {
+                return '<a class="claim-receipt" href="/api/cases/' + c.id + "/files/" + f.id + '" target="_blank" rel="noopener">' + icon("file") + esc(f.title) + ' <span class="muted small">(' + esc(f.fileName) + ")</span></a>";
+            }).join("") + "</div>" : "") +
+            '<label class="btn btn-ghost btn-small case-upload">' + icon("upload") + 'Attach a file<input type="file" id="cs-file" hidden></label>' +
+            '<div class="form-error" id="cs-error" hidden></div>' +
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost danger-text" data-ca="delete">' + icon("trash") + "Delete case</button>" +
+            (c.status === "open" ? '<button type="button" class="btn btn-primary" data-ca="close">Close with outcome</button>' : '<button type="button" class="btn btn-ghost" data-ca="reopen">Reopen</button>') + "</div>",
+            { wide: true }
+        );
+        $("#ce-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try { await api("/api/cases/" + c.id + "/entry", { kind: $("#ce-kind", m.el).value, date: $("#ce-date", m.el).value, text: $("#ce-text", m.el).value }); openCase(d, c.id); } catch (err) { formError($("#cs-error", m.el), err.message); }
+        });
+        $("#cs-file", m.el).addEventListener("change", async function (e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            try { await uploadJson("/api/cases/" + c.id + "/files", "X-Document", { fileName: file.name, title: file.name.replace(/\.[^.]+$/, "") }, file); openCase(d, c.id); } catch (err) { formError($("#cs-error", m.el), err.message); }
+        });
+        m.el.addEventListener("click", async function (e) {
+            const b = e.target.closest("[data-ca]");
+            if (!b) return;
+            try {
+                if (b.dataset.ca === "close") return openCaseClose(d, c);
+                if (b.dataset.ca === "delete" && !(await confirmDialog({ title: "Delete " + c.number + "?", message: "The case, its timeline and files will be permanently deleted.", confirmLabel: "Delete", danger: true }))) return;
+                await api("/api/cases/" + c.id + "/" + b.dataset.ca, {});
+                closeModal();
+                toast(b.dataset.ca === "delete" ? "Case deleted." : "Case reopened.");
+                render();
+            } catch (err) { formError($("#cs-error", m.el), err.message); }
+        });
+    }
+
+    function openCaseClose(d, c) {
+        const m = openModal(
+            '<h2 class="modal-title">Close ' + esc(c.number) + "</h2><form id=\"cc-form\" novalidate>" +
+            '<label for="cc-out">Outcome</label><select id="cc-out">' + Object.keys(d.outcomes).filter(Boolean).map(function (k) { return '<option value="' + k + '">' + esc(d.outcomes[k]) + "</option>"; }).join("") + "</select>" +
+            '<div class="grid-2"><div><label for="cc-date">Outcome date</label><input type="date" id="cc-date" value="' + isoDay(new Date()) + '"></div>' +
+            '<div><label for="cc-exp">Warning expires <span class="muted small">(warnings only)</span></label><input type="date" id="cc-exp"></div></div>' +
+            '<p class="muted small">Leave the expiry blank to use the usual period: 6 months for informal and first written warnings, 12 months for a final written warning.</p>' +
+            '<div class="form-error" id="cc-error" hidden></div>' +
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">Close case</button></div></form>'
+        );
+        $("#cc-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try { await api("/api/cases/" + c.id + "/close", { outcome: $("#cc-out", m.el).value, outcomeDate: $("#cc-date", m.el).value, warningExpires: $("#cc-exp", m.el).value }); closeModal(); toast("Case closed."); render(); } catch (err) { formError($("#cc-error", m.el), err.message); }
+        });
+    }
+
+    // ================= Jobs and recruitment =================
+
+    async function viewJobs(root, current) {
+        const d = await api("/api/jobs");
+        if (!current()) return;
+        root.innerHTML =
+            '<div class="page-head"><div><h1>Jobs</h1><p class="muted">Open roles across HN Group. Apply yourself, or refer someone you know.' + (d.canManage ? " As a recruiter you can post vacancies and move applicants through to hire." : "") + "</p></div>" +
+            (d.canManage ? '<div class="page-actions"><button type="button" class="btn btn-primary" id="jb-new">' + icon("plus") + "Post a vacancy</button></div>" : "") + "</div>" +
+            (d.vacancies.length ? '<div class="job-list">' + d.vacancies.map(function (v) {
+                return '<article class="job-card' + (v.open ? "" : " job-closed") + '" data-job="' + v.id + '"><div class="job-head"><div><h2>' + esc(v.title) + "</h2>" +
+                    '<div class="job-meta"><span>' + icon("building") + esc(v.company) + "</span>" + (v.location ? "<span>" + icon("pin") + esc(v.location) + "</span>" : "") +
+                    "<span>" + icon("clock") + esc(v.contractLabel) + "</span>" + (v.salary ? "<span>" + icon("pound") + esc(v.salary) + "</span>" : "") + "</div></div>" +
+                    (v.open ? (v.closingDate ? '<span class="badge badge-soft">Closes ' + esc(fmtDate(v.closingDate + "T12:00:00")) + "</span>" : '<span class="badge badge-green">Open</span>') : '<span class="badge">' + (v.status === "filled" ? "Filled" : "Closed") + "</span>") + "</div>" +
+                    (v.description ? '<div class="job-desc">' + richText(v.description) + "</div>" : "") +
+                    '<div class="job-foot">' + (v.hiringManagerName ? '<span class="muted small">Hiring manager: ' + esc(v.hiringManagerName) + "</span>" : "<span></span>") +
+                    '<div class="btn-row">' + (v.myApplication ? '<span class="badge badge-soft">You applied · ' + esc(v.myApplication.stageLabel) + "</span>" : "") +
+                    (v.open ? '<button type="button" class="btn btn-ghost btn-small" data-jb="refer">' + icon("users") + "Refer someone</button>" + (v.applied || state.me.system ? "" : '<button type="button" class="btn btn-primary btn-small" data-jb="apply">Apply</button>') : "") + "</div></div>" +
+                    (d.canManage ? jobPipelineHtml(d, v) : "") + "</article>";
+            }).join("") + "</div>" : '<div class="empty-page">' + icon("briefcase", "big") + "<h2>No vacancies right now</h2><p class=\"muted\">New roles will appear here.</p></div>");
+        root.addEventListener("click", async function (e) {
+            if (e.target.closest("#jb-new")) return openVacancyForm(d, null);
+            const b = e.target.closest("[data-jb]");
+            if (!b) return;
+            const v = d.vacancies.find(function (x) { return x.id === b.closest("[data-job]").dataset.job; });
+            const act = b.dataset.jb;
+            if (act === "apply" || act === "refer") return openApplyForm(v, act === "apply", d);
+            if (act === "edit") return openVacancyForm(d, v);
+            if (act === "applicant") return openApplicant(d, v, v.applicants.find(function (a) { return a.id === b.dataset.id; }));
+            try {
+                if (act === "delete" && !(await confirmDialog({ title: "Delete this vacancy?", message: "Its applicants and CVs will be deleted too.", confirmLabel: "Delete", danger: true }))) return;
+                await api("/api/jobs/" + v.id + (act === "delete" ? "/delete" : "/status"), { status: act });
+                toast(act === "delete" ? "Vacancy deleted." : "Vacancy " + (act === "open" ? "reopened." : act + "."));
+                render();
+            } catch (err) { toast(err.message); }
+        });
+    }
+
+    function jobPipelineHtml(d, v) {
+        const stages = ["applied", "screening", "interview", "offer", "hired"];
+        return '<div class="job-pipeline"><div class="jp-head"><strong>' + v.applicants.length + (v.applicants.length === 1 ? " applicant" : " applicants") + "</strong>" +
+            '<div class="btn-row"><button type="button" class="btn btn-ghost btn-small" data-jb="edit">' + icon("edit") + "Edit</button>" +
+            (v.status === "open" ? '<button type="button" class="btn btn-ghost btn-small" data-jb="closed">Close</button>' : '<button type="button" class="btn btn-ghost btn-small" data-jb="open">Reopen</button>') +
+            '<button type="button" class="icon-btn" data-jb="delete" aria-label="Delete vacancy">' + icon("trash") + "</button></div></div>" +
+            '<div class="jp-cols">' + stages.map(function (st) {
+                const list = v.applicants.filter(function (a) { return a.stage === st; });
+                return '<div class="jp-col"><div class="jp-col-head">' + esc(d.stages[st]) + ' <span class="tab-count">' + list.length + "</span></div>" +
+                    list.map(function (a) {
+                        return '<button type="button" class="jp-card" data-jb="applicant" data-id="' + a.id + '"><strong>' + esc(a.name) + '</strong><span class="muted small">' + esc(a.sourceLabel) + (a.cv ? " · CV" : "") + "</span></button>";
+                    }).join("") + "</div>";
+            }).join("") + "</div>" +
+            (v.applicants.some(function (a) { return a.stage === "rejected" || a.stage === "withdrawn"; }) ? '<p class="muted small">' + v.applicants.filter(function (a) { return a.stage === "rejected" || a.stage === "withdrawn"; }).length + " not progressing or withdrawn.</p>" : "") + "</div>";
+    }
+
+    function openVacancyForm(d, v) {
+        v = v || { title: "", company: d.companies[0], location: "", contract: "full-time", salary: "", description: "", closingDate: "", hiringManagerId: "" };
+        const m = openModal(
+            '<h2 class="modal-title">' + (v.id ? "Edit vacancy" : "Post a vacancy") + "</h2><form id=\"vf-form\" novalidate>" +
+            '<label for="vf-title">Job title</label><input type="text" id="vf-title" maxlength="120" value="' + esc(v.title) + '">' +
+            '<div class="grid-2"><div><label for="vf-company">Company</label><select id="vf-company">' + d.companies.map(function (c) { return "<option" + (c === v.company ? " selected" : "") + ">" + esc(c) + "</option>"; }).join("") + "</select></div>" +
+            '<div><label for="vf-contract">Contract</label><select id="vf-contract">' + Object.keys(d.contracts).map(function (k) { return '<option value="' + k + '"' + (k === v.contract ? " selected" : "") + ">" + esc(d.contracts[k]) + "</option>"; }).join("") + "</select></div></div>" +
+            '<div class="grid-2"><div><label for="vf-loc">Location</label><input type="text" id="vf-loc" maxlength="120" value="' + esc(v.location) + '" placeholder="e.g. Manchester / Remote"></div>' +
+            '<div><label for="vf-salary">Salary</label><input type="text" id="vf-salary" maxlength="80" value="' + esc(v.salary) + '" placeholder="e.g. £24,000 – £28,000"></div></div>' +
+            '<div class="grid-2"><div><label for="vf-close">Closing date <span class="muted small">(optional)</span></label><input type="date" id="vf-close" value="' + esc(v.closingDate || "") + '"></div>' +
+            '<div><label for="vf-mgr">Hiring manager</label><select id="vf-mgr"><option value="">None</option>' + d.people.map(function (p) { return '<option value="' + p.id + '"' + (p.id === v.hiringManagerId ? " selected" : "") + ">" + esc(p.displayName) + "</option>"; }).join("") + "</select></div></div>" +
+            '<label for="vf-desc">Description</label><textarea id="vf-desc" rows="7" maxlength="6000" placeholder="What the role involves, who you’re looking for…">' + esc(v.description) + "</textarea>" +
+            '<div class="form-error" id="vf-error" hidden></div>' +
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">' + (v.id ? "Save" : "Post vacancy") + "</button></div></form>",
+            { wide: true }
+        );
+        $("#vf-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try {
+                await api(v.id ? "/api/jobs/" + v.id : "/api/jobs", {
+                    title: $("#vf-title", m.el).value, company: $("#vf-company", m.el).value, contract: $("#vf-contract", m.el).value, location: $("#vf-loc", m.el).value,
+                    salary: $("#vf-salary", m.el).value, closingDate: $("#vf-close", m.el).value, hiringManagerId: $("#vf-mgr", m.el).value, description: $("#vf-desc", m.el).value,
+                });
+                closeModal();
+                toast(v.id ? "Vacancy saved." : "Vacancy posted. Everyone has been notified.");
+                render();
+            } catch (err) { formError($("#vf-error", m.el), err.message); }
+        });
+    }
+
+    function openApplyForm(v, self, d) {
+        let file = null;
+        const m = openModal(
+            '<h2 class="modal-title">' + (self ? "Apply for " : "Refer someone for ") + esc(v.title) + "</h2><form id=\"ap-form\" novalidate>" +
+            (self ? '<p class="muted">Your name and current role are sent to the recruiters. Add a note about why you’d like the job.</p>'
+                : '<div class="grid-2"><div><label for="ap-name">Their name</label><input type="text" id="ap-name" maxlength="120"></div><div><label for="ap-email">Their email</label><input type="email" id="ap-email" maxlength="160"></div></div>' +
+                  '<label for="ap-phone">Phone <span class="muted small">(optional)</span></label><input type="tel" id="ap-phone" maxlength="40">' +
+                  (d.canManage ? '<label for="ap-source">Source</label><select id="ap-source">' + Object.keys(d.sources).filter(function (k) { return k !== "internal"; }).map(function (k) { return '<option value="' + k + '">' + esc(d.sources[k]) + "</option>"; }).join("") + "</select>" : "")) +
+            '<label for="ap-msg">' + (self ? "Why you’d be great" : "Why you’re recommending them") + '</label><textarea id="ap-msg" rows="4" maxlength="3000"></textarea>' +
+            '<label>CV <span class="muted small">(optional)</span></label><label class="drop-zone"><input type="file" id="ap-file" accept=".pdf,.doc,.docx,.odt,.rtf,.txt" hidden>' + icon("upload") + '<span id="ap-file-name">Add a CV (PDF or Word)</span></label>' +
+            '<div class="form-error" id="ap-error" hidden></div>' +
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">' + (self ? "Send application" : "Send referral") + "</button></div></form>"
+        );
+        $("#ap-file", m.el).addEventListener("change", function (e) { file = e.target.files[0] || null; $("#ap-file-name", m.el).textContent = file ? file.name : "Add a CV (PDF or Word)"; });
+        $("#ap-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try {
+                await uploadJson("/api/jobs/" + v.id + "/apply", "X-Applicant", {
+                    self: self, name: self ? "" : $("#ap-name", m.el).value, email: self ? "" : $("#ap-email", m.el).value, phone: self ? "" : $("#ap-phone", m.el).value,
+                    source: $("#ap-source", m.el) ? $("#ap-source", m.el).value : "", message: $("#ap-msg", m.el).value, fileName: file ? file.name : "",
+                }, file);
+                closeModal();
+                toast(self ? "Application sent. Good luck!" : "Referral sent. Thank you!");
+                render();
+            } catch (err) { formError($("#ap-error", m.el), err.message); }
+        });
+    }
+
+    function openApplicant(d, v, a) {
+        const m = openModal(
+            '<span class="eyebrow">' + esc(v.title) + '</span><h2 class="modal-title">' + esc(a.name) + "</h2>" +
+            '<div class="ap-facts"><span class="badge">' + esc(a.stageLabel) + "</span><span>" + esc(a.sourceLabel) + (a.referredByName ? " · referred by " + esc(a.referredByName) : "") + "</span>" +
+            (a.email ? '<a href="mailto:' + esc(a.email) + '">' + esc(a.email) + "</a>" : "") + (a.phone ? "<span>" + esc(a.phone) + "</span>" : "") +
+            (a.cv ? '<a class="claim-receipt" href="/api/jobs/applicants/' + a.id + '/cv" target="_blank" rel="noopener">' + icon("file") + esc(a.cv.fileName) + "</a>" : "") + "</div>" +
+            (a.message ? '<p class="case-summary">' + esc(a.message).replace(/\n/g, "<br>") + "</p>" : "") +
+            (a.stage !== "hired" ? '<label for="ap-stage">Move to</label><div class="inline-form"><select id="ap-stage">' + Object.keys(d.stages).filter(function (k) { return k !== "hired"; }).map(function (k) {
+                return '<option value="' + k + '"' + (k === a.stage ? " selected" : "") + ">" + esc(d.stages[k]) + "</option>";
+            }).join("") + '</select><button type="button" class="btn btn-ghost" id="ap-move">Move</button><button type="button" class="btn btn-primary" id="ap-hire">' + icon("tick") + "Hire</button></div>" : "") +
+            '<h3 class="detail-head">Notes</h3><form id="ap-note" class="inline-form"><input type="text" id="ap-note-t" maxlength="3000" placeholder="Interview feedback, next steps…"><button type="submit" class="btn btn-ghost">Add</button></form>' +
+            (a.notes.length ? '<ol class="case-timeline">' + a.notes.map(function (n) {
+                return "<li" + (n.auto ? ' class="ct-auto"' : "") + '><div class="ct-head"><strong>' + esc(n.byName) + '</strong><span class="muted small">' + esc(fmtDateTime(n.at)) + "</span></div><p>" + esc(n.text) + "</p></li>";
+            }).join("") + "</ol>" : "") +
+            '<div class="form-error" id="ap-err" hidden></div>' +
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost danger-text" id="ap-del">' + icon("trash") + 'Remove applicant</button><button type="button" class="btn btn-primary" data-close>Done</button></div>',
+            { wide: true }
+        );
+        async function act(path, body, msg) {
+            try { await api("/api/jobs/applicants/" + a.id + "/" + path, body); closeModal(); toast(msg); render(); } catch (err) { formError($("#ap-err", m.el), err.message); }
+        }
+        if ($("#ap-move", m.el)) $("#ap-move", m.el).addEventListener("click", function () { act("stage", { stage: $("#ap-stage", m.el).value }, "Applicant moved."); });
+        if ($("#ap-hire", m.el)) $("#ap-hire", m.el).addEventListener("click", function () { openHireForm(d, v, a); });
+        $("#ap-note", m.el).addEventListener("submit", function (e) { e.preventDefault(); act("note", { text: $("#ap-note-t", m.el).value }, "Note added."); });
+        $("#ap-del", m.el).addEventListener("click", async function () {
+            if (await confirmDialog({ title: "Remove " + a.name + "?", message: "Their application and CV will be deleted.", confirmLabel: "Remove", danger: true })) act("delete", {}, "Applicant removed.");
+        });
+    }
+
+    function openHireForm(d, v, a) {
+        const parts = a.name.split(/\s+/);
+        const m = openModal(
+            '<h2 class="modal-title">Hire ' + esc(a.name) + "</h2><form id=\"hf-form\" novalidate>" +
+            (a.personId ? '<p class="muted">' + esc(a.name) + " already works here. They’ll be marked as hired; update their job title and company in Employee Management.</p>" :
+                '<p class="muted">This creates their employee record (with a work email address) and starts their onboarding checklist. You can set up their login from Employee Management.</p>' +
+                '<div class="grid-2"><div><label for="hf-first">First name</label><input type="text" id="hf-first" maxlength="60" value="' + esc(parts[0] || "") + '"></div>' +
+                '<div><label for="hf-last">Last name</label><input type="text" id="hf-last" maxlength="60" value="' + esc(parts.slice(1).join(" ")) + '"></div></div>' +
+                '<div class="grid-2"><div><label for="hf-title">Job title</label><input type="text" id="hf-title" maxlength="100" value="' + esc(v.title) + '"></div>' +
+                '<div><label for="hf-start">Start date</label><input type="date" id="hf-start"></div></div>' +
+                '<div class="grid-2"><div><label for="hf-company">Company</label><select id="hf-company">' + d.companies.map(function (c) { return "<option" + (c === v.company ? " selected" : "") + ">" + esc(c) + "</option>"; }).join("") + "</select></div>" +
+                '<div><label for="hf-sup">Supervisor</label><select id="hf-sup"><option value="">None</option>' + d.people.map(function (p) { return '<option value="' + p.id + '"' + (p.id === v.hiringManagerId ? " selected" : "") + ">" + esc(p.displayName) + "</option>"; }).join("") + "</select></div></div>") +
+            '<label class="inline-check"><input type="checkbox" id="hf-close" checked> Mark the vacancy as filled</label>' +
+            '<div class="form-error" id="hf-error" hidden></div>' +
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">' + icon("tick") + "Hire</button></div></form>"
+        );
+        $("#hf-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            const val = function (id) { const el = $(id, m.el); return el ? el.value : ""; };
+            try {
+                const r = await api("/api/jobs/applicants/" + a.id + "/hire", {
+                    firstName: val("#hf-first"), lastName: val("#hf-last"), jobTitle: val("#hf-title"), startDate: val("#hf-start"),
+                    company: val("#hf-company"), supervisorId: val("#hf-sup"), closeVacancy: $("#hf-close", m.el).checked,
+                });
+                closeModal();
+                toast(a.personId ? "Marked as hired." : "Hired. Their employee record is ready" + (r.onboarding ? " and onboarding has started." : "."));
+                render();
+            } catch (err) { formError($("#hf-error", m.el), err.message); }
         });
     }
 

@@ -22,6 +22,9 @@ const uptime = require("./lib/uptime");
 const expenses = require("./lib/expenses");
 const invoices = require("./lib/invoices");
 const notifications = require("./lib/notifications");
+const training = require("./lib/training");
+const cases = require("./lib/cases");
+const recruitment = require("./lib/recruitment");
 const extraRoutes = require("./lib/routes-extra");
 
 const PORT = parseInt(process.env.PORT || "3200", 10);
@@ -42,7 +45,7 @@ const APP_ROUTES = new Set([
   "/home", "/directory", "/employees", "/settings", "/system", "/announcements", "/documents",
   "/calendar", "/polls", "/onboarding", "/roles", "/about", "/signature",
   "/leave", "/rotas", "/payslips", "/payroll", "/funds", "/helpdesk", "/reviews", "/staff-files", "/status",
-  "/expenses", "/invoices", "/notifications",
+  "/expenses", "/invoices", "/notifications", "/training", "/cases", "/jobs",
 ]);
 const SYSTEM_UNLOCK_MS = 15 * 60 * 1000; // System Admin stays unlocked for 15 minutes of inactivity
 const MAX_PIN_ATTEMPTS = 5;
@@ -75,6 +78,9 @@ backup.init(DATA_DIR);
 expenses.init(DATA_DIR);
 invoices.init(DATA_DIR);
 notifications.init(DATA_DIR);
+training.init(DATA_DIR);
+cases.init(DATA_DIR);
+recruitment.init(DATA_DIR);
 
 // Re-reads every data file, e.g. after a backup is restored.
 function reloadAll() {
@@ -94,6 +100,9 @@ function reloadAll() {
   expenses.init(DATA_DIR);
   invoices.init(DATA_DIR);
   notifications.init(DATA_DIR);
+  training.init(DATA_DIR);
+  cases.init(DATA_DIR);
+  recruitment.init(DATA_DIR);
 }
 
 backup.scheduleNightly((err, name) => {
@@ -511,6 +520,10 @@ function meResponse(session) {
   if (store.can(session.person, uptime.MANAGE)) user.servicesDown = uptime.downCount();
   user.expenseApprovals = expenses.approvalCount(session.person);
   user.notificationsUnread = notifications.unreadCount(session.person.id);
+  user.trainingDue = training.dueCount(session.person);
+  user.jobsOpen = recruitment.openCount();
+  if (store.can(session.person, cases.MANAGE)) user.casesOpen = cases.openCount();
+  if (store.can(session.person, recruitment.MANAGE)) user.newApplicants = recruitment.newApplicantsCount();
   if (store.can(session.person, payslips.MANAGE)) {
     const b = funds.balances();
     user.payrollOverdrawn = b.payroll < 0 || b.main < 0;
@@ -1537,8 +1550,16 @@ async function routeApi(req, res, pathname, session) {
     if (method === "POST" && (m = /^\/api\/timesheets\/([a-f0-9]{16})\/(approve|reject)$/.exec(pathname))) {
       const sheet = rotas.getSheet(m[1]);
       if (!sheet) throw httpError(404, "Timesheet not found.");
-      rotas.decide(sheet, m[2] === "approve", me, (await readJsonBody(req)).note);
-      logEvent(req, session, m[2] === "approve" ? "timesheet-approved" : "timesheet-rejected", { target: (store.getPerson(sheet.personId) || {}).displayName, detail: `Week of ${sheet.week}` });
+      const body = await readJsonBody(req);
+      rotas.decide(sheet, m[2] === "approve", me, body.note);
+      const who = store.getPerson(sheet.personId);
+      logEvent(req, session, m[2] === "approve" ? "timesheet-approved" : "timesheet-rejected", { target: (who || {}).displayName, detail: `Week of ${sheet.week}` });
+      // Extra hours on an approved timesheet can be banked as time off in lieu.
+      if (m[2] === "approve" && who && Number(body.toilHours) > 0) {
+        leave.addToil(who, Number(body.toilHours), `Extra hours, week of ${sheet.week}`, me, "timesheet");
+        logEvent(req, session, "toil-added", { target: who.displayName, detail: `${body.toilHours} hours from the timesheet for the week of ${sheet.week}` });
+      }
+      notifications.notify([sheet.personId], { type: "timesheet", title: `Your timesheet for the week of ${sheet.week} was ${m[2] === "approve" ? "approved" : "sent back"}`, body: (body.note || "") + (Number(body.toilHours) > 0 ? ` ${body.toilHours} hours added as time off in lieu.` : ""), link: "/rotas" }, me);
       return sendJson(res, 200, { ok: true, user: meResponse(session) });
     }
   }
