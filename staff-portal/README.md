@@ -6,18 +6,20 @@ Internal staff portal for the whole of HN Group, served at **https://staff.hngro
 
 ## Features
 
-- **Home page.** Shows the current date and time on your device, and the time where your profile location is set, with the difference between the two. It also has quick-access tiles, your details and company news.
+- **Home page.** Shows the current date and time on your device, and the time where your profile location is set, with the difference between the two. It also shows the latest announcements, anything you need to acknowledge, your onboarding tasks, what's coming up on the calendar and your status.
 - **Dropdown navigation.** People (Staff Directory, Employee Management), Workplace, HR and Support. Sections that aren't built yet are marked *Soon*.
 - **Staff Directory.** Every employee with their photo, job title, company, emails, location and live local time. You can search and filter by company. Click someone to see who they report to and who reports to them.
-- **Employee Management.** Only shown to the leadership and HR teams.
-  - Add employees with their first and last name, display name, job title, company, other companies they work at, supervisor, location, time zone and phone.
+- **Global search.** Use the search box in the top bar, or press **Ctrl+K** (**⌘K** on a Mac) or **/**. It searches people, pages, documents, announcements, events and polls.
+- **Status.** Click your name, then the status line, to set Available, Busy, Away or Out of office. You can add a message and a date it clears on. Your status shows on your profile and in the Staff Directory.
+- **Employee Management.** Only shown to people with the *Manage staff* permission. Click any row to edit that person.
+  - Add employees with their first and last name, display name, job title, company, other companies they work at, supervisor, location, time zone, phone and start date. The start date is used for work anniversaries.
   - **Emails** are generated as `firstname.lastname@domain`. If that address is taken, a number is added (`firstname.42.lastname@domain`).
     - Each address can be overridden with a custom one.
     - Employees can have several addresses on different brand domains.
     - The **primary** address is their login username.
   - After adding someone, you're asked whether to create their login account. A temporary password is shown once on screen, and the employee must create their own password the first time they sign in.
   - You can reset a password, disable or re-enable a login, edit details and delete employees.
-- **Settings.** Opened by clicking your name. It has three tabs: **Profile** (picture, display name, phone, location and time zone), **Appearance** (theme) and **Security** (password).
+- **Settings.** Opened by clicking your name. It has three tabs: **Profile** (picture, banner, display name, phone, location, time zone and birthday), **Appearance** (theme) and **Security** (password, sign-in code, and **Where you're signed in**, where you can sign out other devices). Birthdays are day and month only, and you choose whether colleagues can see yours.
 - **Profile banners.** Under **Settings → Profile**, everyone can choose one of eight preset gradient banners or upload their own wide image, which is cropped to 3:1. The banner shows at the top of their profile and on their Staff Directory card.
 
 **Companies:** HN Group, Horizon Network, Horizon Advertising, Horizon Development and Horizon Media Group.
@@ -66,7 +68,7 @@ Signing in has two steps: your **email and password**, then your personal **6-di
 - **Wrong codes.** Five wrong codes mean starting again from the password step. Wrong codes count towards the 15-minute lockout on that network address, and they're recorded in the activity log.
 - **Log in as.** "Log in as" in System Admin skips both the password and the code.
 
-**How long a sign-in lasts.** A sign-in ends when the browser is closed, or after 12 hours without using the portal. Sign-ins are saved in `sessions.json`, so restarting the app or running the installer doesn't sign anyone out. Only a hash of each sign-in token is stored, so the file can't be used to sign in.
+**How long a sign-in lasts.** Reloading the page or opening a portal address directly signs you out, and so does closing the browser or leaving the portal unused for 12 hours. Moving around inside the portal keeps you signed in. Sign-ins are saved in `sessions.json`, so restarting the app or running the installer doesn't sign anyone out. Only a hash of each sign-in token is stored, so the file can't be used to sign in.
 
 ### Workplace
 
@@ -74,6 +76,19 @@ Signing in has two steps: your **email and password**, then your personal **6-di
 - **Documents & Policies.** Leadership and HR can upload PDF, Word, Excel, PowerPoint, text, CSV or image files up to 20 MB. Each document has a category (Policies, Handbooks, Forms, Templates, Guides or Other) and can be shared with everyone or with particular companies. Staff can view or download documents, and search or filter them.
   - Ticking **Staff must read and acknowledge this** asks everyone in the document's audience to confirm they've read it. Until they do, it shows under "Needs your attention" on their home page.
   - Managers can see who has and hasn't acknowledged a document. Uploading a new version asks everyone to acknowledge it again.
+
+- **Announcement extras.**
+  - Everyone can react with emoji and, unless it's turned off for a post, comment.
+  - Posts can ask staff to **acknowledge** them, and managers see how many have.
+  - Posts can be **scheduled** to go live later and can **expire** automatically.
+- **Calendar.** A month view of company events, UK (England & Wales) bank holidays from 2025 to 2027, company holidays, shared birthdays and work anniversaries. People with *Manage the calendar* can add events for everyone or for particular companies.
+- **Polls & surveys.**
+  - Questions can be single choice, multiple choice, a 1–5 rating or a written answer.
+  - **Anonymous** polls never store who gave which answer.
+  - You choose whether staff see the results after answering, and you can set a closing date.
+- **Onboarding.**
+  - People with *Run onboarding* start a checklist for a new starter from a template. A default "New starter" template is included, and templates can be edited.
+  - Each task belongs to the new starter, their supervisor or HR, and each person sees their own tasks on their home page.
 
 ### Themes
 
@@ -92,11 +107,22 @@ Everyone can pick a theme under **Settings → Appearance**. Settings is in the 
 
 The logo colour stripe always stays in the HN Group brand colours. Dark themes use a white version of the logo.
 
-### Who can see Employee Management
+### Roles & permissions
 
-Access is decided by **job title**. Anyone whose title contains one of the listed words or phrases gets access. The defaults are *Chief, Director, Head of, Founder, Leadership, Human Resources* and *HR*.
+What people can manage is set by **roles**, under **People → Roles & permissions**. Each role switches on any of these permissions:
 
-The admin account (`admin@hngroup.org.uk`) can change the list in the portal under **Employee Management → Access rules**. That screen also shows who currently has access. The admin account always has access.
+- Manage staff
+- Manage roles
+- Post announcements
+- Manage documents
+- Manage the calendar
+- Run polls & surveys
+- Run onboarding
+
+You then choose who has each role. Someone with several roles gets every permission from all of them.
+
+- The **system owner** (charlie.livsey@hngroup.org.uk) and the **admin account** always have every permission, whatever roles they have.
+- On the first start after upgrading, three roles are created: **Leadership & HR** (everything), **Communications** and **Documents**. Everyone who previously had access through their job title is given *Leadership & HR*.
 
 ## Install on the VPS
 
@@ -155,13 +181,21 @@ Everything lives in `/var/lib/hn-staff-portal`:
 | Path              | Contents                                                        |
 |-------------------|-----------------------------------------------------------------|
 | `people.json`     | Employees and login accounts. Passwords are stored as scrypt hashes. |
-| `settings.json`   | Access rules, the system owner and the system PIN (hashed).     |
+| `settings.json`   | Roles, the system owner and the system PIN (hashed).            |
 | `announcements.json`, `documents.json`, `documents/` | Announcements, the document library and the uploaded files. |
 | `sessions.json`   | Signed-in sessions (hashed tokens).                              |
+| `events.json`, `polls.json`, `onboarding.json` | Calendar events, polls and their answers, and onboarding checklists. |
+| `backups/`        | Automatic and manual backups (`.tar.gz`).                       |
 | `audit.log`       | Activity log of every action in the portal.                     |
 | `avatars/`        | Profile pictures.                                               |
 
-To back it up:
+**Automatic backups.**
+- A backup is taken every night at 2am and saved to `backups/`. The latest 14 nightly backups are kept.
+- In **System Admin → Backups** you can back up now, download or delete a backup, or restore one.
+- Restoring needs the System Admin PIN. It takes a safety backup of the current data first and signs everyone out.
+- The activity log is never rolled back.
+
+For an off-server copy, download a backup from System Admin, or run:
 
 ```bash
 sudo tar czf ~/staff-portal-backup-$(date +%F).tgz -C /var/lib hn-staff-portal

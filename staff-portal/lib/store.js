@@ -95,7 +95,104 @@ function init(dir) {
     : { managementTitles: DEFAULT_MANAGEMENT_TITLES };
   if (!settings.ownerEmail) settings.ownerEmail = DEFAULT_OWNER_EMAIL;
   if (!settings.systemPin) settings.systemPin = hashPassword(DEFAULT_SYSTEM_PIN);
+  if (!settings.roles) migrateToRoles();
   writeJson(settingsFile, settings);
+}
+
+// ---------- Roles & permissions ----------
+
+const PERMISSIONS = [
+  { key: "staff.manage", name: "Manage staff", description: "Add, edit and remove employees, and manage their logins." },
+  { key: "access.manage", name: "Manage roles", description: "Create roles and choose who has them." },
+  { key: "announcements.manage", name: "Post announcements", description: "Post, edit and delete announcements." },
+  { key: "documents.manage", name: "Manage documents", description: "Upload, edit and delete documents and policies." },
+  { key: "events.manage", name: "Manage the calendar", description: "Add, edit and delete calendar events and company holidays." },
+  { key: "polls.manage", name: "Run polls & surveys", description: "Create polls and surveys and see the results." },
+  { key: "onboarding.manage", name: "Run onboarding", description: "Start onboarding checklists and edit the templates." },
+];
+const PERMISSION_KEYS = PERMISSIONS.map((p) => p.key);
+
+// First run with roles: create sensible defaults, and give anyone who had access through their
+// job title (the old rule) the "Leadership & HR" role so nobody loses access.
+function migrateToRoles() {
+  const leadership = { id: newId(), name: "Leadership & HR", permissions: PERMISSION_KEYS.slice() };
+  settings.roles = [
+    leadership,
+    { id: newId(), name: "Communications", permissions: ["announcements.manage", "events.manage", "polls.manage"] },
+    { id: newId(), name: "Documents", permissions: ["documents.manage"] },
+  ];
+  let changed = false;
+  for (const p of people) {
+    if (p.system) continue;
+    if (allJobTitles(p).some(titleGrantsManagement)) {
+      p.roleIds = [leadership.id];
+      changed = true;
+    }
+  }
+  if (changed) savePeople();
+}
+
+function listRoles() {
+  return (settings.roles || []).map((r) => ({
+    ...r,
+    members: people.filter((p) => !p.system && (p.roleIds || []).includes(r.id)).map((p) => p.id),
+  }));
+}
+
+function cleanPermissions(list) {
+  return (Array.isArray(list) ? list : []).filter((k, i, arr) => PERMISSION_KEYS.includes(k) && arr.indexOf(k) === i);
+}
+
+function saveRole(input, existing) {
+  const name = str(input.name, 60);
+  if (!name) throw new ValidationError("Give the role a name.");
+  if ((settings.roles || []).some((r) => r !== existing && r.name.toLowerCase() === name.toLowerCase())) {
+    throw new ValidationError("There's already a role with that name.");
+  }
+  const fields = { name, permissions: cleanPermissions(input.permissions) };
+  if (existing) Object.assign(existing, fields);
+  else settings.roles.push((existing = { id: newId(), ...fields }));
+  writeJson(settingsFile, settings);
+  return existing;
+}
+
+function getRole(id) {
+  return (settings.roles || []).find((r) => r.id === id) || null;
+}
+
+function deleteRole(role) {
+  settings.roles = settings.roles.filter((r) => r.id !== role.id);
+  for (const p of people) if (p.roleIds) p.roleIds = p.roleIds.filter((id) => id !== role.id);
+  writeJson(settingsFile, settings);
+  savePeople();
+}
+
+function setRoleMembers(role, personIds) {
+  const ids = new Set(Array.isArray(personIds) ? personIds : []);
+  for (const p of people) {
+    if (p.system) continue;
+    const has = (p.roleIds || []).includes(role.id);
+    if (ids.has(p.id) && !has) p.roleIds = (p.roleIds || []).concat(role.id);
+    if (!ids.has(p.id) && has) p.roleIds = p.roleIds.filter((id) => id !== role.id);
+  }
+  savePeople();
+}
+
+// The owner and the built-in admin account can do everything; everyone else gets the
+// permissions of the roles they've been given.
+function permissionsOf(person) {
+  if (!person) return [];
+  if (person.system || isOwner(person)) return PERMISSION_KEYS.slice();
+  const out = new Set();
+  for (const id of person.roleIds || []) {
+    const role = getRole(id);
+    if (role) role.permissions.forEach((k) => out.add(k));
+  }
+  return [...out];
+}
+
+function can(person, permission) {
+  return permissionsOf(person).includes(permission);
 }
 
 function loadPeople() {
@@ -317,7 +414,7 @@ function allJobTitles(person) {
 }
 
 function canManage(person) {
-  return !!person && (person.system || isOwner(person) || allJobTitles(person).some(titleGrantsManagement));
+  return can(person, "staff.manage");
 }
 
 function avatarUrl(person) {
@@ -341,12 +438,16 @@ function publicView(p) {
     timezone: p.timezone,
     avatarUrl: avatarUrl(p),
     banner: bannerView(p),
+    status: currentStatus(p),
+    birthday: p.birthday && p.birthday.show ? { month: p.birthday.month, day: p.birthday.day } : null,
+    startDate: p.startDate || null,
   };
 }
 
 function manageView(p) {
   return {
     ...publicView(p),
+    roleIds: p.roleIds || [],
     loginUsername: loginName(p),
     account: p.account
       ? {
@@ -396,6 +497,9 @@ function meView(p) {
     username: loginName(p),
     supervisor: supervisor ? { id: supervisor.id, displayName: supervisor.displayName } : null,
     canManage: canManage(p),
+    myBirthday: p.birthday || null,
+    permissions: permissionsOf(p),
+    roleNames: (p.roleIds || []).map((id) => (getRole(id) || {}).name).filter(Boolean),
     isAdmin: !!p.system || isOwner(p),
     mustChangePassword: !!p.account.mustChangePassword,
     passwordTemporary: !!p.account.passwordTemporary,
@@ -547,6 +651,7 @@ function saveEmployee(input, existing) {
     phone: str(input.phone, 40),
     location: str(input.location, 80),
     timezone,
+    startDate: validDate(input.startDate),
     updatedAt: now,
   };
 
@@ -599,6 +704,35 @@ function recordLogin(person) {
   savePeople();
 }
 
+function validDate(value) {
+  const v = String(value || "").trim();
+  if (!v) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v) || isNaN(Date.parse(v + "T00:00:00Z"))) throw new ValidationError("Enter a valid date.");
+  return v;
+}
+
+// ---------- Status / out of office ----------
+
+const STATUS_TYPES = ["available", "busy", "away", "ooo"];
+
+// A status with an end date clears itself once that date has passed.
+function currentStatus(p) {
+  const st = p.status;
+  if (!st || !STATUS_TYPES.includes(st.type)) return null;
+  if (st.until && st.until < new Date().toISOString().slice(0, 10)) return null;
+  return st;
+}
+
+function setStatus(person, input) {
+  if (!input || !input.type) {
+    person.status = null;
+  } else {
+    if (!STATUS_TYPES.includes(input.type)) throw new ValidationError("Choose a status.");
+    person.status = { type: input.type, message: str(input.message, 120), until: validDate(input.until) };
+  }
+  savePeople();
+}
+
 function updateOwnProfile(person, input) {
   const displayName = str(input.displayName, 80);
   if (!displayName) throw new ValidationError("Display name can't be blank.");
@@ -610,6 +744,17 @@ function updateOwnProfile(person, input) {
     timezone: input.timezone || person.timezone || DEFAULT_TIMEZONE,
     updatedAt: new Date().toISOString(),
   });
+  // Birthday: day and month only (no year), shown to colleagues only if the person chooses.
+  if ("birthdayMonth" in input) {
+    const month = Number(input.birthdayMonth);
+    const day = Number(input.birthdayDay);
+    if (!month || !day) person.birthday = null;
+    else {
+      const max = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+      if (!max || day < 1 || day > max) throw new ValidationError("Enter a valid birthday.");
+      person.birthday = { month, day, show: !!input.showBirthday };
+    }
+  }
   savePeople();
 }
 
@@ -753,6 +898,14 @@ function allPeople() {
 
 module.exports = {
   ADMIN_USERNAME,
+  PERMISSIONS,
+  listRoles,
+  saveRole,
+  getRole,
+  deleteRole,
+  setRoleMembers,
+  permissionsOf,
+  can,
   RENAMED_COMPANIES,
   COMPANIES,
   DOMAINS,
@@ -784,6 +937,10 @@ module.exports = {
   recordLogin,
   updateOwnProfile,
   setTheme,
+  setStatus,
+  currentStatus,
+  validDate,
+  STATUS_TYPES,
   markAnnouncementsSeen,
   saveAvatar,
   removeAvatar,

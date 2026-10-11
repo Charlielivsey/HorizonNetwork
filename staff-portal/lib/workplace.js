@@ -79,9 +79,10 @@ function companiesOf(person) {
   return [person.company].concat((person.otherRoles || []).map((r) => r.company));
 }
 
-// An item with no companies is for the whole group. Managers see everything so they can maintain it.
-function canSee(person, item) {
-  if (!item.companies.length || store.canManage(person)) return true;
+// An item with no companies is for the whole group. People who manage that kind of item see
+// everything so they can maintain it.
+function canSee(person, item, permission) {
+  if (!item.companies.length || store.can(person, permission || "documents.manage")) return true;
   const mine = companiesOf(person);
   return item.companies.some((c) => mine.includes(c));
 }
@@ -104,31 +105,84 @@ function authorView(id) {
 
 // ---------- Announcements ----------
 
+const REACTIONS = ["\u{1F44D}", "\u2764\uFE0F", "\u{1F389}", "\u{1F602}", "\u{1F62E}", "\u{1F44F}"];
+const MANAGE_ANN = "announcements.manage";
+
+function publishedAt(a) {
+  return a.publishAt || a.createdAt;
+}
+
+// Scheduled announcements appear at their publish time; expiring ones disappear afterwards.
+function annState(a) {
+  const now = new Date().toISOString();
+  if (publishedAt(a) > now) return "scheduled";
+  if (a.expiresAt && a.expiresAt <= now) return "expired";
+  return "live";
+}
+
 function announcementView(a, person) {
-  return {
+  const manager = store.can(person, MANAGE_ANN);
+  const reactions = a.reactions || {};
+  const view = {
     id: a.id,
     title: a.title,
     body: a.body,
     companies: a.companies,
     pinned: a.pinned,
     important: a.important,
+    allowComments: a.allowComments !== false,
+    requireAck: !!a.requireAck,
     author: authorView(a.authorId),
     createdAt: a.createdAt,
+    publishAt: publishedAt(a),
+    expiresAt: a.expiresAt || null,
+    state: annState(a),
     updatedAt: a.updatedAt,
-    unread: a.authorId !== person.id && a.createdAt > (person.announcementsSeenAt || ""),
+    unread: a.authorId !== person.id && publishedAt(a) > (person.announcementsSeenAt || ""),
+    reactions: REACTIONS.map((emoji) => ({
+      emoji,
+      count: (reactions[emoji] || []).length,
+      mine: (reactions[emoji] || []).includes(person.id),
+    })),
+    comments: (a.comments || []).map((c) => ({
+      id: c.id,
+      author: authorView(c.authorId),
+      body: c.body,
+      createdAt: c.createdAt,
+      canDelete: c.authorId === person.id || manager,
+    })),
+    acknowledgedAt: (a.acks || {})[person.id] || null,
+    needsAck: !!a.requireAck && inAudience(person, a) && !(a.acks || {})[person.id] && annState(a) === "live",
   };
+  if (manager && a.requireAck) {
+    const audience = store.employees().filter((p) => inAudience(p, a));
+    view.ackCount = audience.filter((p) => (a.acks || {})[p.id]).length;
+    view.audienceCount = audience.length;
+  }
+  return view;
 }
 
 function listAnnouncements(person) {
+  const manager = store.can(person, MANAGE_ANN);
   return announcements
-    .filter((a) => canSee(person, a))
-    .sort((a, b) => (b.pinned - a.pinned) || b.createdAt.localeCompare(a.createdAt))
+    .filter((a) => canSee(person, a, MANAGE_ANN) && (manager || annState(a) === "live"))
+    .sort((a, b) => (b.pinned - a.pinned) || publishedAt(b).localeCompare(publishedAt(a)))
     .map((a) => announcementView(a, person));
 }
 
 function unreadAnnouncements(person) {
   const seen = person.announcementsSeenAt || "";
-  return announcements.filter((a) => inAudience(person, a) && a.createdAt > seen && a.authorId !== person.id).length;
+  return announcements.filter((a) =>
+    inAudience(person, a) && annState(a) === "live" && publishedAt(a) > seen && a.authorId !== person.id
+  ).length;
+}
+
+function optionalTime(value) {
+  const v = String(value || "").trim();
+  if (!v) return null;
+  const t = Date.parse(v);
+  if (isNaN(t)) throw new store.ValidationError("Enter a valid date and time.");
+  return new Date(t).toISOString();
 }
 
 function saveAnnouncement(input, author, existing) {
@@ -137,12 +191,19 @@ function saveAnnouncement(input, author, existing) {
   if (!title) throw new store.ValidationError("Give the announcement a title.");
   if (!body) throw new store.ValidationError("Write the announcement.");
   const now = new Date().toISOString();
+  const publishAt = optionalTime(input.publishAt);
+  const expiresAt = optionalTime(input.expiresAt);
+  if (expiresAt && expiresAt <= (publishAt || now)) throw new store.ValidationError("The expiry time must be after it's published.");
   const fields = {
     title,
     body,
     companies: cleanCompanies(input.companies),
     pinned: !!input.pinned,
     important: !!input.important,
+    allowComments: input.allowComments !== false,
+    requireAck: !!input.requireAck,
+    publishAt: publishAt || (existing ? existing.publishAt || existing.createdAt : now),
+    expiresAt,
     updatedAt: now,
   };
   if (existing) {
@@ -150,7 +211,7 @@ function saveAnnouncement(input, author, existing) {
     saveAnnouncements();
     return existing;
   }
-  const a = { id: newId(), ...fields, authorId: author.id, createdAt: now };
+  const a = { id: newId(), ...fields, authorId: author.id, createdAt: now, reactions: {}, comments: [], acks: {} };
   announcements.push(a);
   saveAnnouncements();
   return a;
@@ -160,9 +221,59 @@ function getAnnouncement(id) {
   return announcements.find((a) => a.id === id) || null;
 }
 
+// Whether someone (who isn't managing announcements) can see and interact with it right now.
+function canReach(person, a) {
+  return canSee(person, a, MANAGE_ANN) && (store.can(person, MANAGE_ANN) || annState(a) === "live");
+}
+
 function deleteAnnouncement(a) {
   announcements = announcements.filter((x) => x.id !== a.id);
   saveAnnouncements();
+}
+
+function toggleReaction(a, person, emoji) {
+  if (!REACTIONS.includes(emoji)) throw new store.ValidationError("Pick one of the reactions.");
+  a.reactions = a.reactions || {};
+  const list = a.reactions[emoji] || [];
+  a.reactions[emoji] = list.includes(person.id) ? list.filter((id) => id !== person.id) : list.concat(person.id);
+  saveAnnouncements();
+}
+
+function addComment(a, person, body) {
+  if (a.allowComments === false) throw new store.ValidationError("Comments are turned off for this announcement.");
+  const text = str(body, 2000);
+  if (!text) throw new store.ValidationError("Write a comment first.");
+  a.comments = a.comments || [];
+  a.comments.push({ id: newId(), authorId: person.id, body: text, createdAt: new Date().toISOString() });
+  saveAnnouncements();
+}
+
+function deleteComment(a, person, commentId) {
+  const c = (a.comments || []).find((x) => x.id === commentId);
+  if (!c) throw new store.ValidationError("That comment no longer exists.");
+  if (c.authorId !== person.id && !store.can(person, MANAGE_ANN)) throw new store.ValidationError("You can only delete your own comments.");
+  a.comments = a.comments.filter((x) => x.id !== commentId);
+  saveAnnouncements();
+}
+
+function acknowledgeAnnouncement(a, person) {
+  a.acks = a.acks || {};
+  a.acks[person.id] = new Date().toISOString();
+  saveAnnouncements();
+}
+
+function pendingAnnouncementAcks(person) {
+  return announcements.filter((a) => a.requireAck && inAudience(person, a) && annState(a) === "live" && !(a.acks || {})[person.id]).length;
+}
+
+function announcementAcks(a) {
+  return store.employees().filter((p) => inAudience(p, a)).map((p) => ({
+    id: p.id,
+    displayName: p.displayName,
+    jobTitle: p.jobTitle,
+    avatarUrl: store.publicView(p).avatarUrl,
+    acknowledgedAt: (a.acks || {})[p.id] || null,
+  })).sort((x, y) => (!!x.acknowledgedAt - !!y.acknowledgedAt) || x.displayName.localeCompare(y.displayName));
 }
 
 // ---------- Documents ----------
@@ -193,7 +304,7 @@ function documentView(d, person) {
     acknowledgedAt: ack && ack.version === d.version ? ack.at : null,
     needsAck: d.requiresAck && inAudience(person, d) && !(ack && ack.version === d.version),
   };
-  if (store.canManage(person) && d.requiresAck) {
+  if (store.can(person, "documents.manage") && d.requiresAck) {
     const audience = store.employees().filter((p) => inAudience(p, d));
     view.ackCount = audience.filter((p) => d.acks[p.id] && d.acks[p.id].version === d.version).length;
     view.audienceCount = audience.length;
@@ -312,6 +423,16 @@ module.exports = {
   FILE_TYPES,
   init,
   canSee,
+  REACTIONS,
+  inAudience,
+  annState,
+  canReach,
+  toggleReaction,
+  addComment,
+  deleteComment,
+  acknowledgeAnnouncement,
+  pendingAnnouncementAcks,
+  announcementAcks,
   listAnnouncements,
   unreadAnnouncements,
   saveAnnouncement,

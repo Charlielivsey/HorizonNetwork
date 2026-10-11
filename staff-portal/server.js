@@ -7,6 +7,10 @@ const path = require("path");
 const crypto = require("crypto");
 const store = require("./lib/store");
 const workplace = require("./lib/workplace");
+const calendar = require("./lib/calendar");
+const polls = require("./lib/polls");
+const onboarding = require("./lib/onboarding");
+const backup = require("./lib/backup");
 
 const PORT = parseInt(process.env.PORT || "3200", 10);
 const HOST = process.env.HOST || "127.0.0.1";
@@ -22,7 +26,10 @@ const MAX_BODY_BYTES = 64 * 1024;
 const MAX_AVATAR_BODY_BYTES = 2 * 1024 * 1024;
 
 // Pages of the single-page app; the browser handles routing between them.
-const APP_ROUTES = new Set(["/home", "/directory", "/employees", "/settings", "/system", "/announcements", "/documents"]);
+const APP_ROUTES = new Set([
+  "/home", "/directory", "/employees", "/settings", "/system", "/announcements", "/documents",
+  "/calendar", "/polls", "/onboarding", "/roles",
+]);
 const SYSTEM_UNLOCK_MS = 15 * 60 * 1000; // System Admin stays unlocked for 15 minutes of inactivity
 const MAX_PIN_ATTEMPTS = 5;
 
@@ -38,6 +45,28 @@ const MIME_TYPES = {
 
 store.init(DATA_DIR);
 workplace.init(DATA_DIR);
+calendar.init(DATA_DIR);
+polls.init(DATA_DIR);
+onboarding.init(DATA_DIR);
+backup.init(DATA_DIR);
+
+// Re-reads every data file, e.g. after a backup is restored.
+function reloadAll() {
+  store.init(DATA_DIR);
+  workplace.init(DATA_DIR);
+  calendar.init(DATA_DIR);
+  polls.init(DATA_DIR);
+  onboarding.init(DATA_DIR);
+}
+
+backup.scheduleNightly((err, name) => {
+  if (err) {
+    console.error("Nightly backup failed:", err);
+    store.audit({ action: "backup-failed", actor: "System", detail: String(err.message || err) });
+  } else {
+    store.audit({ action: "backup-created", actor: "System", target: name, detail: "Nightly" });
+  }
+});
 
 // ---------- Sessions & rate limiting ----------
 
@@ -381,7 +410,7 @@ async function handleLogin(req, res) {
 
 function completeLogin(req, res, person) {
   store.recordLogin(person);
-  const token = createSession(person.id, req);
+  const token = createSession(person.id, req, { allowPageLoad: true });
   console.log(`${store.meView(person).username} signed in from ${clientIp(req)}`);
   logEvent(req, null, "signed-in", { actor: store.loginName(person) });
   sendJson(res, 200, { user: store.meView(person) }, { "Set-Cookie": cookieFor(req, token) });
@@ -433,7 +462,9 @@ async function handleSetCode(req, res, session) {
 function meResponse(session) {
   const user = store.meView(session.person);
   user.unreadAnnouncements = workplace.unreadAnnouncements(session.person);
-  user.pendingAcks = workplace.pendingAcks(session.person);
+  user.pendingAcks = workplace.pendingAcks(session.person) + workplace.pendingAnnouncementAcks(session.person);
+  user.openPolls = polls.openForPerson(session.person);
+  user.onboardingTasks = onboarding.forPerson(session.person).reduce((n, c) => n + c.tasks.filter((t) => !t.doneAt && t.canTick).length, 0);
   if (session.data.impersonatorId) {
     const by = store.getPerson(session.data.impersonatorId);
     user.impersonatedBy = by ? by.displayName : "System owner";
@@ -482,28 +513,55 @@ function requireEmployee(id, me, action) {
 async function routeWorkplace(req, res, pathname, session) {
   const me = session.person;
   const method = req.method;
-  const manager = store.canManage(me);
-  const requireManage = () => {
-    if (!manager) throw httpError(403, "Only the leadership and HR teams can do that.");
+  const annManager = store.can(me, "announcements.manage");
+  const docManager = store.can(me, "documents.manage");
+  const requireAnn = () => {
+    if (!annManager) throw httpError(403, "You don't have permission to manage announcements.");
+  };
+  const requireDocs = () => {
+    if (!docManager) throw httpError(403, "You don't have permission to manage documents.");
   };
   let m;
 
   // Announcements
   if (method === "GET" && pathname === "/api/announcements") {
-    return sendJson(res, 200, { announcements: workplace.listAnnouncements(me), canPost: manager });
+    return sendJson(res, 200, { announcements: workplace.listAnnouncements(me), canPost: annManager, reactions: workplace.REACTIONS });
+  }
+  if (method === "POST" && (m = /^\/api\/announcements\/([a-f0-9]{16})\/(react|comments|ack|comments\/([a-f0-9]{16})\/delete)$/.exec(pathname))) {
+    const a = workplace.getAnnouncement(m[1]);
+    if (!a || !workplace.canReach(me, a)) throw httpError(404, "Announcement not found.");
+    const body = await readJsonBody(req);
+    if (m[2] === "react") workplace.toggleReaction(a, me, body.emoji);
+    else if (m[2] === "comments") {
+      workplace.addComment(a, me, body.body);
+      logEvent(req, session, "announcement-commented", { target: a.title });
+    } else if (m[2] === "ack") {
+      workplace.acknowledgeAnnouncement(a, me);
+      logEvent(req, session, "announcement-acknowledged", { target: a.title });
+    } else {
+      workplace.deleteComment(a, me, m[3]);
+      logEvent(req, session, "announcement-comment-deleted", { target: a.title });
+    }
+    return sendJson(res, 200, { announcement: workplace.listAnnouncements(me).find((x) => x.id === a.id), user: meResponse(session) });
+  }
+  if (method === "GET" && (m = /^\/api\/announcements\/([a-f0-9]{16})\/acks$/.exec(pathname))) {
+    requireAnn();
+    const a = workplace.getAnnouncement(m[1]);
+    if (!a) throw httpError(404, "Announcement not found.");
+    return sendJson(res, 200, { people: workplace.announcementAcks(a) });
   }
   if (method === "POST" && pathname === "/api/announcements/seen") {
     store.markAnnouncementsSeen(me);
     return sendJson(res, 200, { user: meResponse(session) });
   }
   if (method === "POST" && pathname === "/api/announcements") {
-    requireManage();
+    requireAnn();
     const a = workplace.saveAnnouncement(await readJsonBody(req), me, null);
     logEvent(req, session, "announcement-posted", { target: a.title, detail: a.companies.length ? a.companies.join(", ") : "Everyone" });
     return sendJson(res, 201, { ok: true });
   }
   if (method === "POST" && (m = /^\/api\/announcements\/([a-f0-9]{16})(\/delete)?$/.exec(pathname))) {
-    requireManage();
+    requireAnn();
     const a = workplace.getAnnouncement(m[1]);
     if (!a) throw httpError(404, "Announcement not found.");
     if (m[2]) {
@@ -518,10 +576,10 @@ async function routeWorkplace(req, res, pathname, session) {
 
   // Documents & policies
   if (method === "GET" && pathname === "/api/documents") {
-    return sendJson(res, 200, { documents: workplace.listDocuments(me), canManage: manager, categories: workplace.CATEGORIES });
+    return sendJson(res, 200, { documents: workplace.listDocuments(me), canManage: docManager, categories: workplace.CATEGORIES });
   }
   if (method === "POST" && pathname === "/api/documents/upload") {
-    requireManage();
+    requireDocs();
     const meta = headerJson(req, "x-document");
     const buffer = await readRawBody(req, workplace.MAX_FILE_BYTES);
     const doc = workplace.createDocument(meta, meta.fileName, buffer, me);
@@ -555,7 +613,7 @@ async function routeWorkplace(req, res, pathname, session) {
       });
     }
     if (method === "GET" && action === "acknowledgements") {
-      requireManage();
+      requireDocs();
       return sendJson(res, 200, { people: workplace.acknowledgements(doc), version: doc.version });
     }
     if (method === "POST" && action === "acknowledge") {
@@ -564,7 +622,7 @@ async function routeWorkplace(req, res, pathname, session) {
       return sendJson(res, 200, { document: workplace.documentView(doc, me), user: meResponse(session) });
     }
     if (method === "POST" && action === "file") {
-      requireManage();
+      requireDocs();
       const { fileName } = headerJson(req, "x-document");
       const buffer = await readRawBody(req, workplace.MAX_FILE_BYTES);
       workplace.replaceFile(doc, fileName, buffer);
@@ -572,13 +630,13 @@ async function routeWorkplace(req, res, pathname, session) {
       return sendJson(res, 200, { document: workplace.documentView(doc, me) });
     }
     if (method === "POST" && action === "delete") {
-      requireManage();
+      requireDocs();
       workplace.deleteDocument(doc);
       logEvent(req, session, "document-deleted", { target: doc.title });
       return sendJson(res, 200, { ok: true });
     }
     if (method === "POST" && !action) {
-      requireManage();
+      requireDocs();
       workplace.updateDocument(doc, await readJsonBody(req));
       logEvent(req, session, "document-updated", { target: doc.title });
       return sendJson(res, 200, { document: workplace.documentView(doc, me) });
@@ -694,7 +752,7 @@ async function routeSystem(req, res, pathname, session) {
     if (!target || target.id === me.id) throw httpError(404, "User not found.");
     if (!target.account) throw httpError(400, `${target.displayName} doesn't have a login account yet.`);
     if (!target.account.enabled) throw httpError(400, `${target.displayName}'s login is disabled.`);
-    const token = createSession(target.id, req, { impersonatorId: me.id, returnKey: session.token });
+    const token = createSession(target.id, req, { impersonatorId: me.id, returnKey: session.token, allowPageLoad: true });
     logEvent(req, session, "logged-in-as", { target: store.loginName(target) });
     return sendJson(res, 200, { ok: true }, { "Set-Cookie": cookieFor(req, token) });
   }
@@ -705,6 +763,50 @@ async function routeSystem(req, res, pathname, session) {
     store.setSystemPin(String(newPin || ""));
     logEvent(req, session, "pin-changed");
     return sendJson(res, 200, { ok: true });
+  }
+
+  // ----- Backups -----
+  if (method === "GET" && pathname === "/api/system/backups") {
+    return sendJson(res, 200, { backups: backup.listBackups() });
+  }
+  if (method === "POST" && pathname === "/api/system/backups") {
+    const name = backup.createBackup("manual");
+    logEvent(req, session, "backup-created", { target: name, detail: "Manual" });
+    return sendJson(res, 201, { name, backups: backup.listBackups() });
+  }
+  if ((m = /^\/api\/system\/backups\/((?:auto|manual|pre-restore)-[\d-]+\.tar\.gz)\/(download|restore|delete)$/.exec(pathname))) {
+    const file = backup.backupPath(m[1]);
+    if (!file) throw httpError(404, "Backup not found.");
+    if (method === "GET" && m[2] === "download") {
+      logEvent(req, session, "backup-downloaded", { target: m[1] });
+      return fs.readFile(file, (err, content) => {
+        if (err) return sendJson(res, 404, { error: "Backup not found." });
+        res.writeHead(200, {
+          "X-Content-Type-Options": "nosniff",
+          "Content-Type": "application/gzip",
+          "Content-Length": content.length,
+          "Content-Disposition": `attachment; filename="hn-staff-portal-${m[1]}"`,
+          "Cache-Control": "private, no-store",
+        });
+        res.end(content);
+      });
+    }
+    if (method === "POST" && m[2] === "delete") {
+      backup.deleteBackup(m[1]);
+      logEvent(req, session, "backup-deleted", { target: m[1] });
+      return sendJson(res, 200, { backups: backup.listBackups() });
+    }
+    if (method === "POST" && m[2] === "restore") {
+      const { pin } = await readJsonBody(req);
+      if (!store.verifySystemPin(String(pin || ""))) throw httpError(400, "Enter the system PIN to confirm the restore.");
+      const actor = store.loginName(me);
+      const safety = backup.restoreBackup(m[1]);
+      reloadAll();
+      // Everyone (including you) signs in again against the restored data.
+      for (const token of [...sessions.keys()]) sessions.delete(token);
+      store.audit({ action: "backup-restored", actor, target: m[1], detail: `Safety backup: ${safety}`, ip: clientIp(req) });
+      return sendJson(res, 200, { ok: true, redirect: "/login" }, { "Set-Cookie": sessionCookie(req, "", 0) });
+    }
   }
 
   sendJson(res, 404, { error: "Not found." });
@@ -722,10 +824,35 @@ function stopImpersonating(req, res, session) {
     // Only a hash of the owner's original token is kept, so hand them a fresh token for the same session.
     const token = crypto.randomBytes(32).toString("hex");
     sessions.delete(returnKey);
+    back.allowPageLoad = true;
     sessions.set(hashToken(token), back);
     return sendJson(res, 200, { ok: true, redirect: "/system" }, { "Set-Cookie": cookieFor(req, token) });
   }
   sendJson(res, 200, { ok: true, redirect: "/login" }, { "Set-Cookie": sessionCookie(req, "", 0) });
+}
+
+// Searches people, documents, announcements, events and polls that the person can see.
+function search(me, query) {
+  const q = String(query).trim().toLowerCase().slice(0, 100);
+  if (q.length < 2) return { people: [], documents: [], announcements: [], events: [], polls: [] };
+  const has = (...fields) => fields.join(" ").toLowerCase().includes(q);
+  const people = [];
+  for (const p of store.employees()) {
+    const roles = [{ company: p.company, jobTitle: p.jobTitle }].concat((p.otherRoles || []).map((r) => ({ company: r.company, jobTitle: r.jobTitle || p.jobTitle })));
+    if (!has(p.displayName, p.firstName, p.lastName, p.location, p.emails.map((e) => e.address).join(" "), roles.map((r) => r.jobTitle + " " + r.company).join(" "))) continue;
+    people.push({ id: p.id, displayName: p.displayName, jobTitle: p.jobTitle, company: p.company, avatarUrl: store.publicView(p).avatarUrl });
+    if (people.length >= 6) break;
+  }
+  const documents = workplace.listDocuments(me).filter((d) => has(d.title, d.description, d.category, d.file.name)).slice(0, 5)
+    .map((d) => ({ id: d.id, title: d.title, category: d.category, ext: d.file.ext }));
+  const announcements = workplace.listAnnouncements(me).filter((a) => has(a.title, a.body)).slice(0, 5)
+    .map((a) => ({ id: a.id, title: a.title, publishAt: a.publishAt }));
+  const today = new Date().toISOString().slice(0, 10);
+  const until = new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10);
+  const events = calendar.allEvents().filter((e) => e.endDate >= today && e.startDate <= until && calendar.canSee(me, e) && has(e.title, e.description, e.location))
+    .sort((a, b) => a.startDate.localeCompare(b.startDate)).slice(0, 5).map((e) => ({ id: e.id, title: e.title, startDate: e.startDate }));
+  const pollList = polls.listPolls(me).filter((p) => has(p.title, p.description)).slice(0, 5).map((p) => ({ id: p.id, title: p.title, open: p.open }));
+  return { people, documents, announcements, events, polls: pollList };
 }
 
 async function routeApi(req, res, pathname, session) {
@@ -855,6 +982,7 @@ async function routeApi(req, res, pathname, session) {
       if (action === "delete") {
         if (person.id === me.id) throw httpError(400, "You can't delete your own record.");
         store.deleteEmployee(person);
+        onboarding.removePerson(person.id);
         endSessionsFor(person.id);
         logEvent(req, session, "employee-deleted", { target: person.displayName });
         return sendJson(res, 200, { ok: true });
@@ -883,26 +1011,202 @@ async function routeApi(req, res, pathname, session) {
     }
   }
 
+  if (method === "POST" && pathname === "/api/me/status") {
+    store.setStatus(me, await readJsonBody(req));
+    logEvent(req, session, "status-changed", { detail: me.status ? me.status.type + (me.status.message ? " \u2013 " + me.status.message : "") : "cleared" });
+    return sendJson(res, 200, { user: meResponse(session) });
+  }
+
+  // ----- Your own sessions -----
+  if (method === "GET" && pathname === "/api/me/sessions") {
+    const list = [];
+    for (const [token, s2] of sessions) {
+      if (s2.personId !== me.id || s2.expires < Date.now()) continue;
+      list.push({
+        id: s2.id, ip: s2.ip, userAgent: s2.userAgent, current: token === session.token,
+        createdAt: new Date(s2.createdAt).toISOString(), lastSeen: new Date(s2.lastSeen).toISOString(),
+        impersonated: !!s2.impersonatorId,
+      });
+    }
+    list.sort((a, b) => b.current - a.current || b.lastSeen.localeCompare(a.lastSeen));
+    return sendJson(res, 200, { sessions: list });
+  }
+  if (method === "POST" && (m = /^\/api\/me\/sessions\/(?:([a-f0-9]{12})\/end|(end-others))$/.exec(pathname))) {
+    let count = 0;
+    for (const [token, s2] of sessions) {
+      if (s2.personId !== me.id || token === session.token) continue;
+      if (m[2] || s2.id === m[1]) { sessions.delete(token); count++; }
+    }
+    logEvent(req, session, "own-sessions-ended", { detail: `${count} session(s)` });
+    return sendJson(res, 200, { ok: true, count });
+  }
+
+  // ----- Search across the portal -----
+  if (method === "GET" && pathname === "/api/search") {
+    return sendJson(res, 200, search(me, new URL(req.url, "http://localhost").searchParams.get("q") || ""));
+  }
+
+  // ----- Calendar -----
+  if (pathname === "/api/calendar" && method === "GET") {
+    const q = new URL(req.url, "http://localhost").searchParams;
+    const from = q.get("from") || new Date().toISOString().slice(0, 10);
+    const to = q.get("to") || from;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || to < from) throw httpError(400, "Choose a valid date range.");
+    if ((Date.parse(to) - Date.parse(from)) / 86400000 > 120) throw httpError(400, "Choose a shorter date range.");
+    return sendJson(res, 200, { items: calendar.itemsBetween(me, from, to), canManage: store.can(me, "events.manage"), types: calendar.EVENT_TYPES });
+  }
+  if (pathname.startsWith("/api/events")) {
+    if (!store.can(me, "events.manage")) throw httpError(403, "You don't have permission to manage the calendar.");
+    if (method === "POST" && pathname === "/api/events") {
+      const e = calendar.saveEvent(await readJsonBody(req), me, null);
+      logEvent(req, session, "event-added", { target: e.title, detail: e.startDate });
+      return sendJson(res, 201, { ok: true });
+    }
+    if (method === "POST" && (m = /^\/api\/events\/([a-f0-9]{16})(\/delete)?$/.exec(pathname))) {
+      const e = calendar.getEvent(m[1]);
+      if (!e) throw httpError(404, "Event not found.");
+      if (m[2]) {
+        calendar.deleteEvent(e);
+        logEvent(req, session, "event-deleted", { target: e.title });
+      } else {
+        calendar.saveEvent(await readJsonBody(req), me, e);
+        logEvent(req, session, "event-updated", { target: e.title });
+      }
+      return sendJson(res, 200, { ok: true });
+    }
+  }
+
+  // ----- Polls & surveys -----
+  if (pathname.startsWith("/api/polls")) {
+    const pollManager = store.can(me, "polls.manage");
+    const requirePolls = () => {
+      if (!pollManager) throw httpError(403, "You don't have permission to manage polls.");
+    };
+    if (method === "GET" && pathname === "/api/polls") {
+      return sendJson(res, 200, { polls: polls.listPolls(me), canManage: pollManager });
+    }
+    if (method === "POST" && pathname === "/api/polls") {
+      requirePolls();
+      const p = polls.savePoll(await readJsonBody(req), me, null);
+      logEvent(req, session, "poll-created", { target: p.title });
+      return sendJson(res, 201, { ok: true });
+    }
+    if (method === "POST" && (m = /^\/api\/polls\/([a-f0-9]{16})(?:\/(respond|close|reopen|delete))?$/.exec(pathname))) {
+      const p = polls.getPoll(m[1]);
+      if (!p || !polls.canSee(me, p)) throw httpError(404, "Poll not found.");
+      if (m[2] === "respond") {
+        polls.respond(p, me, (await readJsonBody(req)).answers);
+        logEvent(req, session, "poll-answered", { target: p.title, detail: p.anonymous ? "Anonymous" : "" });
+        return sendJson(res, 200, { poll: polls.pollView(p, me), user: meResponse(session) });
+      }
+      requirePolls();
+      if (m[2] === "close" || m[2] === "reopen") {
+        polls.closePoll(p, m[2] === "close");
+        logEvent(req, session, m[2] === "close" ? "poll-closed" : "poll-reopened", { target: p.title });
+      } else if (m[2] === "delete") {
+        polls.deletePoll(p);
+        logEvent(req, session, "poll-deleted", { target: p.title });
+      } else {
+        polls.savePoll(await readJsonBody(req), me, p);
+        logEvent(req, session, "poll-updated", { target: p.title });
+      }
+      return sendJson(res, 200, { ok: true });
+    }
+  }
+
+  // ----- Onboarding -----
+  if (pathname.startsWith("/api/onboarding")) {
+    const obManager = store.can(me, "onboarding.manage");
+    const requireOb = () => {
+      if (!obManager) throw httpError(403, "You don't have permission to manage onboarding.");
+    };
+    if (method === "GET" && pathname === "/api/onboarding/mine") {
+      return sendJson(res, 200, { checklists: onboarding.forPerson(me) });
+    }
+    if (method === "GET" && pathname === "/api/onboarding") {
+      requireOb();
+      return sendJson(res, 200, {
+        checklists: onboarding.listChecklists(me),
+        templates: onboarding.listTemplates(),
+        people: store.employees().map((p) => ({ id: p.id, displayName: p.displayName, jobTitle: p.jobTitle })),
+      });
+    }
+    if (method === "POST" && pathname === "/api/onboarding/start") {
+      requireOb();
+      const { templateId, personId } = await readJsonBody(req);
+      const t = onboarding.getTemplate(templateId);
+      const p = store.getPerson(personId);
+      if (!t || !p || p.system) throw httpError(400, "Choose a checklist and an employee.");
+      onboarding.startChecklist(t, p, me);
+      logEvent(req, session, "onboarding-started", { target: p.displayName, detail: t.name });
+      return sendJson(res, 201, { ok: true });
+    }
+    if (method === "POST" && (m = /^\/api\/onboarding\/templates(?:\/([a-f0-9]{16})(\/delete)?)?$/.exec(pathname))) {
+      requireOb();
+      const t = m[1] ? onboarding.getTemplate(m[1]) : null;
+      if (m[1] && !t) throw httpError(404, "Checklist not found.");
+      if (m[2]) {
+        onboarding.deleteTemplate(t);
+        logEvent(req, session, "onboarding-template-deleted", { target: t.name });
+      } else {
+        const saved = onboarding.saveTemplate(await readJsonBody(req), t);
+        logEvent(req, session, t ? "onboarding-template-updated" : "onboarding-template-added", { target: saved.name });
+      }
+      return sendJson(res, 200, { ok: true });
+    }
+    if (method === "POST" && (m = /^\/api\/onboarding\/([a-f0-9]{16})\/(task|delete)$/.exec(pathname))) {
+      const c = onboarding.getChecklist(m[1]);
+      if (!c) throw httpError(404, "Checklist not found.");
+      if (m[2] === "delete") {
+        requireOb();
+        onboarding.deleteChecklist(c);
+        logEvent(req, session, "onboarding-removed", { target: (store.getPerson(c.personId) || {}).displayName });
+        return sendJson(res, 200, { ok: true });
+      }
+      const { taskId, done } = await readJsonBody(req);
+      const task = onboarding.setTask(c, taskId, !!done, me);
+      logEvent(req, session, done ? "onboarding-task-done" : "onboarding-task-undone", { target: (store.getPerson(c.personId) || {}).displayName, detail: task.title });
+      return sendJson(res, 200, { checklist: onboarding.view(c, me), user: meResponse(session) });
+    }
+  }
+
+  // ----- Roles & permissions -----
+  if (pathname.startsWith("/api/roles")) {
+    if (!store.can(me, "access.manage")) throw httpError(403, "You don't have permission to manage roles.");
+    if (method === "GET" && pathname === "/api/roles") {
+      return sendJson(res, 200, {
+        permissions: store.PERMISSIONS,
+        roles: store.listRoles(),
+        people: store.employees().map((p) => ({ id: p.id, displayName: p.displayName, jobTitle: p.jobTitle, avatarUrl: store.publicView(p).avatarUrl, isOwner: store.isOwner(p) })),
+      });
+    }
+    if (method === "POST" && pathname === "/api/roles") {
+      const r = store.saveRole(await readJsonBody(req), null);
+      logEvent(req, session, "role-created", { target: r.name, detail: r.permissions.join(", ") });
+      return sendJson(res, 201, { ok: true });
+    }
+    if (method === "POST" && (m = /^\/api\/roles\/([a-f0-9]{16})(?:\/(delete|members))?$/.exec(pathname))) {
+      const r = store.getRole(m[1]);
+      if (!r) throw httpError(404, "Role not found.");
+      if (m[2] === "delete") {
+        store.deleteRole(r);
+        logEvent(req, session, "role-deleted", { target: r.name });
+      } else if (m[2] === "members") {
+        store.setRoleMembers(r, (await readJsonBody(req)).personIds);
+        logEvent(req, session, "role-members-changed", { target: r.name });
+      } else {
+        store.saveRole(await readJsonBody(req), r);
+        logEvent(req, session, "role-updated", { target: r.name, detail: r.permissions.join(", ") });
+      }
+      return sendJson(res, 200, { ok: true });
+    }
+  }
+
   if (pathname.startsWith("/api/announcements") || pathname.startsWith("/api/documents")) {
     return routeWorkplace(req, res, pathname, session);
   }
 
   if (pathname.startsWith("/api/system/")) return routeSystem(req, res, pathname, session);
-
-  // ----- Access rules (admin account and system owner) -----
-  if (pathname === "/api/settings/access") {
-    if (!me.system && !store.isOwner(me)) throw httpError(403, "Only the system administrator can change access rules.");
-    if (method === "POST") {
-      store.setManagementTitles((await readJsonBody(req)).managementTitles);
-      logEvent(req, session, "access-rules-changed", { detail: store.getManagementTitles().join(", ") });
-    }
-    if (method === "GET" || method === "POST") {
-      return sendJson(res, 200, {
-        managementTitles: store.getManagementTitles(),
-        managers: store.employees().filter(store.canManage).map((p) => ({ displayName: p.displayName, jobTitle: p.jobTitle })),
-      });
-    }
-  }
 
   sendJson(res, 404, { error: "Not found." });
 }
@@ -923,12 +1227,26 @@ async function route(req, res) {
   if (pathname === "/" || pathname === "/dashboard") return redirect(res, session ? "/home" : "/login");
 
   if (pathname === "/login") {
-    if (session) return redirect(res, "/home");
+    // Opening the sign-in page always ends any existing sign-in.
+    if (session) {
+      sessions.delete(session.token);
+      return send(res, 302, "", { Location: "/login", "Cache-Control": "no-store", "Set-Cookie": sessionCookie(req, "", 0) });
+    }
     return sendFile(res, path.join(PUBLIC_DIR, "login.html"), { "Cache-Control": "no-store" });
   }
 
+  // Loading or refreshing a portal page signs you out. The only page load allowed is the one
+  // straight after signing in (or switching with "log in as"); moving around inside the portal
+  // doesn't reload the page, so it isn't affected.
   if (APP_ROUTES.has(pathname)) {
     if (!session) return redirect(res, "/login");
+    if (!session.data.allowPageLoad) {
+      sessions.delete(session.token);
+      logEvent(req, session, "signed-out-refresh");
+      return send(res, 302, "", { Location: "/login", "Cache-Control": "no-store", "Set-Cookie": sessionCookie(req, "", 0) });
+    }
+    session.data.allowPageLoad = false;
+    sessions.save();
     return sendFile(res, path.join(PUBLIC_DIR, "app.html"), { "Cache-Control": "no-store" });
   }
 
