@@ -30,6 +30,66 @@ function init(dataDir) {
   if (!db.data.rtwFrom) { db.data.rtwFrom = new Date().toISOString().slice(0, 10); changed = true; }
   if (!db.data.rtw) { db.data.rtw = {}; changed = true; }
   if (changed) db.save();
+  // Leave starts and ends at midnight, so check statuses regularly as well as on every change.
+  if (!statusTimer) {
+    statusTimer = setInterval(() => { try { syncStatuses(); } catch (e) { console.error("Leave status sync failed:", e.message); } }, 5 * 60 * 1000);
+    statusTimer.unref();
+  }
+  syncStatuses();
+}
+
+let statusTimer = null;
+const isWorkingDay = (iso) => {
+  const day = new Date(iso + "T12:00:00Z").getUTCDay();
+  return day !== 0 && day !== 6 && !calendar.BANK_HOLIDAYS[iso];
+};
+function addDay(iso, n) {
+  const d = new Date(iso + "T12:00:00Z");
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+function nextWorkingDay(iso) {
+  let d = addDay(iso, 1);
+  while (!isWorkingDay(d)) d = addDay(d, 1);
+  return d;
+}
+const shortDate = (iso) => new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+
+// Approved leave (not sickness) puts the person "Out of office" with their return date, and puts
+// back whatever status they had before once it ends or is cancelled. If they change their status
+// themselves during the leave, that's left alone.
+function syncStatuses(personId) {
+  const t = today();
+  const people = personId ? [store.getPerson(personId)].filter(Boolean) : store.employees();
+  for (const p of people) {
+    if (p.system) continue;
+    const mineActive = db.data.requests.filter((r) => r.personId === p.id && r.status === "approved" && r.type !== "sick");
+    const now = mineActive.filter((r) => r.startDate <= t && r.endDate >= t).sort((a, b) => b.endDate.localeCompare(a.endDate))[0];
+    const st = p.status;
+    const ours = st && st.auto === "leave";
+    if (now) {
+      // Back-to-back bookings count as one absence: follow them to the real return date.
+      let end = now.endDate;
+      for (let next; (next = mineActive.find((r) => r.startDate > end && r.startDate <= nextWorkingDay(end) && r.endDate > end));) end = next.endDate;
+      const half = now.halfDay && now.startDate === now.endDate && end === now.endDate;
+      const message = half ? `${TYPES[now.type]} this ${now.halfDay === "am" ? "morning" : "afternoon"}` : `${TYPES[now.type]} \u00b7 back ${shortDate(nextWorkingDay(end))}`;
+      if (ours) {
+        if (st.message !== message || st.until !== end || st.leaveId !== now.id) {
+          now.statusSet = true;
+          db.save();
+          store.setLeaveStatus(p, Object.assign({}, st, { message, until: end, leaveId: now.id }));
+        }
+      } else if (!now.statusSet) {
+        now.statusSet = true;
+        db.save();
+        const prev = store.currentStatus(p) ? { type: st.type, message: st.message || "", until: st.until || null } : null;
+        store.setLeaveStatus(p, { type: "ooo", message, until: end, auto: "leave", leaveId: now.id, previous: prev });
+      }
+    } else if (ours) {
+      const prev = st.previous;
+      store.setLeaveStatus(p, prev && (!prev.until || prev.until >= t) ? prev : null);
+    }
+  }
 }
 
 const newId = () => crypto.randomBytes(8).toString("hex");
@@ -149,6 +209,7 @@ function createRequest(person, input, by) {
   };
   db.data.requests.push(r);
   db.save();
+  syncStatuses(person.id);
   return r;
 }
 
@@ -173,6 +234,7 @@ function decide(request, approve, approver, note, allowOver) {
   request.decidedAt = new Date().toISOString();
   request.decisionNote = String(note || "").trim().slice(0, 500);
   db.save();
+  syncStatuses(request.personId);
 }
 
 // People can cancel their own pending requests, and approved leave that hasn't started yet.
@@ -187,6 +249,7 @@ function cancel(request, by) {
   request.decidedBy = by.id;
   request.decidedAt = new Date().toISOString();
   db.save();
+  syncStatuses(request.personId);
 }
 
 function personBrief(id) {
@@ -334,6 +397,7 @@ function absenceStats(personId) {
 }
 
 module.exports = {
+  syncStatuses,
   TYPES, MANAGE, init, workingDays, summary, createRequest, getRequest, decide, cancel, mine, approvals,
   pendingApprovalCount, team, calendarItems, isOffToday, allowances, setAllowance, setDefaultAllowance, allowanceFor,
   setMaxCarryOver, pendingReturnToWork, completeReturnToWork, returnToWorkFor, absenceStats,

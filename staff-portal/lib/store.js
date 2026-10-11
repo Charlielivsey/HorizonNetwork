@@ -771,7 +771,14 @@ function currentStatus(p) {
   const st = p.status;
   if (!st || !STATUS_TYPES.includes(st.type)) return null;
   if (st.until && st.until < new Date().toISOString().slice(0, 10)) return null;
-  return st;
+  // `auto` marks a status set by approved leave; what it replaced stays private.
+  return { type: st.type, message: st.message || "", until: st.until || null, auto: !!st.auto };
+}
+
+// Used by leave.js to switch "Out of office" on and off around approved leave.
+function setLeaveStatus(person, status) {
+  person.status = status;
+  savePeople();
 }
 
 function setStatus(person, input) {
@@ -991,6 +998,7 @@ module.exports = {
   updateOwnProfile,
   setTheme,
   setStatus,
+  setLeaveStatus,
   currentStatus,
   validDate,
   STATUS_TYPES,

@@ -2315,7 +2315,7 @@
         const s = STATUSES[status.type];
         return '<span class="status-pill ' + s.cls + '"><span class="status-dot"></span>' + esc(s.label) +
             (status.message ? '<span class="status-msg"> · ' + esc(status.message) + "</span>" : "") +
-            (status.until ? '<span class="status-msg"> · until ' + esc(fmtDate(status.until + "T12:00:00")) + "</span>" : "") + "</span>";
+            (status.until && !status.auto ? '<span class="status-msg"> · until ' + esc(fmtDate(status.until + "T12:00:00")) + "</span>" : "") + "</span>";
     }
 
     function openStatusModal() {
