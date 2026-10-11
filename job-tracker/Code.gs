@@ -3,7 +3,7 @@
  *
  * Creates and formats MAIN, Indeed, CV-Library, GOV.UK and OTHER sheets,
  * adds a "Job Tracker" menu (Set Up Sheet, Archive Sheet, New Job, Update Job)
- * and sends an hourly email summary of applications that are still waiting on
+ * and emails a summary every 2 hours between 9am and 9pm of applications that are still waiting on
  * a response or whose status changed since the last email.
  *
  * Every job lives on its job-site sheet AND on MAIN. A hidden ID column links
@@ -19,6 +19,10 @@ const EMAIL_RECIPIENTS = [
   'Chazziebear11@icloud.com',
   'Charlielivsey14@icloud.com',
 ];
+
+// Hours (24h clock, spreadsheet time zone) when the update email is sent: every 2h, 9am–9pm.
+const EMAIL_HOURS = [9, 11, 13, 15, 17, 19, 21];
+const EMAIL_SCHEDULE_ID = 'every2h-' + EMAIL_HOURS.join(',');
 
 const MAIN_SHEET = 'MAIN';
 const SOURCE_SHEETS = ['Indeed', 'CV-Library', 'GOV.UK', 'OTHER'];
@@ -88,12 +92,12 @@ function setUpSheet() {
   });
 
   removeBlankDefaultSheets_(ss);
-  installHourlyTrigger_();
+  installEmailTriggers_();
 
   ss.setActiveSheet(ss.getSheetByName(MAIN_SHEET));
   SpreadsheetApp.getUi().alert(
     'Job Tracker is ready',
-    'Sheets have been created and formatted, and the hourly update email has been scheduled.\n\n' +
+    'Sheets have been created and formatted, and the update email has been scheduled (every 2 hours, 9am–9pm).\n\n' +
     'Use Job Tracker → New Job to add an application.',
     SpreadsheetApp.getUi().ButtonSet.OK);
 }
@@ -442,14 +446,18 @@ function registerManualEntries_(ss) {
 }
 
 // ---------------------------------------------------------------------------
-// Hourly email
+// Scheduled email
 // ---------------------------------------------------------------------------
 
-function installHourlyTrigger_() {
+/** One daily trigger per hour in EMAIL_HOURS (each fires some time within that hour). */
+function installEmailTriggers_() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === 'sendStatusEmail') ScriptApp.deleteTrigger(t);
   });
-  ScriptApp.newTrigger('sendStatusEmail').timeBased().everyHours(1).create();
+  EMAIL_HOURS.forEach(function (hour) {
+    ScriptApp.newTrigger('sendStatusEmail').timeBased().atHour(hour).everyDays(1).create();
+  });
+  PropertiesService.getScriptProperties().setProperty('emailSchedule', EMAIL_SCHEDULE_ID);
 }
 
 function sendUpdateEmailNow() {
@@ -463,7 +471,17 @@ function sendUpdateEmailNow() {
  * Emails every application that has no status yet, plus every application
  * whose status changed since the last email. Returns true if an email was sent.
  */
-function sendStatusEmail() {
+function sendStatusEmail(e) {
+  if (e && e.triggerUid) {
+    // Fired by a trigger: swap out an older schedule (e.g. the old hourly one)
+    // and only send during the scheduled hours.
+    if (PropertiesService.getScriptProperties().getProperty('emailSchedule') !== EMAIL_SCHEDULE_ID) {
+      installEmailTriggers_();
+    }
+    const hour = Number(Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'H'));
+    if (EMAIL_HOURS.indexOf(hour) === -1) return false;
+  }
+
   const ss = SpreadsheetApp.getActive();
   const main = ss.getSheetByName(MAIN_SHEET);
   if (!main) return false;
