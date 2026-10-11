@@ -3147,3 +3147,82 @@ input[type="date"], input[type="time"], input[type="month"], input[type="datetim
 .lr-over { display: inline-flex; align-items: center; gap: 0.3rem; white-space: nowrap; }
 .lr-over .icon { width: 12px; height: 12px; }
 .lv-count strong { white-space: nowrap; }
+
+/* ---------- Expenses ---------- */
+.claim-row .lr-side { min-width: 130px; }
+.claim-amt { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.claim-receipt { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.82rem; margin-top: 0.3rem; }
+.claim-receipt .icon { width: 14px; height: 14px; }
+.stat-danger .stat-value { color: var(--danger-text); }
+.stat-danger::before { background: var(--danger-text); }
+
+/* ---------- Funds charts and budgets ---------- */
+.chart-wrap { overflow: hidden; }
+.funds-chart { width: 100%; height: auto; display: block; }
+.fc-grid { stroke: var(--border); stroke-width: 1; }
+.fc-zero { stroke: var(--danger-text); stroke-width: 1; stroke-dasharray: 4 3; }
+.fc-axis { fill: var(--text-muted); font-size: 11px; font-family: inherit; }
+.fc-in { fill: #3e9ba3; opacity: 0.85; }
+.fc-out { fill: #e97de8; opacity: 0.85; }
+.fc-line { fill: none; stroke: var(--primary); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.fc-dot { fill: var(--surface); stroke: var(--primary); stroke-width: 2; }
+.chart-key { display: flex; flex-wrap: wrap; gap: 0.9rem; font-size: 0.8rem; color: var(--text-muted); }
+.chart-key span { display: inline-flex; align-items: center; gap: 0.35rem; }
+.chart-key span::before { content: ""; width: 10px; height: 10px; border-radius: 3px; }
+.chart-key .ck-in::before { background: #3e9ba3; }
+.chart-key .ck-out::before { background: #e97de8; }
+.chart-key .ck-line::before { height: 3px; border-radius: 2px; background: var(--primary); }
+.budget-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 0.8rem; }
+.budget-row { border: 1px solid var(--border); border-radius: 10px; padding: 0.75rem 0.9rem; background: var(--surface-2); display: grid; gap: 0.4rem; }
+.br-head { display: flex; justify-content: space-between; gap: 0.5rem; font-variant-numeric: tabular-nums; }
+.br-bar { height: 8px; border-radius: 99px; background: var(--border); overflow: hidden; }
+.br-bar span { display: block; height: 100%; width: 0; border-radius: 99px; background: var(--success-text); transition: width 0.6s ease; }
+.b-close .br-bar span { background: #d9a400; }
+.b-over .br-bar span { background: var(--danger-text); }
+.b-over { border-color: var(--danger-border); background: var(--danger-bg); }
+.b-close { border-color: var(--warn-border); }
+.budget-edit { display: grid; gap: 0.45rem; margin: 0.8rem 0; }
+.be-row { display: grid; grid-template-columns: 1fr 170px 34px; gap: 0.6rem; align-items: center; }
+.be-row .money-input span, .be-row .money-input input { font-size: 0.95rem; }
+.inline-form { display: flex; gap: 0.5rem; }
+.inline-form input { flex: 1; }
+.sb-expenses { background: #3e9ba3; }
+.st-subhead { margin: 1rem 0 0.4rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+
+/* ---------- Invoices ---------- */
+.iv-parties { display: grid; grid-template-columns: 1fr 1fr auto; gap: 1.2rem; padding: 1.2rem 1.8rem 0; }
+.iv-parties > div { display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.9rem; }
+.iv-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); font-weight: 700; }
+.iv-dates { display: grid !important; gap: 0.5rem !important; }
+.iv-dates > div { display: flex; flex-direction: column; }
+.iv-totals { margin: 0.8rem 0 0 auto; max-width: 300px; display: grid; gap: 0.3rem; font-variant-numeric: tabular-nums; }
+.iv-totals > div { display: flex; justify-content: space-between; gap: 1rem; }
+.iv-grand { border-top: 2px solid var(--text); padding-top: 0.4rem; font-weight: 800; font-size: 1.15rem; }
+.iv-paid { margin: 1rem 1.8rem 0; display: inline-block; padding: 0.3rem 0.9rem; border: 3px solid var(--success-text); color: var(--success-text); font-weight: 800; letter-spacing: 0.1em; border-radius: 6px; transform: rotate(-3deg); }
+.iv-line { display: grid; grid-template-columns: 1fr 80px 150px 34px; gap: 0.5rem; align-items: center; margin-bottom: 0.45rem; }
+.iv-line .money-input span, .iv-line .money-input input { font-size: 0.95rem; }
+.iv-edit-total { display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-end; }
+.iv-edit-total strong { font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+@media (max-width: 760px) {
+    .iv-parties { grid-template-columns: 1fr; padding-left: 1.1rem; padding-right: 1.1rem; }
+    .iv-line { grid-template-columns: 1fr 64px; }
+    .iv-line .money-input { grid-column: 1; }
+}
+
+/* ---------- Year end, P60 and pay changes ---------- */
+.p60-note { margin: 1rem 1.8rem 0; }
+.pd-changes { border-top: 1px solid var(--border); margin-top: 1.2rem; }
+.pc-list { display: grid; gap: 0.4rem; margin: 0.6rem 0; }
+.pc-row { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; padding: 0.55rem 0.8rem; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
+.pc-row.applied { opacity: 0.7; }
+.pc-row .icon-btn { margin-left: auto; }
+.pc-when { font-weight: 700; color: var(--primary); min-width: 110px; }
+.pc-form { display: grid; grid-template-columns: 150px 150px 150px 1fr auto; gap: 0.5rem; align-items: center; }
+.pc-form .money-input span, .pc-form .money-input input { font-size: 0.95rem; }
+@media (max-width: 760px) { .pc-form { grid-template-columns: 1fr 1fr; } }
+.ps-reimb { padding: 1.2rem 1.8rem 0; }
+.ps-reimb h4 small { font-size: 0.7rem; font-weight: 500; text-transform: none; letter-spacing: 0; margin-left: 0.35rem; }
+@media (max-width: 760px) { .ps-reimb { padding-left: 1.1rem; padding-right: 1.1rem; } }
+.ye-table td:first-child { min-width: 170px; }
+.ye-table .emp-name { white-space: nowrap; }
+#fd-insights > .panel { margin-bottom: 1.25rem; }

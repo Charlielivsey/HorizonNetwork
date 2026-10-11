@@ -364,8 +364,10 @@
                 { title: "Probation & reviews", desc: "Probation dates and reviews", href: "/reviews", icon: "star", badge: "reviewsDue" },
                 { title: "Staff documents", desc: "Contracts and personal documents", href: "/staff-files", icon: "file" },
                 { title: "Payslips", desc: "View and download your payslips", href: "/payslips", icon: "card" },
+                { title: "Expenses", desc: "Claim back money you spent for work", href: "/expenses", icon: "pound", badge: "expenseApprovals" },
                 { title: "Run payroll", desc: "Generate and issue payslips", href: "/payroll", icon: "wallet", requires: "payroll.manage" },
-                { title: "Company funds", desc: "Main balance and payroll fund", href: "/funds", icon: "pound", requires: "payroll.manage" },
+                { title: "Company funds", desc: "Balances, budgets and statements", href: "/funds", icon: "pound", requires: "payroll.manage", badge: "budgetWarnings" },
+                { title: "Invoices", desc: "Bill customers and track payments", href: "/invoices", icon: "file", requires: "payroll.manage", badge: "invoicesOverdue" },
             ],
         },
         {
@@ -559,6 +561,8 @@
         "/reviews": viewReviews,
         "/staff-files": viewStaffFiles,
         "/status": viewStatus,
+        "/expenses": viewExpenses,
+        "/invoices": viewInvoices,
     };
 
     function navigate(href, replace) {
@@ -591,6 +595,8 @@
         "/reviews": "star",
         "/staff-files": "file",
         "/status": "activity",
+        "/expenses": "pound",
+        "/invoices": "file",
     };
 
     function decoratePageHead(root, path) {
@@ -622,7 +628,7 @@
         const path = window.location.pathname;
         let view = ROUTES[path];
         if (!view) return navigate("/home", true);
-        const NEEDS = { "/employees": "staff.manage", "/onboarding": "onboarding.manage", "/roles": "access.manage", "/payroll": "payroll.manage", "/funds": "payroll.manage" };
+        const NEEDS = { "/employees": "staff.manage", "/onboarding": "onboarding.manage", "/roles": "access.manage", "/payroll": "payroll.manage", "/funds": "payroll.manage", "/invoices": "payroll.manage" };
         if (NEEDS[path] && !can(NEEDS[path])) view = viewNoAccess;
         if (path === "/system" && (!can("system.admin") || state.me.impersonatedBy)) view = viewNoSystemAccess;
 
@@ -750,8 +756,11 @@
             (me.servicesDown ? '<a class="hero-chip danger" href="/status" data-link>' + icon("alert") + me.servicesDown + (me.servicesDown === 1 ? " service is" : " services are") + " down</a>" : "") +
             (me.leaveApprovals ? '<a class="hero-chip" href="/leave" data-link>' + icon("sun") + me.leaveApprovals + " leave request" + (me.leaveApprovals === 1 ? "" : "s") + " to approve</a>" : "") +
             (me.timesheetApprovals ? '<a class="hero-chip" href="/rotas" data-link data-rota-approvals>' + icon("clock") + me.timesheetApprovals + " timesheet" + (me.timesheetApprovals === 1 ? "" : "s") + " to approve</a>" : "") +
+            (me.expenseApprovals ? '<a class="hero-chip" href="/expenses" data-link>' + icon("pound") + me.expenseApprovals + " expense claim" + (me.expenseApprovals === 1 ? "" : "s") + " to deal with</a>" : "") +
+            (me.budgetWarnings ? '<a class="hero-chip warn" href="/funds" data-link>' + icon("flag") + me.budgetWarnings + (me.budgetWarnings === 1 ? " budget is" : " budgets are") + " nearly used up</a>" : "") +
+            (me.invoicesOverdue ? '<a class="hero-chip warn" href="/invoices" data-link>' + icon("file") + me.invoicesOverdue + " overdue invoice" + (me.invoicesOverdue === 1 ? "" : "s") + "</a>" : "") +
             (me.helpdeskBadge ? '<a class="hero-chip" href="/helpdesk" data-link>' + icon("lifebuoy") + me.helpdeskBadge + " IT ticket" + (me.helpdeskBadge === 1 ? "" : "s") + " need" + (me.helpdeskBadge === 1 ? "s" : "") + " attention</a>" : "") +
-            (!me.unreadAnnouncements && !me.pendingAcks && !me.openPolls && !me.onboardingTasks && !me.leaveApprovals && !me.timesheetApprovals && !me.helpdeskBadge && !me.payrollOverdrawn && !me.reviewsDue && !me.returnToWorkDue && !me.servicesDown ? '<span class="hero-chip calm">' + icon("tick") + "You\u2019re all caught up</span>" : "") +
+            (!me.unreadAnnouncements && !me.pendingAcks && !me.openPolls && !me.onboardingTasks && !me.leaveApprovals && !me.timesheetApprovals && !me.helpdeskBadge && !me.payrollOverdrawn && !me.reviewsDue && !me.returnToWorkDue && !me.servicesDown && !me.expenseApprovals && !me.budgetWarnings && !me.invoicesOverdue ? '<span class="hero-chip calm">' + icon("tick") + "You\u2019re all caught up</span>" : "") +
             "</div></div>" +
             '<div class="hero-clocks">' +
             '<div class="glass-clock"><div class="gc-label">' + icon("monitor") + "Your time \u00b7 " + esc(tzCity(deviceTz)) + "</div>" +
@@ -4304,7 +4313,10 @@
             '<div class="ps-line ps-total"><span>Total deductions</span><span class="ps-amt">' + fmtMoney(t.deductions) + "</span></div></div>" +
             "</section>" +
 
-            '<section class="ps-sum"><span>' + fmtMoney(t.gross) + '<small>Total pay</small></span><b>−</b><span>' + fmtMoney(t.deductions) + "<small>Deductions</small></span><b>=</b>" +
+            ((p.reimbursements || []).length ? '<section class="ps-reimb"><div class="ps-col"><h4>' + icon("pound") + "Expenses repaid <small>tax free, added to your take-home pay</small></h4>" + lines(p.reimbursements, "") +
+                '<div class="ps-line ps-total"><span>Total expenses repaid</span><span class="ps-amt">' + fmtMoney(t.reimbursed) + "</span></div></div></section>" : "") +
+            '<section class="ps-sum"><span>' + fmtMoney(t.gross) + '<small>Total pay</small></span><b>−</b><span>' + fmtMoney(t.deductions) + "<small>Deductions</small></span>" +
+            (t.reimbursed ? "<b>+</b><span>" + fmtMoney(t.reimbursed) + "<small>Expenses</small></span>" : "") + "<b>=</b>" +
             '<span class="ps-sum-net">' + fmtMoney(t.net) + "<small>Take-home pay</small></span></section>" +
 
             '<section class="ps-ytd"><h4>This tax year so far <small>since ' + esc(fmtDate(p.ytd.from + "T12:00:00")) + "</small></h4>" +
@@ -4356,8 +4368,9 @@
         const yearTotal = d.payslips.filter(function (s) { return latest && s.payDate.slice(0, 4) === latest.payDate.slice(0, 4); }).reduce(function (n, s) { return n + s.net; }, 0);
         root.innerHTML =
             '<div class="page-head"><div><h1>Payslips</h1><p class="muted">Your payslips from HN Group Limited. Only you and Human Resources can see them.</p></div>' +
-            (d.canRunPayroll ? '<div class="page-actions"><a class="btn btn-ghost" href="/funds" data-link>' + icon("pound") + "Company funds</a>" +
-                '<a class="btn btn-primary" href="/payroll" data-link>' + icon("wallet") + "Run payroll</a></div>" : "") + "</div>" +
+            '<div class="page-actions">' + (d.payslips.length ? '<button type="button" class="btn btn-ghost" id="ps-p60">' + icon("file") + "End of year (P60)</button>" : "") +
+            (d.canRunPayroll ? '<a class="btn btn-ghost" href="/funds" data-link>' + icon("pound") + "Company funds</a>" +
+                '<a class="btn btn-primary" href="/payroll" data-link>' + icon("wallet") + "Run payroll</a>" : "") + "</div></div>" +
             (latest ? '<section class="payslip-hero"><div><p class="eyebrow">Latest payslip · ' + esc(latest.periodLabel) + '</p><div class="ph-net">' + fmtMoney(latest.net) +
                 '</div><p class="muted">Take-home pay, paid ' + esc(fmtDate(latest.payDate + "T12:00:00")) + " · " + fmtMoney(latest.gross) + " before deductions</p></div>" +
                 '<div class="ph-side"><div class="ph-stat"><span>' + fmtMoney(yearTotal) + "</span><small>Take-home in " + esc(latest.payDate.slice(0, 4)) + "</small></div>" +
@@ -4370,6 +4383,7 @@
             }).join("") + "</div>"
                 : '<div class="empty-page">' + icon("card", "big") + "<h2>No payslips yet</h2><p class=\"muted\">Your payslips will appear here once Human Resources issues them.</p></div>");
         root.addEventListener("click", function (e) {
+            if (e.target.closest("#ps-p60")) return openMyP60();
             const s = e.target.closest("[data-slip]");
             if (s) openPayslip(s.dataset.slip);
         });
@@ -4406,6 +4420,7 @@
         "transfer-in": ["From main balance", "in"], payroll: ["Payroll", "out"], "payroll-refund": ["Payroll refund", "in"],
         "payroll-shortfall": ["Payroll (the payroll fund ran out)", "out"],
         "payroll-to-main": ["To main balance", "out"], "main-from-payroll": ["From payroll fund", "in"],
+        expense: ["Expenses repaid", "out"],
     };
 
     async function viewFunds(root, current) {
@@ -4417,6 +4432,7 @@
             '<div class="page-actions"><a class="btn btn-ghost" href="/payroll" data-link>' + icon("wallet") + "Run payroll</a>" +
             '<button type="button" class="btn btn-primary" id="fd-statement">' + icon("file") + "Statement</button></div></div>" +
             fundsWarningHtml(d) + fundCardsHtml(d, true) +
+            '<div id="fd-insights"></div>' +
             '<section class="panel"><div class="panel-head"><h2 class="panel-title">' + icon("list") + "History</h2>" +
             '<div class="company-tabs small-tabs" id="fd-tabs"><button type="button" data-acc="">Everything</button><button type="button" data-acc="main">Main balance</button><button type="button" data-acc="payroll">Payroll fund</button></div></div>' +
             '<div id="fd-history"></div></section>';
@@ -4429,7 +4445,7 @@
                     const type = FUND_TYPES[t.type] || [t.type, t.amount >= 0 ? "in" : "out"];
                     return "<tr><td class=\"nowrap small\">" + esc(fmtDateTime(t.at)) + "</td>" +
                         '<td data-label="What"><div class="emp-name">' + esc(t.description || type[0]) + "</div>" +
-                        '<div class="muted small">' + esc(type[0]) + (t.sourceLabel && t.type === "deposit" ? " · " + esc(t.sourceLabel) : "") + (t.reference ? " · ref " + esc(t.reference) : "") + " · " + esc(t.byName) + "</div></td>" +
+                        '<div class="muted small">' + esc(type[0]) + (t.sourceLabel && t.type === "deposit" ? " · " + esc(t.sourceLabel) : "") + (t.category && t.amount < 0 ? " · " + esc(t.category) : "") + (t.reference ? " · ref " + esc(t.reference) : "") + " · " + esc(t.byName) + "</div></td>" +
                         '<td data-label="Account"><span class="badge' + (t.account === "payroll" ? " badge-soft" : "") + '">' + (t.account === "payroll" ? "Payroll fund" : "Main balance") + "</span></td>" +
                         '<td data-label="Amount" class="num fund-' + (t.amount >= 0 ? "in" : "out") + '">' + (t.amount >= 0 ? "+" : "") + fmtMoney(t.amount) + "</td>" +
                         '<td data-label="Balance after" class="num' + (t.balanceAfter < 0 ? " danger-text" : "") + '">' + fmtMoney(t.balanceAfter) + "</td></tr>";
@@ -4440,9 +4456,19 @@
             const a = e.target.closest("[data-acc]");
             if (a) { account = state.fundsAccount = a.dataset.acc; return draw(); }
             if (e.target.closest("#fd-statement")) return openStatement();
+            if (e.target.closest("#fd-budgets") && insights) return openBudgets(insights);
             const f = e.target.closest("[data-fund]");
             if (f) openFundsForm(f.dataset.fund, d);
         });
+        let insights = null;
+        api("/api/funds/insights").then(function (x) {
+            insights = x;
+            state.fundsCategories = x.categories;
+            const box = $("#fd-insights");
+            if (!box) return;
+            box.innerHTML = fundsInsightsHtml(x);
+            $$(".br-bar [data-w]", box).forEach(function (s) { s.style.width = s.dataset.w + "%"; });
+        }).catch(function () {});
         draw();
     }
 
@@ -4465,6 +4491,9 @@
             (kind === "add" ? '<div class="grid-2"><div><label for="fd-source">Where from</label><select id="fd-source">' + Object.keys(d.sources).map(function (k) {
                 return '<option value="' + k + '">' + esc(d.sources[k]) + "</option>";
             }).join("") + '</select></div><div><label for="fd-ref">Reference <span class="muted small">(optional)</span></label><input type="text" id="fd-ref" maxlength="80" placeholder="e.g. PayPal transaction ID"></div></div>' : "") +
+            (kind === "remove" ? '<label for="fd-cat">Category</label><select id="fd-cat">' + (state.fundsCategories || ["Other"]).filter(function (c) { return c !== "Payroll"; }).map(function (c) {
+                return "<option" + (c === "Other" ? " selected" : "") + ">" + esc(c) + "</option>";
+            }).join("") + "</select>" : "") +
             '<label for="fd-note">' + (kind === "remove" ? "Reason" : 'Note <span class="muted small">(optional)</span>') + '</label><input type="text" id="fd-note" maxlength="200">' +
             '<div class="form-error" id="fd-error" hidden></div>' +
             '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn ' + (kind === "remove" ? "btn-danger" : "btn-primary") + '">' + ({ add: "Add funds", remove: "Remove funds", transfer: "Move money", return: "Move money" })[kind] + "</button></div></form>"
@@ -4482,6 +4511,7 @@
                     source: $("#fd-source", m.el) ? $("#fd-source", m.el).value : "",
                     reference: $("#fd-ref", m.el) ? $("#fd-ref", m.el).value : "",
                     note: $("#fd-note", m.el).value,
+                    category: $("#fd-cat", m.el) ? $("#fd-cat", m.el).value : "",
                 });
                 state.me = r.user;
                 renderChrome();
@@ -4537,11 +4567,15 @@
                     : '<p class="st-small">No money came in over the last three months, so none is assumed.</p>') +
                 "</section>" : "") +
             '<section class="st-section"><h4>Where the money went</h4>' +
-            (st.spent > 0 ? '<div class="st-bar"><span class="sb-payroll" data-w="' + share(st.spentBy.payroll) + '"></span><span class="sb-removed" data-w="' + share(st.spentBy.removed) + '"></span></div>' : "") +
+            (st.spent > 0 ? '<div class="st-bar"><span class="sb-payroll" data-w="' + share(st.spentBy.payroll) + '"></span><span class="sb-removed" data-w="' + share(st.spentBy.removed) + '"></span><span class="sb-expenses" data-w="' + share(st.spentBy.expenses || 0) + '"></span></div>' : "") +
             '<div class="st-rows">' +
             '<div class="ps-line"><span><i class="st-dot sb-payroll"></i>Payroll (pay, employer NI and pension)</span><span class="ps-amt">' + fmtMoney(st.spentBy.payroll) + "</span></div>" +
             '<div class="ps-line"><span><i class="st-dot sb-removed"></i>Funds removed</span><span class="ps-amt">' + fmtMoney(st.spentBy.removed) + "</span></div>" +
-            '<div class="ps-line ps-total"><span>Total spent</span><span class="ps-amt">' + fmtMoney(st.spent) + "</span></div></div></section>" +
+            (st.spentBy.expenses ? '<div class="ps-line"><span><i class="st-dot sb-expenses"></i>Expenses repaid</span><span class="ps-amt">' + fmtMoney(st.spentBy.expenses) + "</span></div>" : "") +
+            '<div class="ps-line ps-total"><span>Total spent</span><span class="ps-amt">' + fmtMoney(st.spent) + "</span></div></div>" +
+            ((st.byCategory || []).length ? '<h4 class="st-subhead">By category</h4><div class="st-rows">' + st.byCategory.map(function (c) {
+                return '<div class="ps-line"><span>' + esc(c.category) + '</span><span class="ps-amt">' + fmtMoney(c.amount) + "</span></div>";
+            }).join("") + "</div>" : "") + "</section>" +
 
             '<section class="st-section"><h4>Accounts</h4><table class="st-table"><thead><tr><th>Account</th><th class="num">Opening</th><th class="num">In</th><th class="num">Out</th><th class="num">' + (st.isCurrent || st.isFuture ? "Now" : "Closing") + "</th></tr></thead><tbody>" +
             acc("main", "Main balance") + acc("payroll", "Payroll fund") + "</tbody></table>" +
@@ -4628,7 +4662,8 @@
 
         root.innerHTML =
             '<div class="page-head"><div><h1>Run payroll</h1><p class="muted">Payslips are paid by ' + esc(d.employer) + ". Tax and National Insurance are worked out automatically. Only Human Resources can see this page.</p></div>" +
-            '<div class="page-actions"><button type="button" class="btn btn-ghost" id="pr-single"' + (overdrawn ? " disabled" : "") + ">" + icon("plus") + "Single payslip</button>" +
+            '<div class="page-actions"><button type="button" class="btn btn-ghost" id="pr-yearend">' + icon("chart") + "Year end</button>" +
+            '<button type="button" class="btn btn-ghost" id="pr-single"' + (overdrawn ? " disabled" : "") + ">" + icon("plus") + "Single payslip</button>" +
             '<button type="button" class="btn btn-primary" id="pr-run"' + (overdrawn ? ' disabled title="The payroll fund is overdrawn"' : "") + ">" + icon(overdrawn ? "lock" : "wallet") + "Run payroll</button></div></div>" +
             fundsWarningHtml(d.funds) +
             '<div class="payroll-funds"><div><span class="pf-label">Payroll fund</span><strong class="' + (d.funds.balances.payroll < 0 ? "danger-text" : "") + '">' + fmtMoney(d.funds.balances.payroll) + "</strong></div>" +
@@ -4669,7 +4704,17 @@
                     '<td class="col-actions nowrap"><button type="button" class="btn btn-ghost btn-small" data-details="' + p.id + '">' + icon("edit") + "Pay details</button></td></tr>";
             }).join("") + "</tbody></table></div>" +
             '<p class="muted small pr-rates">' + icon("shield") + "<span>Tax is worked out cumulatively across the tax year with " + esc(d.rates) +
-            " rates for England, Wales and Northern Ireland, and National Insurance for each month. Scottish tax codes are treated as the rest of the UK.</span></p></section>";
+            " rates for England, Wales and Northern Ireland, and National Insurance for each month. Scottish tax codes are treated as the rest of the UK.</span></p></section>" +
+            '<div id="pr-upcoming"></div>';
+        api("/api/payroll/upcoming-changes").then(function (r) {
+            const box = $("#pr-upcoming");
+            if (!box || !r.changes.length) return;
+            box.innerHTML = '<section class="panel"><div class="panel-head"><h2 class="panel-title">' + icon("calendar") + "Upcoming pay changes</h2></div>" +
+                '<div class="pc-list">' + r.changes.map(function (c) {
+                    return '<div class="pc-row"><span class="pc-when">' + esc(c.label) + "</span><strong>" + esc(c.displayName) + "</strong><span>" + (c.payType === "hourly" ? fmtMoney(c.hourlyRate) + " an hour" : fmtMoney(c.monthlySalary) + " a month") +
+                        (c.note ? ' <span class="muted small">· ' + esc(c.note) + "</span>" : "") + "</span></div>";
+                }).join("") + "</div></section>";
+        }).catch(function () {});
 
         root.addEventListener("change", function (e) {
             if (e.target.id === "pr-month" && e.target.value) { state.payPeriod = e.target.value; render(); }
@@ -4679,6 +4724,7 @@
             if (per) { state.payPeriod = per.dataset.period; return render(); }
             if (e.target.closest("#pr-run")) return openPayrollRun(d, period, withSlip);
             if (e.target.closest("#pr-single")) return openPayslipEditor(d, null, period);
+            if (e.target.closest("#pr-yearend")) return openYearEnd();
             const det = e.target.closest("[data-details]");
             if (det) return openPayDetails(det.dataset.details, d);
             if (e.target.closest("#pr-issue-all")) {
@@ -4781,8 +4827,10 @@
                 '<div class="grid-2"><div><label for="pd-prevpay">Total pay (\u00a3)</label><input type="number" id="pd-prevpay" min="0" step="0.01" value="' + esc(v.previousPay || "") + '" placeholder="0.00"></div>' +
                 '<div><label for="pd-prevtax">Tax paid (\u00a3)</label><input type="number" id="pd-prevtax" min="0" step="0.01" value="' + esc(v.previousTax || "") + '" placeholder="0.00"></div></div>' +
                 '<div class="form-error" id="pd-error" hidden></div>' +
-                '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">Save pay details</button></div></form>'
+                '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">Save pay details</button></div></form>' +
+                '<div id="pd-changes" class="pd-changes"></div>'
             );
+            mountPayChanges($("#pd-changes", m.el), personId);
             const sync = function () {
                 const hourly = $("#pd-type", m.el).value === "hourly";
                 $("#pd-salary-box", m.el).hidden = hourly;
@@ -6318,6 +6366,550 @@
                 }
             }).catch(function () {});
         }, 30000);
+    }
+
+
+    // ================= Expense claims =================
+
+    const EXPENSE_BADGES = { submitted: "badge-yellow", approved: "badge-green", rejected: "badge-red", paid: "badge-soft" };
+
+    async function viewExpenses(root, current) {
+        const d = await api("/api/expenses");
+        if (!current()) return;
+        let tab = state.expenseTab || (d.toApprove.length ? "approve" : "mine");
+        const unpaid = d.all.filter(function (c) { return c.canPay; });
+        const tabs = [["mine", "My claims", d.mine.length]];
+        if (d.toApprove.length || d.canPay) tabs.push(["approve", "To approve", d.toApprove.length]);
+        if (d.canPay) tabs.push(["pay", "To repay", unpaid.length], ["all", "All claims", null]);
+        if (!tabs.some(function (t) { return t[0] === tab; })) tab = "mine";
+        const owed = d.mine.filter(function (c) { return c.status === "approved"; }).reduce(function (n, c) { return n + c.amount; }, 0);
+        const waiting = d.mine.filter(function (c) { return c.status === "submitted"; }).reduce(function (n, c) { return n + c.amount; }, 0);
+
+        root.innerHTML =
+            '<div class="page-head"><div><h1>Expenses</h1><p class="muted">Claim back money you spent for work. Add a photo or PDF of the receipt. Your supervisor or payroll approves it, then it’s repaid from company funds or with your next payslip.</p></div>' +
+            '<div class="page-actions">' + (state.me.system ? "" : '<button type="button" class="btn btn-primary" id="ex-new">' + icon("plus") + "New claim</button>") + "</div></div>" +
+            (state.me.system ? "" : '<div class="stat-row">' +
+                '<div class="stat"><div class="stat-value">' + fmtMoney(waiting) + '</div><div class="stat-label">Waiting for approval</div></div>' +
+                '<div class="stat"><div class="stat-value">' + fmtMoney(owed) + '</div><div class="stat-label">Approved, to be repaid</div></div>' +
+                '<div class="stat"><div class="stat-value">' + fmtMoney(d.mine.filter(function (c) { return c.status === "paid"; }).reduce(function (n, c) { return n + c.amount; }, 0)) + '</div><div class="stat-label">Repaid so far</div></div></div>') +
+            '<div class="company-tabs" id="ex-tabs">' + tabs.map(function (t) {
+                return '<button type="button" data-tab="' + t[0] + '">' + esc(t[1]) + (t[2] !== null ? ' <span class="tab-count">' + t[2] + "</span>" : "") + "</button>";
+            }).join("") + "</div><div id=\"ex-body\"></div>";
+
+        function row(c, opts) {
+            return '<div class="leave-row claim-row" data-id="' + c.id + '">' +
+                (opts.person ? avatar(c.person, "md") : '<span class="leave-icon">' + icon("pound") + "</span>") +
+                '<div class="lr-main"><div class="lr-title">' + (opts.person ? esc(c.person.displayName) + ' <span class="muted">· ' : "") + esc(c.description) + (opts.person ? "</span>" : "") + "</div>" +
+                '<div class="muted small">' + esc(c.category) + " · spent " + esc(fmtDate(c.date + "T12:00:00")) + " · claimed " + esc(fmtDate(c.createdAt)) + "</div>" +
+                (c.receipt ? '<a class="claim-receipt" href="/api/expenses/' + c.id + '/receipt" target="_blank" rel="noopener">' + icon("file") + esc(c.receipt.fileName) + "</a>" : '<span class="muted small">No receipt</span>') +
+                (c.decisionNote ? '<div class="lr-note decision">' + icon("message") + esc(c.decidedByName || "") + ": " + esc(c.decisionNote) + "</div>" : "") +
+                "</div>" +
+                '<div class="lr-side"><strong class="claim-amt">' + fmtMoney(c.amount) + '</strong><span class="badge ' + (EXPENSE_BADGES[c.status] || "") + '">' + esc(c.statusLabel) + "</span>" +
+                (c.canApprove ? '<div class="btn-row"><button type="button" class="btn btn-ghost btn-small" data-ex="reject">Reject</button><button type="button" class="btn btn-primary btn-small" data-ex="approve">' + icon("tick") + "Approve</button></div>" : "") +
+                (c.canPay ? '<div class="btn-row"><button type="button" class="btn btn-ghost btn-small" data-ex="payslip">With next payslip</button><button type="button" class="btn btn-primary btn-small" data-ex="direct">' + icon("pound") + "Pay now</button></div>" : "") +
+                (c.canCancel && opts.cancel ? '<button type="button" class="btn btn-link btn-small" data-ex="cancel">Withdraw</button>' : "") +
+                "</div></div>";
+        }
+
+        function list(items, opts, empty) {
+            return items.length ? '<div class="panel leave-list">' + items.map(function (c) { return row(c, opts); }).join("") + "</div>"
+                : '<div class="empty-page">' + icon("pound", "big") + "<h2>" + empty[0] + '</h2><p class="muted">' + empty[1] + "</p></div>";
+        }
+
+        function draw() {
+            $$("#ex-tabs [data-tab]").forEach(function (b) { b.classList.toggle("active", b.dataset.tab === tab); });
+            const body = $("#ex-body");
+            if (tab === "mine") body.innerHTML = list(d.mine, { cancel: true }, ["No claims yet", "Use <strong>New claim</strong> when you’ve paid for something for work."]);
+            else if (tab === "approve") body.innerHTML = list(d.toApprove, { person: true }, ["Nothing to approve", "Claims from your team will appear here."]);
+            else if (tab === "pay") body.innerHTML = list(unpaid, { person: true }, ["Nothing to repay", "Approved claims waiting to be repaid will appear here."]);
+            else body.innerHTML = list(d.all, { person: true, cancel: true }, ["No claims yet", "Claims from everyone will appear here."]);
+        }
+
+        root.addEventListener("click", async function (e) {
+            const t = e.target.closest("[data-tab]");
+            if (t) { tab = state.expenseTab = t.dataset.tab; return draw(); }
+            if (e.target.closest("#ex-new")) return openExpenseForm(d);
+            const b = e.target.closest("[data-ex]");
+            if (!b) return;
+            const id = b.closest("[data-id]").dataset.id;
+            const act = b.dataset.ex;
+            try {
+                let body = {};
+                let path = act;
+                if (act === "reject") {
+                    const note = await askNote({ title: "Reject this claim?", label: "Reason", required: true, confirmLabel: "Reject", danger: true });
+                    if (note === null) return;
+                    body.note = note;
+                } else if (act === "cancel") {
+                    if (!(await confirmDialog({ title: "Withdraw this claim?", message: "It will be removed, along with its receipt.", confirmLabel: "Withdraw", danger: true }))) return;
+                } else if (act === "direct" || act === "payslip") {
+                    const c = d.all.find(function (x) { return x.id === id; });
+                    if (act === "direct" && !(await confirmDialog({ title: "Pay " + fmtMoney(c.amount) + " now?", message: "It’s taken from the main balance and recorded under " + c.category + ".", confirmLabel: "Pay now" }))) return;
+                    path = "pay";
+                    body.method = act;
+                }
+                const r = await api("/api/expenses/" + id + "/" + path, body);
+                state.me = r.user;
+                renderChrome();
+                toast({ approve: "Claim approved.", reject: "Claim rejected.", cancel: "Claim withdrawn.", direct: "Paid from the main balance.", payslip: "It’ll be added to their next payslip." }[act]);
+                render();
+            } catch (err) { toast(err.message); }
+        });
+        draw();
+    }
+
+    function openExpenseForm(d) {
+        let file = null;
+        const m = openModal(
+            '<h2 class="modal-title">New expense claim</h2>' +
+            '<form id="ex-form" novalidate>' +
+            '<label for="ex-desc">What was it for?</label><input type="text" id="ex-desc" maxlength="300" placeholder="e.g. Train to the client meeting in Leeds">' +
+            '<div class="grid-2"><div><label for="ex-amount">Amount</label><div class="money-input"><span>£</span><input type="text" id="ex-amount" inputmode="decimal" placeholder="0.00"></div></div>' +
+            '<div><label for="ex-date">Date paid</label><input type="date" id="ex-date" value="' + isoDay(new Date()) + '" max="' + isoDay(new Date()) + '"></div></div>' +
+            '<label for="ex-cat">Category</label><select id="ex-cat">' + d.categories.map(function (c) { return "<option>" + esc(c) + "</option>"; }).join("") + "</select>" +
+            '<label>Receipt</label><label class="drop-zone" id="ex-drop"><input type="file" id="ex-file" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,image/*,application/pdf" hidden>' +
+            icon("upload") + '<span id="ex-file-name">Add a photo or PDF of the receipt</span></label>' +
+            '<div class="form-error" id="ex-error" hidden></div>' +
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">Send claim</button></div></form>'
+        );
+        $("#ex-file", m.el).addEventListener("change", function (e) {
+            file = e.target.files[0] || null;
+            $("#ex-file-name", m.el).textContent = file ? file.name + " (" + Math.round(file.size / 1024) + " KB)" : "Add a photo or PDF of the receipt";
+        });
+        $("#ex-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            if (file && file.size > 10 * 1024 * 1024) return formError($("#ex-error", m.el), "Receipts can be up to 10 MB.");
+            const meta = {
+                description: $("#ex-desc", m.el).value, amount: $("#ex-amount", m.el).value.replace(/[£,\s]/g, ""),
+                date: $("#ex-date", m.el).value, category: $("#ex-cat", m.el).value, fileName: file ? file.name : "",
+            };
+            try {
+                const res = await fetch("/api/expenses", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/octet-stream", "X-Claim": encodeURIComponent(JSON.stringify(meta)) },
+                    body: file || new Blob([]),
+                });
+                const r = await res.json().catch(function () { return {}; });
+                if (!res.ok) throw new Error(r.error || "Something went wrong.");
+                state.me = r.user;
+                renderChrome();
+                closeModal();
+                toast("Claim sent for approval.");
+                state.expenseTab = "mine";
+                render();
+            } catch (err) { formError($("#ex-error", m.el), err.message); }
+        });
+    }
+
+    // ================= Invoices =================
+
+    const INVOICE_BADGES = { draft: "", sent: "badge-yellow", paid: "badge-green", void: "badge-red" };
+
+    async function viewInvoices(root, current) {
+        const d = await api("/api/invoices");
+        if (!current()) return;
+        let filter = state.invoiceFilter || "";
+        root.innerHTML =
+            '<div class="page-head"><div><h1>Invoices</h1><p class="muted">Raise branded invoices from any HN Group company. Marking one paid adds the money to the main balance.</p></div>' +
+            '<div class="page-actions"><button type="button" class="btn btn-ghost" id="iv-settings">' + icon("settings") + "Invoice settings</button>" +
+            '<button type="button" class="btn btn-primary" id="iv-new">' + icon("plus") + "New invoice</button></div></div>" +
+            '<div class="stat-row">' +
+            '<div class="stat"><div class="stat-value">' + fmtMoney(d.summary.outstanding) + '</div><div class="stat-label">Waiting to be paid</div></div>' +
+            '<div class="stat' + (d.summary.overdue ? " stat-danger" : "") + '"><div class="stat-value">' + fmtMoney(d.summary.overdue) + '</div><div class="stat-label">Overdue' + (d.summary.overdueCount ? " (" + d.summary.overdueCount + ")" : "") + "</div></div>" +
+            '<div class="stat"><div class="stat-value">' + fmtMoney(d.summary.paidThisMonth) + '</div><div class="stat-label">Paid this month</div></div></div>' +
+            '<div class="company-tabs" id="iv-tabs"><button type="button" data-f="">All</button><button type="button" data-f="draft">Drafts</button><button type="button" data-f="sent">Waiting</button><button type="button" data-f="overdue">Overdue</button><button type="button" data-f="paid">Paid</button></div>' +
+            '<div id="iv-body"></div>';
+
+        function draw() {
+            $$("#iv-tabs [data-f]").forEach(function (b) { b.classList.toggle("active", b.dataset.f === filter); });
+            const list = d.invoices.filter(function (i) { return !filter || (filter === "overdue" ? i.overdue : i.status === filter); });
+            $("#iv-body").innerHTML = list.length ? '<div class="table-card"><table class="table"><thead><tr><th>Invoice</th><th>Customer</th><th>From</th><th>Due</th><th>Status</th><th class="num">Total</th><th class="col-actions"></th></tr></thead><tbody>' +
+                list.map(function (i) {
+                    return '<tr data-inv="' + i.id + '"><td><strong>' + esc(i.number) + '</strong><div class="muted small">' + esc(fmtDate(i.issueDate + "T12:00:00")) + "</div></td>" +
+                        '<td data-label="Customer">' + esc(i.customer.name) + (i.reference ? '<div class="muted small">Ref ' + esc(i.reference) + "</div>" : "") + "</td>" +
+                        '<td data-label="From">' + esc(i.company) + "</td>" +
+                        '<td data-label="Due" class="nowrap' + (i.overdue ? " danger-text" : "") + '">' + esc(fmtDate(i.dueDate + "T12:00:00")) + "</td>" +
+                        '<td data-label="Status"><span class="badge ' + (i.overdue ? "badge-red" : INVOICE_BADGES[i.status]) + '">' + esc(i.statusLabel) + "</span></td>" +
+                        '<td data-label="Total" class="num"><strong>' + fmtMoney(i.total) + "</strong></td>" +
+                        '<td class="col-actions nowrap"><button type="button" class="btn btn-ghost btn-small" data-iv="view">' + icon("eye") + "Open</button></td></tr>";
+                }).join("") + "</tbody></table></div>"
+                : '<div class="empty-page">' + icon("file", "big") + "<h2>No invoices" + (filter ? " here" : " yet") + '</h2><p class="muted">Use <strong>New invoice</strong> to bill a customer.</p></div>';
+        }
+        root.addEventListener("click", function (e) {
+            const f = e.target.closest("[data-f]");
+            if (f) { filter = state.invoiceFilter = f.dataset.f; return draw(); }
+            if (e.target.closest("#iv-new")) return openInvoiceEditor(d, null);
+            if (e.target.closest("#iv-settings")) return openInvoiceSettings(d);
+            const r = e.target.closest("[data-inv]");
+            if (r) openInvoice(d, d.invoices.find(function (i) { return i.id === r.dataset.inv; }));
+        });
+        draw();
+    }
+
+    function invoiceDocHtml(inv, settings) {
+        const day = function (iso) { return new Date(iso + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }); };
+        return '<article class="statement invoice">' +
+            '<header class="ps-band"><div class="ps-brand"><img src="/assets/brand/svg/hn-group-wordmark-white.svg" alt="HN Group"></div>' +
+            '<div class="ps-title"><span class="ps-kicker">Invoice</span><span class="ps-period">' + esc(inv.number) + "</span></div></header>" +
+            '<div class="ps-stripe" aria-hidden="true"></div>' +
+            '<section class="iv-parties"><div><span class="iv-label">From</span><strong>' + esc(inv.company) + "</strong><span>Part of HN Group</span></div>" +
+            '<div><span class="iv-label">Bill to</span><strong>' + esc(inv.customer.name) + "</strong>" + (inv.customer.address ? "<span>" + esc(inv.customer.address).replace(/\n/g, "<br>") + "</span>" : "") +
+            (inv.customer.email ? "<span>" + esc(inv.customer.email) + "</span>" : "") + "</div>" +
+            '<div class="iv-dates"><div><span class="iv-label">Invoice date</span><strong>' + esc(day(inv.issueDate)) + "</strong></div>" +
+            '<div><span class="iv-label">Due date</span><strong>' + esc(day(inv.dueDate)) + "</strong></div>" +
+            (inv.reference ? '<div><span class="iv-label">Your reference</span><strong>' + esc(inv.reference) + "</strong></div>" : "") + "</div></section>" +
+            '<section class="st-section"><table class="st-table iv-lines"><thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th></tr></thead><tbody>' +
+            inv.lines.map(function (l) {
+                return "<tr><td>" + esc(l.description) + '</td><td class="num">' + esc(l.quantity) + '</td><td class="num">' + fmtMoney(l.unitPrice) + '</td><td class="num">' + fmtMoney(l.quantity * l.unitPrice) + "</td></tr>";
+            }).join("") + "</tbody></table>" +
+            '<div class="iv-totals"><div><span>Subtotal</span><span>' + fmtMoney(inv.subtotal) + "</span></div>" +
+            "<div><span>VAT (" + inv.vatRate + "%)</span><span>" + fmtMoney(inv.vat) + "</span></div>" +
+            '<div class="iv-grand"><span>Total due</span><span>' + fmtMoney(inv.total) + "</span></div></div></section>" +
+            (inv.notes ? '<section class="ps-note">' + icon("message") + "<div>" + esc(inv.notes).replace(/\n/g, "<br>") + "</div></section>" : "") +
+            (settings.bankDetails ? '<section class="st-section"><h4>How to pay</h4><p class="st-small">' + esc(settings.bankDetails).replace(/\n/g, "<br>") + "</p></section>" : "") +
+            (inv.status === "paid" ? '<div class="iv-paid">PAID ' + esc(fmtDate(inv.paidAt)) + "</div>" : "") +
+            '<footer class="ps-foot"><span>' + esc(inv.company) + "</span><span>" + esc(settings.footer || "") + "</span><span>" + esc(inv.number) + "</span></footer></article>";
+    }
+
+    function openInvoice(d, inv) {
+        const open = inv.status === "draft" || inv.status === "sent";
+        const m = openModal(
+            '<div class="print-area">' + invoiceDocHtml(inv, d.settings) + "</div>" +
+            '<div class="modal-actions no-print">' +
+            (inv.status === "draft" ? '<button type="button" class="btn btn-ghost danger-text" data-iva="delete">' + icon("trash") + "Delete</button>" : "") +
+            (open ? '<button type="button" class="btn btn-ghost" data-iva="void">Void</button><button type="button" class="btn btn-ghost" data-iva="edit">' + icon("edit") + "Edit</button>" : "") +
+            '<button type="button" class="btn btn-ghost" data-iva="print">' + icon("download") + "Download PDF</button>" +
+            (inv.status === "draft" ? '<button type="button" class="btn btn-primary" data-iva="sent">Mark as sent</button>' : "") +
+            (open ? '<button type="button" class="btn btn-primary" data-iva="paid">' + icon("tick") + "Mark as paid</button>" : "") +
+            "</div>",
+            { wide: true, cls: "modal-payslip modal-statement" }
+        );
+        m.el.addEventListener("click", async function (e) {
+            const b = e.target.closest("[data-iva]");
+            if (!b) return;
+            const act = b.dataset.iva;
+            if (act === "print") {
+                const title = document.title;
+                document.title = inv.number + " " + inv.customer.name;
+                document.body.classList.add("printing");
+                window.print();
+                setTimeout(function () { document.body.classList.remove("printing"); document.title = title; }, 500);
+                return;
+            }
+            if (act === "edit") return openInvoiceEditor(d, inv);
+            if (act === "paid" && !(await confirmDialog({ title: "Mark " + inv.number + " as paid?", message: fmtMoney(inv.total) + " will be added to the main balance.", confirmLabel: "Mark as paid" }))) return;
+            if (act === "void" && !(await confirmDialog({ title: "Void " + inv.number + "?", message: "It stays on record but can’t be paid or changed.", confirmLabel: "Void invoice", danger: true }))) return;
+            if (act === "delete" && !(await confirmDialog({ title: "Delete " + inv.number + "?", message: "Drafts can be deleted. This can’t be undone.", confirmLabel: "Delete", danger: true }))) return;
+            try {
+                const r = await api("/api/invoices/" + inv.id + "/" + act, {});
+                if (r.user) { state.me = r.user; renderChrome(); }
+                closeModal();
+                toast({ sent: "Marked as sent.", paid: "Marked as paid and added to the main balance.", void: "Invoice voided.", delete: "Invoice deleted." }[act]);
+                render();
+            } catch (err) { toast(err.message); }
+        });
+    }
+
+    function openInvoiceEditor(d, inv) {
+        const v = inv || { company: d.companies[0], customer: { name: "", email: "", address: "" }, issueDate: isoDay(new Date()), dueDate: "", reference: "", lines: [{ description: "", quantity: 1, unitPrice: "" }], vatRate: 0, notes: "" };
+        const lines = v.lines.map(function (l) { return Object.assign({}, l); });
+        const m = openModal(
+            '<h2 class="modal-title">' + (inv ? "Edit " + esc(inv.number) : "New invoice") + "</h2>" +
+            '<form id="iv-form" novalidate>' +
+            '<div class="grid-2"><div><label for="iv-company">From</label><select id="iv-company">' + d.companies.map(function (c) { return "<option" + (c === v.company ? " selected" : "") + ">" + esc(c) + "</option>"; }).join("") + "</select></div>" +
+            '<div><label for="iv-ref">Customer reference <span class="muted small">(optional)</span></label><input type="text" id="iv-ref" maxlength="80" value="' + esc(v.reference) + '"></div></div>' +
+            '<div class="grid-2"><div><label for="iv-cust">Customer name</label><input type="text" id="iv-cust" maxlength="120" value="' + esc(v.customer.name) + '"></div>' +
+            '<div><label for="iv-email">Customer email <span class="muted small">(optional)</span></label><input type="email" id="iv-email" maxlength="160" value="' + esc(v.customer.email) + '"></div></div>' +
+            '<label for="iv-addr">Customer address <span class="muted small">(optional)</span></label><textarea id="iv-addr" rows="2" maxlength="400">' + esc(v.customer.address) + "</textarea>" +
+            '<div class="grid-2"><div><label for="iv-date">Invoice date</label><input type="date" id="iv-date" value="' + esc(v.issueDate) + '"></div>' +
+            '<div><label for="iv-due">Due date <span class="muted small">(blank = ' + d.settings.paymentTerms + ' days)</span></label><input type="date" id="iv-due" value="' + esc(inv ? v.dueDate : "") + '"></div></div>' +
+            '<h3 class="detail-head">Lines</h3><div id="iv-lines"></div><button type="button" class="btn btn-link" id="iv-add">' + icon("plus") + "Add a line</button>" +
+            '<div class="grid-2"><div><label for="iv-vat">VAT</label><select id="iv-vat">' + d.vatRates.map(function (r) { return '<option value="' + r + '"' + (r === v.vatRate ? " selected" : "") + ">" + (r ? r + "%" : "No VAT") + "</option>"; }).join("") + "</select></div>" +
+            '<div class="iv-edit-total" id="iv-total"></div></div>' +
+            '<label for="iv-notes">Notes <span class="muted small">(optional, shown on the invoice)</span></label><textarea id="iv-notes" rows="2" maxlength="1000">' + esc(v.notes) + "</textarea>" +
+            '<div class="form-error" id="iv-error" hidden></div>' +
+            '<div class="modal-actions sticky-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">' + (inv ? "Save invoice" : "Create invoice") + "</button></div></form>",
+            { wide: true }
+        );
+        function total() {
+            const sub = lines.reduce(function (n, l) { return n + (Number(l.quantity) || 0) * (Number(l.unitPrice) || 0); }, 0);
+            const vat = sub * Number($("#iv-vat", m.el).value) / 100;
+            $("#iv-total", m.el).innerHTML = '<span class="muted small">Total</span><strong>' + fmtMoney(sub + vat) + "</strong>";
+        }
+        function drawLines() {
+            $("#iv-lines", m.el).innerHTML = lines.map(function (l, i) {
+                return '<div class="iv-line" data-l="' + i + '"><input type="text" data-k="description" placeholder="Description" maxlength="200" value="' + esc(l.description) + '">' +
+                    '<input type="number" data-k="quantity" min="0" step="0.01" aria-label="Quantity" value="' + esc(l.quantity) + '">' +
+                    '<div class="money-input"><span>£</span><input type="number" data-k="unitPrice" step="0.01" aria-label="Unit price" placeholder="0.00" value="' + esc(l.unitPrice) + '"></div>' +
+                    '<button type="button" class="icon-btn" data-rm="' + i + '" aria-label="Remove line">' + icon("x") + "</button></div>";
+            }).join("");
+            total();
+        }
+        m.el.addEventListener("input", function (e) {
+            const row = e.target.closest("[data-l]");
+            if (row) lines[Number(row.dataset.l)][e.target.dataset.k] = e.target.value;
+            total();
+        });
+        m.el.addEventListener("change", function (e) { if (e.target.id === "iv-vat") total(); });
+        m.el.addEventListener("click", function (e) {
+            if (e.target.closest("#iv-add")) { lines.push({ description: "", quantity: 1, unitPrice: "" }); drawLines(); return; }
+            const rm = e.target.closest("[data-rm]");
+            if (rm && lines.length > 1) { lines.splice(Number(rm.dataset.rm), 1); drawLines(); }
+        });
+        drawLines();
+        $("#iv-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try {
+                await api(inv ? "/api/invoices/" + inv.id : "/api/invoices", {
+                    company: $("#iv-company", m.el).value, reference: $("#iv-ref", m.el).value,
+                    customerName: $("#iv-cust", m.el).value, customerEmail: $("#iv-email", m.el).value, customerAddress: $("#iv-addr", m.el).value,
+                    issueDate: $("#iv-date", m.el).value, dueDate: $("#iv-due", m.el).value, lines: lines, vatRate: $("#iv-vat", m.el).value, notes: $("#iv-notes", m.el).value,
+                });
+                closeModal();
+                toast(inv ? "Invoice saved." : "Invoice created.");
+                render();
+            } catch (err) { formError($("#iv-error", m.el), err.message); }
+        });
+    }
+
+    function openInvoiceSettings(d) {
+        const s = d.settings;
+        const m = openModal(
+            '<h2 class="modal-title">Invoice settings</h2><form id="is-form" novalidate>' +
+            '<label for="is-terms">Payment terms (days)</label><input type="number" id="is-terms" min="0" max="365" value="' + esc(s.paymentTerms) + '">' +
+            '<label for="is-bank">How to pay <span class="muted small">(bank details, PayPal address…)</span></label><textarea id="is-bank" rows="3" maxlength="400">' + esc(s.bankDetails) + "</textarea>" +
+            '<label for="is-foot">Footer</label><input type="text" id="is-foot" maxlength="300" value="' + esc(s.footer) + '">' +
+            '<div class="form-error" id="is-error" hidden></div>' +
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">Save</button></div></form>'
+        );
+        $("#is-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try {
+                await api("/api/invoices/settings", { paymentTerms: $("#is-terms", m.el).value, bankDetails: $("#is-bank", m.el).value, footer: $("#is-foot", m.el).value });
+                closeModal();
+                toast("Invoice settings saved.");
+                render();
+            } catch (err) { formError($("#is-error", m.el), err.message); }
+        });
+    }
+
+    // ================= Funds charts and budgets =================
+
+    function monthShort(period) {
+        const [y, m] = period.split("-").map(Number);
+        return new Date(y, m - 1, 15).toLocaleDateString("en-GB", { month: "short" });
+    }
+
+    // A 12-month chart: bars for money in and spent, a line for the total balance.
+    function fundsChartSvg(series) {
+        const W = 720, H = 240, L = 56, R = 12, T = 16, B = 30;
+        const vals = [];
+        series.forEach(function (s) { vals.push(s.in, s.out, s.total); });
+        let max = Math.max.apply(null, vals.concat([1]));
+        let min = Math.min.apply(null, vals.concat([0]));
+        const pad = (max - min) * 0.1 || 1;
+        max += pad;
+        if (min < 0) min -= pad;
+        const y = function (v) { return T + (H - T - B) * (1 - (v - min) / (max - min)); };
+        const step = (W - L - R) / series.length;
+        const bw = Math.max(4, step / 4);
+        let out = '<svg class="funds-chart" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Money in, spent and balance over the last 12 months">';
+        for (let i = 0; i <= 4; i++) {
+            const v = min + (max - min) * i / 4;
+            out += '<line class="fc-grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + y(v) + '" y2="' + y(v) + '"></line>' +
+                '<text class="fc-axis" x="' + (L - 6) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + esc(fmtMoney(Math.round(v)).replace(".00", "")) + "</text>";
+        }
+        if (min < 0) out += '<line class="fc-zero" x1="' + L + '" x2="' + (W - R) + '" y1="' + y(0) + '" y2="' + y(0) + '"></line>';
+        const pts = [];
+        series.forEach(function (s, i) {
+            const cx = L + step * i + step / 2;
+            out += '<rect class="fc-in" x="' + (cx - bw - 1) + '" y="' + Math.min(y(s.in), y(0)) + '" width="' + bw + '" height="' + Math.abs(y(0) - y(s.in)) + '"><title>' + esc(monthShort(s.period)) + ": in " + esc(fmtMoney(s.in)) + "</title></rect>" +
+                '<rect class="fc-out" x="' + (cx + 1) + '" y="' + Math.min(y(s.out), y(0)) + '" width="' + bw + '" height="' + Math.abs(y(0) - y(s.out)) + '"><title>' + esc(monthShort(s.period)) + ": spent " + esc(fmtMoney(s.out)) + "</title></rect>" +
+                '<text class="fc-axis" x="' + cx + '" y="' + (H - 10) + '" text-anchor="middle">' + esc(monthShort(s.period)) + "</text>";
+            pts.push(cx + "," + y(s.total));
+        });
+        out += '<polyline class="fc-line" points="' + pts.join(" ") + '"></polyline>';
+        series.forEach(function (s, i) {
+            out += '<circle class="fc-dot" cx="' + (L + step * i + step / 2) + '" cy="' + y(s.total) + '" r="3.5"><title>' + esc(monthShort(s.period)) + ": balance " + esc(fmtMoney(s.total)) + "</title></circle>";
+        });
+        return out + "</svg>";
+    }
+
+    function fundsInsightsHtml(x) {
+        const withBudget = x.budgets.filter(function (b) { return b.budget || b.spent; });
+        return '<section class="panel"><div class="panel-head"><h2 class="panel-title">' + icon("chart") + "Last 12 months</h2>" +
+            '<div class="chart-key"><span class="ck-in">Money in</span><span class="ck-out">Spent</span><span class="ck-line">Total balance</span></div></div>' +
+            '<div class="chart-wrap">' + fundsChartSvg(x.series) + "</div></section>" +
+            '<section class="panel"><div class="panel-head"><h2 class="panel-title">' + icon("flag") + "Budgets this month</h2>" +
+            '<button type="button" class="btn btn-ghost btn-small" id="fd-budgets">' + icon("settings") + "Categories &amp; budgets</button></div>" +
+            (withBudget.length ? '<div class="budget-list">' + withBudget.map(function (b) {
+                const pct = b.budget ? Math.min(100, Math.round(b.used * 100)) : 0;
+                return '<div class="budget-row b-' + (b.level || "none") + '"><div class="br-head"><strong>' + esc(b.category) + "</strong><span>" + fmtMoney(b.spent) +
+                    (b.budget ? ' <span class="muted">of ' + fmtMoney(b.budget) + "</span>" : ' <span class="muted">· no budget</span>') + "</span></div>" +
+                    (b.budget ? '<div class="br-bar"><span data-w="' + pct + '"></span></div><div class="muted small">' +
+                        (b.level === "over" ? '<span class="danger-text">' + fmtMoney(-b.left) + " over budget</span>" : fmtMoney(b.left) + " left" + (b.level === "close" ? " · nearly used up" : "")) + "</div>" : "") + "</div>";
+            }).join("") + "</div>" : '<p class="muted small">Nothing spent yet this month, and no budgets set. Use <strong>Categories &amp; budgets</strong> to set monthly limits.</p>') +
+            "</section>";
+    }
+
+    function openBudgets(x) {
+        const m = openModal(
+            '<h2 class="modal-title">Categories &amp; budgets</h2>' +
+            '<p class="muted">Money taken out of the company is tagged with a category. Give a category a monthly budget to get a warning when it’s nearly used up (80%) or over. Leave it blank for no budget.</p>' +
+            '<div class="budget-edit">' + x.categories.map(function (c) {
+                const b = x.budgets.find(function (y) { return y.category === c; }) || {};
+                return '<div class="be-row"><span>' + esc(c) + '</span><div class="money-input"><span>£</span><input type="text" inputmode="decimal" data-budget="' + esc(c) + '" value="' + (b.budget ? b.budget.toFixed(2) : "") + '" placeholder="No budget"></div>' +
+                    (c === "Payroll" || c === "Other" ? '<span class="be-x"></span>' : '<button type="button" class="icon-btn" data-rmcat="' + esc(c) + '" aria-label="Remove ' + esc(c) + '">' + icon("trash") + "</button>") + "</div>";
+            }).join("") + "</div>" +
+            '<form id="cat-form" class="inline-form"><input type="text" id="cat-name" maxlength="40" placeholder="New category, e.g. Insurance"><button type="submit" class="btn btn-ghost">' + icon("plus") + "Add</button></form>" +
+            '<div class="form-error" id="bd-error" hidden></div>' +
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Close</button><button type="button" class="btn btn-primary" id="bd-save">Save budgets</button></div>'
+        );
+        m.el.addEventListener("click", async function (e) {
+            const rm = e.target.closest("[data-rmcat]");
+            if (rm) {
+                try { await api("/api/funds/categories", { remove: rm.dataset.rmcat }); closeModal(); toast("Category removed."); render(); } catch (err) { formError($("#bd-error", m.el), err.message); }
+            }
+            if (e.target.closest("#bd-save")) {
+                try {
+                    for (const inp of $$("[data-budget]", m.el)) {
+                        const cur = (x.budgets.find(function (y) { return y.category === inp.dataset.budget; }) || {}).budget || 0;
+                        const val = Number(inp.value.replace(/[£,\s]/g, "")) || 0;
+                        if (val !== cur) await api("/api/funds/budgets", { category: inp.dataset.budget, amount: inp.value.replace(/[£,\s]/g, "") });
+                    }
+                    closeModal();
+                    toast("Budgets saved.");
+                    render();
+                } catch (err) { formError($("#bd-error", m.el), err.message); }
+            }
+        });
+        $("#cat-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try { await api("/api/funds/categories", { add: $("#cat-name", m.el).value }); closeModal(); toast("Category added."); render(); } catch (err) { formError($("#bd-error", m.el), err.message); }
+        });
+    }
+
+    // ================= Year end and P60s =================
+
+    function p60DocHtml(p) {
+        const row = function (label, v) { return '<div class="ps-line"><span>' + label + '</span><span class="ps-amt">' + fmtMoney(v) + "</span></div>"; };
+        const fact = function (label, value) { return '<div class="ps-fact"><span>' + label + "</span><strong>" + esc(value || "–") + "</strong></div>"; };
+        return '<article class="payslip p60">' +
+            '<header class="ps-band"><div class="ps-brand"><img src="/assets/brand/svg/hn-group-wordmark-white.svg" alt="HN Group"></div>' +
+            '<div class="ps-title"><span class="ps-kicker">End of year certificate</span><span class="ps-period">Tax year ' + esc(p.label) + "</span></div></header>" +
+            '<div class="ps-stripe" aria-hidden="true"></div>' +
+            '<section class="ps-intro"><div class="ps-who"><div class="ps-name">' + esc(p.employeeName) + '</div><div class="ps-job">' + esc(p.jobTitle || "") + "</div>" +
+            '<div class="ps-employer">' + icon("building") + "Employer: " + esc(p.employer) + "</div></div>" +
+            '<div class="ps-netcard"><span class="ps-netlabel">Pay in this employment</span><span class="ps-netvalue">' + fmtMoney(p.gross) + '</span><span class="ps-netdate">6 April ' + esc(p.start.slice(0, 4)) + " to 5 April " + esc(p.end.slice(0, 4)) + "</span></div></section>" +
+            '<section class="ps-facts">' + fact("Employee no.", p.employeeNumber) + fact("NI number", p.niNumber) + fact("Final tax code", p.taxCode) + fact("Payslips", String(p.payslips)) + "</section>" +
+            (p.complete ? "" : '<div class="banner banner-warn p60-note"><div><strong>The tax year isn’t over yet.</strong> These are the figures so far.</div></div>') +
+            '<section class="ps-columns"><div class="ps-col"><h4>' + icon("plus") + "Pay and tax</h4>" + row("Total pay", p.gross) + row("Taxable pay (after pension)", p.taxable) + row("Income tax deducted", p.tax) +
+            '<div class="ps-line ps-total"><span>Take-home pay</span><span class="ps-amt">' + fmtMoney(p.net) + "</span></div></div>" +
+            '<div class="ps-col"><h4>' + icon("shield") + "Other deductions</h4>" + row("Employee National Insurance", p.ni) + row("Employee pension", p.pension) + row("Student loan", p.studentLoan) +
+            (p.reimbursed ? row("Expenses repaid (tax free)", p.reimbursed) : "") + "</div></section>" +
+            '<section class="ps-employer-ded"><div class="ps-col"><h4>' + icon("building") + "Paid by your employer</h4>" + row("Employer National Insurance", p.employerNi) + row("Employer pension", p.employerPension) + "</div></section>" +
+            '<footer class="ps-foot"><span>' + esc(p.employer) + "</span><span>Keep this certificate. You may need it for tax returns or tax credits.</span><span>" + esc(p.label) + "</span></footer></article>";
+    }
+
+    function printDoc(title) {
+        const t = document.title;
+        document.title = title;
+        document.body.classList.add("printing");
+        window.print();
+        setTimeout(function () { document.body.classList.remove("printing"); document.title = t; }, 500);
+    }
+
+    async function openMyP60(start) {
+        let r;
+        try { r = await api("/api/payslips/p60" + (start ? "?start=" + start : "")); } catch (err) { return toast(err.message); }
+        const m = openModal(
+            '<div class="st-toolbar no-print"><h2 class="modal-title">End of year certificate (P60)</h2><select id="p60-year">' + r.years.map(function (y) {
+                return '<option value="' + y.start + '"' + (y.start === r.p60.start ? " selected" : "") + ">Tax year " + esc(y.label) + "</option>";
+            }).join("") + "</select></div>" +
+            '<div class="print-area">' + p60DocHtml(r.p60) + "</div>" +
+            '<div class="modal-actions no-print"><button type="button" class="btn btn-ghost" id="p60-print">' + icon("printer") + 'Print or save as PDF</button><button type="button" class="btn btn-primary" data-close>Done</button></div>',
+            { wide: true, cls: "modal-payslip" }
+        );
+        $("#p60-year", m.el).addEventListener("change", function (e) { openMyP60(e.target.value); });
+        $("#p60-print", m.el).addEventListener("click", function () { printDoc("P60 " + r.p60.label); });
+    }
+
+    async function openYearEnd(start) {
+        let r;
+        try { r = await api("/api/payroll/year-end" + (start ? "?start=" + start : "")); } catch (err) { return toast(err.message); }
+        const y = r.report;
+        const m = openModal(
+            '<div class="st-toolbar"><h2 class="modal-title">Year end · ' + esc(y.label) + "</h2>" +
+            '<select id="ye-year">' + r.years.map(function (x) { return '<option value="' + x.start + '"' + (x.start === y.start ? " selected" : "") + ">Tax year " + esc(x.label) + "</option>"; }).join("") + "</select></div>" +
+            '<p class="muted">Issued payslips from 6 April ' + esc(y.start.slice(0, 4)) + " to 5 April " + esc(y.end.slice(0, 4)) + ". Open someone’s P60 to print it, or export every payslip to a spreadsheet.</p>" +
+            '<div class="stat-row">' +
+            '<div class="stat"><div class="stat-value">' + fmtMoney(y.totals.gross) + '</div><div class="stat-label">Total pay</div></div>' +
+            '<div class="stat"><div class="stat-value">' + fmtMoney(y.totals.tax) + '</div><div class="stat-label">Income tax</div></div>' +
+            '<div class="stat"><div class="stat-value">' + fmtMoney(y.totals.ni + y.totals.employerNi) + '</div><div class="stat-label">NI (employee + employer)</div></div>' +
+            '<div class="stat"><div class="stat-value">' + fmtMoney(y.totals.cost) + '</div><div class="stat-label">Total cost</div></div></div>' +
+            (y.people.length ? '<div class="table-card flat"><table class="table ye-table"><thead><tr><th>Employee</th><th class="num">Payslips</th><th class="num">Total pay</th><th class="num">Tax</th><th class="num">NI</th><th class="num">Pension</th><th class="num">Take-home</th><th class="col-actions"></th></tr></thead><tbody>' +
+                y.people.map(function (p) {
+                    return "<tr><td><div class=\"emp-name\">" + esc(p.displayName) + '</div><div class="muted small">' + esc(p.jobTitle) + "</div></td>" +
+                        '<td class="num" data-label="Payslips">' + p.payslips + '</td><td class="num" data-label="Total pay">' + fmtMoney(p.gross) + '</td><td class="num" data-label="Tax">' + fmtMoney(p.tax) + "</td>" +
+                        '<td class="num" data-label="NI">' + fmtMoney(p.ni) + '</td><td class="num" data-label="Pension">' + fmtMoney(p.pension) + '</td><td class="num" data-label="Take-home"><strong>' + fmtMoney(p.net) + "</strong></td>" +
+                        '<td class="col-actions"><button type="button" class="btn btn-ghost btn-small" data-p60="' + p.personId + '">' + icon("file") + "P60</button></td></tr>";
+                }).join("") + "</tbody></table></div>" : '<p class="muted small">No issued payslips in this tax year yet.</p>') +
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Close</button>' +
+            '<a class="btn btn-primary" href="/api/payroll/year-end.csv?start=' + y.start + '" download>' + icon("download") + "Export to spreadsheet (CSV)</a></div>",
+            { wide: true }
+        );
+        $("#ye-year", m.el).addEventListener("change", function (e) { openYearEnd(e.target.value); });
+        m.el.addEventListener("click", async function (e) {
+            const b = e.target.closest("[data-p60]");
+            if (!b) return;
+            try {
+                const p = (await api("/api/payroll/p60/" + b.dataset.p60 + "?start=" + y.start)).p60;
+                const pm = openModal('<div class="print-area">' + p60DocHtml(p) + "</div>" +
+                    '<div class="modal-actions no-print"><button type="button" class="btn btn-ghost" id="p60-back">Back to year end</button><button type="button" class="btn btn-primary" id="p60-print">' + icon("printer") + "Print or save as PDF</button></div>",
+                    { wide: true, cls: "modal-payslip" });
+                $("#p60-back", pm.el).addEventListener("click", function () { openYearEnd(y.start); });
+                $("#p60-print", pm.el).addEventListener("click", function () { printDoc("P60 " + p.employeeName + " " + p.label); });
+            } catch (err) { toast(err.message); }
+        });
+    }
+
+    // Scheduled pay changes, shown inside the pay details pop-up.
+    function payChangesHtml(changes) {
+        return '<h3 class="detail-head">Scheduled pay changes</h3>' +
+            '<p class="muted small">Set a pay rise (or any change) from a future month. Payroll picks it up automatically from that month.</p>' +
+            (changes.length ? '<div class="pc-list">' + changes.map(function (c) {
+                return '<div class="pc-row' + (c.applied ? " applied" : "") + '"><span class="pc-when">' + esc(c.label) + "</span><strong>" + (c.payType === "hourly" ? fmtMoney(c.hourlyRate) + " an hour" : fmtMoney(c.monthlySalary) + " a month") + "</strong>" +
+                    '<span class="muted small">' + (c.applied ? "In effect" : "Upcoming") + (c.note ? " · " + esc(c.note) : "") + "</span>" +
+                    '<button type="button" class="icon-btn" data-pcdel="' + c.id + '" aria-label="Remove">' + icon("trash") + "</button></div>";
+            }).join("") + "</div>" : "") +
+            '<div class="pc-form"><input type="month" id="pc-month" aria-label="From month">' +
+            '<select id="pc-type" aria-label="Pay type"><option value="salary">Monthly salary</option><option value="hourly">Hourly rate</option></select>' +
+            '<div class="money-input"><span>£</span><input type="number" id="pc-amount" step="0.01" min="0" placeholder="New amount" aria-label="New amount"></div>' +
+            '<input type="text" id="pc-note" maxlength="200" placeholder="Note (optional)" aria-label="Note">' +
+            '<button type="button" class="btn btn-ghost" id="pc-add">' + icon("plus") + "Schedule</button></div>" +
+            '<div class="form-error" id="pc-error" hidden></div>';
+    }
+
+    function mountPayChanges(box, personId) {
+        function load(changes) {
+            box.innerHTML = payChangesHtml(changes);
+            $("#pc-month", box).value = shiftMonth(isoDay(new Date()).slice(0, 7), 1);
+        }
+        api("/api/payroll/pay-changes/" + personId).then(function (r) { load(r.changes); }).catch(function () {});
+        box.addEventListener("click", async function (e) {
+            const del = e.target.closest("[data-pcdel]");
+            try {
+                if (del) return load((await api("/api/payroll/pay-changes/" + personId + "/" + del.dataset.pcdel + "/delete", {})).changes);
+                if (e.target.closest("#pc-add")) {
+                    const type = $("#pc-type", box).value;
+                    load((await api("/api/payroll/pay-changes/" + personId, {
+                        effective: $("#pc-month", box).value, payType: type, note: $("#pc-note", box).value,
+                        monthlySalary: type === "salary" ? $("#pc-amount", box).value : 0, hourlyRate: type === "hourly" ? $("#pc-amount", box).value : 0,
+                    })).changes);
+                    toast("Pay change scheduled.");
+                }
+            } catch (err) { formError($("#pc-error", box), err.message); }
+        });
     }
 
     start();

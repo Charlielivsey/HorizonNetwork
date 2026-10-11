@@ -104,6 +104,17 @@ function init(dir) {
     settings.superAdminRoleAdded = true;
   }
   if (!settings.hrRolesAdded) migrateHrRoles();
+  if (!settings.extraPermissionsAdded) {
+    // HR cases, recruitment and reports: given once to the roles that should have them.
+    const add = (name, keys) => {
+      const role = settings.roles.find((r) => r.name.toLowerCase() === name);
+      if (role) keys.forEach((k) => { if (!role.permissions.includes(k)) role.permissions.push(k); });
+    };
+    add("super admin", ["cases.manage", "recruitment.manage", "reports.view"]);
+    add("leadership & hr", ["cases.manage", "recruitment.manage", "reports.view"]);
+    add("human resources", ["cases.manage", "recruitment.manage", "reports.view"]);
+    settings.extraPermissionsAdded = true;
+  }
   writeJson(settingsFile, settings);
 }
 
@@ -120,7 +131,10 @@ const PERMISSIONS = [
   { key: "leave.manage", name: "Manage leave", description: "Approve anyone's leave, see all absence and set holiday allowances." },
   { key: "rotas.manage", name: "Manage rotas & timesheets", description: "Plan shifts on the rota and approve anyone's timesheets." },
   { key: "helpdesk.manage", name: "Handle IT tickets", description: "See every IT Helpdesk ticket, reply, assign and change its status." },
-  { key: "payroll.manage", name: "Run payroll", description: "See pay details and generate and issue payslips. Only people who already have it can give it out." },
+  { key: "payroll.manage", name: "Run payroll & finance", description: "See pay details, generate and issue payslips, and manage company funds, expenses and invoices. Only people who already have it can give it out." },
+  { key: "cases.manage", name: "HR cases", description: "See and record disciplinary, grievance and capability cases. These are private to people with this permission." },
+  { key: "recruitment.manage", name: "Recruitment", description: "Post job vacancies, track applicants and hire them." },
+  { key: "reports.view", name: "Activity reports", description: "See the monthly activity reports (payroll figures only for people who can run payroll)." },
   { key: "system.admin", name: "System Admin", description: "Open System Admin with the PIN: sessions, log in as, backups and the full activity log. Only people who already have it can give it out." },
 ];
 const SYSTEM_ADMIN = "system.admin";

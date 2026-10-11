@@ -19,6 +19,10 @@ const helpdesk = require("./lib/helpdesk");
 const reviews = require("./lib/reviews");
 const stafffiles = require("./lib/stafffiles");
 const uptime = require("./lib/uptime");
+const expenses = require("./lib/expenses");
+const invoices = require("./lib/invoices");
+const notifications = require("./lib/notifications");
+const extraRoutes = require("./lib/routes-extra");
 
 const PORT = parseInt(process.env.PORT || "3200", 10);
 const HOST = process.env.HOST || "127.0.0.1";
@@ -38,6 +42,7 @@ const APP_ROUTES = new Set([
   "/home", "/directory", "/employees", "/settings", "/system", "/announcements", "/documents",
   "/calendar", "/polls", "/onboarding", "/roles", "/about", "/signature",
   "/leave", "/rotas", "/payslips", "/payroll", "/funds", "/helpdesk", "/reviews", "/staff-files", "/status",
+  "/expenses", "/invoices", "/notifications",
 ]);
 const SYSTEM_UNLOCK_MS = 15 * 60 * 1000; // System Admin stays unlocked for 15 minutes of inactivity
 const MAX_PIN_ATTEMPTS = 5;
@@ -67,6 +72,9 @@ stafffiles.init(DATA_DIR);
 uptime.init(DATA_DIR, `http://127.0.0.1:${PORT}/healthz`);
 uptime.start();
 backup.init(DATA_DIR);
+expenses.init(DATA_DIR);
+invoices.init(DATA_DIR);
+notifications.init(DATA_DIR);
 
 // Re-reads every data file, e.g. after a backup is restored.
 function reloadAll() {
@@ -83,6 +91,9 @@ function reloadAll() {
   reviews.init(DATA_DIR);
   stafffiles.init(DATA_DIR);
   uptime.init(DATA_DIR);
+  expenses.init(DATA_DIR);
+  invoices.init(DATA_DIR);
+  notifications.init(DATA_DIR);
 }
 
 backup.scheduleNightly((err, name) => {
@@ -498,9 +509,13 @@ function meResponse(session) {
   user.reviewsDue = reviews.due(session.person).length;
   user.returnToWorkDue = leave.pendingReturnToWork(session.person).length;
   if (store.can(session.person, uptime.MANAGE)) user.servicesDown = uptime.downCount();
+  user.expenseApprovals = expenses.approvalCount(session.person);
+  user.notificationsUnread = notifications.unreadCount(session.person.id);
   if (store.can(session.person, payslips.MANAGE)) {
     const b = funds.balances();
     user.payrollOverdrawn = b.payroll < 0 || b.main < 0;
+    user.budgetWarnings = funds.budgetWarnings().length;
+    user.invoicesOverdue = invoices.summary().overdueCount;
   }
   if (session.data.impersonatorId) {
     const by = store.getPerson(session.data.impersonatorId);
@@ -934,6 +949,8 @@ async function routeApi(req, res, pathname, session) {
   if (!store.hasCode(me) && !session.data.impersonatorId) {
     return sendJson(res, 403, { error: "Please set your sign-in code first.", code: "CODE_SETUP_REQUIRED" });
   }
+
+  if (await extraRoutes.handle(req, res, pathname, session)) return;
 
   if (method === "GET" && pathname === "/api/meta") {
     return sendJson(res, 200, {
@@ -1814,6 +1831,12 @@ function fundsSummary() {
   }
   return { balances: b, nextPayroll, warning, overdrawn: b.main < 0 || b.payroll < 0 };
 }
+
+extraRoutes.init({
+  sendJson, httpError, readJsonBody, readRawBody, headerJson, logEvent, meResponse, endSessionsFor, reloadAll, clientIp,
+  notify: (ids, item, from) => notifications.notify(ids, item, from),
+  sessions: () => sessions,
+});
 
 // ---------- Routing ----------
 
