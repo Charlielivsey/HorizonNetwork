@@ -13,6 +13,7 @@ const onboarding = require("./lib/onboarding");
 const backup = require("./lib/backup");
 const leave = require("./lib/leave");
 const rotas = require("./lib/rotas");
+const funds = require("./lib/funds");
 const payslips = require("./lib/payslips");
 const helpdesk = require("./lib/helpdesk");
 
@@ -33,7 +34,7 @@ const MAX_AVATAR_BODY_BYTES = 2 * 1024 * 1024;
 const APP_ROUTES = new Set([
   "/home", "/directory", "/employees", "/settings", "/system", "/announcements", "/documents",
   "/calendar", "/polls", "/onboarding", "/roles", "/about", "/signature",
-  "/leave", "/rotas", "/payslips", "/payroll", "/helpdesk",
+  "/leave", "/rotas", "/payslips", "/payroll", "/funds", "/helpdesk",
 ]);
 const SYSTEM_UNLOCK_MS = 15 * 60 * 1000; // System Admin stays unlocked for 15 minutes of inactivity
 const MAX_PIN_ATTEMPTS = 5;
@@ -55,6 +56,7 @@ polls.init(DATA_DIR);
 onboarding.init(DATA_DIR);
 leave.init(DATA_DIR);
 rotas.init(DATA_DIR);
+funds.init(DATA_DIR);
 payslips.init(DATA_DIR);
 helpdesk.init(DATA_DIR);
 backup.init(DATA_DIR);
@@ -68,6 +70,7 @@ function reloadAll() {
   onboarding.init(DATA_DIR);
   leave.init(DATA_DIR);
   rotas.init(DATA_DIR);
+  funds.init(DATA_DIR);
   payslips.init(DATA_DIR);
   helpdesk.init(DATA_DIR);
 }
@@ -482,6 +485,7 @@ function meResponse(session) {
   user.timesheetApprovals = rotas.pendingApprovalCount(session.person);
   user.helpdeskBadge = helpdesk.badgeCount(session.person);
   user.onLeaveToday = leave.isOffToday(session.person.id);
+  if (store.can(session.person, payslips.MANAGE)) user.payrollOverdrawn = funds.balances().payroll < 0;
   if (session.data.impersonatorId) {
     const by = store.getPerson(session.data.impersonatorId);
     user.impersonatedBy = by ? by.displayName : "System owner";
@@ -1348,6 +1352,21 @@ async function routeApi(req, res, pathname, session) {
     return sendJson(res, 200, { payslip: payslips.fullView(slip) });
   }
 
+  // ----- Company funds (Human Resources only) -----
+  if (pathname.startsWith("/api/funds")) {
+    if (!store.can(me, payslips.MANAGE)) throw httpError(403, "Only Human Resources can see company funds.");
+    if (method === "GET" && pathname === "/api/funds") {
+      return sendJson(res, 200, { ...fundsSummary(), transactions: funds.history(300), sources: funds.SOURCES });
+    }
+    if (method === "POST" && (m = /^\/api\/funds\/(add|remove|transfer)$/.exec(pathname))) {
+      const body = await readJsonBody(req);
+      const t = m[1] === "add" ? funds.addFunds(body, me) : m[1] === "remove" ? funds.removeFunds(body, me) : funds.transferToPayroll(body, me);
+      const action = { add: "funds-added", remove: "funds-removed", transfer: "funds-transferred" }[m[1]];
+      logEvent(req, session, action, { detail: `${funds.fmt(Math.round(Math.abs(t.amount) * 100))}${m[1] === "add" ? " via " + funds.SOURCES[t.source] : ""}${t.reference ? " (ref " + t.reference + ")" : ""}${t.description ? " – " + t.description : ""}` });
+      return sendJson(res, 200, { ...fundsSummary(), transactions: funds.history(300), user: meResponse(session) });
+    }
+  }
+
   // ----- Payroll (Human Resources only) -----
   if (pathname.startsWith("/api/payroll")) {
     if (!store.can(me, payslips.MANAGE)) throw httpError(403, "Only Human Resources can run payroll.");
@@ -1362,7 +1381,9 @@ async function routeApi(req, res, pathname, session) {
         people: payslips.peopleList(),
         rates: payslips.RATES.label,
         studentLoans: Object.fromEntries(Object.entries(payslips.RATES.studentLoans).map(([k, v]) => [k, v.label])),
-        companies: store.COMPANIES,
+        employer: payslips.EMPLOYER,
+        standardSalary: payslips.STANDARD_MONTHLY_SALARY,
+        funds: fundsSummary(),
       });
     }
     if ((m = /^\/api\/payroll\/details\/([a-f0-9]{16})$/.exec(pathname))) {
@@ -1376,8 +1397,16 @@ async function routeApi(req, res, pathname, session) {
       }
     }
     if (method === "POST" && pathname === "/api/payroll/estimate") {
-      const { personId, period } = await readJsonBody(req);
-      return sendJson(res, 200, payslips.estimate(personId, period));
+      const { personId, period, payDate } = await readJsonBody(req);
+      return sendJson(res, 200, payslips.estimate(personId, period, payDate));
+    }
+    // Live tax/NI for the payslip editor as payments change.
+    if (method === "POST" && pathname === "/api/payroll/calculate") {
+      const { personId, payments, payDate, payslipId } = await readJsonBody(req);
+      if (!store.getPerson(personId)) throw httpError(400, "Choose an employee.");
+      const clean = (Array.isArray(payments) ? payments : []).map((l) => ({ label: String((l && l.label) || ""), amount: Math.round(Number((l && l.amount) || 0) * 100) / 100 })).filter((l) => isFinite(l.amount));
+      const date = /^\d{4}-\d{2}-\d{2}$/.test(payDate || "") ? payDate : new Date().toISOString().slice(0, 10);
+      return sendJson(res, 200, payslips.calculate(personId, clean, date, payslipId || null));
     }
     if (method === "POST" && pathname === "/api/payroll/run") {
       const { period, payDate, personIds } = await readJsonBody(req);
@@ -1385,14 +1414,19 @@ async function routeApi(req, res, pathname, session) {
       const skipped = [];
       for (const id of Array.isArray(personIds) ? personIds : []) {
         try {
-          made.push(payslips.createDraft(id, { period, payDate }, me));
+          made.push(payslips.createDraft(id, { period, payDate }, me, { deferCharge: true }));
         } catch (err) {
           if (!(err instanceof store.ValidationError)) throw err;
           skipped.push({ name: (store.getPerson(id) || {}).displayName || id, reason: err.message });
         }
       }
-      if (made.length) logEvent(req, session, "payroll-drafted", { detail: `${payslips.periodLabel(period)}: ${made.length} draft payslip${made.length === 1 ? "" : "s"}` });
-      return sendJson(res, 200, { made: made.length, skipped });
+      // One payment out of the payroll fund for the whole run.
+      const cost = made.reduce((n, s) => n + s.charged, 0);
+      if (made.length) {
+        funds.chargePayroll(cost, `Payroll – ${payslips.periodLabel(period)}, ${made.length} payslip${made.length === 1 ? "" : "s"}`, me);
+        logEvent(req, session, "payroll-drafted", { detail: `${payslips.periodLabel(period)}: ${made.length} payslip${made.length === 1 ? "" : "s"}, ${funds.fmt(cost)} from the payroll fund` });
+      }
+      return sendJson(res, 200, { made: made.length, skipped, cost: cost / 100, funds: fundsSummary() });
     }
     if (method === "POST" && pathname === "/api/payroll/payslips") {
       const body = await readJsonBody(req);
@@ -1411,10 +1445,10 @@ async function routeApi(req, res, pathname, session) {
           payslips.setIssued(slip, m[2] === "issue", me);
           logEvent(req, session, m[2] === "issue" ? "payslip-issued" : "payslip-withdrawn", { target: who, detail: label });
         } else if (m[2] === "delete") {
-          payslips.deletePayslip(slip);
+          payslips.deletePayslip(slip, me);
           logEvent(req, session, "payslip-deleted", { target: who, detail: label });
         } else {
-          payslips.updateDraft(slip, await readJsonBody(req));
+          payslips.updateDraft(slip, await readJsonBody(req), me);
           logEvent(req, session, "payslip-edited", { target: who, detail: label });
         }
         return sendJson(res, 200, { ok: true, payslip: m[2] === "delete" ? null : payslips.fullView(slip) });
@@ -1522,6 +1556,16 @@ async function routeApi(req, res, pathname, session) {
   if (pathname.startsWith("/api/system/")) return routeSystem(req, res, pathname, session);
 
   sendJson(res, 404, { error: "Not found." });
+}
+
+// Balances, the cost of the next payroll, and any warning about the payroll fund.
+function fundsSummary() {
+  const b = funds.balances();
+  const nextPayroll = payslips.forecastMonthlyCost();
+  let warning = null;
+  if (b.payroll < 0) warning = { level: "danger", message: `The payroll fund is overdrawn by ${funds.fmt(-Math.round(b.payroll * 100))}. The next payroll cannot be met until money is moved in from the main balance.` };
+  else if (b.payroll < nextPayroll) warning = { level: "warn", message: `The payroll fund has ${funds.fmt(Math.round(b.payroll * 100))}, but the next payroll needs about ${funds.fmt(Math.round(nextPayroll * 100))}.` };
+  return { balances: b, nextPayroll, warning };
 }
 
 // ---------- Routing ----------

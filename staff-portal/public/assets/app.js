@@ -52,6 +52,7 @@
         thermometer: '<path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/>',
         heart: '<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>',
         wallet: '<path d="M20 7H5a2 2 0 0 1 0-4h13v4"/><path d="M3 5v14a2 2 0 0 0 2 2h15V7"/><path d="M16 14h.01"/>',
+        pound: '<path d="M17 7.5A3.5 3.5 0 0 0 10 7v12"/><path d="M6 13h8M6 19h12"/>',
         printer: '<path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>',
         flag: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7"/>',
         star: '<path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/>',
@@ -291,6 +292,7 @@
                 { title: "Rotas & Timesheets", desc: "Shifts, hours and approvals", href: "/rotas", icon: "clock", badge: "timesheetApprovals" },
                 { title: "Payslips", desc: "View and download your payslips", href: "/payslips", icon: "card" },
                 { title: "Run payroll", desc: "Generate and issue payslips", href: "/payroll", icon: "wallet", requires: "payroll.manage" },
+                { title: "Company funds", desc: "Main balance and payroll fund", href: "/funds", icon: "pound", requires: "payroll.manage" },
             ],
         },
         {
@@ -478,6 +480,7 @@
         "/rotas": viewRotas,
         "/payslips": viewPayslips,
         "/payroll": viewPayroll,
+        "/funds": viewFunds,
         "/helpdesk": viewHelpdesk,
     };
 
@@ -506,6 +509,7 @@
         "/rotas": "clock",
         "/payslips": "card",
         "/payroll": "wallet",
+        "/funds": "pound",
         "/helpdesk": "lifebuoy",
     };
 
@@ -538,7 +542,7 @@
         const path = window.location.pathname;
         let view = ROUTES[path];
         if (!view) return navigate("/home", true);
-        const NEEDS = { "/employees": "staff.manage", "/onboarding": "onboarding.manage", "/roles": "access.manage", "/payroll": "payroll.manage" };
+        const NEEDS = { "/employees": "staff.manage", "/onboarding": "onboarding.manage", "/roles": "access.manage", "/payroll": "payroll.manage", "/funds": "payroll.manage" };
         if (NEEDS[path] && !can(NEEDS[path])) view = viewNoAccess;
         if (path === "/system" && (!can("system.admin") || state.me.impersonatedBy)) view = viewNoSystemAccess;
 
@@ -660,10 +664,11 @@
             (me.pendingAcks ? '<a class="hero-chip warn" href="#home-todo">' + icon("check") + me.pendingAcks + (me.pendingAcks === 1 ? " thing" : " things") + " to acknowledge</a>" : "") +
             (me.openPolls ? '<a class="hero-chip" href="/polls" data-link>' + icon("chart") + me.openPolls + (me.openPolls === 1 ? " poll" : " polls") + " to answer</a>" : "") +
             (me.onboardingTasks ? '<a class="hero-chip" href="#home-onboarding">' + icon("check") + me.onboardingTasks + " onboarding task" + (me.onboardingTasks === 1 ? "" : "s") + "</a>" : "") +
+            (me.payrollOverdrawn ? '<a class="hero-chip danger" href="/funds" data-link>' + icon("alert") + "Payroll fund overdrawn \u2013 next payroll can\u2019t be met</a>" : "") +
             (me.leaveApprovals ? '<a class="hero-chip" href="/leave" data-link>' + icon("sun") + me.leaveApprovals + " leave request" + (me.leaveApprovals === 1 ? "" : "s") + " to approve</a>" : "") +
             (me.timesheetApprovals ? '<a class="hero-chip" href="/rotas" data-link data-rota-approvals>' + icon("clock") + me.timesheetApprovals + " timesheet" + (me.timesheetApprovals === 1 ? "" : "s") + " to approve</a>" : "") +
             (me.helpdeskBadge ? '<a class="hero-chip" href="/helpdesk" data-link>' + icon("lifebuoy") + me.helpdeskBadge + " IT ticket" + (me.helpdeskBadge === 1 ? "" : "s") + " need" + (me.helpdeskBadge === 1 ? "s" : "") + " attention</a>" : "") +
-            (!me.unreadAnnouncements && !me.pendingAcks && !me.openPolls && !me.onboardingTasks && !me.leaveApprovals && !me.timesheetApprovals && !me.helpdeskBadge ? '<span class="hero-chip calm">' + icon("tick") + "You\u2019re all caught up</span>" : "") +
+            (!me.unreadAnnouncements && !me.pendingAcks && !me.openPolls && !me.onboardingTasks && !me.leaveApprovals && !me.timesheetApprovals && !me.helpdeskBadge && !me.payrollOverdrawn ? '<span class="hero-chip calm">' + icon("tick") + "You\u2019re all caught up</span>" : "") +
             "</div></div>" +
             '<div class="hero-clocks">' +
             '<div class="glass-clock"><div class="gc-label">' + icon("monitor") + "Your time \u00b7 " + esc(tzCity(deviceTz)) + "</div>" +
@@ -4091,48 +4096,69 @@
 
     // ================= Payslips =================
 
-    const DEDUCTION_KIND_LABELS = { tax: "Income tax", ni: "National Insurance", pension: "Pension", studentLoan: "Student loan", other: "Other" };
-
     function payslipDocHtml(p) {
-        const rows = function (list, emptyText) {
+        const t = p.totals;
+        const lines = function (list, emptyText) {
             return list.length ? list.map(function (l) {
-                return '<tr><td>' + esc(l.label) + '</td><td class="num">' + fmtMoney(l.amount) + "</td></tr>";
-            }).join("") : '<tr><td colspan="2" class="muted">' + emptyText + "</td></tr>";
+                return '<div class="ps-line"><span>' + esc(l.label) + '</span><span class="ps-amt">' + fmtMoney(l.amount) + "</span></div>";
+            }).join("") : '<div class="ps-line ps-none"><span>' + emptyText + "</span></div>";
         };
-        return '<article class="payslip-doc">' +
-            '<header class="pd-head"><div><div class="pd-employer">' + esc(p.employer) + '</div><div class="pd-kicker">Payslip · ' + esc(p.periodLabel) + "</div></div>" +
-            '<img class="pd-logo" src="/assets/brand/svg/hn-group-wordmark.svg" alt="HN Group"></header>' +
-            '<div class="pd-stripe" aria-hidden="true"></div>' +
-            '<dl class="pd-meta">' +
-            "<div><dt>Employee</dt><dd>" + esc(p.employeeName) + "</dd></div>" +
-            "<div><dt>Job title</dt><dd>" + esc(p.jobTitle || "–") + "</dd></div>" +
-            "<div><dt>Employee no.</dt><dd>" + esc(p.employeeNumber || "–") + "</dd></div>" +
-            "<div><dt>NI number</dt><dd>" + esc(p.niNumber || "–") + "</dd></div>" +
-            "<div><dt>Tax code</dt><dd>" + esc(p.taxCode || "–") + "</dd></div>" +
-            "<div><dt>NI category</dt><dd>" + esc(p.niCategory || "–") + "</dd></div>" +
-            "<div><dt>Pay period</dt><dd>" + esc(fmtDate(p.periodStart + "T12:00:00")) + " – " + esc(fmtDate(p.periodEnd + "T12:00:00")) + "</dd></div>" +
-            "<div><dt>Pay date</dt><dd>" + esc(fmtDate(p.payDate + "T12:00:00")) + "</dd></div>" +
-            "</dl>" +
-            '<div class="pd-tables">' +
-            '<table class="pd-table"><thead><tr><th>Payments</th><th class="num">Amount</th></tr></thead><tbody>' + rows(p.payments, "No payments") +
-            '</tbody><tfoot><tr><td>Total pay</td><td class="num">' + fmtMoney(p.totals.gross) + "</td></tr></tfoot></table>" +
-            '<table class="pd-table"><thead><tr><th>Deductions</th><th class="num">Amount</th></tr></thead><tbody>' + rows(p.deductions, "No deductions") +
-            '</tbody><tfoot><tr><td>Total deductions</td><td class="num">' + fmtMoney(p.totals.deductions) + "</td></tr></tfoot></table>" +
-            "</div>" +
-            '<div class="pd-net"><span>Net pay</span><strong>' + fmtMoney(p.totals.net) + "</strong></div>" +
-            '<div class="pd-bottom">' +
-            '<div class="pd-box"><h4>This tax year to date</h4><dl class="pd-ytd">' +
-            "<div><dt>Total pay</dt><dd>" + fmtMoney(p.ytd.gross) + "</dd></div><div><dt>Income tax</dt><dd>" + fmtMoney(p.ytd.tax) + "</dd></div>" +
-            "<div><dt>National Insurance</dt><dd>" + fmtMoney(p.ytd.ni) + "</dd></div><div><dt>Pension</dt><dd>" + fmtMoney(p.ytd.pension) + "</dd></div>" +
-            "<div><dt>Net pay</dt><dd>" + fmtMoney(p.ytd.net) + "</dd></div></dl>" +
-            '<p class="pd-small">Since ' + esc(fmtDate(p.ytd.from + "T12:00:00")) + "</p></div>" +
-            (p.employerItems.length ? '<div class="pd-box"><h4>Paid by your employer</h4><dl class="pd-ytd">' + p.employerItems.map(function (l) {
-                return "<div><dt>" + esc(l.label) + "</dt><dd>" + fmtMoney(l.amount) + "</dd></div>";
-            }).join("") + '</dl><p class="pd-small">On top of your pay. Not deducted from it.</p></div>' : "") +
-            "</div>" +
-            (p.note ? '<p class="pd-note">' + richText(p.note) + "</p>" : "") +
-            '<footer class="pd-foot">Private and confidential · ' + esc(p.employer) + "</footer>" +
+        const fact = function (label, value) { return '<div class="ps-fact"><span>' + label + "</span><strong>" + esc(value || "–") + "</strong></div>"; };
+        const share = function (n) { return t.gross > 0 ? Math.max(0, Math.min(100, (n / t.gross) * 100)) : 0; };
+        return '<article class="payslip">' +
+            '<header class="ps-band">' +
+            '<div class="ps-brand"><img src="/assets/brand/svg/hn-group-wordmark-white.svg" alt="HN Group"></div>' +
+            '<div class="ps-title"><span class="ps-kicker">Payslip</span><span class="ps-period">' + esc(p.periodLabel) + "</span></div>" +
+            "</header>" +
+            '<div class="ps-stripe" aria-hidden="true"></div>' +
+
+            '<section class="ps-intro">' +
+            '<div class="ps-who"><div class="ps-name">' + esc(p.employeeName) + '</div><div class="ps-job">' + esc(p.jobTitle || "") + "</div>" +
+            '<div class="ps-employer">' + icon("building") + "Paid by " + esc(p.employer) + "</div></div>" +
+            '<div class="ps-netcard"><span class="ps-netlabel">Take-home pay</span><span class="ps-netvalue">' + fmtMoney(t.net) + "</span>" +
+            '<span class="ps-netdate">Paid ' + esc(new Date(p.payDate + "T12:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "long", year: "numeric" })) + "</span></div>" +
+            "</section>" +
+
+            '<section class="ps-facts">' +
+            fact("Employee no.", p.employeeNumber) + fact("NI number", p.niNumber) + fact("Tax code", p.taxCode) + fact("NI category", p.niCategory) +
+            fact("Pay period", new Date(p.periodStart + "T12:00:00").getDate() + "–" + new Date(p.periodEnd + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" })) +
+            fact("Tax month", String(p.ytd.taxMonth)) +
+            "</section>" +
+
+            '<section class="ps-flow" aria-label="How your pay adds up">' +
+            '<div class="ps-flow-bar"><span class="pf-net" data-w="' + share(t.net) + '"></span><span class="pf-tax" data-w="' + share(t.tax + t.ni) + '"></span><span class="pf-other" data-w="' + share(t.deductions - t.tax - t.ni) + '"></span></div>' +
+            '<div class="ps-flow-key"><span class="k-net">Take-home ' + fmtMoney(t.net) + '</span><span class="k-tax">Tax &amp; NI ' + fmtMoney(t.tax + t.ni) + "</span>" +
+            (t.deductions - t.tax - t.ni ? '<span class="k-other">Pension &amp; other ' + fmtMoney(t.deductions - t.tax - t.ni) + "</span>" : "") + "</div>" +
+            "</section>" +
+
+            '<section class="ps-columns">' +
+            '<div class="ps-col"><h4>' + icon("plus") + "Payments</h4>" + lines(p.payments, "No payments") +
+            '<div class="ps-line ps-total"><span>Total pay</span><span class="ps-amt">' + fmtMoney(t.gross) + "</span></div></div>" +
+            '<div class="ps-col"><h4>' + icon("x") + "Deductions</h4>" + lines(p.deductions, "No deductions") +
+            '<div class="ps-line ps-total"><span>Total deductions</span><span class="ps-amt">' + fmtMoney(t.deductions) + "</span></div></div>" +
+            "</section>" +
+
+            '<section class="ps-sum"><span>' + fmtMoney(t.gross) + '<small>Total pay</small></span><b>−</b><span>' + fmtMoney(t.deductions) + "<small>Deductions</small></span><b>=</b>" +
+            '<span class="ps-sum-net">' + fmtMoney(t.net) + "<small>Take-home pay</small></span></section>" +
+
+            '<section class="ps-ytd"><h4>This tax year so far <small>since ' + esc(fmtDate(p.ytd.from + "T12:00:00")) + "</small></h4>" +
+            '<div class="ps-ytd-grid">' +
+            "<div><span>Total pay</span><strong>" + fmtMoney(p.ytd.gross) + "</strong></div>" +
+            "<div><span>Income tax</span><strong>" + fmtMoney(p.ytd.tax) + "</strong></div>" +
+            "<div><span>National Insurance</span><strong>" + fmtMoney(p.ytd.ni) + "</strong></div>" +
+            "<div><span>Pension</span><strong>" + fmtMoney(p.ytd.pension) + "</strong></div>" +
+            '<div class="ps-ytd-net"><span>Take-home pay</span><strong>' + fmtMoney(p.ytd.net) + "</strong></div>" +
+            "</div></section>" +
+
+            (p.employerItems.some(function (l) { return l.amount; }) ? '<section class="ps-employer-extra">' + icon("heart") + "<div><strong>On top of your pay</strong>, " + esc(p.employer) + " also paid " +
+                p.employerItems.filter(function (l) { return l.amount; }).map(function (l) { return esc(l.label.replace(/^Employer /, "").toLowerCase()) + " of " + fmtMoney(l.amount); }).join(" and ") + ".</div></section>" : "") +
+            (p.note ? '<section class="ps-note">' + icon("message") + "<div>" + richText(p.note) + "</div></section>" : "") +
+            '<footer class="ps-foot"><span>' + esc(p.employer) + "</span><span>Private and confidential</span><span>Ref " + esc(p.id.slice(0, 8).toUpperCase()) + "</span></footer>" +
             "</article>";
+    }
+
+    function paintPayslip(root) {
+        $$(".ps-flow-bar [data-w]", root).forEach(function (s) { s.style.width = s.dataset.w + "%"; });
     }
 
     async function openPayslip(id, opts) {
@@ -4146,6 +4172,7 @@
             '<button type="button" class="btn btn-primary" data-close>Done</button></div>',
             { wide: true, cls: "modal-payslip" }
         );
+        paintPayslip(m.el);
         $("#ps-print", m.el).addEventListener("click", function () {
             document.body.classList.add("printing");
             window.print();
@@ -4158,25 +4185,132 @@
         const d = await api("/api/payslips");
         if (!current()) return;
         const latest = d.payslips[0];
+        const yearTotal = d.payslips.filter(function (s) { return latest && s.payDate.slice(0, 4) === latest.payDate.slice(0, 4); }).reduce(function (n, s) { return n + s.net; }, 0);
         root.innerHTML =
-            '<div class="page-head"><div><h1>Payslips</h1><p class="muted">Your payslips from HN Group. Only you and Human Resources can see them.</p></div>' +
-            (d.canRunPayroll ? '<div class="page-actions"><a class="btn btn-primary" href="/payroll" data-link>' + icon("wallet") + "Run payroll</a></div>" : "") + "</div>" +
+            '<div class="page-head"><div><h1>Payslips</h1><p class="muted">Your payslips from HN Group Limited. Only you and Human Resources can see them.</p></div>' +
+            (d.canRunPayroll ? '<div class="page-actions"><a class="btn btn-ghost" href="/funds" data-link>' + icon("pound") + "Company funds</a>" +
+                '<a class="btn btn-primary" href="/payroll" data-link>' + icon("wallet") + "Run payroll</a></div>" : "") + "</div>" +
             (latest ? '<section class="payslip-hero"><div><p class="eyebrow">Latest payslip · ' + esc(latest.periodLabel) + '</p><div class="ph-net">' + fmtMoney(latest.net) +
-                '</div><p class="muted">Net pay, paid ' + esc(fmtDate(latest.payDate + "T12:00:00")) + " · " + fmtMoney(latest.gross) + " before deductions</p></div>" +
-                '<button type="button" class="btn btn-primary" data-slip="' + latest.id + '">' + icon("eye") + "Open payslip</button></section>" : "") +
-            (d.payslips.length ? '<div class="table-card"><table class="table table-click"><thead><tr><th>Period</th><th>Pay date</th><th>Employer</th><th class="num">Total pay</th><th class="num">Net pay</th></tr></thead><tbody>' +
-                d.payslips.map(function (s) {
-                    return '<tr data-slip="' + s.id + '" tabindex="0"><td><strong>' + esc(s.periodLabel) + '</strong></td><td data-label="Pay date">' + esc(fmtDate(s.payDate + "T12:00:00")) + "</td>" +
-                        '<td data-label="Employer">' + esc(s.employer) + '</td><td data-label="Total pay" class="num">' + fmtMoney(s.gross) + '</td><td data-label="Net pay" class="num"><strong>' + fmtMoney(s.net) + "</strong></td></tr>";
-                }).join("") + "</tbody></table></div>"
+                '</div><p class="muted">Take-home pay, paid ' + esc(fmtDate(latest.payDate + "T12:00:00")) + " · " + fmtMoney(latest.gross) + " before deductions</p></div>" +
+                '<div class="ph-side"><div class="ph-stat"><span>' + fmtMoney(yearTotal) + "</span><small>Take-home in " + esc(latest.payDate.slice(0, 4)) + "</small></div>" +
+                '<button type="button" class="btn btn-light" data-slip="' + latest.id + '">' + icon("eye") + "Open payslip</button></div></section>" : "") +
+            (d.payslips.length ? '<div class="slip-list">' + d.payslips.map(function (s) {
+                return '<button type="button" class="slip-row" data-slip="' + s.id + '"><span class="slip-icon">' + icon("card") + "</span>" +
+                    '<span class="slip-main"><strong>' + esc(s.periodLabel) + '</strong><span class="muted small">Paid ' + esc(fmtDate(s.payDate + "T12:00:00")) + " · " + esc(s.employer) + "</span></span>" +
+                    '<span class="slip-gross"><small>Total pay</small>' + fmtMoney(s.gross) + '</span><span class="slip-net"><small>Take-home</small>' + fmtMoney(s.net) + "</span>" +
+                    icon("chevronRight", "slip-chev") + "</button>";
+            }).join("") + "</div>"
                 : '<div class="empty-page">' + icon("card", "big") + "<h2>No payslips yet</h2><p class=\"muted\">Your payslips will appear here once Human Resources issues them.</p></div>");
         root.addEventListener("click", function (e) {
             const s = e.target.closest("[data-slip]");
             if (s) openPayslip(s.dataset.slip);
         });
-        root.addEventListener("keydown", function (e) {
-            const s = e.target.closest("tr[data-slip]");
-            if (s && e.key === "Enter") openPayslip(s.dataset.slip);
+    }
+
+    // ================= Company funds (Human Resources) =================
+
+    function fundsWarningHtml(f) {
+        if (!f.warning) return "";
+        return '<div class="banner funds-warning ' + (f.warning.level === "danger" ? "is-danger" : "is-warn") + '">' + icon("alert") +
+            "<div><strong>" + (f.warning.level === "danger" ? "Next payroll cannot be met." : "Payroll fund is running low.") + "</strong> " + esc(f.warning.message) + "</div>" +
+            (window.location.pathname === "/funds" ? "" : '<a class="btn btn-small ' + (f.warning.level === "danger" ? "btn-danger" : "btn-ghost") + '" href="/funds" data-link>Add funds</a>') + "</div>";
+    }
+
+    function fundCardsHtml(f, actions) {
+        return '<div class="fund-cards">' +
+            '<section class="fund-card fund-main"><div class="fc-head"><span class="fc-icon">' + icon("pound") + '</span><span>Main balance</span></div>' +
+            '<div class="fc-value">' + fmtMoney(f.balances.main) + "</div>" +
+            '<p class="fc-sub">Money the company holds. Add PayPal and bank payments here.</p>' +
+            (actions ? '<div class="btn-row"><button type="button" class="btn btn-primary btn-small" data-fund="add">' + icon("plus") + "Add funds</button>" +
+                '<button type="button" class="btn btn-ghost btn-small" data-fund="remove">Remove funds</button></div>' : "") + "</section>" +
+            '<div class="fund-arrow" aria-hidden="true">' + icon("chevronRight") + "</div>" +
+            '<section class="fund-card fund-payroll' + (f.balances.payroll < 0 ? " overdrawn" : "") + '"><div class="fc-head"><span class="fc-icon">' + icon("wallet") + '</span><span>Payroll fund</span></div>' +
+            '<div class="fc-value">' + fmtMoney(f.balances.payroll) + "</div>" +
+            '<p class="fc-sub">Pays wages. Topped up only from the main balance. Next payroll needs about <strong>' + fmtMoney(f.nextPayroll) + "</strong>.</p>" +
+            (actions ? '<div class="btn-row"><button type="button" class="btn btn-primary btn-small" data-fund="transfer">' + icon("refresh") + "Move from main balance</button></div>" : "") + "</section>" +
+            "</div>";
+    }
+
+    const FUND_TYPES = {
+        deposit: ["Money in", "in"], withdrawal: ["Removed", "out"], "transfer-out": ["To payroll fund", "out"],
+        "transfer-in": ["From main balance", "in"], payroll: ["Payroll", "out"], "payroll-refund": ["Payroll refund", "in"],
+    };
+
+    async function viewFunds(root, current) {
+        const d = await api("/api/funds");
+        if (!current()) return;
+        let account = state.fundsAccount || "";
+        root.innerHTML =
+            '<div class="page-head"><div><h1>Company funds</h1><p class="muted">The main balance and the payroll fund for HN Group Limited. Only Human Resources can see this page.</p></div>' +
+            '<div class="page-actions"><a class="btn btn-ghost" href="/payroll" data-link>' + icon("wallet") + "Run payroll</a></div></div>" +
+            fundsWarningHtml(d) + fundCardsHtml(d, true) +
+            '<section class="panel"><div class="panel-head"><h2 class="panel-title">' + icon("list") + "History</h2>" +
+            '<div class="company-tabs small-tabs" id="fd-tabs"><button type="button" data-acc="">Everything</button><button type="button" data-acc="main">Main balance</button><button type="button" data-acc="payroll">Payroll fund</button></div></div>' +
+            '<div id="fd-history"></div></section>';
+
+        function draw() {
+            $$("#fd-tabs [data-acc]").forEach(function (b) { b.classList.toggle("active", b.dataset.acc === account); });
+            const list = d.transactions.filter(function (t) { return !account || t.account === account; });
+            $("#fd-history").innerHTML = list.length ? '<div class="table-card flat"><table class="table"><thead><tr><th>When</th><th>What</th><th>Account</th><th class="num">Amount</th><th class="num">Balance after</th></tr></thead><tbody>' +
+                list.map(function (t) {
+                    const type = FUND_TYPES[t.type] || [t.type, t.amount >= 0 ? "in" : "out"];
+                    return "<tr><td class=\"nowrap small\">" + esc(fmtDateTime(t.at)) + "</td>" +
+                        '<td data-label="What"><div class="emp-name">' + esc(t.description || type[0]) + "</div>" +
+                        '<div class="muted small">' + esc(type[0]) + (t.sourceLabel && t.type === "deposit" ? " · " + esc(t.sourceLabel) : "") + (t.reference ? " · ref " + esc(t.reference) : "") + " · " + esc(t.byName) + "</div></td>" +
+                        '<td data-label="Account"><span class="badge' + (t.account === "payroll" ? " badge-soft" : "") + '">' + (t.account === "payroll" ? "Payroll fund" : "Main balance") + "</span></td>" +
+                        '<td data-label="Amount" class="num fund-' + (t.amount >= 0 ? "in" : "out") + '">' + (t.amount >= 0 ? "+" : "") + fmtMoney(t.amount) + "</td>" +
+                        '<td data-label="Balance after" class="num' + (t.balanceAfter < 0 ? " danger-text" : "") + '">' + fmtMoney(t.balanceAfter) + "</td></tr>";
+                }).join("") + "</tbody></table></div>"
+                : '<p class="muted small">Nothing yet. Use <strong>Add funds</strong> when money reaches the company PayPal.</p>';
+        }
+        root.addEventListener("click", function (e) {
+            const a = e.target.closest("[data-acc]");
+            if (a) { account = state.fundsAccount = a.dataset.acc; return draw(); }
+            const f = e.target.closest("[data-fund]");
+            if (f) openFundsForm(f.dataset.fund, d);
+        });
+        draw();
+    }
+
+    function openFundsForm(kind, d) {
+        const titles = { add: "Add funds", remove: "Remove funds", transfer: "Move money to the payroll fund" };
+        const m = openModal(
+            '<h2 class="modal-title">' + titles[kind] + "</h2>" +
+            '<p class="muted">' + (kind === "add" ? "Record money that has reached the company, such as a PayPal payment." :
+                kind === "remove" ? "Take money out of the main balance. Main balance: <strong>" + fmtMoney(d.balances.main) + "</strong>." :
+                "The payroll fund can only be topped up from the main balance. Main balance: <strong>" + fmtMoney(d.balances.main) + "</strong>.") + "</p>" +
+            '<form id="fd-form" novalidate>' +
+            '<label for="fd-amount">Amount</label><div class="money-input"><span>£</span><input type="text" id="fd-amount" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>' +
+            (kind === "transfer" && d.nextPayroll > 0 ? '<div class="fd-quick"><span class="muted small">Quick amounts:</span>' +
+                '<button type="button" class="chip" data-quick="' + d.nextPayroll.toFixed(2) + '">Next payroll (' + fmtMoney(d.nextPayroll) + ")</button>" +
+                (d.balances.payroll < 0 ? '<button type="button" class="chip" data-quick="' + (d.nextPayroll - d.balances.payroll).toFixed(2) + '">Cover the overdraft and next payroll (' + fmtMoney(d.nextPayroll - d.balances.payroll) + ")</button>" : "") + "</div>" : "") +
+            (kind === "add" ? '<div class="grid-2"><div><label for="fd-source">Where from</label><select id="fd-source">' + Object.keys(d.sources).map(function (k) {
+                return '<option value="' + k + '">' + esc(d.sources[k]) + "</option>";
+            }).join("") + '</select></div><div><label for="fd-ref">Reference <span class="muted small">(optional)</span></label><input type="text" id="fd-ref" maxlength="80" placeholder="e.g. PayPal transaction ID"></div></div>' : "") +
+            '<label for="fd-note">' + (kind === "remove" ? "Reason" : 'Note <span class="muted small">(optional)</span>') + '</label><input type="text" id="fd-note" maxlength="200">' +
+            '<div class="form-error" id="fd-error" hidden></div>' +
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn ' + (kind === "remove" ? "btn-danger" : "btn-primary") + '">' + titles[kind] + "</button></div></form>"
+        );
+        $("#fd-amount", m.el).focus();
+        m.el.addEventListener("click", function (e) {
+            const q = e.target.closest("[data-quick]");
+            if (q) $("#fd-amount", m.el).value = q.dataset.quick;
+        });
+        $("#fd-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try {
+                const r = await api("/api/funds/" + kind, {
+                    amount: $("#fd-amount", m.el).value.replace(/[£,\s]/g, ""),
+                    source: $("#fd-source", m.el) ? $("#fd-source", m.el).value : "",
+                    reference: $("#fd-ref", m.el) ? $("#fd-ref", m.el).value : "",
+                    note: $("#fd-note", m.el).value,
+                });
+                state.me = r.user;
+                renderChrome();
+                closeModal();
+                toast({ add: "Funds added.", remove: "Funds removed.", transfer: "Moved to the payroll fund." }[kind]);
+                render();
+            } catch (err) { formError($("#fd-error", m.el), err.message); }
         });
     }
 
@@ -4195,54 +4329,64 @@
         return isoDay(d);
     }
 
+    function payLabel(p) {
+        return p.payType === "hourly" ? fmtMoney(p.hourlyRate) + " an hour" : fmtMoney(p.monthlySalary) + " a month";
+    }
+
     async function viewPayroll(root, current) {
         const period = state.payPeriod || isoDay(new Date()).slice(0, 7);
         const d = await api("/api/payroll?period=" + period);
         if (!current()) return;
         const drafts = d.payslips.filter(function (s) { return s.status === "draft"; });
         const issued = d.payslips.filter(function (s) { return s.status === "issued"; });
-        const sum = function (list, k) { return list.reduce(function (n, s) { return n + s[k]; }, 0); };
+        const sumOf = function (list, k) { return list.reduce(function (n, s) { return n + s[k]; }, 0); };
         const withSlip = {};
         d.payslips.forEach(function (s) { withSlip[s.personId] = true; });
 
         root.innerHTML =
-            '<div class="page-head"><div><h1>Run payroll</h1><p class="muted">Generate, check and issue payslips. Only Human Resources can see this page.</p></div>' +
+            '<div class="page-head"><div><h1>Run payroll</h1><p class="muted">Payslips are paid by ' + esc(d.employer) + ". Tax and National Insurance are worked out automatically. Only Human Resources can see this page.</p></div>" +
             '<div class="page-actions"><button type="button" class="btn btn-ghost" id="pr-single">' + icon("plus") + "Single payslip</button>" +
-            '<button type="button" class="btn btn-primary" id="pr-run">' + icon("wallet") + "Generate payslips</button></div></div>" +
+            '<button type="button" class="btn btn-primary" id="pr-run">' + icon("wallet") + "Run payroll</button></div></div>" +
+            fundsWarningHtml(d.funds) +
+            '<div class="payroll-funds"><div><span class="pf-label">Payroll fund</span><strong class="' + (d.funds.balances.payroll < 0 ? "danger-text" : "") + '">' + fmtMoney(d.funds.balances.payroll) + "</strong></div>" +
+            '<div><span class="pf-label">Next payroll needs about</span><strong>' + fmtMoney(d.funds.nextPayroll) + "</strong></div>" +
+            '<div><span class="pf-label">Main balance</span><strong>' + fmtMoney(d.funds.balances.main) + "</strong></div>" +
+            '<a class="btn btn-ghost btn-small" href="/funds" data-link>' + icon("pound") + "Company funds</a></div>" +
             '<div class="week-nav"><button type="button" class="icon-btn" data-period="' + shiftMonth(period, -1) + '" aria-label="Previous month">' + icon("chevronLeft") + "</button>" +
             '<input type="month" id="pr-month" value="' + period + '" aria-label="Pay month">' +
             '<button type="button" class="icon-btn" data-period="' + shiftMonth(period, 1) + '" aria-label="Next month">' + icon("chevronRight") + "</button>" +
             '<h2 class="week-title">' + esc(d.periodLabel) + "</h2></div>" +
             '<div class="stat-row">' +
-            '<div class="stat"><div class="stat-value">' + issued.length + '</div><div class="stat-label">Issued</div></div>' +
-            '<div class="stat"><div class="stat-value">' + drafts.length + '</div><div class="stat-label">Drafts to check</div></div>' +
-            '<div class="stat"><div class="stat-value">' + fmtMoney(sum(d.payslips, "gross")) + '</div><div class="stat-label">Total pay</div></div>' +
-            '<div class="stat"><div class="stat-value">' + fmtMoney(sum(d.payslips, "net")) + '</div><div class="stat-label">Total net pay</div></div>' +
+            '<div class="stat"><div class="stat-value">' + issued.length + " / " + d.payslips.length + '</div><div class="stat-label">Issued</div></div>' +
+            '<div class="stat"><div class="stat-value">' + fmtMoney(sumOf(d.payslips, "gross")) + '</div><div class="stat-label">Total pay</div></div>' +
+            '<div class="stat"><div class="stat-value">' + fmtMoney(sumOf(d.payslips, "net")) + '</div><div class="stat-label">Take-home pay</div></div>' +
+            '<div class="stat"><div class="stat-value">' + fmtMoney(sumOf(d.payslips, "cost")) + '</div><div class="stat-label">Cost to the company</div></div>' +
             "</div>" +
             '<section class="panel"><div class="panel-head"><h2 class="panel-title">' + icon("card") + "Payslips for " + esc(d.periodLabel) + "</h2>" +
             (drafts.length ? '<button type="button" class="btn btn-primary btn-small" id="pr-issue-all">' + icon("tick") + "Issue all " + drafts.length + " drafts</button>" : "") + "</div>" +
-            (d.payslips.length ? '<div class="table-card flat"><table class="table"><thead><tr><th>Employee</th><th>Status</th><th class="num">Total pay</th><th class="num">Net pay</th><th class="col-actions"></th></tr></thead><tbody>' +
+            (d.payslips.length ? '<div class="table-card flat"><table class="table"><thead><tr><th>Employee</th><th>Status</th><th class="num">Total pay</th><th class="num">Take-home</th><th class="num">Cost</th><th class="col-actions"></th></tr></thead><tbody>' +
                 d.payslips.map(function (s) {
-                    return '<tr data-slip="' + s.id + '"><td><div class="emp-cell">' + avatar(s.person, "sm") + '<div><div class="emp-name">' + esc(s.person.displayName) + '</div><div class="muted small">' + esc(s.employer) + "</div></div></div></td>" +
-                        '<td data-label="Status">' + statusBadge(s.status) + '</td><td data-label="Total pay" class="num">' + fmtMoney(s.gross) + '</td><td data-label="Net pay" class="num"><strong>' + fmtMoney(s.net) + "</strong></td>" +
-                        '<td class="col-actions nowrap"><button type="button" class="btn btn-ghost btn-small" data-pa="view">' + icon("eye") + "</button>" +
+                    return '<tr data-slip="' + s.id + '"><td><div class="emp-cell">' + avatar(s.person, "sm") + '<div><div class="emp-name">' + esc(s.person.displayName) + '</div><div class="muted small">' + esc(s.person.jobTitle || "") + "</div></div></div></td>" +
+                        '<td data-label="Status">' + statusBadge(s.status) + '</td><td data-label="Total pay" class="num">' + fmtMoney(s.gross) + '</td><td data-label="Take-home" class="num"><strong>' + fmtMoney(s.net) + "</strong></td>" +
+                        '<td data-label="Cost" class="num muted">' + fmtMoney(s.cost) + "</td>" +
+                        '<td class="col-actions nowrap"><button type="button" class="btn btn-ghost btn-small" data-pa="view" aria-label="View">' + icon("eye") + "</button>" +
                         (s.status === "draft" ? '<button type="button" class="btn btn-ghost btn-small" data-pa="edit">' + icon("edit") + 'Edit</button><button type="button" class="btn btn-primary btn-small" data-pa="issue">Issue</button>'
                             : '<button type="button" class="btn btn-ghost btn-small" data-pa="withdraw">Withdraw</button>') +
                         '<button type="button" class="btn btn-ghost btn-small danger-text" data-pa="delete" aria-label="Delete">' + icon("trash") + "</button></td></tr>";
                 }).join("") + "</tbody></table></div>"
-                : '<p class="muted small">No payslips for ' + esc(d.periodLabel) + " yet. Use <strong>Generate payslips</strong> to make drafts for everyone with pay details.</p>") +
+                : '<p class="muted small">No payslips for ' + esc(d.periodLabel) + " yet. Use <strong>Run payroll</strong> to make them for everyone.</p>") +
             "</section>" +
             '<section class="panel"><div class="panel-head"><h2 class="panel-title">' + icon("users") + "Pay details</h2>" +
-            '<span class="muted small">' + d.people.filter(function (p) { return p.hasDetails; }).length + " of " + d.people.length + " set up</span></div>" +
+            '<span class="muted small">Standard pay is ' + fmtMoney(d.standardSalary) + " a month</span></div>" +
             '<div class="table-card flat"><table class="table"><thead><tr><th>Employee</th><th>Pay</th><th>' + esc(d.periodLabel) + '</th><th class="col-actions"></th></tr></thead><tbody>' +
             d.people.map(function (p) {
                 return '<tr><td><div class="emp-cell">' + avatar(p, "sm") + '<div><div class="emp-name">' + esc(p.displayName) + '</div><div class="muted small">' + esc(p.jobTitle) + "</div></div></div></td>" +
-                    '<td data-label="Pay">' + (p.hasDetails ? '<span class="badge badge-green">' + (p.payType === "hourly" ? "Hourly" : "Salary") + "</span>" : '<span class="badge badge-yellow">Not set up</span>') + "</td>" +
-                    '<td data-label="Payslip">' + (withSlip[p.id] ? '<span class="muted small">' + icon("tick") + "Done</span>" : '<span class="muted small">–</span>') + "</td>" +
+                    '<td data-label="Pay"><strong>' + payLabel(p) + "</strong>" + (p.isStandard ? ' <span class="badge badge-soft">Standard</span>' : "") + "</td>" +
+                    '<td data-label="Payslip">' + (withSlip[p.id] ? '<span class="badge badge-green">' + icon("tick") + "Done</span>" : '<span class="muted small">Not yet</span>') + "</td>" +
                     '<td class="col-actions nowrap"><button type="button" class="btn btn-ghost btn-small" data-details="' + p.id + '">' + icon("edit") + "Pay details</button></td></tr>";
             }).join("") + "</tbody></table></div>" +
-            '<p class="muted small pr-rates">' + icon("alert") + "<span>Tax, National Insurance and student loan amounts are <strong>estimates</strong> using " + esc(d.rates) +
-            " rates for England, Wales and Northern Ireland (monthly, non-cumulative). Scottish income tax is different. Check every figure before issuing.</span></p></section>";
+            '<p class="muted small pr-rates">' + icon("shield") + "<span>Tax is worked out cumulatively across the tax year with " + esc(d.rates) +
+            " rates for England, Wales and Northern Ireland, and National Insurance for each month. Scottish tax codes are treated as the rest of the UK.</span></p></section>";
 
         root.addEventListener("change", function (e) {
             if (e.target.id === "pr-month" && e.target.value) { state.payPeriod = e.target.value; render(); }
@@ -4265,14 +4409,11 @@
             const act = pa.dataset.pa;
             try {
                 if (act === "view") return openPayslip(id);
-                if (act === "edit") {
-                    const full = (await api("/api/payroll/payslips/" + id)).payslip;
-                    return openPayslipEditor(d, full, period);
-                }
-                if (act === "delete" && !(await confirmDialog({ title: "Delete this payslip?", message: "It will be removed for good. Issued payslips are payroll records, so only delete one that was made by mistake.", confirmLabel: "Delete", danger: true }))) return;
+                if (act === "edit") return openPayslipEditor(d, (await api("/api/payroll/payslips/" + id)).payslip, period);
+                if (act === "delete" && !(await confirmDialog({ title: "Delete this payslip?", message: "Its cost goes back into the payroll fund. Only delete a payslip that was made by mistake.", confirmLabel: "Delete", danger: true }))) return;
                 if (act === "withdraw" && !(await confirmDialog({ title: "Withdraw this payslip?", message: "The employee won’t be able to see it until it’s issued again.", confirmLabel: "Withdraw" }))) return;
                 await api("/api/payroll/payslips/" + id + "/" + act, {});
-                toast({ issue: "Payslip issued.", withdraw: "Payslip withdrawn.", delete: "Payslip deleted." }[act]);
+                toast({ issue: "Payslip issued.", withdraw: "Payslip withdrawn.", delete: "Payslip deleted and its cost returned to the payroll fund." }[act]);
                 render();
             } catch (err) { toast(err.message); }
         });
@@ -4281,26 +4422,40 @@
     function openPayrollRun(d, period, withSlip) {
         const ready = d.people.filter(function (p) { return !withSlip[p.id]; });
         const m = openModal(
-            '<h2 class="modal-title">Generate payslips for ' + esc(d.periodLabel) + "</h2>" +
-            '<p class="muted">Draft payslips are made from each person’s pay details, with estimated tax, NI and pension. Hourly staff are paid for hours on their approved timesheets. You can check and edit every draft before issuing it.</p>' +
+            '<h2 class="modal-title">Run payroll for ' + esc(d.periodLabel) + "</h2>" +
+            '<p class="muted">A payslip is made for each person from their pay details, with tax and National Insurance worked out automatically. The cost comes out of the payroll fund straight away. You can check every payslip before issuing it.</p>' +
             '<form id="run-form" novalidate><label for="run-date">Pay date</label><input type="date" id="run-date" value="' + lastWorkingDay(period) + '">' +
             '<div class="rm-head"><h3 class="detail-head">Who to pay</h3><button type="button" class="btn btn-link btn-small" id="run-all">Select all</button></div>' +
             '<div class="member-list run-list">' + (ready.length ? ready.map(function (p) {
-                return '<label class="member-row' + (p.hasDetails ? " on" : "") + '">' + avatar(p, "md") + '<span class="mr-text"><span class="emp-name">' + esc(p.displayName) + "</span>" +
-                    '<span class="muted small">' + (p.hasDetails ? (p.payType === "hourly" ? "Hourly" : "Salary") : "No pay details yet – the payslip will be empty") + "</span></span>" +
-                    '<input type="checkbox" value="' + p.id + '"' + (p.hasDetails ? " checked" : "") + '><span class="mr-check">' + icon("tick") + "</span></label>";
+                return '<label class="member-row on">' + avatar(p, "md") + '<span class="mr-text"><span class="emp-name">' + esc(p.displayName) + "</span>" +
+                    '<span class="muted small">' + payLabel(p) + "</span></span>" +
+                    '<input type="checkbox" value="' + p.id + '" checked><span class="mr-check">' + icon("tick") + "</span></label>";
             }).join("") : '<p class="muted small">Everyone already has a payslip for this month.</p>') + "</div>" +
+            '<div class="run-summary" id="run-summary"></div>' +
             '<div class="form-error" id="run-error" hidden></div>' +
-            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary"' + (ready.length ? "" : " disabled") + ">Make drafts</button></div></form>",
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary"' + (ready.length ? "" : " disabled") + ">Make payslips</button></div></form>",
             { cls: "modal-members" }
         );
+        // A rough cost for the summary: salaried pay for the people ticked (hourly pay depends on timesheets).
+        function summary() {
+            const ids = $$(".run-list input:checked", m.el).map(function (c) { return c.value; });
+            const est = d.people.filter(function (p) { return ids.indexOf(p.id) !== -1 && p.payType === "salary"; }).reduce(function (n, p) { return n + p.monthlySalary; }, 0);
+            const after = d.funds.balances.payroll - est;
+            $("#run-summary", m.el).innerHTML = ids.length ? '<div><span>Payroll fund now</span><strong>' + fmtMoney(d.funds.balances.payroll) + "</strong></div>" +
+                "<div><span>About to pay (before employer costs)</span><strong>−" + fmtMoney(est) + "</strong></div>" +
+                '<div class="' + (after < 0 ? "danger-text" : "") + '"><span>Left afterwards</span><strong>' + fmtMoney(after) + "</strong></div>" +
+                (after < 0 ? '<p class="run-warn">' + icon("alert") + "The payroll fund will go negative. Payroll can still run, but the next one cannot be met until money is moved in.</p>" : "") : "";
+        }
         m.el.addEventListener("change", function (e) {
             const row = e.target.closest(".member-row");
             if (row) row.classList.toggle("on", e.target.checked);
+            summary();
         });
         $("#run-all", m.el).addEventListener("click", function () {
             $$(".run-list input", m.el).forEach(function (c) { c.checked = true; c.closest(".member-row").classList.add("on"); });
+            summary();
         });
+        summary();
         $("#run-form", m.el).addEventListener("submit", async function (e) {
             e.preventDefault();
             const ids = $$(".run-list input:checked", m.el).map(function (c) { return c.value; });
@@ -4308,7 +4463,7 @@
             try {
                 const r = await api("/api/payroll/run", { period: period, payDate: $("#run-date", m.el).value, personIds: ids });
                 closeModal();
-                toast(r.made + (r.made === 1 ? " draft payslip made." : " draft payslips made.") + (r.skipped.length ? " " + r.skipped.length + " skipped." : ""));
+                toast(r.made + (r.made === 1 ? " payslip made" : " payslips made") + ", " + fmtMoney(r.cost) + " taken from the payroll fund." + (r.skipped.length ? " " + r.skipped.length + " skipped." : ""));
                 render();
             } catch (err) { formError($("#run-error", m.el), err.message); }
         });
@@ -4319,22 +4474,24 @@
             const v = r.details;
             const m = openModal(
                 '<h2 class="modal-title">Pay details · ' + esc(r.person.displayName) + "</h2>" +
-                '<p class="muted">Used to generate payslips. Only Human Resources can see these.</p>' +
+                '<p class="muted">Used to make payslips, paid by ' + esc(d.employer) + ". Only Human Resources can see these.</p>" +
                 '<form id="pd-form" novalidate>' +
-                '<div class="grid-2"><div><label for="pd-num">Employee number</label><input type="text" id="pd-num" maxlength="20" value="' + esc(v.employeeNumber) + '"></div>' +
-                '<div><label for="pd-company">Paid by</label><select id="pd-company"><option value="">Main company (' + esc(r.person.company) + ")</option>" +
-                d.companies.map(function (c) { return '<option value="' + esc(c) + '"' + (v.company === c ? " selected" : "") + ">" + esc(c) + "</option>"; }).join("") + "</select></div></div>" +
-                '<div class="grid-2"><div><label for="pd-ni">National Insurance number</label><input type="text" id="pd-ni" maxlength="13" value="' + esc(v.niNumber) + '" placeholder="AB123456C"></div>' +
-                '<div><label for="pd-nicat">NI category</label><input type="text" id="pd-nicat" maxlength="1" value="' + esc(v.niCategory) + '"></div></div>' +
-                '<div class="grid-2"><div><label for="pd-tax">Tax code</label><input type="text" id="pd-tax" maxlength="12" value="' + esc(v.taxCode) + '"></div>' +
-                '<div><label for="pd-type">Pay type</label><select id="pd-type"><option value="salary"' + (v.payType === "salary" ? " selected" : "") + '>Annual salary</option><option value="hourly"' + (v.payType === "hourly" ? " selected" : "") + ">Hourly rate</option></select></div></div>" +
-                '<div class="grid-2"><div id="pd-salary-box"><label for="pd-salary">Annual salary (£)</label><input type="number" id="pd-salary" min="0" step="0.01" value="' + esc(v.annualSalary || "") + '"></div>' +
+                '<div class="grid-2"><div><label for="pd-type">Pay type</label><select id="pd-type"><option value="salary"' + (v.payType === "salary" ? " selected" : "") + '>Monthly salary</option><option value="hourly"' + (v.payType === "hourly" ? " selected" : "") + ">Hourly rate</option></select></div>" +
+                '<div id="pd-salary-box"><label for="pd-salary">Monthly salary (£)</label><input type="number" id="pd-salary" min="0" step="0.01" value="' + esc(v.monthlySalary) + '"></div>' +
                 '<div id="pd-rate-box"><label for="pd-rate">Hourly rate (£)</label><input type="number" id="pd-rate" min="0" step="0.01" value="' + esc(v.hourlyRate || "") + '"></div></div>' +
+                '<div class="grid-2"><div><label for="pd-num">Employee number</label><input type="text" id="pd-num" maxlength="20" value="' + esc(v.employeeNumber) + '"></div>' +
+                '<div><label for="pd-ni">National Insurance number</label><input type="text" id="pd-ni" maxlength="13" value="' + esc(v.niNumber) + '" placeholder="AB123456C"></div></div>' +
+                '<div class="grid-2"><div><label for="pd-tax">Tax code</label><input type="text" id="pd-tax" maxlength="12" value="' + esc(v.taxCode) + '"></div>' +
+                '<div><label for="pd-nicat">NI category</label><input type="text" id="pd-nicat" maxlength="1" value="' + esc(v.niCategory) + '"></div></div>' +
                 '<div class="grid-2"><div><label for="pd-pen">Employee pension (%)</label><input type="number" id="pd-pen" min="0" max="100" step="0.5" value="' + esc(v.pensionEmployeePct) + '"></div>' +
                 '<div><label for="pd-epen">Employer pension (%)</label><input type="number" id="pd-epen" min="0" max="100" step="0.5" value="' + esc(v.pensionEmployerPct) + '"></div></div>' +
                 '<label for="pd-loan">Student loan</label><select id="pd-loan"><option value="">None</option>' + Object.keys(d.studentLoans).map(function (k) {
                     return '<option value="' + k + '"' + (v.studentLoan === k ? " selected" : "") + ">" + esc(d.studentLoans[k]) + "</option>";
                 }).join("") + "</select>" +
+                '<h3 class="detail-head">Earlier this tax year</h3>' +
+                '<p class="muted small">Pay and tax since ' + esc(fmtDate(v.currentTaxYear + "T12:00:00")) + ' that isn\u2019t on a payslip here (from their P45, or your previous payroll). Income tax is worked out across the whole tax year, so this keeps it right.</p>' +
+                '<div class="grid-2"><div><label for="pd-prevpay">Total pay (\u00a3)</label><input type="number" id="pd-prevpay" min="0" step="0.01" value="' + esc(v.previousPay || "") + '" placeholder="0.00"></div>' +
+                '<div><label for="pd-prevtax">Tax paid (\u00a3)</label><input type="number" id="pd-prevtax" min="0" step="0.01" value="' + esc(v.previousTax || "") + '" placeholder="0.00"></div></div>' +
                 '<div class="form-error" id="pd-error" hidden></div>' +
                 '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">Save pay details</button></div></form>'
             );
@@ -4349,10 +4506,11 @@
                 e.preventDefault();
                 try {
                     await api("/api/payroll/details/" + personId, {
-                        employeeNumber: $("#pd-num", m.el).value, company: $("#pd-company", m.el).value, niNumber: $("#pd-ni", m.el).value,
+                        employeeNumber: $("#pd-num", m.el).value, niNumber: $("#pd-ni", m.el).value,
                         niCategory: $("#pd-nicat", m.el).value, taxCode: $("#pd-tax", m.el).value, payType: $("#pd-type", m.el).value,
-                        annualSalary: $("#pd-salary", m.el).value, hourlyRate: $("#pd-rate", m.el).value,
+                        monthlySalary: $("#pd-salary", m.el).value, hourlyRate: $("#pd-rate", m.el).value,
                         pensionEmployeePct: $("#pd-pen", m.el).value, pensionEmployerPct: $("#pd-epen", m.el).value, studentLoan: $("#pd-loan", m.el).value,
+                        previousPay: $("#pd-prevpay", m.el).value, previousTax: $("#pd-prevtax", m.el).value,
                     });
                     closeModal();
                     toast("Pay details saved.");
@@ -4362,24 +4520,22 @@
         }).catch(function (err) { toast(err.message); });
     }
 
-    // Create or edit a draft payslip line by line, with live totals.
+    // Create or edit a payslip. HR sets the payments and any extra deductions; tax, NI, pension and
+    // student loan are recalculated automatically as the payments change.
     function openPayslipEditor(d, slip, period) {
         const v = slip || { payments: [], deductions: [], employerItems: [], payDate: lastWorkingDay(period), note: "" };
         const lines = {
             payments: v.payments.map(function (l) { return Object.assign({}, l); }),
-            deductions: v.deductions.map(function (l) { return Object.assign({}, l); }),
-            employerItems: v.employerItems.map(function (l) { return Object.assign({}, l); }),
+            extras: v.deductions.filter(function (l) { return l.kind === "other"; }).map(function (l) { return Object.assign({}, l); }),
         };
+        let auto = { deductions: v.deductions.filter(function (l) { return l.kind !== "other"; }), employer: v.employerItems };
         const m = openModal(
             '<h2 class="modal-title">' + (slip ? "Edit payslip · " + esc(slip.employeeName) + " · " + esc(slip.periodLabel) : "New payslip · " + esc(d.periodLabel)) + "</h2>" +
             '<form id="pe-form" novalidate>' +
             (slip ? "" : '<label for="pe-person">Employee</label><select id="pe-person"><option value="">Choose someone</option>' + d.people.map(function (p) {
-                return '<option value="' + p.id + '">' + esc(p.displayName) + (p.hasDetails ? "" : " (no pay details)") + "</option>";
+                return '<option value="' + p.id + '">' + esc(p.displayName) + " — " + payLabel(p) + "</option>";
             }).join("") + "</select>") +
-            '<div class="grid-2"><div><label for="pe-date">Pay date</label><input type="date" id="pe-date" value="' + esc(v.payDate) + '"></div>' +
-            (slip ? '<div><label for="pe-tax">Tax code</label><input type="text" id="pe-tax" maxlength="12" value="' + esc(slip.taxCode) + '"></div>' : "<div></div>") + "</div>" +
-            '<div class="pe-recalc"><button type="button" class="btn btn-ghost btn-small" id="pe-estimate">' + icon("refresh") + "Fill in from pay details</button>" +
-            '<span class="muted small">Replaces the lines below with estimates.</span></div>' +
+            '<div class="grid-2"><div><label for="pe-date">Pay date</label><input type="date" id="pe-date" value="' + esc(v.payDate) + '"></div><div></div></div>' +
             '<div id="pe-lines"></div>' +
             '<div class="pe-totals" id="pe-totals"></div>' +
             '<label for="pe-note">Message on the payslip <span class="muted small">(optional)</span></label><textarea id="pe-note" rows="2" maxlength="500">' + esc(v.note || "") + "</textarea>" +
@@ -4388,80 +4544,103 @@
             '<button type="submit" class="btn btn-ghost" data-issue="0">Save draft</button><button type="submit" class="btn btn-primary" data-issue="1">' + icon("tick") + "Save and issue</button></div></form>",
             { wide: true }
         );
-        function section(key, title, withKind) {
-            return '<div class="pe-section" data-key="' + key + '"><div class="pe-head"><h3 class="detail-head">' + title + '</h3><button type="button" class="btn btn-link btn-small" data-add="' + key + '">' + icon("plus") + "Add line</button></div>" +
+        const editable = function (key, title, addLabel) {
+            return '<div class="pe-section" data-key="' + key + '"><div class="pe-head"><h3 class="detail-head">' + title + '</h3><button type="button" class="btn btn-link btn-small" data-add="' + key + '">' + icon("plus") + addLabel + "</button></div>" +
                 (lines[key].length ? lines[key].map(function (l, i) {
                     return '<div class="pe-line" data-i="' + i + '"><input type="text" class="pe-label" maxlength="80" value="' + esc(l.label) + '" placeholder="Description">' +
-                        (withKind ? '<select class="pe-kind" aria-label="Type">' + Object.keys(DEDUCTION_KIND_LABELS).map(function (k) {
-                            return '<option value="' + k + '"' + (l.kind === k ? " selected" : "") + ">" + DEDUCTION_KIND_LABELS[k] + "</option>";
-                        }).join("") + "</select>" : "") +
                         '<span class="pe-money"><span>£</span><input type="number" class="pe-amount" step="0.01" value="' + (l.amount === "" ? "" : Number(l.amount).toFixed(2)) + '" aria-label="Amount"></span>' +
                         '<button type="button" class="icon-btn icon-btn-sm" data-remove aria-label="Remove line">' + icon("x") + "</button></div>";
                 }).join("") : '<p class="muted small pe-empty">None</p>') + "</div>";
-        }
+        };
+        const autoRows = function (list) {
+            return list.map(function (l) {
+                return '<div class="pe-line pe-auto"><span class="pe-auto-label">' + icon("lock") + esc(l.label) + '</span><span class="pe-auto-amt">' + fmtMoney(l.amount) + "</span></div>";
+            }).join("");
+        };
         function drawLines() {
-            $("#pe-lines", m.el).innerHTML = section("payments", "Payments") + section("deductions", "Deductions", true) + section("employerItems", "Employer contributions (not deducted)");
+            $("#pe-lines", m.el).innerHTML = editable("payments", "Payments", "Add payment") +
+                '<div class="pe-section"><div class="pe-head"><h3 class="detail-head">Worked out automatically</h3><span class="muted small">Updates as you change the payments</span></div>' +
+                autoRows(auto.deductions) + "</div>" +
+                editable("extras", "Other deductions", "Add deduction") +
+                (auto.employer.some(function (l) { return l.amount; }) ? '<div class="pe-section"><div class="pe-head"><h3 class="detail-head">Paid by the employer (not deducted)</h3></div>' + autoRows(auto.employer) + "</div>" : "");
             drawTotals();
         }
         function drawTotals() {
-            const sum = function (k) { return lines[k].reduce(function (n, l) { return n + (Number(l.amount) || 0); }, 0); };
-            const gross = sum("payments");
-            const ded = sum("deductions");
-            $("#pe-totals", m.el).innerHTML = '<span>Total pay <strong>' + fmtMoney(gross) + "</strong></span><span>Deductions <strong>" + fmtMoney(ded) + '</strong></span><span class="pe-net">Net pay <strong>' + fmtMoney(gross - ded) + "</strong></span>";
+            const s = function (list) { return list.reduce(function (n, l) { return n + (Number(l.amount) || 0); }, 0); };
+            const gross = s(lines.payments);
+            const ded = s(auto.deductions) + s(lines.extras);
+            $("#pe-totals", m.el).innerHTML = "<span>Total pay <strong>" + fmtMoney(gross) + "</strong></span><span>Deductions <strong>" + fmtMoney(ded) + "</strong></span>" +
+                '<span class="pe-net">Take-home <strong>' + fmtMoney(gross - ded) + "</strong></span><span class=\"muted\">Cost to the payroll fund <strong>" + fmtMoney(gross + s(auto.employer)) + "</strong></span>";
         }
+        const personId = function () { return slip ? slip.personId : $("#pe-person", m.el).value; };
+        let timer;
+        let seq = 0;
+        async function recalc() {
+            if (!personId()) { auto = { deductions: [], employer: [] }; drawLines(); return; }
+            const mySeq = ++seq;
+            try {
+                const r = await api("/api/payroll/calculate", { personId: personId(), payments: lines.payments, payDate: $("#pe-date", m.el).value, payslipId: slip ? slip.id : "" });
+                if (mySeq !== seq) return;
+                auto = { deductions: r.deductions, employer: r.employer };
+                const focused = document.activeElement;
+                const keep = focused && focused.closest && focused.closest(".pe-line") ? { key: focused.closest("[data-key]").dataset.key, i: focused.closest(".pe-line").dataset.i, cls: focused.className } : null;
+                drawLines();
+                if (keep) {
+                    const el = $('[data-key="' + keep.key + '"] .pe-line[data-i="' + keep.i + '"] .' + keep.cls.split(" ")[0], m.el);
+                    if (el) { el.focus(); if (el.setSelectionRange && el.type === "text") el.setSelectionRange(el.value.length, el.value.length); }
+                }
+            } catch (err) { formError($("#pe-error", m.el), err.message); }
+        }
+        const scheduleRecalc = function () { clearTimeout(timer); timer = setTimeout(recalc, 350); };
         drawLines();
         const box = $("#pe-lines", m.el);
         box.addEventListener("input", function (e) {
             const row = e.target.closest(".pe-line");
-            if (!row) return;
+            if (!row || !row.closest("[data-key]")) return;
             const l = lines[row.closest("[data-key]").dataset.key][Number(row.dataset.i)];
             if (e.target.classList.contains("pe-label")) l.label = e.target.value;
-            if (e.target.classList.contains("pe-amount")) l.amount = e.target.value;
+            if (e.target.classList.contains("pe-amount")) {
+                l.amount = e.target.value;
+                if (row.closest("[data-key]").dataset.key === "payments") scheduleRecalc();
+            }
             drawTotals();
-        });
-        box.addEventListener("change", function (e) {
-            const row = e.target.closest(".pe-line");
-            if (row && e.target.classList.contains("pe-kind")) lines.deductions[Number(row.dataset.i)].kind = e.target.value;
         });
         box.addEventListener("click", function (e) {
             const add = e.target.closest("[data-add]");
-            if (add) { lines[add.dataset.add].push({ label: "", amount: "", kind: "other" }); drawLines(); return; }
+            if (add) { lines[add.dataset.add].push({ label: "", amount: "" }); drawLines(); return; }
             const rm = e.target.closest("[data-remove]");
             if (rm) {
                 const row = rm.closest(".pe-line");
-                lines[row.closest("[data-key]").dataset.key].splice(Number(row.dataset.i), 1);
+                const key = row.closest("[data-key]").dataset.key;
+                lines[key].splice(Number(row.dataset.i), 1);
                 drawLines();
+                if (key === "payments") scheduleRecalc();
             }
         });
-        async function fillEstimate() {
-            const personId = slip ? slip.personId : $("#pe-person", m.el).value;
-            if (!personId) return formError($("#pe-error", m.el), "Choose an employee first.");
+        $("#pe-date", m.el).addEventListener("change", scheduleRecalc);
+        if ($("#pe-person", m.el)) $("#pe-person", m.el).addEventListener("change", async function () {
+            if (!personId()) return;
             try {
-                const est = await api("/api/payroll/estimate", { personId: personId, period: slip ? slip.period : period });
+                const est = await api("/api/payroll/estimate", { personId: personId(), period: period, payDate: $("#pe-date", m.el).value });
                 lines.payments = est.payments;
-                lines.deductions = est.deductions;
-                lines.employerItems = est.employer;
+                auto = { deductions: est.deductions, employer: est.employer };
                 drawLines();
-                formError($("#pe-error", m.el), est.missingDetails ? "This person has no pay details yet, so there’s nothing to estimate from." : "");
             } catch (err) { formError($("#pe-error", m.el), err.message); }
-        }
-        $("#pe-estimate", m.el).addEventListener("click", fillEstimate);
-        if ($("#pe-person", m.el)) $("#pe-person", m.el).addEventListener("change", fillEstimate);
+        });
         $("#pe-form", m.el).addEventListener("submit", async function (e) {
             e.preventDefault();
             const issue = e.submitter && e.submitter.dataset.issue === "1";
             const body = {
                 payDate: $("#pe-date", m.el).value,
-                payments: lines.payments, deductions: lines.deductions, employerItems: lines.employerItems,
+                payments: lines.payments,
+                deductions: lines.extras.map(function (l) { return { label: l.label, amount: l.amount, kind: "other" }; }),
                 note: $("#pe-note", m.el).value,
             };
             try {
                 let saved;
-                if (slip) {
-                    Object.assign(body, { taxCode: $("#pe-tax", m.el).value, employer: slip.employer, employeeNumber: slip.employeeNumber, niNumber: slip.niNumber, niCategory: slip.niCategory });
-                    saved = (await api("/api/payroll/payslips/" + slip.id, body)).payslip;
-                } else {
-                    body.personId = $("#pe-person", m.el).value;
+                if (slip) saved = (await api("/api/payroll/payslips/" + slip.id, body)).payslip;
+                else {
+                    body.personId = personId();
                     body.period = period;
                     if (!body.personId) return formError($("#pe-error", m.el), "Choose an employee.");
                     saved = (await api("/api/payroll/payslips", body)).payslip;
@@ -5059,6 +5238,9 @@
         "payslip-withdrawn": ["withdrew the payslip of", "payroll"],
         "payslip-deleted": ["deleted the payslip of", "payroll"],
         "payslip-viewed": ["viewed their payslip", "payroll"],
+        "funds-added": ["added funds to the main balance", "payroll"],
+        "funds-removed": ["removed funds from the main balance", "payroll"],
+        "funds-transferred": ["moved money to the payroll fund", "payroll"],
         "ticket-raised": ["raised IT ticket", "helpdesk"],
         "ticket-replied": ["replied to IT ticket", "helpdesk"],
         "ticket-note-added": ["added an internal note to IT ticket", "helpdesk"],
@@ -5076,7 +5258,7 @@
         ["access", "Roles & permissions"],
         ["leave", "Leave & absence"],
         ["rotas", "Rotas & timesheets"],
-        ["payroll", "Payroll"],
+        ["payroll", "Payroll & funds"],
         ["helpdesk", "IT Helpdesk"],
         ["system", "System Admin"],
     ];
