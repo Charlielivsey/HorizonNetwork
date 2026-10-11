@@ -2538,3 +2538,32 @@ a.chip:hover { box-shadow: 0 0 0 2px var(--focus-ring); }
 .rm-empty { text-align: center; padding: 1.5rem 0; }
 .rm-actions { align-items: center; }
 .rm-count { margin-right: auto; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); }
+
+/* ================= Smooth scrolling ================= */
+/* The page background sits on its own fixed layer instead of background-attachment: fixed,
+   which made the browser repaint the whole page on every scroll frame. */
+body { background: var(--bg); background-attachment: scroll; }
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+        radial-gradient(900px 420px at 85% -120px, var(--primary-tint), transparent 70%),
+        radial-gradient(700px 360px at -10% 10%, var(--alt-tint), transparent 70%);
+    transform: translateZ(0);
+}
+/* Home banner: the glows keep their own layers, and the glass effects no longer re-blur them each frame. */
+.home-hero { contain: paint; isolation: isolate; }
+.hero-glow { will-change: transform; }
+.glass-clock { backdrop-filter: none; background: rgba(255, 255, 255, 0.1); }
+.hero-chip { backdrop-filter: none; }
+/* The home side column is taller than the screen now, so it scrolls with the page instead of sticking. */
+.home-side { position: static; }
+/* While scrolling, cards don't react to the mouse passing over them (no bobbing up and down). */
+body.is-scrolling #view { pointer-events: none; }
+@media (prefers-reduced-motion: reduce) {
+    .hero-glow { animation: none; }
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

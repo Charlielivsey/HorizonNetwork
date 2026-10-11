@@ -249,6 +249,17 @@
         $$("[data-clock]").forEach(function (el) { el.textContent = clockText(el.dataset.tz, el.dataset.clock); });
     }, 1000);
 
+    // While the page is scrolling, cards ignore the mouse so hover effects don't make them jump.
+    let scrollTimer = null;
+    window.addEventListener("scroll", function () {
+        if (!scrollTimer) document.body.classList.add("is-scrolling");
+        clearTimeout(scrollTimer);
+        scrollTimer = setTimeout(function () {
+            scrollTimer = null;
+            document.body.classList.remove("is-scrolling");
+        }, 120);
+    }, { passive: true });
+
     // ================= Navigation & menus =================
 
     const NAV = [
