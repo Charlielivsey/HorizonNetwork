@@ -16,6 +16,11 @@ let db;
 let timer = null;
 let saveTimer = null;
 const running = new Set();
+// Called when a service goes down (two failed checks in a row) or comes back up.
+let alertHandler = null;
+function onAlert(fn) {
+  alertHandler = fn;
+}
 
 function init(dataDir, selfUrl) {
   db = datafile.open(dataDir, "uptime.json", () => ({ monitors: [], checks: {} }));
@@ -42,6 +47,8 @@ function saveMonitor(input, existing) {
     name,
     url: validUrl(input.url),
     intervalMin: [1, 5, 10, 15, 30, 60].includes(Number(input.intervalMin)) ? Number(input.intervalMin) : 5,
+    // Show a banner to all staff (not just IT) while it's down.
+    announce: !!input.announce,
   };
   if (existing) Object.assign(existing, fields);
   else db.data.monitors.push((existing = { id: newId(), ...fields, createdAt: new Date().toISOString() }));
@@ -99,7 +106,19 @@ async function check(m) {
   try {
     const result = await probe(m.url);
     const list = (db.data.checks[m.id] = db.data.checks[m.id] || []);
+    const prev = list[list.length - 1];
     list.push(result);
+    // Alert after two failures in a row (one blip isn't an outage), and again when it recovers.
+    if (!result.ok && prev && !prev.ok && !m.alerting) {
+      m.alerting = new Date().toISOString();
+      db.save();
+      if (alertHandler) try { alertHandler(m, "down", result); } catch (e) { console.error(e); }
+    } else if (result.ok && m.alerting) {
+      const downSince = m.alerting;
+      m.alerting = null;
+      db.save();
+      if (alertHandler) try { alertHandler(m, "up", result, downSince); } catch (e) { console.error(e); }
+    }
     const cutoff = new Date(Date.now() - KEEP_MS).toISOString();
     while (list.length && list[0].at < cutoff) list.shift();
     clearTimeout(saveTimer);
@@ -161,6 +180,8 @@ function view(m) {
     url: m.url,
     intervalMin: m.intervalMin,
     self: !!m.self,
+    announce: !!m.announce,
+    alerting: m.alerting || null,
     state: !last ? "pending" : last.ok ? "up" : "down",
     last,
     since,
@@ -180,4 +201,23 @@ function downCount() {
   return list().filter((m) => m.state === "down").length;
 }
 
-module.exports = { MANAGE, init, start, saveMonitor, getMonitor, deleteMonitor, check, list, view, downCount };
+// Outages to show as a banner: everything for IT, only announced services for everyone else.
+function alerts(isIT) {
+  return db.data.monitors.filter((m) => m.alerting && (isIT || m.announce)).map((m) => {
+    const list = db.data.checks[m.id] || [];
+    const last = list[list.length - 1] || {};
+    return { id: m.id, name: m.name, since: m.alerting, error: last.error || (last.status ? `HTTP ${last.status}` : "Not responding"), announce: !!m.announce };
+  });
+}
+
+// Outages that started in a date range, for the activity reports.
+function incidentsBetween(from, to) {
+  let n = 0;
+  for (const m of db.data.monitors) {
+    const list = db.data.checks[m.id] || [];
+    for (let i = 0; i < list.length; i++) if (!list[i].ok && (i === 0 || list[i - 1].ok) && list[i].at.slice(0, 10) >= from && list[i].at.slice(0, 10) <= to) n++;
+  }
+  return n;
+}
+
+module.exports = { onAlert, alerts, incidentsBetween, MANAGE, init, start, saveMonitor, getMonitor, deleteMonitor, check, list, view, downCount };

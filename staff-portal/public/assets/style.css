@@ -3444,3 +3444,25 @@ input[type="date"], input[type="time"], input[type="month"], input[type="datetim
 .team-list { list-style: none; padding: 0; margin: 0.4rem 0 0; display: grid; gap: 0.5rem; }
 .team-list li { display: flex; flex-direction: column; }
 .ms-congrats { font-size: 1.05rem; padding: 0.25rem 0.55rem; }
+
+/* ---------- Outage banner, backups, reports ---------- */
+.status-banner { background: #9b1d4f; color: #fff; position: relative; z-index: 40; }
+.status-banner .sb-inner { max-width: 1240px; margin: 0 auto; padding: 0.6rem 1rem; display: flex; align-items: center; gap: 0.7rem; font-size: 0.9rem; }
+.status-banner .sb-inner > .icon { flex: none; width: 18px; height: 18px; }
+.status-banner .sb-inner > span { flex: 1; }
+.status-banner .sb-close { color: #fff; border-color: transparent; }
+.status-banner .sb-close:hover { background: rgba(255, 255, 255, 0.15); color: #fff; }
+.bk-upload { cursor: pointer; }
+.bk-health { display: flex; align-items: center; gap: 0.5rem; padding: 0.55rem 0.8rem; margin: 0.6rem 0 0.9rem; border-radius: 10px; background: var(--success-bg); color: var(--success-text); border: 1px solid var(--success-border); font-size: 0.86rem; }
+.bk-health.is-stale { background: var(--danger-bg); color: var(--danger-text); border-color: var(--danger-border); }
+.bk-health .icon { flex: none; width: 16px; height: 16px; }
+.report-wrap { margin-top: 1rem; }
+.report-wrap .statement { max-width: 900px; margin: 0 auto; }
+.rp-bars { display: flex; align-items: flex-end; gap: 3px; height: 90px; padding: 0.4rem 0; border-bottom: 1px solid var(--border); }
+.rp-bar { flex: 1; height: 100%; display: flex; align-items: flex-end; }
+.rp-bar i { display: block; width: 100%; height: 2%; border-radius: 3px 3px 0 0; background: linear-gradient(180deg, #8b5cf6, var(--primary)); }
+.rp-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+.rp-activity { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 0.4rem; }
+.rp-activity div { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.4rem 0.6rem; border-radius: 8px; background: var(--surface-2); font-size: 0.85rem; }
+@media (max-width: 760px) { .rp-cols { grid-template-columns: 1fr; } }
+@media print { .rp-bar i { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }

@@ -379,6 +379,7 @@
         {
             label: "Support", items: [
                 { title: "Service status", desc: "Are our websites up?", href: "/status", icon: "activity", badge: "servicesDown" },
+                { title: "Activity reports", desc: "Monthly summary as a PDF", href: "/reports", icon: "chart", requires: "reports.view" },
                 { title: "About HN Group", desc: "Our companies, brand colours and logos", href: "/about", icon: "building" },
                 { title: "IT Helpdesk", desc: "Raise and track support tickets", href: "/helpdesk", icon: "lifebuoy", badge: "helpdeskBadge" },
             ],
@@ -437,6 +438,7 @@
         $("#search-btn").innerHTML = icon("search") + '<span class="sb-text">Search</span><kbd>' + (/Mac|iPhone|iPad/.test(navigator.platform) ? "\u2318" : "Ctrl") + " K</kbd>";
         highlightNav();
 
+        renderStatusBanner();
         const banner = $("#imp-banner");
         banner.hidden = !me.impersonatedBy;
         if (me.impersonatedBy) {
@@ -579,6 +581,7 @@
         "/kudos": viewKudos,
         "/ideas": viewIdeas,
         "/team": viewTeam,
+        "/reports": viewReports,
     };
 
     function navigate(href, replace) {
@@ -620,6 +623,7 @@
         "/kudos": "heart",
         "/ideas": "flag",
         "/team": "building",
+        "/reports": "chart",
     };
 
     function decoratePageHead(root, path) {
@@ -651,7 +655,7 @@
         const path = window.location.pathname;
         let view = ROUTES[path];
         if (!view) return navigate("/home", true);
-        const NEEDS = { "/employees": "staff.manage", "/onboarding": "onboarding.manage", "/roles": "access.manage", "/payroll": "payroll.manage", "/funds": "payroll.manage", "/invoices": "payroll.manage", "/cases": "cases.manage" };
+        const NEEDS = { "/employees": "staff.manage", "/onboarding": "onboarding.manage", "/roles": "access.manage", "/payroll": "payroll.manage", "/funds": "payroll.manage", "/invoices": "payroll.manage", "/cases": "cases.manage", "/reports": "reports.view" };
         if (NEEDS[path] && !can(NEEDS[path])) view = viewNoAccess;
         if (path === "/system" && (!can("system.admin") || state.me.impersonatedBy)) view = viewNoSystemAccess;
 
@@ -782,10 +786,11 @@
             (me.expenseApprovals ? '<a class="hero-chip" href="/expenses" data-link>' + icon("pound") + me.expenseApprovals + " expense claim" + (me.expenseApprovals === 1 ? "" : "s") + " to deal with</a>" : "") +
             (me.budgetWarnings ? '<a class="hero-chip warn" href="/funds" data-link>' + icon("flag") + me.budgetWarnings + (me.budgetWarnings === 1 ? " budget is" : " budgets are") + " nearly used up</a>" : "") +
             (me.invoicesOverdue ? '<a class="hero-chip warn" href="/invoices" data-link>' + icon("file") + me.invoicesOverdue + " overdue invoice" + (me.invoicesOverdue === 1 ? "" : "s") + "</a>" : "") +
+            (me.backupStale ? '<a class="hero-chip danger" href="/system#sys-backups" data-link>' + icon("archive") + "No backup in the last 36 hours</a>" : "") +
             (me.trainingDue ? '<a class="hero-chip warn" href="/training" data-link>' + icon("star") + me.trainingDue + " training item" + (me.trainingDue === 1 ? "" : "s") + " expiring or missing</a>" : "") +
             (me.newApplicants ? '<a class="hero-chip" href="/jobs" data-link>' + icon("briefcase") + me.newApplicants + " new job applicant" + (me.newApplicants === 1 ? "" : "s") + "</a>" : "") +
             (me.helpdeskBadge ? '<a class="hero-chip" href="/helpdesk" data-link>' + icon("lifebuoy") + me.helpdeskBadge + " IT ticket" + (me.helpdeskBadge === 1 ? "" : "s") + " need" + (me.helpdeskBadge === 1 ? "s" : "") + " attention</a>" : "") +
-            (!me.unreadAnnouncements && !me.pendingAcks && !me.openPolls && !me.onboardingTasks && !me.leaveApprovals && !me.timesheetApprovals && !me.helpdeskBadge && !me.payrollOverdrawn && !me.reviewsDue && !me.returnToWorkDue && !me.servicesDown && !me.expenseApprovals && !me.budgetWarnings && !me.invoicesOverdue && !me.trainingDue && !me.newApplicants ? '<span class="hero-chip calm">' + icon("tick") + "You\u2019re all caught up</span>" : "") +
+            (!me.unreadAnnouncements && !me.pendingAcks && !me.openPolls && !me.onboardingTasks && !me.leaveApprovals && !me.timesheetApprovals && !me.helpdeskBadge && !me.payrollOverdrawn && !me.reviewsDue && !me.returnToWorkDue && !me.servicesDown && !me.expenseApprovals && !me.budgetWarnings && !me.invoicesOverdue && !me.trainingDue && !me.newApplicants && !me.backupStale ? '<span class="hero-chip calm">' + icon("tick") + "You\u2019re all caught up</span>" : "") +
             "</div></div>" +
             '<div class="hero-clocks">' +
             '<div class="glass-clock"><div class="gc-label">' + icon("monitor") + "Your time \u00b7 " + esc(tzCity(deviceTz)) + "</div>" +
@@ -3223,13 +3228,18 @@
     // ================= Backups (System Admin) =================
 
     function mountBackups(box) {
-        const kindLabel = { auto: "Nightly", manual: "Manual", "pre-restore": "Before restore" };
+        const kindLabel = { auto: "Nightly", manual: "Manual", "pre-restore": "Before restore", uploaded: "Uploaded" };
         async function draw() {
             let d;
             try { d = await api("/api/system/backups"); } catch (err) { box.innerHTML = '<p class="muted">' + esc(err.message) + "</p>"; return; }
             box.innerHTML = '<div class="panel-head"><h2 class="panel-title">' + icon("archive") + "Backups</h2>" +
-                '<button type="button" class="btn btn-primary btn-small" id="bk-now">' + icon("archive") + "Back up now</button></div>" +
-                '<p class="muted small">A backup of everything (staff, logins, documents, photos, settings) is taken automatically every night at 2am. The latest 14 nightly backups are kept.</p>' +
+                '<div class="btn-row"><label class="btn btn-ghost btn-small bk-upload">' + icon("upload") + 'Upload a backup<input type="file" id="bk-file" accept=".gz,.tar.gz,application/gzip" hidden></label>' +
+                '<button type="button" class="btn btn-primary btn-small" id="bk-now">' + icon("archive") + "Back up now</button></div></div>" +
+                '<p class="muted small">A backup of everything (staff, logins, documents, photos, settings) is taken automatically every night at 2am. The latest 14 nightly backups are kept. You can also upload a backup downloaded from here (for example from another server) and restore it.</p>' +
+                '<div class="bk-health' + (d.health.stale ? " is-stale" : "") + '">' + icon(d.health.stale ? "alert" : "check") + "<span>" +
+                (d.health.last ? "Last backup " + esc(fmtDateTime(d.health.last.createdAt)) + " (" + (d.health.hoursSince < 1 ? "under an hour" : Math.round(d.health.hoursSince) + " hours") + " ago)" : "No backups yet") +
+                (d.health.stale ? " \u2013 that\u2019s more than 36 hours. Check the nightly backup is running, or back up now." : "") +
+                ' \u00b7 ' + d.health.count + " backups using " + esc(fileSize(d.health.totalSize)) + "</span></div>" +
                 (d.backups.length ? '<div class="table-card flat"><table class="table"><thead><tr><th>Backup</th><th>Type</th><th>Size</th><th class="col-actions"></th></tr></thead><tbody>' +
                     d.backups.map(function (b) {
                         return "<tr><td>" + esc(fmtDateTime(b.createdAt)) + '</td><td data-label="Type"><span class="badge">' + esc(kindLabel[b.kind] || b.kind) + "</span></td>" +
@@ -3239,6 +3249,17 @@
                             '<button type="button" class="btn btn-ghost btn-small danger-text" data-del-backup="' + esc(b.name) + '" aria-label="Delete backup">' + icon("trash") + "</button></td></tr>";
                     }).join("") + "</tbody></table></div>" : '<p class="muted small">No backups yet.</p>');
         }
+        box.addEventListener("change", async function (e) {
+            if (e.target.id !== "bk-file" || !e.target.files[0]) return;
+            const file = e.target.files[0];
+            try {
+                const res = await fetch("/api/system/backups/upload", { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: file });
+                const r = await res.json().catch(function () { return {}; });
+                if (!res.ok) throw new Error(r.error || "Upload failed.");
+                toast("Backup uploaded. Use Restore to put it back.");
+            } catch (err) { toast(err.message); }
+            draw();
+        });
         box.addEventListener("click", async function (e) {
             if (e.target.closest("#bk-now")) {
                 e.target.closest("#bk-now").disabled = true;
@@ -5513,7 +5534,7 @@
             '<p>' + (down.length ? esc(down.map(function (x) { return x.name; }).join(", ")) + ". The IT team has been alerted on their home page." : d.monitors.length ? "Everything we monitor is up and responding." : (d.canManage ? "Add the websites you want to keep an eye on." : "The IT team hasn’t added anything yet.")) + "</p></div></section>" +
             '<div class="monitor-list">' + d.monitors.map(function (x) {
                 return '<article class="monitor m-' + x.state + '" data-mon="' + x.id + '">' +
-                    '<div class="mon-head"><span class="mon-dot"></span><div class="mon-name"><strong>' + esc(x.name) + '</strong><a class="muted small" href="' + esc(x.url) + '" target="_blank" rel="noopener noreferrer">' + esc(x.url.replace(/^https?:\/\//, "").replace(/\/$/, "")) + "</a></div>" +
+                    '<div class="mon-head"><span class="mon-dot"></span><div class="mon-name"><strong>' + esc(x.name) + (x.announce ? ' <span class="badge badge-soft" title="Everyone sees a banner while it\u2019s down">Banner for all staff</span>' : "") + '</strong><a class="muted small" href="' + esc(x.url) + '" target="_blank" rel="noopener noreferrer">' + esc(x.url.replace(/^https?:\/\//, "").replace(/\/$/, "")) + "</a></div>" +
                     '<span class="mon-state">' + (x.state === "up" ? "Up" : x.state === "down" ? "Down" : "Checking…") + "</span></div>" +
                     '<div class="mon-bar" aria-label="Last 24 hours">' + x.timeline.map(function (b) { return '<span class="mb-' + b + '"></span>'; }).join("") + "</div>" +
                     '<div class="mon-bar-labels"><span>24 hours ago</span><span>Now</span></div>' +
@@ -5566,14 +5587,15 @@
             '<label for="mon-int">Check every</label><select id="mon-int">' + [1, 5, 10, 15, 30, 60].map(function (n) {
                 return '<option value="' + n + '"' + ((mon ? mon.intervalMin : 5) === n ? " selected" : "") + ">" + (n === 60 ? "hour" : n + (n === 1 ? " minute" : " minutes")) + "</option>";
             }).join("") + "</select>" +
-            '<p class="hint">It counts as up if it responds within 10 seconds without an error.</p>' +
+            '<p class="hint">It counts as up if it responds within 10 seconds without an error. After two failed checks in a row, IT gets a notification and a banner, and again when it\u2019s back up.</p>' +
+            '<label class="inline-check"><input type="checkbox" id="mon-announce"' + (mon && mon.announce ? " checked" : "") + "> Show a banner to all staff while it\u2019s down (for services everyone uses)</label>" +
             '<div class="form-error" id="mon-error" hidden></div>' +
             '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">' + (mon ? "Save" : "Add and check") + "</button></div></form>"
         );
         $("#mon-form", m.el).addEventListener("submit", async function (e) {
             e.preventDefault();
             try {
-                const r = await api("/api/status/monitors" + (mon ? "/" + mon.id : ""), { name: $("#mon-name", m.el).value, url: $("#mon-url", m.el).value, intervalMin: $("#mon-int", m.el).value });
+                const r = await api("/api/status/monitors" + (mon ? "/" + mon.id : ""), { name: $("#mon-name", m.el).value, url: $("#mon-url", m.el).value, intervalMin: $("#mon-int", m.el).value, announce: $("#mon-announce", m.el).checked });
                 closeModal();
                 toast(mon ? "Saved." : r.monitor.name + " added: " + (r.monitor.state === "up" ? "it’s up." : "it’s not responding."));
                 render();
@@ -6031,6 +6053,59 @@
         "ticket-replied": ["replied to IT ticket", "helpdesk"],
         "ticket-note-added": ["added an internal note to IT ticket", "helpdesk"],
         "ticket-updated": ["updated IT ticket", "helpdesk"],
+        "ticket-raised": ["raised IT ticket", "helpdesk"],
+        "expense-claimed": ["claimed expenses", "payroll"],
+        "expense-approved": ["approved an expense claim from", "payroll"],
+        "expense-rejected": ["rejected an expense claim from", "payroll"],
+        "expense-paid": ["repaid expenses to", "payroll"],
+        "expense-withdrawn": ["withdrew an expense claim for", "payroll"],
+        "funds-category-changed": ["changed the spending categories", "payroll"],
+        "budget-set": ["set the monthly budget for", "payroll"],
+        "pay-change-scheduled": ["scheduled a pay change for", "payroll"],
+        "pay-change-deleted": ["removed a scheduled pay change for", "payroll"],
+        "payroll-exported": ["exported the payroll for", "payroll"],
+        "invoice-created": ["created invoice", "payroll"],
+        "invoice-updated": ["edited invoice", "payroll"],
+        "invoice-sent": ["marked as sent: invoice", "payroll"],
+        "invoice-paid": ["marked as paid: invoice", "payroll"],
+        "invoice-void": ["voided invoice", "payroll"],
+        "invoice-deleted": ["deleted invoice", "payroll"],
+        "invoice-settings-changed": ["changed the invoice settings", "payroll"],
+        "leave-settings-changed": ["changed the leave clash warning", "leave"],
+        "shutdown-booked": ["booked company shutdown days:", "leave"],
+        "shutdown-cancelled": ["cancelled the shutdown", "leave"],
+        "toil-added": ["added time off in lieu for", "leave"],
+        "training-added": ["added training for", "staff"],
+        "training-updated": ["updated training for", "staff"],
+        "training-deleted": ["deleted training for", "staff"],
+        "training-required-added": ["made this training required:", "staff"],
+        "case-opened": ["opened HR case", "cases"],
+        "case-viewed": ["viewed HR case", "cases"],
+        "case-updated": ["updated HR case", "cases"],
+        "case-entry": ["added to the timeline of HR case", "cases"],
+        "case-close": ["closed HR case", "cases"],
+        "case-reopen": ["reopened HR case", "cases"],
+        "case-deleted": ["deleted HR case", "cases"],
+        "case-file-added": ["attached a file to HR case", "cases"],
+        "case-file-opened": ["opened a file in HR case", "cases"],
+        "vacancy-posted": ["posted the vacancy", "staff"],
+        "vacancy-updated": ["updated the vacancy", "staff"],
+        "vacancy-deleted": ["deleted the vacancy", "staff"],
+        "job-applied": ["applied for", "staff"],
+        "candidate-referred": ["referred a candidate for", "staff"],
+        "candidate-hired": ["hired", "staff"],
+        "applicant-stage": ["moved an applicant:", "staff"],
+        "applicant-note": ["added a note about applicant", "staff"],
+        "applicant-delete": ["removed applicant", "staff"],
+        "kudos-given": ["gave kudos to", "workplace"],
+        "kudos-deleted": ["deleted a kudos post", "workplace"],
+        "idea-posted": ["shared the idea", "workplace"],
+        "idea-status-changed": ["updated the idea", "workplace"],
+        "idea-deleted": ["deleted the idea", "workplace"],
+        "report-viewed": ["viewed the activity report for", "system"],
+        "backup-uploaded": ["uploaded the backup", "system"],
+        "service-down": ["\u2014 a service went down:", "helpdesk"],
+        "service-up": ["\u2014 a service came back up:", "helpdesk"],
     };
     const AUDIT_FILTERS = [
         ["", "All activity"],
@@ -6046,6 +6121,7 @@
         ["rotas", "Rotas & timesheets"],
         ["payroll", "Payroll & funds"],
         ["helpdesk", "IT Helpdesk"],
+        ["cases", "HR cases"],
         ["system", "System Admin"],
     ];
 
@@ -7854,6 +7930,128 @@
             const cg = e.target.closest("[data-congrats]");
             if (cg) return sendCongrats(cg);
         });
+    }
+
+    // ================= Service outage banner =================
+
+    // Shown on every page while a monitored service is down: IT see every outage, everyone else
+    // only services marked "show a banner to all staff". Dismissing hides it until something changes.
+    function renderStatusBanner() {
+        const box = $("#status-banner");
+        if (!box) return;
+        const alerts = (state.me && state.me.serviceAlerts) || [];
+        const key = alerts.map(function (a) { return a.id + a.since; }).join("|");
+        let dismissed = "";
+        try { dismissed = sessionStorage.getItem("hn-status-dismissed") || ""; } catch (e) { /* ignore */ }
+        box.hidden = !alerts.length || dismissed === key;
+        if (box.hidden) return;
+        const it = can("helpdesk.manage");
+        box.innerHTML = '<div class="sb-inner">' + icon("alert") + "<span><strong>" +
+            (alerts.length === 1 ? esc(alerts[0].name) + " is down" : alerts.length + " services are down: " + esc(alerts.map(function (a) { return a.name; }).join(", "))) + ".</strong> " +
+            (alerts.length === 1 ? esc(alerts[0].error) + " · since " + esc(new Date(alerts[0].since).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })) + ". " : "") +
+            (it ? "" : "IT know about it and are looking into it.") + "</span>" +
+            (it ? '<a class="btn btn-small btn-light" href="/status" data-link>Service status</a>' : "") +
+            '<button type="button" class="icon-btn sb-close" data-sb-close aria-label="Hide">' + icon("x") + "</button></div>";
+        $("[data-sb-close]", box).addEventListener("click", function () {
+            try { sessionStorage.setItem("hn-status-dismissed", key); } catch (e) { /* ignore */ }
+            box.hidden = true;
+        });
+    }
+
+    // ================= Activity reports =================
+
+    const REPORT_ACTIONS = {
+        "signed-in": "Sign-ins", "leave-requested": "Leave requests", "leave-approved": "Leave approved", "absence-reported": "Sickness reported",
+        "timesheet-approved": "Timesheets approved", "ticket-raised": "IT tickets raised", "ticket-replied": "IT ticket replies", "kudos-given": "Kudos given",
+        "expense-claimed": "Expense claims", "announcement-posted": "Announcements", "document-uploaded": "Documents uploaded", "payslip-viewed": "Payslips viewed",
+        "idea-posted": "Ideas shared", "profile-updated": "Profiles updated", "status-changed": "Statuses set", "training-added": "Training added",
+    };
+
+    function reportDocHtml(r) {
+        const [y, m] = r.month.split("-").map(Number);
+        const label = new Date(y, m - 1, 15).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+        const card = function (title, value, note) { return '<div class="st-card"><span>' + title + "</span><strong>" + value + "</strong>" + (note ? "<small>" + note + "</small>" : "") + "</div>"; };
+        const days = Object.keys(r.logins.byDay).sort();
+        const max = Math.max.apply(null, days.map(function (d) { return r.logins.byDay[d]; }).concat([1]));
+        const lastDay = Number(r.to.slice(8));
+        let bars = "";
+        for (let i = 1; i <= lastDay; i++) {
+            const d = r.month + "-" + String(i).padStart(2, "0");
+            const n = r.logins.byDay[d] || 0;
+            bars += '<span class="rp-bar" title="' + esc(d + ": " + n) + '"><i data-h="' + Math.round((n / max) * 100) + '"></i></span>';
+        }
+        return '<article class="statement report">' +
+            '<header class="ps-band"><div class="ps-brand"><img src="/assets/brand/svg/hn-group-wordmark-white.svg" alt="HN Group"></div>' +
+            '<div class="ps-title"><span class="ps-kicker">Activity report</span><span class="ps-period">' + esc(label) + "</span></div></header>" +
+            '<div class="ps-stripe" aria-hidden="true"></div>' +
+            '<section class="st-intro"><div><div class="ps-name">HN Group staff portal</div><div class="ps-job">' + esc(fmtDate(r.from + "T12:00:00")) + " to " + esc(fmtDate(r.to + "T12:00:00")) + (r.isCurrent ? " (month so far)" : "") + "</div></div>" +
+            '<div class="st-generated">Produced ' + esc(fmtDateTime(r.generatedAt)) + "<br>by " + esc(r.generatedBy) + "</div></section>" +
+            '<section class="st-cards">' +
+            card("People", r.people.headcount, r.people.starters.length + " joined · " + r.people.leavers.length + " leaving") +
+            card("Sign-ins", r.logins.total, r.logins.people + " different people") +
+            card("Leave taken", fmtDays(r.leave.total), "all types") +
+            card("IT tickets", r.helpdesk.opened + " opened", r.helpdesk.closed + " closed · " + r.helpdesk.open + " still open") +
+            card("Outages", r.status.incidents, r.status.incidents === 1 ? "service went down" : "times a service went down") +
+            "</section>" +
+            '<section class="st-section"><h4>Sign-ins each day</h4><div class="rp-bars">' + bars + '</div><p class="st-small">' +
+            (r.logins.busiestDay ? "Busiest day: " + esc(fmtDate(r.logins.busiestDay[0] + "T12:00:00")) + " with " + r.logins.busiestDay[1] + " sign-ins." : "Nobody signed in this month.") + "</p></section>" +
+            '<section class="rp-cols"><div class="st-section"><h4>People</h4><div class="st-rows">' +
+            r.people.byCompany.map(function (c) { return '<div class="ps-line"><span>' + esc(c.company) + '</span><span class="ps-amt">' + c.count + "</span></div>"; }).join("") +
+            '<div class="ps-line"><span>Hired through Jobs</span><span class="ps-amt">' + r.people.hires + "</span></div>" +
+            "</div>" + (r.people.starters.length ? '<p class="st-small"><strong>Joined:</strong> ' + esc(r.people.starters.join(", ")) + "</p>" : "") +
+            (r.people.leavers.length ? '<p class="st-small"><strong>Leaving:</strong> ' + esc(r.people.leavers.join(", ")) + "</p>" : "") + "</div>" +
+            '<div class="st-section"><h4>Leave</h4><div class="st-rows">' + (r.leave.byType.length ? r.leave.byType.map(function (l) {
+                return '<div class="ps-line"><span>' + esc(l.label) + '</span><span class="ps-amt">' + fmtDays(l.days) + "</span></div>";
+            }).join("") : '<div class="ps-line ps-none"><span>No leave</span></div>') + "</div></div></section>" +
+            '<section class="rp-cols"><div class="st-section"><h4>Engagement</h4><div class="st-rows">' +
+            [["Kudos given", r.engagement.kudos], ["Ideas shared", r.engagement.ideas], ["Announcements posted", r.engagement.announcements], ["Documents uploaded", r.engagement.documents], ["Expense claims", r.engagement.expenseClaims]].map(function (x) {
+                return '<div class="ps-line"><span>' + x[0] + '</span><span class="ps-amt">' + x[1] + "</span></div>";
+            }).join("") + "</div></div>" +
+            '<div class="st-section"><h4>Services</h4><div class="st-rows">' + (r.status.services.length ? r.status.services.map(function (s) {
+                return '<div class="ps-line"><span>' + esc(s.name) + '</span><span class="ps-amt">' + (s.uptime7d === null ? "–" : s.uptime7d + "% (7 days)") + "</span></div>";
+            }).join("") : '<div class="ps-line ps-none"><span>Nothing monitored</span></div>') + "</div></div></section>" +
+            (r.money ? '<section class="st-section"><h4>Money</h4><div class="st-rows">' +
+                '<div class="ps-line"><span>Payroll cost (' + r.money.payroll.payslips + " payslips)</span><span class=\"ps-amt\">" + fmtMoney(r.money.payroll.cost) + "</span></div>" +
+                '<div class="ps-line"><span>Expenses repaid (' + r.money.expenses.count + ")</span><span class=\"ps-amt\">" + fmtMoney(r.money.expenses.amount) + "</span></div>" +
+                '<div class="ps-line"><span>Invoices paid</span><span class="ps-amt">' + fmtMoney(r.money.invoicesPaid) + "</span></div>" +
+                '<div class="ps-line"><span>Money in</span><span class="ps-amt">' + fmtMoney(r.money.moneyIn) + "</span></div>" +
+                '<div class="ps-line"><span>Money spent</span><span class="ps-amt">' + fmtMoney(r.money.spent) + "</span></div>" +
+                '<div class="ps-line ps-total"><span>Company funds at the end of the month</span><span class="ps-amt">' + fmtMoney(r.money.closing) + "</span></div></div></section>" : "") +
+            (r.activity.length ? '<section class="st-section"><h4>Most common activity</h4><div class="rp-activity">' + r.activity.map(function (a) {
+                return '<div><span>' + esc(REPORT_ACTIONS[a.action] || a.action.replace(/-/g, " ")) + "</span><strong>" + a.count + "</strong></div>";
+            }).join("") + "</div></section>" : "") +
+            '<footer class="ps-foot"><span>HN Group</span><span>Private and confidential</span><span>Activity report ' + esc(label) + "</span></footer></article>";
+    }
+
+    async function viewReports(root, current) {
+        let month = state.reportMonth || isoDay(new Date()).slice(0, 7);
+        root.innerHTML = '<div class="page-head"><div><h1>Activity reports</h1><p class="muted">A monthly summary of how the portal and the business are doing: people, sign-ins, leave, IT, services' + (can("payroll.manage") ? " and money" : "") + ". Download it as a PDF to share.</p></div>" +
+            '<div class="page-actions"><button type="button" class="btn btn-primary" id="rp-pdf">' + icon("download") + "Download PDF</button></div></div>" +
+            '<div class="week-nav no-print"><button type="button" class="icon-btn" data-rpm="-1" aria-label="Previous month">' + icon("chevronLeft") + "</button>" +
+            '<input type="month" id="rp-month" aria-label="Month"><button type="button" class="icon-btn" data-rpm="1" aria-label="Next month">' + icon("chevronRight") + "</button></div>" +
+            '<div class="print-area report-wrap" id="rp-doc"><p class="muted">Loading…</p></div>';
+        async function load() {
+            $("#rp-month").value = month;
+            try {
+                const r = (await api("/api/reports?month=" + month)).report;
+                if (!current()) return;
+                $("#rp-doc").innerHTML = reportDocHtml(r);
+                $$(".rp-bar i", root).forEach(function (b) { b.style.height = Math.max(2, Number(b.dataset.h)) + "%"; });
+            } catch (err) { $("#rp-doc").innerHTML = '<p class="form-error">' + esc(err.message) + "</p>"; }
+        }
+        root.addEventListener("click", function (e) {
+            const s = e.target.closest("[data-rpm]");
+            if (s) { month = state.reportMonth = shiftMonth(month, Number(s.dataset.rpm)); load(); }
+            if (e.target.closest("#rp-pdf")) {
+                // Printing only shows pop-ups, so the report is printed from one.
+                const pm = openModal('<div class="print-area">' + $("#rp-doc").innerHTML + "</div>", { wide: true, cls: "modal-payslip modal-statement" });
+                $$(".rp-bar i", pm.el).forEach(function (b) { b.style.height = Math.max(2, Number(b.dataset.h)) + "%"; });
+                printDoc("HN Group activity report " + month);
+                setTimeout(closeModal, 600);
+            }
+        });
+        root.addEventListener("change", function (e) { if (e.target.id === "rp-month" && e.target.value) { month = state.reportMonth = e.target.value; load(); } });
+        await load();
     }
 
     start();

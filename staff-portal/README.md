@@ -67,6 +67,39 @@ Internal staff portal for the whole of HN Group, served at **https://staff.hngro
 
 Both lists are at the top of `lib/store.js` if you need to change them.
 
+### Money
+
+- **Expense claims** (HR → Expenses). Anyone claims money back with a receipt photo or PDF. Their supervisor or anyone with *Run payroll & finance* approves it. Payroll then repays it either **now** (taken from the main balance and recorded under its spending category) or **with the next payslip**, where it's added tax free under "Expenses repaid".
+- **Invoices** (HR → Invoices, finance only). Branded invoices from any HN Group company with lines, VAT (0, 5 or 20%), due dates and payment details. Mark as sent, paid (the total is added to the main balance) or void, and download a PDF. Overdue invoices are flagged on the home page.
+- **Spending categories and budgets** (Company funds → Categories & budgets). Money removed from the main balance is tagged with a category (Hosting, Software, Marketing and so on; you can add your own). Give a category a monthly budget to get a warning at 80% and when it's over. Statements show spending by category.
+- **Charts on Company funds.** The last 12 months of money in, money spent and the total balance.
+- **Payroll year end** (Run payroll → Year end). Everyone's totals for a tax year, a P60-style end of year certificate for each person (print or save as PDF), and an export of every payslip to a spreadsheet (CSV). Staff can open their own certificate from Payslips → End of year (P60).
+- **Scheduled pay changes** (Pay details → Scheduled pay changes). Set a new salary or hourly rate from a future month; payroll uses it automatically from that month.
+
+### HR
+
+- **Leave calendar** (Leave & Absence → Calendar). A month grid of who's off, filterable by company, with bank holidays shaded. Reasons are never shown, and sickness only shows as "Off" to people who don't manage leave.
+- **Clash warnings.** When more than a set number of people from one company would be off at once (3 by default, set under *Allowances & absence*; 0 turns it off), the request shows who else is off for the approver, and the calendar highlights the day.
+- **Company shutdown days** (Leave & Absence → Shutdown days). Book the same days off for everyone (or chosen companies), like Christmas closure. Each person gets approved annual leave that comes out of their allowance; anyone already off is skipped and listed. Cancelling a shutdown gives the days back.
+- **Time off in lieu (TOIL).** When a timesheet with more hours than the rota planned is approved, the approver can bank the extra hours. Supervisors and HR can also add or take off hours. Staff book it as **Time off in lieu** (7.5 hours a day), which can't go over their balance.
+- **Training** (HR → Training). Courses and certificates with completion and expiry dates. Staff add their own; HR sees everyone's, marks them as checked and sets **required courses** for everyone or one company. Expiring (within 30 days), expired and missing required training is flagged.
+- **HR cases** (HR → HR cases, *HR cases* permission only). Disciplinary, grievance, capability and investigation records with a timeline of notes and meetings, attached letters, an outcome and, for warnings, when the warning expires (6 or 12 months by default). Opening a case is recorded in the activity log.
+- **Jobs** (People → Jobs). Recruiters (*Recruitment* permission) post vacancies, which everyone is told about and can apply for or refer someone to, with a CV. Applicants move through Applied → Screening → Interview → Offer → Hired. Hiring someone new creates their employee record with a work email address and starts their onboarding checklist.
+
+### People
+
+- **Notifications bell** (top bar). Leave requests and decisions, expense decisions, payslips issued, shared reviews, IT ticket replies, kudos, idea updates, new vacancies, timesheet decisions and service outages (for IT). Click one to go straight to it. **See all notifications** shows the last 90 days.
+- **Kudos** (People → Kudos). Thank colleagues publicly with a value such as Teamwork or Above and beyond; others react. The most thanked people this month are listed, and the latest kudos show on the home page.
+- **Staff milestones.** Birthdays (for people who share theirs), work anniversaries and new starters are worked out automatically and show on the home page, the Kudos page and team pages, with a 🎉 button to send congratulations.
+- **Ideas** (Workplace → Ideas). Anyone shares an idea (optionally anonymously, hidden even from leadership), votes and comments. People who post announcements set the status (under review, planned, in progress, done, not going ahead) with a note, and the author and voters are told.
+- **Team pages** (People → Teams). A page for each company: its people and their status, who's off, news posted for that company, kudos, celebrations, leave and events in the next 30 days, and open roles.
+
+### IT
+
+- **Outage alerts.** When a monitored service fails two checks in a row, IT get a notification and a red banner on every page until it's back up (they're told then too). Tick *Show a banner to all staff* on a service everyone uses to show the banner to everyone.
+- **Activity reports** (Support → Activity reports, *Activity reports* permission). A monthly summary: headcount, starters and leavers, sign-ins each day, leave by type, IT tickets, outages and uptime, kudos, ideas and other activity, plus payroll, expenses, invoices and funds for people who run payroll. **Download PDF** saves it.
+- **Backups.** System Admin → Backups now shows when the last backup was taken (with a warning, also on the home page, if it's more than 36 hours ago) and lets you **upload a backup** file (for example one downloaded from another server) to restore it.
+
 ### System owner & System Admin
 
 The **system owner** has access to everything. The owner is whoever has the email `charlie.livsey@hngroup.org.uk`, set in `settings.json` as `ownerEmail`.
@@ -161,13 +194,17 @@ What people can manage is set by **roles**, under **People → Roles & permissio
 - Manage leave
 - Manage rotas & timesheets
 - Handle IT tickets
-- Run payroll: only people who already have it can give it out.
+- Run payroll & finance (payroll, funds, expenses and invoices): only people who already have it can give it out.
+- HR cases
+- Recruitment
+- Activity reports
 - System Admin: open System Admin with the PIN. Only people who already have it can give it out.
 
 You then choose who has each role. Someone with several roles gets every permission from all of them.
 
 - The **system owner** (charlie.livsey@hngroup.org.uk) always has every permission.
 - A **Super Admin** role with every permission except *Run payroll*, including System Admin, is created automatically.
+- *HR cases*, *Recruitment* and *Activity reports* are given to the Super Admin, Leadership & HR and Human Resources roles the first time this version starts.
 - A **Human Resources** role (staff, onboarding, leave, rotas and payroll) is created and given to everyone whose job title mentions Human Resources or HR. An empty **IT Support** role (helpdesk) is created too.
 - The built-in admin account gets every permission except System Admin and *Run payroll*.
   - Super admins can use everything in System Admin except changing the PIN.

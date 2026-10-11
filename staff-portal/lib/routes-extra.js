@@ -17,6 +17,9 @@ const kudos = require("./kudos");
 const ideas = require("./ideas");
 const workplace = require("./workplace");
 const calendar = require("./calendar");
+const helpdesk = require("./helpdesk");
+const uptime = require("./uptime");
+const onboarding = require("./onboarding");
 
 let ctx;
 function init(helpers) {
@@ -512,6 +515,57 @@ async function handle(req, res, pathname, session) {
       milestones: kudos.milestones(me, { people: ids, ahead: 30 }),
       vacancies: recruitment.forViewer(me).vacancies.filter((v) => v.open && v.company === company).map((v) => ({ id: v.id, title: v.title, location: v.location })),
     }), true;
+  }
+
+  // ----- Monthly activity reports -----
+  if (pathname === "/api/reports" && method === "GET") {
+    if (!can("reports.view")) throw httpError(403, "Activity reports need the Activity reports permission.");
+    const thisMonth = new Date().toISOString().slice(0, 7);
+    const month = /^\d{4}-\d{2}$/.test(query(req).get("month") || "") ? query(req).get("month") : thisMonth;
+    const [y, mo] = month.split("-").map(Number);
+    const from = `${month}-01`;
+    const to = new Date(Date.UTC(y, mo, 0)).toISOString().slice(0, 10);
+    const prevMonth = new Date(Date.UTC(y, mo - 2, 1)).toISOString().slice(0, 7);
+    const audit = store.readAudit(200000).filter((e) => e.at && e.at.slice(0, 10) >= from && e.at.slice(0, 10) <= to);
+    const signIns = audit.filter((e) => e.action === "signed-in");
+    const byDay = {};
+    for (const e of signIns) byDay[e.at.slice(0, 10)] = (byDay[e.at.slice(0, 10)] || 0) + 1;
+    const people = store.employees();
+    const leavers = onboarding.listChecklists(me).filter((c) => c.kind === "leaver" && c.lastDay && c.lastDay >= from && c.lastDay <= to);
+    const leaveDays = leave.leaveBetween(from, to);
+    const report = {
+      month, from, to, prevMonth, generatedAt: new Date().toISOString(), generatedBy: me.displayName, isCurrent: month === thisMonth,
+      people: {
+        headcount: people.length,
+        byCompany: store.COMPANIES.map((c) => ({ company: c, count: people.filter((p) => p.company === c).length })),
+        starters: people.filter((p) => p.startDate && p.startDate >= from && p.startDate <= to).map((p) => p.displayName),
+        leavers: leavers.map((c) => c.person.displayName),
+        hires: recruitment.hiresBetween(from, to),
+      },
+      logins: { total: signIns.length, people: new Set(signIns.map((e) => e.actor)).size, byDay, busiestDay: Object.entries(byDay).sort((a, b) => b[1] - a[1])[0] || null },
+      leave: { byType: Object.entries(leaveDays).map(([type, days]) => ({ type, label: leave.TYPES[type] || type, days })), total: Object.values(leaveDays).reduce((n, d) => n + d, 0) },
+      helpdesk: helpdesk.statsBetween(from, to),
+      status: { incidents: uptime.incidentsBetween(from, to), services: uptime.list().map((x) => ({ name: x.name, uptime7d: x.uptime7d, state: x.state })) },
+      engagement: {
+        kudos: kudos.countBetween(from, to),
+        ideas: ideas.countBetween(from, to),
+        announcements: audit.filter((e) => e.action === "announcement-posted").length,
+        documents: audit.filter((e) => e.action === "document-uploaded").length,
+        expenseClaims: audit.filter((e) => e.action === "expense-claimed").length,
+      },
+      activity: Object.entries(audit.reduce((acc, e) => { acc[e.action] = (acc[e.action] || 0) + 1; return acc; }, {})).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([action, count]) => ({ action, count })),
+    };
+    if (can(payslips.MANAGE)) {
+      const st = funds.statement(month);
+      report.money = {
+        payroll: payslips.costBetween(from, to),
+        expenses: expenses.paidBetween(from, to),
+        invoicesPaid: invoices.list().filter((i) => i.status === "paid" && i.paidAt.slice(0, 10) >= from && i.paidAt.slice(0, 10) <= to).reduce((n, i) => n + i.total, 0),
+        moneyIn: st.moneyIn, spent: st.spent, closing: st.closing, byCategory: st.byCategory,
+      };
+    }
+    logEvent(req, session, "report-viewed", { detail: month });
+    return sendJson(res, 200, { report }), true;
   }
 
   return false;

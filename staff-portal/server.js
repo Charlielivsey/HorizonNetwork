@@ -47,7 +47,7 @@ const APP_ROUTES = new Set([
   "/home", "/directory", "/employees", "/settings", "/system", "/announcements", "/documents",
   "/calendar", "/polls", "/onboarding", "/roles", "/about", "/signature",
   "/leave", "/rotas", "/payslips", "/payroll", "/funds", "/helpdesk", "/reviews", "/staff-files", "/status",
-  "/expenses", "/invoices", "/notifications", "/training", "/cases", "/jobs", "/kudos", "/ideas", "/team",
+  "/expenses", "/invoices", "/notifications", "/training", "/cases", "/jobs", "/kudos", "/ideas", "/team", "/reports",
 ]);
 const SYSTEM_UNLOCK_MS = 15 * 60 * 1000; // System Admin stays unlocked for 15 minutes of inactivity
 const MAX_PIN_ATTEMPTS = 5;
@@ -76,6 +76,15 @@ reviews.init(DATA_DIR);
 stafffiles.init(DATA_DIR);
 uptime.init(DATA_DIR, `http://127.0.0.1:${PORT}/healthz`);
 uptime.start();
+// Outages: tell IT straight away (the status banner shows them too), and record it.
+uptime.onAlert((m, state, result, downSince) => {
+  const it = store.employees().filter((p) => store.can(p, uptime.MANAGE)).map((p) => p.id);
+  const mins = downSince ? Math.max(1, Math.round((Date.now() - Date.parse(downSince)) / 60000)) : 0;
+  notifications.notify(it, state === "down"
+    ? { type: "status", title: `${m.name} is down`, body: result.error || (result.status ? `HTTP ${result.status}` : "Not responding"), link: "/status" }
+    : { type: "status", title: `${m.name} is back up`, body: `It was down for about ${mins} minute${mins === 1 ? "" : "s"}.`, link: "/status" });
+  store.audit({ action: state === "down" ? "service-down" : "service-up", actor: "System", target: m.name, detail: state === "down" ? (result.error || `HTTP ${result.status}`) : `Down for about ${mins} min` });
+});
 backup.init(DATA_DIR);
 expenses.init(DATA_DIR);
 invoices.init(DATA_DIR);
@@ -408,14 +417,14 @@ function readRawBody(req, limit) {
     }
     if (Number(req.headers["content-length"] || 0) > limit) {
       req.resume();
-      return reject(httpError(413, "That file is too large (max 20 MB)."));
+      return reject(httpError(413, `That file is too large (max ${Math.round(limit / 1048576)} MB).`));
     }
     let size = 0;
     const chunks = [];
     req.on("data", (chunk) => {
       size += chunk.length;
       if (size > limit) {
-        reject(httpError(413, "That file is too large (max 20 MB)."));
+        reject(httpError(413, `That file is too large (max ${Math.round(limit / 1048576)} MB).`));
         req.destroy();
         return;
       }
@@ -524,6 +533,8 @@ function meResponse(session) {
   user.reviewsDue = reviews.due(session.person).length;
   user.returnToWorkDue = leave.pendingReturnToWork(session.person).length;
   if (store.can(session.person, uptime.MANAGE)) user.servicesDown = uptime.downCount();
+  user.serviceAlerts = uptime.alerts(store.can(session.person, uptime.MANAGE));
+  if (store.can(session.person, "system.admin")) user.backupStale = backup.health().stale;
   user.expenseApprovals = expenses.approvalCount(session.person);
   user.notificationsUnread = notifications.unreadCount(session.person.id);
   user.trainingDue = training.dueCount(session.person);
@@ -850,14 +861,20 @@ async function routeSystem(req, res, pathname, session) {
 
   // ----- Backups -----
   if (method === "GET" && pathname === "/api/system/backups") {
-    return sendJson(res, 200, { backups: backup.listBackups() });
+    return sendJson(res, 200, { backups: backup.listBackups(), health: backup.health() });
   }
   if (method === "POST" && pathname === "/api/system/backups") {
     const name = backup.createBackup("manual");
     logEvent(req, session, "backup-created", { target: name, detail: "Manual" });
     return sendJson(res, 201, { name, backups: backup.listBackups() });
   }
-  if ((m = /^\/api\/system\/backups\/((?:auto|manual|pre-restore)-[\d-]+\.tar\.gz)\/(download|restore|delete)$/.exec(pathname))) {
+  if (method === "POST" && pathname === "/api/system/backups/upload") {
+    const buffer = await readRawBody(req, 500 * 1024 * 1024);
+    const r = backup.saveUploaded(buffer);
+    logEvent(req, session, "backup-uploaded", { target: r.name, detail: `${r.files} files` });
+    return sendJson(res, 201, { name: r.name, backups: backup.listBackups(), health: backup.health() });
+  }
+  if ((m = /^\/api\/system\/backups\/((?:auto|manual|pre-restore|uploaded)-[\d-]+\.tar\.gz)\/(download|restore|delete)$/.exec(pathname))) {
     const file = backup.backupPath(m[1]);
     if (!file) throw httpError(404, "Backup not found.");
     if (method === "GET" && m[2] === "download") {

@@ -109,9 +109,11 @@ function prune() {
   for (const b of autos.slice(KEEP_AUTOMATIC)) fs.rmSync(path.join(backupDir, b.name), { force: true });
 }
 
+const NAME_RE = /^(auto|manual|pre-restore|uploaded)-[\d-]+\.tar\.gz$/;
+
 function listBackups() {
   return fs.readdirSync(backupDir)
-    .filter((n) => /^(auto|manual|pre-restore)-[\d-]+\.tar\.gz$/.test(n))
+    .filter((n) => NAME_RE.test(n))
     .map((name) => {
       const st = fs.statSync(path.join(backupDir, name));
       return { name, kind: name.split("-")[0] === "pre" ? "pre-restore" : name.split("-")[0], size: st.size, createdAt: st.mtime.toISOString() };
@@ -120,7 +122,7 @@ function listBackups() {
 }
 
 function backupPath(name) {
-  if (!/^(auto|manual|pre-restore)-[\d-]+\.tar\.gz$/.test(String(name || ""))) return null;
+  if (!NAME_RE.test(String(name || ""))) return null;
   const full = path.join(backupDir, name);
   return fs.existsSync(full) ? full : null;
 }
@@ -152,6 +154,25 @@ function restoreBackup(name) {
   return safety;
 }
 
+// A backup file uploaded from elsewhere (e.g. downloaded from another server). It's checked and
+// stored alongside the others, ready to restore.
+function saveUploaded(buffer) {
+  let files;
+  try { files = readTar(zlib.gunzipSync(buffer)); } catch (e) { throw Object.assign(new Error("That isn't a portal backup file (.tar.gz)."), { status: 400 }); }
+  if (!files.some((f) => f.name === "people.json")) throw Object.assign(new Error("That backup doesn't contain the staff list, so it can't be restored."), { status: 400 });
+  const name = `uploaded-${stamp()}.tar.gz`;
+  fs.writeFileSync(path.join(backupDir, name), buffer, { mode: 0o600 });
+  return { name, files: files.length };
+}
+
+// How healthy the backups are: when the last one was taken and how much space they use.
+function health() {
+  const list = listBackups().filter((b) => b.kind !== "pre-restore");
+  const last = list[0] || null;
+  const hours = last ? (Date.now() - Date.parse(last.createdAt)) / 3600000 : null;
+  return { last, hoursSince: hours === null ? null : Math.round(hours * 10) / 10, stale: hours === null || hours > 36, totalSize: listBackups().reduce((n, b) => n + b.size, 0), count: listBackups().length };
+}
+
 // Runs createBackup("auto") every night at 02:00 server time.
 function scheduleNightly(onDone) {
   const next = new Date();
@@ -167,4 +188,4 @@ function scheduleNightly(onDone) {
   }, next - new Date()).unref();
 }
 
-module.exports = { init, createBackup, listBackups, backupPath, deleteBackup, restoreBackup, scheduleNightly, readTar };
+module.exports = { saveUploaded, health, init, createBackup, listBackups, backupPath, deleteBackup, restoreBackup, scheduleNightly, readTar };
