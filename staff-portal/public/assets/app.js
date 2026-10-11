@@ -2924,21 +2924,43 @@
     function openRoleMembers(r, people) {
         const chosen = {};
         r.members.forEach(function (id) { chosen[id] = true; });
-        const m = openModal('<h2 class="modal-title">People with “' + esc(r.name) + "”</h2>" +
-            '<label class="search">' + icon("search") + '<input type="search" id="rm-search" placeholder="Search people" aria-label="Search people"></label>' +
+        const count = function () { return Object.keys(chosen).filter(function (k) { return chosen[k]; }).length; };
+        const m = openModal(
+            '<div class="rm-modal-head"><span class="rm-modal-icon">' + icon("shield") + "</span><div>" +
+            '<h2 class="modal-title">' + esc(r.name) + "</h2>" +
+            '<p class="muted small">Choose who has this role. They get its permissions straight away.</p></div></div>' +
+            '<label class="search rm-search">' + icon("search") + '<input type="search" id="rm-search" placeholder="Search by name or job title" aria-label="Search people"></label>' +
             '<div class="member-list" id="rm-list"></div>' +
-            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="button" class="btn btn-primary" id="rm-save">Save</button></div>');
+            '<div class="modal-actions rm-actions"><span class="rm-count" id="rm-count"></span>' +
+            '<button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="button" class="btn btn-primary" id="rm-save">' + icon("tick") + "Save</button></div>",
+            { cls: "modal-members" }
+        );
+        function drawCount() {
+            const n = count();
+            $("#rm-count", m.el).textContent = n ? n + (n === 1 ? " person selected" : " people selected") : "Nobody selected";
+        }
         function draw() {
             const q = $("#rm-search", m.el).value.trim().toLowerCase();
-            $("#rm-list", m.el).innerHTML = people.filter(function (p) { return !q || (p.displayName + " " + p.jobTitle).toLowerCase().indexOf(q) !== -1; }).map(function (p) {
-                return '<label class="member-row">' + avatar(p, "sm") + '<span class="mr-text"><span class="emp-name">' + esc(p.displayName) + '</span><span class="muted small">' + esc(p.jobTitle) +
-                    (p.isOwner ? " · system owner (has everything)" : "") + "</span></span>" +
-                    '<input type="checkbox" value="' + p.id + '"' + (chosen[p.id] ? " checked" : "") + "></label>";
-            }).join("");
+            const list = people.filter(function (p) { return !q || (p.displayName + " " + p.jobTitle).toLowerCase().indexOf(q) !== -1; });
+            $("#rm-list", m.el).innerHTML = list.length ? list.map(function (p) {
+                if (p.isOwner) {
+                    return '<div class="member-row is-owner">' + avatar(p, "md") + '<span class="mr-text"><span class="emp-name">' + esc(p.displayName) + "</span>" +
+                        '<span class="muted small">' + esc(p.jobTitle) + "</span></span>" +
+                        '<span class="badge badge-owner">System owner \u00b7 has everything</span></div>';
+                }
+                return '<label class="member-row' + (chosen[p.id] ? " on" : "") + '">' + avatar(p, "md") +
+                    '<span class="mr-text"><span class="emp-name">' + esc(p.displayName) + '</span><span class="muted small">' + esc(p.jobTitle) + "</span></span>" +
+                    '<input type="checkbox" value="' + p.id + '"' + (chosen[p.id] ? " checked" : "") + '><span class="mr-check">' + icon("tick") + "</span></label>";
+            }).join("") : '<p class="muted small rm-empty">Nobody matches \u201c' + esc(q) + "\u201d.</p>";
         }
         draw();
+        drawCount();
         $("#rm-search", m.el).addEventListener("input", draw);
-        $("#rm-list", m.el).addEventListener("change", function (e) { chosen[e.target.value] = e.target.checked; });
+        $("#rm-list", m.el).addEventListener("change", function (e) {
+            chosen[e.target.value] = e.target.checked;
+            e.target.closest(".member-row").classList.toggle("on", e.target.checked);
+            drawCount();
+        });
         $("#rm-save", m.el).addEventListener("click", async function () {
             try {
                 await api("/api/roles/" + r.id + "/members", { personIds: Object.keys(chosen).filter(function (k) { return chosen[k]; }) });
