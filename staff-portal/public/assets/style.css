@@ -2586,3 +2586,26 @@ body.is-scrolling #view { pointer-events: none; }
 .sig-steps { padding-left: 1.3rem; display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.9rem; margin-top: 0.6rem; }
 .sig-steps li::marker { color: var(--primary); font-weight: 800; }
 @media (max-width: 900px) { .sig-layout { grid-template-columns: 1fr; } }
+
+/* ================= Scrollbars ================= */
+/* Thin, rounded scrollbars in the theme's colours wherever something has to scroll. */
+* { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 999px; border: 3px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background-color: var(--text-muted); }
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* Org chart: no scrollbar at all; drag to move, with fades at the edges when there's more. */
+.org-frame { position: relative; }
+.org-scroll { scrollbar-width: none; cursor: grab; user-select: none; }
+.org-scroll::-webkit-scrollbar { display: none; }
+.org-scroll.dragging { cursor: grabbing; }
+.org-scroll.dragging * { cursor: grabbing !important; }
+.org-fade {
+    position: absolute; top: 1px; bottom: 1px; width: 56px; z-index: 2; pointer-events: none;
+    opacity: 0; transition: opacity 0.2s;
+}
+.org-fade.left { left: 1px; border-radius: var(--radius) 0 0 var(--radius); background: linear-gradient(90deg, var(--surface), transparent); }
+.org-fade.right { right: 1px; border-radius: 0 var(--radius) var(--radius) 0; background: linear-gradient(270deg, var(--surface), transparent); }
+.org-frame.more-left .org-fade.left, .org-frame.more-right .org-fade.right { opacity: 1; }

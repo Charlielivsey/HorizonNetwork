@@ -917,8 +917,9 @@
             }
             const html = roots.map(function (r) { return node(r, 0); }).join("");
             return '<div class="org-hint muted small">' + icon("tree") + "Showing reporting lines" + (company ? " within " + esc(company) : " for every role across HN Group") +
-                ". Someone with several roles appears once per role. Click a person for details, or −/+ to collapse a team.</div>" +
-                '<div class="org-scroll"><div class="org"><ul class="org-roots">' + html + "</ul></div></div>";
+                ". Someone with several roles appears once per role. Click a person for details, use −/+ to collapse a team, and drag to move around.</div>" +
+                '<div class="org-frame"><span class="org-fade left" aria-hidden="true"></span><span class="org-fade right" aria-hidden="true"></span>' +
+                '<div class="org-scroll"><div class="org"><ul class="org-roots">' + html + "</ul></div></div></div>";
         }
 
         function draw() {
@@ -941,9 +942,14 @@
                 body.innerHTML = '<div class="table-card"><table class="table table-click"><thead><tr><th>Name</th><th>Company</th><th>Reports to</th><th>Email</th><th>Local time</th></tr></thead><tbody>' +
                     list.map(row).join("") + "</tbody></table></div>";
             } else if (view === "tree") {
+                // Keep the chart where it was when a team is collapsed or expanded; centre it the first time.
+                const old = $(".org-scroll", body);
+                const keep = old ? { left: old.scrollLeft, top: old.scrollTop } : null;
                 body.innerHTML = drawTree(list);
                 const scroller = $(".org-scroll", body);
-                scroller.scrollLeft = (scroller.scrollWidth - scroller.clientWidth) / 2;
+                if (keep) { scroller.scrollLeft = keep.left; scroller.scrollTop = keep.top; }
+                else scroller.scrollLeft = (scroller.scrollWidth - scroller.clientWidth) / 2;
+                wireOrgPan(scroller);
             } else {
                 body.innerHTML = '<div class="people-grid">' + list.map(card).join("") + "</div>";
             }
@@ -979,6 +985,46 @@
 
     // Shows one role profile (a person at one company): their title there, who they report to
     // there (in that supervisor's matching role), their team there, and tabs for their other roles.
+    // The org chart has no visible scrollbar: drag it with the mouse (touch screens swipe as normal),
+    // and soft fades at the edges show when there's more to see.
+    function wireOrgPan(scroller) {
+        const frame = scroller.parentNode;
+        const fades = function () {
+            frame.classList.toggle("more-left", scroller.scrollLeft > 4);
+            frame.classList.toggle("more-right", scroller.scrollLeft < scroller.scrollWidth - scroller.clientWidth - 4);
+        };
+        let drag = null;
+        scroller.addEventListener("pointerdown", function (e) {
+            if (e.pointerType !== "mouse" || e.button !== 0) return;
+            drag = { x: e.clientX, y: e.clientY, left: scroller.scrollLeft, top: scroller.scrollTop, moved: false };
+        });
+        scroller.addEventListener("pointermove", function (e) {
+            if (!drag) return;
+            const dx = e.clientX - drag.x;
+            const dy = e.clientY - drag.y;
+            if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 5) return;
+            if (!drag.moved) {
+                drag.moved = true;
+                scroller.setPointerCapture(e.pointerId);
+                scroller.classList.add("dragging");
+            }
+            scroller.scrollLeft = drag.left - dx;
+            scroller.scrollTop = drag.top - dy;
+        });
+        const end = function () {
+            if (!drag) return;
+            const moved = drag.moved;
+            drag = null;
+            scroller.classList.remove("dragging");
+            // A drag shouldn't also count as clicking the person it ended on.
+            if (moved) scroller.addEventListener("click", function (e) { e.stopPropagation(); e.preventDefault(); }, { capture: true, once: true });
+        };
+        scroller.addEventListener("pointerup", end);
+        scroller.addEventListener("pointercancel", end);
+        scroller.addEventListener("scroll", fades, { passive: true });
+        fades();
+    }
+
     const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
     // Birthday (if they share it) and how long they've been with HN Group.
