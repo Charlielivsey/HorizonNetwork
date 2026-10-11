@@ -132,4 +132,54 @@ function history(limit) {
   });
 }
 
-module.exports = { ACCOUNTS, SOURCES, init, balances, addFunds, removeFunds, transferToPayroll, transferToMain, chargePayroll, history, pence, fmt };
+// Movements between the two accounts are internal, so they don't count as money in or spent.
+const INTERNAL = ["transfer-out", "transfer-in", "payroll-to-main", "main-from-payroll"];
+
+// Figures for a statement covering one month (YYYY-MM).
+function statement(period) {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(String(period || ""))) throw new store.ValidationError("Choose a valid month.");
+  const [y, m] = period.split("-").map(Number);
+  const start = new Date(Date.UTC(y, m - 1, 1)).toISOString();
+  const end = new Date(Date.UTC(y, m, 1)).toISOString();
+  const all = db.data.transactions;
+  const balanceAt = (account, before) => {
+    let last = null;
+    for (const t of all) if (t.account === account && t.at < before) last = t;
+    return last ? last.balanceAfter : 0;
+  };
+  const inPeriod = all.filter((t) => t.at >= start && t.at < end);
+  const external = inPeriod.filter((t) => !INTERNAL.includes(t.type));
+  const p = (list) => list.reduce((n, t) => n + pence(t.amount), 0);
+  const spentBy = {
+    payroll: -p(external.filter((t) => t.type === "payroll" || t.type === "payroll-shortfall" || t.type === "payroll-refund")),
+    removed: -p(external.filter((t) => t.type === "withdrawal")),
+  };
+  const accounts = {};
+  for (const a of Object.keys(ACCOUNTS)) {
+    const list = inPeriod.filter((t) => t.account === a);
+    accounts[a] = {
+      opening: balanceAt(a, start),
+      in: pounds(list.filter((t) => t.amount > 0).reduce((n, t) => n + pence(t.amount), 0)),
+      out: pounds(-list.filter((t) => t.amount < 0).reduce((n, t) => n + pence(t.amount), 0)),
+      closing: balanceAt(a, end),
+    };
+  }
+  const byName = (t) => {
+    const person = t.by ? store.getPerson(t.by) : null;
+    return person ? person.displayName : t.by ? "Former staff" : "System";
+  };
+  return {
+    period,
+    start: start.slice(0, 10),
+    end: new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10),
+    accounts,
+    opening: pounds(pence(accounts.main.opening) + pence(accounts.payroll.opening)),
+    closing: pounds(pence(accounts.main.closing) + pence(accounts.payroll.closing)),
+    moneyIn: pounds(p(external.filter((t) => t.amount > 0 && t.type !== "payroll-refund"))),
+    spent: pounds(spentBy.payroll + spentBy.removed),
+    spentBy: { payroll: pounds(spentBy.payroll), removed: pounds(spentBy.removed) },
+    transactions: inPeriod.map((t) => ({ ...t, byName: byName(t), sourceLabel: SOURCES[t.source] || "", internal: INTERNAL.includes(t.type) })),
+  };
+}
+
+module.exports = { ACCOUNTS, SOURCES, INTERNAL, statement, init, balances, addFunds, removeFunds, transferToPayroll, transferToMain, chargePayroll, history, pence, fmt };

@@ -307,6 +307,21 @@ function forecastMonthlyCost() {
   return money(total);
 }
 
+// Payroll still to run for a month: everyone without a payslip for it, at their current pay.
+function remainingForPeriod(period) {
+  const end = periodBounds(period).end;
+  let cost = 0;
+  let people = 0;
+  for (const p of store.employees()) {
+    if (db.data.payslips.some((s) => s.personId === p.id && s.period === period)) continue;
+    const payments = standardPayments(p.id, period);
+    const c = calculate(p.id, payments, end, null);
+    cost += sum(payments) + sum(c.employer);
+    people++;
+  }
+  return { people, cost: money(cost) };
+}
+
 // ---------- Payslips ----------
 
 function cleanLines(list) {
@@ -501,5 +516,5 @@ function removePerson(personId) {
 module.exports = {
   MANAGE, RATES, EMPLOYER, STANDARD_MONTHLY_SALARY, init, payDetails, savePayDetails, estimate, calculate, createDraft,
   updateDraft, setIssued, getPayslip, deletePayslip, fullView, summaryView, mine, forPeriod, peopleList, periodLabel,
-  removePerson, forecastMonthlyCost, payeTax, employeeNi, taxMonth, assertCanRun,
+  removePerson, forecastMonthlyCost, remainingForPeriod, payeTax, employeeNi, taxMonth, assertCanRun,
 };

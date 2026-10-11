@@ -2979,3 +2979,60 @@ input[type="date"], input[type="time"], input[type="month"], input[type="datetim
 .ps-employer-ded h4 small { font-size: 0.7rem; font-weight: 500; letter-spacing: 0; text-transform: none; margin-left: 0.35rem; }
 .ps-cost { border-bottom: 0; padding-top: 0.2rem; color: var(--ps-muted); font-size: 0.82rem; }
 @media (max-width: 760px) { .ps-employer-ded { padding-left: 1.1rem; padding-right: 1.1rem; } .ps-employer-ded h4 small { display: block; margin: 0.2rem 0 0; } }
+
+/* ================= Funds statement ================= */
+.st-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; padding-right: 2.5rem; }
+.st-toolbar .modal-title { margin: 0; }
+.st-toolbar .week-nav { margin: 0; }
+.statement {
+    --ps-ink: #171a26; --ps-muted: #6b7080; --ps-line: #eceef3; --ps-purple: #5514b4; --ps-tint: #f4effc;
+    background: #fff; color: var(--ps-ink); border-radius: 18px; overflow: hidden; border: 1px solid #e3e5ec; font-size: 0.88rem;
+}
+.st-intro { display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem; padding: 1.4rem 1.8rem 0.4rem; }
+.st-generated { font-size: 0.75rem; color: var(--ps-muted); text-align: right; }
+.st-cards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.55rem; padding: 1rem 1.8rem 0; }
+.st-card { border: 1px solid var(--ps-line); border-radius: 12px; padding: 0.7rem 0.8rem; display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.st-card span { font-size: 0.66rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ps-muted); }
+.st-card strong { font-size: 1.12rem; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-card small { font-size: 0.7rem; color: var(--ps-muted); }
+.st-card.st-estimate { background: linear-gradient(135deg, #5514b4, #7a3ad6); border-color: transparent; color: #fff; }
+.st-card.st-estimate span, .st-card.st-estimate small { color: rgba(255, 255, 255, 0.8); }
+.st-card.st-estimate strong.st-neg { color: #ffd1df; }
+.st-in { color: #23683d; }
+.st-neg { color: #b4234f !important; }
+.st-box { display: flex; gap: 0.6rem; align-items: flex-start; margin: 0.9rem 1.8rem 0; padding: 0.75rem 0.95rem; border-radius: 12px; background: var(--ps-tint); font-size: 0.84rem; line-height: 1.5; }
+.st-box .icon { width: 16px; height: 16px; flex-shrink: 0; margin-top: 3px; color: var(--ps-purple); }
+.st-section { padding: 1.2rem 1.8rem 0; }
+.st-section h4 { font-size: 0.72rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ps-muted); padding-bottom: 0.45rem; border-bottom: 2px solid var(--ps-ink); margin-bottom: 0.2rem; }
+.st-section h4 small { font-weight: 600; margin-left: 0.3rem; }
+.st-bar { display: flex; height: 10px; border-radius: 999px; overflow: hidden; background: var(--ps-line); margin: 0.6rem 0 0.3rem; }
+.st-bar span { display: block; height: 100%; width: 0; }
+.sb-payroll { background: #5514b4; }
+.sb-removed { background: #e97de8; }
+.st-dot { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 0.45rem; vertical-align: 0; }
+.st-table { width: 100%; border-collapse: collapse; }
+.st-table th { text-align: left; font-size: 0.66rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ps-muted); padding: 0.5rem 0.4rem 0.35rem; border-bottom: 1px solid var(--ps-line); }
+.st-table td { padding: 0.5rem 0.4rem; border-bottom: 1px dashed var(--ps-line); vertical-align: top; }
+.st-table th:first-child, .st-table td:first-child { padding-left: 0; }
+.st-table th:last-child, .st-table td:last-child { padding-right: 0; }
+.st-tx td { font-size: 0.82rem; }
+.st-internal td { color: var(--ps-muted); }
+.st-ref { font-size: 0.72rem; color: var(--ps-muted); }
+.st-by { font-size: 0.72rem; color: var(--ps-muted); }
+.st-small { font-size: 0.74rem; color: var(--ps-muted); margin-top: 0.5rem; }
+.statement .ps-foot { margin-top: 1.4rem; }
+@media (max-width: 760px) {
+    .st-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); padding-left: 1.1rem; padding-right: 1.1rem; }
+    .st-card.st-estimate { grid-column: 1 / -1; }
+    .st-intro, .st-section { padding-left: 1.1rem; padding-right: 1.1rem; }
+    .st-box { margin-left: 1.1rem; margin-right: 1.1rem; }
+    .st-tx th:nth-child(3), .st-tx td:nth-child(3) { display: none; }
+}
+@media print {
+    body.printing .statement { border: 0; }
+    .statement, .statement * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .st-table tr { break-inside: avoid; }
+}
+.st-card.st-estimate.is-negative { background: linear-gradient(135deg, #b4234f, #d9416f); }
+.st-card.st-estimate.is-negative small { font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #fff; }
+.st-table th.num { text-align: right; }

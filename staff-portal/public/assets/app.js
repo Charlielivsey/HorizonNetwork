@@ -4248,7 +4248,8 @@
         let account = state.fundsAccount || "";
         root.innerHTML =
             '<div class="page-head"><div><h1>Company funds</h1><p class="muted">The main balance and the payroll fund for HN Group Limited. Only Human Resources can see this page.</p></div>' +
-            '<div class="page-actions"><a class="btn btn-ghost" href="/payroll" data-link>' + icon("wallet") + "Run payroll</a></div></div>" +
+            '<div class="page-actions"><a class="btn btn-ghost" href="/payroll" data-link>' + icon("wallet") + "Run payroll</a>" +
+            '<button type="button" class="btn btn-primary" id="fd-statement">' + icon("file") + "Statement</button></div></div>" +
             fundsWarningHtml(d) + fundCardsHtml(d, true) +
             '<section class="panel"><div class="panel-head"><h2 class="panel-title">' + icon("list") + "History</h2>" +
             '<div class="company-tabs small-tabs" id="fd-tabs"><button type="button" data-acc="">Everything</button><button type="button" data-acc="main">Main balance</button><button type="button" data-acc="payroll">Payroll fund</button></div></div>' +
@@ -4272,6 +4273,7 @@
         root.addEventListener("click", function (e) {
             const a = e.target.closest("[data-acc]");
             if (a) { account = state.fundsAccount = a.dataset.acc; return draw(); }
+            if (e.target.closest("#fd-statement")) return openStatement();
             const f = e.target.closest("[data-fund]");
             if (f) openFundsForm(f.dataset.fund, d);
         });
@@ -4322,6 +4324,99 @@
                 render();
             } catch (err) { formError($("#fd-error", m.el), err.message); }
         });
+    }
+
+    // ================= Statements =================
+
+    function statementDocHtml(st) {
+        const left = st.isCurrent || st.isFuture ? st.current.total : st.closing;
+        const leftLabel = st.isCurrent || st.isFuture ? "Left now" : "Left at month end";
+        const fmtDay = function (d) { return new Date(d + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }); };
+        const share = function (n) { return st.spent > 0 ? Math.max(0, Math.min(100, (n / st.spent) * 100)) : 0; };
+        const acc = function (key, name) {
+            const a = st.accounts[key];
+            const now = st.isCurrent || st.isFuture ? st.current[key] : a.closing;
+            return "<tr><td><strong>" + name + '</strong></td><td class="num">' + fmtMoney(a.opening) + '</td><td class="num st-in">+' + fmtMoney(a.in) + "</td>" +
+                '<td class="num">−' + fmtMoney(a.out) + '</td><td class="num' + (now < 0 ? " st-neg" : "") + '"><strong>' + fmtMoney(now) + "</strong></td></tr>";
+        };
+        return '<article class="statement">' +
+            '<header class="ps-band"><div class="ps-brand"><img src="/assets/brand/svg/hn-group-wordmark-white.svg" alt="HN Group"></div>' +
+            '<div class="ps-title"><span class="ps-kicker">Statement</span><span class="ps-period">' + esc(st.periodLabel) + "</span></div></header>" +
+            '<div class="ps-stripe" aria-hidden="true"></div>' +
+            '<section class="st-intro"><div><div class="ps-name">' + esc(st.employer) + '</div><div class="ps-job">Company funds · ' + esc(fmtDay(st.start)) + " to " + esc(fmtDay(st.end)) + "</div></div>" +
+            '<div class="st-generated">Produced ' + esc(fmtDateTime(st.generatedAt)) + "<br>by " + esc(st.generatedBy) + "</div></section>" +
+
+            '<section class="st-cards">' +
+            '<div class="st-card"><span>Opening balance</span><strong>' + fmtMoney(st.opening) + "</strong><small>" + esc(fmtDay(st.start)) + "</small></div>" +
+            '<div class="st-card"><span>Money in</span><strong class="st-in">+' + fmtMoney(st.moneyIn) + "</strong><small>PayPal, bank and manual</small></div>" +
+            '<div class="st-card"><span>Spent</span><strong>−' + fmtMoney(st.spent) + "</strong><small>Payroll and removals</small></div>" +
+            '<div class="st-card"><span>' + leftLabel + "</span><strong" + (left < 0 ? ' class="st-neg"' : "") + ">" + fmtMoney(left) + "</strong><small>Main balance and payroll fund</small></div>" +
+            '<div class="st-card st-estimate' + (st.estimatedEnd < 0 ? " is-negative" : "") + '"><span>' + (st.isCurrent || st.isFuture ? "Estimated by month end" : "Closing balance") + "</span><strong>" + fmtMoney(st.estimatedEnd) + "</strong><small>" + (st.estimatedEnd < 0 ? "Overdrawn" : esc(fmtDay(st.end))) + "</small></div>" +
+            "</section>" +
+
+            (st.isCurrent || st.isFuture ? '<section class="st-box st-estimate-box">' + icon("clock") + "<div><strong>How the estimate is worked out.</strong> " +
+                fmtMoney(st.current.total) + " left now" + (st.remainingPayroll.people ? ", less about " + fmtMoney(st.remainingPayroll.cost) + " for the payroll still to run this month (" + st.remainingPayroll.people + (st.remainingPayroll.people === 1 ? " person" : " people") + ", including employer NI and pension)"
+                    : ". Everyone has already been paid this month") + ", gives <strong>" + fmtMoney(st.estimatedEnd) + "</strong>." +
+                (st.estimatedEnd < 0 ? " <strong>The company would be overdrawn by the end of the month.</strong>" : "") + " Money still to come in isn’t included.</div></section>" : "") +
+
+            '<section class="st-section"><h4>Where the money went</h4>' +
+            (st.spent > 0 ? '<div class="st-bar"><span class="sb-payroll" data-w="' + share(st.spentBy.payroll) + '"></span><span class="sb-removed" data-w="' + share(st.spentBy.removed) + '"></span></div>' : "") +
+            '<div class="st-rows">' +
+            '<div class="ps-line"><span><i class="st-dot sb-payroll"></i>Payroll (pay, employer NI and pension)</span><span class="ps-amt">' + fmtMoney(st.spentBy.payroll) + "</span></div>" +
+            '<div class="ps-line"><span><i class="st-dot sb-removed"></i>Funds removed</span><span class="ps-amt">' + fmtMoney(st.spentBy.removed) + "</span></div>" +
+            '<div class="ps-line ps-total"><span>Total spent</span><span class="ps-amt">' + fmtMoney(st.spent) + "</span></div></div></section>" +
+
+            '<section class="st-section"><h4>Accounts</h4><table class="st-table"><thead><tr><th>Account</th><th class="num">Opening</th><th class="num">In</th><th class="num">Out</th><th class="num">' + (st.isCurrent || st.isFuture ? "Now" : "Closing") + "</th></tr></thead><tbody>" +
+            acc("main", "Main balance") + acc("payroll", "Payroll fund") + "</tbody></table>" +
+            '<p class="st-small">Money moved between the main balance and the payroll fund shows in both accounts but isn’t counted as money in or spent.</p></section>' +
+
+            '<section class="st-section"><h4>Transactions <small>' + st.transactions.length + "</small></h4>" +
+            (st.transactions.length ? '<table class="st-table st-tx"><thead><tr><th>Date</th><th>Details</th><th>Account</th><th class="num">Amount</th><th class="num">Balance</th></tr></thead><tbody>' +
+                st.transactions.map(function (t) {
+                    return "<tr" + (t.internal ? ' class="st-internal"' : "") + "><td class=\"nowrap\">" + esc(new Date(t.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })) + "</td>" +
+                        "<td>" + esc(t.description) + (t.reference ? ' <span class="st-ref">ref ' + esc(t.reference) + "</span>" : "") + '<div class="st-by">' + esc(t.byName) + (t.sourceLabel && t.type === "deposit" ? " · " + esc(t.sourceLabel) : "") + "</div></td>" +
+                        '<td class="nowrap">' + (t.account === "payroll" ? "Payroll fund" : "Main balance") + "</td>" +
+                        '<td class="num' + (t.amount >= 0 ? " st-in" : "") + '">' + (t.amount >= 0 ? "+" : "") + fmtMoney(t.amount) + "</td>" +
+                        '<td class="num' + (t.balanceAfter < 0 ? " st-neg" : "") + '">' + fmtMoney(t.balanceAfter) + "</td></tr>";
+                }).join("") + "</tbody></table>" : '<p class="st-small">No money moved this month.</p>') + "</section>" +
+            '<footer class="ps-foot"><span>' + esc(st.employer) + "</span><span>Private and confidential</span><span>Statement for " + esc(st.periodLabel) + "</span></footer>" +
+            "</article>";
+    }
+
+    function openStatement() {
+        let period = isoDay(new Date()).slice(0, 7);
+        const m = openModal(
+            '<div class="st-toolbar no-print"><h2 class="modal-title">Statement</h2>' +
+            '<div class="week-nav"><button type="button" class="icon-btn" data-step="-1" aria-label="Previous month">' + icon("chevronLeft") + "</button>" +
+            '<input type="month" id="st-month" aria-label="Statement month">' +
+            '<button type="button" class="icon-btn" data-step="1" aria-label="Next month">' + icon("chevronRight") + "</button></div></div>" +
+            '<div class="print-area" id="st-doc"><p class="muted">Loading…</p></div>' +
+            '<div class="modal-actions no-print"><button type="button" class="btn btn-ghost" data-close>Close</button>' +
+            '<button type="button" class="btn btn-primary" id="st-print">' + icon("download") + "Download PDF</button></div>",
+            { wide: true, cls: "modal-payslip modal-statement" }
+        );
+        async function load() {
+            $("#st-month", m.el).value = period;
+            try {
+                const st = (await api("/api/funds/statement?period=" + period)).statement;
+                $("#st-doc", m.el).innerHTML = statementDocHtml(st);
+                $$(".st-bar [data-w]", m.el).forEach(function (s) { s.style.width = s.dataset.w + "%"; });
+            } catch (err) { $("#st-doc", m.el).innerHTML = '<p class="form-error">' + esc(err.message) + "</p>"; }
+        }
+        m.el.addEventListener("click", function (e) {
+            const step = e.target.closest("[data-step]");
+            if (step) { period = shiftMonth(period, Number(step.dataset.step)); load(); }
+        });
+        $("#st-month", m.el).addEventListener("change", function (e) { if (e.target.value) { period = e.target.value; load(); } });
+        $("#st-print", m.el).addEventListener("click", function () {
+            // The browser's print dialog saves it as a PDF ("Save as PDF" / "Microsoft Print to PDF").
+            const title = document.title;
+            document.title = "HN Group statement " + period;
+            document.body.classList.add("printing");
+            window.print();
+            setTimeout(function () { document.body.classList.remove("printing"); document.title = title; }, 500);
+        });
+        load();
     }
 
     // ================= Payroll (Human Resources) =================
@@ -5267,6 +5362,7 @@
         "funds-removed": ["removed funds from the main balance", "payroll"],
         "funds-transferred": ["moved money to the payroll fund", "payroll"],
         "funds-returned": ["moved money back to the main balance", "payroll"],
+        "funds-statement": ["produced a funds statement for", "payroll"],
         "ticket-raised": ["raised IT ticket", "helpdesk"],
         "ticket-replied": ["replied to IT ticket", "helpdesk"],
         "ticket-note-added": ["added an internal note to IT ticket", "helpdesk"],

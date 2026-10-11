@@ -1361,6 +1361,30 @@ async function routeApi(req, res, pathname, session) {
     if (method === "GET" && pathname === "/api/funds") {
       return sendJson(res, 200, { ...fundsSummary(), transactions: funds.history(300), sources: funds.SOURCES });
     }
+    if (method === "GET" && pathname === "/api/funds/statement") {
+      const period = new URL(req.url, "http://localhost").searchParams.get("period") || new Date().toISOString().slice(0, 7);
+      const st = funds.statement(period);
+      const thisMonth = new Date().toISOString().slice(0, 7);
+      const b = funds.balances();
+      st.isCurrent = period === thisMonth;
+      st.isFuture = period > thisMonth;
+      st.current = { main: b.main, payroll: b.payroll, total: Math.round((b.main + b.payroll) * 100) / 100 };
+      // Estimate for the end of the month: what's left now, less the payroll still to run this month.
+      if (period >= thisMonth) {
+        const remaining = payslips.remainingForPeriod(period);
+        st.remainingPayroll = remaining;
+        st.estimatedEnd = Math.round((st.current.total - remaining.cost) * 100) / 100;
+      } else {
+        st.remainingPayroll = { people: 0, cost: 0 };
+        st.estimatedEnd = st.closing;
+      }
+      st.periodLabel = payslips.periodLabel(period);
+      st.generatedAt = new Date().toISOString();
+      st.generatedBy = me.displayName;
+      st.employer = payslips.EMPLOYER;
+      logEvent(req, session, "funds-statement", { detail: st.periodLabel });
+      return sendJson(res, 200, { statement: st });
+    }
     if (method === "POST" && (m = /^\/api\/funds\/(add|remove|transfer|return)$/.exec(pathname))) {
       const body = await readJsonBody(req);
       const t = m[1] === "add" ? funds.addFunds(body, me) : m[1] === "remove" ? funds.removeFunds(body, me)
