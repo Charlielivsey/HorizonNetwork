@@ -182,4 +182,13 @@ function statement(period) {
   };
 }
 
-module.exports = { ACCOUNTS, SOURCES, INTERNAL, statement, init, balances, addFunds, removeFunds, transferToPayroll, transferToMain, chargePayroll, history, pence, fmt };
+// Average money in per month over the last `months` full months before `period` (YYYY-MM).
+function averageMonthlyIn(period, months) {
+  const [y, m] = period.split("-").map(Number);
+  const end = new Date(Date.UTC(y, m - 1, 1)).toISOString();
+  const start = new Date(Date.UTC(y, m - 1 - months, 1)).toISOString();
+  const total = db.data.transactions.filter((t) => t.type === "deposit" && t.at >= start && t.at < end).reduce((n, t) => n + pence(t.amount), 0);
+  return pounds(Math.round(total / months));
+}
+
+module.exports = { ACCOUNTS, SOURCES, INTERNAL, statement, averageMonthlyIn, init, balances, addFunds, removeFunds, transferToPayroll, transferToMain, chargePayroll, history, pence, fmt };

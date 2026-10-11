@@ -266,6 +266,77 @@
         }, 120);
     }, { passive: true });
 
+    // ----- Scroll bounce -----
+    // Cards spring into place as they come on screen, from below when scrolling down and from above
+    // when scrolling up. Cards already on screen when a page opens are left alone.
+    const reducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const REVEAL = ".panel, .person-card, .announcement, .ticket-row, .slip-row, .poll-card, .company-card, .logo-tile, .leave-row, " +
+        ".checklist-grid > .checklist, .stat, .fund-card, .role-card, .doc-row, .ts-review, .theme-option, .clock-card";
+    if (!reducedMotion && "IntersectionObserver" in window) {
+        const io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (en) {
+                const el = en.target;
+                const fromTop = en.boundingClientRect.top < 0;
+                if (!el.dataset.rv) {
+                    // First look: if any of it is already on screen, don't animate it.
+                    el.dataset.rv = "1";
+                    if (en.isIntersecting) return;
+                    el.classList.add("rv");
+                    el.classList.toggle("rv-from-top", fromTop);
+                    return;
+                }
+                if (!en.isIntersecting) {
+                    // Fully off screen: get ready to bounce in from whichever side it comes back on.
+                    el.classList.add("rv");
+                    el.classList.remove("rv-in");
+                    el.classList.toggle("rv-from-top", fromTop);
+                } else if (en.intersectionRatio >= 0.08 && el.classList.contains("rv") && !el.classList.contains("rv-in")) {
+                    requestAnimationFrame(function () { el.classList.add("rv-in"); });
+                }
+            });
+        }, { threshold: [0, 0.08] });
+        // Once it has landed, drop the classes so hover effects work as normal.
+        document.addEventListener("transitionend", function (e) {
+            const el = e.target;
+            if (e.propertyName === "transform" && el.classList && el.classList.contains("rv-in")) el.classList.remove("rv", "rv-in", "rv-from-top");
+        });
+        const watch = function (root) {
+            if (!(root instanceof Element)) return;
+            if (root.matches(REVEAL) && !root.closest(".modal-backdrop")) io.observe(root);
+            root.querySelectorAll(REVEAL).forEach(function (el) { if (!el.closest(".modal-backdrop")) io.observe(el); });
+        };
+        new MutationObserver(function (list) {
+            list.forEach(function (mut) {
+                mut.addedNodes.forEach(function (n) {
+                    if (n.nodeType === 1 && (n.id === "view" || (n.closest && n.closest("#view")))) watch(n);
+                });
+            });
+        }).observe(document.body, { childList: true, subtree: true });
+
+        // A little elastic give when you scroll past the top or bottom with a mouse or trackpad.
+        let pull = 0;
+        let settle = null;
+        window.addEventListener("wheel", function (e) {
+            if (e.ctrlKey || $(".modal-backdrop") || $(".search-overlay")) return;
+            if (e.target.closest && e.target.closest(".menu, .org-scroll, .rota-wrap, .table-card, .member-list, textarea, select")) return;
+            const atTop = window.scrollY <= 0 && e.deltaY < 0;
+            const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 1 && e.deltaY > 0;
+            if (!atTop && !atBottom) return;
+            const view = $("#view");
+            if (!view) return;
+            pull = Math.max(-26, Math.min(26, pull - e.deltaY * 0.12));
+            view.classList.remove("edge-bounce");
+            view.style.transform = "translate3d(0," + pull + "px,0)";
+            clearTimeout(settle);
+            settle = setTimeout(function () {
+                pull = 0;
+                view.classList.add("edge-bounce");
+                view.style.transform = "";
+                setTimeout(function () { view.classList.remove("edge-bounce"); }, 600);
+            }, 90);
+        }, { passive: true });
+    }
+
     // ================= Navigation & menus =================
 
     const NAV = [
@@ -4355,10 +4426,21 @@
             "</section>" +
 
             (st.isCurrent || st.isFuture ? '<section class="st-box st-estimate-box">' + icon("clock") + "<div><strong>How the estimate is worked out.</strong> " +
-                fmtMoney(st.current.total) + " left now" + (st.remainingPayroll.people ? ", less about " + fmtMoney(st.remainingPayroll.cost) + " for the payroll still to run this month (" + st.remainingPayroll.people + (st.remainingPayroll.people === 1 ? " person" : " people") + ", including employer NI and pension)"
+                fmtMoney(st.current.total) + " left now" + (st.earlierPayroll ? ", less about " + fmtMoney(st.earlierPayroll) + " for payroll in the months before" : "") + (st.remainingPayroll.people ? ", less about " + fmtMoney(st.remainingPayroll.cost) + " for the payroll still to run this month (" + st.remainingPayroll.people + (st.remainingPayroll.people === 1 ? " person" : " people") + ", including employer NI and pension)"
                     : ". Everyone has already been paid this month") + ", gives <strong>" + fmtMoney(st.estimatedEnd) + "</strong>." +
                 (st.estimatedEnd < 0 ? " <strong>The company would be overdrawn by the end of the month.</strong>" : "") + " Money still to come in isn’t included.</div></section>" : "") +
 
+            (st.nextMonth ? '<section class="st-section st-next"><h4>Next month estimate \u00b7 ' + esc(st.nextMonth.periodLabel) + "</h4>" +
+                '<div class="st-flow">' +
+                '<div class="st-flow-step"><span>Starts with</span><strong' + (st.nextMonth.start < 0 ? ' class="st-neg"' : "") + ">" + fmtMoney(st.nextMonth.start) + "</strong><small>Estimated end of " + esc(st.periodLabel) + "</small></div>" +
+                '<b class="st-op">\u2212</b>' +
+                '<div class="st-flow-step"><span>Payroll</span><strong>' + fmtMoney(st.nextMonth.payroll.cost) + "</strong><small>" + (st.nextMonth.payroll.people ? st.nextMonth.payroll.people + (st.nextMonth.payroll.people === 1 ? " person" : " people") + ", with employer NI and pension" : "Payslips already made and paid for") + "</small></div>" +
+                '<b class="st-op">=</b>' +
+                '<div class="st-flow-step st-flow-result' + (st.nextMonth.estimatedEnd < 0 ? " is-negative" : "") + '"><span>Estimated end of month</span><strong>' + fmtMoney(st.nextMonth.estimatedEnd) + "</strong><small>" + (st.nextMonth.estimatedEnd < 0 ? "Overdrawn" : "If no money comes in") + "</small></div>" +
+                "</div>" +
+                (st.nextMonth.averageIn > 0 ? '<p class="st-small">If money comes in like the last three months (about ' + fmtMoney(st.nextMonth.averageIn) + " a month), " + esc(st.nextMonth.periodLabel) + " would end at about <strong" + (st.nextMonth.estimatedEndWithIncome < 0 ? ' class="st-neg"' : "") + ">" + fmtMoney(st.nextMonth.estimatedEndWithIncome) + "</strong>.</p>"
+                    : '<p class="st-small">No money came in over the last three months, so none is assumed.</p>') +
+                "</section>" : "") +
             '<section class="st-section"><h4>Where the money went</h4>' +
             (st.spent > 0 ? '<div class="st-bar"><span class="sb-payroll" data-w="' + share(st.spentBy.payroll) + '"></span><span class="sb-removed" data-w="' + share(st.spentBy.removed) + '"></span></div>' : "") +
             '<div class="st-rows">' +

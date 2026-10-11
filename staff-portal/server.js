@@ -1369,14 +1369,37 @@ async function routeApi(req, res, pathname, session) {
       st.isCurrent = period === thisMonth;
       st.isFuture = period > thisMonth;
       st.current = { main: b.main, payroll: b.payroll, total: Math.round((b.main + b.payroll) * 100) / 100 };
-      // Estimate for the end of the month: what's left now, less the payroll still to run this month.
+      // Estimate for the end of the month: what's left now, less the payroll still to run in every
+      // month from now up to and including this one.
+      const nextMonth = (p) => { const [yy, mm] = p.split("-").map(Number); return new Date(Date.UTC(yy, mm, 1)).toISOString().slice(0, 7); };
+      const round = (n) => Math.round(n * 100) / 100;
       if (period >= thisMonth) {
+        let before = 0;
+        for (let q = thisMonth; q < period; q = nextMonth(q)) before += payslips.remainingForPeriod(q).cost;
         const remaining = payslips.remainingForPeriod(period);
         st.remainingPayroll = remaining;
-        st.estimatedEnd = Math.round((st.current.total - remaining.cost) * 100) / 100;
+        st.earlierPayroll = round(before);
+        st.estimatedEnd = round(st.current.total - before - remaining.cost);
       } else {
         st.remainingPayroll = { people: 0, cost: 0 };
+        st.earlierPayroll = 0;
         st.estimatedEnd = st.closing;
+      }
+      // A forecast for the month after: it starts where this one ends, less that month's payroll.
+      // Money coming in is shown separately, based on the average of the last three months.
+      if (period >= thisMonth) {
+        const after = nextMonth(period);
+        const payroll = payslips.remainingForPeriod(after);
+        const avgIn = funds.averageMonthlyIn(thisMonth, 3);
+        st.nextMonth = {
+          period: after,
+          periodLabel: payslips.periodLabel(after),
+          start: st.estimatedEnd,
+          payroll,
+          estimatedEnd: round(st.estimatedEnd - payroll.cost),
+          averageIn: avgIn,
+          estimatedEndWithIncome: round(st.estimatedEnd - payroll.cost + avgIn),
+        };
       }
       st.periodLabel = payslips.periodLabel(period);
       st.generatedAt = new Date().toISOString();
