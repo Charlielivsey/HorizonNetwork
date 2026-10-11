@@ -48,6 +48,11 @@
         gift: '<path d="M20 12v10H4V12M2 7h20v5H2zM12 22V7M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>',
         archive: '<path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/>',
         refresh: '<path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>',
+        sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
+        thermometer: '<path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/>',
+        heart: '<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>',
+        wallet: '<path d="M20 7H5a2 2 0 0 1 0-4h13v4"/><path d="M3 5v14a2 2 0 0 0 2 2h15V7"/><path d="M16 14h.01"/>',
+        printer: '<path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>',
         flag: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7"/>',
         star: '<path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/>',
         chevronLeft: '<path d="m15 18-6-6 6-6"/>',
@@ -282,14 +287,16 @@
         },
         {
             label: "HR", items: [
-                { title: "Leave & Absence", desc: "Book holidays and report absence", icon: "calendar", soon: true },
-                { title: "Rotas & Timesheets", desc: "Shifts, hours and approvals", icon: "clock", soon: true },
+                { title: "Leave & Absence", desc: "Book holidays and report absence", href: "/leave", icon: "sun", badge: "leaveApprovals" },
+                { title: "Rotas & Timesheets", desc: "Shifts, hours and approvals", href: "/rotas", icon: "clock", badge: "timesheetApprovals" },
+                { title: "Payslips", desc: "View and download your payslips", href: "/payslips", icon: "card" },
+                { title: "Run payroll", desc: "Generate and issue payslips", href: "/payroll", icon: "wallet", requires: "payroll.manage" },
             ],
         },
         {
             label: "Support", items: [
                 { title: "About HN Group", desc: "Our companies, brand colours and logos", href: "/about", icon: "building" },
-                { title: "IT Helpdesk", desc: "Raise and track support tickets", icon: "lifebuoy", soon: true },
+                { title: "IT Helpdesk", desc: "Raise and track support tickets", href: "/helpdesk", icon: "lifebuoy", badge: "helpdeskBadge" },
             ],
         },
     ];
@@ -467,6 +474,11 @@
         "/roles": viewRoles,
         "/about": viewAbout,
         "/signature": viewSignature,
+        "/leave": viewLeave,
+        "/rotas": viewRotas,
+        "/payslips": viewPayslips,
+        "/payroll": viewPayroll,
+        "/helpdesk": viewHelpdesk,
     };
 
     function navigate(href, replace) {
@@ -490,6 +502,11 @@
         "/roles": "key",
         "/about": "building",
         "/signature": "mail",
+        "/leave": "sun",
+        "/rotas": "clock",
+        "/payslips": "card",
+        "/payroll": "wallet",
+        "/helpdesk": "lifebuoy",
     };
 
     function decoratePageHead(root, path) {
@@ -521,7 +538,7 @@
         const path = window.location.pathname;
         let view = ROUTES[path];
         if (!view) return navigate("/home", true);
-        const NEEDS = { "/employees": "staff.manage", "/onboarding": "onboarding.manage", "/roles": "access.manage" };
+        const NEEDS = { "/employees": "staff.manage", "/onboarding": "onboarding.manage", "/roles": "access.manage", "/payroll": "payroll.manage" };
         if (NEEDS[path] && !can(NEEDS[path])) view = viewNoAccess;
         if (path === "/system" && (!can("system.admin") || state.me.impersonatedBy)) view = viewNoSystemAccess;
 
@@ -614,6 +631,11 @@
     }
 
     async function viewHome(root) {
+        // Fresh counts for the reminder chips (approvals and tickets change while you're signed in).
+        try {
+            state.me = (await api("/api/me")).user;
+            renderChrome();
+        } catch (e) { /* keep what we have */ }
         const me = state.me;
         const hour = Number(fmt(deviceTz, { hour: "2-digit", hourCycle: "h23" }));
         const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
@@ -638,7 +660,10 @@
             (me.pendingAcks ? '<a class="hero-chip warn" href="#home-todo">' + icon("check") + me.pendingAcks + (me.pendingAcks === 1 ? " thing" : " things") + " to acknowledge</a>" : "") +
             (me.openPolls ? '<a class="hero-chip" href="/polls" data-link>' + icon("chart") + me.openPolls + (me.openPolls === 1 ? " poll" : " polls") + " to answer</a>" : "") +
             (me.onboardingTasks ? '<a class="hero-chip" href="#home-onboarding">' + icon("check") + me.onboardingTasks + " onboarding task" + (me.onboardingTasks === 1 ? "" : "s") + "</a>" : "") +
-            (!me.unreadAnnouncements && !me.pendingAcks && !me.openPolls && !me.onboardingTasks ? '<span class="hero-chip calm">' + icon("tick") + "You\u2019re all caught up</span>" : "") +
+            (me.leaveApprovals ? '<a class="hero-chip" href="/leave" data-link>' + icon("sun") + me.leaveApprovals + " leave request" + (me.leaveApprovals === 1 ? "" : "s") + " to approve</a>" : "") +
+            (me.timesheetApprovals ? '<a class="hero-chip" href="/rotas" data-link data-rota-approvals>' + icon("clock") + me.timesheetApprovals + " timesheet" + (me.timesheetApprovals === 1 ? "" : "s") + " to approve</a>" : "") +
+            (me.helpdeskBadge ? '<a class="hero-chip" href="/helpdesk" data-link>' + icon("lifebuoy") + me.helpdeskBadge + " IT ticket" + (me.helpdeskBadge === 1 ? "" : "s") + " need" + (me.helpdeskBadge === 1 ? "s" : "") + " attention</a>" : "") +
+            (!me.unreadAnnouncements && !me.pendingAcks && !me.openPolls && !me.onboardingTasks && !me.leaveApprovals && !me.timesheetApprovals && !me.helpdeskBadge ? '<span class="hero-chip calm">' + icon("tick") + "You\u2019re all caught up</span>" : "") +
             "</div></div>" +
             '<div class="hero-clocks">' +
             '<div class="glass-clock"><div class="gc-label">' + icon("monitor") + "Your time \u00b7 " + esc(tzCity(deviceTz)) + "</div>" +
@@ -689,6 +714,8 @@
         }).catch(function () {});
 
         $("#home-status").addEventListener("click", openStatusModal);
+        if ($("[data-rota-approvals]", root)) $("[data-rota-approvals]", root).addEventListener("click", function () { state.rotaTab = "approvals"; });
+        if (me.leaveApprovals) $('.hero-chip[href="/leave"]', root).addEventListener("click", function () { state.leaveTab = "approvals"; });
         $$('a[href^="#home-"]', root).forEach(function (a) {
             a.addEventListener("click", function (e) {
                 e.preventDefault();
@@ -2245,6 +2272,7 @@
         "bank-holiday": { icon: "flag", label: "Bank holiday" },
         birthday: { icon: "gift", label: "Birthday" },
         anniversary: { icon: "star", label: "Work anniversary" },
+        leave: { icon: "sun", label: "Leave" },
     };
     const EVENT_TYPE_LABELS = { event: "Event", meeting: "Meeting", social: "Social", training: "Training", holiday: "Company holiday" };
 
@@ -2402,7 +2430,7 @@
             '<button type="button" class="btn btn-ghost btn-small" id="cal-today">Today</button>' +
             '<button type="button" class="icon-btn" id="cal-next" aria-label="Next month">' + icon("chevronRight") + "</button></div>" +
             '<h2 class="cal-title">' + esc(first.toLocaleDateString("en-GB", { month: "long", year: "numeric" })) + "</h2>" +
-            '<div class="cal-legend"><span class="ci-event">Events</span><span class="ci-bank-holiday">Holidays</span><span class="ci-birthday">Birthdays</span><span class="ci-anniversary">Anniversaries</span></div></div>' +
+            '<div class="cal-legend"><span class="ci-event">Events</span><span class="ci-bank-holiday">Holidays</span><span class="ci-birthday">Birthdays</span><span class="ci-anniversary">Anniversaries</span><span class="ci-leave">Leave</span></div></div>' +
             '<div class="cal-grid"><div class="cal-dow">Mon</div><div class="cal-dow">Tue</div><div class="cal-dow">Wed</div><div class="cal-dow">Thu</div><div class="cal-dow">Fri</div><div class="cal-dow">Sat</div><div class="cal-dow">Sun</div>' +
             cells + "</div></section>" +
             '<aside class="panel cal-side"><h2 class="section-title">' + icon("clock") + "Upcoming</h2>" +
@@ -3558,6 +3586,1052 @@
         });
     }
 
+    // ================= Shared bits for the HR pages =================
+
+    function fmtMoney(n) {
+        const v = Number(n) || 0;
+        return (v < 0 ? "−" : "") + "£" + Math.abs(v).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function fmtDays(n) {
+        return (Math.round(n * 2) / 2) + (n === 1 ? " day" : " days");
+    }
+
+    function dateRange(from, to) {
+        const f = new Date(from + "T12:00:00");
+        const t = new Date(to + "T12:00:00");
+        const opts = { day: "numeric", month: "short" };
+        if (from === to) return f.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+        return f.toLocaleDateString("en-GB", f.getFullYear() === t.getFullYear() ? opts : Object.assign({ year: "numeric" }, opts)) + " – " +
+            t.toLocaleDateString("en-GB", Object.assign({ year: "numeric" }, opts));
+    }
+
+    // A small modal asking for an optional note; resolves with the text, or null if cancelled.
+    function askNote(opts) {
+        return new Promise(function (resolve) {
+            let done = false;
+            const m = openModal(
+                '<h2 class="modal-title">' + esc(opts.title) + "</h2>" + (opts.message ? '<p class="muted">' + esc(opts.message) + "</p>" : "") +
+                '<form id="note-form" novalidate><label for="note-text">' + esc(opts.label || "Note") + ' <span class="muted small">' + (opts.required ? "" : "(optional)") + "</span></label>" +
+                '<textarea id="note-text" rows="3" maxlength="500"></textarea><div class="form-error" id="note-error" hidden></div>' +
+                '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn ' + (opts.danger ? "btn-danger" : "btn-primary") + '">' + esc(opts.confirmLabel || "Save") + "</button></div></form>",
+                { onClose: function () { if (!done) resolve(null); } }
+            );
+            $("#note-text", m.el).focus();
+            $("#note-form", m.el).addEventListener("submit", function (e) {
+                e.preventDefault();
+                const v = $("#note-text", m.el).value.trim();
+                if (opts.required && !v) return formError($("#note-error", m.el), "Please add a note.");
+                done = true;
+                closeModal();
+                resolve(v);
+            });
+        });
+    }
+
+    function statusBadge(status, labels) {
+        const cls = { pending: "badge-yellow", submitted: "badge-yellow", draft: "", approved: "badge-green", issued: "badge-green", declined: "badge-red", rejected: "badge-red", cancelled: "" }[status] || "";
+        return '<span class="badge ' + cls + '">' + esc((labels && labels[status]) || status.charAt(0).toUpperCase() + status.slice(1)) + "</span>";
+    }
+
+    // ================= Leave & absence =================
+
+    const LEAVE_ICONS = { annual: "sun", sick: "thermometer", compassionate: "heart", unpaid: "calendar", other: "calendar" };
+
+    async function viewLeave(root, current) {
+        const year = state.leaveYear || new Date().getFullYear();
+        const d = await api("/api/leave?year=" + year);
+        if (!current()) return;
+        let tab = state.leaveTab || (d.approvals.length ? "approvals" : "mine");
+        if (tab === "approvals" && !d.isApprover) tab = "mine";
+        if (tab === "allowances" && !d.canManage) tab = "mine";
+        const s = d.summary;
+
+        const tabs = [["mine", "My leave", d.mine.length]];
+        if (d.isApprover) tabs.push(["approvals", "To approve", d.approvals.length]);
+        tabs.push(["off", "Who’s off", d.whosOff.length]);
+        if (d.canManage) tabs.push(["allowances", "Allowances", null]);
+
+        root.innerHTML =
+            '<div class="page-head"><div><h1>Leave &amp; Absence</h1><p class="muted">Book holidays, report sickness and see who’s off. Weekends and bank holidays never count against your allowance.</p></div>' +
+            '<div class="page-actions">' + (s ? '<button type="button" class="btn btn-ghost" id="lv-sick">' + icon("thermometer") + "Report sickness</button>" : "") +
+            '<button type="button" class="btn btn-primary" id="lv-new">' + icon("plus") + (s ? "Request leave" : "Record leave") + "</button></div></div>" +
+            (s ? '<section class="leave-summary">' +
+                '<div class="ls-main"><div class="ls-year"><button type="button" class="icon-btn icon-btn-sm" data-year="' + (year - 1) + '" aria-label="Previous year">' + icon("chevronLeft") + "</button>" +
+                "<span>" + year + " holiday allowance</span>" +
+                '<button type="button" class="icon-btn icon-btn-sm" data-year="' + (year + 1) + '" aria-label="Next year">' + icon("chevronRight") + "</button></div>" +
+                '<div class="ls-remaining"><span class="ls-big">' + (Math.round(s.remaining * 2) / 2) + '</span><span class="muted">of ' + s.allowance + " days left</span></div>" +
+                '<div class="ls-bar"><span class="ls-taken" data-pct="' + pct(s.taken, s.allowance) + '"></span><span class="ls-booked" data-pct="' + pct(s.booked, s.allowance) + '"></span><span class="ls-pending" data-pct="' + pct(s.pending, s.allowance) + '"></span></div>' +
+                '<div class="ls-legend"><span class="ls-k taken">Taken ' + s.taken + '</span><span class="ls-k booked">Booked ' + s.booked + '</span><span class="ls-k pending">Waiting for approval ' + s.pending + "</span></div></div>" +
+                '<div class="ls-side"><div class="stat"><div class="stat-value">' + s.sickDays + '</div><div class="stat-label">Sick days in ' + year + "</div></div>" +
+                (state.me.onLeaveToday ? '<div class="stat ls-today"><div class="stat-value">' + icon("sun") + '</div><div class="stat-label">You’re on leave today</div></div>' : "") + "</div>" +
+                "</section>" : "") +
+            '<div class="company-tabs" id="lv-tabs">' + tabs.map(function (t) {
+                return '<button type="button" data-tab="' + t[0] + '">' + esc(t[1]) + (t[2] !== null ? ' <span class="tab-count">' + t[2] + "</span>" : "") + "</button>";
+            }).join("") + "</div>" +
+            '<div id="lv-body"></div>';
+
+        function pct(n, of) { return of ? Math.max(0, Math.min(100, (n / of) * 100)) : 0; }
+        $$(".ls-bar [data-pct]", root).forEach(function (b) { b.style.width = b.dataset.pct + "%"; });
+
+        function requestRow(r, opts) {
+            opts = opts || {};
+            return '<div class="leave-row" data-id="' + r.id + '">' +
+                (opts.person ? avatar(r.person, "md") : '<span class="leave-icon lt-' + r.type + '">' + icon(LEAVE_ICONS[r.type] || "calendar") + "</span>") +
+                '<div class="lr-main"><div class="lr-title">' + (opts.person ? esc(r.person.displayName) + ' <span class="muted">· ' + esc(r.typeLabel) + "</span>" : esc(r.typeLabel)) + "</div>" +
+                '<div class="muted small">' + esc(dateRange(r.startDate, r.endDate)) + (r.halfDay ? " (" + (r.halfDay === "am" ? "morning" : "afternoon") + ")" : "") + " · " + fmtDays(r.days) + "</div>" +
+                (r.note ? '<div class="lr-note">' + esc(r.note) + "</div>" : "") +
+                (r.decisionNote ? '<div class="lr-note decision">' + icon("message") + esc(r.decidedBy || "") + ": " + esc(r.decisionNote) + "</div>" : "") +
+                "</div>" +
+                '<div class="lr-side">' + (opts.noStatus ? "" : statusBadge(r.status)) +
+                (r.canApprove && opts.actions ? '<div class="btn-row"><button type="button" class="btn btn-ghost btn-small" data-act="decline">Decline</button><button type="button" class="btn btn-primary btn-small" data-act="approve">' + icon("tick") + "Approve</button></div>" : "") +
+                (r.canCancel && opts.cancel ? '<button type="button" class="btn btn-link btn-small" data-act="cancel">Cancel</button>' : "") +
+                "</div></div>";
+        }
+
+        function draw() {
+            $$("#lv-tabs [data-tab]").forEach(function (b) { b.classList.toggle("active", b.dataset.tab === tab); });
+            const body = $("#lv-body");
+            if (tab === "mine") {
+                body.innerHTML = d.mine.length ? '<div class="panel leave-list">' + d.mine.map(function (r) { return requestRow(r, { cancel: true }); }).join("") + "</div>"
+                    : '<div class="empty-page">' + icon("sun", "big") + "<h2>No leave yet</h2><p class=\"muted\">Use <strong>Request leave</strong> to book some time off.</p></div>";
+            } else if (tab === "approvals") {
+                body.innerHTML = d.approvals.length ? '<div class="panel leave-list">' + d.approvals.map(function (r) { return requestRow(r, { person: true, actions: true, noStatus: true }); }).join("") + "</div>"
+                    : '<div class="empty-page">' + icon("check", "big") + "<h2>Nothing to approve</h2><p class=\"muted\">Requests from your team will appear here.</p></div>";
+            } else if (tab === "off") {
+                body.innerHTML = d.whosOff.length ? '<div class="panel leave-list">' + d.whosOff.map(function (r) { return requestRow(r, { person: true, noStatus: true, cancel: d.canManage }); }).join("") + "</div>"
+                    : '<div class="empty-page">' + icon("users", "big") + "<h2>Nobody’s off</h2><p class=\"muted\">" + (d.canManage ? "No approved leave in the next 60 days." : "No approved leave for you or your team in the next 60 days.") + "</p></div>";
+            } else {
+                body.innerHTML = '<section class="panel"><div class="panel-head"><h2 class="panel-title">' + icon("sun") + year + " allowances</h2>" +
+                    '<form class="allow-default" id="lv-default"><label for="lv-def">Default for everyone</label><input type="number" id="lv-def" min="0" max="100" step="0.5" value="' + d.allowances.defaultAllowance + '"><span class="muted small">days</span>' +
+                    '<button type="submit" class="btn btn-ghost btn-small">Save</button></form></div>' +
+                    '<p class="muted small">Annual leave days per year, not counting bank holidays. Leave a person’s box empty to use the default.</p>' +
+                    '<div class="table-card flat"><table class="table"><thead><tr><th>Person</th><th>Allowance</th><th>Taken</th><th>Booked</th><th>Waiting</th><th>Left</th></tr></thead><tbody>' +
+                    d.people.map(function (p) {
+                        const custom = d.allowances.custom[p.id];
+                        return '<tr><td><div class="emp-cell">' + avatar(p, "sm") + '<div><div class="emp-name">' + esc(p.displayName) + '</div><div class="muted small">' + esc(p.jobTitle) + "</div></div></div></td>" +
+                            '<td data-label="Allowance"><input type="number" class="allow-input" data-allow="' + p.id + '" min="0" max="100" step="0.5" value="' + (custom === undefined ? "" : custom) + '" placeholder="' + d.allowances.defaultAllowance + '" aria-label="Allowance for ' + esc(p.displayName) + '"></td>' +
+                            '<td data-label="Taken">' + p.summary.taken + '</td><td data-label="Booked">' + p.summary.booked + '</td><td data-label="Waiting">' + p.summary.pending + "</td>" +
+                            '<td data-label="Left"><strong' + (p.summary.remaining < 0 ? ' class="danger-text"' : "") + ">" + p.summary.remaining + "</strong></td></tr>";
+                    }).join("") + "</tbody></table></div></section>";
+                $("#lv-default").addEventListener("submit", async function (e) {
+                    e.preventDefault();
+                    try { await api("/api/leave/allowances", { defaultAllowance: $("#lv-def").value }); toast("Default allowance saved."); render(); } catch (err) { toast(err.message); }
+                });
+            }
+        }
+
+        root.addEventListener("change", async function (e) {
+            const inp = e.target.closest("[data-allow]");
+            if (!inp) return;
+            try { await api("/api/leave/allowances", { personId: inp.dataset.allow, days: inp.value }); toast("Allowance saved."); render(); } catch (err) { toast(err.message); }
+        });
+        root.addEventListener("click", async function (e) {
+            const t = e.target.closest("[data-tab]");
+            if (t) { tab = state.leaveTab = t.dataset.tab; return draw(); }
+            const y = e.target.closest("[data-year]");
+            if (y) { state.leaveYear = Number(y.dataset.year); return render(); }
+            if (e.target.closest("#lv-new")) return openLeaveForm(d, "annual");
+            if (e.target.closest("#lv-sick")) return openLeaveForm(d, "sick");
+            const act = e.target.closest("[data-act]");
+            if (!act) return;
+            const id = act.closest("[data-id]").dataset.id;
+            try {
+                let note = "";
+                if (act.dataset.act === "decline") {
+                    note = await askNote({ title: "Decline this request?", label: "Reason", confirmLabel: "Decline", danger: true });
+                    if (note === null) return;
+                } else if (act.dataset.act === "cancel") {
+                    if (!(await confirmDialog({ title: "Cancel this leave?", message: "The days go back into the allowance.", confirmLabel: "Cancel leave", danger: true }))) return;
+                }
+                const r = await api("/api/leave/" + id + "/" + act.dataset.act, { note: note });
+                state.me = r.user;
+                renderChrome();
+                toast({ approve: "Leave approved.", decline: "Request declined.", cancel: "Leave cancelled." }[act.dataset.act]);
+                render();
+            } catch (err) { toast(err.message); }
+        });
+        draw();
+    }
+
+    function openLeaveForm(d, type) {
+        const t0 = isoDay(new Date());
+        const forOthers = d.canManage && d.people.length;
+        const m = openModal(
+            '<h2 class="modal-title">' + (type === "sick" ? "Report sickness" : d.summary ? "Request leave" : "Record leave") + "</h2>" +
+            (type === "sick" ? '<p class="muted">Let your team know you’re off sick. It’s recorded straight away and doesn’t come out of your holiday allowance.</p>' : "") +
+            '<form id="lv-form" novalidate>' +
+            (forOthers ? '<label for="lv-person">Who for</label><select id="lv-person">' + (d.summary ? '<option value="">Me</option>' : "") + d.people.map(function (p) {
+                return '<option value="' + p.id + '">' + esc(p.displayName) + "</option>";
+            }).join("") + "</select>" : "") +
+            '<label for="lv-type">Type</label><select id="lv-type">' + Object.keys(d.types).map(function (k) {
+                return '<option value="' + k + '"' + (k === type ? " selected" : "") + ">" + esc(d.types[k]) + "</option>";
+            }).join("") + "</select>" +
+            '<div class="grid-2"><div><label for="lv-start">From</label><input type="date" id="lv-start" value="' + t0 + '"></div>' +
+            '<div><label for="lv-end">To</label><input type="date" id="lv-end" value="' + t0 + '"></div></div>' +
+            '<div class="option-row" id="lv-half-row"><label class="inline-check"><input type="radio" name="lv-half" value="" checked> Full day</label>' +
+            '<label class="inline-check"><input type="radio" name="lv-half" value="am"> Morning only</label><label class="inline-check"><input type="radio" name="lv-half" value="pm"> Afternoon only</label></div>' +
+            '<div class="lv-count" id="lv-count"></div>' +
+            '<label for="lv-note">Note <span class="muted small">(optional' + (type === "sick" ? ", only your manager and HR see it" : "") + ')</span></label><textarea id="lv-note" rows="2" maxlength="500"></textarea>' +
+            '<div class="form-error" id="lv-error" hidden></div>' +
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary" id="lv-submit">' + (type === "sick" ? "Report sickness" : "Send request") + "</button></div></form>"
+        );
+        let seq = 0;
+        async function recount() {
+            const from = $("#lv-start", m.el).value;
+            const to = $("#lv-end", m.el).value;
+            $("#lv-half-row", m.el).hidden = from !== to;
+            const mySeq = ++seq;
+            let days = 0;
+            try { days = (await api("/api/leave/working-days", { startDate: from, endDate: to })).days; } catch (e) { days = 0; }
+            if (mySeq !== seq) return;
+            const half = from === to && $("input[name=lv-half]:checked", m.el).value;
+            if (half && days) days = 0.5;
+            const typ = $("#lv-type", m.el).value;
+            const someoneElse = $("#lv-person", m.el) && $("#lv-person", m.el).value;
+            $("#lv-count", m.el).innerHTML = !days ? icon("alert") + "These dates are all weekends or bank holidays."
+                : icon("calendar") + "<strong>" + fmtDays(days) + "</strong>" + (typ === "annual" && d.summary && !someoneElse ? " · " + Math.max(0, d.summary.remaining - days) + " left afterwards" : "") +
+                  (typ === "annual" ? "" : typ === "sick" ? " · not taken from holiday" : "");
+            $("#lv-submit", m.el).textContent = $("#lv-type", m.el).value === "sick" ? "Report sickness" : someoneElse ? "Record leave" : "Send request";
+        }
+        $("#lv-start", m.el).addEventListener("change", function (e) { if ($("#lv-end", m.el).value < e.target.value) $("#lv-end", m.el).value = e.target.value; recount(); });
+        m.el.addEventListener("change", function (e) { if (e.target.id !== "lv-start") recount(); });
+        recount();
+        $("#lv-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try {
+                const r = await api("/api/leave", {
+                    personId: $("#lv-person", m.el) ? $("#lv-person", m.el).value : "",
+                    type: $("#lv-type", m.el).value,
+                    startDate: $("#lv-start", m.el).value,
+                    endDate: $("#lv-end", m.el).value,
+                    halfDay: $("#lv-start", m.el).value === $("#lv-end", m.el).value ? $("input[name=lv-half]:checked", m.el).value : "",
+                    note: $("#lv-note", m.el).value,
+                });
+                const someoneElse = $("#lv-person", m.el) && $("#lv-person", m.el).value;
+                state.me = r.user;
+                renderChrome();
+                closeModal();
+                toast(someoneElse ? "Leave recorded." : $("#lv-type", m.el).value === "sick" ? "Sickness recorded. Get well soon." : "Request sent for approval.");
+                state.leaveTab = "mine";
+                render();
+            } catch (err) { formError($("#lv-error", m.el), err.message); }
+        });
+    }
+
+    // ================= Rotas & timesheets =================
+
+    function addDaysIso(date, n) {
+        const d = new Date(date + "T12:00:00");
+        d.setDate(d.getDate() + n);
+        return isoDay(d);
+    }
+
+    function mondayOf(date) {
+        const d = new Date(date + "T12:00:00");
+        d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+        return isoDay(d);
+    }
+
+    function hoursBetween(start, end, breakMins) {
+        if (!start || !end) return 0;
+        const mins = function (t) { return Number(t.slice(0, 2)) * 60 + Number(t.slice(3)); };
+        let span = mins(end) - mins(start);
+        if (span <= 0) span += 1440;
+        return Math.max(0, Math.round(((span - (Number(breakMins) || 0)) / 60) * 100) / 100);
+    }
+
+    function fmtHours(h) {
+        const whole = Math.floor(h);
+        const m = Math.round((h - whole) * 60);
+        return whole + "h" + (m ? " " + m + "m" : "");
+    }
+
+    const SHEET_STATUS = { draft: "Draft", submitted: "Waiting for approval", approved: "Approved", rejected: "Sent back" };
+
+    async function viewRotas(root, current) {
+        const week = state.rotaWeek || mondayOf(isoDay(new Date()));
+        const [rota, mine] = await Promise.all([
+            api("/api/rotas?week=" + week),
+            state.me.system ? Promise.resolve(null) : api("/api/timesheets/mine?week=" + week),
+        ]);
+        const review = rota.isApprover ? await api("/api/timesheets/review") : null;
+        if (!current()) return;
+        let tab = state.rotaTab || "rota";
+        if (tab === "timesheet" && !mine) tab = "rota";
+        if (tab === "approvals" && !review) tab = "rota";
+        let company = state.rotaCompany || "";
+
+        const tabs = [["rota", "Rota", null]];
+        if (mine) tabs.push(["timesheet", "My timesheet", null]);
+        if (review) tabs.push(["approvals", "Timesheets to approve", review.waiting.length]);
+        const days = [0, 1, 2, 3, 4, 5, 6].map(function (i) { return addDaysIso(week, i); });
+        const weekLabel = new Date(week + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" }) + " – " +
+            new Date(days[6] + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+
+        root.innerHTML =
+            '<div class="page-head"><div><h1>Rotas &amp; Timesheets</h1><p class="muted">Who’s working when, and the hours you’ve worked.</p></div>' +
+            (rota.canManage ? '<div class="page-actions"><button type="button" class="btn btn-ghost" id="rt-copy">' + icon("copy") + "Copy last week</button>" +
+                '<button type="button" class="btn btn-primary" id="rt-add">' + icon("plus") + "Add shift</button></div>" : "") + "</div>" +
+            '<div class="company-tabs" id="rt-tabs">' + tabs.map(function (t) {
+                return '<button type="button" data-tab="' + t[0] + '">' + esc(t[1]) + (t[2] !== null ? ' <span class="tab-count">' + t[2] + "</span>" : "") + "</button>";
+            }).join("") + "</div>" +
+            '<div class="week-nav"><button type="button" class="icon-btn" data-week="' + addDaysIso(week, -7) + '" aria-label="Previous week">' + icon("chevronLeft") + "</button>" +
+            '<button type="button" class="btn btn-ghost btn-small" data-week="' + mondayOf(isoDay(new Date())) + '">This week</button>' +
+            '<button type="button" class="icon-btn" data-week="' + addDaysIso(week, 7) + '" aria-label="Next week">' + icon("chevronRight") + "</button>" +
+            '<h2 class="week-title">' + esc(weekLabel) + "</h2></div>" +
+            '<div id="rt-body"></div>';
+
+        const today = isoDay(new Date());
+        const peopleById = {};
+        rota.people.forEach(function (p) { peopleById[p.id] = p; });
+
+        function drawRota() {
+            const worksAtCo = function (p) { return !company || p.company === company || p.otherCompanies.indexOf(company) !== -1; };
+            let people = rota.people.filter(worksAtCo);
+            if (!rota.canManage) {
+                people = people.filter(function (p) { return p.id === state.me.id || rota.shifts.some(function (s) { return s.personId === p.id; }); });
+            }
+            const companies = Array.from(new Set(rota.people.map(function (p) { return p.company; })));
+            return '<div class="company-tabs small-tabs" id="rt-companies"><button type="button" data-co=""' + (company ? "" : ' class="active"') + ">Everyone</button>" +
+                companies.map(function (c) { return '<button type="button" data-co="' + esc(c) + '"' + (company === c ? ' class="active"' : "") + ">" + esc(c) + "</button>"; }).join("") + "</div>" +
+                (people.length ? '<div class="rota-wrap"><table class="rota"><thead><tr><th class="rota-person">Person</th>' + days.map(function (d) {
+                    const dt = new Date(d + "T12:00:00");
+                    return '<th class="' + (d === today ? "is-today" : "") + '"><span class="rd-dow">' + dt.toLocaleDateString("en-GB", { weekday: "short" }) + '</span><span class="rd-num">' + dt.getDate() + "</span></th>";
+                }).join("") + '<th class="rota-total">Hours</th></tr></thead><tbody>' +
+                    people.map(function (p) {
+                        let total = 0;
+                        return '<tr><th class="rota-person" scope="row"><div class="emp-cell">' + avatar(p, "sm") + '<div><div class="emp-name">' + esc(p.displayName) + '</div><div class="muted small">' + esc(p.jobTitle) + "</div></div></div></th>" +
+                            days.map(function (d) {
+                                const shifts = rota.shifts.filter(function (s) { return s.personId === p.id && s.date === d; });
+                                const off = rota.leave.find(function (l) { return l.personId === p.id && l.startDate <= d && l.endDate >= d; });
+                                shifts.forEach(function (s) { total += s.hours; });
+                                return '<td class="rota-cell' + (d === today ? " is-today" : "") + (rota.canManage ? " editable" : "") + '" data-person="' + p.id + '" data-date="' + d + '">' +
+                                    (off ? '<span class="rota-leave">' + icon("sun") + "Leave</span>" : "") +
+                                    shifts.map(function (s) {
+                                        return '<button type="button" class="shift" data-shift="' + s.id + '"><span class="sh-time">' + esc(s.start) + "–" + esc(s.end) + "</span>" +
+                                            (s.note ? '<span class="sh-note">' + esc(s.note) + "</span>" : "") + "</button>";
+                                    }).join("") +
+                                    (rota.canManage && !shifts.length ? '<span class="rota-add" aria-hidden="true">' + icon("plus") + "</span>" : "") + "</td>";
+                            }).join("") + '<td class="rota-total">' + (total ? fmtHours(total) : '<span class="muted">–</span>') + "</td></tr>";
+                    }).join("") + "</tbody></table></div>"
+                    : '<div class="empty-page">' + icon("clock", "big") + "<h2>No shifts this week</h2><p class=\"muted\">" + (rota.canManage ? "Use <strong>Add shift</strong> or click a day on the rota." : "Nothing has been planned yet.") + "</p></div>");
+        }
+
+        function drawTimesheet() {
+            const sh = mine.sheet;
+            const locked = sh.status === "submitted" || sh.status === "approved";
+            return '<section class="panel ts-panel">' +
+                '<div class="panel-head"><h2 class="panel-title">' + icon("clock") + "Week of " + esc(new Date(week + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "long" })) + "</h2>" +
+                statusBadge(sh.status, SHEET_STATUS) + "</div>" +
+                (sh.status === "rejected" && sh.decisionNote ? '<div class="banner banner-warn"><div><strong>Sent back by ' + esc(sh.decidedByName || "your approver") + ":</strong> " + esc(sh.decisionNote) + "</div></div>" : "") +
+                (sh.status === "approved" ? '<p class="muted small">Approved by ' + esc(sh.decidedByName || "") + " " + esc(timeAgo(sh.decidedAt)) + ".</p>" : "") +
+                (!sh.id && sh.fromRota ? '<p class="muted small">' + icon("tick") + "Filled in from your shifts on the rota. Change anything that was different.</p>" : "") +
+                '<div class="table-card flat"><table class="table ts-table"><thead><tr><th>Day</th><th>Start</th><th>Finish</th><th>Break (mins)</th><th>Hours</th><th>Note</th></tr></thead><tbody>' +
+                sh.days.map(function (d, i) {
+                    const dt = new Date(d.date + "T12:00:00");
+                    return '<tr data-i="' + i + '"><td class="nowrap"><strong>' + dt.toLocaleDateString("en-GB", { weekday: "short" }) + "</strong> " + dt.getDate() + "</td>" +
+                        '<td data-label="Start"><input type="time" class="ts-start" value="' + esc(d.start) + '"' + (locked ? " disabled" : "") + "></td>" +
+                        '<td data-label="Finish"><input type="time" class="ts-end" value="' + esc(d.end) + '"' + (locked ? " disabled" : "") + "></td>" +
+                        '<td data-label="Break"><input type="number" class="ts-break" min="0" max="600" step="5" value="' + (d.start ? d.breakMins : "") + '"' + (locked ? " disabled" : "") + "></td>" +
+                        '<td data-label="Hours" class="ts-hours">' + (d.hours ? fmtHours(d.hours) : '<span class="muted">–</span>') + "</td>" +
+                        '<td data-label="Note"><input type="text" class="ts-note" maxlength="200" value="' + esc(d.note) + '"' + (locked ? " disabled" : "") + "></td></tr>";
+                }).join("") + '</tbody><tfoot><tr><td colspan="4"><strong>Total</strong></td><td id="ts-total"><strong>' + fmtHours(sh.totalHours) + "</strong></td><td></td></tr></tfoot></table></div>" +
+                '<div class="form-error" id="ts-error" hidden></div>' +
+                (locked ? "" : '<div class="form-actions btn-row ts-actions"><button type="button" class="btn btn-ghost" id="ts-save">Save draft</button><button type="button" class="btn btn-primary" id="ts-submit">' + icon("tick") + "Submit for approval</button></div>") +
+                "</section>" +
+                (mine.recent.length ? '<section class="panel"><h2 class="panel-title">' + icon("list") + "Recent timesheets</h2><ul class=\"plain-list ts-recent\">" + mine.recent.map(function (t) {
+                    return '<li><button type="button" class="btn btn-link" data-week="' + t.week + '">Week of ' + esc(new Date(t.week + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })) + "</button>" +
+                        '<span class="muted small">' + fmtHours(t.totalHours) + "</span>" + statusBadge(t.status, SHEET_STATUS) + "</li>";
+                }).join("") + "</ul></section>" : "");
+        }
+
+        function sheetCard(t, actions) {
+            return '<article class="panel ts-review" data-sheet="' + t.id + '"><div class="ts-review-head">' + avatar(t.person, "md") +
+                '<div class="lr-main"><div class="lr-title">' + esc(t.person.displayName) + '</div><div class="muted small">Week of ' +
+                esc(new Date(t.week + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })) + " · <strong>" + fmtHours(t.totalHours) + "</strong></div></div>" +
+                (actions ? '<div class="btn-row"><button type="button" class="btn btn-ghost btn-small" data-ts="reject">Send back</button><button type="button" class="btn btn-primary btn-small" data-ts="approve">' + icon("tick") + "Approve</button></div>"
+                    : statusBadge(t.status, SHEET_STATUS)) + "</div>" +
+                '<div class="ts-days">' + t.days.map(function (d) {
+                    const dt = new Date(d.date + "T12:00:00");
+                    return '<div class="ts-day' + (d.start ? "" : " off") + '"><span class="tsd-dow">' + dt.toLocaleDateString("en-GB", { weekday: "short" }) + "</span>" +
+                        (d.start ? '<span class="tsd-time">' + esc(d.start) + "–" + esc(d.end) + '</span><span class="tsd-hours">' + fmtHours(d.hours) + "</span>" : '<span class="tsd-time muted">Off</span>') +
+                        (d.note ? '<span class="tsd-note" title="' + esc(d.note) + '">' + icon("message") + "</span>" : "") + "</div>";
+                }).join("") + "</div>" +
+                (t.decisionNote && !actions ? '<p class="lr-note decision">' + icon("message") + esc(t.decidedByName || "") + ": " + esc(t.decisionNote) + "</p>" : "") +
+                "</article>";
+        }
+
+        function drawApprovals() {
+            return (review.waiting.length ? review.waiting.map(function (t) { return sheetCard(t, true); }).join("")
+                : '<div class="empty-page">' + icon("check", "big") + "<h2>All caught up</h2><p class=\"muted\">Submitted timesheets from your team appear here.</p></div>") +
+                (review.recent.length ? '<h2 class="section-title about-title">' + icon("clock") + "Recently dealt with</h2>" + review.recent.map(function (t) { return sheetCard(t, false); }).join("") : "");
+        }
+
+        function draw() {
+            $$("#rt-tabs [data-tab]").forEach(function (b) { b.classList.toggle("active", b.dataset.tab === tab); });
+            $(".week-nav").hidden = tab === "approvals";
+            const body = $("#rt-body");
+            body.innerHTML = tab === "rota" ? drawRota() : tab === "timesheet" ? drawTimesheet() : drawApprovals();
+        }
+
+        function readSheet() {
+            return $$(".ts-table tbody tr").map(function (tr) {
+                const i = Number(tr.dataset.i);
+                return { date: mine.sheet.days[i].date, start: $(".ts-start", tr).value, end: $(".ts-end", tr).value, breakMins: $(".ts-break", tr).value, note: $(".ts-note", tr).value };
+            });
+        }
+
+        root.addEventListener("input", function (e) {
+            const tr = e.target.closest(".ts-table tbody tr");
+            if (!tr) return;
+            const h = hoursBetween($(".ts-start", tr).value, $(".ts-end", tr).value, $(".ts-break", tr).value);
+            $(".ts-hours", tr).innerHTML = h ? fmtHours(h) : '<span class="muted">–</span>';
+            const total = readSheet().reduce(function (n, d) { return n + hoursBetween(d.start, d.end, d.breakMins); }, 0);
+            $("#ts-total").innerHTML = "<strong>" + fmtHours(total) + "</strong>";
+        });
+
+        root.addEventListener("click", async function (e) {
+            const t = e.target.closest("[data-tab]");
+            if (t) { tab = state.rotaTab = t.dataset.tab; return draw(); }
+            const w = e.target.closest("[data-week]");
+            if (w) { state.rotaWeek = mondayOf(w.dataset.week); return render(); }
+            const co = e.target.closest("[data-co]");
+            if (co) { company = state.rotaCompany = co.dataset.co; return draw(); }
+            if (e.target.closest("#rt-add")) return openShiftForm(rota, null, { date: week });
+            if (e.target.closest("#rt-copy")) {
+                if (!(await confirmDialog({ title: "Copy last week’s shifts?", message: "Every shift from the week before is added to this week. Shifts already here are kept.", confirmLabel: "Copy shifts" }))) return;
+                try {
+                    const r = await api("/api/rotas/copy-week", { from: addDaysIso(week, -7), to: week });
+                    toast(r.added ? r.added + (r.added === 1 ? " shift copied." : " shifts copied.") : "Nothing new to copy.");
+                    render();
+                } catch (err) { toast(err.message); }
+                return;
+            }
+            const shiftBtn = e.target.closest("[data-shift]");
+            if (shiftBtn) {
+                const s = rota.shifts.find(function (x) { return x.id === shiftBtn.dataset.shift; });
+                if (rota.canManage) return openShiftForm(rota, s);
+                return toast(peopleById[s.personId].displayName + ": " + s.start + "–" + s.end + (s.note ? " (" + s.note + ")" : "") + ", " + fmtHours(s.hours));
+            }
+            const cell = e.target.closest(".rota-cell.editable");
+            if (cell) return openShiftForm(rota, null, { personId: cell.dataset.person, date: cell.dataset.date });
+            if (e.target.closest("#ts-save") || e.target.closest("#ts-submit")) {
+                const submit = !!e.target.closest("#ts-submit");
+                try {
+                    const r = await api("/api/timesheets/mine", { week: week, days: readSheet(), submit: submit });
+                    mine.sheet = r.sheet;
+                    state.me = r.user;
+                    renderChrome();
+                    toast(submit ? "Timesheet submitted for approval." : "Draft saved.");
+                    render();
+                } catch (err) { formError($("#ts-error"), err.message); }
+                return;
+            }
+            const ts = e.target.closest("[data-ts]");
+            if (ts) {
+                const id = ts.closest("[data-sheet]").dataset.sheet;
+                let note = "";
+                if (ts.dataset.ts === "reject") {
+                    note = await askNote({ title: "Send this timesheet back?", message: "They can correct it and submit it again.", label: "What needs changing", required: true, confirmLabel: "Send back", danger: true });
+                    if (note === null) return;
+                }
+                try {
+                    const r = await api("/api/timesheets/" + id + "/" + ts.dataset.ts, { note: note });
+                    state.me = r.user;
+                    renderChrome();
+                    toast(ts.dataset.ts === "approve" ? "Timesheet approved." : "Timesheet sent back.");
+                    render();
+                } catch (err) { toast(err.message); }
+            }
+        });
+        draw();
+    }
+
+    function openShiftForm(rota, shift, preset) {
+        const v = shift || Object.assign({ personId: rota.people[0] && rota.people[0].id, start: "09:00", end: "17:00", breakMins: 30, note: "" }, preset || {});
+        const m = openModal(
+            '<h2 class="modal-title">' + (shift ? "Edit shift" : "Add shift") + "</h2>" +
+            '<form id="sh-form" novalidate>' +
+            '<label for="sh-person">Person</label><select id="sh-person">' + rota.people.map(function (p) {
+                return '<option value="' + p.id + '"' + (p.id === v.personId ? " selected" : "") + ">" + esc(p.displayName) + " — " + esc(p.jobTitle) + "</option>";
+            }).join("") + "</select>" +
+            '<label for="sh-date">Date</label><input type="date" id="sh-date" value="' + esc(v.date) + '">' +
+            '<div class="grid-2"><div><label for="sh-start">Start</label><input type="time" id="sh-start" value="' + esc(v.start) + '"></div>' +
+            '<div><label for="sh-end">Finish</label><input type="time" id="sh-end" value="' + esc(v.end) + '"></div></div>' +
+            '<div class="grid-2"><div><label for="sh-break">Break (minutes)</label><input type="number" id="sh-break" min="0" max="600" step="5" value="' + esc(v.breakMins) + '"></div>' +
+            '<div><label for="sh-note">Note <span class="muted small">(optional)</span></label><input type="text" id="sh-note" maxlength="120" value="' + esc(v.note || "") + '" placeholder="e.g. Front desk"></div></div>' +
+            '<p class="muted small" id="sh-hours"></p>' +
+            '<div class="form-error" id="sh-error" hidden></div>' +
+            '<div class="modal-actions">' + (shift ? '<button type="button" class="btn btn-ghost danger-text" id="sh-delete">' + icon("trash") + "Delete</button>" : "") +
+            '<button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">' + (shift ? "Save shift" : "Add shift") + "</button></div></form>"
+        );
+        const showHours = function () {
+            $("#sh-hours", m.el).textContent = fmtHours(hoursBetween($("#sh-start", m.el).value, $("#sh-end", m.el).value, $("#sh-break", m.el).value)) + " paid time";
+        };
+        m.el.addEventListener("input", showHours);
+        showHours();
+        if (shift) $("#sh-delete", m.el).addEventListener("click", async function () {
+            try { await api("/api/rotas/shifts/" + shift.id + "/delete", {}); closeModal(); toast("Shift deleted."); render(); } catch (err) { formError($("#sh-error", m.el), err.message); }
+        });
+        $("#sh-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try {
+                await api(shift ? "/api/rotas/shifts/" + shift.id : "/api/rotas/shifts", {
+                    personId: $("#sh-person", m.el).value, date: $("#sh-date", m.el).value, start: $("#sh-start", m.el).value,
+                    end: $("#sh-end", m.el).value, breakMins: $("#sh-break", m.el).value, note: $("#sh-note", m.el).value,
+                });
+                closeModal();
+                toast(shift ? "Shift updated." : "Shift added.");
+                state.rotaWeek = mondayOf($("#sh-date", m.el).value);
+                render();
+            } catch (err) { formError($("#sh-error", m.el), err.message); }
+        });
+    }
+
+    // ================= Payslips =================
+
+    const DEDUCTION_KIND_LABELS = { tax: "Income tax", ni: "National Insurance", pension: "Pension", studentLoan: "Student loan", other: "Other" };
+
+    function payslipDocHtml(p) {
+        const rows = function (list, emptyText) {
+            return list.length ? list.map(function (l) {
+                return '<tr><td>' + esc(l.label) + '</td><td class="num">' + fmtMoney(l.amount) + "</td></tr>";
+            }).join("") : '<tr><td colspan="2" class="muted">' + emptyText + "</td></tr>";
+        };
+        return '<article class="payslip-doc">' +
+            '<header class="pd-head"><div><div class="pd-employer">' + esc(p.employer) + '</div><div class="pd-kicker">Payslip · ' + esc(p.periodLabel) + "</div></div>" +
+            '<img class="pd-logo" src="/assets/brand/svg/hn-group-wordmark.svg" alt="HN Group"></header>' +
+            '<div class="pd-stripe" aria-hidden="true"></div>' +
+            '<dl class="pd-meta">' +
+            "<div><dt>Employee</dt><dd>" + esc(p.employeeName) + "</dd></div>" +
+            "<div><dt>Job title</dt><dd>" + esc(p.jobTitle || "–") + "</dd></div>" +
+            "<div><dt>Employee no.</dt><dd>" + esc(p.employeeNumber || "–") + "</dd></div>" +
+            "<div><dt>NI number</dt><dd>" + esc(p.niNumber || "–") + "</dd></div>" +
+            "<div><dt>Tax code</dt><dd>" + esc(p.taxCode || "–") + "</dd></div>" +
+            "<div><dt>NI category</dt><dd>" + esc(p.niCategory || "–") + "</dd></div>" +
+            "<div><dt>Pay period</dt><dd>" + esc(fmtDate(p.periodStart + "T12:00:00")) + " – " + esc(fmtDate(p.periodEnd + "T12:00:00")) + "</dd></div>" +
+            "<div><dt>Pay date</dt><dd>" + esc(fmtDate(p.payDate + "T12:00:00")) + "</dd></div>" +
+            "</dl>" +
+            '<div class="pd-tables">' +
+            '<table class="pd-table"><thead><tr><th>Payments</th><th class="num">Amount</th></tr></thead><tbody>' + rows(p.payments, "No payments") +
+            '</tbody><tfoot><tr><td>Total pay</td><td class="num">' + fmtMoney(p.totals.gross) + "</td></tr></tfoot></table>" +
+            '<table class="pd-table"><thead><tr><th>Deductions</th><th class="num">Amount</th></tr></thead><tbody>' + rows(p.deductions, "No deductions") +
+            '</tbody><tfoot><tr><td>Total deductions</td><td class="num">' + fmtMoney(p.totals.deductions) + "</td></tr></tfoot></table>" +
+            "</div>" +
+            '<div class="pd-net"><span>Net pay</span><strong>' + fmtMoney(p.totals.net) + "</strong></div>" +
+            '<div class="pd-bottom">' +
+            '<div class="pd-box"><h4>This tax year to date</h4><dl class="pd-ytd">' +
+            "<div><dt>Total pay</dt><dd>" + fmtMoney(p.ytd.gross) + "</dd></div><div><dt>Income tax</dt><dd>" + fmtMoney(p.ytd.tax) + "</dd></div>" +
+            "<div><dt>National Insurance</dt><dd>" + fmtMoney(p.ytd.ni) + "</dd></div><div><dt>Pension</dt><dd>" + fmtMoney(p.ytd.pension) + "</dd></div>" +
+            "<div><dt>Net pay</dt><dd>" + fmtMoney(p.ytd.net) + "</dd></div></dl>" +
+            '<p class="pd-small">Since ' + esc(fmtDate(p.ytd.from + "T12:00:00")) + "</p></div>" +
+            (p.employerItems.length ? '<div class="pd-box"><h4>Paid by your employer</h4><dl class="pd-ytd">' + p.employerItems.map(function (l) {
+                return "<div><dt>" + esc(l.label) + "</dt><dd>" + fmtMoney(l.amount) + "</dd></div>";
+            }).join("") + '</dl><p class="pd-small">On top of your pay. Not deducted from it.</p></div>' : "") +
+            "</div>" +
+            (p.note ? '<p class="pd-note">' + richText(p.note) + "</p>" : "") +
+            '<footer class="pd-foot">Private and confidential · ' + esc(p.employer) + "</footer>" +
+            "</article>";
+    }
+
+    async function openPayslip(id, opts) {
+        opts = opts || {};
+        let p;
+        try { p = (await api("/api/payslips/" + id)).payslip; } catch (err) { return toast(err.message); }
+        const m = openModal(
+            (p.status === "draft" ? '<div class="banner banner-warn pd-draft"><div><strong>Draft.</strong> The employee can’t see this payslip until it’s issued.</div></div>' : "") +
+            '<div class="print-area">' + payslipDocHtml(p) + "</div>" +
+            '<div class="modal-actions no-print">' + (opts.footer || "") + '<button type="button" class="btn btn-ghost" id="ps-print">' + icon("printer") + "Print or save as PDF</button>" +
+            '<button type="button" class="btn btn-primary" data-close>Done</button></div>',
+            { wide: true, cls: "modal-payslip" }
+        );
+        $("#ps-print", m.el).addEventListener("click", function () {
+            document.body.classList.add("printing");
+            window.print();
+            setTimeout(function () { document.body.classList.remove("printing"); }, 500);
+        });
+        return m;
+    }
+
+    async function viewPayslips(root, current) {
+        const d = await api("/api/payslips");
+        if (!current()) return;
+        const latest = d.payslips[0];
+        root.innerHTML =
+            '<div class="page-head"><div><h1>Payslips</h1><p class="muted">Your payslips from HN Group. Only you and Human Resources can see them.</p></div>' +
+            (d.canRunPayroll ? '<div class="page-actions"><a class="btn btn-primary" href="/payroll" data-link>' + icon("wallet") + "Run payroll</a></div>" : "") + "</div>" +
+            (latest ? '<section class="payslip-hero"><div><p class="eyebrow">Latest payslip · ' + esc(latest.periodLabel) + '</p><div class="ph-net">' + fmtMoney(latest.net) +
+                '</div><p class="muted">Net pay, paid ' + esc(fmtDate(latest.payDate + "T12:00:00")) + " · " + fmtMoney(latest.gross) + " before deductions</p></div>" +
+                '<button type="button" class="btn btn-primary" data-slip="' + latest.id + '">' + icon("eye") + "Open payslip</button></section>" : "") +
+            (d.payslips.length ? '<div class="table-card"><table class="table table-click"><thead><tr><th>Period</th><th>Pay date</th><th>Employer</th><th class="num">Total pay</th><th class="num">Net pay</th></tr></thead><tbody>' +
+                d.payslips.map(function (s) {
+                    return '<tr data-slip="' + s.id + '" tabindex="0"><td><strong>' + esc(s.periodLabel) + '</strong></td><td data-label="Pay date">' + esc(fmtDate(s.payDate + "T12:00:00")) + "</td>" +
+                        '<td data-label="Employer">' + esc(s.employer) + '</td><td data-label="Total pay" class="num">' + fmtMoney(s.gross) + '</td><td data-label="Net pay" class="num"><strong>' + fmtMoney(s.net) + "</strong></td></tr>";
+                }).join("") + "</tbody></table></div>"
+                : '<div class="empty-page">' + icon("card", "big") + "<h2>No payslips yet</h2><p class=\"muted\">Your payslips will appear here once Human Resources issues them.</p></div>");
+        root.addEventListener("click", function (e) {
+            const s = e.target.closest("[data-slip]");
+            if (s) openPayslip(s.dataset.slip);
+        });
+        root.addEventListener("keydown", function (e) {
+            const s = e.target.closest("tr[data-slip]");
+            if (s && e.key === "Enter") openPayslip(s.dataset.slip);
+        });
+    }
+
+    // ================= Payroll (Human Resources) =================
+
+    function shiftMonth(period, n) {
+        const [y, m] = period.split("-").map(Number);
+        const d = new Date(y, m - 1 + n, 1);
+        return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+    }
+
+    function lastWorkingDay(period) {
+        const [y, m] = period.split("-").map(Number);
+        const d = new Date(y, m, 0, 12);
+        while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1);
+        return isoDay(d);
+    }
+
+    async function viewPayroll(root, current) {
+        const period = state.payPeriod || isoDay(new Date()).slice(0, 7);
+        const d = await api("/api/payroll?period=" + period);
+        if (!current()) return;
+        const drafts = d.payslips.filter(function (s) { return s.status === "draft"; });
+        const issued = d.payslips.filter(function (s) { return s.status === "issued"; });
+        const sum = function (list, k) { return list.reduce(function (n, s) { return n + s[k]; }, 0); };
+        const withSlip = {};
+        d.payslips.forEach(function (s) { withSlip[s.personId] = true; });
+
+        root.innerHTML =
+            '<div class="page-head"><div><h1>Run payroll</h1><p class="muted">Generate, check and issue payslips. Only Human Resources can see this page.</p></div>' +
+            '<div class="page-actions"><button type="button" class="btn btn-ghost" id="pr-single">' + icon("plus") + "Single payslip</button>" +
+            '<button type="button" class="btn btn-primary" id="pr-run">' + icon("wallet") + "Generate payslips</button></div></div>" +
+            '<div class="week-nav"><button type="button" class="icon-btn" data-period="' + shiftMonth(period, -1) + '" aria-label="Previous month">' + icon("chevronLeft") + "</button>" +
+            '<input type="month" id="pr-month" value="' + period + '" aria-label="Pay month">' +
+            '<button type="button" class="icon-btn" data-period="' + shiftMonth(period, 1) + '" aria-label="Next month">' + icon("chevronRight") + "</button>" +
+            '<h2 class="week-title">' + esc(d.periodLabel) + "</h2></div>" +
+            '<div class="stat-row">' +
+            '<div class="stat"><div class="stat-value">' + issued.length + '</div><div class="stat-label">Issued</div></div>' +
+            '<div class="stat"><div class="stat-value">' + drafts.length + '</div><div class="stat-label">Drafts to check</div></div>' +
+            '<div class="stat"><div class="stat-value">' + fmtMoney(sum(d.payslips, "gross")) + '</div><div class="stat-label">Total pay</div></div>' +
+            '<div class="stat"><div class="stat-value">' + fmtMoney(sum(d.payslips, "net")) + '</div><div class="stat-label">Total net pay</div></div>' +
+            "</div>" +
+            '<section class="panel"><div class="panel-head"><h2 class="panel-title">' + icon("card") + "Payslips for " + esc(d.periodLabel) + "</h2>" +
+            (drafts.length ? '<button type="button" class="btn btn-primary btn-small" id="pr-issue-all">' + icon("tick") + "Issue all " + drafts.length + " drafts</button>" : "") + "</div>" +
+            (d.payslips.length ? '<div class="table-card flat"><table class="table"><thead><tr><th>Employee</th><th>Status</th><th class="num">Total pay</th><th class="num">Net pay</th><th class="col-actions"></th></tr></thead><tbody>' +
+                d.payslips.map(function (s) {
+                    return '<tr data-slip="' + s.id + '"><td><div class="emp-cell">' + avatar(s.person, "sm") + '<div><div class="emp-name">' + esc(s.person.displayName) + '</div><div class="muted small">' + esc(s.employer) + "</div></div></div></td>" +
+                        '<td data-label="Status">' + statusBadge(s.status) + '</td><td data-label="Total pay" class="num">' + fmtMoney(s.gross) + '</td><td data-label="Net pay" class="num"><strong>' + fmtMoney(s.net) + "</strong></td>" +
+                        '<td class="col-actions nowrap"><button type="button" class="btn btn-ghost btn-small" data-pa="view">' + icon("eye") + "</button>" +
+                        (s.status === "draft" ? '<button type="button" class="btn btn-ghost btn-small" data-pa="edit">' + icon("edit") + 'Edit</button><button type="button" class="btn btn-primary btn-small" data-pa="issue">Issue</button>'
+                            : '<button type="button" class="btn btn-ghost btn-small" data-pa="withdraw">Withdraw</button>') +
+                        '<button type="button" class="btn btn-ghost btn-small danger-text" data-pa="delete" aria-label="Delete">' + icon("trash") + "</button></td></tr>";
+                }).join("") + "</tbody></table></div>"
+                : '<p class="muted small">No payslips for ' + esc(d.periodLabel) + " yet. Use <strong>Generate payslips</strong> to make drafts for everyone with pay details.</p>") +
+            "</section>" +
+            '<section class="panel"><div class="panel-head"><h2 class="panel-title">' + icon("users") + "Pay details</h2>" +
+            '<span class="muted small">' + d.people.filter(function (p) { return p.hasDetails; }).length + " of " + d.people.length + " set up</span></div>" +
+            '<div class="table-card flat"><table class="table"><thead><tr><th>Employee</th><th>Pay</th><th>' + esc(d.periodLabel) + '</th><th class="col-actions"></th></tr></thead><tbody>' +
+            d.people.map(function (p) {
+                return '<tr><td><div class="emp-cell">' + avatar(p, "sm") + '<div><div class="emp-name">' + esc(p.displayName) + '</div><div class="muted small">' + esc(p.jobTitle) + "</div></div></div></td>" +
+                    '<td data-label="Pay">' + (p.hasDetails ? '<span class="badge badge-green">' + (p.payType === "hourly" ? "Hourly" : "Salary") + "</span>" : '<span class="badge badge-yellow">Not set up</span>') + "</td>" +
+                    '<td data-label="Payslip">' + (withSlip[p.id] ? '<span class="muted small">' + icon("tick") + "Done</span>" : '<span class="muted small">–</span>') + "</td>" +
+                    '<td class="col-actions nowrap"><button type="button" class="btn btn-ghost btn-small" data-details="' + p.id + '">' + icon("edit") + "Pay details</button></td></tr>";
+            }).join("") + "</tbody></table></div>" +
+            '<p class="muted small pr-rates">' + icon("alert") + "<span>Tax, National Insurance and student loan amounts are <strong>estimates</strong> using " + esc(d.rates) +
+            " rates for England, Wales and Northern Ireland (monthly, non-cumulative). Scottish income tax is different. Check every figure before issuing.</span></p></section>";
+
+        root.addEventListener("change", function (e) {
+            if (e.target.id === "pr-month" && e.target.value) { state.payPeriod = e.target.value; render(); }
+        });
+        root.addEventListener("click", async function (e) {
+            const per = e.target.closest("[data-period]");
+            if (per) { state.payPeriod = per.dataset.period; return render(); }
+            if (e.target.closest("#pr-run")) return openPayrollRun(d, period, withSlip);
+            if (e.target.closest("#pr-single")) return openPayslipEditor(d, null, period);
+            const det = e.target.closest("[data-details]");
+            if (det) return openPayDetails(det.dataset.details, d);
+            if (e.target.closest("#pr-issue-all")) {
+                if (!(await confirmDialog({ title: "Issue " + drafts.length + " payslips?", message: "Each employee will be able to see their payslip straight away.", confirmLabel: "Issue payslips" }))) return;
+                try { const r = await api("/api/payroll/issue-all", { period: period }); toast(r.issued + " payslips issued."); render(); } catch (err) { toast(err.message); }
+                return;
+            }
+            const pa = e.target.closest("[data-pa]");
+            if (!pa) return;
+            const id = pa.closest("[data-slip]").dataset.slip;
+            const act = pa.dataset.pa;
+            try {
+                if (act === "view") return openPayslip(id);
+                if (act === "edit") {
+                    const full = (await api("/api/payroll/payslips/" + id)).payslip;
+                    return openPayslipEditor(d, full, period);
+                }
+                if (act === "delete" && !(await confirmDialog({ title: "Delete this payslip?", message: "It will be removed for good. Issued payslips are payroll records, so only delete one that was made by mistake.", confirmLabel: "Delete", danger: true }))) return;
+                if (act === "withdraw" && !(await confirmDialog({ title: "Withdraw this payslip?", message: "The employee won’t be able to see it until it’s issued again.", confirmLabel: "Withdraw" }))) return;
+                await api("/api/payroll/payslips/" + id + "/" + act, {});
+                toast({ issue: "Payslip issued.", withdraw: "Payslip withdrawn.", delete: "Payslip deleted." }[act]);
+                render();
+            } catch (err) { toast(err.message); }
+        });
+    }
+
+    function openPayrollRun(d, period, withSlip) {
+        const ready = d.people.filter(function (p) { return !withSlip[p.id]; });
+        const m = openModal(
+            '<h2 class="modal-title">Generate payslips for ' + esc(d.periodLabel) + "</h2>" +
+            '<p class="muted">Draft payslips are made from each person’s pay details, with estimated tax, NI and pension. Hourly staff are paid for hours on their approved timesheets. You can check and edit every draft before issuing it.</p>' +
+            '<form id="run-form" novalidate><label for="run-date">Pay date</label><input type="date" id="run-date" value="' + lastWorkingDay(period) + '">' +
+            '<div class="rm-head"><h3 class="detail-head">Who to pay</h3><button type="button" class="btn btn-link btn-small" id="run-all">Select all</button></div>' +
+            '<div class="member-list run-list">' + (ready.length ? ready.map(function (p) {
+                return '<label class="member-row' + (p.hasDetails ? " on" : "") + '">' + avatar(p, "md") + '<span class="mr-text"><span class="emp-name">' + esc(p.displayName) + "</span>" +
+                    '<span class="muted small">' + (p.hasDetails ? (p.payType === "hourly" ? "Hourly" : "Salary") : "No pay details yet – the payslip will be empty") + "</span></span>" +
+                    '<input type="checkbox" value="' + p.id + '"' + (p.hasDetails ? " checked" : "") + '><span class="mr-check">' + icon("tick") + "</span></label>";
+            }).join("") : '<p class="muted small">Everyone already has a payslip for this month.</p>') + "</div>" +
+            '<div class="form-error" id="run-error" hidden></div>' +
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary"' + (ready.length ? "" : " disabled") + ">Make drafts</button></div></form>",
+            { cls: "modal-members" }
+        );
+        m.el.addEventListener("change", function (e) {
+            const row = e.target.closest(".member-row");
+            if (row) row.classList.toggle("on", e.target.checked);
+        });
+        $("#run-all", m.el).addEventListener("click", function () {
+            $$(".run-list input", m.el).forEach(function (c) { c.checked = true; c.closest(".member-row").classList.add("on"); });
+        });
+        $("#run-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            const ids = $$(".run-list input:checked", m.el).map(function (c) { return c.value; });
+            if (!ids.length) return formError($("#run-error", m.el), "Choose at least one person.");
+            try {
+                const r = await api("/api/payroll/run", { period: period, payDate: $("#run-date", m.el).value, personIds: ids });
+                closeModal();
+                toast(r.made + (r.made === 1 ? " draft payslip made." : " draft payslips made.") + (r.skipped.length ? " " + r.skipped.length + " skipped." : ""));
+                render();
+            } catch (err) { formError($("#run-error", m.el), err.message); }
+        });
+    }
+
+    function openPayDetails(personId, d) {
+        api("/api/payroll/details/" + personId).then(function (r) {
+            const v = r.details;
+            const m = openModal(
+                '<h2 class="modal-title">Pay details · ' + esc(r.person.displayName) + "</h2>" +
+                '<p class="muted">Used to generate payslips. Only Human Resources can see these.</p>' +
+                '<form id="pd-form" novalidate>' +
+                '<div class="grid-2"><div><label for="pd-num">Employee number</label><input type="text" id="pd-num" maxlength="20" value="' + esc(v.employeeNumber) + '"></div>' +
+                '<div><label for="pd-company">Paid by</label><select id="pd-company"><option value="">Main company (' + esc(r.person.company) + ")</option>" +
+                d.companies.map(function (c) { return '<option value="' + esc(c) + '"' + (v.company === c ? " selected" : "") + ">" + esc(c) + "</option>"; }).join("") + "</select></div></div>" +
+                '<div class="grid-2"><div><label for="pd-ni">National Insurance number</label><input type="text" id="pd-ni" maxlength="13" value="' + esc(v.niNumber) + '" placeholder="AB123456C"></div>' +
+                '<div><label for="pd-nicat">NI category</label><input type="text" id="pd-nicat" maxlength="1" value="' + esc(v.niCategory) + '"></div></div>' +
+                '<div class="grid-2"><div><label for="pd-tax">Tax code</label><input type="text" id="pd-tax" maxlength="12" value="' + esc(v.taxCode) + '"></div>' +
+                '<div><label for="pd-type">Pay type</label><select id="pd-type"><option value="salary"' + (v.payType === "salary" ? " selected" : "") + '>Annual salary</option><option value="hourly"' + (v.payType === "hourly" ? " selected" : "") + ">Hourly rate</option></select></div></div>" +
+                '<div class="grid-2"><div id="pd-salary-box"><label for="pd-salary">Annual salary (£)</label><input type="number" id="pd-salary" min="0" step="0.01" value="' + esc(v.annualSalary || "") + '"></div>' +
+                '<div id="pd-rate-box"><label for="pd-rate">Hourly rate (£)</label><input type="number" id="pd-rate" min="0" step="0.01" value="' + esc(v.hourlyRate || "") + '"></div></div>' +
+                '<div class="grid-2"><div><label for="pd-pen">Employee pension (%)</label><input type="number" id="pd-pen" min="0" max="100" step="0.5" value="' + esc(v.pensionEmployeePct) + '"></div>' +
+                '<div><label for="pd-epen">Employer pension (%)</label><input type="number" id="pd-epen" min="0" max="100" step="0.5" value="' + esc(v.pensionEmployerPct) + '"></div></div>' +
+                '<label for="pd-loan">Student loan</label><select id="pd-loan"><option value="">None</option>' + Object.keys(d.studentLoans).map(function (k) {
+                    return '<option value="' + k + '"' + (v.studentLoan === k ? " selected" : "") + ">" + esc(d.studentLoans[k]) + "</option>";
+                }).join("") + "</select>" +
+                '<div class="form-error" id="pd-error" hidden></div>' +
+                '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">Save pay details</button></div></form>'
+            );
+            const sync = function () {
+                const hourly = $("#pd-type", m.el).value === "hourly";
+                $("#pd-salary-box", m.el).hidden = hourly;
+                $("#pd-rate-box", m.el).hidden = !hourly;
+            };
+            $("#pd-type", m.el).addEventListener("change", sync);
+            sync();
+            $("#pd-form", m.el).addEventListener("submit", async function (e) {
+                e.preventDefault();
+                try {
+                    await api("/api/payroll/details/" + personId, {
+                        employeeNumber: $("#pd-num", m.el).value, company: $("#pd-company", m.el).value, niNumber: $("#pd-ni", m.el).value,
+                        niCategory: $("#pd-nicat", m.el).value, taxCode: $("#pd-tax", m.el).value, payType: $("#pd-type", m.el).value,
+                        annualSalary: $("#pd-salary", m.el).value, hourlyRate: $("#pd-rate", m.el).value,
+                        pensionEmployeePct: $("#pd-pen", m.el).value, pensionEmployerPct: $("#pd-epen", m.el).value, studentLoan: $("#pd-loan", m.el).value,
+                    });
+                    closeModal();
+                    toast("Pay details saved.");
+                    render();
+                } catch (err) { formError($("#pd-error", m.el), err.message); }
+            });
+        }).catch(function (err) { toast(err.message); });
+    }
+
+    // Create or edit a draft payslip line by line, with live totals.
+    function openPayslipEditor(d, slip, period) {
+        const v = slip || { payments: [], deductions: [], employerItems: [], payDate: lastWorkingDay(period), note: "" };
+        const lines = {
+            payments: v.payments.map(function (l) { return Object.assign({}, l); }),
+            deductions: v.deductions.map(function (l) { return Object.assign({}, l); }),
+            employerItems: v.employerItems.map(function (l) { return Object.assign({}, l); }),
+        };
+        const m = openModal(
+            '<h2 class="modal-title">' + (slip ? "Edit payslip · " + esc(slip.employeeName) + " · " + esc(slip.periodLabel) : "New payslip · " + esc(d.periodLabel)) + "</h2>" +
+            '<form id="pe-form" novalidate>' +
+            (slip ? "" : '<label for="pe-person">Employee</label><select id="pe-person"><option value="">Choose someone</option>' + d.people.map(function (p) {
+                return '<option value="' + p.id + '">' + esc(p.displayName) + (p.hasDetails ? "" : " (no pay details)") + "</option>";
+            }).join("") + "</select>") +
+            '<div class="grid-2"><div><label for="pe-date">Pay date</label><input type="date" id="pe-date" value="' + esc(v.payDate) + '"></div>' +
+            (slip ? '<div><label for="pe-tax">Tax code</label><input type="text" id="pe-tax" maxlength="12" value="' + esc(slip.taxCode) + '"></div>' : "<div></div>") + "</div>" +
+            '<div class="pe-recalc"><button type="button" class="btn btn-ghost btn-small" id="pe-estimate">' + icon("refresh") + "Fill in from pay details</button>" +
+            '<span class="muted small">Replaces the lines below with estimates.</span></div>' +
+            '<div id="pe-lines"></div>' +
+            '<div class="pe-totals" id="pe-totals"></div>' +
+            '<label for="pe-note">Message on the payslip <span class="muted small">(optional)</span></label><textarea id="pe-note" rows="2" maxlength="500">' + esc(v.note || "") + "</textarea>" +
+            '<div class="form-error" id="pe-error" hidden></div>' +
+            '<div class="modal-actions sticky-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button>' +
+            '<button type="submit" class="btn btn-ghost" data-issue="0">Save draft</button><button type="submit" class="btn btn-primary" data-issue="1">' + icon("tick") + "Save and issue</button></div></form>",
+            { wide: true }
+        );
+        function section(key, title, withKind) {
+            return '<div class="pe-section" data-key="' + key + '"><div class="pe-head"><h3 class="detail-head">' + title + '</h3><button type="button" class="btn btn-link btn-small" data-add="' + key + '">' + icon("plus") + "Add line</button></div>" +
+                (lines[key].length ? lines[key].map(function (l, i) {
+                    return '<div class="pe-line" data-i="' + i + '"><input type="text" class="pe-label" maxlength="80" value="' + esc(l.label) + '" placeholder="Description">' +
+                        (withKind ? '<select class="pe-kind" aria-label="Type">' + Object.keys(DEDUCTION_KIND_LABELS).map(function (k) {
+                            return '<option value="' + k + '"' + (l.kind === k ? " selected" : "") + ">" + DEDUCTION_KIND_LABELS[k] + "</option>";
+                        }).join("") + "</select>" : "") +
+                        '<span class="pe-money"><span>£</span><input type="number" class="pe-amount" step="0.01" value="' + (l.amount === "" ? "" : Number(l.amount).toFixed(2)) + '" aria-label="Amount"></span>' +
+                        '<button type="button" class="icon-btn icon-btn-sm" data-remove aria-label="Remove line">' + icon("x") + "</button></div>";
+                }).join("") : '<p class="muted small pe-empty">None</p>') + "</div>";
+        }
+        function drawLines() {
+            $("#pe-lines", m.el).innerHTML = section("payments", "Payments") + section("deductions", "Deductions", true) + section("employerItems", "Employer contributions (not deducted)");
+            drawTotals();
+        }
+        function drawTotals() {
+            const sum = function (k) { return lines[k].reduce(function (n, l) { return n + (Number(l.amount) || 0); }, 0); };
+            const gross = sum("payments");
+            const ded = sum("deductions");
+            $("#pe-totals", m.el).innerHTML = '<span>Total pay <strong>' + fmtMoney(gross) + "</strong></span><span>Deductions <strong>" + fmtMoney(ded) + '</strong></span><span class="pe-net">Net pay <strong>' + fmtMoney(gross - ded) + "</strong></span>";
+        }
+        drawLines();
+        const box = $("#pe-lines", m.el);
+        box.addEventListener("input", function (e) {
+            const row = e.target.closest(".pe-line");
+            if (!row) return;
+            const l = lines[row.closest("[data-key]").dataset.key][Number(row.dataset.i)];
+            if (e.target.classList.contains("pe-label")) l.label = e.target.value;
+            if (e.target.classList.contains("pe-amount")) l.amount = e.target.value;
+            drawTotals();
+        });
+        box.addEventListener("change", function (e) {
+            const row = e.target.closest(".pe-line");
+            if (row && e.target.classList.contains("pe-kind")) lines.deductions[Number(row.dataset.i)].kind = e.target.value;
+        });
+        box.addEventListener("click", function (e) {
+            const add = e.target.closest("[data-add]");
+            if (add) { lines[add.dataset.add].push({ label: "", amount: "", kind: "other" }); drawLines(); return; }
+            const rm = e.target.closest("[data-remove]");
+            if (rm) {
+                const row = rm.closest(".pe-line");
+                lines[row.closest("[data-key]").dataset.key].splice(Number(row.dataset.i), 1);
+                drawLines();
+            }
+        });
+        async function fillEstimate() {
+            const personId = slip ? slip.personId : $("#pe-person", m.el).value;
+            if (!personId) return formError($("#pe-error", m.el), "Choose an employee first.");
+            try {
+                const est = await api("/api/payroll/estimate", { personId: personId, period: slip ? slip.period : period });
+                lines.payments = est.payments;
+                lines.deductions = est.deductions;
+                lines.employerItems = est.employer;
+                drawLines();
+                formError($("#pe-error", m.el), est.missingDetails ? "This person has no pay details yet, so there’s nothing to estimate from." : "");
+            } catch (err) { formError($("#pe-error", m.el), err.message); }
+        }
+        $("#pe-estimate", m.el).addEventListener("click", fillEstimate);
+        if ($("#pe-person", m.el)) $("#pe-person", m.el).addEventListener("change", fillEstimate);
+        $("#pe-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            const issue = e.submitter && e.submitter.dataset.issue === "1";
+            const body = {
+                payDate: $("#pe-date", m.el).value,
+                payments: lines.payments, deductions: lines.deductions, employerItems: lines.employerItems,
+                note: $("#pe-note", m.el).value,
+            };
+            try {
+                let saved;
+                if (slip) {
+                    Object.assign(body, { taxCode: $("#pe-tax", m.el).value, employer: slip.employer, employeeNumber: slip.employeeNumber, niNumber: slip.niNumber, niCategory: slip.niCategory });
+                    saved = (await api("/api/payroll/payslips/" + slip.id, body)).payslip;
+                } else {
+                    body.personId = $("#pe-person", m.el).value;
+                    body.period = period;
+                    if (!body.personId) return formError($("#pe-error", m.el), "Choose an employee.");
+                    saved = (await api("/api/payroll/payslips", body)).payslip;
+                }
+                if (issue) await api("/api/payroll/payslips/" + saved.id + "/issue", {});
+                closeModal();
+                toast(issue ? "Payslip issued." : "Draft saved.");
+                render();
+            } catch (err) { formError($("#pe-error", m.el), err.message); }
+        });
+    }
+
+    // ================= IT Helpdesk =================
+
+    function ticketStatusPill(status, labels) {
+        return '<span class="tk-status tk-' + status + '">' + esc(labels[status] || status) + "</span>";
+    }
+
+    function priorityPill(p, labels) {
+        return '<span class="tk-priority tp-' + p + '">' + esc(labels[p] || p) + "</span>";
+    }
+
+    async function viewHelpdesk(root, current) {
+        const d = await api("/api/helpdesk");
+        if (!current()) return;
+        const me = state.me;
+        const done = function (t) { return t.status === "resolved" || t.status === "closed"; };
+        const filters = d.canManage
+            ? [["open", "Open", function (t) { return !done(t); }], ["mine", "Assigned to me", function (t) { return !done(t) && t.assignee && t.assignee.id === me.id; }],
+               ["unassigned", "Unassigned", function (t) { return !done(t) && !t.assignee; }], ["raised", "Raised by me", function (t) { return t.requester && t.requester.id === me.id; }],
+               ["done", "Resolved & closed", done]]
+            : [["open", "Open", function (t) { return !done(t); }], ["done", "Resolved & closed", done]];
+        let filter = state.helpFilter && filters.some(function (f) { return f[0] === state.helpFilter; }) ? state.helpFilter : "open";
+
+        root.innerHTML =
+            '<div class="page-head"><div><h1>IT Helpdesk</h1><p class="muted">' + (d.canManage ? "Every ticket raised across HN Group." : "Get help from the IT team. Raise a ticket and follow it here.") + "</p></div>" +
+            '<div class="page-actions"><button type="button" class="btn btn-primary" id="hd-new">' + icon("plus") + "New ticket</button></div></div>" +
+            '<div class="company-tabs" id="hd-tabs">' + filters.map(function (f) {
+                return '<button type="button" data-f="' + f[0] + '">' + esc(f[1]) + ' <span class="tab-count">' + d.tickets.filter(f[2]).length + "</span></button>";
+            }).join("") + "</div>" +
+            '<div id="hd-list"></div>';
+
+        function draw() {
+            $$("#hd-tabs [data-f]").forEach(function (b) { b.classList.toggle("active", b.dataset.f === filter); });
+            const fn = filters.find(function (f) { return f[0] === filter; })[2];
+            const list = d.tickets.filter(fn);
+            $("#hd-list").innerHTML = list.length ? '<div class="ticket-list">' + list.map(function (t) {
+                return '<button type="button" class="ticket-row" data-ticket="' + t.id + '">' +
+                    '<span class="tk-num">#' + t.number + "</span>" +
+                    '<span class="tk-main"><span class="tk-subject">' + esc(t.subject) + "</span>" +
+                    '<span class="muted small">' + esc(t.categoryLabel) + (d.canManage && t.requester ? " · " + esc(t.requester.displayName) : "") +
+                    " · updated " + esc(timeAgo(t.updatedAt)) + (t.replies ? " · " + t.replies + (t.replies === 1 ? " reply" : " replies") : "") + "</span></span>" +
+                    '<span class="tk-side">' + priorityPill(t.priority, d.priorities) + ticketStatusPill(t.status, d.statuses) +
+                    (t.assignee ? '<span class="tk-assignee" title="Assigned to ' + esc(t.assignee.displayName) + '">' + avatar(t.assignee, "xs") + "</span>" : "") + "</span></button>";
+            }).join("") + "</div>"
+                : '<div class="empty-page">' + icon("lifebuoy", "big") + "<h2>" + (filter === "open" ? "No open tickets" : "Nothing here") + "</h2>" +
+                  '<p class="muted">' + (filter === "open" && !d.canManage ? "Something not working? Use <strong>New ticket</strong> and the IT team will help." : "All quiet.") + "</p></div>";
+        }
+
+        root.addEventListener("click", function (e) {
+            const f = e.target.closest("[data-f]");
+            if (f) { filter = state.helpFilter = f.dataset.f; return draw(); }
+            if (e.target.closest("#hd-new")) return openNewTicket(d);
+            const t = e.target.closest("[data-ticket]");
+            if (t) openTicket(t.dataset.ticket, d);
+        });
+        draw();
+        if (state.pendingTicket) {
+            const id = state.pendingTicket;
+            state.pendingTicket = null;
+            openTicket(id, d);
+        }
+    }
+
+    function openNewTicket(d) {
+        const m = openModal(
+            '<h2 class="modal-title">New IT ticket</h2><p class="muted">Tell the IT team what’s wrong. The more detail, the quicker they can fix it.</p>' +
+            '<form id="tk-form" novalidate>' +
+            '<label for="tk-subject">Summary</label><input type="text" id="tk-subject" maxlength="150" placeholder="e.g. Can’t connect to the VPN from home">' +
+            '<div class="grid-2"><div><label for="tk-cat">Category</label><select id="tk-cat">' + Object.keys(d.categories).map(function (k) {
+                return '<option value="' + k + '">' + esc(d.categories[k]) + "</option>";
+            }).join("") + "</select></div>" +
+            '<div><label for="tk-pri">How urgent?</label><select id="tk-pri">' + Object.keys(d.priorities).map(function (k) {
+                return '<option value="' + k + '"' + (k === "normal" ? " selected" : "") + ">" + esc(d.priorities[k]) + "</option>";
+            }).join("") + "</select></div></div>" +
+            '<label for="tk-body">Details</label><textarea id="tk-body" rows="6" maxlength="5000" placeholder="What happened, what you expected, any error messages, and what you’ve tried."></textarea>' +
+            '<div class="form-error" id="tk-error" hidden></div>' +
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">Raise ticket</button></div></form>'
+        );
+        $("#tk-subject", m.el).focus();
+        $("#tk-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try {
+                const r = await api("/api/helpdesk", { subject: $("#tk-subject", m.el).value, category: $("#tk-cat", m.el).value, priority: $("#tk-pri", m.el).value, body: $("#tk-body", m.el).value });
+                state.me = r.user;
+                renderChrome();
+                closeModal();
+                toast("Ticket #" + r.ticket.number + " raised. The IT team will be in touch.");
+                state.pendingTicket = r.ticket.id;
+                state.helpFilter = "open";
+                if (window.location.pathname === "/helpdesk") render(); else navigate("/helpdesk");
+            } catch (err) { formError($("#tk-error", m.el), err.message); }
+        });
+    }
+
+    async function openTicket(id, d) {
+        let t;
+        try { t = (await api("/api/helpdesk/" + id)).ticket; } catch (err) { return toast(err.message); }
+        const done = t.status === "resolved" || t.status === "closed";
+        const m = openModal(
+            '<div class="tk-header"><span class="tk-num">#' + t.number + "</span>" + ticketStatusPill(t.status, d.statuses) + priorityPill(t.priority, d.priorities) + "</div>" +
+            '<h2 class="modal-title">' + esc(t.subject) + "</h2>" +
+            '<p class="muted small">' + esc(t.categoryLabel) + " · raised by " + esc(t.requester ? t.requester.displayName : "") + " " + esc(timeAgo(t.createdAt)) +
+            (t.assignee ? " · assigned to " + esc(t.assignee.displayName) : " · not assigned yet") + "</p>" +
+            (t.canManage ? '<div class="tk-controls">' +
+                '<label>Status<select id="tk-status">' + Object.keys(d.statuses).map(function (k) { return '<option value="' + k + '"' + (t.status === k ? " selected" : "") + ">" + esc(k === "waiting" ? "Waiting on requester" : d.statuses[k]) + "</option>"; }).join("") + "</select></label>" +
+                '<label>Priority<select id="tk-priority">' + Object.keys(d.priorities).map(function (k) { return '<option value="' + k + '"' + (t.priority === k ? " selected" : "") + ">" + esc(d.priorities[k]) + "</option>"; }).join("") + "</select></label>" +
+                '<label>Assigned to<select id="tk-assignee"><option value="">Nobody</option>' + d.agents.map(function (a) { return '<option value="' + a.id + '"' + (t.assignee && t.assignee.id === a.id ? " selected" : "") + ">" + esc(a.displayName) + (a.id === state.me.id ? " (me)" : "") + "</option>"; }).join("") + "</select></label>" +
+                "</div>" : "") +
+            '<div class="tk-thread">' + t.messages.map(function (msg) {
+                const mine = msg.authorId === state.me.id;
+                return '<div class="tk-msg' + (mine ? " mine" : "") + (msg.internal ? " internal" : "") + (msg.fromIt ? " from-it" : "") + '">' + avatar(msg.author || {}, "sm") +
+                    '<div class="tk-bubble"><div class="tk-meta"><strong>' + esc(msg.author ? msg.author.displayName : "") + "</strong>" +
+                    (msg.fromIt ? '<span class="badge">IT</span>' : "") + (msg.internal ? '<span class="badge badge-yellow">Internal note</span>' : "") +
+                    '<span class="muted small">' + esc(timeAgo(msg.at)) + '</span></div><div class="tk-body">' + richText(msg.body) + "</div></div></div>";
+            }).join("") + "</div>" +
+            (t.status === "closed" && !t.canManage ? '<p class="muted small center">This ticket is closed. Reopen it if the problem is back.</p>' :
+            '<form id="tk-reply" class="tk-reply" novalidate><textarea id="tk-reply-text" rows="3" maxlength="5000" placeholder="' + (t.canManage ? "Reply to " + esc(t.requester ? t.requester.displayName : "the requester") : "Add more detail or reply to IT") + '…"></textarea>' +
+            '<div class="tk-reply-bar">' + (t.canManage ? '<label class="inline-check"><input type="checkbox" id="tk-internal"> Internal note (only IT sees it)</label>' : "<span></span>") +
+            '<button type="submit" class="btn btn-primary btn-small">' + icon("message") + "Send</button></div></form>") +
+            '<div class="modal-actions">' + (t.isRequester && !t.canManage
+                ? (done ? '<button type="button" class="btn btn-ghost" data-set="open">' + icon("refresh") + "Reopen ticket</button>" : '<button type="button" class="btn btn-ghost" data-set="resolved">' + icon("tick") + "It’s fixed – close ticket</button>")
+                : "") + '<button type="button" class="btn btn-primary" data-close>Done</button></div>',
+            { wide: true, cls: "modal-ticket" }
+        );
+        const thread = $(".tk-thread", m.el);
+        thread.scrollTop = thread.scrollHeight;
+        const after = function (r, message) {
+            state.me = r.user;
+            renderChrome();
+            toast(message);
+            if (window.location.pathname === "/helpdesk") {
+                closeModal();
+                state.pendingTicket = id;
+                render();
+            }
+        };
+        if (t.canManage) {
+            m.el.addEventListener("change", async function (e) {
+                const field = { "tk-status": "status", "tk-priority": "priority", "tk-assignee": "assigneeId" }[e.target.id];
+                if (!field) return;
+                const body = {};
+                body[field] = e.target.value;
+                try { after(await api("/api/helpdesk/" + id + "/update", body), "Ticket updated."); } catch (err) { toast(err.message); }
+            });
+        }
+        const replyForm = $("#tk-reply", m.el);
+        if (replyForm) replyForm.addEventListener("submit", async function (e) {
+            e.preventDefault();
+            const body = $("#tk-reply-text", m.el).value;
+            if (!body.trim()) return;
+            try { after(await api("/api/helpdesk/" + id + "/reply", { body: body, internal: $("#tk-internal", m.el) ? $("#tk-internal", m.el).checked : false }), "Reply sent."); } catch (err) { toast(err.message); }
+        });
+        m.el.addEventListener("click", async function (e) {
+            const s = e.target.closest("[data-set]");
+            if (!s) return;
+            try { after(await api("/api/helpdesk/" + id + "/update", { status: s.dataset.set }), s.dataset.set === "open" ? "Ticket reopened." : "Ticket closed. Thanks!"); } catch (err) { toast(err.message); }
+        });
+    }
+
     // ================= Settings =================
 
     async function refreshMe() {
@@ -3965,6 +5039,30 @@
         "backup-deleted": ["deleted the backup", "system"],
         "backup-restored": ["restored the backup", "system"],
         "backup-failed": ["\u2014 the nightly backup failed", "system"],
+        "leave-requested": ["requested leave", "leave"],
+        "absence-reported": ["reported an absence", "leave"],
+        "leave-approved": ["approved leave for", "leave"],
+        "leave-declined": ["declined leave for", "leave"],
+        "leave-cancelled": ["cancelled leave for", "leave"],
+        "leave-allowance-changed": ["changed the holiday allowance", "leave"],
+        "shift-added": ["added a shift for", "rotas"],
+        "shift-updated": ["changed a shift for", "rotas"],
+        "shift-deleted": ["deleted a shift for", "rotas"],
+        "rota-copied": ["copied the rota", "rotas"],
+        "timesheet-submitted": ["submitted a timesheet", "rotas"],
+        "timesheet-approved": ["approved the timesheet of", "rotas"],
+        "timesheet-rejected": ["sent back the timesheet of", "rotas"],
+        "pay-details-updated": ["updated the pay details of", "payroll"],
+        "payroll-drafted": ["made draft payslips", "payroll"],
+        "payslip-edited": ["edited the payslip of", "payroll"],
+        "payslip-issued": ["issued payslips", "payroll"],
+        "payslip-withdrawn": ["withdrew the payslip of", "payroll"],
+        "payslip-deleted": ["deleted the payslip of", "payroll"],
+        "payslip-viewed": ["viewed their payslip", "payroll"],
+        "ticket-raised": ["raised IT ticket", "helpdesk"],
+        "ticket-replied": ["replied to IT ticket", "helpdesk"],
+        "ticket-note-added": ["added an internal note to IT ticket", "helpdesk"],
+        "ticket-updated": ["updated IT ticket", "helpdesk"],
     };
     const AUDIT_FILTERS = [
         ["", "All activity"],
@@ -3976,6 +5074,10 @@
         ["calendar", "Calendar"],
         ["polls", "Polls & surveys"],
         ["access", "Roles & permissions"],
+        ["leave", "Leave & absence"],
+        ["rotas", "Rotas & timesheets"],
+        ["payroll", "Payroll"],
+        ["helpdesk", "IT Helpdesk"],
         ["system", "System Admin"],
     ];
 

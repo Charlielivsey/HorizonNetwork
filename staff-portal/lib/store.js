@@ -103,6 +103,7 @@ function init(dir) {
     }
     settings.superAdminRoleAdded = true;
   }
+  if (!settings.hrRolesAdded) migrateHrRoles();
   writeJson(settingsFile, settings);
 }
 
@@ -116,9 +117,16 @@ const PERMISSIONS = [
   { key: "events.manage", name: "Manage the calendar", description: "Add, edit and delete calendar events and company holidays." },
   { key: "polls.manage", name: "Run polls & surveys", description: "Create polls and surveys and see the results." },
   { key: "onboarding.manage", name: "Run onboarding", description: "Start onboarding checklists and edit the templates." },
+  { key: "leave.manage", name: "Manage leave", description: "Approve anyone's leave, see all absence and set holiday allowances." },
+  { key: "rotas.manage", name: "Manage rotas & timesheets", description: "Plan shifts on the rota and approve anyone's timesheets." },
+  { key: "helpdesk.manage", name: "Handle IT tickets", description: "See every IT Helpdesk ticket, reply, assign and change its status." },
+  { key: "payroll.manage", name: "Run payroll", description: "See pay details and generate and issue payslips. Only people who already have it can give it out." },
   { key: "system.admin", name: "System Admin", description: "Open System Admin with the PIN: sessions, log in as, backups and the full activity log. Only people who already have it can give it out." },
 ];
 const SYSTEM_ADMIN = "system.admin";
+const PAYROLL = "payroll.manage";
+// Permissions only someone who already has them can hand out.
+const GUARDED_PERMISSIONS = [SYSTEM_ADMIN, PAYROLL];
 const PERMISSION_KEYS = PERMISSIONS.map((p) => p.key);
 
 // First run with roles: create sensible defaults, and give anyone who had access through their
@@ -139,6 +147,32 @@ function migrateToRoles() {
     }
   }
   if (changed) savePeople();
+}
+
+// Leave, rotas, the helpdesk and payroll: give the new permissions to the roles that should have
+// them, and add "Human Resources" (with payroll) and "IT Support" roles. Runs once.
+function migrateHrRoles() {
+  const byName = (name) => settings.roles.find((r) => r.name.toLowerCase() === name.toLowerCase());
+  const add = (role, keys) => {
+    if (role) keys.forEach((k) => { if (!role.permissions.includes(k)) role.permissions.push(k); });
+  };
+  add(byName("Leadership & HR"), ["leave.manage", "rotas.manage"]);
+  add(byName("Super Admin"), ["leave.manage", "rotas.manage", "helpdesk.manage"]);
+  if (!byName("Human Resources")) {
+    const hr = { id: newId(), name: "Human Resources", permissions: ["staff.manage", "onboarding.manage", "leave.manage", "rotas.manage", PAYROLL] };
+    settings.roles.push(hr);
+    let changed = false;
+    for (const p of people) {
+      if (p.system) continue;
+      if (allJobTitles(p).some((t) => /human resources|\bhr\b/i.test(t))) {
+        p.roleIds = (p.roleIds || []).concat(hr.id);
+        changed = true;
+      }
+    }
+    if (changed) savePeople();
+  }
+  if (!byName("IT Support")) settings.roles.push({ id: newId(), name: "IT Support", permissions: ["helpdesk.manage"] });
+  settings.hrRolesAdded = true;
 }
 
 function listRoles() {
@@ -192,7 +226,7 @@ function setRoleMembers(role, personIds) {
 function permissionsOf(person) {
   if (!person) return [];
   if (isOwner(person)) return PERMISSION_KEYS.slice();
-  if (person.system) return PERMISSION_KEYS.filter((k) => k !== SYSTEM_ADMIN);
+  if (person.system) return PERMISSION_KEYS.filter((k) => k !== SYSTEM_ADMIN && k !== PAYROLL);
   const out = new Set();
   for (const id of person.roleIds || []) {
     const role = getRole(id);
@@ -203,6 +237,13 @@ function permissionsOf(person) {
 
 function can(person, permission) {
   return permissionsOf(person).includes(permission);
+}
+
+// Does `boss` supervise `person` in any of the person's roles?
+function supervises(boss, person) {
+  if (!boss || !person || boss.id === person.id) return false;
+  if (person.supervisorId === boss.id) return true;
+  return (person.otherRoles || []).some((r) => (r.supervisorId || person.supervisorId) === boss.id);
 }
 
 function loadPeople() {
@@ -909,6 +950,8 @@ function allPeople() {
 module.exports = {
   ADMIN_USERNAME,
   PERMISSIONS,
+  GUARDED_PERMISSIONS,
+  supervises,
   listRoles,
   saveRole,
   getRole,

@@ -7,7 +7,7 @@ Internal staff portal for the whole of HN Group, served at **https://staff.hngro
 ## Features
 
 - **Home page.** Shows the current date and time on your device, and the time where your profile location is set, with the difference between the two. It also shows the latest announcements, anything you need to acknowledge, your onboarding tasks, what's coming up on the calendar and your status.
-- **Dropdown navigation.** People (Staff Directory, Employee Management), Workplace, HR and Support. Sections that aren't built yet are marked *Soon*.
+- **Dropdown navigation.** People, Workplace, HR and Support. Pages you don't have permission for are hidden.
 - **Staff Directory.** Every employee with their photo, job title, company, emails, location and live local time. You can search and filter by company. Click someone to see who they report to and who reports to them.
 - **About HN Group** (Support → About HN Group). It covers the companies in the group with how many people work at each, the brand colours (click to copy) and every logo, with SVG and PNG downloads. The logo files are in `public/assets/brand/`.
 - **Email signature** (Workplace → Email signature, or the menu under your name).
@@ -16,6 +16,21 @@ Internal staff portal for the whole of HN Group, served at **https://staff.hngro
   - **Copy signature** pastes straight into Gmail or Outlook. You can also copy the HTML or download it as a file, and there are step-by-step instructions for Gmail, Outlook and Apple Mail.
   - People with *Manage staff* can make a signature for anyone.
   - The logo images load from the portal (`/assets/brand/png/`), so recipients need to be able to reach staff.hngroup.org.uk.
+- **Leave & Absence** (HR → Leave & Absence).
+  - Staff request annual, compassionate, unpaid or other leave, with half days for single days. Sickness is reported and recorded straight away.
+  - Only working days count: weekends and UK bank holidays are skipped. Annual leave comes out of a yearly allowance (January to December, 25 days by default).
+  - Requests go to the person's supervisor, or anyone with *Manage leave*. Approved leave shows on the company calendar and the rota (without the reason).
+  - People with *Manage leave* can set the default allowance and individual allowances, see everyone's leave and record leave for others.
+- **Rotas & Timesheets** (HR → Rotas & Timesheets).
+  - A weekly rota everyone can see. People with *Manage rotas & timesheets* add, edit and delete shifts, and can copy last week's rota.
+  - Staff fill in a weekly timesheet, prefilled from their shifts, and submit it. Their supervisor or a rota manager approves it or sends it back with a note.
+- **Payslips** (HR → Payslips). Staff see their own issued payslips, with year-to-date totals, and can print them or save them as a PDF.
+- **Run payroll** (HR → Run payroll). Only for people with *Run payroll*, which by default only the **Human Resources** role has.
+  - Store each person's pay details: salary or hourly rate, tax code, NI number and category, pension percentages and student loan plan.
+  - **Generate payslips** makes a draft for everyone selected. Tax, NI, pension and student loan are estimated with 2025/26 UK rates (rest of UK, monthly, non-cumulative). Hourly staff are paid for the hours on their approved timesheets.
+  - Every line can be edited before issuing. Issued payslips can be withdrawn. Staff only see issued payslips.
+  - The estimates are a starting point, not a payroll engine. Scottish income tax and cumulative tax codes aren't handled, so check each payslip before issuing it.
+- **IT Helpdesk** (Support → IT Helpdesk). Anyone can raise a ticket with a category and urgency and follow the conversation. People with *Handle IT tickets* (the **IT Support** role) see every ticket, reply, add internal notes, assign tickets and change their status.
 - **Global search.** Use the search box in the top bar, or press **Ctrl+K** (**⌘K** on a Mac) or **/**. It searches people, pages, documents, announcements, events and polls.
 - **Status.** Click your name, then the status line, to set Available, Busy, Away or Out of office. You can add a message and a date it clears on. Your status shows on your profile and in the Staff Directory.
 - **Employee Management.** Only shown to people with the *Manage staff* permission. Click any row to edit that person.
@@ -125,12 +140,18 @@ What people can manage is set by **roles**, under **People → Roles & permissio
 - Manage the calendar
 - Run polls & surveys
 - Run onboarding
+- Manage leave
+- Manage rotas & timesheets
+- Handle IT tickets
+- Run payroll: only people who already have it can give it out.
 - System Admin: open System Admin with the PIN. Only people who already have it can give it out.
 
 You then choose who has each role. Someone with several roles gets every permission from all of them.
 
-- The **system owner** (charlie.livsey@hngroup.org.uk) always has every permission. The built-in **admin account** has every permission except System Admin.
-- A **Super Admin** role with every permission, including System Admin, is created automatically.
+- The **system owner** (charlie.livsey@hngroup.org.uk) always has every permission.
+- A **Super Admin** role with every permission except *Run payroll*, including System Admin, is created automatically.
+- A **Human Resources** role (staff, onboarding, leave, rotas and payroll) is created and given to everyone whose job title mentions Human Resources or HR. An empty **IT Support** role (helpdesk) is created too.
+- The built-in admin account gets every permission except System Admin and *Run payroll*.
   - Super admins can use everything in System Admin except changing the PIN.
   - They can't log in as the system owner or end the owner's sessions.
 - On the first start after upgrading, three roles are created: **Leadership & HR** (everything), **Communications** and **Documents**. Everyone who previously had access through their job title is given *Leadership & HR*.
@@ -196,6 +217,8 @@ Everything lives in `/var/lib/hn-staff-portal`:
 | `announcements.json`, `documents.json`, `documents/` | Announcements, the document library and the uploaded files. |
 | `sessions.json`   | Signed-in sessions (hashed tokens).                              |
 | `events.json`, `polls.json`, `onboarding.json` | Calendar events, polls and their answers, and onboarding checklists. |
+| `leave.json`, `rotas.json`, `helpdesk.json` | Leave requests and allowances, shifts and timesheets, and IT tickets. |
+| `payslips.json` | Pay details and payslips. Only Human Resources can see these in the portal. |
 | `backups/`        | Automatic and manual backups (`.tar.gz`).                       |
 | `audit.log`       | Activity log of every action in the portal.                     |
 | `avatars/`        | Profile pictures.                                               |

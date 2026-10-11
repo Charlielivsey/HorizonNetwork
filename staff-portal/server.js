@@ -11,6 +11,10 @@ const calendar = require("./lib/calendar");
 const polls = require("./lib/polls");
 const onboarding = require("./lib/onboarding");
 const backup = require("./lib/backup");
+const leave = require("./lib/leave");
+const rotas = require("./lib/rotas");
+const payslips = require("./lib/payslips");
+const helpdesk = require("./lib/helpdesk");
 
 const PORT = parseInt(process.env.PORT || "3200", 10);
 const HOST = process.env.HOST || "127.0.0.1";
@@ -29,6 +33,7 @@ const MAX_AVATAR_BODY_BYTES = 2 * 1024 * 1024;
 const APP_ROUTES = new Set([
   "/home", "/directory", "/employees", "/settings", "/system", "/announcements", "/documents",
   "/calendar", "/polls", "/onboarding", "/roles", "/about", "/signature",
+  "/leave", "/rotas", "/payslips", "/payroll", "/helpdesk",
 ]);
 const SYSTEM_UNLOCK_MS = 15 * 60 * 1000; // System Admin stays unlocked for 15 minutes of inactivity
 const MAX_PIN_ATTEMPTS = 5;
@@ -48,6 +53,10 @@ workplace.init(DATA_DIR);
 calendar.init(DATA_DIR);
 polls.init(DATA_DIR);
 onboarding.init(DATA_DIR);
+leave.init(DATA_DIR);
+rotas.init(DATA_DIR);
+payslips.init(DATA_DIR);
+helpdesk.init(DATA_DIR);
 backup.init(DATA_DIR);
 
 // Re-reads every data file, e.g. after a backup is restored.
@@ -57,6 +66,10 @@ function reloadAll() {
   calendar.init(DATA_DIR);
   polls.init(DATA_DIR);
   onboarding.init(DATA_DIR);
+  leave.init(DATA_DIR);
+  rotas.init(DATA_DIR);
+  payslips.init(DATA_DIR);
+  helpdesk.init(DATA_DIR);
 }
 
 backup.scheduleNightly((err, name) => {
@@ -465,6 +478,10 @@ function meResponse(session) {
   user.pendingAcks = workplace.pendingAcks(session.person) + workplace.pendingAnnouncementAcks(session.person);
   user.openPolls = polls.openForPerson(session.person);
   user.onboardingTasks = onboarding.forPerson(session.person).reduce((n, c) => n + c.tasks.filter((t) => !t.doneAt && t.canTick).length, 0);
+  user.leaveApprovals = leave.pendingApprovalCount(session.person);
+  user.timesheetApprovals = rotas.pendingApprovalCount(session.person);
+  user.helpdeskBadge = helpdesk.badgeCount(session.person);
+  user.onLeaveToday = leave.isOffToday(session.person.id);
   if (session.data.impersonatorId) {
     const by = store.getPerson(session.data.impersonatorId);
     user.impersonatedBy = by ? by.displayName : "System owner";
@@ -994,6 +1011,7 @@ async function routeApi(req, res, pathname, session) {
         if (person.id === me.id) throw httpError(400, "You can't delete your own record.");
         store.deleteEmployee(person);
         onboarding.removePerson(person.id);
+        payslips.removePerson(person.id);
         endSessionsFor(person.id);
         logEvent(req, session, "employee-deleted", { target: person.displayName });
         return sendJson(res, 200, { ok: true });
@@ -1064,7 +1082,9 @@ async function routeApi(req, res, pathname, session) {
     const to = q.get("to") || from;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || to < from) throw httpError(400, "Choose a valid date range.");
     if ((Date.parse(to) - Date.parse(from)) / 86400000 > 120) throw httpError(400, "Choose a shorter date range.");
-    return sendJson(res, 200, { items: calendar.itemsBetween(me, from, to), canManage: store.can(me, "events.manage"), types: calendar.EVENT_TYPES });
+    const items = calendar.itemsBetween(me, from, to).concat(leave.calendarItems(from, to))
+      .sort((a, b) => a.startDate.localeCompare(b.startDate) || (a.startTime || "").localeCompare(b.startTime || ""));
+    return sendJson(res, 200, { items, canManage: store.can(me, "events.manage"), types: calendar.EVENT_TYPES });
   }
   if (pathname.startsWith("/api/events")) {
     if (!store.can(me, "events.manage")) throw httpError(403, "You don't have permission to manage the calendar.");
@@ -1181,6 +1201,273 @@ async function routeApi(req, res, pathname, session) {
     }
   }
 
+  // ----- Leave & absence -----
+  if (pathname.startsWith("/api/leave")) {
+    const leaveManager = store.can(me, leave.MANAGE);
+    if (me.system && !leaveManager) throw httpError(403, "Leave isn't available for this account.");
+    if (method === "GET" && pathname === "/api/leave") {
+      const q = new URL(req.url, "http://localhost").searchParams;
+      const year = /^\d{4}$/.test(q.get("year") || "") ? q.get("year") : String(new Date().getFullYear());
+      const t = new Date().toISOString().slice(0, 10);
+      return sendJson(res, 200, {
+        types: leave.TYPES,
+        summary: me.system ? null : leave.summary(me.id, year),
+        mine: me.system ? [] : leave.mine(me),
+        approvals: leave.approvals(me),
+        whosOff: leave.team(me, t, rotas.addDays(t, 60)),
+        canManage: leaveManager,
+        isApprover: leaveManager || store.employees().some((p) => store.supervises(me, p)),
+        people: leaveManager ? store.employees().map((p) => ({ id: p.id, displayName: p.displayName, jobTitle: p.jobTitle, avatarUrl: store.publicView(p).avatarUrl, summary: leave.summary(p.id, year) })) : [],
+        allowances: leaveManager ? leave.allowances() : null,
+      });
+    }
+    if (method === "POST" && pathname === "/api/leave/working-days") {
+      const { startDate, endDate } = await readJsonBody(req);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate || "") || !/^\d{4}-\d{2}-\d{2}$/.test(endDate || "") || endDate < startDate) return sendJson(res, 200, { days: 0 });
+      return sendJson(res, 200, { days: leave.workingDays(startDate, endDate) });
+    }
+    if (method === "POST" && pathname === "/api/leave") {
+      const body = await readJsonBody(req);
+      // HR (or a supervisor) can record leave for someone else.
+      let person = me;
+      if (body.personId && body.personId !== me.id) {
+        person = store.getPerson(body.personId);
+        if (!person || person.system || !(leaveManager || store.supervises(me, person))) throw httpError(403, "You can't book leave for that person.");
+      }
+      const r = leave.createRequest(person, body, me);
+      logEvent(req, session, r.type === "sick" ? "absence-reported" : "leave-requested", {
+        target: person.id === me.id ? undefined : person.displayName,
+        detail: `${leave.TYPES[r.type]}, ${r.startDate}${r.endDate !== r.startDate ? " to " + r.endDate : ""} (${r.days} day${r.days === 1 ? "" : "s"})${r.status === "approved" ? ", recorded" : ""}`,
+      });
+      return sendJson(res, 201, { ok: true, user: meResponse(session) });
+    }
+    if (method === "POST" && (m = /^\/api\/leave\/([a-f0-9]{16})\/(approve|decline|cancel)$/.exec(pathname))) {
+      const r = leave.getRequest(m[1]);
+      if (!r) throw httpError(404, "Request not found.");
+      const body = await readJsonBody(req);
+      const who = (store.getPerson(r.personId) || {}).displayName;
+      if (m[2] === "cancel") {
+        if (r.personId !== me.id && !leaveManager) throw httpError(403, "You can't cancel that request.");
+        leave.cancel(r, me);
+        logEvent(req, session, "leave-cancelled", { target: who, detail: `${leave.TYPES[r.type]}, ${r.startDate}` });
+      } else {
+        leave.decide(r, m[2] === "approve", me, body.note);
+        logEvent(req, session, m[2] === "approve" ? "leave-approved" : "leave-declined", { target: who, detail: `${leave.TYPES[r.type]}, ${r.startDate}${r.endDate !== r.startDate ? " to " + r.endDate : ""}` });
+      }
+      return sendJson(res, 200, { ok: true, user: meResponse(session) });
+    }
+    if (method === "POST" && pathname === "/api/leave/allowances") {
+      if (!leaveManager) throw httpError(403, "You don't have permission to change allowances.");
+      const body = await readJsonBody(req);
+      if ("defaultAllowance" in body) leave.setDefaultAllowance(body.defaultAllowance);
+      if (body.personId) {
+        const p = store.getPerson(body.personId);
+        if (!p) throw httpError(404, "Person not found.");
+        leave.setAllowance(p.id, body.days);
+        logEvent(req, session, "leave-allowance-changed", { target: p.displayName, detail: body.days === "" ? "default" : `${body.days} days` });
+      } else {
+        logEvent(req, session, "leave-allowance-changed", { detail: `Default ${body.defaultAllowance} days` });
+      }
+      return sendJson(res, 200, { ok: true });
+    }
+  }
+
+  // ----- Rotas & timesheets -----
+  if (pathname.startsWith("/api/rotas") || pathname.startsWith("/api/timesheets")) {
+    const rotaManager = store.can(me, rotas.MANAGE);
+    const q = new URL(req.url, "http://localhost").searchParams;
+    const requireRotas = () => {
+      if (!rotaManager) throw httpError(403, "You don't have permission to edit the rota.");
+    };
+    if (method === "GET" && pathname === "/api/rotas") {
+      const week = rotas.weekStart(q.get("week") || new Date().toISOString().slice(0, 10));
+      return sendJson(res, 200, {
+        week,
+        shifts: rotas.shiftsBetween(week, rotas.addDays(week, 6)),
+        people: store.employees().map((p) => ({ id: p.id, displayName: p.displayName, jobTitle: p.jobTitle, company: p.company, otherCompanies: (p.otherRoles || []).map((r) => r.company), avatarUrl: store.publicView(p).avatarUrl }))
+          .sort((a, b) => a.displayName.localeCompare(b.displayName)),
+        leave: leave.calendarItems(week, rotas.addDays(week, 6)),
+        canManage: rotaManager,
+        isApprover: rotas.isApprover(me),
+      });
+    }
+    if (method === "POST" && (m = /^\/api\/rotas\/shifts(?:\/([a-f0-9]{16})(\/delete)?)?$/.exec(pathname))) {
+      requireRotas();
+      const existing = m[1] ? rotas.getShift(m[1]) : null;
+      if (m[1] && !existing) throw httpError(404, "Shift not found.");
+      if (m[2]) {
+        rotas.deleteShift(existing);
+        logEvent(req, session, "shift-deleted", { target: (store.getPerson(existing.personId) || {}).displayName, detail: existing.date });
+      } else {
+        const sh = rotas.saveShift(await readJsonBody(req), existing);
+        logEvent(req, session, existing ? "shift-updated" : "shift-added", { target: (store.getPerson(sh.personId) || {}).displayName, detail: `${sh.date} ${sh.start}–${sh.end}` });
+      }
+      return sendJson(res, 200, { ok: true });
+    }
+    if (method === "POST" && pathname === "/api/rotas/copy-week") {
+      requireRotas();
+      const { from, to } = await readJsonBody(req);
+      const added = rotas.copyWeek(from, to);
+      logEvent(req, session, "rota-copied", { detail: `Week of ${rotas.weekStart(from)} to week of ${rotas.weekStart(to)} (${added} shifts)` });
+      return sendJson(res, 200, { ok: true, added });
+    }
+    if (method === "GET" && pathname === "/api/timesheets/mine") {
+      if (me.system) throw httpError(403, "Timesheets aren't available for this account.");
+      const week = rotas.weekStart(q.get("week") || new Date().toISOString().slice(0, 10));
+      const sheet = rotas.findSheet(me.id, week);
+      return sendJson(res, 200, { sheet: rotas.sheetView(sheet || rotas.blankSheet(me, week), me), recent: rotas.myRecent(me) });
+    }
+    if (method === "POST" && pathname === "/api/timesheets/mine") {
+      if (me.system) throw httpError(403, "Timesheets aren't available for this account.");
+      const body = await readJsonBody(req);
+      const sheet = rotas.saveSheet(me, body);
+      if (body.submit) logEvent(req, session, "timesheet-submitted", { detail: `Week of ${sheet.week}` });
+      return sendJson(res, 200, { sheet: rotas.sheetView(sheet, me), user: meResponse(session) });
+    }
+    if (method === "GET" && pathname === "/api/timesheets/review") {
+      return sendJson(res, 200, rotas.forReview(me));
+    }
+    if (method === "POST" && (m = /^\/api\/timesheets\/([a-f0-9]{16})\/(approve|reject)$/.exec(pathname))) {
+      const sheet = rotas.getSheet(m[1]);
+      if (!sheet) throw httpError(404, "Timesheet not found.");
+      rotas.decide(sheet, m[2] === "approve", me, (await readJsonBody(req)).note);
+      logEvent(req, session, m[2] === "approve" ? "timesheet-approved" : "timesheet-rejected", { target: (store.getPerson(sheet.personId) || {}).displayName, detail: `Week of ${sheet.week}` });
+      return sendJson(res, 200, { ok: true, user: meResponse(session) });
+    }
+  }
+
+  // ----- Payslips (your own) -----
+  if (method === "GET" && pathname === "/api/payslips") {
+    return sendJson(res, 200, { payslips: payslips.mine(me), canRunPayroll: store.can(me, payslips.MANAGE) });
+  }
+  if (method === "GET" && (m = /^\/api\/payslips\/([a-f0-9]{16})$/.exec(pathname))) {
+    const slip = payslips.getPayslip(m[1]);
+    const allowed = slip && ((slip.personId === me.id && slip.status === "issued") || store.can(me, payslips.MANAGE));
+    if (!allowed) throw httpError(404, "Payslip not found.");
+    if (slip.personId === me.id) logEvent(req, session, "payslip-viewed", { detail: payslips.periodLabel(slip.period) });
+    return sendJson(res, 200, { payslip: payslips.fullView(slip) });
+  }
+
+  // ----- Payroll (Human Resources only) -----
+  if (pathname.startsWith("/api/payroll")) {
+    if (!store.can(me, payslips.MANAGE)) throw httpError(403, "Only Human Resources can run payroll.");
+    const q = new URL(req.url, "http://localhost").searchParams;
+    if (method === "GET" && pathname === "/api/payroll") {
+      const now = new Date();
+      const period = /^\d{4}-(0[1-9]|1[0-2])$/.test(q.get("period") || "") ? q.get("period") : now.toISOString().slice(0, 7);
+      return sendJson(res, 200, {
+        period,
+        periodLabel: payslips.periodLabel(period),
+        payslips: payslips.forPeriod(period),
+        people: payslips.peopleList(),
+        rates: payslips.RATES.label,
+        studentLoans: Object.fromEntries(Object.entries(payslips.RATES.studentLoans).map(([k, v]) => [k, v.label])),
+        companies: store.COMPANIES,
+      });
+    }
+    if ((m = /^\/api\/payroll\/details\/([a-f0-9]{16})$/.exec(pathname))) {
+      const p = store.getPerson(m[1]);
+      if (!p || p.system) throw httpError(404, "Person not found.");
+      if (method === "GET") return sendJson(res, 200, { details: payslips.payDetails(p.id), person: { id: p.id, displayName: p.displayName, company: p.company } });
+      if (method === "POST") {
+        payslips.savePayDetails(p.id, await readJsonBody(req));
+        logEvent(req, session, "pay-details-updated", { target: p.displayName });
+        return sendJson(res, 200, { ok: true });
+      }
+    }
+    if (method === "POST" && pathname === "/api/payroll/estimate") {
+      const { personId, period } = await readJsonBody(req);
+      return sendJson(res, 200, payslips.estimate(personId, period));
+    }
+    if (method === "POST" && pathname === "/api/payroll/run") {
+      const { period, payDate, personIds } = await readJsonBody(req);
+      const made = [];
+      const skipped = [];
+      for (const id of Array.isArray(personIds) ? personIds : []) {
+        try {
+          made.push(payslips.createDraft(id, { period, payDate }, me));
+        } catch (err) {
+          if (!(err instanceof store.ValidationError)) throw err;
+          skipped.push({ name: (store.getPerson(id) || {}).displayName || id, reason: err.message });
+        }
+      }
+      if (made.length) logEvent(req, session, "payroll-drafted", { detail: `${payslips.periodLabel(period)}: ${made.length} draft payslip${made.length === 1 ? "" : "s"}` });
+      return sendJson(res, 200, { made: made.length, skipped });
+    }
+    if (method === "POST" && pathname === "/api/payroll/payslips") {
+      const body = await readJsonBody(req);
+      const slip = payslips.createDraft(body.personId, body, me);
+      logEvent(req, session, "payroll-drafted", { target: (store.getPerson(slip.personId) || {}).displayName, detail: payslips.periodLabel(slip.period) });
+      return sendJson(res, 201, { payslip: payslips.fullView(slip) });
+    }
+    if ((m = /^\/api\/payroll\/payslips\/([a-f0-9]{16})(?:\/(issue|withdraw|delete))?$/.exec(pathname))) {
+      const slip = payslips.getPayslip(m[1]);
+      if (!slip) throw httpError(404, "Payslip not found.");
+      const who = (store.getPerson(slip.personId) || {}).displayName;
+      const label = payslips.periodLabel(slip.period);
+      if (method === "GET" && !m[2]) return sendJson(res, 200, { payslip: payslips.fullView(slip) });
+      if (method === "POST") {
+        if (m[2] === "issue" || m[2] === "withdraw") {
+          payslips.setIssued(slip, m[2] === "issue", me);
+          logEvent(req, session, m[2] === "issue" ? "payslip-issued" : "payslip-withdrawn", { target: who, detail: label });
+        } else if (m[2] === "delete") {
+          payslips.deletePayslip(slip);
+          logEvent(req, session, "payslip-deleted", { target: who, detail: label });
+        } else {
+          payslips.updateDraft(slip, await readJsonBody(req));
+          logEvent(req, session, "payslip-edited", { target: who, detail: label });
+        }
+        return sendJson(res, 200, { ok: true, payslip: m[2] === "delete" ? null : payslips.fullView(slip) });
+      }
+    }
+    if (method === "POST" && pathname === "/api/payroll/issue-all") {
+      const { period } = await readJsonBody(req);
+      let n = 0;
+      for (const s of payslips.forPeriod(period)) {
+        if (s.status !== "draft") continue;
+        payslips.setIssued(payslips.getPayslip(s.id), true, me);
+        n++;
+      }
+      if (n) logEvent(req, session, "payslip-issued", { detail: `${payslips.periodLabel(period)}: ${n} payslip${n === 1 ? "" : "s"}` });
+      return sendJson(res, 200, { issued: n });
+    }
+  }
+
+  // ----- IT Helpdesk -----
+  if (pathname.startsWith("/api/helpdesk")) {
+    if (method === "GET" && pathname === "/api/helpdesk") {
+      return sendJson(res, 200, {
+        tickets: helpdesk.list(me),
+        canManage: helpdesk.isAgent(me),
+        agents: helpdesk.agents(),
+        categories: helpdesk.CATEGORIES,
+        priorities: helpdesk.PRIORITIES,
+        statuses: helpdesk.STATUSES,
+      });
+    }
+    if (method === "POST" && pathname === "/api/helpdesk") {
+      const t = helpdesk.createTicket(me, await readJsonBody(req));
+      logEvent(req, session, "ticket-raised", { target: `#${t.number}`, detail: t.subject });
+      return sendJson(res, 201, { ticket: helpdesk.fullView(t, me), user: meResponse(session) });
+    }
+    if ((m = /^\/api\/helpdesk\/([a-f0-9]{16})(?:\/(reply|update))?$/.exec(pathname))) {
+      const t = helpdesk.getTicket(m[1]);
+      if (!t || !helpdesk.canSee(me, t)) throw httpError(404, "Ticket not found.");
+      if (method === "GET" && !m[2]) return sendJson(res, 200, { ticket: helpdesk.fullView(t, me) });
+      if (method === "POST" && m[2] === "reply") {
+        const body = await readJsonBody(req);
+        helpdesk.reply(t, me, body);
+        logEvent(req, session, body.internal && helpdesk.isAgent(me) ? "ticket-note-added" : "ticket-replied", { target: `#${t.number}` });
+        return sendJson(res, 200, { ticket: helpdesk.fullView(t, me), user: meResponse(session) });
+      }
+      if (method === "POST" && m[2] === "update") {
+        const changes = helpdesk.update(t, me, await readJsonBody(req));
+        if (changes.length) logEvent(req, session, "ticket-updated", { target: `#${t.number}`, detail: changes.join(", ") });
+        return sendJson(res, 200, { ticket: helpdesk.fullView(t, me), user: meResponse(session) });
+      }
+    }
+  }
+
   // ----- Roles & permissions -----
   if (pathname.startsWith("/api/roles")) {
     if (!store.can(me, "access.manage")) throw httpError(403, "You don't have permission to manage roles.");
@@ -1192,11 +1479,15 @@ async function routeApi(req, res, pathname, session) {
       });
     }
     // Only people who can open System Admin can give that permission out, or change who has it.
+    // System Admin and payroll can only be handed out (or changed on a role) by people who have them.
     const guardSystemAdmin = (role, body) => {
-      if (store.can(me, "system.admin")) return;
-      const before = role ? role.permissions.includes("system.admin") : false;
-      const after = body && Array.isArray(body.permissions) ? body.permissions.includes("system.admin") : before;
-      if (before || after) throw httpError(403, "Only people with System Admin access can change roles that include it.");
+      for (const key of store.GUARDED_PERMISSIONS) {
+        if (store.can(me, key)) continue;
+        const before = role ? role.permissions.includes(key) : false;
+        const after = body && Array.isArray(body.permissions) ? body.permissions.includes(key) : before;
+        const name = (store.PERMISSIONS.find((x) => x.key === key) || {}).name || key;
+        if (before || after) throw httpError(403, `Only people with the “${name}” permission can change roles that include it.`);
+      }
     };
     if (method === "POST" && pathname === "/api/roles") {
       const body = await readJsonBody(req);
