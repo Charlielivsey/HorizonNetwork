@@ -35,6 +35,11 @@ const feedback = require("./lib/feedback");
 const pulse = require("./lib/pulse");
 const exitinterviews = require("./lib/exitinterviews");
 const flexible = require("./lib/flexible");
+const chat = require("./lib/chat");
+const qa = require("./lib/qa");
+const wiki = require("./lib/wiki");
+const mentoring = require("./lib/mentoring");
+const oncall = require("./lib/oncall");
 
 const PORT = parseInt(process.env.PORT || "3200", 10);
 const HOST = process.env.HOST || "127.0.0.1";
@@ -54,7 +59,7 @@ const APP_ROUTES = new Set([
   "/home", "/directory", "/employees", "/settings", "/system", "/announcements", "/documents",
   "/calendar", "/polls", "/onboarding", "/roles", "/about", "/signature",
   "/leave", "/rotas", "/payslips", "/payroll", "/funds", "/helpdesk", "/reviews", "/staff-files", "/status",
-  "/expenses", "/invoices", "/notifications", "/training", "/cases", "/jobs", "/kudos", "/ideas", "/team", "/reports", "/bills", "/objectives", "/feedback", "/pulse", "/exit-interview", "/exit-interviews", "/flexible",
+  "/expenses", "/invoices", "/notifications", "/training", "/cases", "/jobs", "/kudos", "/ideas", "/team", "/reports", "/bills", "/objectives", "/feedback", "/pulse", "/exit-interview", "/exit-interviews", "/flexible", "/chat", "/questions", "/wiki", "/mentoring", "/on-call",
 ]);
 const SYSTEM_UNLOCK_MS = 15 * 60 * 1000; // System Admin stays unlocked for 15 minutes of inactivity
 const MAX_PIN_ATTEMPTS = 5;
@@ -98,7 +103,7 @@ invoices.init(DATA_DIR);
 notifications.init(DATA_DIR);
 resume.init(DATA_DIR);
 bills.init(DATA_DIR);
-for (const mod of [objectives, feedback, pulse, exitinterviews, flexible]) mod.init(DATA_DIR);
+for (const mod of [objectives, feedback, pulse, exitinterviews, flexible, chat, qa, wiki, mentoring, oncall]) mod.init(DATA_DIR);
 training.init(DATA_DIR);
 cases.init(DATA_DIR);
 recruitment.init(DATA_DIR);
@@ -129,7 +134,7 @@ function reloadAll() {
   kudos.init(DATA_DIR);
   ideas.init(DATA_DIR);
   bills.init(DATA_DIR);
-  for (const mod of [objectives, feedback, pulse, exitinterviews, flexible]) mod.init(DATA_DIR);
+  for (const mod of [objectives, feedback, pulse, exitinterviews, flexible, chat, qa, wiki, mentoring, oncall]) mod.init(DATA_DIR);
 }
 
 backup.scheduleNightly((err, name) => {
@@ -613,6 +618,9 @@ function meResponse(session) {
   user.notificationsUnread = notifications.unreadCount(session.person.id);
   user.trainingDue = training.dueCount(session.person);
   user.feedbackDue = feedback.pendingCount(session.person);
+  user.chatUnread = chat.unreadTotal(session.person);
+  user.mentoringDue = mentoring.dueCount(session.person);
+  user.onCallNow = oncall.current();
   user.pulseDue = !session.person.system && !pulse.hasAnswered(session.person);
   user.flexibleDecisions = flexible.pendingCount(session.person);
   user.exitInterviewDue = !!onboarding.leaverChecklistOf(session.person.id) && !exitinterviews.forPerson(session.person.id);
@@ -1062,7 +1070,7 @@ function search(me, query) {
   const people = [];
   for (const p of store.employees()) {
     const roles = [{ company: p.company, jobTitle: p.jobTitle }].concat((p.otherRoles || []).map((r) => ({ company: r.company, jobTitle: r.jobTitle || p.jobTitle })));
-    if (!has(p.displayName, p.firstName, p.lastName, p.location, p.emails.map((e) => e.address).join(" "), roles.map((r) => r.jobTitle + " " + r.company).join(" "))) continue;
+    if (!has(p.displayName, p.firstName, p.lastName, p.location, p.emails.map((e) => e.address).join(" "), roles.map((r) => r.jobTitle + " " + r.company).join(" "), (p.skills || []).join(" "), (p.languages || []).join(" "))) continue;
     people.push({ id: p.id, displayName: p.displayName, jobTitle: p.jobTitle, company: p.company, avatarUrl: store.publicView(p).avatarUrl });
     if (people.length >= 6) break;
   }
@@ -1075,7 +1083,9 @@ function search(me, query) {
   const events = calendar.allEvents().filter((e) => e.endDate >= today && e.startDate <= until && calendar.canSee(me, e) && has(e.title, e.description, e.location))
     .sort((a, b) => a.startDate.localeCompare(b.startDate)).slice(0, 5).map((e) => ({ id: e.id, title: e.title, startDate: e.startDate }));
   const pollList = polls.listPolls(me).filter((p) => has(p.title, p.description)).slice(0, 5).map((p) => ({ id: p.id, title: p.title, open: p.open }));
-  return { people, documents, announcements, events, polls: pollList };
+  const pages = wiki.search(q).slice(0, 5).map((p) => ({ slug: p.slug, title: p.title }));
+  const questions = qa.search(q).slice(0, 5).map((x) => ({ id: x.id, title: x.title, solved: !!x.acceptedId }));
+  return { people, documents, announcements, events, polls: pollList, pages, questions };
 }
 
 async function routeApi(req, res, pathname, session) {

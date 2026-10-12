@@ -17,6 +17,8 @@
         lock: '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
         logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/>',
         chevron: '<path d="m6 9 6 6 6-6"/>',
+        chevronLeft: '<path d="m15 18-6-6 6-6"/>',
+        chevronRight: '<path d="m9 18 6-6-6-6"/>',
         plus: '<path d="M12 5v14M5 12h14"/>',
         search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>',
         shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
@@ -44,6 +46,8 @@
         tick: '<path d="M20 6 9 17l-5-5"/>',
         chart: '<path d="M18 20V10M12 20V4M6 20v-6"/>',
         smile: '<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/>',
+        book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
+        help: '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
         message: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
         gift: '<path d="M20 12v10H4V12M2 7h20v5H2zM12 22V7M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>',
         archive: '<path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/>',
@@ -349,6 +353,10 @@
                 { title: "Staff Directory", desc: "Find colleagues across the group", href: "/directory", icon: "users" },
                 { title: "Teams", desc: "Each company’s people, news and plans", href: "/team", icon: "building" },
                 { title: "Kudos", desc: "Thank colleagues and celebrate milestones", href: "/kudos", icon: "heart" },
+                { title: "Chat", desc: "Message colleagues and company channels", href: "/chat", icon: "message", badge: "chatUnread" },
+                { title: "Q&A", desc: "Ask a question, share what you know", href: "/questions", icon: "help" },
+                { title: "Knowledge base", desc: "How-to guides anyone can edit", href: "/wiki", icon: "book" },
+                { title: "Mentoring", desc: "Find a mentor and plan catch-ups", href: "/mentoring", icon: "users", badge: "mentoringDue" },
                 { title: "Employee Management", desc: "Add and manage staff records", href: "/employees", icon: "briefcase", requires: "staff.manage" },
                 { title: "Joiners & leavers", desc: "Onboarding and leaving checklists", href: "/onboarding", icon: "check", requires: "onboarding.manage" },
                 { title: "Jobs", desc: "Open roles, applications and referrals", href: "/jobs", icon: "briefcase", badge: "newApplicants" },
@@ -392,6 +400,7 @@
                 { title: "Activity reports", desc: "Monthly summary as a PDF", href: "/reports", icon: "chart", requires: "reports.view" },
                 { title: "About HN Group", desc: "Our companies, brand colours and logos", href: "/about", icon: "building" },
                 { title: "IT Helpdesk", desc: "Raise and track support tickets", href: "/helpdesk", icon: "lifebuoy", badge: "helpdeskBadge" },
+                { title: "On call", desc: "Who to contact out of hours", href: "/on-call", icon: "phone" },
             ],
         },
     ];
@@ -596,6 +605,11 @@
         "/jobs": viewJobs,
         "/notifications": viewNotifications,
         "/kudos": viewKudos,
+        "/chat": viewChat,
+        "/questions": viewQuestions,
+        "/wiki": viewWiki,
+        "/mentoring": viewMentoring,
+        "/on-call": viewOnCall,
         "/ideas": viewIdeas,
         "/team": viewTeam,
         "/reports": viewReports,
@@ -645,6 +659,11 @@
         "/jobs": "briefcase",
         "/notifications": "bell",
         "/kudos": "heart",
+        "/chat": "message",
+        "/questions": "help",
+        "/wiki": "book",
+        "/mentoring": "users",
+        "/on-call": "phone",
         "/ideas": "flag",
         "/team": "building",
         "/reports": "chart",
@@ -824,8 +843,10 @@
             (me.backupStale ? '<a class="hero-chip danger" href="/system#sys-backups" data-link>' + icon("archive") + "No backup in the last 36 hours</a>" : "") +
             (me.trainingDue ? '<a class="hero-chip warn" href="/training" data-link>' + icon("star") + me.trainingDue + " training item" + (me.trainingDue === 1 ? "" : "s") + " expiring or missing</a>" : "") +
             (me.newApplicants ? '<a class="hero-chip" href="/jobs" data-link>' + icon("briefcase") + me.newApplicants + " new job applicant" + (me.newApplicants === 1 ? "" : "s") + "</a>" : "") +
+            (me.chatUnread ? '<a class="hero-chip" href="/chat" data-link>' + icon("message") + me.chatUnread + " unread message" + (me.chatUnread === 1 ? "" : "s") + "</a>" : "") +
+            (me.mentoringDue ? '<a class="hero-chip" href="/mentoring" data-link>' + icon("users") + me.mentoringDue + " mentoring catch-up" + (me.mentoringDue === 1 ? "" : "s") + " due</a>" : "") +
             (me.helpdeskBadge ? '<a class="hero-chip" href="/helpdesk" data-link>' + icon("lifebuoy") + me.helpdeskBadge + " IT ticket" + (me.helpdeskBadge === 1 ? "" : "s") + " need" + (me.helpdeskBadge === 1 ? "s" : "") + " attention</a>" : "") +
-            (!me.unreadAnnouncements && !me.pendingAcks && !me.openPolls && !me.onboardingTasks && !me.leaveApprovals && !me.timesheetApprovals && !me.helpdeskBadge && !me.payrollOverdrawn && !me.reviewsDue && !me.returnToWorkDue && !me.servicesDown && !me.expenseApprovals && !me.budgetWarnings && !me.invoicesOverdue && !me.trainingDue && !me.newApplicants && !me.backupStale && !me.billsDue && !me.exitInterviewDue && !me.feedbackDue && !me.flexibleDecisions ? '<span class="hero-chip calm">' + icon("tick") + "You\u2019re all caught up</span>" : "") +
+            (!me.unreadAnnouncements && !me.pendingAcks && !me.openPolls && !me.onboardingTasks && !me.leaveApprovals && !me.timesheetApprovals && !me.helpdeskBadge && !me.payrollOverdrawn && !me.reviewsDue && !me.returnToWorkDue && !me.servicesDown && !me.expenseApprovals && !me.budgetWarnings && !me.invoicesOverdue && !me.trainingDue && !me.newApplicants && !me.backupStale && !me.billsDue && !me.exitInterviewDue && !me.feedbackDue && !me.flexibleDecisions && !me.chatUnread && !me.mentoringDue ? '<span class="hero-chip calm">' + icon("tick") + "You\u2019re all caught up</span>" : "") +
             "</div></div>" +
             '<div class="hero-clocks">' +
             '<div class="glass-clock"><div class="gc-label">' + icon("monitor") + "Your time \u00b7 " + esc(tzCity(deviceTz)) + "</div>" +
@@ -855,7 +876,12 @@
             (primaryEmail(me) ? '<div class="me-email">' + icon("mail") + esc(primaryEmail(me)) + "</div>" : "") +
             '<a class="btn btn-ghost btn-block-sm" href="/settings" data-link>' + icon("settings") + "Settings</a></section>" +
             '<section class="panel help-panel">' + icon("lifebuoy") + '<div><h2 class="section-title">Need help?</h2>' +
-            '<p class="muted small">For access problems or anything IT related, contact the IT team.</p></div></section>' +
+            '<p class="muted small">For access problems or anything IT related, contact the IT team.</p>' +
+            ((me.onCallNow || []).length ? '<div class="oc-home">' + me.onCallNow.map(function (r) {
+                return '<a class="oc-home-row" href="/on-call" data-link>' + avatar(r.person, "sm") + '<span><strong>' + esc(r.person.displayName) + '</strong><span class="muted small">On call · ' + esc(r.name) +
+                    (r.contact || r.person.phone ? " · " + esc(r.contact || r.person.phone) : "") + "</span></span></a>";
+            }).join("") + "</div>" : "") +
+            "</div></section>" +
             "</aside></div>";
 
         // Live panels: the latest announcements, and anything waiting for the user to acknowledge.
@@ -1024,7 +1050,7 @@
                 return '<button type="button" data-company="' + esc(c) + '">' + esc(c) + ' <span class="tab-count">' + n + "</span></button>";
             }).join("") + "</div>" +
             '<div class="toolbar">' +
-            '<label class="search">' + icon("search") + '<input type="search" id="dir-search" placeholder="Search by name, job title, email or location" aria-label="Search"></label>' +
+            '<label class="search">' + icon("search") + '<input type="search" id="dir-search" placeholder="Search by name, job title, skill, language or location" aria-label="Search"></label>' +
             "</div>" +
             '<p class="muted small" id="dir-count"></p>' +
             '<div id="dir-body"></div>';
@@ -1037,6 +1063,7 @@
             if (!q) return true;
             const p = e.person;
             return [p.displayName, p.firstName, p.lastName, e.jobTitle, e.company, p.location]
+                .concat(p.skills || [], p.languages || [])
                 .concat(p.emails.map(function (x) { return x.address; }))
                 .join(" ").toLowerCase().indexOf(q) !== -1;
         }
@@ -1295,14 +1322,30 @@
                 ? '<div class="profile-section"><h3 class="detail-head">Team <span class="tab-count">' + reports.length + "</span></h3>" +
                   '<div class="team-grid">' + reports.map(personRow).join("") + "</div></div>"
                 : "") +
+            ((p.skills || []).length || (p.languages || []).length
+                ? '<div class="profile-section">' +
+                  ((p.skills || []).length ? '<h3 class="detail-head">Skills</h3><div class="tag-list">' + p.skills.map(function (t) { return '<span class="tag">' + esc(t) + "</span>"; }).join("") + "</div>" : "") +
+                  ((p.languages || []).length ? '<h3 class="detail-head">Languages</h3><div class="tag-list">' + p.languages.map(function (t) { return '<span class="tag">' + esc(t) + "</span>"; }).join("") + "</div>" : "") + "</div>"
+                : "") +
             "</div>" +
 
-            (email ? '<div class="profile-actions"><a class="btn btn-primary" href="mailto:' + esc(email) + '">' + icon("mail") + "Email " + esc(p.firstName || p.displayName) + "</a></div>" : ""),
+            '<div class="profile-actions">' + (p.id !== state.me.id && !p.system ? '<button type="button" class="btn btn-ghost" data-message-person="' + esc(p.id) + '">' + icon("message") + "Message</button>" : "") +
+            (email ? '<a class="btn btn-primary" href="mailto:' + esc(email) + '">' + icon("mail") + "Email " + esc(p.firstName || p.displayName) + "</a>" : "") + "</div>",
             { cls: "modal-profile" }
         );
-        m.el.addEventListener("click", function (ev) {
+        m.el.addEventListener("click", async function (ev) {
             const copy = ev.target.closest("[data-copy]");
             if (copy) return copyText(copy.dataset.copy);
+            const msg = ev.target.closest("[data-message-person]");
+            if (msg) {
+                try {
+                    const r = await api("/api/chat/dm", { personId: msg.dataset.messagePerson });
+                    closeModal();
+                    state.chatChannel = r.channel;
+                    navigate("/chat?c=" + r.channel);
+                } catch (err) { toast(err.message); }
+                return;
+            }
             const target = ev.target.closest("[data-entry]");
             if (target && target.dataset.entry !== key) openPersonModal(target.dataset.entry, ctx);
         });
@@ -3394,6 +3437,8 @@
             else if (it.kind === "announcement") { state.pendingAnnouncement = it.id; navigate("/announcements"); }
             else if (it.kind === "event") { state.pendingCalendarDate = it.date; navigate("/calendar"); }
             else if (it.kind === "poll") { state.pendingPoll = it.id; navigate("/polls"); }
+            else if (it.kind === "page") navigate("/wiki?p=" + it.id);
+            else if (it.kind === "question") navigate("/questions?q=" + it.id);
             else navigate(it.href);
         }
         function draw(groups) {
@@ -3435,6 +3480,8 @@
                     { label: "Announcements", items: d.announcements.map(function (x) { return { kind: "announcement", id: x.id, title: x.title, sub: fmtDate(x.publishAt), icon: "bell" }; }) },
                     { label: "Events", items: d.events.map(function (x) { return { kind: "event", id: x.id, date: x.startDate, title: x.title, sub: dayLabel(x.startDate), icon: "calendar" }; }) },
                     { label: "Polls", items: d.polls.map(function (x) { return { kind: "poll", id: x.id, title: x.title, sub: x.open ? "Open" : "Closed", icon: "chart" }; }) },
+                    { label: "Knowledge base", items: (d.pages || []).map(function (x) { return { kind: "page", id: x.slug, title: x.title, sub: "Knowledge base", icon: "file" }; }) },
+                    { label: "Q&A", items: (d.questions || []).map(function (x) { return { kind: "question", id: x.id, title: x.title, sub: x.solved ? "Answered" : "Open question", icon: "message" }; }) },
                 ]);
             } catch (e) { /* ignore */ }
         }
@@ -5783,6 +5830,9 @@
             '<label for="p-phone">Phone</label><input type="tel" id="p-phone" maxlength="40" value="' + esc(me.phone) + '">' +
             '<div class="grid-2"><div><label for="p-location">Location</label><input type="text" id="p-location" maxlength="80" value="' + esc(me.location) + '" placeholder="e.g. Manchester, UK"></div>' +
             '<div><label for="p-tz">Time zone</label><select id="p-tz">' + timezoneOptions(me.timezone || state.meta.defaultTimezone) + "</select></div></div>" +
+            '<label for="p-skills">Skills</label><input type="text" id="p-skills" maxlength="400" value="' + esc((me.skills || []).join(", ")) + '" placeholder="e.g. Photoshop, Excel, first aid">' +
+            '<label for="p-langs">Languages</label><input type="text" id="p-langs" maxlength="300" value="' + esc((me.languages || []).join(", ")) + '" placeholder="e.g. English, Polish, BSL">' +
+            '<p class="muted small">Separate with commas. Colleagues can search the directory by these.</p>' +
             '<p class="hint">Your location and time zone are shown on your home page and in the staff directory.</p>' +
             (me.system ? "" :
                 '<div class="grid-2"><div><label for="p-bday">Birthday <span class="muted small">(optional)</span></label><select id="p-bday"><option value="">Day</option>' +
@@ -5977,6 +6027,8 @@
                     phone: $("#p-phone").value,
                     location: $("#p-location").value,
                     timezone: $("#p-tz").value,
+                    skills: $("#p-skills").value,
+                    languages: $("#p-langs").value,
                 }))).user;
                 renderChrome();
                 toast("Profile saved.");
@@ -6203,6 +6255,30 @@
         "maintenance-pin-failed": ["entered a wrong maintenance PIN", "system"],
         "service-down": ["\u2014 a service went down:", "helpdesk"],
         "service-up": ["\u2014 a service came back up:", "helpdesk"],
+        "bill-added": ["added the bill", "payroll"],
+        "bill-updated": ["changed the bill", "payroll"],
+        "bill-paid": ["paid the bill", "payroll"],
+        "bill-deleted": ["deleted the bill", "payroll"],
+        "payroll-approved": ["approved payroll for", "payroll"],
+        "payroll-settings-changed": ["changed the payroll settings", "payroll"],
+        "pay-extra-deleted": ["removed a bonus or commission for", "payroll"],
+        "salary-band-changed": ["changed the salary band", "payroll"],
+        "work-pattern-changed": ["changed the working pattern for", "staff"],
+        "objective-set": ["set a goal for", "staff"],
+        "feedback-requested": ["asked for 360 feedback on", "staff"],
+        "feedback-given": ["gave 360 feedback", "staff"],
+        "pulse-question-set": ["set the pulse question", "workplace"],
+        "exit-interview-sent": ["sent an exit interview to", "staff"],
+        "flexible-requested": ["asked for flexible working", "staff"],
+        "flexible-decided": ["decided a flexible working request for", "staff"],
+        "question-asked": ["asked the question", "workplace"],
+        "wiki-page-created": ["created the knowledge base page", "workplace"],
+        "wiki-page-deleted": ["deleted the knowledge base page", "workplace"],
+        "wiki-page-edited": ["edited the knowledge base page", "workplace"],
+        "wiki-page-restored": ["restored an old version of the knowledge base page", "workplace"],
+        "mentoring-requested": ["set up mentoring with", "staff"],
+        "oncall-rota-created": ["created the on-call rota", "helpdesk"],
+        "oncall-rota-changed": ["changed the on-call rota", "helpdesk"],
     };
     const AUDIT_FILTERS = [
         ["", "All activity"],
@@ -8818,6 +8894,496 @@
                 toast("Saved. Bank holiday adjustment this year: " + (r.summary.bankHolidayAdjustment > 0 ? "+" : "") + r.summary.bankHolidayAdjustment + " days.");
                 render();
             } catch (err) { formError($("#wp-error", m.el), err.message); }
+        });
+    }
+
+
+    // ================= Simple Markdown (wiki, Q&A) =================
+    // Everything is escaped first, then a few safe patterns are turned into HTML. Links only allow
+    // http(s), mailto and paths on this site.
+
+    function mdInline(t) {
+        return t
+            .replace(/`([^`]+)`/g, "<code>$1</code>")
+            .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+            .replace(/(^|[^*])\*([^*\s][^*]*)\*/g, "$1<em>$2</em>")
+            .replace(/\[\[([^\]]{1,120})\]\]/g, function (m, title) { return '<a href="#" data-wikilink="' + title + '">' + title + "</a>"; })
+            .replace(/\[([^\]]+)\]\(((?:https?:\/\/|mailto:|\/)[^)\s]+)\)/g, function (m, text, url) {
+                return '<a href="' + url + '"' + (url.charAt(0) === "/" ? " data-link" : ' target="_blank" rel="noopener noreferrer"') + ">" + text + "</a>";
+            });
+    }
+
+    function md(text) {
+        const lines = esc(text || "").split("\n");
+        let html = "", list = null, para = [], code = null;
+        function flushPara() { if (para.length) { html += "<p>" + mdInline(para.join(" ")) + "</p>"; para = []; } }
+        function flushList() { if (list) { html += "</" + list + ">"; list = null; } }
+        lines.forEach(function (raw) {
+            const line = raw.replace(/\s+$/, "");
+            if (code !== null) {
+                if (/^```/.test(line)) { html += "<pre><code>" + code.join("\n") + "</code></pre>"; code = null; } else code.push(raw);
+                return;
+            }
+            if (/^```/.test(line)) { flushPara(); flushList(); code = []; return; }
+            let m;
+            if ((m = /^(#{1,3})\s+(.*)$/.exec(line))) { flushPara(); flushList(); const n = m[1].length + 1; html += "<h" + n + ">" + mdInline(m[2]) + "</h" + n + ">"; return; }
+            if ((m = /^\s*[-*]\s+(.*)$/.exec(line))) { flushPara(); if (list !== "ul") { flushList(); html += "<ul>"; list = "ul"; } html += "<li>" + mdInline(m[1]) + "</li>"; return; }
+            if ((m = /^\s*\d+[.)]\s+(.*)$/.exec(line))) { flushPara(); if (list !== "ol") { flushList(); html += "<ol>"; list = "ol"; } html += "<li>" + mdInline(m[1]) + "</li>"; return; }
+            if (/^&gt;\s?/.test(line)) { flushPara(); flushList(); html += "<blockquote>" + mdInline(line.replace(/^&gt;\s?/, "")) + "</blockquote>"; return; }
+            if (/^---+$/.test(line)) { flushPara(); flushList(); html += "<hr>"; return; }
+            if (!line.trim()) { flushPara(); flushList(); return; }
+            flushList();
+            para.push(line);
+        });
+        if (code !== null) html += "<pre><code>" + code.join("\n") + "</code></pre>";
+        flushPara(); flushList();
+        return html;
+    }
+
+    // ================= Team chat =================
+
+    async function viewChat(root, current) {
+        let channel = new URLSearchParams(window.location.search).get("c") || state.chatChannel || "everyone";
+        const d = await api("/api/chat?open=" + encodeURIComponent(channel));
+        if (!current()) return;
+        let channels = d.channels;
+        if (!channels.some(function (c) { return c.id === channel; }) && !/^dm-/.test(channel)) channel = "everyone";
+        let last = "";
+        root.innerHTML = '<div class="page-head"><div><h1>Chat</h1><p class="muted">Talk to everyone, your company, or message someone directly.</p></div>' +
+            '<div class="page-actions"><button type="button" class="btn btn-primary" id="ch-new">' + icon("message") + "New message</button></div></div>" +
+            '<div class="chat-layout"><aside class="chat-channels" id="ch-list"></aside><section class="chat-pane"><div class="chat-head" id="ch-head"></div>' +
+            '<div class="chat-messages" id="ch-msgs"></div><form class="chat-input" id="ch-form"><textarea id="ch-text" rows="1" maxlength="4000" placeholder="Write a message… (Enter to send, Shift+Enter for a new line)"></textarea>' +
+            '<button type="submit" class="btn btn-primary" aria-label="Send">' + icon("chevronRight") + "</button></form></section></div>";
+        function drawChannels() {
+            const groups = [["Channels", channels.filter(function (c) { return c.kind !== "dm"; })], ["Direct messages", channels.filter(function (c) { return c.kind === "dm"; })]];
+            $("#ch-list").innerHTML = groups.map(function (g) {
+                return '<div class="ch-group">' + g[0] + "</div>" + (g[1].length ? g[1].map(function (c) {
+                    return '<button type="button" class="ch-item' + (c.id === channel ? " active" : "") + (c.unread ? " unread" : "") + '" data-ch="' + c.id + '">' +
+                        (c.other ? avatar(c.other, "sm") : '<span class="ch-hash">#</span>') + '<span class="ch-name"><strong>' + esc(c.name) + "</strong>" +
+                        (c.last ? '<span class="muted small">' + esc((c.kind === "dm" ? "" : c.last.by.split(" ")[0] + ": ") + c.last.text.replace(/\*\*|__|`/g, "")) + "</span>" : "") + "</span>" +
+                        (c.unread ? '<span class="count-badge">' + c.unread + "</span>" : "") + "</button>";
+                }).join("") : '<p class="muted small ch-none">None yet</p>');
+            }).join("");
+            const cur = channels.find(function (c) { return c.id === channel; });
+            $("#ch-head").innerHTML = cur ? (cur.other ? avatar(cur.other, "sm") + "<strong>" + esc(cur.name) + '</strong><span class="muted small">' + esc(cur.other.jobTitle || "") + "</span>" : '<span class="ch-hash">#</span><strong>' + esc(cur.name) + "</strong>") : "";
+        }
+        function msgHtml(x, prev) {
+            const same = prev && prev.by.id === x.by.id && (new Date(x.at) - new Date(prev.at)) < 5 * 60000;
+            return '<div class="chat-msg' + (x.mine ? " mine" : "") + (same ? " cont" : "") + '" data-msg="' + x.id + '">' + (same ? '<span class="cm-gap"></span>' : avatar(x.by, "sm")) +
+                '<div class="cm-body">' + (same ? "" : '<div class="cm-head"><strong>' + esc(x.by.displayName) + '</strong><span class="muted small">' + esc(new Date(x.at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })) + "</span></div>") +
+                '<div class="cm-text">' + (x.deleted ? '<em class="muted">Message deleted</em>' : richText(x.text)) + "</div></div>" +
+                (x.canDelete ? '<button type="button" class="icon-btn icon-btn-sm cm-del" data-del="' + x.id + '" aria-label="Delete message">' + icon("trash") + "</button>" : "") + "</div>";
+        }
+        let shown = [];
+        async function load(fresh) {
+            try {
+                const r = await api("/api/chat/c/" + channel + (fresh || !last ? "" : "?after=" + encodeURIComponent(last)));
+                if (!current()) return;
+                const box = $("#ch-msgs");
+                const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+                if (fresh || !last) shown = r.messages; else shown = shown.concat(r.messages);
+                if (r.messages.length || fresh) {
+                    box.innerHTML = shown.length ? shown.map(function (x, i) { return msgHtml(x, shown[i - 1]); }).join("") : '<div class="chat-empty">' + icon("message", "big") + "<p>No messages yet. Say hello!</p></div>";
+                    if (fresh || atBottom) box.scrollTop = box.scrollHeight;
+                }
+                if (shown.length) last = shown[shown.length - 1].at;
+                if (state.me.chatUnread !== r.unreadTotal) { state.me.chatUnread = r.unreadTotal; renderChrome(); }
+            } catch (err) { /* keep trying */ }
+        }
+        async function refreshChannels() {
+            try { channels = (await api("/api/chat?open=" + encodeURIComponent(channel))).channels; if (current()) drawChannels(); } catch (e) { /* ignore */ }
+        }
+        function open(id) {
+            channel = state.chatChannel = id;
+            last = ""; shown = [];
+            history.replaceState({}, "", "/chat?c=" + id);
+            drawChannels();
+            load(true).then(refreshChannels);
+            $("#ch-text").focus();
+        }
+        drawChannels();
+        load(true).then(refreshChannels);
+        const timer = setInterval(function () {
+            if (!current()) return clearInterval(timer);
+            if (document.hidden) return;
+            load(false);
+            refreshChannels();
+        }, 4000);
+        $("#ch-text").addEventListener("keydown", function (e) {
+            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("#ch-form").requestSubmit(); }
+        });
+        $("#ch-text").addEventListener("input", function (e) { e.target.style.height = "auto"; e.target.style.height = Math.min(160, e.target.scrollHeight) + "px"; });
+        $("#ch-form").addEventListener("submit", async function (e) {
+            e.preventDefault();
+            const t = $("#ch-text").value.trim();
+            if (!t) return;
+            $("#ch-text").value = "";
+            $("#ch-text").style.height = "auto";
+            try { await api("/api/chat/c/" + channel, { text: t }); await load(false); refreshChannels(); $("#ch-msgs").scrollTop = $("#ch-msgs").scrollHeight; } catch (err) { toast(err.message); $("#ch-text").value = t; }
+        });
+        root.addEventListener("click", async function (e) {
+            const c = e.target.closest("[data-ch]");
+            if (c) return open(c.dataset.ch);
+            const del = e.target.closest("[data-del]");
+            if (del) {
+                try { await api("/api/chat/c/" + channel + "/" + del.dataset.del + "/delete", {}); load(true); } catch (err) { toast(err.message); }
+                return;
+            }
+            if (e.target.closest("#ch-new")) {
+                const m = openModal('<h2 class="modal-title">New message</h2><input type="search" id="nm-search" placeholder="Search for a colleague" autocomplete="off"><div class="kf-results" id="nm-results"></div>');
+                const draw = function () {
+                    const q = $("#nm-search", m.el).value.trim().toLowerCase();
+                    $("#nm-results", m.el).innerHTML = d.people.filter(function (p) { return !q || (p.displayName + " " + p.jobTitle).toLowerCase().indexOf(q) !== -1; }).slice(0, 8).map(function (p) {
+                        return '<button type="button" class="kf-result" data-dm="' + p.id + '">' + avatar(p, "sm") + "<span>" + esc(p.displayName) + ' <span class="muted small">' + esc(p.jobTitle) + "</span></span></button>";
+                    }).join("");
+                };
+                $("#nm-search", m.el).addEventListener("input", draw);
+                m.el.addEventListener("click", async function (ev) {
+                    const b = ev.target.closest("[data-dm]");
+                    if (!b) return;
+                    const r = await api("/api/chat/dm", { personId: b.dataset.dm });
+                    closeModal();
+                    const p = d.people.find(function (x) { return x.id === b.dataset.dm; });
+                    if (!channels.some(function (x) { return x.id === r.channel; })) channels.push({ id: r.channel, kind: "dm", name: p.displayName, other: p, unread: 0, last: null });
+                    open(r.channel);
+                });
+                draw();
+            }
+        });
+    }
+
+    // ================= Q&A =================
+
+    async function viewQuestions(root, current) {
+        const qid = new URLSearchParams(window.location.search).get("q");
+        if (qid) return viewQuestion(root, current, qid);
+        const d = await api("/api/qa");
+        if (!current()) return;
+        let filter = state.qaFilter || "all";
+        root.innerHTML = '<div class="page-head"><div><h1>Q&amp;A</h1><p class="muted">Ask a question and anyone can answer. The best answer gets pinned, so the next person can find it.</p></div>' +
+            (state.me.system ? "" : '<div class="page-actions"><button type="button" class="btn btn-primary" id="qa-new">' + icon("plus") + "Ask a question</button></div>") + "</div>" +
+            '<div class="toolbar"><label class="search">' + icon("search") + '<input type="search" id="qa-search" placeholder="Search questions and answers"></label>' +
+            '<div class="company-tabs" id="qa-tabs"><button type="button" data-f="all">All</button><button type="button" data-f="open">Unanswered</button><button type="button" data-f="solved">Solved</button><button type="button" data-f="mine">Mine</button></div></div>' +
+            '<div id="qa-list" class="qa-list"></div>';
+        function draw() {
+            $$("#qa-tabs [data-f]").forEach(function (b) { b.classList.toggle("active", b.dataset.f === filter); });
+            const s = $("#qa-search").value.trim().toLowerCase();
+            const list = d.questions.filter(function (q) {
+                if (filter === "open" && q.answerCount) return false;
+                if (filter === "solved" && !q.solved) return false;
+                if (filter === "mine" && !q.mine) return false;
+                return !s || (q.title + " " + q.snippet + " " + q.tags.join(" ")).toLowerCase().indexOf(s) !== -1;
+            });
+            $("#qa-list").innerHTML = list.length ? list.map(function (q) {
+                return '<a class="qa-row" href="/questions?q=' + q.id + '" data-link><span class="qa-count' + (q.solved ? " solved" : q.answerCount ? " answered" : "") + '"><strong>' + q.answerCount + "</strong>answer" + (q.answerCount === 1 ? "" : "s") + "</span>" +
+                    '<span class="qa-main"><strong>' + esc(q.title) + "</strong>" + (q.snippet ? '<span class="muted small">' + esc(q.snippet) + "</span>" : "") +
+                    '<span class="qa-meta">' + q.tags.map(function (t) { return '<span class="chip">' + esc(t) + "</span>"; }).join("") + '<span class="muted small">' + esc(q.author.displayName) + " · " + esc(timeAgo(q.createdAt)) + "</span></span></span></a>";
+            }).join("") : '<div class="empty-page">' + icon("message", "big") + "<h2>No questions here</h2></div>";
+        }
+        $("#qa-search").addEventListener("input", draw);
+        root.addEventListener("click", function (e) {
+            const t = e.target.closest("[data-f]");
+            if (t) { filter = state.qaFilter = t.dataset.f; draw(); }
+            if (e.target.closest("#qa-new")) openAskForm();
+        });
+        draw();
+    }
+
+    function openAskForm() {
+        const m = openModal('<h2 class="modal-title">Ask a question</h2><form id="ak-form" novalidate>' +
+            '<label for="ak-title">Your question</label><input type="text" id="ak-title" maxlength="200" placeholder="e.g. How do I add someone to the shared calendar?">' +
+            '<label for="ak-body">More detail <span class="muted small">(optional)</span></label><textarea id="ak-body" rows="4" maxlength="5000"></textarea>' +
+            '<label for="ak-tags">Tags <span class="muted small">(optional, comma separated)</span></label><input type="text" id="ak-tags" maxlength="150" placeholder="e.g. IT, calendar">' +
+            '<div class="form-error" id="ak-error" hidden></div><div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">Ask</button></div></form>');
+        $("#ak-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try { const r = await api("/api/qa", { title: $("#ak-title", m.el).value, body: $("#ak-body", m.el).value, tags: $("#ak-tags", m.el).value }); closeModal(); navigate("/questions?q=" + r.id); } catch (err) { formError($("#ak-error", m.el), err.message); }
+        });
+    }
+
+    async function viewQuestion(root, current, id) {
+        let q = (await api("/api/qa/" + id)).question;
+        if (!current()) return;
+        function draw() {
+            root.innerHTML = '<a class="back-link" href="/questions" data-link>' + icon("chevronLeft") + "All questions</a>" +
+                '<article class="panel qa-question"><h1>' + esc(q.title) + '</h1><div class="qa-meta">' + q.tags.map(function (t) { return '<span class="chip">' + esc(t) + "</span>"; }).join("") +
+                '<span class="muted small">Asked by ' + esc(q.author.displayName) + " · " + esc(fmtDateTime(q.createdAt)) + "</span>" +
+                (q.canDelete ? '<button type="button" class="btn btn-link btn-small danger-text" data-qd>Delete question</button>' : "") + "</div>" +
+                (q.body ? '<div class="md">' + md(q.body) + "</div>" : "") + "</article>" +
+                '<h2 class="section-title">' + q.answers.length + " answer" + (q.answers.length === 1 ? "" : "s") + "</h2>" +
+                q.answers.map(function (a) {
+                    return '<article class="panel qa-answer' + (a.accepted ? " accepted" : "") + '" data-a="' + a.id + '"><div class="qa-vote"><button type="button" class="vote-btn' + (a.voted ? " voted" : "") + '" data-av' + (a.mine ? " disabled" : "") + ' aria-label="Helpful">' + icon("chevronRight", "vote-up") + "<strong>" + a.votes + "</strong><span>helpful</span></button></div>" +
+                        '<div class="qa-a-main">' + (a.accepted ? '<span class="badge badge-green">' + icon("check") + "Best answer</span>" : "") + '<div class="md">' + md(a.body) + "</div>" +
+                        '<div class="qa-meta"><span class="muted small">' + esc(a.author.displayName) + " · " + esc(fmtDateTime(a.at)) + "</span>" +
+                        (q.canAccept ? '<button type="button" class="btn btn-link btn-small" data-aa>' + (a.accepted ? "Unmark best answer" : "Mark as best answer") + "</button>" : "") +
+                        (a.canDelete ? '<button type="button" class="btn btn-link btn-small danger-text" data-ad>Delete</button>' : "") + "</div></div></article>";
+                }).join("") +
+                (state.me.system ? "" : '<form class="panel qa-reply" id="qa-reply"><h2 class="panel-title">Your answer</h2><textarea id="qa-text" rows="5" maxlength="5000" placeholder="Share what you know. **bold**, - lists and links work."></textarea><div class="form-error" id="qa-error" hidden></div><div class="form-actions"><button type="submit" class="btn btn-primary">Post answer</button></div></form>');
+        }
+        async function act(path, body) {
+            try { const r = await api("/api/qa/" + q.id + path, body || {}); if (r.question) { q = r.question; draw(); } } catch (err) { toast(err.message); }
+        }
+        root.addEventListener("submit", function (e) {
+            if (e.target.id !== "qa-reply") return;
+            e.preventDefault();
+            act("/answer", { body: $("#qa-text").value });
+        });
+        root.addEventListener("click", async function (e) {
+            const a = e.target.closest("[data-a]");
+            if (e.target.closest("[data-av]")) return act("/vote", { answerId: a.dataset.a });
+            if (e.target.closest("[data-aa]")) return act("/accept", { answerId: a.dataset.a });
+            if (e.target.closest("[data-ad]") && await confirmDialog({ title: "Delete this answer?", message: "It can’t be undone.", confirmLabel: "Delete", danger: true })) return act("/answers/" + a.dataset.a + "/delete");
+            if (e.target.closest("[data-qd]") && await confirmDialog({ title: "Delete this question?", message: "Its answers go too.", confirmLabel: "Delete", danger: true })) {
+                try { await api("/api/qa/" + q.id + "/delete", {}); navigate("/questions"); } catch (err) { toast(err.message); }
+            }
+        });
+        draw();
+    }
+
+    // ================= Knowledge base =================
+
+    async function viewWiki(root, current) {
+        const slug = new URLSearchParams(window.location.search).get("p");
+        if (slug) return viewWikiPage(root, current, slug);
+        const d = await api("/api/wiki");
+        if (!current()) return;
+        root.innerHTML = '<div class="page-head"><div><h1>Knowledge base</h1><p class="muted">How-to guides anyone can write and improve. Every change is kept, so nothing gets lost.</p></div>' +
+            (state.me.system ? "" : '<div class="page-actions"><button type="button" class="btn btn-primary" id="wk-new">' + icon("plus") + "New page</button></div>") + "</div>" +
+            '<div class="toolbar"><label class="search">' + icon("search") + '<input type="search" id="wk-search" placeholder="Search pages"></label></div><div id="wk-list"></div>';
+        function draw() {
+            const s = $("#wk-search").value.trim().toLowerCase();
+            const list = d.pages.filter(function (p) { return !s || (p.title + " " + p.section).toLowerCase().indexOf(s) !== -1; });
+            const sections = {};
+            list.forEach(function (p) { (sections[p.section] = sections[p.section] || []).push(p); });
+            $("#wk-list").innerHTML = Object.keys(sections).length ? Object.keys(sections).sort().map(function (sec) {
+                return '<section class="panel wk-section"><h2 class="panel-title">' + icon("file") + esc(sec) + '</h2><div class="wk-pages">' + sections[sec].map(function (p) {
+                    return '<a class="wk-page" href="/wiki?p=' + p.slug + '" data-link><strong>' + esc(p.title) + '</strong><span class="muted small">Updated ' + esc(timeAgo(p.updatedAt)) + " by " + esc(p.updatedByName) + "</span></a>";
+                }).join("") + "</div></section>";
+            }).join("") : '<div class="empty-page">' + icon("file", "big") + "<h2>No pages found</h2></div>";
+        }
+        $("#wk-search").addEventListener("input", draw);
+        root.addEventListener("click", function (e) { if (e.target.closest("#wk-new")) openWikiEditor(null, d.pages); });
+        draw();
+    }
+
+    async function viewWikiPage(root, current, slug) {
+        let r;
+        try { r = await api("/api/wiki/page/" + slug); } catch (err) { root.innerHTML = '<div class="empty-page">' + icon("file", "big") + "<h2>Page not found</h2><p><a href=\"/wiki\" data-link>Back to the knowledge base</a></p></div>"; return; }
+        if (!current()) return;
+        const p = r.page;
+        root.innerHTML = '<a class="back-link" href="/wiki" data-link>' + icon("chevronLeft") + "Knowledge base</a>" +
+            '<article class="panel wk-article"><div class="wk-head"><div><span class="eyebrow">' + esc(p.section) + "</span><h1>" + esc(p.title) + '</h1><p class="muted small">Last changed ' + esc(fmtDateTime(p.updatedAt)) + " by " + esc(p.updatedByName) + " · " + p.edits + " version" + (p.edits === 1 ? "" : "s") + "</p></div>" +
+            '<div class="btn-row">' + (state.me.system ? "" : '<button type="button" class="btn btn-primary btn-small" id="wk-edit">' + icon("edit") + "Edit</button>") +
+            (p.history.length ? '<button type="button" class="btn btn-ghost btn-small" id="wk-hist">' + icon("clock") + "History</button>" : "") +
+            (r.canDelete ? '<button type="button" class="icon-btn" id="wk-del" aria-label="Delete page">' + icon("trash") + "</button>" : "") + "</div></div>" +
+            '<div class="md">' + md(p.body) + "</div>" +
+            (p.linkedFrom.length ? '<div class="wk-links"><span class="muted small">Linked from:</span> ' + p.linkedFrom.map(function (l) { return '<a href="/wiki?p=' + l.slug + '" data-link>' + esc(l.title) + "</a>"; }).join(", ") + "</div>" : "") + "</article>";
+        root.addEventListener("click", async function (e) {
+            const wl = e.target.closest("[data-wikilink]");
+            if (wl) {
+                e.preventDefault();
+                const res = await api("/api/wiki/resolve?title=" + encodeURIComponent(wl.dataset.wikilink));
+                if (res.slug) return navigate("/wiki?p=" + res.slug);
+                return openWikiEditor({ title: wl.dataset.wikilink, body: "", section: p.section }, null, true);
+            }
+            if (e.target.closest("#wk-edit")) return openWikiEditor(p);
+            if (e.target.closest("#wk-hist")) return openWikiHistory(p);
+            if (e.target.closest("#wk-del") && await confirmDialog({ title: "Delete this page?", message: "The page and its history will be removed.", confirmLabel: "Delete", danger: true })) {
+                try { await api("/api/wiki/page/" + p.slug + "/delete", {}); navigate("/wiki"); } catch (err) { toast(err.message); }
+            }
+        });
+    }
+
+    function openWikiEditor(p, pages, isNewFromLink) {
+        const editing = p && p.slug && !isNewFromLink;
+        const v = p || { title: "", body: "", section: "General" };
+        const m = openModal('<h2 class="modal-title">' + (editing ? "Edit page" : "New page") + '</h2><form id="we-form" novalidate>' +
+            '<div class="grid-2"><div><label for="we-title">Title</label><input type="text" id="we-title" maxlength="120" value="' + esc(v.title) + '"></div>' +
+            '<div><label for="we-sec">Section</label><input type="text" id="we-sec" maxlength="60" value="' + esc(v.section) + '" list="we-sections" placeholder="e.g. IT, HR, Getting started"></div></div>' +
+            '<div class="we-tabs"><button type="button" class="active" data-wt="write">Write</button><button type="button" data-wt="preview">Preview</button><span class="muted small">Headings with #, lists with -, **bold**, [[Another page]], [link](https://…)</span></div>' +
+            '<textarea id="we-body" rows="16" class="we-body">' + esc(v.body) + '</textarea><div class="md we-preview" id="we-preview" hidden></div>' +
+            (editing ? '<label for="we-note">What did you change? <span class="muted small">(optional)</span></label><input type="text" id="we-note" maxlength="200">' : "") +
+            '<div class="form-error" id="we-error" hidden></div><div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">Save page</button></div></form>', { wide: true });
+        api("/api/wiki").then(function (d) {
+            const secs = {};
+            d.pages.forEach(function (x) { secs[x.section] = true; });
+            const dl = document.createElement("datalist");
+            dl.id = "we-sections";
+            dl.innerHTML = Object.keys(secs).map(function (s) { return '<option value="' + esc(s) + '">'; }).join("");
+            m.el.appendChild(dl);
+        }).catch(function () {});
+        m.el.addEventListener("click", function (e) {
+            const t = e.target.closest("[data-wt]");
+            if (!t) return;
+            $$("[data-wt]", m.el).forEach(function (b) { b.classList.toggle("active", b === t); });
+            const prev = t.dataset.wt === "preview";
+            $("#we-body", m.el).hidden = prev;
+            $("#we-preview", m.el).hidden = !prev;
+            if (prev) $("#we-preview", m.el).innerHTML = md($("#we-body", m.el).value) || '<p class="muted">Nothing to preview yet.</p>';
+        });
+        $("#we-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            const body = { title: $("#we-title", m.el).value, section: $("#we-sec", m.el).value, body: $("#we-body", m.el).value, note: $("#we-note", m.el) ? $("#we-note", m.el).value : "", baseUpdatedAt: editing ? p.updatedAt : undefined };
+            try { const r = await api(editing ? "/api/wiki/page/" + p.slug : "/api/wiki", body); closeModal(); toast("Page saved."); navigate("/wiki?p=" + r.slug); } catch (err) { formError($("#we-error", m.el), err.message); }
+        });
+    }
+
+    function openWikiHistory(p) {
+        const m = openModal('<h2 class="modal-title">History · ' + esc(p.title) + '</h2><p class="muted">Earlier versions of the page. Restoring one saves it as a new version, so the current text is kept too.</p>' +
+            '<ol class="version-list">' + '<li class="current"><div class="vl-head"><strong>Current version</strong><span class="muted small">' + esc(fmtDateTime(p.updatedAt)) + " · " + esc(p.updatedByName) + "</span></div>" + (p.note ? '<p class="vl-note">' + esc(p.note) + "</p>" : "") + "</li>" +
+            p.history.map(function (h) {
+                return '<li><div class="vl-head"><strong>' + esc(fmtDateTime(h.at)) + '</strong><span class="muted small">' + esc(h.byName) + "</span>" +
+                    '<button type="button" class="btn btn-ghost btn-small" data-restore="' + h.index + '">Restore</button></div>' + (h.note ? '<p class="vl-note">' + esc(h.note) + "</p>" : "") +
+                    '<details class="vl-acks"><summary>Show this version</summary><div class="md wk-old">' + md(h.body) + "</div></details></li>";
+            }).join("") + "</ol>" +
+            '<div class="modal-actions"><button type="button" class="btn btn-primary" data-close>Done</button></div>', { wide: true });
+        m.el.addEventListener("click", async function (e) {
+            const b = e.target.closest("[data-restore]");
+            if (!b) return;
+            try { await api("/api/wiki/page/" + p.slug + "/restore", { index: Number(b.dataset.restore) }); closeModal(); toast("Version restored."); render(); } catch (err) { toast(err.message); }
+        });
+    }
+
+    // ================= Mentoring =================
+
+    async function viewMentoring(root, current) {
+        const d = await api("/api/mentoring");
+        if (!current()) return;
+        function pairHtml(p) {
+            const other = p.role === "mentor" ? p.mentee : p.mentor;
+            return '<article class="panel mt-card" data-pair="' + p.id + '"><div class="panel-head"><div class="emp-cell">' + avatar(p.role ? other : p.mentee, "md") + "<div>" +
+                (p.role ? "<strong>" + esc(other.displayName) + '</strong><div class="muted small">' + (p.role === "mentor" ? "You’re mentoring them" : "Your mentor") + " · " + esc(other.jobTitle || "") + "</div>"
+                    : "<strong>" + esc(p.mentor.displayName) + " → " + esc(p.mentee.displayName) + '</strong><div class="muted small">' + p.meetingCount + " catch-up" + (p.meetingCount === 1 ? "" : "s") + "</div>") + "</div></div>" +
+                '<span class="badge ' + (p.status === "active" ? "badge-green" : p.status === "requested" ? "badge-yellow" : "") + '">' + esc(p.statusLabel) + "</span></div>" +
+                (p.goals ? '<p><strong>Goals:</strong> ' + esc(p.goals) + "</p>" : "") +
+                (p.status === "active" ? '<p class="small ' + (p.due ? "danger-text" : "muted") + '">' + icon("calendar") + " Catch up every " + p.everyWeeks + " week" + (p.everyWeeks === 1 ? "" : "s") + " · next one " + (p.due ? "is due" : "") + " " + esc(fmtDate(p.nextCatchUp + "T12:00:00")) + "</p>" : "") +
+                (p.canRespond ? '<div class="btn-row"><button type="button" class="btn btn-ghost btn-small" data-mt="decline">Not right now</button><button type="button" class="btn btn-primary btn-small" data-mt="accept">Yes, I’ll mentor them</button></div>' : "") +
+                (p.role && p.status === "active" ? '<div class="btn-row"><button type="button" class="btn btn-primary btn-small" data-mt="meeting">' + icon("check") + 'Log a catch-up</button><button type="button" class="btn btn-ghost btn-small" data-mt="end">End mentoring</button></div>' +
+                    '<div class="mt-cols"><div><h3 class="detail-head">Catch-ups</h3>' + (p.meetings.length ? p.meetings.map(function (x) { return '<div class="mt-meeting"><strong>' + esc(fmtDate(x.date + "T12:00:00")) + "</strong>" + (x.summary ? "<p>" + esc(x.summary) + "</p>" : "") + (x.actions ? '<p class="small"><strong>Actions:</strong> ' + esc(x.actions) + "</p>" : "") + "</div>"; }).join("") : '<p class="muted small">None yet.</p>') + "</div>" +
+                    '<div><h3 class="detail-head">Shared notebook <span class="muted small">(only you two can see it)</span></h3><form class="inline-form" data-mt-note><input type="text" maxlength="3000" placeholder="Add a note"><button type="submit" class="btn btn-ghost btn-small">Add</button></form>' +
+                    p.notes.map(function (n) { return '<div class="ic-row">' + avatar(n.author, "sm") + "<div><strong>" + esc(n.author.displayName) + '</strong> <span class="muted small">' + esc(fmtDate(n.at)) + "</span><p>" + esc(n.text) + "</p></div></div>"; }).join("") + "</div></div>" : "") +
+                "</article>";
+        }
+        const mentorsWithSkills = d.people.filter(function (p) { return p.id !== state.me.id; });
+        root.innerHTML = '<div class="page-head"><div><h1>Mentoring</h1><p class="muted">Learn from a colleague. Ask someone to mentor you, agree what you’d like to work on, and keep notes of your catch-ups. Notes are private to the two of you.</p></div>' +
+            '<div class="page-actions">' + (d.canPair ? '<button type="button" class="btn btn-ghost" id="mt-pair">' + icon("users") + "Pair people</button>" : "") + (state.me.system ? "" : '<button type="button" class="btn btn-primary" id="mt-ask">' + icon("plus") + "Find a mentor</button>") + "</div></div>" +
+            (d.mine.length ? d.mine.map(pairHtml).join("") : '<div class="empty-page">' + icon("users", "big") + "<h2>No mentoring yet</h2><p class=\"muted\">Use <strong>Find a mentor</strong> to ask someone.</p></div>") +
+            (d.all.length ? '<h2 class="section-title">' + icon("users") + "All mentoring</h2>" + d.all.map(pairHtml).join("") : "");
+        root.addEventListener("submit", async function (e) {
+            const f = e.target.closest("[data-mt-note]");
+            if (!f) return;
+            e.preventDefault();
+            try { await api("/api/mentoring/" + f.closest("[data-pair]").dataset.pair + "/note", { text: $("input", f).value }); render(); } catch (err) { toast(err.message); }
+        });
+        root.addEventListener("click", async function (e) {
+            if (e.target.closest("#mt-ask")) return openMentorForm(d, mentorsWithSkills, false);
+            if (e.target.closest("#mt-pair")) return openMentorForm(d, d.people, true);
+            const b = e.target.closest("[data-mt]");
+            if (!b) return;
+            const id = b.closest("[data-pair]").dataset.pair;
+            try {
+                if (b.dataset.mt === "meeting") return openMeetingForm(id);
+                if (b.dataset.mt === "end") {
+                    if (!(await confirmDialog({ title: "End this mentoring?", message: "Your notes stay available to you both.", confirmLabel: "End" }))) return;
+                    await api("/api/mentoring/" + id + "/update", { end: true });
+                } else {
+                    const r = await api("/api/mentoring/" + id + "/" + b.dataset.mt, {});
+                    state.me = r.user; renderChrome();
+                }
+                render();
+            } catch (err) { toast(err.message); }
+        });
+    }
+
+    function openMentorForm(d, people, pairMode) {
+        const opts = function (sel) { return people.map(function (p) { return '<option value="' + p.id + '">' + esc(p.displayName) + " — " + esc(p.jobTitle) + (p.skills.length ? " (" + esc(p.skills.slice(0, 3).join(", ")) + ")" : "") + "</option>"; }).join(""); };
+        const m = openModal('<h2 class="modal-title">' + (pairMode ? "Pair people for mentoring" : "Find a mentor") + '</h2><form id="mf-form" novalidate>' +
+            (pairMode ? '<label for="mf-mentee">Mentee</label><select id="mf-mentee">' + opts() + "</select>" : "") +
+            '<label for="mf-mentor">Mentor</label><select id="mf-mentor">' + opts() + "</select>" +
+            '<label for="mf-goals">What would you like to work on?</label><textarea id="mf-goals" rows="3" maxlength="2000" placeholder="e.g. Getting better at presenting to clients"></textarea>' +
+            '<label for="mf-every">Catch up every</label><select id="mf-every"><option value="1">week</option><option value="2">2 weeks</option><option value="4" selected>4 weeks</option><option value="6">6 weeks</option><option value="8">8 weeks</option></select>' +
+            '<div class="form-error" id="mf-error" hidden></div><div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">' + (pairMode ? "Pair them" : "Ask them") + "</button></div></form>");
+        $("#mf-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try {
+                const r = await api("/api/mentoring", { mentorId: $("#mf-mentor", m.el).value, menteeId: pairMode ? $("#mf-mentee", m.el).value : undefined, goals: $("#mf-goals", m.el).value, everyWeeks: $("#mf-every", m.el).value });
+                state.me = r.user; renderChrome(); closeModal(); toast(pairMode ? "Paired." : "Request sent."); render();
+            } catch (err) { formError($("#mf-error", m.el), err.message); }
+        });
+    }
+
+    function openMeetingForm(id) {
+        const m = openModal('<h2 class="modal-title">Log a catch-up</h2><form id="mm-form" novalidate>' +
+            '<div class="grid-2"><div><label for="mm-date">Date</label><input type="date" id="mm-date" value="' + isoDay(new Date()) + '"></div><div><label for="mm-next">Next catch-up <span class="muted small">(optional)</span></label><input type="date" id="mm-next"></div></div>' +
+            '<label for="mm-sum">What you talked about</label><textarea id="mm-sum" rows="3" maxlength="3000"></textarea>' +
+            '<label for="mm-act">Actions <span class="muted small">(optional)</span></label><input type="text" id="mm-act" maxlength="1000">' +
+            '<div class="form-error" id="mm-error" hidden></div><div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">Save</button></div></form>');
+        $("#mm-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try { const r = await api("/api/mentoring/" + id + "/meeting", { date: $("#mm-date", m.el).value, next: $("#mm-next", m.el).value, summary: $("#mm-sum", m.el).value, actions: $("#mm-act", m.el).value }); state.me = r.user; renderChrome(); closeModal(); toast("Catch-up saved."); render(); } catch (err) { formError($("#mm-error", m.el), err.message); }
+        });
+    }
+
+    // ================= On call =================
+
+    async function viewOnCall(root, current) {
+        const from = state.onCallFrom || "";
+        const d = await api("/api/oncall" + (from ? "?from=" + from : ""));
+        if (!current()) return;
+        const weekLabel = function (w) { const a = new Date(w + "T12:00:00"); const b = new Date(a); b.setDate(b.getDate() + 6); return a.getDate() + " " + a.toLocaleDateString("en-GB", { month: "short" }) + " – " + b.getDate() + " " + b.toLocaleDateString("en-GB", { month: "short" }); };
+        root.innerHTML = '<div class="page-head"><div><h1>On call</h1><p class="muted">Who to contact out of hours. Each person is on call for a week, Monday to Sunday.</p></div>' +
+            (d.canManage ? '<div class="page-actions"><button type="button" class="btn btn-primary" id="oc-new">' + icon("plus") + "New rota</button></div>" : "") + "</div>" +
+            '<div class="week-nav"><button type="button" class="icon-btn" data-ocw="-4" aria-label="Earlier">' + icon("chevronLeft") + '</button><h2 class="week-title">From ' + esc(weekLabel(d.from)) + '</h2><button type="button" class="icon-btn" data-ocw="4" aria-label="Later">' + icon("chevronRight") + "</button></div>" +
+            d.rotas.map(function (r) {
+                return '<section class="panel oc-rota" data-rota="' + r.id + '"><div class="panel-head"><div><h2 class="panel-title">' + icon("phone") + esc(r.name) + "</h2>" + (r.description ? '<p class="muted small">' + esc(r.description) + "</p>" : "") + "</div>" +
+                    (d.canManage ? '<div class="btn-row"><button type="button" class="btn btn-ghost btn-small" data-oca="rotate">' + icon("refresh") + 'Take turns</button><button type="button" class="btn btn-ghost btn-small" data-oca="edit">' + icon("edit") + '</button><button type="button" class="icon-btn" data-oca="delete" aria-label="Delete rota">' + icon("trash") + "</button></div>" : "") + "</div>" +
+                    '<div class="oc-now">' + (r.now ? avatar(r.now, "md") + '<div><span class="muted small">On call this week</span><strong>' + esc(r.now.displayName) + "</strong>" + (r.now.phone ? '<a href="tel:' + esc(r.now.phone) + '">' + icon("phone") + esc(r.now.phone) + "</a>" : "") + "</div>" : '<span class="muted">Nobody is on call this week.</span>') +
+                    (r.contact ? '<div class="oc-contact"><span class="muted small">Contact</span><strong>' + esc(r.contact) + "</strong></div>" : "") + "</div>" +
+                    '<div class="oc-weeks">' + r.weeks.map(function (w) {
+                        return '<div class="oc-week"><span class="muted small">' + esc(weekLabel(w.week)) + "</span>" + (d.canManage ? '<select data-ocweek="' + w.week + '"><option value="">Nobody</option>' + d.people.map(function (p) { return '<option value="' + p.id + '"' + (w.person && w.person.id === p.id ? " selected" : "") + ">" + esc(p.displayName) + "</option>"; }).join("") + "</select>" : "<strong>" + (w.person ? esc(w.person.displayName) : '<span class="muted">Nobody</span>') + "</strong>") + "</div>";
+                    }).join("") + "</div></section>";
+            }).join("");
+        root.addEventListener("change", async function (e) {
+            const s = e.target.closest("[data-ocweek]");
+            if (!s) return;
+            try { await api("/api/oncall/" + s.closest("[data-rota]").dataset.rota + "/assign", { week: s.dataset.ocweek, personId: s.value }); toast("Saved."); } catch (err) { toast(err.message); }
+        });
+        root.addEventListener("click", async function (e) {
+            const w = e.target.closest("[data-ocw]");
+            if (w) { const dt = new Date(d.from + "T12:00:00"); dt.setDate(dt.getDate() + Number(w.dataset.ocw) * 7); state.onCallFrom = isoDay(dt); return render(); }
+            if (e.target.closest("#oc-new")) return openRotaForm(null);
+            const b = e.target.closest("[data-oca]");
+            if (!b) return;
+            const r = d.rotas.find(function (x) { return x.id === b.closest("[data-rota]").dataset.rota; });
+            if (b.dataset.oca === "edit") return openRotaForm(r);
+            if (b.dataset.oca === "rotate") return openRotateForm(r, d);
+            if (await confirmDialog({ title: "Delete " + r.name + "?", message: "Its weeks will be cleared.", confirmLabel: "Delete", danger: true })) {
+                try { await api("/api/oncall/" + r.id + "/delete", {}); render(); } catch (err) { toast(err.message); }
+            }
+        });
+    }
+
+    function openRotaForm(r) {
+        const v = r || { name: "", description: "", contact: "" };
+        const m = openModal('<h2 class="modal-title">' + (r ? "Edit rota" : "New rota") + '</h2><form id="or-form" novalidate><label for="or-name">Name</label><input type="text" id="or-name" maxlength="80" value="' + esc(v.name) + '">' +
+            '<label for="or-desc">What it covers</label><input type="text" id="or-desc" maxlength="300" value="' + esc(v.description) + '">' +
+            '<label for="or-contact">Contact (phone or how to reach them) <span class="muted small">(optional)</span></label><input type="text" id="or-contact" maxlength="120" value="' + esc(v.contact) + '">' +
+            '<div class="form-error" id="or-error" hidden></div><div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">Save</button></div></form>');
+        $("#or-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try { await api(r ? "/api/oncall/" + r.id : "/api/oncall", { name: $("#or-name", m.el).value, description: $("#or-desc", m.el).value, contact: $("#or-contact", m.el).value }); closeModal(); render(); } catch (err) { formError($("#or-error", m.el), err.message); }
+        });
+    }
+
+    function openRotateForm(r, d) {
+        const m = openModal('<h2 class="modal-title">Take turns · ' + esc(r.name) + '</h2><p class="muted">Fills the coming weeks by going round the people you tick, in order.</p><form id="ot-form" novalidate>' +
+            '<div class="member-list">' + d.people.map(function (p) { return '<label class="member-row"><span class="mr-text"><span class="emp-name">' + esc(p.displayName) + '</span><span class="muted small">' + esc(p.jobTitle) + '</span></span><input type="checkbox" value="' + p.id + '"><span class="mr-check">' + icon("tick") + "</span></label>"; }).join("") + "</div>" +
+            '<div class="grid-2"><div><label for="ot-from">Starting week</label><input type="date" id="ot-from" value="' + d.from + '"></div><div><label for="ot-count">Weeks to fill</label><input type="number" id="ot-count" min="1" max="52" value="8"></div></div>' +
+            '<div class="form-error" id="ot-error" hidden></div><div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">Fill weeks</button></div></form>', { cls: "modal-members" });
+        m.el.addEventListener("change", function (e) { const row = e.target.closest(".member-row"); if (row) row.classList.toggle("on", e.target.checked); });
+        $("#ot-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try { await api("/api/oncall/" + r.id + "/rotate", { people: $$(".member-row input:checked", m.el).map(function (c) { return c.value; }), from: $("#ot-from", m.el).value, count: $("#ot-count", m.el).value }); closeModal(); toast("Weeks filled."); render(); } catch (err) { formError($("#ot-error", m.el), err.message); }
         });
     }
 

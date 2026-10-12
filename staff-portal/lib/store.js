@@ -509,7 +509,15 @@ function publicView(p) {
     status: currentStatus(p),
     birthday: p.birthday && p.birthday.show ? { month: p.birthday.month, day: p.birthday.day } : null,
     startDate: p.startDate || null,
+    skills: p.skills || [],
+    languages: p.languages || [],
   };
+}
+
+// Skills and languages people list on their profile (so the directory can find "who speaks Spanish?").
+function cleanTagList(v, max) {
+  const list = Array.isArray(v) ? v : String(v || "").split(",");
+  return [...new Set(list.map((x) => str(x, 40)).filter(Boolean).map((x) => x.charAt(0).toUpperCase() + x.slice(1)))].slice(0, max);
 }
 
 function manageView(p) {
@@ -819,6 +827,8 @@ function updateOwnProfile(person, input) {
     timezone: input.timezone || person.timezone || DEFAULT_TIMEZONE,
     updatedAt: new Date().toISOString(),
   });
+  if ("skills" in input) person.skills = cleanTagList(input.skills, 20);
+  if ("languages" in input) person.languages = cleanTagList(input.languages, 10);
   // Birthday: day and month only (no year), shown to colleagues only if the person chooses.
   if ("birthdayMonth" in input) {
     const month = Number(input.birthdayMonth);

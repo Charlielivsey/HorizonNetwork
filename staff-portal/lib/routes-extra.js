@@ -26,6 +26,11 @@ const feedback = require("./feedback");
 const pulse = require("./pulse");
 const exitinterviews = require("./exitinterviews");
 const flexible = require("./flexible");
+const chat = require("./chat");
+const qa = require("./qa");
+const wiki = require("./wiki");
+const mentoring = require("./mentoring");
+const oncall = require("./oncall");
 
 let ctx;
 function init(helpers) {
@@ -98,6 +103,145 @@ async function handle(req, res, pathname, session) {
         logEvent(req, session, "expense-withdrawn", { target: who, detail: `£${c.amount.toFixed(2)} – ${c.description}` });
       }
       return sendJson(res, 200, { ok: true, user: meResponse(session) }), true;
+    }
+  }
+
+  // ----- Team chat -----
+  if (pathname.startsWith("/api/chat")) {
+    if (me.system) throw httpError(403, "The admin account can't use chat.");
+    if (method === "GET" && pathname === "/api/chat") {
+      return sendJson(res, 200, { channels: chat.channels(me, query(req).get("open")), people: store.employees().filter((p) => p.id !== me.id).map((p) => ({ id: p.id, displayName: p.displayName, jobTitle: p.jobTitle, avatarUrl: store.publicView(p).avatarUrl })) }), true;
+    }
+    if (method === "POST" && pathname === "/api/chat/dm") {
+      const { personId } = await readJsonBody(req);
+      const other = store.getPerson(personId);
+      if (!other || other.system || other.id === me.id) throw httpError(400, "Choose someone to message.");
+      return sendJson(res, 200, { channel: chat.dmId(me.id, other.id) }), true;
+    }
+    if ((m = /^\/api\/chat\/c\/([a-z0-9\-]+)(?:\/([a-f0-9]{16})\/delete)?$/.exec(pathname))) {
+      const channel = m[1];
+      if (!chat.canAccess(me, channel)) throw httpError(404, "Conversation not found.");
+      if (method === "GET") {
+        const after = query(req).get("after") || "";
+        const msgs = chat.messages(me, channel, after);
+        chat.markRead(me, channel);
+        return sendJson(res, 200, { messages: msgs, unreadTotal: chat.unreadTotal(me) }), true;
+      }
+      if (method === "POST" && m[2]) { chat.remove(me, channel, m[2]); return sendJson(res, 200, { ok: true }), true; }
+      if (method === "POST") {
+        const { text } = await readJsonBody(req);
+        const msg = chat.post(me, channel, text);
+        if (channel.startsWith("dm-") && notify) {
+          const other = channel.slice(3).split("-").find((id) => id !== me.id);
+          notify([other], { type: "chat", title: `New message from ${me.displayName}`, body: msg.text.slice(0, 120), link: "/chat?c=" + channel }, me);
+        }
+        return sendJson(res, 201, { ok: true }), true;
+      }
+    }
+  }
+
+  // ----- Q&A -----
+  if (pathname.startsWith("/api/qa")) {
+    if (method === "GET" && pathname === "/api/qa") return sendJson(res, 200, { questions: qa.list(me) }), true;
+    if (method === "POST" && pathname === "/api/qa") {
+      const q = qa.ask(me, await readJsonBody(req));
+      logEvent(req, session, "question-asked", { target: q.title });
+      return sendJson(res, 201, { id: q.id }), true;
+    }
+    if ((m = /^\/api\/qa\/([a-f0-9]{16})(?:\/(answer|vote|accept|delete)|\/answers\/([a-f0-9]{16})\/delete)?$/.exec(pathname))) {
+      const q = qa.get(m[1]);
+      if (!q) throw httpError(404, "Question not found.");
+      if (method === "GET") return sendJson(res, 200, { question: qa.view(q, me, true) }), true;
+      const body = await readJsonBody(req);
+      if (m[3]) qa.removeAnswer(q, m[3], me);
+      else if (m[2] === "answer") {
+        qa.answer(q, me, body.body);
+        if (notify) notify([q.by].concat(q.answers.map((a) => a.by)), { type: "idea", title: `${me.displayName} answered: ${q.title}`, link: "/questions?q=" + q.id }, me);
+      } else if (m[2] === "vote") qa.vote(q, body.answerId, me);
+      else if (m[2] === "accept") qa.accept(q, body.answerId, me);
+      else if (m[2] === "delete") { qa.removeQuestion(q, me); return sendJson(res, 200, { ok: true }), true; }
+      return sendJson(res, 200, { question: qa.view(q, me, true) }), true;
+    }
+  }
+
+  // ----- Knowledge base -----
+  if (pathname.startsWith("/api/wiki")) {
+    if (method === "GET" && pathname === "/api/wiki") return sendJson(res, 200, { pages: wiki.list(), canDelete: can(wiki.MANAGE) }), true;
+    if (method === "GET" && pathname === "/api/wiki/resolve") {
+      const p = wiki.byTitle(query(req).get("title"));
+      return sendJson(res, 200, { slug: p ? p.slug : null }), true;
+    }
+    if (method === "POST" && pathname === "/api/wiki") {
+      if (me.system) throw httpError(403, "The admin account can't write pages.");
+      const page = wiki.save(await readJsonBody(req), me, null);
+      logEvent(req, session, "wiki-page-created", { target: page.title });
+      return sendJson(res, 201, { slug: page.slug }), true;
+    }
+    if ((m = /^\/api\/wiki\/page\/([a-z0-9\-]+)(?:\/(restore|delete))?$/.exec(pathname))) {
+      const page = wiki.bySlug(m[1]);
+      if (!page) throw httpError(404, "That page doesn't exist.");
+      if (method === "GET") return sendJson(res, 200, { page: wiki.view(page, true), canDelete: can(wiki.MANAGE) }), true;
+      const body = await readJsonBody(req);
+      if (m[2] === "delete") {
+        if (!can(wiki.MANAGE)) throw httpError(403, "Only people who manage documents can delete pages.");
+        wiki.remove(page);
+        logEvent(req, session, "wiki-page-deleted", { target: page.title });
+        return sendJson(res, 200, { ok: true }), true;
+      }
+      if (m[2] === "restore") wiki.restore(page, body.index, me);
+      else wiki.save(body, me, page);
+      logEvent(req, session, m[2] === "restore" ? "wiki-page-restored" : "wiki-page-edited", { target: page.title });
+      return sendJson(res, 200, { slug: page.slug }), true;
+    }
+  }
+
+  // ----- Mentoring -----
+  if (pathname.startsWith("/api/mentoring")) {
+    if (method === "GET" && pathname === "/api/mentoring") {
+      return sendJson(res, 200, { ...mentoring.forViewer(me), canPair: can("staff.manage"), people: store.employees().map((p) => ({ id: p.id, displayName: p.displayName, jobTitle: p.jobTitle, skills: p.skills || [] })) }), true;
+    }
+    if (method === "POST" && pathname === "/api/mentoring") {
+      const pair = mentoring.create(await readJsonBody(req), me);
+      logEvent(req, session, "mentoring-requested", { target: (store.getPerson(pair.mentorId) || {}).displayName });
+      if (notify) notify(pair.status === "requested" ? [pair.mentorId] : [pair.mentorId, pair.menteeId], { type: "review", title: pair.status === "requested" ? `${me.displayName} would like you to mentor them` : "You've been paired for mentoring", link: "/mentoring" }, me);
+      return sendJson(res, 201, { ok: true, user: meResponse(session) }), true;
+    }
+    if ((m = /^\/api\/mentoring\/([a-f0-9]{16})\/(accept|decline|meeting|note|update)$/.exec(pathname)) && method === "POST") {
+      const p = mentoring.get(m[1]);
+      if (!p) throw httpError(404, "Not found.");
+      const body = await readJsonBody(req);
+      if (m[2] === "accept" || m[2] === "decline") {
+        mentoring.respond(p, m[2] === "accept", me);
+        if (notify) notify([p.menteeId], { type: "review", title: `${me.displayName} ${m[2] === "accept" ? "will be your mentor" : "can't be your mentor right now"}`, link: "/mentoring" }, me);
+      } else if (m[2] === "meeting") mentoring.logMeeting(p, body, me);
+      else if (m[2] === "note") mentoring.addNote(p, body.text, me);
+      else mentoring.update(p, body, me);
+      return sendJson(res, 200, { ok: true, user: meResponse(session) }), true;
+    }
+  }
+
+  // ----- On-call rotas -----
+  if (pathname.startsWith("/api/oncall")) {
+    if (method === "GET" && pathname === "/api/oncall") {
+      const from = /^\d{4}-\d{2}-\d{2}$/.test(query(req).get("from") || "") ? query(req).get("from") : oncall.weekStart();
+      return sendJson(res, 200, { rotas: oncall.list(from, 8), from: oncall.weekStart(from), canManage: can(oncall.MANAGE), people: can(oncall.MANAGE) ? store.employees().map((p) => ({ id: p.id, displayName: p.displayName, jobTitle: p.jobTitle })) : [] }), true;
+    }
+    if (!can(oncall.MANAGE)) throw httpError(403, "Only IT can change on-call rotas.");
+    if (method === "POST" && pathname === "/api/oncall") {
+      const r = oncall.saveRota(await readJsonBody(req), null);
+      logEvent(req, session, "oncall-rota-created", { target: r.name });
+      return sendJson(res, 201, { ok: true }), true;
+    }
+    if ((m = /^\/api\/oncall\/([a-f0-9]{16})(?:\/(assign|rotate|delete))?$/.exec(pathname)) && method === "POST") {
+      const r = oncall.getRota(m[1]);
+      if (!r) throw httpError(404, "Rota not found.");
+      const body = await readJsonBody(req);
+      if (!m[2]) oncall.saveRota(body, r);
+      else if (m[2] === "assign") oncall.assign(r, body.week, body.personId);
+      else if (m[2] === "rotate") oncall.rotate(r, body.people, body.from, body.count);
+      else oncall.deleteRota(r);
+      logEvent(req, session, "oncall-rota-changed", { target: r.name, detail: m[2] || "details" });
+      return sendJson(res, 200, { ok: true }), true;
     }
   }
 
