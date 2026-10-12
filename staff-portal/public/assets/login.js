@@ -12,6 +12,9 @@
     const toggle = document.getElementById("toggle-pw");
     const boxes = Array.prototype.slice.call(document.querySelectorAll("#code-boxes input"));
     let challenge = null;
+    // Only the fixed local status authorization route is an allowed return destination.
+    const requestedNext = new URLSearchParams(window.location.search).get("next") || "";
+    const nextPage = /^\/status-admin\/authorize\?state=[a-f0-9]{64}$/.test(requestedNext) ? requestedNext : "/home";
 
     toggle.addEventListener("click", function () {
         const show = password.type === "password";
@@ -41,7 +44,7 @@
         button.classList.add("done");
         button.querySelector(".btn-label").textContent = "Welcome";
         document.body.classList.add("leaving");
-        setTimeout(function () { window.location.href = "/home"; }, 350);
+        setTimeout(function () { window.location.href = nextPage; }, 350);
     }
 
     function showStep(step) {

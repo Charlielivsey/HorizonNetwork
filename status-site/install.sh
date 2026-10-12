@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install only status.hngroup.org.uk. No other website installers are invoked.
+# Install status.hngroup.org.uk and its minimal staff sign-in integration. No other website installers are invoked.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOMAIN=status.hngroup.org.uk
@@ -36,9 +36,12 @@ for config in /etc/nginx/sites-enabled/* /etc/nginx/conf.d/*.conf; do
         exit 1
     fi
 done
+# The status Admin button uses existing staff credentials and roles.
+bash "$SCRIPT_DIR/install-portal-sso.sh"
+
 mkdir -p "$APP_DIR/public" "$DATA_DIR" "$SSL_DIR" "$CHALLENGE_DIR" /etc/nginx/sites-available /etc/nginx/sites-enabled
 chmod 700 "$DATA_DIR"
-cp "$SCRIPT_DIR/server.js" "$APP_DIR/server.js"
+cp "$SCRIPT_DIR/server.js" "$SCRIPT_DIR/auth.js" "$APP_DIR/"
 cp -r "$SCRIPT_DIR/public/." "$APP_DIR/public/"
 PORT=3300 HOST=127.0.0.1 DATA_DIR="$DATA_DIR" pm2 startOrRestart "$SCRIPT_DIR/ecosystem.config.cjs" --update-env
 healthy=0
@@ -101,9 +104,9 @@ echo ''
 echo "Status installed: https://$DOMAIN"
 echo 'PM2 process: hn-status (port 3300, loopback only)'
 echo 'Admin page: https://status.hngroup.org.uk/admin'
-echo 'Read your admin key: sudo cat /var/lib/hn-status/admin-token'
+echo 'Admin sign-in: staff portal (system owner and Super Admin role only)'
 if [ "$HTTPS_OK" != 1 ]; then
     echo 'WARNING: Trusted SSL could not be issued/refreshed. An existing certificate or temporary self-signed certificate is in use.'
     echo 'Point the status DNS record at this VPS, allow inbound ports 80/443, then rerun this installer.'
-    echo 'Do not enter the admin key until trusted HTTPS is working.'
+    echo 'Staff sign-in requires trusted HTTPS on both staff and status domains.'
 fi

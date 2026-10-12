@@ -3,11 +3,11 @@ const $ = s => document.querySelector(s);
 const labels = { operational: 'Operational', degraded: 'Degraded performance', outage: 'Major outage', maintenance: 'Under maintenance', unknown: 'Awaiting checks' };
 const escapeHTML = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const date = value => new Date(value).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
-let key = '', adminData;
+let adminData;
 async function api(route, data) {
-  const response = await fetch(route, { headers: { 'Content-Type': 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) }, ...(data ? { method: 'POST', body: JSON.stringify(data) } : {}), signal: AbortSignal.timeout(15000), cache: 'no-store' });
+  const response = await fetch(route, { headers: { 'Content-Type': 'application/json' }, ...(data ? { method: 'POST', body: JSON.stringify(data) } : {}), signal: AbortSignal.timeout(15000), cache: 'no-store' });
   const result = await response.json();
-  if (!response.ok) throw new Error(result.error || 'Unable to load status');
+  if (!response.ok) throw Object.assign(new Error(result.error || 'Unable to load status'), { status: response.status });
   return result;
 }
 async function refresh() {
@@ -31,16 +31,26 @@ async function refresh() {
 }
 async function loadAdmin() {
   adminData = await api('/api/admin');
-  $('#login').hidden = true; $('#dashboard').hidden = false;
+  $('#sign-in-again').hidden = true; $('#dashboard').hidden = false;
   $('#admin-services').innerHTML = adminData.services.map(s => `<div class="card service-top"><strong>${escapeHTML(s.name)}</strong><div><button data-edit="${s.id}" class="secondary">Edit</button> <button data-delete="${s.id}" class="secondary">Delete</button></div></div>`).join('');
   $('#incident-picker').innerHTML = '<option value="">New incident</option>' + adminData.incidents.map(i => `<option value="${i.id}">${escapeHTML(i.title)} (${escapeHTML(i.status)})</option>`).join('');
   $('#affected').innerHTML = adminData.services.map(s => `<label class="check"><input type="checkbox" name="serviceIds" value="${s.id}"> ${escapeHTML(s.name)}</label>`).join('');
 }
-function feedback(error) { $('#message').textContent = error.message || error; }
-if (!document.body.dataset.admin) { refresh(); setInterval(refresh, 30000); }
+function feedback(error) {
+  $('#message').textContent = error.message || error;
+  if ([401, 403, 503].includes(error.status)) { $('#dashboard').hidden = true; $('#sign-in-again').hidden = false; adminData = null; }
+}
+if (document.body.dataset.denied) {
+  const reason = new URLSearchParams(window.location.search).get('reason');
+  if (reason === 'unavailable') { $('#denied-title').textContent = 'Sign-in temporarily unavailable'; $('#denied-message').textContent = 'The staff portal could not verify your access. Please try again shortly or contact the system owner.'; }
+  if (reason === 'expired') { $('#denied-title').textContent = 'Please sign in again'; $('#denied-message').textContent = 'Your staff sign-in or return link has expired. Start again below.'; }
+}
+else if (!document.body.dataset.admin) { refresh(); setInterval(refresh, 30000); }
 else {
-  $('#login').addEventListener('submit', async e => { e.preventDefault(); key = $('#key').value.trim(); try { await loadAdmin(); $('#key').value = ''; feedback('Dashboard unlocked.'); } catch (e) { key = ''; feedback(e); } });
-  $('#logout').onclick = () => { key = ''; adminData = null; $('#dashboard').hidden = true; $('#login').hidden = false; feedback('Dashboard locked.'); };
+  loadAdmin().catch(feedback);
+  $('#logout').onclick = async () => {
+    try { await api('/auth/logout', {}); window.location.assign('/'); } catch (e) { feedback(e); }
+  };
   $('#cancel-service').onclick = () => { $('#service-form').reset(); $('#service-heading').textContent = 'Add service'; };
   $('#admin-services').onclick = async e => {
     const edit = e.target.dataset.edit, remove = e.target.dataset.delete;

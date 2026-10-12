@@ -43,6 +43,7 @@ const oncall = require("./lib/oncall");
 const security = require("./lib/security");
 const enquiries = require("./lib/enquiries");
 const retention = require("./lib/retention");
+const { createStatusSso, loginNext } = require("./lib/status-sso");
 
 const PORT = parseInt(process.env.PORT || "3200", 10);
 const HOST = process.env.HOST || "127.0.0.1";
@@ -2091,9 +2092,13 @@ extraRoutes.init({
 
 // ---------- Routing ----------
 
+const statusSso = createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent });
+
 async function route(req, res) {
   const pathname = new URL(req.url, "http://localhost").pathname;
   const session = getSession(req);
+
+  if (await statusSso(req, res, pathname, session)) return;
 
   if (pathname.startsWith("/api/")) return routeApi(req, res, pathname, session);
 
@@ -2105,10 +2110,11 @@ async function route(req, res) {
   if (pathname === "/" || pathname === "/dashboard") return redirect(res, session ? "/home" : "/login");
 
   if (pathname === "/login") {
+    const next = loginNext(new URL(req.url, "http://localhost").searchParams.get("next"));
     // Opening the sign-in page always ends any existing sign-in.
     if (session) {
       sessions.delete(session.token);
-      return send(res, 302, "", { Location: "/login", "Cache-Control": "no-store", "Set-Cookie": sessionCookie(req, "", 0) });
+      return send(res, 302, "", { Location: "/login" + (next ? "?next=" + encodeURIComponent(next) : ""), "Cache-Control": "no-store", "Set-Cookie": sessionCookie(req, "", 0) });
     }
     return sendFile(res, path.join(PUBLIC_DIR, "login.html"), { "Cache-Control": "no-store" });
   }

@@ -4,5 +4,5 @@
 - Read `brand/README.md` for logo names and shared design references. Copy required assets into each site's own public directory so deployments stay independent.
 - Match the existing public website and staff portal design language for HN Group sites: Plus Jakarta Sans, the HN palette and multicolour stripe, purple actions, rounded cards, and responsive layouts.
 - Include an appropriate browser tab icon. The approved existing HN Group favicon is `hngroup-site/public/assets/favicon.svg`.
-- Keep each website's installation isolated. When making changes to the status site, do not edit or invoke the other website installers.
+- Keep each website's installation isolated. When making changes to the status site, do not edit or invoke the other website installers. The user requested staff portal sign-in for status admin; its narrowly scoped integration helper may update the necessary portal sign-in files and restart that portal when those files change, while leaving the main public website alone.
 - Provide a single-line VPS update/install command when delivering website changes.

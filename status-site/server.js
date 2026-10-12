@@ -3,12 +3,11 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { createAuth, STATUS_ORIGIN } = require('./auth');
+const auth = createAuth();
 const DATA = process.env.DATA_DIR || path.join(__dirname, 'data');
 fs.mkdirSync(DATA, { recursive: true, mode: 0o700 });
 const file = path.join(DATA, 'status.json');
-const tokenFile = path.join(DATA, 'admin-token');
-if (!fs.existsSync(tokenFile)) fs.writeFileSync(tokenFile, crypto.randomBytes(32).toString('hex'), { mode: 0o600 });
-const token = fs.readFileSync(tokenFile, 'utf8').trim();
 let db = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {
   services: [
     { id: crypto.randomUUID(), name: 'HN Group website', url: 'https://hngroup.org.uk', override: 'auto', checks: [], days: {} },
@@ -52,11 +51,6 @@ async function checkAll() {
     })); save();
   } finally { checking = false; }
 }
-function authorized(req) {
-  const provided = Buffer.from((req.headers.authorization || '').replace(/^Bearer /, ''));
-  const expected = Buffer.from(token);
-  return provided.length === expected.length && crypto.timingSafeEqual(provided, expected);
-}
 async function body(req) {
   let data = '';
   for await (const chunk of req) { data += chunk; if (data.length > 32768) throw new Error('Request too large'); }
@@ -80,10 +74,14 @@ const server = http.createServer(async (req, res) => {
   const route = new URL(req.url, 'http://localhost').pathname;
   const send = (code, value) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(value)); };
   try {
+    if (await auth.handle(req, res, route)) return;
     if (route === '/healthz' && req.method === 'GET') return send(200, { ok: true });
     if (route === '/api/status' && req.method === 'GET') return send(200, snapshot());
     if (route.startsWith('/api/admin')) {
-      if (!authorized(req)) return send(401, { error: 'Admin key not recognised' });
+      let user;
+      try { user = await auth.authorize(req); } catch (e) { return send(e.status || 503, { error: e.message }); }
+      if (!user) return send(401, { error: 'Sign in through the staff portal to manage status.' });
+      if (req.method === 'POST' && (req.headers.origin !== STATUS_ORIGIN || !(req.headers['content-type'] || '').startsWith('application/json'))) return send(403, { error: 'Request origin or content type not allowed.' });
       if (route === '/api/admin' && req.method === 'GET') return send(200, db);
       if (req.method !== 'POST') return send(405, { error: 'Method not allowed' });
       const b = await body(req);
@@ -114,9 +112,9 @@ const server = http.createServer(async (req, res) => {
       } else return send(404, { error: 'Not found' });
       save(); send(200, { ok: true }); void checkAll(); return;
     }
-    const assets = { '/': 'index.html', '/admin': 'admin.html', '/app.js': 'app.js', '/style.css': 'style.css', '/assets/favicon.svg': 'assets/favicon.svg', '/assets/brand/hn-group-wordmark.svg': 'assets/brand/hn-group-wordmark.svg', '/assets/brand/hn-group-wordmark-white.svg': 'assets/brand/hn-group-wordmark-white.svg', '/assets/fonts/plus-jakarta-sans.woff2': 'assets/fonts/plus-jakarta-sans.woff2' };
+    const assets = { '/': 'index.html', '/admin': 'admin.html', '/admin/denied': 'denied.html', '/app.js': 'app.js', '/style.css': 'style.css', '/assets/favicon.svg': 'assets/favicon.svg', '/assets/brand/hn-group-wordmark.svg': 'assets/brand/hn-group-wordmark.svg', '/assets/brand/hn-group-wordmark-white.svg': 'assets/brand/hn-group-wordmark-white.svg', '/assets/fonts/plus-jakarta-sans.woff2': 'assets/fonts/plus-jakarta-sans.woff2' };
     if (!assets[route] || req.method !== 'GET') return send(404, { error: 'Not found' });
-    res.writeHead(200, { 'Content-Type': route.endsWith('.js') ? 'text/javascript' : route.endsWith('.css') ? 'text/css' : route.endsWith('.svg') ? 'image/svg+xml' : route.endsWith('.woff2') ? 'font/woff2' : 'text/html', 'Cache-Control': 'no-cache' });
+    res.writeHead(200, { 'Content-Type': route.endsWith('.js') ? 'text/javascript' : route.endsWith('.css') ? 'text/css' : route.endsWith('.svg') ? 'image/svg+xml' : route.endsWith('.woff2') ? 'font/woff2' : 'text/html', 'Cache-Control': route === '/admin' ? 'no-store' : 'no-cache' });
     res.end(fs.readFileSync(path.join(__dirname, 'public', assets[route])));
   } catch (e) { send(400, { error: e.message }); }
 });
