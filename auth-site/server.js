@@ -141,6 +141,13 @@ const server = http.createServer(async (req, res) => {
     }
     const file = staticFiles[route];
     if (!file) return send(res, 404, { error: 'Not found.' });
+    // Auth deliberately ends its session on every document navigation, including refresh.
+    // Assets and API requests must not revoke the sign-in in progress.
+    if (file.endsWith('.html')) {
+      sessions.delete(hash(cookie(req, COOKIE)));
+      challenges.delete(hash(cookie(req, FLOW)));
+      res.setHeader('Set-Cookie', [setCookie(COOKIE, '', 0), setCookie(FLOW, '', 0)]);
+    }
     res.writeHead(200, { 'Content-Type': mime[path.extname(file)], 'Cache-Control': file.endsWith('.html') ? 'no-store' : 'public, max-age=3600' });
     fs.createReadStream(path.join(__dirname, 'public', file)).pipe(res);
   } catch (e) { send(res, e.status || 503, { error: e.status ? e.message : 'Authentication service is unavailable. Please try again shortly.' }); }

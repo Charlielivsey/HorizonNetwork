@@ -51,8 +51,17 @@ test('real staff password and PIN, minimal live profile, avatar, fixed clients a
     assert.equal((await post('/api/sso/exchange',{code:callback.searchParams.get('code'),state},'',{Authorization:'Bearer '+'c'.repeat(64)})).status,401);
     const authHeader={Authorization:'Bearer '+'c'.repeat(64)};
     assert.equal((await post('/api/sso/session',{session:sso.session},'',authHeader)).status,200);
+    const refreshed = await fetch(base + '/', { headers: { Cookie: cookie } });
+    assert.equal(refreshed.status, 200);
+    assert.equal(refreshed.headers.getSetCookie().filter(c => /Max-Age=0/.test(c)).length, 2);
+    assert.equal((await post('/api/sso/session',{session:sso.session},'',authHeader)).status,401);
     assert.equal((await post('/api/logout',{},cookie)).status,200);
     assert.equal((await post('/api/sso/session',{session:sso.session},'',authHeader)).status,401);
     assert.equal((await fetch(base+'/api/me',{headers:{Cookie:cookie}})).status,401);
+    const pendingLogin = await post('/api/login',{ username:'test.owner@hngroup.org.uk',password:'Test-password-582!' });
+    const pendingFlow = pendingLogin.headers.getSetCookie()[0].split(';')[0];
+    const pinRefresh = await fetch(base + '/authorize?client_id=status&state=' + state, { headers: { Cookie: pendingFlow } });
+    assert.equal(pinRefresh.status, 200);
+    assert.equal((await post('/api/login/code',{code:'582947'},pendingFlow)).status,401);
   } finally { await new Promise(r=>server.close(r)); if(child.exitCode===null){child.kill('SIGTERM');await new Promise(r=>child.once('exit',r));} fs.rmSync(dir,{recursive:true,force:true}); }
 });

@@ -6,3 +6,5 @@
 - Include an appropriate browser tab icon. The approved existing HN Group favicon is `hngroup-site/public/assets/favicon.svg`.
 - Keep each website's installation isolated. When making changes to the status site, do not edit or invoke the other website installers. The user requested a dedicated auth.hngroup.org.uk service backed by staff accounts; its narrowly scoped integration helper may update the necessary portal authentication bridge files and restart that portal when those files change, while leaving the main public website alone. The status installer may invoke the isolated auth installer to set up both requested services. Status admin must authenticate through auth.hngroup.org.uk and admit only the system owner and Super Admin role members.
 - Provide a single-line VPS update/install command when delivering website changes.
+
+- Auth must end the browser session on refresh, matching the staff portal. Keep PIN entry masked; use the six-box HN design with smooth transitions and reduced-motion support.
