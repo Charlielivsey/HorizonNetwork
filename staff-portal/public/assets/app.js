@@ -4756,7 +4756,7 @@
 
         root.innerHTML =
             '<div class="page-head"><div><h1>Run payroll</h1><p class="muted">Payslips are paid by ' + esc(d.employer) + ". Tax and National Insurance are worked out automatically. Only Human Resources can see this page.</p></div>" +
-            '<div class="page-actions"><button type="button" class="btn btn-ghost" id="pr-bands">' + icon("chart") + "Salary bands</button>" +
+            '<div class="page-actions"><button type="button" class="btn btn-ghost" id="pr-bands">' + icon("list") + "Salary bands</button>" +
             '<button type="button" class="btn btn-ghost" id="pr-yearend">' + icon("chart") + "Year end</button>" +
             '<button type="button" class="btn btn-ghost" id="pr-single"' + (overdrawn ? " disabled" : "") + ">" + icon("plus") + "Single payslip</button>" +
             '<button type="button" class="btn btn-primary" id="pr-run"' + (overdrawn ? ' disabled title="The payroll fund is overdrawn"' : "") + ">" + icon(overdrawn ? "lock" : "wallet") + "Run payroll</button></div></div>" +
@@ -8303,7 +8303,7 @@
                 const r = await api("/api/expenses/mileage?miles=" + n + "&date=" + $("#mi-date", m.el).value);
                 if (mine !== seq) return;
                 $("#mi-calc", m.el).innerHTML = icon("pound") + "<strong>" + fmtMoney(r.amount) + "</strong>&nbsp;for " + n + " miles" +
-                    (r.atLower ? " (" + r.atFull + " at 45p, " + r.atLower + " at 25p)" : " at 45p a mile") + " · " + Math.round(r.before) + " miles claimed this tax year";
+                    (r.atLower ? " (" + r.atFull + " at 45p, " + r.atLower + " at 25p)" : " at 45p a mile") + " · " + Math.round(r.before) + " miles already claimed this tax year";
             } catch (e) { /* ignore */ }
         }
         m.el.addEventListener("input", calc);
