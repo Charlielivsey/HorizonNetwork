@@ -118,6 +118,14 @@ function init(dir) {
     add("human resources", ["cases.manage", "recruitment.manage", "reports.view"]);
     settings.extraPermissionsAdded = true;
   }
+  if (!settings.enquiriesPermissionAdded) {
+    // Website enquiries: given once to the roles that had every permission, and to Communications.
+    for (const role of settings.roles) {
+      const name = role.name.toLowerCase();
+      if ((name === "super admin" || name === "leadership & hr" || name === "communications") && !role.permissions.includes("enquiries.manage")) role.permissions.push("enquiries.manage");
+    }
+    settings.enquiriesPermissionAdded = true;
+  }
   writeJson(settingsFile, settings);
 }
 
@@ -137,6 +145,7 @@ const PERMISSIONS = [
   { key: "payroll.manage", name: "Run payroll & finance", description: "See pay details, generate and issue payslips, and manage company funds, expenses and invoices. Only people who already have it can give it out." },
   { key: "cases.manage", name: "HR cases", description: "See and record disciplinary, grievance and capability cases. These are private to people with this permission." },
   { key: "recruitment.manage", name: "Recruitment", description: "Post job vacancies, track applicants and hire them." },
+  { key: "enquiries.manage", name: "Website enquiries", description: "Read and answer messages sent from the contact form on hngroup.org.uk." },
   { key: "reports.view", name: "Activity reports", description: "See the monthly activity reports (payroll figures only for people who can run payroll)." },
   { key: "system.admin", name: "System Admin", description: "Open System Admin with the PIN: sessions, log in as, backups and the full activity log. Only people who already have it can give it out." },
 ];

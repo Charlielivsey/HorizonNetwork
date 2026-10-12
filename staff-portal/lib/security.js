@@ -12,9 +12,10 @@ const RETENTION_CHOICES = {
   applicantsDays: [0, 90, 180, 365],
   chatDays: [0, 90, 180, 365, 730],
   ticketsDays: [0, 180, 365, 730],
+  enquiriesDays: [0, 180, 365, 730],
   leaversYears: [0, 6, 7],
 };
-const RETENTION_DEFAULTS = { auditDays: 730, applicantsDays: 180, chatDays: 0, ticketsDays: 0, leaversYears: 0 };
+const RETENTION_DEFAULTS = { auditDays: 730, applicantsDays: 180, chatDays: 0, ticketsDays: 0, enquiriesDays: 365, leaversYears: 0 };
 
 // The most common passwords from public breach lists (plus a few local ones). Anything on this list,
 // or one of these with a number or symbol added, is refused when "Block common passwords" is on.

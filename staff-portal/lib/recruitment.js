@@ -14,7 +14,7 @@ const datafile = require("./datafile");
 const MANAGE = "recruitment.manage";
 const STAGES = { applied: "Applied", screening: "Screening", interview: "Interview", offer: "Offer", hired: "Hired", rejected: "Not progressing", withdrawn: "Withdrawn" };
 const CONTRACTS = { "full-time": "Full time", "part-time": "Part time", contract: "Contract", temporary: "Temporary", apprenticeship: "Apprenticeship", internship: "Internship" };
-const SOURCES = { internal: "Internal applicant", referral: "Staff referral", external: "External", agency: "Agency" };
+const SOURCES = { internal: "Internal applicant", referral: "Staff referral", external: "External", agency: "Agency", website: "Company website" };
 
 let db;
 let dir;
@@ -51,6 +51,8 @@ function saveVacancy(input, by, existing) {
     closingDate: closingDate || null,
     hiringManagerId: manager && !manager.system ? manager.id : null,
     internalOnly: !!input.internalOnly,
+    // Shown on the Careers section of hngroup.org.uk, where anyone can apply.
+    publicListing: !!input.publicListing,
     updatedAt: new Date().toISOString(),
   });
   if (!existing) db.data.vacancies.push(v);
@@ -113,6 +115,38 @@ function addApplicant(v, meta, buffer, by) {
     fs.writeFileSync(path.join(dir, a.id), buffer, { mode: 0o600 });
     a.cv = { fileName: workplace.cleanFileName(fileName), ext, size: buffer.length };
   }
+  db.data.applicants.push(a);
+  db.save();
+  return a;
+}
+
+// ----- The public website (hngroup.org.uk) -----
+
+// Open vacancies HR have chosen to advertise, with only the details meant for the public.
+function publicVacancies() {
+  return db.data.vacancies.filter((v) => v.publicListing && isOpen(v))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .map((v) => ({ id: v.id, title: v.title, company: v.company, location: v.location, contract: CONTRACTS[v.contract], salary: v.salary, description: v.description, closingDate: v.closingDate, postedAt: v.createdAt.slice(0, 10) }));
+}
+
+// An application from the website: name, email and a CV are required.
+function addWebsiteApplicant(v, meta, buffer) {
+  if (!v || !v.publicListing || !isOpen(v)) throw new store.ValidationError("This job is no longer open.");
+  const name = str(meta.name, 120), email = str(meta.email, 160);
+  if (!name) throw new store.ValidationError("Enter your name.");
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new store.ValidationError("Enter a valid email address.");
+  if (!buffer || !buffer.length) throw new store.ValidationError("Attach your CV.");
+  if (db.data.applicants.some((a) => a.vacancyId === v.id && a.email.toLowerCase() === email.toLowerCase() && a.stage !== "withdrawn")) throw new store.ValidationError("You've already applied for this job. We'll be in touch.");
+  const fileName = str(meta.fileName, 200);
+  const ext = workplace.fileExt(fileName);
+  if (!["pdf", "doc", "docx", "odt", "txt", "rtf"].includes(ext)) throw new store.ValidationError("Your CV needs to be a PDF or Word document.");
+  const now = new Date().toISOString();
+  const a = {
+    id: newId(), vacancyId: v.id, personId: null, name, email, phone: str(meta.phone, 40), source: "website", referredBy: null,
+    message: str(meta.message, 3000), stage: "applied", notes: [], cv: null, createdAt: now, stageChangedAt: now,
+  };
+  fs.writeFileSync(path.join(dir, a.id), buffer, { mode: 0o600 });
+  a.cv = { fileName: workplace.cleanFileName(fileName), ext, size: buffer.length };
   db.data.applicants.push(a);
   db.save();
   return a;
@@ -236,5 +270,5 @@ function hiresBetween(from, to) {
 
 module.exports = {
   MANAGE, STAGES, CONTRACTS, SOURCES, init, canManage, saveVacancy, getVacancy, setVacancyStatus, deleteVacancy, addApplicant, getApplicant, cvFile,
-  setStage, addNote, hire, deleteApplicant, pruneApplicants, forViewer, vacancyView, openCount, newApplicantsCount, hiresBetween,
+  setStage, addNote, hire, deleteApplicant, pruneApplicants, publicVacancies, addWebsiteApplicant, forViewer, vacancyView, openCount, newApplicantsCount, hiresBetween,
 };

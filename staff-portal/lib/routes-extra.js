@@ -32,6 +32,7 @@ const wiki = require("./wiki");
 const mentoring = require("./mentoring");
 const oncall = require("./oncall");
 const security = require("./security");
+const enquiries = require("./enquiries");
 const retention = require("./retention");
 const rotas = require("./rotas");
 const stafffiles = require("./stafffiles");
@@ -143,6 +144,29 @@ async function handle(req, res, pathname, session) {
         }
         return sendJson(res, 201, { ok: true }), true;
       }
+    }
+  }
+
+  // ----- Website enquiries (from the contact form on hngroup.org.uk) -----
+  if (pathname.startsWith("/api/enquiries")) {
+    if (!can(enquiries.MANAGE)) throw httpError(403, "You don't have access to website enquiries.");
+    if (method === "GET" && pathname === "/api/enquiries") {
+      return sendJson(res, 200, { enquiries: enquiries.list(), topics: enquiries.TOPICS, statuses: enquiries.STATUSES, handlers: store.employees().filter((p) => store.can(p, enquiries.MANAGE)).map((p) => ({ id: p.id, displayName: p.displayName })) }), true;
+    }
+    if ((m = /^\/api\/enquiries\/([a-f0-9]{16})(\/delete)?$/.exec(pathname)) && method === "POST") {
+      const e = enquiries.get(m[1]);
+      if (!e) throw httpError(404, "Enquiry not found.");
+      if (m[2]) {
+        enquiries.remove(e);
+        logEvent(req, session, "enquiry-deleted", { target: e.name });
+        return sendJson(res, 200, { ok: true }), true;
+      }
+      const body = await readJsonBody(req);
+      const was = e.assigneeId;
+      enquiries.update(e, body, me);
+      if (e.assigneeId && e.assigneeId !== was && e.assigneeId !== me.id && notify) notify([e.assigneeId], { type: "info", title: `${me.displayName} passed you a website enquiry from ${e.name}`, link: "/enquiries" }, me);
+      logEvent(req, session, "enquiry-updated", { target: e.name, detail: enquiries.STATUSES[e.status] });
+      return sendJson(res, 200, { enquiry: enquiries.view(e) }), true;
     }
   }
 
@@ -1106,4 +1130,52 @@ async function handleSystem(req, res, pathname, session) {
   throw httpError(404, "Not found.");
 }
 
-module.exports = { init, handle, handleSystem };
+// ----- The public website (hngroup.org.uk) -----
+// nginx on hngroup.org.uk passes /api/public/ through to the portal; nothing else of the portal is
+// reachable from there. No sign-in, so everything here is limited per IP address.
+const publicHits = new Map();
+function publicLimit(ip, max) {
+  const now = Date.now();
+  const list = (publicHits.get(ip) || []).filter((t) => now - t < 10 * 60 * 1000);
+  if (list.length >= max) return false;
+  list.push(now);
+  publicHits.set(ip, list);
+  if (publicHits.size > 5000) publicHits.clear();
+  return true;
+}
+
+async function handlePublic(req, res, pathname) {
+  if (!pathname.startsWith("/api/public/")) return false;
+  const { sendJson, httpError, readJsonBody, readRawBody, headerJson, notify } = ctx;
+  const method = req.method;
+  const ip = ctx.clientIp(req);
+  const staffWith = (perm) => store.employees().filter((p) => store.can(p, perm) && p.account && p.account.enabled).map((p) => p.id);
+  let m;
+  if (method === "GET" && pathname === "/api/public/jobs") {
+    res.setHeader("Cache-Control", "public, max-age=120");
+    return sendJson(res, 200, { jobs: recruitment.publicVacancies() }), true;
+  }
+  if (method === "POST" && (m = /^\/api\/public\/jobs\/([a-f0-9]{16})\/apply$/.exec(pathname))) {
+    if (!publicLimit(ip, 5)) throw httpError(429, "Too many applications from your connection. Please try again later.");
+    const v = recruitment.getVacancy(m[1]);
+    if (!v) throw httpError(404, "That job is no longer open.");
+    const meta = headerJson(req, "x-application");
+    const buffer = await readRawBody(req, 10 * 1024 * 1024);
+    const a = recruitment.addWebsiteApplicant(v, meta, buffer);
+    store.audit({ action: "website-application", actor: a.email, target: v.title, detail: a.name, ip });
+    if (notify) notify(staffWith(recruitment.MANAGE).concat(v.hiringManagerId || []), { type: "jobs", title: `${a.name} applied for ${v.title} on the website`, link: "/jobs" }, null);
+    return sendJson(res, 201, { ok: true }), true;
+  }
+  if (method === "POST" && pathname === "/api/public/enquiry") {
+    if (!publicLimit(ip, 5)) throw httpError(429, "You've sent a few messages already. Please try again later.");
+    const e = enquiries.create(await readJsonBody(req), ip);
+    if (e.status !== "spam") {
+      store.audit({ action: "website-enquiry", actor: e.email, detail: enquiries.TOPICS[e.topic], ip });
+      if (notify) notify(staffWith(enquiries.MANAGE), { type: "info", title: `Website enquiry from ${e.name}`, body: enquiries.TOPICS[e.topic] + (e.company ? " · " + e.company : ""), link: "/enquiries" }, null);
+    }
+    return sendJson(res, 201, { ok: true }), true;
+  }
+  throw httpError(404, "Not found.");
+}
+
+module.exports = { init, handle, handleSystem, handlePublic };

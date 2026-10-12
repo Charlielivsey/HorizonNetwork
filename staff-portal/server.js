@@ -41,6 +41,7 @@ const wiki = require("./lib/wiki");
 const mentoring = require("./lib/mentoring");
 const oncall = require("./lib/oncall");
 const security = require("./lib/security");
+const enquiries = require("./lib/enquiries");
 const retention = require("./lib/retention");
 
 const PORT = parseInt(process.env.PORT || "3200", 10);
@@ -61,7 +62,7 @@ const APP_ROUTES = new Set([
   "/home", "/directory", "/employees", "/settings", "/system", "/announcements", "/documents",
   "/calendar", "/polls", "/onboarding", "/roles", "/about", "/signature",
   "/leave", "/rotas", "/payslips", "/payroll", "/funds", "/helpdesk", "/reviews", "/staff-files", "/status",
-  "/expenses", "/invoices", "/notifications", "/training", "/cases", "/jobs", "/kudos", "/ideas", "/team", "/reports", "/bills", "/objectives", "/feedback", "/pulse", "/exit-interview", "/exit-interviews", "/flexible", "/chat", "/questions", "/wiki", "/mentoring", "/on-call",
+  "/expenses", "/invoices", "/notifications", "/training", "/cases", "/jobs", "/kudos", "/ideas", "/team", "/reports", "/bills", "/objectives", "/feedback", "/pulse", "/exit-interview", "/exit-interviews", "/flexible", "/chat", "/questions", "/wiki", "/mentoring", "/on-call", "/enquiries",
 ]);
 const SYSTEM_UNLOCK_MS = 15 * 60 * 1000; // System Admin stays unlocked for 15 minutes of inactivity
 const MAX_PIN_ATTEMPTS = 5;
@@ -105,7 +106,7 @@ invoices.init(DATA_DIR);
 notifications.init(DATA_DIR);
 resume.init(DATA_DIR);
 bills.init(DATA_DIR);
-for (const mod of [objectives, feedback, pulse, exitinterviews, flexible, chat, qa, wiki, mentoring, oncall, security]) mod.init(DATA_DIR);
+for (const mod of [objectives, feedback, pulse, exitinterviews, flexible, chat, qa, wiki, mentoring, oncall, security, enquiries]) mod.init(DATA_DIR);
 training.init(DATA_DIR);
 cases.init(DATA_DIR);
 recruitment.init(DATA_DIR);
@@ -136,7 +137,7 @@ function reloadAll() {
   kudos.init(DATA_DIR);
   ideas.init(DATA_DIR);
   bills.init(DATA_DIR);
-  for (const mod of [objectives, feedback, pulse, exitinterviews, flexible, chat, qa, wiki, mentoring, oncall, security]) mod.init(DATA_DIR);
+  for (const mod of [objectives, feedback, pulse, exitinterviews, flexible, chat, qa, wiki, mentoring, oncall, security, enquiries]) mod.init(DATA_DIR);
 }
 
 backup.scheduleNightly((err, name) => {
@@ -622,6 +623,7 @@ function meResponse(session) {
   user.feedbackDue = feedback.pendingCount(session.person);
   user.chatUnread = chat.unreadTotal(session.person);
   user.mentoringDue = mentoring.dueCount(session.person);
+  if (store.can(session.person, enquiries.MANAGE)) user.enquiriesNew = enquiries.newCount();
   user.onCallNow = oncall.current();
   user.pulseDue = !session.person.system && !pulse.hasAnswered(session.person);
   user.flexibleDecisions = flexible.pendingCount(session.person);
@@ -1102,6 +1104,8 @@ async function routeApi(req, res, pathname, session) {
     const mt = store.maintenance();
     return sendJson(res, 200, { on: mt.on, message: mt.on ? mt.message : "" });
   }
+  // The public website's careers list, job applications and contact form (no sign-in).
+  if (await extraRoutes.handlePublic(req, res, pathname)) return;
   if (method === "POST" && pathname === "/api/logout") {
     if (session) {
       sessions.delete(session.token);
@@ -2073,7 +2077,7 @@ function runRetention(run) {
     store.audit({ action: "leaver-record-deleted", actor: "(automatic)", target: p.displayName, detail: "Data retention" });
   });
   const total = Object.values(r).reduce((a, b) => a + b, 0);
-  if (total) store.audit({ action: "retention-cleanup", actor: "(automatic)", detail: `${r.audit} log entries, ${r.applicants} applicants, ${r.chat} chat messages, ${r.tickets} IT tickets, ${r.leavers} leavers` });
+  if (total) store.audit({ action: "retention-cleanup", actor: "(automatic)", detail: `${r.audit} log entries, ${r.applicants} applicants, ${r.chat} chat messages, ${r.tickets} IT tickets, ${r.enquiries} website enquiries, ${r.leavers} leavers` });
   return r;
 }
 retention.schedule(runRetention);

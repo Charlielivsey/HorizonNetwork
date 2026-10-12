@@ -6,6 +6,7 @@ const security = require("./security");
 const recruitment = require("./recruitment");
 const chat = require("./chat");
 const helpdesk = require("./helpdesk");
+const enquiries = require("./enquiries");
 const onboarding = require("./onboarding");
 const payslips = require("./payslips");
 
@@ -25,11 +26,12 @@ function oldLeavers(years) {
 // Runs the clean-up. `onPersonDeleted` lets the server end sessions and log it.
 function run(onPersonDeleted) {
   const r = security.retention();
-  const result = { audit: 0, applicants: 0, chat: 0, tickets: 0, leavers: 0 };
+  const result = { audit: 0, applicants: 0, chat: 0, tickets: 0, enquiries: 0, leavers: 0 };
   if (r.auditDays) result.audit = store.pruneAudit(cutoff(r.auditDays));
   if (r.applicantsDays) result.applicants = recruitment.pruneApplicants(cutoff(r.applicantsDays));
   if (r.chatDays) result.chat = chat.prune(cutoff(r.chatDays));
   if (r.ticketsDays) result.tickets = helpdesk.pruneClosed(cutoff(r.ticketsDays));
+  if (r.enquiriesDays) result.enquiries = enquiries.prune(cutoff(r.enquiriesDays));
   if (r.leaversYears) {
     for (const p of oldLeavers(r.leaversYears)) {
       store.deleteEmployee(p);

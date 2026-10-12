@@ -401,6 +401,7 @@
                 { title: "About HN Group", desc: "Our companies, brand colours and logos", href: "/about", icon: "building" },
                 { title: "IT Helpdesk", desc: "Raise and track support tickets", href: "/helpdesk", icon: "lifebuoy", badge: "helpdeskBadge" },
                 { title: "On call", desc: "Who to contact out of hours", href: "/on-call", icon: "phone" },
+                { title: "Website enquiries", desc: "Messages from hngroup.org.uk", href: "/enquiries", icon: "mail", requires: "enquiries.manage", badge: "enquiriesNew" },
             ],
         },
     ];
@@ -610,6 +611,7 @@
         "/wiki": viewWiki,
         "/mentoring": viewMentoring,
         "/on-call": viewOnCall,
+        "/enquiries": viewEnquiries,
         "/ideas": viewIdeas,
         "/team": viewTeam,
         "/reports": viewReports,
@@ -664,6 +666,7 @@
         "/wiki": "book",
         "/mentoring": "users",
         "/on-call": "phone",
+        "/enquiries": "mail",
         "/ideas": "flag",
         "/team": "building",
         "/reports": "chart",
@@ -705,7 +708,7 @@
         const path = window.location.pathname;
         let view = ROUTES[path];
         if (!view) return navigate("/home", true);
-        const NEEDS = { "/employees": "staff.manage", "/onboarding": "onboarding.manage", "/roles": "access.manage", "/payroll": "payroll.manage", "/funds": "payroll.manage", "/invoices": "payroll.manage", "/cases": "cases.manage", "/reports": "reports.view", "/bills": "payroll.manage", "/exit-interviews": "staff.manage" };
+        const NEEDS = { "/employees": "staff.manage", "/onboarding": "onboarding.manage", "/roles": "access.manage", "/payroll": "payroll.manage", "/funds": "payroll.manage", "/invoices": "payroll.manage", "/cases": "cases.manage", "/reports": "reports.view", "/bills": "payroll.manage", "/exit-interviews": "staff.manage", "/enquiries": "enquiries.manage" };
         if (NEEDS[path] && !can(NEEDS[path])) view = viewNoAccess;
         if (path === "/system" && (!can("system.admin") || state.me.impersonatedBy)) view = viewNoSystemAccess;
 
@@ -845,8 +848,9 @@
             (me.newApplicants ? '<a class="hero-chip" href="/jobs" data-link>' + icon("briefcase") + me.newApplicants + " new job applicant" + (me.newApplicants === 1 ? "" : "s") + "</a>" : "") +
             (me.chatUnread ? '<a class="hero-chip" href="/chat" data-link>' + icon("message") + me.chatUnread + " unread message" + (me.chatUnread === 1 ? "" : "s") + "</a>" : "") +
             (me.mentoringDue ? '<a class="hero-chip" href="/mentoring" data-link>' + icon("users") + me.mentoringDue + " mentoring catch-up" + (me.mentoringDue === 1 ? "" : "s") + " due</a>" : "") +
+            (me.enquiriesNew ? '<a class="hero-chip" href="/enquiries" data-link>' + icon("mail") + me.enquiriesNew + " new website enquir" + (me.enquiriesNew === 1 ? "y" : "ies") + "</a>" : "") +
             (me.helpdeskBadge ? '<a class="hero-chip" href="/helpdesk" data-link>' + icon("lifebuoy") + me.helpdeskBadge + " IT ticket" + (me.helpdeskBadge === 1 ? "" : "s") + " need" + (me.helpdeskBadge === 1 ? "s" : "") + " attention</a>" : "") +
-            (!me.unreadAnnouncements && !me.pendingAcks && !me.openPolls && !me.onboardingTasks && !me.leaveApprovals && !me.timesheetApprovals && !me.helpdeskBadge && !me.payrollOverdrawn && !me.reviewsDue && !me.returnToWorkDue && !me.servicesDown && !me.expenseApprovals && !me.budgetWarnings && !me.invoicesOverdue && !me.trainingDue && !me.newApplicants && !me.backupStale && !me.billsDue && !me.exitInterviewDue && !me.feedbackDue && !me.flexibleDecisions && !me.chatUnread && !me.mentoringDue ? '<span class="hero-chip calm">' + icon("tick") + "You\u2019re all caught up</span>" : "") +
+            (!me.unreadAnnouncements && !me.pendingAcks && !me.openPolls && !me.onboardingTasks && !me.leaveApprovals && !me.timesheetApprovals && !me.helpdeskBadge && !me.payrollOverdrawn && !me.reviewsDue && !me.returnToWorkDue && !me.servicesDown && !me.expenseApprovals && !me.budgetWarnings && !me.invoicesOverdue && !me.trainingDue && !me.newApplicants && !me.backupStale && !me.billsDue && !me.exitInterviewDue && !me.feedbackDue && !me.flexibleDecisions && !me.chatUnread && !me.mentoringDue && !me.enquiriesNew ? '<span class="hero-chip calm">' + icon("tick") + "You\u2019re all caught up</span>" : "") +
             "</div></div>" +
             '<div class="hero-clocks">' +
             '<div class="glass-clock"><div class="gc-label">' + icon("monitor") + "Your time \u00b7 " + esc(tzCity(deviceTz)) + "</div>" +
@@ -6312,6 +6316,10 @@
         "retention-run": ["ran the data retention clean-up", "system"],
         "retention-cleanup": ["\u2014 old data was deleted:", "system"],
         "leaver-record-deleted": ["\u2014 a leaver\u2019s record was deleted:", "system"],
+        "website-enquiry": ["sent a message from the website:", "workplace"],
+        "website-application": ["applied on the website for", "staff"],
+        "enquiry-updated": ["updated the website enquiry from", "workplace"],
+        "enquiry-deleted": ["deleted the website enquiry from", "workplace"],
         "oncall-rota-created": ["created the on-call rota", "helpdesk"],
         "oncall-rota-changed": ["changed the on-call rota", "helpdesk"],
     };
@@ -7634,7 +7642,8 @@
             (d.vacancies.length ? '<div class="job-list">' + d.vacancies.map(function (v) {
                 return '<article class="job-card' + (v.open ? "" : " job-closed") + '" data-job="' + v.id + '"><div class="job-head"><div><h2>' + esc(v.title) + "</h2>" +
                     '<div class="job-meta"><span>' + icon("building") + esc(v.company) + "</span>" + (v.location ? "<span>" + icon("pin") + esc(v.location) + "</span>" : "") +
-                    "<span>" + icon("clock") + esc(v.contractLabel) + "</span>" + (v.salary ? "<span>" + icon("pound") + esc(v.salary) + "</span>" : "") + "</div></div>" +
+                    "<span>" + icon("clock") + esc(v.contractLabel) + "</span>" + (v.salary ? "<span>" + icon("pound") + esc(v.salary) + "</span>" : "") +
+                    (v.publicListing && d.canManage ? "<span>" + icon("monitor") + "On the website</span>" : "") + "</div></div>" +
                     (v.open ? (v.closingDate ? '<span class="badge badge-soft">Closes ' + esc(fmtDate(v.closingDate + "T12:00:00")) + "</span>" : '<span class="badge badge-green">Open</span>') : '<span class="badge">' + (v.status === "filled" ? "Filled" : "Closed") + "</span>") + "</div>" +
                     (v.description ? '<div class="job-desc">' + richText(v.description) + "</div>" : "") +
                     '<div class="job-foot">' + (v.hiringManagerName ? '<span class="muted small">Hiring manager: ' + esc(v.hiringManagerName) + "</span>" : "<span></span>") +
@@ -7688,6 +7697,7 @@
             '<div class="grid-2"><div><label for="vf-close">Closing date <span class="muted small">(optional)</span></label><input type="date" id="vf-close" value="' + esc(v.closingDate || "") + '"></div>' +
             '<div><label for="vf-mgr">Hiring manager</label><select id="vf-mgr"><option value="">None</option>' + d.people.map(function (p) { return '<option value="' + p.id + '"' + (p.id === v.hiringManagerId ? " selected" : "") + ">" + esc(p.displayName) + "</option>"; }).join("") + "</select></div></div>" +
             '<label for="vf-desc">Description</label><textarea id="vf-desc" rows="7" maxlength="6000" placeholder="What the role involves, who you’re looking for…">' + esc(v.description) + "</textarea>" +
+            '<label class="inline-check"><input type="checkbox" id="vf-public"' + (v.publicListing ? " checked" : "") + "> Advertise on the HN Group website (hngroup.org.uk/careers), where anyone can apply with a CV</label>" +
             '<div class="form-error" id="vf-error" hidden></div>' +
             '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">' + (v.id ? "Save" : "Post vacancy") + "</button></div></form>",
             { wide: true }
@@ -7698,6 +7708,7 @@
                 await api(v.id ? "/api/jobs/" + v.id : "/api/jobs", {
                     title: $("#vf-title", m.el).value, company: $("#vf-company", m.el).value, contract: $("#vf-contract", m.el).value, location: $("#vf-loc", m.el).value,
                     salary: $("#vf-salary", m.el).value, closingDate: $("#vf-close", m.el).value, hiringManagerId: $("#vf-mgr", m.el).value, description: $("#vf-desc", m.el).value,
+                    publicListing: $("#vf-public", m.el).checked,
                 });
                 closeModal();
                 toast(v.id ? "Vacancy saved." : "Vacancy posted. Everyone has been notified.");
@@ -9479,6 +9490,7 @@
             applicantsDays: ["Unsuccessful job applicants", "Applicants marked “Not progressing” or withdrawn, with their CVs", "days"],
             chatDays: ["Chat messages", "Messages in every chat channel and direct message", "days"],
             ticketsDays: ["Closed IT tickets", "Resolved and closed helpdesk tickets", "days"],
+            enquiriesDays: ["Website enquiries", "Contact form messages marked as dealt with or spam", "days"],
             leaversYears: ["Leavers’ records", "Staff records, payslips and checklists of leavers whose login is off, counted from their last day", "years"],
         };
         const label = function (n, unit) {
@@ -9510,7 +9522,7 @@
                         }).join("") + "</select></div>";
                 }).join("") + "</div>" +
                 (d.preview.leavers.length ? '<div class="banner banner-warn">' + icon("alert") + "<div><strong>The next clean-up will delete " + d.preview.leavers.length + " leaver" + (d.preview.leavers.length === 1 ? "’s" : "s’") + " records:</strong> " + d.preview.leavers.map(esc).join(", ") + "</div></div>" : "") +
-                '<p class="hint">' + (r.lastCleanup ? "Last clean-up " + esc(fmtDateTime(r.lastCleanup.at)) + ": deleted " + r.lastCleanup.audit + " log entries, " + r.lastCleanup.applicants + " applicants, " + r.lastCleanup.chat + " chat messages, " + r.lastCleanup.tickets + " IT tickets and " + r.lastCleanup.leavers + " leavers." : "The clean-up hasn’t run yet.") + "</p>" +
+                '<p class="hint">' + (r.lastCleanup ? "Last clean-up " + esc(fmtDateTime(r.lastCleanup.at)) + ": deleted " + r.lastCleanup.audit + " log entries, " + r.lastCleanup.applicants + " applicants, " + r.lastCleanup.chat + " chat messages, " + r.lastCleanup.tickets + " IT tickets, " + (r.lastCleanup.enquiries || 0) + " website enquiries and " + r.lastCleanup.leavers + " leavers." : "The clean-up hasn’t run yet.") + "</p>" +
                 '<div class="form-actions"><button type="submit" class="btn btn-primary">Save retention settings</button></div></form>';
         }
         box.addEventListener("submit", async function (e) {
@@ -9705,6 +9717,112 @@
             } catch (err) { toast(err.message); }
         });
         draw();
+    }
+
+
+    // ================= Website enquiries (contact form on hngroup.org.uk) =================
+
+    async function viewEnquiries(root, current) {
+        const d = await api("/api/enquiries");
+        if (!current()) return;
+        let filter = state.enqFilter || "inbox";
+        let openId = new URLSearchParams(window.location.search).get("e");
+        root.innerHTML = '<div class="page-head"><div><h1>Website enquiries</h1><p class="muted">Messages sent from the contact form on hngroup.org.uk. Reply from your own email, then mark them as dealt with.</p></div></div>' +
+            '<div class="toolbar"><label class="search">' + icon("search") + '<input type="search" id="enq-search" placeholder="Search by name, email or message"></label>' +
+            '<div class="company-tabs" id="enq-tabs">' + [["inbox", "To deal with"], ["mine", "Assigned to me"], ["done", "Dealt with"], ["spam", "Spam"], ["all", "All"]].map(function (t) {
+                const n = t[0] === "inbox" ? d.enquiries.filter(function (e) { return e.status === "new" || e.status === "open"; }).length : 0;
+                return '<button type="button" data-f="' + t[0] + '">' + t[1] + (n ? ' <span class="tab-count">' + n + "</span>" : "") + "</button>";
+            }).join("") + "</div></div>" +
+            '<div class="enq-layout"><div class="enq-list" id="enq-list"></div><section class="panel enq-detail" id="enq-detail"></section></div>';
+
+        function shown() {
+            const q = $("#enq-search").value.trim().toLowerCase();
+            return d.enquiries.filter(function (e) {
+                if (filter === "inbox" && !(e.status === "new" || e.status === "open")) return false;
+                if (filter === "mine" && e.assigneeId !== state.me.id) return false;
+                if ((filter === "done" || filter === "spam") && e.status !== filter) return false;
+                return !q || [e.name, e.email, e.organisation, e.message, e.company].join(" ").toLowerCase().indexOf(q) !== -1;
+            });
+        }
+        function drawList() {
+            $$("#enq-tabs [data-f]").forEach(function (b) { b.classList.toggle("active", b.dataset.f === filter); });
+            const list = shown();
+            if (!openId || !list.some(function (e) { return e.id === openId; })) openId = list.length ? list[0].id : null;
+            $("#enq-list").innerHTML = list.length ? list.map(function (e) {
+                return '<button type="button" class="enq-row' + (e.id === openId ? " active" : "") + (e.status === "new" ? " is-new" : "") + '" data-e="' + e.id + '">' +
+                    '<span class="enq-top"><strong>' + esc(e.name) + '</strong><span class="muted small">' + esc(timeAgo(e.createdAt)) + "</span></span>" +
+                    '<span class="muted small">' + esc(e.topicLabel) + (e.company ? " · " + esc(e.company) : "") + "</span>" +
+                    '<span class="enq-snip small">' + esc(e.message.slice(0, 110)) + "</span></button>";
+            }).join("") : '<div class="empty-page">' + icon("mail", "big") + "<h2>Nothing here</h2><p class=\"muted\">New messages from the website appear here.</p></div>";
+            drawDetail();
+        }
+        function drawDetail() {
+            const e = d.enquiries.find(function (x) { return x.id === openId; });
+            const box = $("#enq-detail");
+            box.hidden = !e;
+            if (!e) return;
+            const subject = "Re: your message to HN Group";
+            box.innerHTML = '<div class="panel-head"><div><h2 class="panel-title">' + esc(e.name) + "</h2>" +
+                '<p class="muted small">' + esc(fmtDateTime(e.createdAt)) + " · " + esc(e.topicLabel) + (e.company ? " · about " + esc(e.company) : "") + "</p></div>" +
+                '<span class="badge ' + (e.status === "done" ? "badge-green" : e.status === "spam" ? "badge-red" : e.status === "new" ? "badge-yellow" : "") + '">' + esc(e.statusLabel) + "</span></div>" +
+                '<div class="enq-contact">' +
+                '<a href="mailto:' + esc(e.email) + "?subject=" + encodeURIComponent(subject) + '">' + icon("mail") + esc(e.email) + "</a>" +
+                (e.phone ? '<a href="tel:' + esc(e.phone.replace(/[^\d+]/g, "")) + '">' + icon("phone") + esc(e.phone) + "</a>" : "") +
+                (e.organisation ? "<span>" + icon("building") + esc(e.organisation) + "</span>" : "") + "</div>" +
+                '<div class="enq-message">' + richText(e.message) + "</div>" +
+                '<div class="grid-2"><div><label for="enq-assign">Assigned to</label><select id="enq-assign"><option value="">Nobody</option>' + d.handlers.map(function (h) {
+                    return '<option value="' + h.id + '"' + (h.id === e.assigneeId ? " selected" : "") + ">" + esc(h.displayName) + "</option>";
+                }).join("") + "</select></div>" +
+                '<div><label for="enq-status">Status</label><select id="enq-status">' + Object.keys(d.statuses).map(function (k) {
+                    return '<option value="' + k + '"' + (k === e.status ? " selected" : "") + ">" + esc(d.statuses[k]) + "</option>";
+                }).join("") + "</select></div></div>" +
+                '<h3 class="detail-head">Notes <span class="muted small">(only staff see these)</span></h3>' +
+                (e.notes.length ? '<ul class="enq-notes">' + e.notes.map(function (n) {
+                    return '<li><div class="small"><strong>' + esc(n.byName) + '</strong> <span class="muted">' + esc(fmtDateTime(n.at)) + "</span></div>" + richText(n.text) + "</li>";
+                }).join("") + "</ul>" : "") +
+                '<form class="inline-form" id="enq-note"><input type="text" maxlength="3000" placeholder="e.g. Replied with our rates, following up on Friday"><button type="submit" class="btn btn-ghost btn-small">Add note</button></form>' +
+                '<div class="form-actions enq-actions">' +
+                '<button type="button" class="icon-btn" id="enq-del" aria-label="Delete enquiry">' + icon("trash") + "</button>" +
+                '<a class="btn btn-ghost" href="mailto:' + esc(e.email) + "?subject=" + encodeURIComponent(subject) + '">' + icon("mail") + "Reply by email</a>" +
+                (e.status !== "done" ? '<button type="button" class="btn btn-primary" id="enq-done">' + icon("check") + "Mark as dealt with</button>" : "") + "</div>";
+        }
+        async function save(body) {
+            try {
+                const r = await api("/api/enquiries/" + openId, body);
+                const i = d.enquiries.findIndex(function (x) { return x.id === openId; });
+                d.enquiries[i] = r.enquiry;
+                state.me = (await api("/api/me")).user;
+                renderChrome();
+                drawList();
+            } catch (err) { toast(err.message); }
+        }
+        $("#enq-search").addEventListener("input", drawList);
+        root.addEventListener("click", async function (ev) {
+            const f = ev.target.closest("#enq-tabs [data-f]");
+            if (f) { filter = state.enqFilter = f.dataset.f; openId = null; return drawList(); }
+            const row = ev.target.closest("[data-e]");
+            if (row) { openId = row.dataset.e; history.replaceState({}, "", "/enquiries?e=" + openId); return drawList(); }
+            if (ev.target.closest("#enq-done")) { await save({ status: "done" }); return toast("Marked as dealt with."); }
+            if (ev.target.closest("#enq-del") && await confirmDialog({ title: "Delete this enquiry?", message: "It will be removed for everyone.", confirmLabel: "Delete", danger: true })) {
+                try {
+                    await api("/api/enquiries/" + openId + "/delete", {});
+                    d.enquiries = d.enquiries.filter(function (x) { return x.id !== openId; });
+                    openId = null;
+                    drawList();
+                } catch (err) { toast(err.message); }
+            }
+        });
+        root.addEventListener("change", function (ev) {
+            if (ev.target.id === "enq-assign") save({ assigneeId: ev.target.value });
+            if (ev.target.id === "enq-status") save({ status: ev.target.value });
+        });
+        root.addEventListener("submit", function (ev) {
+            if (ev.target.id !== "enq-note") return;
+            ev.preventDefault();
+            const input = $("input", ev.target);
+            if (input.value.trim()) save({ note: input.value });
+        });
+        drawList();
     }
 
     start();

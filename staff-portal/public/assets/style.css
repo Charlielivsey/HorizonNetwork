@@ -3780,3 +3780,23 @@ input[type="range"] { width: 100%; accent-color: var(--primary); }
 .hw-move { display: flex; gap: 0.2rem; flex: none; }
 .hw-move .hw-up { transform: rotate(90deg); }
 .hw-move .hw-down { transform: rotate(90deg); }
+
+/* ---------- Website enquiries ---------- */
+.enq-layout { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 1rem; align-items: start; }
+.enq-list { display: grid; gap: 0.4rem; }
+.enq-row { display: flex; flex-direction: column; gap: 0.15rem; text-align: left; padding: 0.7rem 0.85rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); font: inherit; cursor: pointer; min-width: 0; }
+.enq-row:hover { border-color: var(--border-hover); }
+.enq-row.active { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+.enq-row.is-new strong::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--primary); margin-right: 0.4rem; vertical-align: 1px; }
+.enq-top { display: flex; justify-content: space-between; gap: 0.5rem; }
+.enq-snip { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.enq-detail { position: sticky; top: calc(var(--topbar-h) + 1rem); }
+.enq-contact { display: flex; flex-wrap: wrap; gap: 0.5rem 1.2rem; margin-bottom: 1rem; }
+.enq-contact a, .enq-contact span { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.9rem; }
+.enq-contact .icon { width: 15px; height: 15px; }
+.enq-message { padding: 0.9rem 1rem; background: var(--surface-2); border-radius: 12px; margin-bottom: 1rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.enq-notes { list-style: none; padding: 0; margin: 0 0 0.6rem; display: grid; gap: 0.5rem; }
+.enq-notes li { padding: 0.5rem 0.7rem; border-left: 3px solid var(--primary-soft-border); }
+.enq-actions { align-items: center; }
+.enq-actions #enq-del { margin-right: auto; }
+@media (max-width: 860px) { .enq-layout { grid-template-columns: minmax(0, 1fr); } .enq-detail { position: static; } }
