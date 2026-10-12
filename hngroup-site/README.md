@@ -75,6 +75,21 @@ To update the website on its own, run `sudo bash hngroup-site/install.sh`.
 - **Careers:** post a test vacancy in the staff portal with **Advertise on the HN Group website** ticked. It should appear under Careers within about two minutes.
 - **Contact form:** send a test message. It should appear in the staff portal under Support → Website enquiries.
 
+## If hngroup.org.uk still shows the staff portal
+
+The installer ends by checking what the domain really serves. To run the check on its own:
+
+```bash
+sudo bash /root/HorizonNetwork/hngroup-site/check.sh
+```
+
+It tells you which of these it is:
+
+- **Another nginx config on the server claims hngroup.org.uk.** The installer fixes this itself. It switches the other config off, or takes the main domain out of it if it also serves something else, and keeps a backup in `/root/nginx-backup-<date>`.
+- **The DNS record points somewhere else, or is missing.** Set `A @ 217.154.34.205` and `A www 217.154.34.205`, and delete any other A, AAAA or CNAME records for `@` and `www`.
+- **Your domain provider is forwarding the domain.** Many providers have a "domain forwarding", "URL redirect" or "web forwarding" setting that sends visitors somewhere else before they ever reach the server. Turn it off for `hngroup.org.uk` and `www`, and keep the A records.
+- **Everything passes but your browser still shows the portal.** The browser has remembered an old redirect. Try a private/incognito window, or clear its cache for hngroup.org.uk.
+
 ## Updating
 
 The same single command updates the portal and the website:

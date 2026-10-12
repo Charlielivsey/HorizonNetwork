@@ -80,16 +80,55 @@ server {
     return 444;
 }
 NGINX
-if grep -Rqs "listen.*443.*default_server" /etc/nginx/sites-enabled/ --exclude=hn-catch-all; then
+if grep -REqs "^[[:space:]]*listen[^#]*443[^#]*default_server" /etc/nginx/sites-enabled/ --exclude=hn-catch-all; then
     warn "Another nginx site is already the default for HTTPS, so the catch-all was not enabled."
 else
     ln -sf "$CATCHALL" /etc/nginx/sites-enabled/hn-catch-all
 fi
 
 # ---- nginx: the website ----
-NGINX_SITE="/etc/nginx/sites-available/hngroup-website"
+# The file name starts with 00- so nginx loads it before the other sites: if anything else also
+# claims hngroup.org.uk, this one wins.
+NGINX_SITE="/etc/nginx/sites-available/00-hngroup-website"
+rm -f /etc/nginx/sites-enabled/hngroup-website
+if [ -f /etc/nginx/sites-available/hngroup-website ] && [ ! -f "$NGINX_SITE" ]; then
+    mv /etc/nginx/sites-available/hngroup-website "$NGINX_SITE.old"
+fi
 cp "$SCRIPT_DIR/nginx-hngroup.conf" "$NGINX_SITE"
-ln -sf "$NGINX_SITE" /etc/nginx/sites-enabled/hngroup-website
+ln -sf "$NGINX_SITE" /etc/nginx/sites-enabled/00-hngroup-website
+
+# Any other nginx config that claims hngroup.org.uk or www (for example an older setup that sent
+# the main domain to the staff portal) is switched off, or has those names taken out if it also
+# serves something else. Backups go to /root/nginx-backup-<date>.
+BACKUP="/root/nginx-backup-$(date +%Y%m%d-%H%M%S)"
+NAME_RE="server_name[^;]*[[:space:]](hngroup\.org\.uk|www\.hngroup\.org\.uk)[[:space:];]"
+for f in /etc/nginx/sites-enabled/* /etc/nginx/conf.d/*.conf; do
+    [ -e "$f" ] || continue
+    real="$(readlink -f "$f")"
+    case "$(basename "$f")" in 00-hngroup-website|hn-catch-all) continue ;; esac
+    grep -qE "$NAME_RE" "$real" 2>/dev/null || continue
+    mkdir -p "$BACKUP"
+    cp "$real" "$BACKUP/$(basename "$real")"
+    # Every name the file serves, apart from ours.
+    others="$(grep -oE "server_name[^;]*" "$real" | sed -E 's/^server_name//' | tr -s ' \t' '\n' | grep -vE '^$|^(www\.)?hngroup\.org\.uk$' || true)"
+    if [ -n "$others" ]; then
+        # Also serves other names (e.g. staff.hngroup.org.uk): just take ours out of it.
+        sed -i -E '/server_name/ s/[[:space:]](www\.)?hngroup\.org\.uk([[:space:];])/\2/g' "$real"
+        sed -i -E '/server_name/ s/[[:space:]](www\.)?hngroup\.org\.uk([[:space:];])/\2/g' "$real"
+        sed -i -E 's/server_name[[:space:]]*;/server_name hngroup-moved.invalid;/' "$real"
+        warn "Removed $DOMAIN from $real (it was sending the main domain elsewhere; backup in $BACKUP)"
+    else
+        if [ -L "$f" ]; then rm -f "$f"; else mv "$f" "$f.disabled"; fi
+        warn "Switched off $f, which was also serving $DOMAIN (backup in $BACKUP)"
+    fi
+done
+
+# Servers without IPv6 can't listen on [::], so take those lines out of our files there.
+if ! nginx -t 2>/dev/null && nginx -t 2>&1 | grep -q "Address family not supported"; then
+    sed -i '/listen[[:space:]]*\[::\]/d' "$NGINX_SITE" "$CATCHALL"
+    warn "This server has no IPv6, so the website only listens on IPv4"
+fi
+
 if nginx -t 2>/dev/null; then
     systemctl reload nginx || systemctl restart nginx
     systemctl enable nginx >/dev/null 2>&1
@@ -97,8 +136,10 @@ if nginx -t 2>/dev/null; then
 else
     echo -e "${RED}  [✗] nginx config invalid!${RESET}"
     nginx -t
+    if [ -d "${BACKUP:-/nonexistent}" ]; then warn "Backups of anything changed are in $BACKUP"; fi
     exit 1
 fi
+nginx -t 2>&1 | grep -i "conflicting server name" | sed 's/^/      /' || true
 
 if command -v ufw &>/dev/null && ufw status | grep -q "Status: active"; then
     ufw allow 'Nginx Full' >/dev/null
@@ -137,5 +178,7 @@ if [ "$HTTPS_OK" = 1 ]; then
 else
     echo -e "  ${CYAN}Website:${RESET}  http://$DOMAIN  (once DNS points at $SERVER_IP)"
 fi
-echo -e "  ${CYAN}Files:${RESET}    $WEB_DIR (re-run this script after changing hngroup-site/public)"
-echo ""
+echo -e "  ${CYAN}Files:${RESET}    $WEB_DIR"
+
+# Check what the domain really serves, and say what to fix if it isn't the website.
+bash "$SCRIPT_DIR/check.sh" || true
