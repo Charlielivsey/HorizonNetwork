@@ -40,12 +40,47 @@ function canSee(viewer, claim) {
   return claim.personId === viewer.id || canApprove(viewer, claim) || store.can(viewer, PAY);
 }
 
+// HMRC approved mileage rates for cars and vans: 45p a mile for the first 10,000 business miles in
+// a tax year, then 25p.
+const MILEAGE = { rate: 0.45, lowerRate: 0.25, threshold: 10000 };
+
+function taxYearStart(date) {
+  const y = Number(date.slice(0, 4));
+  return date >= `${y}-04-06` ? `${y}-04-06` : `${y - 1}-04-06`;
+}
+
+// Business miles someone has already claimed this tax year (rejected claims don't count).
+function milesThisYear(personId, date, excludeId) {
+  const from = taxYearStart(date);
+  return db.data.claims.filter((c) => c.personId === personId && c.mileage && c.id !== excludeId && c.status !== "rejected" && c.date >= from && c.date <= date)
+    .reduce((n, c) => n + c.mileage.miles, 0);
+}
+
+function mileageAmount(personId, date, miles) {
+  const before = milesThisYear(personId, date);
+  const atFull = Math.max(0, Math.min(miles, MILEAGE.threshold - before));
+  const atLower = miles - atFull;
+  return { amount: money(atFull * MILEAGE.rate + atLower * MILEAGE.lowerRate), atFull, atLower, before };
+}
+
 function submit(person, meta, buffer) {
   if (!person || person.system) throw new store.ValidationError("Only staff can claim expenses.");
   const date = str(meta.date, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(Date.parse(date))) throw new store.ValidationError("Choose the date you paid.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(Date.parse(date))) throw new store.ValidationError(meta.kind === "mileage" ? "Choose the date of the journey." : "Choose the date you paid.");
   if (date > new Date().toISOString().slice(0, 10)) throw new store.ValidationError("The date can't be in the future.");
-  const text = String(meta.amount == null ? "" : meta.amount).trim();
+  let mileage = null;
+  let text = String(meta.amount == null ? "" : meta.amount).trim();
+  if (meta.kind === "mileage") {
+    const miles = Math.round(Number(meta.miles) * 10) / 10;
+    if (!(miles > 0 && miles <= 2000)) throw new store.ValidationError("Enter the business miles for the journey (up to 2,000).");
+    const from = str(meta.from, 120), to = str(meta.to, 120);
+    if (!from || !to) throw new store.ValidationError("Enter where the journey started and finished.");
+    const calc = mileageAmount(person.id, date, miles);
+    mileage = { miles, from, to, returnTrip: !!meta.returnTrip, atFull: calc.atFull, atLower: calc.atLower };
+    text = calc.amount.toFixed(2);
+    if (!meta.description) meta.description = `Mileage: ${from} to ${to}${meta.returnTrip ? " and back" : ""} (${miles} miles)`;
+    meta.category = "Travel";
+  }
   if (!/^\d+(\.\d{1,2})?$/.test(text) || !(Number(text) > 0) || Number(text) > 100000) throw new store.ValidationError("Enter the amount in pounds, like 12.50.");
   const description = str(meta.description, 300);
   if (!description) throw new store.ValidationError("Say what the expense was for.");
@@ -57,6 +92,7 @@ function submit(person, meta, buffer) {
     amount: money(text),
     description,
     receipt: null,
+    mileage,
     status: "submitted",
     createdAt: new Date().toISOString(),
     decidedBy: null, decidedAt: null, decisionNote: "",
@@ -183,4 +219,4 @@ function paidBetween(from, to) {
   return { count: list.length, amount: money(list.reduce((n, c) => n + c.amount, 0)) };
 }
 
-module.exports = { STATUSES, init, submit, get, canSee, receiptFile, decide, pay, cancel, forViewer, approvalCount, paidBetween };
+module.exports = { MILEAGE, mileageAmount, STATUSES, init, submit, get, canSee, receiptFile, decide, pay, cancel, forViewer, approvalCount, paidBetween };

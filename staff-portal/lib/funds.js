@@ -141,6 +141,23 @@ function payExpense(amountPence, category, description, reference, by) {
   return t;
 }
 
+// A supplier bill paid from the main balance (allowed to go below zero).
+function payBill(amountPence, category, description, reference, by) {
+  const t = record("main", -amountPence, { type: "bill", description, reference, category: validCategory(category) }, by);
+  db.save();
+  return t;
+}
+
+// Average money spent each month on things other than payroll and bills (removals and expenses)
+// over the last `months` full months.
+function averageMonthlyOther(months) {
+  const now = new Date();
+  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - months, 1)).toISOString();
+  const total = db.data.transactions.filter((t) => (t.type === "withdrawal" || t.type === "expense") && t.at >= start && t.at < end).reduce((n, t) => n - pence(t.amount), 0);
+  return pounds(Math.round(total / months));
+}
+
 // A customer paid an invoice: the money goes into the main balance.
 function invoicePaid(amountPence, description, reference, by) {
   const t = record("main", amountPence, { type: "deposit", source: "invoice", description, reference }, by);
@@ -189,7 +206,7 @@ function spendingByCategory(period) {
   const out = {};
   for (const t of db.data.transactions) {
     if (t.at < start || t.at >= end || INTERNAL.includes(t.type)) continue;
-    const spend = t.type === "withdrawal" || t.type === "expense" || t.type === "payroll" || t.type === "payroll-shortfall" || t.type === "payroll-refund";
+    const spend = t.type === "withdrawal" || t.type === "expense" || t.type === "bill" || t.type === "payroll" || t.type === "payroll-shortfall" || t.type === "payroll-refund";
     if (!spend) continue;
     const c = t.category || categoryOfType(t.type) || "Other";
     out[c] = (out[c] || 0) - pence(t.amount);
@@ -269,6 +286,7 @@ function statement(period) {
     payroll: -p(external.filter((t) => t.type === "payroll" || t.type === "payroll-shortfall" || t.type === "payroll-refund")),
     removed: -p(external.filter((t) => t.type === "withdrawal")),
     expenses: -p(external.filter((t) => t.type === "expense")),
+    bills: -p(external.filter((t) => t.type === "bill")),
   };
   const accounts = {};
   for (const a of Object.keys(ACCOUNTS)) {
@@ -292,8 +310,8 @@ function statement(period) {
     opening: pounds(pence(accounts.main.opening) + pence(accounts.payroll.opening)),
     closing: pounds(pence(accounts.main.closing) + pence(accounts.payroll.closing)),
     moneyIn: pounds(p(external.filter((t) => t.amount > 0 && t.type !== "payroll-refund"))),
-    spent: pounds(spentBy.payroll + spentBy.removed + spentBy.expenses),
-    spentBy: { payroll: pounds(spentBy.payroll), removed: pounds(spentBy.removed), expenses: pounds(spentBy.expenses) },
+    spent: pounds(spentBy.payroll + spentBy.removed + spentBy.expenses + spentBy.bills),
+    spentBy: { payroll: pounds(spentBy.payroll), removed: pounds(spentBy.removed), expenses: pounds(spentBy.expenses), bills: pounds(spentBy.bills) },
     byCategory: Object.entries(spendingByCategory(period)).map(([category, v]) => ({ category, amount: pounds(v) })).filter((x) => x.amount).sort((a, b) => b.amount - a.amount),
     transactions: inPeriod.map((t) => ({ ...t, byName: byName(t), sourceLabel: SOURCES[t.source] || "", internal: INTERNAL.includes(t.type) })),
   };
@@ -309,5 +327,5 @@ function averageMonthlyIn(period, months) {
 }
 
 module.exports = {
-  categories, addCategory, removeCategory, setBudget, budgets, budgetWarnings, spendingByCategory, monthlySeries, payExpense, invoicePaid,
+  payBill, averageMonthlyOther, categories, addCategory, removeCategory, setBudget, budgets, budgetWarnings, spendingByCategory, monthlySeries, payExpense, invoicePaid,
   ACCOUNTS, SOURCES, INTERNAL, statement, averageMonthlyIn, init, balances, addFunds, removeFunds, transferToPayroll, transferToMain, chargePayroll, history, pence, fmt };

@@ -3507,3 +3507,30 @@ input[type="date"], input[type="time"], input[type="month"], input[type="datetim
 .login-maint-banner .icon { flex: none; width: 18px; height: 18px; margin-top: 0.1rem; }
 .login-maint-banner[hidden], .maint-card .login-maint-banner { display: none; }
 .login-maint-banner strong { display: block; }
+
+/* ---------- Payroll approval, bands, history, bills, forecast ---------- */
+.pr-approval { margin: 0 0 0.8rem; font-size: 0.88rem; }
+.pr-ok { display: inline-flex; align-items: center; gap: 0.25rem; color: var(--success-text); margin-top: 0.2rem; }
+.pr-ok .icon { width: 13px; height: 13px; }
+.pr-wait { display: inline-block; max-width: 140px; white-space: normal; vertical-align: middle; margin-right: 0.3rem; }
+.band-below { background: var(--warn-bg); color: var(--warn-text); border-color: var(--warn-border); }
+.band-within { background: var(--success-bg); color: var(--success-text); border-color: var(--success-border); }
+.band-above { background: var(--primary-tint); color: var(--primary); border-color: var(--primary-soft-border); }
+.band-form, .extra-form { display: grid; grid-template-columns: 1fr 150px 150px auto; gap: 0.5rem; align-items: center; margin-top: 0.8rem; }
+.extra-form { grid-template-columns: 170px 1fr 140px auto auto; }
+.ex2-range { display: flex; gap: 0.4rem; }
+.ex2-range[hidden] { display: none; }
+.band-form .money-input span, .band-form .money-input input, .extra-form .money-input span, .extra-form .money-input input { font-size: 0.95rem; }
+@media (max-width: 760px) { .band-form, .extra-form { grid-template-columns: 1fr 1fr; } }
+.band-meter { padding: 0.8rem 1rem; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); margin-bottom: 0.6rem; }
+.bm-head { display: flex; justify-content: space-between; gap: 0.6rem; margin-bottom: 0.6rem; }
+.bm-track { position: relative; height: 10px; border-radius: 99px; background: linear-gradient(90deg, var(--warn-border), var(--success-border), var(--primary-soft-border)); margin: 0 7px 0.5rem; }
+.bm-dot { position: absolute; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; background: var(--primary); box-shadow: 0 0 0 3px var(--surface); }
+.pay-bars { display: flex; align-items: flex-end; gap: 4px; height: 120px; padding: 0.4rem 0; }
+.pb-col { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 3px; min-width: 0; }
+.pb-col span { display: block; width: 100%; max-width: 34px; border-radius: 4px 4px 0 0; background: linear-gradient(180deg, #8b5cf6, var(--primary)); }
+.pb-col small { font-size: 0.65rem; color: var(--text-muted); }
+.sb-bills { background: #e0a526; }
+.fc-dot.neg { stroke: var(--danger-text); }
+.forecast-table td, .forecast-table th { white-space: nowrap; }
+#fd-forecast > .panel { margin-bottom: 1.25rem; }

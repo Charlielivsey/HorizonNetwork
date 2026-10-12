@@ -378,6 +378,7 @@
                 { title: "Run payroll", desc: "Generate and issue payslips", href: "/payroll", icon: "wallet", requires: "payroll.manage" },
                 { title: "Company funds", desc: "Balances, budgets and statements", href: "/funds", icon: "pound", requires: "payroll.manage", badge: "budgetWarnings" },
                 { title: "Invoices", desc: "Bill customers and track payments", href: "/invoices", icon: "file", requires: "payroll.manage", badge: "invoicesOverdue" },
+                { title: "Bills", desc: "Supplier bills and when they're due", href: "/bills", icon: "card", requires: "payroll.manage", badge: "billsDue" },
             ],
         },
         {
@@ -593,6 +594,7 @@
         "/ideas": viewIdeas,
         "/team": viewTeam,
         "/reports": viewReports,
+        "/bills": viewBills,
     };
 
     function navigate(href, replace) {
@@ -635,6 +637,7 @@
         "/ideas": "flag",
         "/team": "building",
         "/reports": "chart",
+        "/bills": "card",
     };
 
     function decoratePageHead(root, path) {
@@ -666,7 +669,7 @@
         const path = window.location.pathname;
         let view = ROUTES[path];
         if (!view) return navigate("/home", true);
-        const NEEDS = { "/employees": "staff.manage", "/onboarding": "onboarding.manage", "/roles": "access.manage", "/payroll": "payroll.manage", "/funds": "payroll.manage", "/invoices": "payroll.manage", "/cases": "cases.manage", "/reports": "reports.view" };
+        const NEEDS = { "/employees": "staff.manage", "/onboarding": "onboarding.manage", "/roles": "access.manage", "/payroll": "payroll.manage", "/funds": "payroll.manage", "/invoices": "payroll.manage", "/cases": "cases.manage", "/reports": "reports.view", "/bills": "payroll.manage" };
         if (NEEDS[path] && !can(NEEDS[path])) view = viewNoAccess;
         if (path === "/system" && (!can("system.admin") || state.me.impersonatedBy)) view = viewNoSystemAccess;
 
@@ -796,12 +799,13 @@
             (me.timesheetApprovals ? '<a class="hero-chip" href="/rotas" data-link data-rota-approvals>' + icon("clock") + me.timesheetApprovals + " timesheet" + (me.timesheetApprovals === 1 ? "" : "s") + " to approve</a>" : "") +
             (me.expenseApprovals ? '<a class="hero-chip" href="/expenses" data-link>' + icon("pound") + me.expenseApprovals + " expense claim" + (me.expenseApprovals === 1 ? "" : "s") + " to deal with</a>" : "") +
             (me.budgetWarnings ? '<a class="hero-chip warn" href="/funds" data-link>' + icon("flag") + me.budgetWarnings + (me.budgetWarnings === 1 ? " budget is" : " budgets are") + " nearly used up</a>" : "") +
+            (me.billsDue ? '<a class="hero-chip warn" href="/bills" data-link>' + icon("card") + me.billsDue + " bill" + (me.billsDue === 1 ? "" : "s") + " due this week</a>" : "") +
             (me.invoicesOverdue ? '<a class="hero-chip warn" href="/invoices" data-link>' + icon("file") + me.invoicesOverdue + " overdue invoice" + (me.invoicesOverdue === 1 ? "" : "s") + "</a>" : "") +
             (me.backupStale ? '<a class="hero-chip danger" href="/system#sys-backups" data-link>' + icon("archive") + "No backup in the last 36 hours</a>" : "") +
             (me.trainingDue ? '<a class="hero-chip warn" href="/training" data-link>' + icon("star") + me.trainingDue + " training item" + (me.trainingDue === 1 ? "" : "s") + " expiring or missing</a>" : "") +
             (me.newApplicants ? '<a class="hero-chip" href="/jobs" data-link>' + icon("briefcase") + me.newApplicants + " new job applicant" + (me.newApplicants === 1 ? "" : "s") + "</a>" : "") +
             (me.helpdeskBadge ? '<a class="hero-chip" href="/helpdesk" data-link>' + icon("lifebuoy") + me.helpdeskBadge + " IT ticket" + (me.helpdeskBadge === 1 ? "" : "s") + " need" + (me.helpdeskBadge === 1 ? "s" : "") + " attention</a>" : "") +
-            (!me.unreadAnnouncements && !me.pendingAcks && !me.openPolls && !me.onboardingTasks && !me.leaveApprovals && !me.timesheetApprovals && !me.helpdeskBadge && !me.payrollOverdrawn && !me.reviewsDue && !me.returnToWorkDue && !me.servicesDown && !me.expenseApprovals && !me.budgetWarnings && !me.invoicesOverdue && !me.trainingDue && !me.newApplicants && !me.backupStale ? '<span class="hero-chip calm">' + icon("tick") + "You\u2019re all caught up</span>" : "") +
+            (!me.unreadAnnouncements && !me.pendingAcks && !me.openPolls && !me.onboardingTasks && !me.leaveApprovals && !me.timesheetApprovals && !me.helpdeskBadge && !me.payrollOverdrawn && !me.reviewsDue && !me.returnToWorkDue && !me.servicesDown && !me.expenseApprovals && !me.budgetWarnings && !me.invoicesOverdue && !me.trainingDue && !me.newApplicants && !me.backupStale && !me.billsDue ? '<span class="hero-chip calm">' + icon("tick") + "You\u2019re all caught up</span>" : "") +
             "</div></div>" +
             '<div class="hero-clocks">' +
             '<div class="glass-clock"><div class="gc-label">' + icon("monitor") + "Your time \u00b7 " + esc(tzCity(deviceTz)) + "</div>" +
@@ -4505,6 +4509,7 @@
         "payroll-shortfall": ["Payroll (the payroll fund ran out)", "out"],
         "payroll-to-main": ["To main balance", "out"], "main-from-payroll": ["From payroll fund", "in"],
         expense: ["Expenses repaid", "out"],
+        bill: ["Bill paid", "out"],
     };
 
     async function viewFunds(root, current) {
@@ -4516,7 +4521,7 @@
             '<div class="page-actions"><a class="btn btn-ghost" href="/payroll" data-link>' + icon("wallet") + "Run payroll</a>" +
             '<button type="button" class="btn btn-primary" id="fd-statement">' + icon("file") + "Statement</button></div></div>" +
             fundsWarningHtml(d) + fundCardsHtml(d, true) +
-            '<div id="fd-insights"></div>' +
+            '<div id="fd-insights"></div><div id="fd-forecast"></div>' +
             '<section class="panel"><div class="panel-head"><h2 class="panel-title">' + icon("list") + "History</h2>" +
             '<div class="company-tabs small-tabs" id="fd-tabs"><button type="button" data-acc="">Everything</button><button type="button" data-acc="main">Main balance</button><button type="button" data-acc="payroll">Payroll fund</button></div></div>' +
             '<div id="fd-history"></div></section>';
@@ -4552,6 +4557,10 @@
             if (!box) return;
             box.innerHTML = fundsInsightsHtml(x);
             $$(".br-bar [data-w]", box).forEach(function (s) { s.style.width = s.dataset.w + "%"; });
+        }).catch(function () {});
+        api("/api/funds/forecast").then(function (f) {
+            const box = $("#fd-forecast");
+            if (box) box.innerHTML = forecastHtml(f);
         }).catch(function () {});
         draw();
     }
@@ -4651,11 +4660,12 @@
                     : '<p class="st-small">No money came in over the last three months, so none is assumed.</p>') +
                 "</section>" : "") +
             '<section class="st-section"><h4>Where the money went</h4>' +
-            (st.spent > 0 ? '<div class="st-bar"><span class="sb-payroll" data-w="' + share(st.spentBy.payroll) + '"></span><span class="sb-removed" data-w="' + share(st.spentBy.removed) + '"></span><span class="sb-expenses" data-w="' + share(st.spentBy.expenses || 0) + '"></span></div>' : "") +
+            (st.spent > 0 ? '<div class="st-bar"><span class="sb-payroll" data-w="' + share(st.spentBy.payroll) + '"></span><span class="sb-removed" data-w="' + share(st.spentBy.removed) + '"></span><span class="sb-expenses" data-w="' + share(st.spentBy.expenses || 0) + '"></span><span class="sb-bills" data-w="' + share(st.spentBy.bills || 0) + '"></span></div>' : "") +
             '<div class="st-rows">' +
             '<div class="ps-line"><span><i class="st-dot sb-payroll"></i>Payroll (pay, employer NI and pension)</span><span class="ps-amt">' + fmtMoney(st.spentBy.payroll) + "</span></div>" +
             '<div class="ps-line"><span><i class="st-dot sb-removed"></i>Funds removed</span><span class="ps-amt">' + fmtMoney(st.spentBy.removed) + "</span></div>" +
             (st.spentBy.expenses ? '<div class="ps-line"><span><i class="st-dot sb-expenses"></i>Expenses repaid</span><span class="ps-amt">' + fmtMoney(st.spentBy.expenses) + "</span></div>" : "") +
+            (st.spentBy.bills ? '<div class="ps-line"><span><i class="st-dot sb-bills"></i>Bills paid</span><span class="ps-amt">' + fmtMoney(st.spentBy.bills) + "</span></div>" : "") +
             '<div class="ps-line ps-total"><span>Total spent</span><span class="ps-amt">' + fmtMoney(st.spent) + "</span></div></div>" +
             ((st.byCategory || []).length ? '<h4 class="st-subhead">By category</h4><div class="st-rows">' + st.byCategory.map(function (c) {
                 return '<div class="ps-line"><span>' + esc(c.category) + '</span><span class="ps-amt">' + fmtMoney(c.amount) + "</span></div>";
@@ -4746,7 +4756,8 @@
 
         root.innerHTML =
             '<div class="page-head"><div><h1>Run payroll</h1><p class="muted">Payslips are paid by ' + esc(d.employer) + ". Tax and National Insurance are worked out automatically. Only Human Resources can see this page.</p></div>" +
-            '<div class="page-actions"><button type="button" class="btn btn-ghost" id="pr-yearend">' + icon("chart") + "Year end</button>" +
+            '<div class="page-actions"><button type="button" class="btn btn-ghost" id="pr-bands">' + icon("chart") + "Salary bands</button>" +
+            '<button type="button" class="btn btn-ghost" id="pr-yearend">' + icon("chart") + "Year end</button>" +
             '<button type="button" class="btn btn-ghost" id="pr-single"' + (overdrawn ? " disabled" : "") + ">" + icon("plus") + "Single payslip</button>" +
             '<button type="button" class="btn btn-primary" id="pr-run"' + (overdrawn ? ' disabled title="The payroll fund is overdrawn"' : "") + ">" + icon(overdrawn ? "lock" : "wallet") + "Run payroll</button></div></div>" +
             fundsWarningHtml(d.funds) +
@@ -4765,14 +4776,20 @@
             '<div class="stat"><div class="stat-value">' + fmtMoney(sumOf(d.payslips, "cost")) + '</div><div class="stat-label">Cost to the company</div></div>' +
             "</div>" +
             '<section class="panel"><div class="panel-head"><h2 class="panel-title">' + icon("card") + "Payslips for " + esc(d.periodLabel) + "</h2>" +
-            (drafts.length ? '<button type="button" class="btn btn-primary btn-small" id="pr-issue-all">' + icon("tick") + "Issue all " + drafts.length + " drafts</button>" : "") + "</div>" +
+            '<div class="btn-row">' + (d.requireApproval && drafts.some(function (x) { return !x.approvedBy && x.createdBy !== d.meId && x.updatedBy !== d.meId; }) ? '<button type="button" class="btn btn-ghost btn-small" id="pr-approve-all">' + icon("check") + "Approve all</button>" : "") +
+            (drafts.length ? '<button type="button" class="btn btn-primary btn-small" id="pr-issue-all">' + icon("tick") + "Issue all " + (d.requireApproval ? "approved" : drafts.length) + " drafts</button>" : "") + "</div></div>" +
+            '<label class="inline-check pr-approval"><input type="checkbox" id="pr-require"' + (d.requireApproval ? " checked" : "") + "> Payslips need approving by a second person (not the person who made or changed them) before they can be issued</label>" +
+            (d.requireApproval && d.payrollPeople < 2 ? '<div class="banner banner-warn">' + icon("alert") + "<div><strong>Only one person can run payroll.</strong> Give someone else <em>Run payroll &amp; finance</em> so they can approve payslips, or turn approval off.</div></div>" : "") +
             (d.payslips.length ? '<div class="table-card flat"><table class="table"><thead><tr><th>Employee</th><th>Status</th><th class="num">Total pay</th><th class="num">Take-home</th><th class="num">Cost</th><th class="col-actions"></th></tr></thead><tbody>' +
                 d.payslips.map(function (s) {
                     return '<tr data-slip="' + s.id + '"><td><div class="emp-cell">' + avatar(s.person, "sm") + '<div><div class="emp-name">' + esc(s.person.displayName) + (s.additional ? ' <span class="badge badge-soft">Additional</span>' : "") + '</div><div class="muted small">' + esc(s.person.jobTitle || "") + "</div></div></div></td>" +
-                        '<td data-label="Status">' + statusBadge(s.status) + '</td><td data-label="Total pay" class="num">' + fmtMoney(s.gross) + '</td><td data-label="Take-home" class="num"><strong>' + fmtMoney(s.net) + "</strong></td>" +
+                        '<td data-label="Status">' + statusBadge(s.status) + (s.status === "draft" && d.requireApproval ? (s.approvedBy ? '<div class="small pr-ok">' + icon("check") + "Approved by " + esc(s.approvedBy) + "</div>" : '<div class="small muted">Needs approval</div>') : "") +
+                        '</td><td data-label="Total pay" class="num">' + fmtMoney(s.gross) + '</td><td data-label="Take-home" class="num"><strong>' + fmtMoney(s.net) + "</strong></td>" +
                         '<td data-label="Cost" class="num muted">' + fmtMoney(s.cost) + "</td>" +
                         '<td class="col-actions nowrap"><button type="button" class="btn btn-ghost btn-small" data-pa="view" aria-label="View">' + icon("eye") + "</button>" +
-                        (s.status === "draft" ? '<button type="button" class="btn btn-ghost btn-small" data-pa="edit">' + icon("edit") + 'Edit</button><button type="button" class="btn btn-primary btn-small" data-pa="issue">Issue</button>'
+                        (s.status === "draft" ? '<button type="button" class="btn btn-ghost btn-small" data-pa="edit">' + icon("edit") + "Edit</button>" +
+                            (d.requireApproval && !s.approvedBy ? (s.createdBy !== d.meId && s.updatedBy !== d.meId ? '<button type="button" class="btn btn-primary btn-small" data-pa="approve">Approve</button>' : '<span class="muted small pr-wait">Waiting for someone else to approve</span>')
+                                : (d.requireApproval ? '<button type="button" class="btn btn-ghost btn-small" data-pa="unapprove">Unapprove</button>' : "") + '<button type="button" class="btn btn-primary btn-small" data-pa="issue">Issue</button>')
                             : '<button type="button" class="btn btn-ghost btn-small" data-pa="withdraw">Withdraw</button>') +
                         '<button type="button" class="btn btn-ghost btn-small danger-text" data-pa="delete" aria-label="Delete">' + icon("trash") + "</button></td></tr>";
                 }).join("") + "</tbody></table></div>"
@@ -4783,9 +4800,12 @@
             '<div class="table-card flat"><table class="table"><thead><tr><th>Employee</th><th>Pay</th><th>' + esc(d.periodLabel) + '</th><th class="col-actions"></th></tr></thead><tbody>' +
             d.people.map(function (p) {
                 return '<tr><td><div class="emp-cell">' + avatar(p, "sm") + '<div><div class="emp-name">' + esc(p.displayName) + '</div><div class="muted small">' + esc(p.jobTitle) + "</div></div></div></td>" +
-                    '<td data-label="Pay"><strong>' + payLabel(p) + "</strong>" + (p.isStandard ? ' <span class="badge badge-soft">Standard</span>' : "") + "</td>" +
+                    '<td data-label="Pay"><strong>' + payLabel(p) + "</strong>" + (p.isStandard ? ' <span class="badge badge-soft">Standard</span>' : "") +
+                    (p.band ? ' <span class="badge band-' + p.band.position + '" title="Band ' + esc(fmtMoney(p.band.min) + " – " + fmtMoney(p.band.max)) + ' a month">' + ({ below: "Below band", within: "In band", above: "Above band" })[p.band.position] + "</span>" : "") +
+                    (p.pendingBonuses ? ' <span class="badge badge-yellow">Bonus due</span>' : "") + (p.commission ? ' <span class="badge badge-soft">Commission</span>' : "") + "</td>" +
                     '<td data-label="Payslip">' + (withSlip[p.id] ? '<span class="badge badge-green">' + icon("tick") + "Done</span>" : '<span class="muted small">Not yet</span>') + "</td>" +
-                    '<td class="col-actions nowrap"><button type="button" class="btn btn-ghost btn-small" data-details="' + p.id + '">' + icon("edit") + "Pay details</button></td></tr>";
+                    '<td class="col-actions nowrap"><button type="button" class="btn btn-ghost btn-small" data-history="' + p.id + '" data-name="' + esc(p.displayName) + '">' + icon("clock") + "History &amp; bonuses</button>" +
+                    '<button type="button" class="btn btn-ghost btn-small" data-details="' + p.id + '">' + icon("edit") + "Pay details</button></td></tr>";
             }).join("") + "</tbody></table></div>" +
             '<p class="muted small pr-rates">' + icon("shield") + "<span>Tax is worked out cumulatively across the tax year with " + esc(d.rates) +
             " rates for England, Wales and Northern Ireland, and National Insurance for each month. Scottish tax codes are treated as the rest of the UK.</span></p></section>" +
@@ -4800,8 +4820,11 @@
                 }).join("") + "</div></section>";
         }).catch(function () {});
 
-        root.addEventListener("change", function (e) {
+        root.addEventListener("change", async function (e) {
             if (e.target.id === "pr-month" && e.target.value) { state.payPeriod = e.target.value; render(); }
+            if (e.target.id === "pr-require") {
+                try { await api("/api/payroll/settings", { requireApproval: e.target.checked }); toast(e.target.checked ? "Payslips now need a second approval." : "Second approval turned off."); render(); } catch (err) { toast(err.message); }
+            }
         });
         root.addEventListener("click", async function (e) {
             const per = e.target.closest("[data-period]");
@@ -4809,11 +4832,18 @@
             if (e.target.closest("#pr-run")) return openPayrollRun(d, period, withSlip);
             if (e.target.closest("#pr-single")) return openPayslipEditor(d, null, period);
             if (e.target.closest("#pr-yearend")) return openYearEnd();
+            if (e.target.closest("#pr-bands")) return openBands();
+            const hist = e.target.closest("[data-history]");
+            if (hist) return openPayHistory(hist.dataset.history, hist.dataset.name);
+            if (e.target.closest("#pr-approve-all")) {
+                try { const r = await api("/api/payroll/approve-all", { period: period }); toast(r.approved + " approved." + (r.skipped ? " " + r.skipped + " you made or changed need someone else." : "")); render(); } catch (err) { toast(err.message); }
+                return;
+            }
             const det = e.target.closest("[data-details]");
             if (det) return openPayDetails(det.dataset.details, d);
             if (e.target.closest("#pr-issue-all")) {
                 if (!(await confirmDialog({ title: "Issue " + drafts.length + " payslips?", message: "Each employee will be able to see their payslip straight away.", confirmLabel: "Issue payslips" }))) return;
-                try { const r = await api("/api/payroll/issue-all", { period: period }); toast(r.issued + " payslips issued."); render(); } catch (err) { toast(err.message); }
+                try { const r = await api("/api/payroll/issue-all", { period: period }); toast(r.issued + " payslips issued." + (r.waiting ? " " + r.waiting + " still need approving." : "")); render(); } catch (err) { toast(err.message); }
                 return;
             }
             const pa = e.target.closest("[data-pa]");
@@ -4826,7 +4856,7 @@
                 if (act === "delete" && !(await confirmDialog({ title: "Delete this payslip?", message: "Its cost goes back into the payroll fund. Only delete a payslip that was made by mistake.", confirmLabel: "Delete", danger: true }))) return;
                 if (act === "withdraw" && !(await confirmDialog({ title: "Withdraw this payslip?", message: "The employee won’t be able to see it until it’s issued again.", confirmLabel: "Withdraw" }))) return;
                 await api("/api/payroll/payslips/" + id + "/" + act, {});
-                toast({ issue: "Payslip issued.", withdraw: "Payslip withdrawn.", delete: "Payslip deleted and its cost returned to the payroll fund." }[act]);
+                toast({ issue: "Payslip issued.", withdraw: "Payslip withdrawn.", delete: "Payslip deleted and its cost returned to the payroll fund.", approve: "Payslip approved.", unapprove: "Approval removed." }[act]);
                 render();
             } catch (err) { toast(err.message); }
         });
@@ -6533,7 +6563,7 @@
 
         root.innerHTML =
             '<div class="page-head"><div><h1>Expenses</h1><p class="muted">Claim back money you spent for work. Add a photo or PDF of the receipt. Your supervisor or payroll approves it, then it’s repaid from company funds or with your next payslip.</p></div>' +
-            '<div class="page-actions">' + (state.me.system ? "" : '<button type="button" class="btn btn-primary" id="ex-new">' + icon("plus") + "New claim</button>") + "</div></div>" +
+            '<div class="page-actions">' + (state.me.system ? "" : '<button type="button" class="btn btn-ghost" id="ex-miles">' + icon("pin") + 'Claim mileage</button><button type="button" class="btn btn-primary" id="ex-new">' + icon("plus") + "New claim</button>") + "</div></div>" +
             (state.me.system ? "" : '<div class="stat-row">' +
                 '<div class="stat"><div class="stat-value">' + fmtMoney(waiting) + '</div><div class="stat-label">Waiting for approval</div></div>' +
                 '<div class="stat"><div class="stat-value">' + fmtMoney(owed) + '</div><div class="stat-label">Approved, to be repaid</div></div>' +
@@ -6547,7 +6577,8 @@
                 (opts.person ? avatar(c.person, "md") : '<span class="leave-icon">' + icon("pound") + "</span>") +
                 '<div class="lr-main"><div class="lr-title">' + (opts.person ? esc(c.person.displayName) + ' <span class="muted">· ' : "") + esc(c.description) + (opts.person ? "</span>" : "") + "</div>" +
                 '<div class="muted small">' + esc(c.category) + " · spent " + esc(fmtDate(c.date + "T12:00:00")) + " · claimed " + esc(fmtDate(c.createdAt)) + "</div>" +
-                (c.receipt ? '<a class="claim-receipt" href="/api/expenses/' + c.id + '/receipt" target="_blank" rel="noopener">' + icon("file") + esc(c.receipt.fileName) + "</a>" : '<span class="muted small">No receipt</span>') +
+                (c.mileage ? '<span class="claim-receipt">' + icon("pin") + c.mileage.miles + " miles" + (c.mileage.atLower ? " (" + c.mileage.atFull + " at 45p, " + c.mileage.atLower + " at 25p)" : " at 45p") + "</span>" :
+                    c.receipt ? '<a class="claim-receipt" href="/api/expenses/' + c.id + '/receipt" target="_blank" rel="noopener">' + icon("file") + esc(c.receipt.fileName) + "</a>" : '<span class="muted small">No receipt</span>') +
                 (c.decisionNote ? '<div class="lr-note decision">' + icon("message") + esc(c.decidedByName || "") + ": " + esc(c.decisionNote) + "</div>" : "") +
                 "</div>" +
                 '<div class="lr-side"><strong class="claim-amt">' + fmtMoney(c.amount) + '</strong><span class="badge ' + (EXPENSE_BADGES[c.status] || "") + '">' + esc(c.statusLabel) + "</span>" +
@@ -6575,6 +6606,7 @@
             const t = e.target.closest("[data-tab]");
             if (t) { tab = state.expenseTab = t.dataset.tab; return draw(); }
             if (e.target.closest("#ex-new")) return openExpenseForm(d);
+            if (e.target.closest("#ex-miles")) return openMileageForm();
             const b = e.target.closest("[data-ex]");
             if (!b) return;
             const id = b.closest("[data-id]").dataset.id;
@@ -8147,6 +8179,251 @@
         });
         root.addEventListener("change", function (e) { if (e.target.id === "rp-month" && e.target.value) { month = state.reportMonth = e.target.value; load(); } });
         await load();
+    }
+
+    // ================= Salary bands, pay history, bonuses and commission =================
+
+    async function openBands() {
+        let r;
+        try { r = await api("/api/payroll/bands"); } catch (err) { return toast(err.message); }
+        const m = openModal(
+            '<h2 class="modal-title">Salary bands</h2>' +
+            '<p class="muted">A monthly pay range for each job title. Pay details then show whether each person is below, in or above their band (hourly pay counts as 162.5 hours a month).</p>' +
+            (r.bands.length ? '<div class="table-card flat"><table class="table"><thead><tr><th>Job title</th><th class="num">Minimum</th><th class="num">Maximum</th><th class="col-actions"></th></tr></thead><tbody>' +
+                r.bands.map(function (b) {
+                    return "<tr><td>" + esc(b.jobTitle) + '</td><td class="num" data-label="Minimum">' + fmtMoney(b.min) + '</td><td class="num" data-label="Maximum">' + fmtMoney(b.max) + "</td>" +
+                        '<td class="col-actions"><button type="button" class="icon-btn" data-band-del="' + b.id + '" aria-label="Delete">' + icon("trash") + "</button></td></tr>";
+                }).join("") + "</tbody></table></div>" : '<p class="muted small">No bands yet.</p>') +
+            '<form id="band-form" class="band-form" novalidate><input type="text" id="band-title" maxlength="100" placeholder="Job title, e.g. Graphic Designer" list="band-titles">' +
+            '<div class="money-input"><span>£</span><input type="number" id="band-min" min="0" step="0.01" placeholder="Min a month"></div>' +
+            '<div class="money-input"><span>£</span><input type="number" id="band-max" min="0" step="0.01" placeholder="Max a month"></div>' +
+            '<button type="submit" class="btn btn-ghost">' + icon("plus") + "Add</button></form>" +
+            '<div class="form-error" id="band-error" hidden></div>' +
+            '<div class="modal-actions"><button type="button" class="btn btn-primary" data-close>Done</button></div>'
+        );
+        api("/api/directory").then(function (d) {
+            const titles = {};
+            d.people.forEach(function (p) { titles[p.jobTitle] = true; });
+            const list = document.createElement("datalist");
+            list.id = "band-titles";
+            list.innerHTML = Object.keys(titles).sort().map(function (t) { return '<option value="' + esc(t) + '">'; }).join("");
+            m.el.appendChild(list);
+        }).catch(function () {});
+        m.el.addEventListener("click", async function (e) {
+            const del = e.target.closest("[data-band-del]");
+            if (!del) return;
+            try { await api("/api/payroll/bands", { delete: del.dataset.bandDel }); openBands(); } catch (err) { formError($("#band-error", m.el), err.message); }
+        });
+        $("#band-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try {
+                await api("/api/payroll/bands", { jobTitle: $("#band-title", m.el).value, min: $("#band-min", m.el).value, max: $("#band-max", m.el).value });
+                toast("Band saved.");
+                openBands();
+            } catch (err) { formError($("#band-error", m.el), err.message); }
+        });
+    }
+
+    async function openPayHistory(personId, name) {
+        let r;
+        try { r = await api("/api/payroll/history/" + personId); } catch (err) { return toast(err.message); }
+        const max = Math.max.apply(null, r.payslips.map(function (s) { return s.gross; }).concat([1]));
+        const m = openModal(
+            '<h2 class="modal-title">' + esc(name) + "</h2>" +
+            (r.band ? '<div class="band-meter band-' + r.band.position + '"><div class="bm-head"><strong>' + esc(r.band.jobTitle) + " band</strong><span>" + fmtMoney(r.band.min) + " – " + fmtMoney(r.band.max) + " a month</span></div>" +
+                '<div class="bm-track"><span class="bm-dot" data-left="' + Math.max(0, Math.min(100, (r.band.monthly - r.band.min) / Math.max(1, r.band.max - r.band.min) * 100)) + '"></span></div>' +
+                '<div class="muted small">' + fmtMoney(r.band.monthly) + " a month · " + ({ below: "below the band", within: "within the band", above: "above the band" })[r.band.position] + "</div></div>" : "") +
+            '<h3 class="detail-head">Bonuses and commission</h3>' +
+            '<p class="muted small">A bonus is paid once, on the next payslip made for them. Commission is added every month between the months you choose. Both are taxed as normal pay.</p>' +
+            (r.extras.length ? '<div class="pc-list">' + r.extras.map(function (x) {
+                return '<div class="pc-row' + (x.paid ? " applied" : "") + '"><span class="pc-when">' + (x.kind === "bonus" ? "Bonus" : "Commission") + "</span><strong>" + fmtMoney(x.amount) + "</strong><span>" + esc(x.label) +
+                    ' <span class="muted small">· ' + (x.kind === "bonus" ? (x.paid ? "paid" : "on the next payslip") : esc(x.fromLabel) + (x.toLabel ? " to " + esc(x.toLabel) : " onwards")) + "</span></span>" +
+                    (x.paid ? "" : '<button type="button" class="icon-btn" data-extra-del="' + x.id + '" aria-label="Remove">' + icon("trash") + "</button>") + "</div>";
+            }).join("") + "</div>" : "") +
+            '<form id="ex2-form" class="extra-form" novalidate><select id="ex2-kind"><option value="bonus">One-off bonus</option><option value="commission">Monthly commission</option></select>' +
+            '<input type="text" id="ex2-label" maxlength="80" placeholder="Label, e.g. Christmas bonus">' +
+            '<div class="money-input"><span>£</span><input type="number" id="ex2-amount" min="0" step="0.01" placeholder="Amount"></div>' +
+            '<span class="ex2-range" hidden><input type="month" id="ex2-from" aria-label="From"><input type="month" id="ex2-to" aria-label="To (optional)"></span>' +
+            '<button type="submit" class="btn btn-ghost">' + icon("plus") + "Add</button></form>" +
+            '<div class="form-error" id="ex2-error" hidden></div>' +
+            '<h3 class="detail-head">Pay over time</h3>' +
+            (r.payslips.length ? '<div class="pay-bars">' + r.payslips.map(function (s) {
+                return '<div class="pb-col" title="' + esc(s.label + ": " + fmtMoney(s.gross)) + '"><span data-h="' + Math.round(s.gross / max * 100) + '"></span><small>' + esc(s.label.slice(0, 3)) + "</small></div>";
+            }).join("") + "</div>" : '<p class="muted small">No issued payslips yet.</p>') +
+            '<h3 class="detail-head">Pay changes</h3>' +
+            (r.changes.length ? '<div class="pc-list">' + r.changes.map(function (c) {
+                return '<div class="pc-row"><span class="pc-when">' + esc(fmtDate(c.at)) + "</span><strong>" + (c.payType === "hourly" ? fmtMoney(c.hourlyRate) + " an hour" : fmtMoney(c.monthlySalary) + " a month") + "</strong>" +
+                    '<span class="muted small">' + esc(c.note || "") + " · " + esc(c.byName) + "</span></div>";
+            }).join("") + "</div>" : '<p class="muted small">No changes recorded yet. Changes to pay details and scheduled pay changes show up here.</p>') +
+            '<div class="modal-actions"><button type="button" class="btn btn-primary" data-close>Done</button></div>',
+            { wide: true }
+        );
+        $$("[data-h]", m.el).forEach(function (b) { b.style.height = Math.max(3, Number(b.dataset.h)) + "%"; });
+        $$("[data-left]", m.el).forEach(function (b) { b.style.left = b.dataset.left + "%"; });
+        $("#ex2-from", m.el).value = isoDay(new Date()).slice(0, 7);
+        $("#ex2-kind", m.el).addEventListener("change", function (e) { $(".ex2-range", m.el).hidden = e.target.value !== "commission"; });
+        m.el.addEventListener("click", async function (e) {
+            const del = e.target.closest("[data-extra-del]");
+            if (!del) return;
+            try { await api("/api/payroll/extras/" + personId + "/" + del.dataset.extraDel + "/delete", {}); openPayHistory(personId, name); } catch (err) { formError($("#ex2-error", m.el), err.message); }
+        });
+        $("#ex2-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try {
+                await api("/api/payroll/extras/" + personId, { kind: $("#ex2-kind", m.el).value, label: $("#ex2-label", m.el).value, amount: $("#ex2-amount", m.el).value, from: $("#ex2-from", m.el).value, to: $("#ex2-to", m.el).value });
+                toast($("#ex2-kind", m.el).value === "bonus" ? "Bonus added to their next payslip." : "Commission added.");
+                openPayHistory(personId, name);
+            } catch (err) { formError($("#ex2-error", m.el), err.message); }
+        });
+    }
+
+    // ================= Mileage claims =================
+
+    function openMileageForm() {
+        const m = openModal(
+            '<h2 class="modal-title">Claim mileage</h2>' +
+            '<p class="muted">For business journeys in your own car or van. HMRC rates: 45p a mile for the first 10,000 miles in the tax year, then 25p. Don’t include your normal commute.</p>' +
+            '<form id="mi-form" novalidate><div class="grid-2"><div><label for="mi-from">From</label><input type="text" id="mi-from" maxlength="120" placeholder="e.g. Manchester office"></div>' +
+            '<div><label for="mi-to">To</label><input type="text" id="mi-to" maxlength="120" placeholder="e.g. Client site, Leeds"></div></div>' +
+            '<div class="grid-2"><div><label for="mi-miles">Miles (one way)</label><input type="number" id="mi-miles" min="0" step="0.1"></div>' +
+            '<div><label for="mi-date">Date of journey</label><input type="date" id="mi-date" value="' + isoDay(new Date()) + '" max="' + isoDay(new Date()) + '"></div></div>' +
+            '<label class="inline-check"><input type="checkbox" id="mi-return"> Return journey (doubles the miles)</label>' +
+            '<div class="lv-count" id="mi-calc">' + icon("pound") + "Enter the miles to see what you’ll get back.</div>" +
+            '<label for="mi-note">What was it for?</label><input type="text" id="mi-note" maxlength="200" placeholder="e.g. Pitch meeting with Acme">' +
+            '<div class="form-error" id="mi-error" hidden></div>' +
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">Send claim</button></div></form>'
+        );
+        function miles() { return (Number($("#mi-miles", m.el).value) || 0) * ($("#mi-return", m.el).checked ? 2 : 1); }
+        let seq = 0;
+        async function calc() {
+            const n = miles();
+            if (!n) return;
+            const mine = ++seq;
+            try {
+                const r = await api("/api/expenses/mileage?miles=" + n + "&date=" + $("#mi-date", m.el).value);
+                if (mine !== seq) return;
+                $("#mi-calc", m.el).innerHTML = icon("pound") + "<strong>" + fmtMoney(r.amount) + "</strong>&nbsp;for " + n + " miles" +
+                    (r.atLower ? " (" + r.atFull + " at 45p, " + r.atLower + " at 25p)" : " at 45p a mile") + " · " + Math.round(r.before) + " miles claimed this tax year";
+            } catch (e) { /* ignore */ }
+        }
+        m.el.addEventListener("input", calc);
+        m.el.addEventListener("change", calc);
+        $("#mi-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            const from = $("#mi-from", m.el).value, to = $("#mi-to", m.el).value, ret = $("#mi-return", m.el).checked;
+            const note = $("#mi-note", m.el).value.trim();
+            try {
+                const r = await uploadJson("/api/expenses", "X-Claim", {
+                    kind: "mileage", from: from, to: to, miles: miles(), returnTrip: ret, date: $("#mi-date", m.el).value,
+                    description: note ? note + " – " + from + " to " + to + (ret ? " and back" : "") + " (" + miles() + " miles)" : "",
+                }, null);
+                state.me = r.user;
+                renderChrome();
+                closeModal();
+                toast("Mileage claim sent for approval.");
+                render();
+            } catch (err) { formError($("#mi-error", m.el), err.message); }
+        });
+    }
+
+    // ================= Cash-flow forecast =================
+
+    function forecastHtml(f) {
+        const vals = f.months.map(function (x) { return x.end; }).concat(f.months.map(function (x) { return x.start; }), [0]);
+        const max = Math.max.apply(null, vals), min = Math.min.apply(null, vals);
+        const range = (max - min) || 1;
+        const W = 640, H = 150, L = 8, T = 12, B = 22;
+        const x = function (i) { return L + (W - 2 * L) * (i + 0.5) / f.months.length; };
+        const y = function (v) { return T + (H - T - B) * (1 - (v - min) / range); };
+        const pts = f.months.map(function (m, i) { return x(i) + "," + y(m.end); }).join(" ");
+        const svg = '<svg class="funds-chart fc-forecast" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Forecast balance at the end of each month">' +
+            (min < 0 ? '<line class="fc-zero" x1="0" x2="' + W + '" y1="' + y(0) + '" y2="' + y(0) + '"></line>' : "") +
+            '<polyline class="fc-line" points="' + pts + '"></polyline>' +
+            f.months.map(function (m, i) {
+                return '<circle class="fc-dot' + (m.end < 0 ? " neg" : "") + '" cx="' + x(i) + '" cy="' + y(m.end) + '" r="4"><title>' + esc(m.label + ": " + fmtMoney(m.end)) + "</title></circle>" +
+                    '<text class="fc-axis" x="' + x(i) + '" y="' + (H - 6) + '" text-anchor="middle">' + esc(m.label.slice(0, 3)) + "</text>";
+            }).join("") + "</svg>";
+        return '<section class="panel"><div class="panel-head"><h2 class="panel-title">' + icon("activity") + "Cash-flow forecast</h2>" +
+            '<span class="muted small">Lowest point: <strong class="' + (f.lowest.end < 0 ? "danger-text" : "") + '">' + fmtMoney(f.lowest.end) + "</strong> at the end of " + esc(f.lowest.label) + "</span></div>" +
+            '<div class="chart-wrap">' + svg + "</div>" +
+            '<div class="table-card flat"><table class="table forecast-table"><thead><tr><th>Month</th><th class="num">Starts with</th><th class="num">Invoices due in</th><th class="num">Bills due</th><th class="num">Payroll</th><th class="num">Other spending</th><th class="num">Ends with</th></tr></thead><tbody>' +
+            f.months.map(function (m) {
+                return "<tr><td>" + esc(m.label) + '</td><td class="num" data-label="Starts with">' + fmtMoney(m.start) + '</td><td class="num fund-in" data-label="Invoices in">+' + fmtMoney(m.invoicesIn) + "</td>" +
+                    '<td class="num" data-label="Bills">−' + fmtMoney(m.billsOut) + '</td><td class="num" data-label="Payroll">−' + fmtMoney(m.payroll) + '</td><td class="num" data-label="Other">−' + fmtMoney(m.other) + "</td>" +
+                    '<td class="num' + (m.end < 0 ? " danger-text" : "") + '" data-label="Ends with"><strong>' + fmtMoney(m.end) + "</strong></td></tr>";
+            }).join("") + "</tbody></table></div>" +
+            '<p class="muted small">Payroll is everyone’s pay (with scheduled pay changes, commission, employer NI and pension) for payslips not made yet. Bills include repeats of repeating bills. Other spending is the average of funds removed and expenses over the last three months (' + fmtMoney(f.averageOther) + " a month). Only invoices already sent count as money in" +
+            (f.averageIn ? "; on average " + fmtMoney(f.averageIn) + " a month has come in recently" : "") + ".</p></section>";
+    }
+
+    // ================= Supplier bills =================
+
+    async function viewBills(root, current) {
+        const d = await api("/api/bills");
+        if (!current()) return;
+        let filter = state.billFilter || "unpaid";
+        root.innerHTML = '<div class="page-head"><div><h1>Bills</h1><p class="muted">Money the company owes suppliers. Mark a bill paid to take it out of the main balance; repeating bills make the next one automatically.</p></div>' +
+            '<div class="page-actions"><button type="button" class="btn btn-primary" id="bl-new">' + icon("plus") + "Add a bill</button></div></div>" +
+            '<div class="stat-row"><div class="stat"><div class="stat-value">' + fmtMoney(d.summary.unpaid) + '</div><div class="stat-label">Unpaid</div></div>' +
+            '<div class="stat' + (d.summary.overdue ? " stat-danger" : "") + '"><div class="stat-value">' + fmtMoney(d.summary.overdue) + '</div><div class="stat-label">Overdue' + (d.summary.overdueCount ? " (" + d.summary.overdueCount + ")" : "") + "</div></div>" +
+            '<div class="stat"><div class="stat-value">' + fmtMoney(d.summary.dueThisMonth) + '</div><div class="stat-label">Due by the end of this month</div></div></div>' +
+            '<div class="company-tabs" id="bl-tabs"><button type="button" data-f="unpaid">Unpaid</button><button type="button" data-f="paid">Paid</button><button type="button" data-f="">All</button></div><div id="bl-body"></div>';
+        function draw() {
+            $$("#bl-tabs [data-f]").forEach(function (b) { b.classList.toggle("active", b.dataset.f === filter); });
+            const list = d.bills.filter(function (b) { return !filter || b.status === filter; });
+            $("#bl-body").innerHTML = list.length ? '<div class="table-card"><table class="table"><thead><tr><th>Supplier</th><th>Category</th><th>Due</th><th>Repeats</th><th class="num">Amount</th><th class="col-actions"></th></tr></thead><tbody>' +
+                list.map(function (b) {
+                    return '<tr data-bill="' + b.id + '"><td><strong>' + esc(b.supplier) + "</strong>" + (b.reference ? '<div class="muted small">Ref ' + esc(b.reference) + "</div>" : "") + (b.note ? '<div class="muted small">' + esc(b.note) + "</div>" : "") + "</td>" +
+                        '<td data-label="Category">' + esc(b.category) + "</td>" +
+                        '<td data-label="Due" class="nowrap' + (b.overdue ? " danger-text" : "") + '">' + esc(fmtDate(b.dueDate + "T12:00:00")) + (b.overdue ? ' <span class="badge badge-red">Overdue</span>' : b.dueSoon ? ' <span class="badge badge-yellow">Due soon</span>' : "") +
+                        (b.status === "paid" ? '<div class="muted small">Paid ' + esc(fmtDate(b.paidAt)) + "</div>" : "") + "</td>" +
+                        '<td data-label="Repeats">' + esc(b.repeatLabel) + '</td><td class="num" data-label="Amount"><strong>' + fmtMoney(b.amount) + "</strong></td>" +
+                        '<td class="col-actions nowrap">' + (b.status === "unpaid" ? '<button type="button" class="btn btn-ghost btn-small" data-bl="edit">' + icon("edit") + '</button><button type="button" class="btn btn-ghost btn-small danger-text" data-bl="delete">' + icon("trash") + '</button><button type="button" class="btn btn-primary btn-small" data-bl="pay">Mark paid</button>' : '<span class="badge badge-green">Paid</span>') + "</td></tr>";
+                }).join("") + "</tbody></table></div>" : '<div class="empty-page">' + icon("file", "big") + "<h2>No bills here</h2></div>";
+        }
+        root.addEventListener("click", async function (e) {
+            const t = e.target.closest("[data-f]");
+            if (t) { filter = state.billFilter = t.dataset.f; return draw(); }
+            if (e.target.closest("#bl-new")) return openBillForm(d, null);
+            const b = e.target.closest("[data-bl]");
+            if (!b) return;
+            const bill = d.bills.find(function (x) { return x.id === b.closest("[data-bill]").dataset.bill; });
+            if (b.dataset.bl === "edit") return openBillForm(d, bill);
+            try {
+                if (b.dataset.bl === "pay" && !(await confirmDialog({ title: "Mark " + bill.supplier + " as paid?", message: fmtMoney(bill.amount) + " will be taken from the main balance under " + bill.category + "." + (bill.repeat !== "none" ? " The next one will be added automatically." : ""), confirmLabel: "Mark paid" }))) return;
+                if (b.dataset.bl === "delete" && !(await confirmDialog({ title: "Delete this bill?", message: "It hasn’t been paid, so nothing changes in company funds.", confirmLabel: "Delete", danger: true }))) return;
+                const r = await api("/api/bills/" + bill.id + "/" + b.dataset.bl, {});
+                if (r.user) { state.me = r.user; renderChrome(); }
+                toast(b.dataset.bl === "pay" ? "Bill paid." : "Bill deleted.");
+                render();
+            } catch (err) { toast(err.message); }
+        });
+        draw();
+    }
+
+    function openBillForm(d, b) {
+        const v = b || { supplier: "", reference: "", amount: "", dueDate: isoDay(new Date()), category: "Other", repeat: "none", note: "" };
+        const m = openModal(
+            '<h2 class="modal-title">' + (b ? "Edit bill" : "Add a bill") + '</h2><form id="bf-form" novalidate>' +
+            '<div class="grid-2"><div><label for="bf-sup">Supplier</label><input type="text" id="bf-sup" maxlength="120" value="' + esc(v.supplier) + '" placeholder="e.g. Hetzner"></div>' +
+            '<div><label for="bf-ref">Reference <span class="muted small">(optional)</span></label><input type="text" id="bf-ref" maxlength="80" value="' + esc(v.reference) + '"></div></div>' +
+            '<div class="grid-2"><div><label for="bf-amt">Amount</label><div class="money-input"><span>£</span><input type="text" id="bf-amt" inputmode="decimal" value="' + esc(v.amount) + '"></div></div>' +
+            '<div><label for="bf-due">Due date</label><input type="date" id="bf-due" value="' + esc(v.dueDate) + '"></div></div>' +
+            '<div class="grid-2"><div><label for="bf-cat">Category</label><select id="bf-cat">' + d.categories.map(function (c) { return "<option" + (c === v.category ? " selected" : "") + ">" + esc(c) + "</option>"; }).join("") + "</select></div>" +
+            '<div><label for="bf-rep">Repeats</label><select id="bf-rep">' + Object.keys(d.repeats).map(function (k) { return '<option value="' + k + '"' + (k === v.repeat ? " selected" : "") + ">" + esc(d.repeats[k]) + "</option>"; }).join("") + "</select></div></div>" +
+            '<label for="bf-note">Note <span class="muted small">(optional)</span></label><input type="text" id="bf-note" maxlength="500" value="' + esc(v.note || "") + '">' +
+            '<div class="form-error" id="bf-error" hidden></div>' +
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">Save</button></div></form>'
+        );
+        $("#bf-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try {
+                await api(b ? "/api/bills/" + b.id : "/api/bills", { supplier: $("#bf-sup", m.el).value, reference: $("#bf-ref", m.el).value, amount: $("#bf-amt", m.el).value, dueDate: $("#bf-due", m.el).value, category: $("#bf-cat", m.el).value, repeat: $("#bf-rep", m.el).value, note: $("#bf-note", m.el).value });
+                closeModal();
+                toast("Bill saved.");
+                render();
+            } catch (err) { formError($("#bf-error", m.el), err.message); }
+        });
     }
 
     start();

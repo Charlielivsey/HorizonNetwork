@@ -20,6 +20,7 @@ const calendar = require("./calendar");
 const helpdesk = require("./helpdesk");
 const uptime = require("./uptime");
 const onboarding = require("./onboarding");
+const bills = require("./bills");
 
 let ctx;
 function init(helpers) {
@@ -90,6 +91,129 @@ async function handle(req, res, pathname, session) {
       } else {
         expenses.cancel(c, me);
         logEvent(req, session, "expense-withdrawn", { target: who, detail: `£${c.amount.toFixed(2)} – ${c.description}` });
+      }
+      return sendJson(res, 200, { ok: true, user: meResponse(session) }), true;
+    }
+  }
+
+  // ----- Mileage: what a journey would pay -----
+  if (pathname === "/api/expenses/mileage" && method === "GET") {
+    const q = query(req);
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(q.get("date") || "") ? q.get("date") : new Date().toISOString().slice(0, 10);
+    const miles = Math.max(0, Math.min(2000, Number(q.get("miles")) || 0));
+    return sendJson(res, 200, { ...expenses.mileageAmount(me.id, date, miles), rates: expenses.MILEAGE }), true;
+  }
+
+  // ----- Payroll: approval, pay history, salary bands, bonuses and commission -----
+  if (pathname.startsWith("/api/payroll/")) {
+    if ((m = /^\/api\/payroll\/history\/([a-f0-9]{16})$/.exec(pathname)) && method === "GET") {
+      needPay();
+      return sendJson(res, 200, { ...payslips.payHistoryView(m[1]), extras: payslips.extrasView(m[1]) }), true;
+    }
+    if ((m = /^\/api\/payroll\/extras\/([a-f0-9]{16})(?:\/([a-f0-9]{16})\/delete)?$/.exec(pathname)) && method === "POST") {
+      needPay();
+      const p = store.getPerson(m[1]);
+      if (!p) throw httpError(404, "Employee not found.");
+      if (m[2]) {
+        payslips.deleteExtra(p.id, m[2]);
+        logEvent(req, session, "pay-extra-deleted", { target: p.displayName });
+      } else {
+        const x = payslips.addExtra(p.id, await readJsonBody(req), me);
+        logEvent(req, session, x.kind === "bonus" ? "bonus-added" : "commission-added", { target: p.displayName, detail: `£${x.amount.toFixed(2)} ${x.label}` });
+      }
+      return sendJson(res, 200, { extras: payslips.extrasView(p.id) }), true;
+    }
+    if (pathname === "/api/payroll/bands") {
+      needPay();
+      if (method === "POST") {
+        const body = await readJsonBody(req);
+        if (body.delete) payslips.deleteBand(body.delete);
+        else payslips.saveBand(body);
+        logEvent(req, session, "salary-band-changed", { target: body.jobTitle || undefined });
+      }
+      return sendJson(res, 200, { bands: payslips.bands() }), true;
+    }
+    if (pathname === "/api/payroll/settings" && method === "POST") {
+      needPay();
+      const body = await readJsonBody(req);
+      payslips.setApprovalRequired(!!body.requireApproval);
+      logEvent(req, session, "payroll-settings-changed", { detail: body.requireApproval ? "Second approval required" : "Second approval not required" });
+      return sendJson(res, 200, { requireApproval: payslips.approvalRequired() }), true;
+    }
+    if ((m = /^\/api\/payroll\/payslips\/([a-f0-9]{16})\/(approve|unapprove)$/.exec(pathname)) && method === "POST") {
+      needPay();
+      const slip = payslips.getPayslip(m[1]);
+      if (!slip) throw httpError(404, "Payslip not found.");
+      if (m[2] === "approve") payslips.approve(slip, me); else payslips.unapprove(slip);
+      logEvent(req, session, "payslip-" + m[2] + "d", { target: (store.getPerson(slip.personId) || {}).displayName, detail: payslips.periodLabel(slip.period) });
+      return sendJson(res, 200, { ok: true }), true;
+    }
+    if (pathname === "/api/payroll/approve-all" && method === "POST") {
+      needPay();
+      const { period } = await readJsonBody(req);
+      let n = 0, skipped = 0;
+      for (const sv of payslips.forPeriod(period)) {
+        const slip = payslips.getPayslip(sv.id);
+        if (slip.status !== "draft" || slip.approvedBy) continue;
+        try { payslips.approve(slip, me); n++; } catch (err) { if (!(err instanceof store.ValidationError)) throw err; skipped++; }
+      }
+      if (n) logEvent(req, session, "payroll-approved", { detail: `${payslips.periodLabel(period)}: ${n} payslip${n === 1 ? "" : "s"}` });
+      return sendJson(res, 200, { approved: n, skipped }), true;
+    }
+  }
+
+  // ----- Cash-flow forecast: the next 6 months -----
+  if (pathname === "/api/funds/forecast" && method === "GET") {
+    needPay();
+    const b = funds.balances();
+    const now = new Date();
+    const thisMonth = now.toISOString().slice(0, 7);
+    const avgOther = funds.averageMonthlyOther(3);
+    const avgIn = funds.averageMonthlyIn(thisMonth, 3);
+    const unpaidInvoices = invoices.list().filter((i) => i.status === "sent");
+    const unpaidBills = bills.list().filter((x) => x.status === "unpaid");
+    let balance = Math.round((b.main + b.payroll) * 100) / 100;
+    const months = [];
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + i, 1));
+      const period = d.toISOString().slice(0, 7);
+      const inMonth = (date) => (i === 0 ? date.slice(0, 7) <= period : date.slice(0, 7) === period);
+      const invoicesIn = unpaidInvoices.filter((x) => inMonth(x.dueDate)).reduce((n, x) => n + x.total, 0);
+      // Bills: unpaid ones due this month, plus repeats of repeating bills projected forward.
+      let billsOut = unpaidBills.filter((x) => inMonth(x.dueDate)).reduce((n, x) => n + x.amount, 0);
+      for (const x of unpaidBills) {
+        if (x.repeat === "none") continue;
+        const step = { monthly: 1, quarterly: 3, yearly: 12 }[x.repeat];
+        for (let due = bills.addMonths(x.dueDate, step), k = 0; due.slice(0, 7) <= period && k < 24; due = bills.addMonths(due, step), k++) if (due.slice(0, 7) === period) billsOut += x.amount;
+      }
+      const payroll = payslips.remainingForPeriod(period).cost;
+      const start = balance;
+      const other = i === 0 ? Math.round(avgOther * (1 - now.getUTCDate() / 31) * 100) / 100 : avgOther;
+      balance = Math.round((start + invoicesIn - billsOut - payroll - other) * 100) / 100;
+      months.push({ period, label: payslips.periodLabel(period), start, invoicesIn: Math.round(invoicesIn * 100) / 100, billsOut: Math.round(billsOut * 100) / 100, payroll, other, end: balance });
+    }
+    return sendJson(res, 200, { months, averageIn: avgIn, averageOther: avgOther, lowest: months.reduce((lo, x) => (x.end < lo.end ? x : lo), months[0]) }), true;
+  }
+
+  // ----- Supplier bills -----
+  if (pathname.startsWith("/api/bills")) {
+    needPay();
+    if (method === "GET" && pathname === "/api/bills") {
+      return sendJson(res, 200, { bills: bills.list(), summary: bills.summary(), repeats: bills.REPEATS, categories: funds.categories().filter((c) => c !== "Payroll") }), true;
+    }
+    if (method === "POST" && pathname === "/api/bills") {
+      const x = bills.create(await readJsonBody(req), me);
+      logEvent(req, session, "bill-added", { target: x.supplier, detail: `£${x.amount.toFixed(2)} due ${x.dueDate}` });
+      return sendJson(res, 201, { ok: true }), true;
+    }
+    if ((m = /^\/api\/bills\/([a-f0-9]{16})(?:\/(pay|delete))?$/.exec(pathname)) && method === "POST") {
+      const x = bills.get(m[1]);
+      if (!x) throw httpError(404, "Bill not found.");
+      if (!m[2]) { bills.update(x, await readJsonBody(req)); logEvent(req, session, "bill-updated", { target: x.supplier }); }
+      else if (m[2] === "delete") { bills.remove(x); logEvent(req, session, "bill-deleted", { target: x.supplier }); }
+      else {
+        const next = bills.pay(x, me);
+        logEvent(req, session, "bill-paid", { target: x.supplier, detail: `£${x.amount.toFixed(2)}` + (next ? `; next one due ${next.dueDate}` : "") });
       }
       return sendJson(res, 200, { ok: true, user: meResponse(session) }), true;
     }

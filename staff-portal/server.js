@@ -29,6 +29,7 @@ const kudos = require("./lib/kudos");
 const ideas = require("./lib/ideas");
 const extraRoutes = require("./lib/routes-extra");
 const resume = require("./lib/resume");
+const bills = require("./lib/bills");
 
 const PORT = parseInt(process.env.PORT || "3200", 10);
 const HOST = process.env.HOST || "127.0.0.1";
@@ -48,7 +49,7 @@ const APP_ROUTES = new Set([
   "/home", "/directory", "/employees", "/settings", "/system", "/announcements", "/documents",
   "/calendar", "/polls", "/onboarding", "/roles", "/about", "/signature",
   "/leave", "/rotas", "/payslips", "/payroll", "/funds", "/helpdesk", "/reviews", "/staff-files", "/status",
-  "/expenses", "/invoices", "/notifications", "/training", "/cases", "/jobs", "/kudos", "/ideas", "/team", "/reports",
+  "/expenses", "/invoices", "/notifications", "/training", "/cases", "/jobs", "/kudos", "/ideas", "/team", "/reports", "/bills",
 ]);
 const SYSTEM_UNLOCK_MS = 15 * 60 * 1000; // System Admin stays unlocked for 15 minutes of inactivity
 const MAX_PIN_ATTEMPTS = 5;
@@ -91,6 +92,7 @@ expenses.init(DATA_DIR);
 invoices.init(DATA_DIR);
 notifications.init(DATA_DIR);
 resume.init(DATA_DIR);
+bills.init(DATA_DIR);
 training.init(DATA_DIR);
 cases.init(DATA_DIR);
 recruitment.init(DATA_DIR);
@@ -120,6 +122,7 @@ function reloadAll() {
   recruitment.init(DATA_DIR);
   kudos.init(DATA_DIR);
   ideas.init(DATA_DIR);
+  bills.init(DATA_DIR);
 }
 
 backup.scheduleNightly((err, name) => {
@@ -611,6 +614,7 @@ function meResponse(session) {
     user.payrollOverdrawn = b.payroll < 0 || b.main < 0;
     user.budgetWarnings = funds.budgetWarnings().length;
     user.invoicesOverdue = invoices.summary().overdueCount;
+    user.billsDue = bills.dueCount();
   }
   if (session.data.impersonatorId) {
     const by = store.getPerson(session.data.impersonatorId);
@@ -1806,6 +1810,9 @@ async function routeApi(req, res, pathname, session) {
         employer: payslips.EMPLOYER,
         standardSalary: payslips.STANDARD_MONTHLY_SALARY,
         funds: fundsSummary(),
+        requireApproval: payslips.approvalRequired(),
+        payrollPeople: store.employees().filter((p) => store.can(p, payslips.MANAGE)).length,
+        meId: me.id,
       });
     }
     if ((m = /^\/api\/payroll\/details\/([a-f0-9]{16})$/.exec(pathname))) {
@@ -1813,7 +1820,7 @@ async function routeApi(req, res, pathname, session) {
       if (!p || p.system) throw httpError(404, "Person not found.");
       if (method === "GET") return sendJson(res, 200, { details: payslips.payDetails(p.id), person: { id: p.id, displayName: p.displayName, company: p.company } });
       if (method === "POST") {
-        payslips.savePayDetails(p.id, await readJsonBody(req));
+        payslips.savePayDetails(p.id, await readJsonBody(req), me);
         logEvent(req, session, "pay-details-updated", { target: p.displayName });
         return sendJson(res, 200, { ok: true });
       }
@@ -1882,14 +1889,16 @@ async function routeApi(req, res, pathname, session) {
     if (method === "POST" && pathname === "/api/payroll/issue-all") {
       const { period } = await readJsonBody(req);
       let n = 0;
+      let waiting = 0;
       for (const s of payslips.forPeriod(period)) {
         if (s.status !== "draft") continue;
+        if (payslips.approvalRequired() && !payslips.getPayslip(s.id).approvedBy) { waiting++; continue; }
         payslips.setIssued(payslips.getPayslip(s.id), true, me);
         notifications.notify([s.personId], { type: "payslip", title: `Your payslip for ${payslips.periodLabel(period)} is ready`, link: "/payslips" }, me);
         n++;
       }
       if (n) logEvent(req, session, "payslip-issued", { detail: `${payslips.periodLabel(period)}: ${n} payslip${n === 1 ? "" : "s"}` });
-      return sendJson(res, 200, { issued: n });
+      return sendJson(res, 200, { issued: n, waiting });
     }
   }
 
