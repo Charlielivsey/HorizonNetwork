@@ -35,7 +35,11 @@ Before you save:
 
 - **Remove anything old for `@` and `www`.** Delete any other **A**, **AAAA** or **CNAME** records for `@` or `www`, such as a parking page or an old website builder. If an old AAAA (IPv6) record is left behind, the HTTPS certificate can fail.
 - **Don't touch email records.** Leave the **MX** and **TXT** records (Google Workspace, SPF, DKIM, DMARC) and the `staff` record exactly as they are. Changing the A records doesn't affect email.
-- **Cloudflare:** set both records to **DNS only** (grey cloud) for the first install, so the certificate can be issued.
+- **Cloudflare:** both proxied (orange cloud) and **DNS only** (grey cloud) work.
+  - **SSL mode.** With the orange cloud, set SSL/TLS to **Full** in Cloudflare. Once the installer says the Let's Encrypt certificate is in place, you can switch to **Full (strict)**.
+  - **Flexible mode** also works, but traffic between Cloudflare and the server isn't encrypted.
+  - **Until Let's Encrypt is issued,** the server uses a temporary self-signed certificate, so Cloudflare still reaches the website and not the staff portal.
+  - **Proxied checks.** With the orange cloud, DNS lookups return Cloudflare's addresses rather than the server's. The installer and `check.sh` recognise these as correct.
 
 DNS changes usually take a few minutes, but can take a few hours. To check, run this on the VPS:
 
@@ -107,5 +111,8 @@ cd /root/HorizonNetwork && git pull && sudo bash staff-portal/install.sh
 | `public/assets/site.css`, `site.js` | Styles, and the menu, Careers and contact form code. |
 | `public/assets/brand/` | Logos, copied from the staff portal's brand library. |
 | `public/assets/og-image.png` | The picture shown when someone shares the link. |
-| `nginx-hngroup.conf` | The nginx site, including security headers and the `/api/public/` pass-through. |
+| `nginx/hngroup-website.conf` | The nginx servers for hngroup.org.uk and www (HTTP, HTTPS, redirects). |
+| `nginx/hngroup-site.conf` | The site itself: files, security headers and the `/api/public/` pass-through. |
+| `nginx/hngroup-cloudflare.conf` | Gets visitors' real IP addresses from Cloudflare (used for spam limits). |
+| `check.sh` | Checks what the domain really serves and says what to fix. |
 | `install.sh` | The installer described above. |

@@ -8,9 +8,10 @@
 # updates the portal and the website together.
 #
 # The site is served by nginx from /var/www/hngroup for hngroup.org.uk (www.hngroup.org.uk
-# redirects to it). Open roles and the contact form come from the staff portal. When DNS points
-# at this server, a free Let's Encrypt HTTPS certificate is set up (the email is only needed if
-# this server has never had a certificate before).
+# redirects to it). Open roles and the contact form come from the staff portal. It works with the
+# domain pointing straight at this server or through Cloudflare's proxy. HTTPS uses a free Let's
+# Encrypt certificate, with a temporary self-signed one until that's issued (the email is only
+# needed if this server has never had a Let's Encrypt certificate before).
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -59,6 +60,26 @@ else
     warn "and the contact form need it: sudo bash staff-portal/install.sh"
 fi
 
+# ---- HTTPS certificate ----
+# nginx always reads the certificate from /etc/nginx/hngroup-ssl. That points at the Let's Encrypt
+# certificate once there is one, and at a temporary self-signed one until then, so HTTPS (and
+# Cloudflare, which connects over HTTPS) always gets the website rather than another site.
+SSL_DIR="/etc/nginx/hngroup-ssl"
+LE_DIR="/etc/letsencrypt/live/$DOMAIN"
+mkdir -p "$SSL_DIR" /var/www/letsencrypt
+use_cert() { ln -sfn "$1" "$SSL_DIR/fullchain.pem"; ln -sfn "$2" "$SSL_DIR/privkey.pem"; }
+if [ -f "$LE_DIR/fullchain.pem" ]; then
+    use_cert "$LE_DIR/fullchain.pem" "$LE_DIR/privkey.pem"
+else
+    if [ ! -f "$SSL_DIR/selfsigned.crt" ]; then
+        openssl req -x509 -nodes -newkey rsa:2048 -days 3650 -subj "/CN=$DOMAIN" \
+            -addext "subjectAltName=DNS:$DOMAIN,DNS:$WWW" \
+            -keyout "$SSL_DIR/selfsigned.key" -out "$SSL_DIR/selfsigned.crt" >/dev/null 2>&1
+        chmod 600 "$SSL_DIR/selfsigned.key"
+    fi
+    use_cert "$SSL_DIR/selfsigned.crt" "$SSL_DIR/selfsigned.key"
+fi
+
 # ---- nginx: catch-all for HTTPS ----
 # Without this, nginx answers HTTPS requests for any name it doesn't know (for example the main
 # domain before its certificate exists) with the first HTTPS site it has, which is the staff
@@ -91,10 +112,10 @@ fi
 # claims hngroup.org.uk, this one wins.
 NGINX_SITE="/etc/nginx/sites-available/00-hngroup-website"
 rm -f /etc/nginx/sites-enabled/hngroup-website
-if [ -f /etc/nginx/sites-available/hngroup-website ] && [ ! -f "$NGINX_SITE" ]; then
-    mv /etc/nginx/sites-available/hngroup-website "$NGINX_SITE.old"
-fi
-cp "$SCRIPT_DIR/nginx-hngroup.conf" "$NGINX_SITE"
+cp "$SCRIPT_DIR/nginx/hngroup-website.conf" "$NGINX_SITE"
+mkdir -p /etc/nginx/snippets
+cp "$SCRIPT_DIR/nginx/hngroup-site.conf" /etc/nginx/snippets/hngroup-site.conf
+cp "$SCRIPT_DIR/nginx/hngroup-cloudflare.conf" /etc/nginx/snippets/hngroup-cloudflare.conf
 ln -sf "$NGINX_SITE" /etc/nginx/sites-enabled/00-hngroup-website
 
 # Any other nginx config that claims hngroup.org.uk or www (for example an older setup that sent
@@ -139,35 +160,54 @@ else
     if [ -d "${BACKUP:-/nonexistent}" ]; then warn "Backups of anything changed are in $BACKUP"; fi
     exit 1
 fi
-nginx -t 2>&1 | grep -i "conflicting server name" | sed 's/^/      /' || true
 
 if command -v ufw &>/dev/null && ufw status | grep -q "Status: active"; then
     ufw allow 'Nginx Full' >/dev/null
     ok "Firewall: opened ports 80 and 443"
 fi
 
-# ---- HTTPS ----
-SERVER_IP="$(curl -4 -fsS https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}')"
-dns_ip() { getent ahostsv4 "$1" 2>/dev/null | awk 'NR==1{print $1}'; }
-HTTPS_OK=0
-# Only ask for names that already point here, so a missing www record doesn't block the main one.
+# ---- Let's Encrypt ----
+# Uses the "webroot" method: Let's Encrypt fetches a file from /.well-known/acme-challenge/,
+# which nginx answers on HTTP and HTTPS. That works whether the domain points straight here or
+# goes through Cloudflare's proxy.
+SERVER_IP="$(curl -4 -fsS --max-time 5 https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}')"
+# Is this address Cloudflare's? (their proxy sits in front of the domain when the cloud is orange)
+is_cloudflare() {
+    python3 -c "import ipaddress,sys
+nets=[ipaddress.ip_network(n) for n in '173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32'.split()]
+sys.exit(0 if any(ipaddress.ip_address(sys.argv[1]) in n for n in nets) else 1)" "$1" 2>/dev/null
+}
+# 0 = points here, 1 = through Cloudflare, 2 = somewhere else / nothing
+where() {
+    local ip; ip="$(getent ahostsv4 "$1" 2>/dev/null | awk 'NR==1{print $1}')"
+    if [ "$ip" = "$SERVER_IP" ]; then return 0; elif [ -n "$ip" ] && is_cloudflare "$ip"; then return 1; else return 2; fi
+}
 NAMES=()
 for n in "$DOMAIN" "$WWW"; do
-    if [ "$(dns_ip "$n")" = "$SERVER_IP" ]; then NAMES+=(-d "$n"); else warn "$n points to '$(dns_ip "$n")', not this server ($SERVER_IP)."; fi
+    set +e; where "$n"; w=$?; set -e
+    case $w in
+        0) NAMES+=(-d "$n") ;;
+        1) NAMES+=(-d "$n"); ok "$n goes through Cloudflare's proxy" ;;
+        *) warn "$n doesn't point at this server ($SERVER_IP) or Cloudflare yet, so it's left off the certificate." ;;
+    esac
 done
-if [ "$(dns_ip "$DOMAIN")" != "$SERVER_IP" ]; then
-    warn "Point $DOMAIN at $SERVER_IP (see hngroup-site/README.md), wait for DNS to update, then run the installer again."
+HTTPS_OK=0
+if [ "${NAMES[1]:-}" != "$DOMAIN" ]; then
+    warn "Point $DOMAIN at $SERVER_IP (see hngroup-site/README.md), then run the installer again."
+    warn "Until then HTTPS uses a temporary self-signed certificate."
 elif [ -z "$EMAIL" ] && [ ! -d /etc/letsencrypt/accounts ]; then
-    warn "This server has never had a certificate, so an email is needed once:"
+    warn "This server has never had a Let's Encrypt certificate, so an email is needed once:"
     warn "  sudo bash staff-portal/install.sh staff.hngroup.org.uk you@hngroup.org.uk"
+elif certbot certonly --webroot -w /var/www/letsencrypt "${NAMES[@]}" --cert-name "$DOMAIN" \
+        --non-interactive --agree-tos ${EMAIL:+-m "$EMAIL"} --keep-until-expiring --expand \
+        --deploy-hook "systemctl reload nginx"; then
+    use_cert "$LE_DIR/fullchain.pem" "$LE_DIR/privkey.pem"
+    nginx -t 2>/dev/null && (systemctl reload nginx || systemctl restart nginx)
+    HTTPS_OK=1
+    ok "Let's Encrypt certificate in place for $DOMAIN (renews automatically)"
 else
-    # --expand adds www to the certificate later if its DNS record is added after the first install.
-    if certbot --nginx "${NAMES[@]}" --cert-name "$DOMAIN" --non-interactive --agree-tos ${EMAIL:+-m "$EMAIL"} --redirect --keep-until-expiring --expand; then
-        HTTPS_OK=1
-        ok "HTTPS certificate in place for hngroup.org.uk (auto-renews)"
-    else
-        warn "certbot failed — see above. The site is still reachable over HTTP."
-    fi
+    warn "Let's Encrypt couldn't issue the certificate — see above. HTTPS keeps using the temporary"
+    warn "self-signed certificate, which works behind Cloudflare in 'Full' SSL mode (not 'Full (strict)')."
 fi
 
 echo ""
