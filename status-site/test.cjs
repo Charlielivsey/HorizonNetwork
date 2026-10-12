@@ -59,6 +59,24 @@ test('protected management, real checks, incidents and persistent history', asyn
     for (const route of ['/', '/admin', '/app.js', '/style.css']) {
       const r = await fetch(base + route); assert.equal(r.status, 200); assert.ok(r.headers.get('content-security-policy'));
     }
+    for (const [route, type] of [
+      ['/assets/favicon.svg', 'image/svg+xml'],
+      ['/assets/brand/hn-group-wordmark.svg', 'image/svg+xml'],
+      ['/assets/brand/hn-group-wordmark-white.svg', 'image/svg+xml'],
+      ['/assets/fonts/plus-jakarta-sans.woff2', 'font/woff2']
+    ]) {
+      const r = await fetch(base + route);
+      assert.equal(r.status, 200);
+      assert.equal(r.headers.get('content-type'), type);
+      const expected = fs.readFileSync(path.join(__dirname, 'public', route));
+      assert.deepEqual(Buffer.from(await r.arrayBuffer()), expected);
+    }
+    for (const route of ['/', '/admin']) {
+      const html = await (await fetch(base + route)).text();
+      assert.match(html, /rel="icon" href="\/assets\/favicon\.svg"/);
+      assert.match(html, /hn-group-wordmark-white\.svg/);
+    }
+    assert.equal((await request('/assets/unlisted.svg', null, false)).code, 404);
     assert.equal((await request('/missing', null, false)).code, 404);
   } finally {
     await new Promise(r => setTimeout(r, 30));

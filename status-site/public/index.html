@@ -1,1 +1,48 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Live service status and incident updates from HN Group."><title>Service status · HN Group</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head><body><header><a class="brand" href="/">HN<span>GROUP</span><small>SERVICE STATUS</small></a><a href="https://hngroup.org.uk">Visit HN Group ↗</a></header><main><div class="eyebrow">KEEPING YOU CONNECTED</div><h1>Service status<span class="accent">.</span></h1><p class="intro">Live availability and the latest updates across HN Group.</p><section id="summary" class="summary" aria-live="polite">Connecting to status service…</section><div class="section-head"><h2>Our services</h2><span id="checked">Checks every 60 seconds</span></div><div id="services"></div><p class="legend">30-day check history <span>🟩 Available &nbsp; 🟨 Some failed checks &nbsp; 🟥 Unavailable &nbsp; ▫ No data</span></p><div class="section-head"><h2>Incident updates</h2><span>Latest first</span></div><div id="incidents"></div><p class="note">Availability is measured from this server. An incident or maintenance notice may affect a service even when its website is reachable. If this VPS is offline, this page may also be unavailable.</p></main><footer><span>HN Group · Status you can count on.</span><a href="/admin">Manage status</a></footer></body></html>
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Live service status and incident updates from HN Group.">
+  <meta name="theme-color" content="#5514B4">
+  <title>Service status · HN Group</title>
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/assets/fonts/plus-jakarta-sans.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="/" aria-label="HN Group service status">
+        <img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="" width="456" height="159">
+        <img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="456" height="159">
+        <span class="brand-sub">Service status</span>
+      </a>
+      <a class="header-link" href="https://hngroup.org.uk">Visit HN Group <span aria-hidden="true">↗</span></a>
+    </div>
+  </header>
+  <main id="main">
+    <section class="hero" aria-labelledby="page-title">
+      <div>
+        <p class="eyebrow">CONNECTED. INFORMED. UP TO DATE.</p>
+        <h1 id="page-title">Service status<span class="accent">.</span></h1>
+        <p class="intro">Live availability and the latest updates across HN Group.</p>
+      </div>
+      <div class="steps" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+    </section>
+    <section id="summary" class="summary" aria-live="polite">Connecting to status service…</section>
+    <div class="section-head"><h2>Our services</h2><span id="checked">Checks every 60 seconds</span></div>
+    <div id="services"></div>
+    <div class="legend"><span>30-day check history</span><span class="legend-keys"><span><i class="legend-dot operational" aria-hidden="true"></i>Available</span><span><i class="legend-dot degraded" aria-hidden="true"></i>Some failed checks</span><span><i class="legend-dot outage" aria-hidden="true"></i>Unavailable</span><span><i class="legend-dot unknown" aria-hidden="true"></i>No data</span></span></div>
+    <div class="section-head"><h2>Incident updates</h2><span>Latest first</span></div>
+    <div id="incidents"></div>
+    <p class="note">Availability is measured from this server. An incident or maintenance notice may affect a service even when its website is reachable. If this VPS is offline, this page may also be unavailable.</p>
+  </main>
+  <footer class="site-footer">
+    <div class="stripe" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+    <div class="footer-inner"><div><img src="/assets/brand/hn-group-wordmark-white.svg" alt="HN Group" width="456" height="159"><p>Keeping you connected across the group.</p></div><nav aria-label="Footer"><a href="https://hngroup.org.uk">HN Group</a><a href="/admin">Manage status</a></nav></div>
+  </footer>
+</body>
+</html>

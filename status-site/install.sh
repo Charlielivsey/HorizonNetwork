@@ -39,7 +39,7 @@ done
 mkdir -p "$APP_DIR/public" "$DATA_DIR" "$SSL_DIR" "$CHALLENGE_DIR" /etc/nginx/sites-available /etc/nginx/sites-enabled
 chmod 700 "$DATA_DIR"
 cp "$SCRIPT_DIR/server.js" "$APP_DIR/server.js"
-cp "$SCRIPT_DIR/public/"* "$APP_DIR/public/"
+cp -r "$SCRIPT_DIR/public/." "$APP_DIR/public/"
 PORT=3300 HOST=127.0.0.1 DATA_DIR="$DATA_DIR" pm2 startOrRestart "$SCRIPT_DIR/ecosystem.config.cjs" --update-env
 healthy=0
 for attempt in {1..15}; do

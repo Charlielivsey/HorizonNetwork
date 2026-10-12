@@ -20,6 +20,10 @@ sudo cat /var/lib/hn-status/admin-token
 
 There is no shared default password. The browser holds the key only in memory; refresh or lock to sign out. Never send it to anyone or enter it over untrusted HTTPS. To rotate it: replace `/var/lib/hn-status/admin-token` with a new random secret (`openssl rand -hex 32`), keep permissions at 600, and restart only `hn-status`.
 
+## Branding
+
+Matches the public website and staff portal: locally hosted Plus Jakarta Sans, HN purple, rounded cards, soft colour glows, the stepped stripe, and automatic light/dark palettes. Original HN Group wordmarks come from the user-supplied logo pack in `brand/logos/`; the browser tab uses the same HN favicon as the public website. The admin page shares this styling. See `brand/README.md` and the root `AGENTS.md` for future branding guidance. All assets are served locally and copied by the isolated status installer.
+
 ## Use
 
 - The HN Group website and staff portal are initially added as monitors. Add, edit or remove services in admin. Check URLs stay private; use public HTTP(S) endpoints without credentials. The server checks each URL every 60 seconds with a 10-second timeout. HTTP 2xx after redirects counts as available; failures count as unavailable. This measures HTTP reachability, not every feature or login flow.

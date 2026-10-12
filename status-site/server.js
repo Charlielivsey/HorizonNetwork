@@ -114,9 +114,9 @@ const server = http.createServer(async (req, res) => {
       } else return send(404, { error: 'Not found' });
       save(); send(200, { ok: true }); void checkAll(); return;
     }
-    const assets = { '/': 'index.html', '/admin': 'admin.html', '/app.js': 'app.js', '/style.css': 'style.css' };
+    const assets = { '/': 'index.html', '/admin': 'admin.html', '/app.js': 'app.js', '/style.css': 'style.css', '/assets/favicon.svg': 'assets/favicon.svg', '/assets/brand/hn-group-wordmark.svg': 'assets/brand/hn-group-wordmark.svg', '/assets/brand/hn-group-wordmark-white.svg': 'assets/brand/hn-group-wordmark-white.svg', '/assets/fonts/plus-jakarta-sans.woff2': 'assets/fonts/plus-jakarta-sans.woff2' };
     if (!assets[route] || req.method !== 'GET') return send(404, { error: 'Not found' });
-    res.writeHead(200, { 'Content-Type': route.endsWith('.js') ? 'text/javascript' : route.endsWith('.css') ? 'text/css' : 'text/html', 'Cache-Control': 'no-cache' });
+    res.writeHead(200, { 'Content-Type': route.endsWith('.js') ? 'text/javascript' : route.endsWith('.css') ? 'text/css' : route.endsWith('.svg') ? 'image/svg+xml' : route.endsWith('.woff2') ? 'font/woff2' : 'text/html', 'Cache-Control': 'no-cache' });
     res.end(fs.readFileSync(path.join(__dirname, 'public', assets[route])));
   } catch (e) { send(400, { error: e.message }); }
 });
