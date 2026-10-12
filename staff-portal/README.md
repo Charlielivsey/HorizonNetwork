@@ -279,6 +279,7 @@ The installer:
 5. Adds an nginx site for the domain. The existing Horizon Network sites are left alone.
 6. Opens ports 80 and 443 if `ufw` is active.
 7. Gets a free HTTPS certificate that renews automatically.
+8. Installs or updates the public website for `hngroup.org.uk`, with its own HTTPS certificate (see `../hngroup-site/README.md`). Set `SKIP_WEBSITE=1` to leave it out.
 
 ## Updating
 
@@ -286,7 +287,7 @@ The installer:
 cd /root/HorizonNetwork && git pull && sudo bash staff-portal/install.sh
 ```
 
-Re-running the installer is safe. Staff records, accounts, photos and the HTTPS certificate are all kept.
+This one command updates both the staff portal and the public website (hngroup.org.uk), including their HTTPS certificates. Re-running the installer is safe. Staff records, accounts, photos and the HTTPS certificate are all kept.
 
 When you update from an earlier version, existing logins are carried over automatically. The old `admin` login is renamed to `admin@hngroup.org.uk` and keeps its password.
 

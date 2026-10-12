@@ -3,10 +3,14 @@
 #
 #   sudo bash hngroup-site/install.sh [email-for-ssl]
 #
+# You don't normally need to run this yourself: staff-portal/install.sh runs it too, so
+#   cd /root/HorizonNetwork && git pull && sudo bash staff-portal/install.sh
+# updates the portal and the website together.
+#
 # The site is served by nginx from /var/www/hngroup for hngroup.org.uk (www.hngroup.org.uk
-# redirects to it). Open roles and the contact form come from the staff portal, so install that
-# first (staff-portal/install.sh). If an email is given and DNS already points at this server,
-# free Let's Encrypt HTTPS certificates are set up for both names.
+# redirects to it). Open roles and the contact form come from the staff portal. When DNS points
+# at this server, a free Let's Encrypt HTTPS certificate is set up (the email is only needed if
+# this server has never had a certificate before).
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -55,7 +59,34 @@ else
     warn "and the contact form need it: sudo bash staff-portal/install.sh"
 fi
 
-# ---- nginx ----
+# ---- nginx: catch-all for HTTPS ----
+# Without this, nginx answers HTTPS requests for any name it doesn't know (for example the main
+# domain before its certificate exists) with the first HTTPS site it has, which is the staff
+# portal. This closes those connections instead.
+CATCHALL="/etc/nginx/sites-available/hn-catch-all"
+if [ ! -f /etc/nginx/hn-catch-all.crt ]; then
+    openssl req -x509 -nodes -newkey rsa:2048 -days 3650 -subj "/CN=invalid" \
+        -keyout /etc/nginx/hn-catch-all.key -out /etc/nginx/hn-catch-all.crt >/dev/null 2>&1
+    chmod 600 /etc/nginx/hn-catch-all.key
+fi
+cat > "$CATCHALL" <<'NGINX'
+# Requests for names this server doesn't host. Written by hngroup-site/install.sh.
+server {
+    listen 443 ssl default_server;
+    listen [::]:443 ssl default_server;
+    server_name _;
+    ssl_certificate /etc/nginx/hn-catch-all.crt;
+    ssl_certificate_key /etc/nginx/hn-catch-all.key;
+    return 444;
+}
+NGINX
+if grep -Rqs "listen.*443.*default_server" /etc/nginx/sites-enabled/ --exclude=hn-catch-all; then
+    warn "Another nginx site is already the default for HTTPS, so the catch-all was not enabled."
+else
+    ln -sf "$CATCHALL" /etc/nginx/sites-enabled/hn-catch-all
+fi
+
+# ---- nginx: the website ----
 NGINX_SITE="/etc/nginx/sites-available/hngroup-website"
 cp "$SCRIPT_DIR/nginx-hngroup.conf" "$NGINX_SITE"
 ln -sf "$NGINX_SITE" /etc/nginx/sites-enabled/hngroup-website
@@ -78,23 +109,21 @@ fi
 SERVER_IP="$(curl -4 -fsS https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}')"
 dns_ip() { getent ahostsv4 "$1" 2>/dev/null | awk 'NR==1{print $1}'; }
 HTTPS_OK=0
-if [ -d "/etc/letsencrypt/live/$DOMAIN" ]; then
-    # Existing certificate: re-attach it to the freshly copied nginx config.
-    if certbot --nginx -d "$DOMAIN" -d "$WWW" --cert-name "$DOMAIN" --non-interactive --redirect --keep-until-expiring; then
-        HTTPS_OK=1
-        ok "HTTPS certificate re-applied"
-    else
-        warn "certbot failed — see above. The site is still reachable over HTTP."
-    fi
-elif [ -z "$EMAIL" ]; then
-    warn "No email given, so HTTPS was skipped. Re-run with: sudo bash $0 you@hngroup.org.uk"
-elif [ "$(dns_ip "$DOMAIN")" != "$SERVER_IP" ] || [ "$(dns_ip "$WWW")" != "$SERVER_IP" ]; then
-    warn "$DOMAIN resolves to '$(dns_ip "$DOMAIN")' and $WWW to '$(dns_ip "$WWW")', not this server ($SERVER_IP)."
-    warn "Point both at $SERVER_IP (see hngroup-site/README.md), wait for DNS to update, then re-run this script."
+# Only ask for names that already point here, so a missing www record doesn't block the main one.
+NAMES=()
+for n in "$DOMAIN" "$WWW"; do
+    if [ "$(dns_ip "$n")" = "$SERVER_IP" ]; then NAMES+=(-d "$n"); else warn "$n points to '$(dns_ip "$n")', not this server ($SERVER_IP)."; fi
+done
+if [ "$(dns_ip "$DOMAIN")" != "$SERVER_IP" ]; then
+    warn "Point $DOMAIN at $SERVER_IP (see hngroup-site/README.md), wait for DNS to update, then run the installer again."
+elif [ -z "$EMAIL" ] && [ ! -d /etc/letsencrypt/accounts ]; then
+    warn "This server has never had a certificate, so an email is needed once:"
+    warn "  sudo bash staff-portal/install.sh staff.hngroup.org.uk you@hngroup.org.uk"
 else
-    if certbot --nginx -d "$DOMAIN" -d "$WWW" --cert-name "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL" --redirect --keep-until-expiring; then
+    # --expand adds www to the certificate later if its DNS record is added after the first install.
+    if certbot --nginx "${NAMES[@]}" --cert-name "$DOMAIN" --non-interactive --agree-tos ${EMAIL:+-m "$EMAIL"} --redirect --keep-until-expiring --expand; then
         HTTPS_OK=1
-        ok "HTTPS certificate installed (auto-renews)"
+        ok "HTTPS certificate in place for hngroup.org.uk (auto-renews)"
     else
         warn "certbot failed — see above. The site is still reachable over HTTP."
     fi

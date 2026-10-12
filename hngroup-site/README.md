@@ -47,35 +47,40 @@ Both lines should show `217.154.34.205`.
 
 ### 2. Install it on the VPS
 
-As root on the VPS:
+The staff portal's installer installs the website too, so it's the same single command you already use. As root on the VPS:
 
 ```bash
-cd /root/HorizonNetwork && git pull
-sudo bash staff-portal/install.sh                                # updates the portal (Careers and the contact form need it)
-sudo bash hngroup-site/install.sh charlie.livsey@hngroup.org.uk  # the email is only for certificate expiry notices
+cd /root/HorizonNetwork && git pull && sudo bash staff-portal/install.sh
 ```
 
-The website installer:
+The command does all of this:
 
-1. Installs nginx and certbot if they're missing.
-2. Copies `public/` to `/var/www/hngroup`.
-3. Adds an nginx site for `hngroup.org.uk`, with `www.hngroup.org.uk` redirecting to it. The staff portal and the other Horizon Network sites aren't affected.
-4. Gets a free HTTPS certificate covering both names. It renews automatically.
+1. Updates the staff portal.
+2. Copies the website to `/var/www/hngroup`.
+3. Adds an nginx site for `hngroup.org.uk`, with `www.hngroup.org.uk` redirecting to it.
+4. Gets free HTTPS certificates for the portal and the website. They renew automatically.
+   - **No email needed.** It reuses the Let's Encrypt registration the staff portal already has.
+   - **www later.** If the `www` record isn't pointing here yet, the main domain still gets its certificate. Run the command again once `www` is set up and it's added.
+5. Adds a catch-all, so any web address this server doesn't host is refused. Before this, nginx showed the staff portal for any address it didn't recognise, which is why hngroup.org.uk was showing the portal.
 
-If DNS isn't pointing at the VPS yet, the installer says so and skips HTTPS. Run it again once `getent hosts` shows the right address.
+On a brand-new server that has never had a certificate, add your email the first time:
+`sudo bash staff-portal/install.sh staff.hngroup.org.uk you@hngroup.org.uk`.
+
+To update the website on its own, run `sudo bash hngroup-site/install.sh`.
 
 ### 3. Check it
 
-- Open https://hngroup.org.uk. It should load with a padlock, and http:// and www. should both redirect there.
+- Open https://hngroup.org.uk. It should load the website (not the staff portal) with a padlock, and http:// and www. should both redirect there.
+- Open https://staff.hngroup.org.uk. The staff portal should still load as normal.
 - **Careers:** post a test vacancy in the staff portal with **Advertise on the HN Group website** ticked. It should appear under Careers within about two minutes.
 - **Contact form:** send a test message. It should appear in the staff portal under Support → Website enquiries.
 
 ## Updating
 
-After changing anything in `hngroup-site/`:
+The same single command updates the portal and the website:
 
 ```bash
-cd /root/HorizonNetwork && git pull && sudo bash hngroup-site/install.sh
+cd /root/HorizonNetwork && git pull && sudo bash staff-portal/install.sh
 ```
 
 ## Files

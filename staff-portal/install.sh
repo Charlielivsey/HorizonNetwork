@@ -3,8 +3,12 @@
 #
 #   sudo bash staff-portal/install.sh [domain] [email-for-ssl]
 #
-# Defaults: domain = staff.hngroup.org.uk. If an email is given and the domain's
-# DNS already points at this server, a free Let's Encrypt HTTPS certificate is set up.
+# Defaults: domain = staff.hngroup.org.uk. If the domain's DNS points at this server, a free
+# Let's Encrypt HTTPS certificate is set up. The email is only needed the very first time
+# (to register with Let's Encrypt); after that the existing registration is reused.
+#
+# This also installs or updates the public website (hngroup.org.uk, see hngroup-site/), so one
+# command updates both:  cd /root/HorizonNetwork && git pull && sudo bash staff-portal/install.sh
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -107,18 +111,25 @@ if [ -d "/etc/letsencrypt/live/$DOMAIN" ]; then
     else
         warn "certbot failed — see the output above. The portal is still reachable over HTTP."
     fi
-elif [ -z "$EMAIL" ]; then
+elif [ -z "$EMAIL" ] && [ ! -d /etc/letsencrypt/accounts ]; then
     warn "No email given, so HTTPS was skipped. Re-run with: sudo bash $0 $DOMAIN you@hngroup.org.uk"
 elif [ "$DNS_IP" != "$SERVER_IP" ]; then
     warn "$DOMAIN resolves to '${DNS_IP:-nothing}', not this server ($SERVER_IP)."
     warn "Add the DNS A record first (see staff-portal/README.md), then re-run this script."
 else
-    if certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL" --redirect --keep-until-expiring; then
+    if certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos ${EMAIL:+-m "$EMAIL"} --redirect --keep-until-expiring; then
         HTTPS_OK=1
         ok "HTTPS certificate installed (auto-renews)"
     else
         warn "certbot failed — see the output above. The portal is still reachable over HTTP."
     fi
+fi
+
+# ---- The public website (hngroup.org.uk) ----
+# Installed by the same command so both stay up to date. Set SKIP_WEBSITE=1 to leave it out.
+if [ "${SKIP_WEBSITE:-0}" != 1 ] && [ -f "$SCRIPT_DIR/../hngroup-site/install.sh" ]; then
+    echo ""
+    bash "$SCRIPT_DIR/../hngroup-site/install.sh" "$EMAIL" || warn "The website install had a problem — see the output above."
 fi
 
 echo ""
