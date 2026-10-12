@@ -245,7 +245,7 @@
         try {
             const m = await (await fetch("/api/maintenance")).json();
             if (m.on) {
-                document.getElementById("login-maint-msg").textContent = " " + m.message;
+                document.getElementById("login-maint-msg").textContent = m.message;
                 document.getElementById("login-maint").hidden = false;
                 if (/[?&]maintenance=1/.test(window.location.search)) return showMaintenance(m);
             }
