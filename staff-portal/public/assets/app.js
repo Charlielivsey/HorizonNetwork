@@ -8018,7 +8018,19 @@
             box.hidden = false;
             box.className = "status-banner maint-banner";
             box.innerHTML = '<div class="sb-inner">' + icon("settings") + "<span><strong>Maintenance mode is on.</strong> Only you can sign in; everyone else sees the maintenance message.</span>" +
-                (can("system.admin") ? '<a class="btn btn-small btn-light" href="/system#sys-maint" data-link>Turn off</a>' : "") + "</div>";
+                (state.me.isOwner && !state.me.impersonatedBy ? '<button type="button" class="btn btn-small btn-light" data-maint-off>Turn off</button>' : "") + "</div>";
+            const off = $("[data-maint-off]", box);
+            if (off) off.addEventListener("click", async function () {
+                if (!(await confirmDialog({ title: "Turn off maintenance mode?", message: "Everyone will be able to sign in again straight away.", confirmLabel: "Turn off" }))) return;
+                off.disabled = true;
+                try {
+                    const r = await api("/api/maintenance/off", {});
+                    state.me = r.user;
+                    renderChrome();
+                    toast("Maintenance mode is off. Everyone can sign in again.");
+                    if (window.location.pathname === "/system") render();
+                } catch (err) { off.disabled = false; toast(err.message); }
+            });
             return;
         }
         box.className = "status-banner";

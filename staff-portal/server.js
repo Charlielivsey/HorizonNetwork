@@ -816,7 +816,7 @@ async function routeSystem(req, res, pathname, session) {
       if (!entry || Date.now() - entry.first > LOCKOUT_WINDOW_MS) pinFailures.set(me.id, { count: 1, first: Date.now() });
       else entry.count++;
       logEvent(req, session, "pin-failed");
-      throw httpError(401, "Incorrect PIN.");
+      throw httpError(400, "Incorrect PIN.");
     }
     pinFailures.delete(me.id);
     session.data.systemUnlockedUntil = Date.now() + SYSTEM_UNLOCK_MS;
@@ -947,7 +947,7 @@ async function routeSystem(req, res, pathname, session) {
         if (!entry || Date.now() - entry.first > LOCKOUT_WINDOW_MS) pinFailures.set("maint:" + me.id, { count: 1, first: Date.now() });
         else entry.count++;
         logEvent(req, session, "maintenance-pin-failed");
-        throw httpError(401, "That maintenance PIN isn't right.");
+        throw httpError(400, "That maintenance PIN isn't right.");
       }
       pinFailures.delete("maint:" + me.id);
     }
@@ -1090,6 +1090,14 @@ async function routeApi(req, res, pathname, session) {
   // ...and until a sign-in code has been set.
   if (!store.hasCode(me) && !session.data.impersonatorId) {
     return sendJson(res, 403, { error: "Please set your sign-in code first.", code: "CODE_SETUP_REQUIRED" });
+  }
+
+  // The owner can turn maintenance mode off from the banner on any page.
+  if (method === "POST" && pathname === "/api/maintenance/off") {
+    if (!store.isOwner(me) || session.data.impersonatorId) throw httpError(403, "Only the system owner can turn maintenance mode off.");
+    const mt = store.setMaintenance(false, store.maintenance().message, me);
+    logEvent(req, session, "maintenance-off");
+    return sendJson(res, 200, { ...mt, user: meResponse(session) });
   }
 
   if (await extraRoutes.handle(req, res, pathname, session)) return;

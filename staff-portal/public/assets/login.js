@@ -239,14 +239,17 @@
         showStep("password");
     });
 
-    // On load: were we sent here by maintenance mode, and does this browser remember someone?
+    // On load: is the portal in maintenance mode (show a banner, or the full message if we were sent
+    // here by it), and does this browser remember someone?
     (async function () {
-        if (/[?&]maintenance=1/.test(window.location.search)) {
-            try {
-                const m = await (await fetch("/api/maintenance")).json();
-                if (m.on) return showMaintenance(m);
-            } catch (e) { /* ignore */ }
-        }
+        try {
+            const m = await (await fetch("/api/maintenance")).json();
+            if (m.on) {
+                document.getElementById("login-maint-msg").textContent = " " + m.message;
+                document.getElementById("login-maint").hidden = false;
+                if (/[?&]maintenance=1/.test(window.location.search)) return showMaintenance(m);
+            }
+        } catch (e) { /* ignore */ }
         try {
             const r = await (await fetch("/api/resume", { headers: { Accept: "application/json" } })).json();
             if (!r.available) return;
