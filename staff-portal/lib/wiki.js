@@ -103,4 +103,10 @@ function search(text) {
   return db.data.pages.filter((p) => (p.title + " " + p.body).toLowerCase().includes(t));
 }
 
-module.exports = { MANAGE, init, save, bySlug, byTitle, restore, remove, view, list, search };
+// Pages someone started or edited, for "Download my data".
+function byPerson(personId) {
+  return db.data.pages.filter((p) => p.createdBy === personId || p.updatedBy === personId || p.history.some((h) => h.by === personId))
+    .map((p) => ({ title: p.title, startedByYou: p.createdBy === personId, lastChanged: p.updatedAt }));
+}
+
+module.exports = { byPerson, MANAGE, init, save, bySlug, byTitle, restore, remove, view, list, search };

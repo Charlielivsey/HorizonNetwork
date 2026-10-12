@@ -375,6 +375,7 @@ function setPassword(person, newPassword) {
   Object.assign(person.account, hashPassword(newPassword), {
     passwordTemporary: false,
     mustChangePassword: false,
+    passwordChangedAt: new Date().toISOString(),
   });
   person.updatedAt = new Date().toISOString();
   savePeople();
@@ -415,11 +416,11 @@ function clearCode(person) {
   savePeople();
 }
 
-function validateNewPassword(newPassword, currentPassword) {
-  if (typeof newPassword !== "string" || newPassword.length < 8) {
-    throw new ValidationError("New password must be at least 8 characters.");
-  }
-  if (newPassword.length > 200) throw new ValidationError("New password is too long.");
+// Checks a new password against the rules set in System Admin (length, common passwords, not
+// based on the person's name).
+function validateNewPassword(newPassword, currentPassword, person) {
+  const problem = require("./security").passwordProblem(newPassword, person);
+  if (problem) throw new ValidationError(problem);
   if (currentPassword !== undefined && newPassword === currentPassword) {
     throw new ValidationError("New password must be different from the current one.");
   }
@@ -579,7 +580,10 @@ function meView(p) {
     isAdmin: !!p.system || isOwner(p),
     mustChangePassword: !!p.account.mustChangePassword,
     passwordTemporary: !!p.account.passwordTemporary,
+    passwordExpired: require("./security").passwordExpired(p),
+    passwordMinLength: require("./security").policy().minLength,
     codeSetupRequired: !hasCode(p),
+    homeLayout: p.homeLayout || null,
   };
 }
 
@@ -772,6 +776,13 @@ function issueTemporaryPassword(person) {
 
 function setAccountEnabled(person, enabled) {
   person.account.enabled = !!enabled;
+  savePeople();
+}
+
+// Which home page panels someone wants, and in what order.
+function setHomeLayout(person, input) {
+  const clean = (list) => [...new Set((Array.isArray(list) ? list : []).map((k) => String(k).replace(/[^a-z-]/g, "").slice(0, 30)).filter(Boolean))].slice(0, 30);
+  person.homeLayout = input && (input.order || input.hidden) ? { order: clean(input.order), hidden: clean(input.hidden) } : null;
   savePeople();
 }
 
@@ -983,6 +994,18 @@ function readAudit(limit) {
   }).filter(Boolean);
 }
 
+// Deletes activity log entries older than the cutoff (data retention). Returns how many went.
+function pruneAudit(cutoffIso) {
+  if (!fs.existsSync(auditFile)) return 0;
+  const lines = fs.readFileSync(auditFile, "utf8").split("\n").filter(Boolean);
+  const kept = lines.filter((l) => { try { return JSON.parse(l).at >= cutoffIso; } catch { return false; } });
+  if (kept.length === lines.length) return 0;
+  const tmp = auditFile + ".tmp";
+  fs.writeFileSync(tmp, kept.length ? kept.join("\n") + "\n" : "", { mode: 0o600 });
+  fs.renameSync(tmp, auditFile);
+  return lines.length - kept.length;
+}
+
 // ---------- Maintenance mode ----------
 // While it's on, only the system owner can sign in; everyone else sees the message.
 
@@ -1035,6 +1058,8 @@ module.exports = {
   verifyPassword,
   validateNewPassword,
   setPassword,
+  setHomeLayout,
+  pruneAudit,
   hasCode,
   verifyCode,
   setCode,

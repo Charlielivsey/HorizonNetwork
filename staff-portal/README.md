@@ -58,7 +58,7 @@ Internal staff portal for the whole of HN Group, served at **https://staff.hngro
     - The **primary** address is their login username.
   - After adding someone, you're asked whether to create their login account. A temporary password is shown once on screen, and the employee must create their own password the first time they sign in.
   - You can reset a password, disable or re-enable a login, edit details and delete employees.
-- **Settings.** Opened by clicking your name. It has three tabs: **Profile** (picture, banner, display name, phone, location, time zone and birthday), **Appearance** (theme) and **Security** (password, sign-in code, and **Where you're signed in**, where you can sign out other devices). Birthdays are day and month only, and you choose whether colleagues can see yours.
+- **Settings.** Opened by clicking your name. It has three tabs: **Profile** (picture, banner, display name, phone, location, time zone, skills, languages and birthday), **Appearance** (theme) and **Security** (password, sign-in code, **Where you're signed in**, where you can sign out other devices, **Sign-in history** and **Download my data**). Birthdays are day and month only, and you choose whether colleagues can see yours.
 - **Profile banners.** Under **Settings → Profile**, everyone can choose one of eight preset gradient banners or upload their own wide image, which is cropped to 3:1. The banner shows at the top of their profile and on their Staff Directory card.
 
 **Companies:** HN Group, Horizon Network, Horizon Advertising, Horizon Development and Horizon Media Group.
@@ -75,6 +75,12 @@ Both lists are at the top of `lib/store.js` if you need to change them.
 - **Charts on Company funds.** The last 12 months of money in, money spent and the total balance.
 - **Payroll year end** (Run payroll → Year end). Everyone's totals for a tax year, a P60-style end of year certificate for each person (print or save as PDF), and an export of every payslip to a spreadsheet (CSV). Staff can open their own certificate from Payslips → End of year (P60).
 - **Scheduled pay changes** (Pay details → Scheduled pay changes). Set a new salary or hourly rate from a future month; payroll uses it automatically from that month.
+- **Payroll approval** (Run payroll → Settings). Turn on *Payslips need approving* and a second person with *Run payroll & finance* has to approve each payslip before it can be issued. The person who created or last changed a payslip can't approve it.
+- **Pay history and salary bands** (Pay details → Pay history). A timeline of every salary or rate change for a person. Set salary bands (for example "Designer: £24,000 to £32,000") and each person shows whether they're below, within or above their band.
+- **Bonuses and commission** (Pay details → Bonuses & commission). Add a one-off bonus for a chosen month, or a monthly commission rate. Both are added to the next payslip automatically.
+- **Mileage claims** (Expenses → Claim mileage). Enter the journey and miles; the amount is worked out at HMRC rates (45p a mile for the first 10,000 miles in the tax year, 25p after).
+- **Cash-flow forecast** (Company funds → Forecast). The next six months of balance, using upcoming payroll (with scheduled pay changes), bills that are due, unpaid invoices and average monthly spending.
+- **Supplier bills** (HR → Bills, finance only). Record bills you need to pay with a due date and category, optionally repeating monthly, quarterly or yearly. Bills due this week are flagged on the home page; marking one paid takes it from the main balance.
 
 ### HR
 
@@ -84,6 +90,13 @@ Both lists are at the top of `lib/store.js` if you need to change them.
 - **Time off in lieu (TOIL).** When a timesheet with more hours than the rota planned is approved, the approver can bank the extra hours. Supervisors and HR can also add or take off hours. Staff book it as **Time off in lieu** (7.5 hours a day), which can't go over their balance.
 - **Training** (HR → Training). Courses and certificates with completion and expiry dates. Staff add their own; HR sees everyone's, marks them as checked and sets **required courses** for everyone or one company. Expiring (within 30 days), expired and missing required training is flagged.
 - **HR cases** (HR → HR cases, *HR cases* permission only). Disciplinary, grievance, capability and investigation records with a timeline of notes and meetings, attached letters, an outcome and, for warnings, when the warning expires (6 or 12 months by default). Opening a case is recorded in the activity log.
+- **Goals** (HR → Goals). Quarterly goals with a measure of success. People update their progress and status (on track, at risk, off track, done); supervisors and HR set goals for their team and see everyone's progress.
+- **360 feedback** (HR → 360 feedback). Ask at least two colleagues for anonymous feedback about someone. Results (average ratings and comments, never names) only show once at least two people have answered.
+- **Pulse** (Workplace → Pulse). A quick anonymous question each week (1 to 5 and an optional comment), shown on the home page until answered. HR sees the trend over time and can change the question.
+- **Exit interviews.** Leaver checklists include an exit interview task: the leaver fills in a short form from their home page and the task ticks itself. HR sees the answers and a summary of reasons for leaving under HR → Exit interviews.
+- **Policy versions** (Documents & Policies). Uploading a new version of a document keeps the old one in its history with a note of what changed, who acknowledged which version, and a download of each old version. Policies needing acknowledgement ask everyone again.
+- **Flexible working requests** (HR → Flexible working). Staff ask for a different pattern (changed or compressed hours, part time, different start and finish times, or working from home); their supervisor or HR approves it, approves it as a trial with an end date, or declines it with a reason.
+- **Work patterns and bank holidays.** Set the days each part-time or shift worker works (Leave & Absence → Allowances & absence). Leave only counts their working days, and their allowance is adjusted for bank holidays that fall on days they do or don't work, so everyone is treated fairly.
 - **Jobs** (People → Jobs). Recruiters (*Recruitment* permission) post vacancies, which everyone is told about and can apply for or refer someone to, with a CV. Applicants move through Applied → Screening → Interview → Offer → Hired. Hiring someone new creates their employee record with a work email address and starts their onboarding checklist.
 
 ### People
@@ -92,12 +105,24 @@ Both lists are at the top of `lib/store.js` if you need to change them.
 - **Kudos** (People → Kudos). Thank colleagues publicly with a value such as Teamwork or Above and beyond; others react. The most thanked people this month are listed, and the latest kudos show on the home page.
 - **Staff milestones.** Birthdays (for people who share theirs), work anniversaries and new starters are worked out automatically and show on the home page, the Kudos page and team pages, with a 🎉 button to send congratulations.
 - **Ideas** (Workplace → Ideas). Anyone shares an idea (optionally anonymously, hidden even from leadership), votes and comments. People who post announcements set the status (under review, planned, in progress, done, not going ahead) with a note, and the author and voters are told.
+- **Chat** (People → Chat). An *Everyone* channel, a channel for each company (for the people who work there) and direct messages between two people. New messages appear every few seconds, unread counts show in the menu, and there's a **Message** button on each profile.
+- **Q&A** (People → Q&A). Ask a question, answer other people's, mark answers as helpful, and the person who asked picks the best answer. Questions and answers show in the search box.
+- **Knowledge base** (People → Knowledge base). How-to pages anyone can write and edit, with headings, lists, bold text, links and `[[Page title]]` links between pages. Every edit is kept in the page history and old versions can be restored. People who manage documents can delete pages.
+- **Mentoring** (People → Mentoring). Ask someone to be your mentor (people's skills show when choosing), agree goals and how often to catch up, log each catch-up and keep a shared notebook only the two of you can see. HR can pair people directly. A reminder shows when a catch-up is due.
+- **Skills and languages.** Add them under Settings → Profile. They show on your profile, and the directory and search box find people by them.
+- **On call** (Support → On call). Who's on call each week (Monday to Sunday) for each rota, such as IT support. IT set the rota week by week or fill it automatically with **Take turns**. Whoever's on call this week shows on everyone's home page.
 - **Team pages** (People → Teams). A page for each company: its people and their status, who's off, news posted for that company, kudos, celebrations, leave and events in the next 30 days, and open roles.
 
 ### IT
 
 - **Outage alerts.** When a monitored service fails two checks in a row, IT get a notification and a red banner on every page until it's back up (they're told then too). Tick *Show a banner to all staff* on a service everyone uses to show the banner to everyone.
 - **Activity reports** (Support → Activity reports, *Activity reports* permission). A monthly summary: headcount, starters and leavers, sign-ins each day, leave by type, IT tickets, outages and uptime, kudos, ideas and other activity, plus payroll, expenses, invoices and funds for people who run payroll. **Download PDF** saves it.
+- **Sign-in history** (Settings → Security). Your recent sign-ins and failed attempts, with the device and IP address. **This wasn't me** signs you out on every other device, forgets remembered browsers, raises an urgent IT ticket and asks you to change your password and code.
+- **Password rules** (System Admin → Password rules). Set the minimum length (8 to 32), block common and leaked passwords (and ones based on the person's name), and optionally make people change their password every 90 days, 180 days or year. Expiry counts from when it's turned on, so nobody is forced to change straight away; when a password expires the person must choose a new one after signing in.
+- **Download my data** (Settings → Security → Your data). Everyone can download the personal data the portal holds about them as a JSON file: profile, sign-ins, leave, payslips, expenses, timesheets, training, goals, reviews, messages, Q&A and more.
+- **Data retention** (System Admin → Data retention). Choose how long to keep the activity log, unsuccessful job applicants and their CVs, chat messages, closed IT tickets and (optionally, after 6 or 7 years) leavers' records. Older data is deleted automatically every night at about 3am, or straight away with **Run clean-up now**.
+- **Announcement schedule** (Announcements → Schedule, for people who post announcements). A month calendar of when each announcement goes out and comes down, with a list of what's coming up. Click a day to schedule one for 9am that day.
+- **Customise your home page.** **Customise this page** at the bottom of the home page lets everyone choose which side panels show (including the optional *Leave balance* and *Unanswered questions*) and put them in their own order.
 - **Backups.** System Admin → Backups now shows when the last backup was taken (with a warning, also on the home page, if it's more than 36 hours ago) and lets you **upload a backup** file (for example one downloaded from another server) to restore it.
 
 ### System owner & System Admin
@@ -279,6 +304,9 @@ Everything lives in `/var/lib/hn-staff-portal`:
 | `payslips.json`, `funds.json` | Pay details, payslips, and the company balances with their history. Only Human Resources can see these in the portal. |
 | `backups/`        | Automatic and manual backups (`.tar.gz`).                       |
 | `audit.log`       | Activity log of every action in the portal.                     |
+| `security.json`   | Password rules, data retention settings and reported sign-ins.  |
+| `chat.json`, `qa.json`, `wiki.json`, `mentoring.json`, `oncall.json` | Chat messages, Q&A, knowledge base pages (with history), mentoring and on-call rotas. |
+| `expenses.json`, `invoices.json`, `bills.json` and the other `.json` files | One file for each of the newer features. All are included in backups. |
 | `avatars/`        | Profile pictures.                                               |
 
 **Automatic backups.**

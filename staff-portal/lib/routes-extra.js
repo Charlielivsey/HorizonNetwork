@@ -31,6 +31,11 @@ const qa = require("./qa");
 const wiki = require("./wiki");
 const mentoring = require("./mentoring");
 const oncall = require("./oncall");
+const security = require("./security");
+const retention = require("./retention");
+const rotas = require("./rotas");
+const stafffiles = require("./stafffiles");
+const reviews = require("./reviews");
 
 let ctx;
 function init(helpers) {
@@ -61,6 +66,7 @@ async function handle(req, res, pathname, session) {
   const me = session.person;
   const { sendJson, httpError, readJsonBody, readRawBody, headerJson, logEvent, meResponse, notify } = ctx;
   let m;
+  if (pathname.startsWith("/api/me/") && (await handleMe(req, res, pathname, session))) return true;
   const can = (perm) => store.can(me, perm);
   const needPay = () => { if (!can(payslips.MANAGE)) throw httpError(403, "Only people who run payroll & finance can do that."); };
 
@@ -979,4 +985,125 @@ async function handle(req, res, pathname, session) {
   return false;
 }
 
-module.exports = { init, handle };
+// ----- Sign-in history -----
+const LOGIN_ACTIONS = { "signed-in": "Signed in", "sign-in-failed": "Wrong password", "sign-in-code-failed": "Wrong sign-in code", "password-changed": "Password changed", "code-changed": "Sign-in code changed", "sign-in-maintenance": "Tried to sign in during maintenance" };
+
+function loginHistory(person, limit) {
+  const name = store.loginName(person);
+  const out = [];
+  for (const e of store.readAudit(20000)) {
+    if (!LOGIN_ACTIONS[e.action] || e.via) continue;
+    // Failed password attempts are logged with whatever was typed, which could be any of their emails.
+    const mine = e.actor === name || (e.action === "sign-in-failed" && store.findByLogin(e.actor) === person);
+    if (!mine) continue;
+    out.push({ at: e.at, action: e.action, label: LOGIN_ACTIONS[e.action], ip: e.ip || "", ua: e.ua || "", detail: e.detail || "", failed: /failed/.test(e.action), reported: security.isReported(e.at, e.ip) });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+// Everything the portal holds about someone, as they'd see it, for "Download my data".
+function exportFor(me) {
+  const safe = (fn) => { try { return fn(); } catch (err) { return { error: "This section couldn't be included." }; } };
+  const view = store.meView(me);
+  delete view.permissions;
+  return {
+    exportedAt: new Date().toISOString(),
+    about: "Your personal data held by the HN Group Staff Portal. Anonymous answers (pulse surveys, anonymous ideas and 360 feedback you gave) aren't linked to you, so they aren't included.",
+    profile: view,
+    signIns: safe(() => loginHistory(me, 500)),
+    leave: safe(() => ({ requests: leave.mine(me), thisYear: leave.summary(me.id), toil: leave.toilHistory(me.id) })),
+    payslips: safe(() => payslips.mine(me)),
+    expenses: safe(() => expenses.forViewer(me).mine),
+    timesheets: safe(() => rotas.myRecent(me)),
+    training: safe(() => training.forViewer(me).mine),
+    goals: safe(() => objectives.forPerson(me.id, me)),
+    reviews: safe(() => reviews.forPerson(me, me)),
+    feedbackAboutYou: safe(() => feedback.forViewer(me).requests.filter((r) => r.subject && r.subject.id === me.id)),
+    flexibleWorking: safe(() => flexible.forViewer(me).mine),
+    exitInterview: safe(() => exitinterviews.forPerson(me.id)),
+    documents: safe(() => stafffiles.forPerson(me.id, me).map((f) => ({ name: f.name || f.fileName, category: f.categoryLabel || f.category, uploadedAt: f.uploadedAt }))),
+    kudos: safe(() => kudos.list(me, { people: [me.id], limit: 1000 })),
+    ideas: safe(() => ideas.list(me).filter((i) => i.mine)),
+    itTickets: safe(() => helpdesk.list(me).filter((t) => t.requester && t.requester.id === me.id)),
+    chatMessages: safe(() => chat.writtenBy(me.id)),
+    questionsAndAnswers: safe(() => qa.byPerson(me.id)),
+    knowledgeBase: safe(() => wiki.byPerson(me.id)),
+    mentoring: safe(() => mentoring.forViewer(me).mine),
+    notifications: safe(() => notifications.forPerson(me.id)),
+  };
+}
+
+async function handleMe(req, res, pathname, session) {
+  const method = req.method;
+  const me = session.person;
+  const { sendJson, httpError, readJsonBody, logEvent, meResponse, notify } = ctx;
+  if (method === "GET" && pathname === "/api/me/logins") {
+    return sendJson(res, 200, { logins: loginHistory(me, 60) }), true;
+  }
+  if (method === "POST" && pathname === "/api/me/logins/report") {
+    if (session.data.impersonatorId) throw httpError(403, "You can't do that while logged in as someone else.");
+    const { at, ip } = await readJsonBody(req);
+    const entry = loginHistory(me, 500).find((e) => e.at === at && e.ip === (ip || ""));
+    if (!entry) throw httpError(404, "That sign-in isn't in your history.");
+    if (entry.reported) throw httpError(400, "You've already reported that sign-in.");
+    // Sign out everywhere else, forget remembered browsers, and tell IT.
+    ctx.endSessionsFor(me.id, session.token);
+    require("./resume").revokeFor(me.id);
+    const t = helpdesk.createTicket(me, {
+      subject: "Sign-in I don't recognise",
+      category: "access",
+      priority: "urgent",
+      body: `${me.displayName} reported a sign-in they don't recognise.\n\nWhat: ${entry.label}\nWhen: ${entry.at}\nIP address: ${entry.ip || "unknown"}\nDevice: ${entry.ua || "unknown"}\n\nAll their other sessions have been signed out. They've been asked to change their password and sign-in code.`,
+    });
+    security.addReport(me.id, entry, t.number);
+    logEvent(req, session, "sign-in-reported", { target: `#${t.number}`, detail: `${entry.label} from ${entry.ip || "unknown IP"} at ${entry.at}` });
+    if (notify) notify(helpdesk.agents().map((a) => a.id).filter((id) => id !== me.id), { type: "helpdesk", title: `${me.displayName} reported a sign-in they don't recognise`, body: `IT ticket #${t.number}`, link: "/helpdesk" }, me);
+    return sendJson(res, 200, { ticket: t.number }), true;
+  }
+  if (method === "GET" && pathname === "/api/me/export") {
+    if (session.data.impersonatorId) throw httpError(403, "You can't download someone else's data while logged in as them.");
+    const body = JSON.stringify(exportFor(me), null, 2);
+    logEvent(req, session, "data-exported");
+    res.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Content-Disposition": `attachment; filename="my-data-${new Date().toISOString().slice(0, 10)}.json"`,
+      "Cache-Control": "no-store",
+    });
+    res.end(body);
+    return true;
+  }
+  if (method === "POST" && pathname === "/api/me/home-layout") {
+    store.setHomeLayout(me, await readJsonBody(req));
+    return sendJson(res, 200, { user: meResponse(session) }), true;
+  }
+  return false;
+}
+
+// System Admin → Security & data (only reached once the System Admin PIN has been entered).
+async function handleSystem(req, res, pathname, session) {
+  const method = req.method;
+  const { sendJson, httpError, readJsonBody, logEvent } = ctx;
+  if (!pathname.startsWith("/api/system/security")) return false;
+  if (method === "GET" && pathname === "/api/system/security") {
+    return sendJson(res, 200, { password: security.policy(), retention: security.retention(), choices: { expiry: security.EXPIRY_CHOICES, retention: security.RETENTION_CHOICES }, preview: retention.preview() }), true;
+  }
+  if (method === "POST" && pathname === "/api/system/security/password") {
+    const p = security.setPolicy(await readJsonBody(req));
+    logEvent(req, session, "password-rules-changed", { detail: `At least ${p.minLength} characters, common passwords ${p.blockCommon ? "blocked" : "allowed"}, ${p.expiryDays ? `change every ${p.expiryDays} days` : "no expiry"}` });
+    return sendJson(res, 200, { password: p }), true;
+  }
+  if (method === "POST" && pathname === "/api/system/security/retention") {
+    const r = security.setRetention(await readJsonBody(req));
+    logEvent(req, session, "retention-changed");
+    return sendJson(res, 200, { retention: r, preview: retention.preview() }), true;
+  }
+  if (method === "POST" && pathname === "/api/system/security/cleanup") {
+    const r = ctx.runRetention(retention.run);
+    logEvent(req, session, "retention-run");
+    return sendJson(res, 200, { result: r, retention: security.retention() }), true;
+  }
+  throw httpError(404, "Not found.");
+}
+
+module.exports = { init, handle, handleSystem };

@@ -183,6 +183,13 @@ function deleteApplicant(a) {
   db.save();
 }
 
+// Data retention: applicants who weren't taken on (and their CVs) are deleted after a while.
+function pruneApplicants(cutoffIso) {
+  const old = db.data.applicants.filter((a) => (a.stage === "rejected" || a.stage === "withdrawn") && (a.stageChangedAt || a.createdAt) < cutoffIso);
+  for (const a of old) deleteApplicant(a);
+  return old.length;
+}
+
 const nameOf = (id) => { const p = id ? store.getPerson(id) : null; return p ? p.displayName : id ? "Former staff" : ""; };
 
 function applicantView(a) {
@@ -229,5 +236,5 @@ function hiresBetween(from, to) {
 
 module.exports = {
   MANAGE, STAGES, CONTRACTS, SOURCES, init, canManage, saveVacancy, getVacancy, setVacancyStatus, deleteVacancy, addApplicant, getApplicant, cvFile,
-  setStage, addNote, hire, deleteApplicant, forViewer, vacancyView, openCount, newApplicantsCount, hiresBetween,
+  setStage, addNote, hire, deleteApplicant, pruneApplicants, forViewer, vacancyView, openCount, newApplicantsCount, hiresBetween,
 };

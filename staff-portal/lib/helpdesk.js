@@ -168,9 +168,18 @@ function badgeCount(person) {
   return n;
 }
 
+// Data retention: closed or resolved tickets are deleted a while after they were closed.
+function pruneClosed(cutoffIso) {
+  const before = db.data.tickets.length;
+  db.data.tickets = db.data.tickets.filter((t) => !((t.status === "closed" || t.status === "resolved") && (t.closedAt || t.updatedAt) < cutoffIso));
+  const n = before - db.data.tickets.length;
+  if (n) db.save();
+  return n;
+}
+
 function statsBetween(from, to) {
   const inRange = (iso) => iso && iso.slice(0, 10) >= from && iso.slice(0, 10) <= to;
   return { opened: db.data.tickets.filter((t) => inRange(t.createdAt)).length, closed: db.data.tickets.filter((t) => inRange(t.closedAt)).length, open: db.data.tickets.filter((t) => t.status !== "resolved" && t.status !== "closed").length };
 }
 
-module.exports = { statsBetween, MANAGE, CATEGORIES, PRIORITIES, STATUSES, init, isAgent, canSee, createTicket, getTicket, reply, update, fullView, list, agents, badgeCount };
+module.exports = { pruneClosed, statsBetween, MANAGE, CATEGORIES, PRIORITIES, STATUSES, init, isAgent, canSee, createTicket, getTicket, reply, update, fullView, list, agents, badgeCount };

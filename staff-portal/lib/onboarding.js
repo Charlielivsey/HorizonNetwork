@@ -212,6 +212,11 @@ function forPerson(person) {
     .map((c) => view(c, person));
 }
 
+// The last working day from someone's leaver checklist, if they have one.
+function leavingDateOf(personId) {
+  return data.checklists.filter((c) => c.personId === personId && c.kind === "leaver" && c.lastDay).map((c) => c.lastDay).sort().pop() || null;
+}
+
 function removePerson(personId) {
   const before = data.checklists.length;
   data.checklists = data.checklists.filter((c) => c.personId !== personId);
@@ -219,6 +224,7 @@ function removePerson(personId) {
 }
 
 module.exports = {
+  leavingDateOf,
   KINDS,
   ACTIONS,
   leaverChecklistOf,

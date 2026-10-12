@@ -102,4 +102,12 @@ function search(text) {
   return db.data.questions.filter((q) => (q.title + " " + q.body + " " + q.tags.join(" ") + " " + q.answers.map((a) => a.body).join(" ")).toLowerCase().includes(t));
 }
 
-module.exports = { init, ask, get, answer, vote, accept, removeQuestion, removeAnswer, view, list, search };
+// Questions and answers someone wrote, for "Download my data".
+function byPerson(personId) {
+  return {
+    questions: db.data.questions.filter((q) => q.by === personId).map((q) => ({ title: q.title, body: q.body, tags: q.tags, at: q.createdAt })),
+    answers: db.data.questions.flatMap((q) => q.answers.filter((a) => a.by === personId).map((a) => ({ question: q.title, body: a.body, at: a.at }))),
+  };
+}
+
+module.exports = { byPerson, init, ask, get, answer, vote, accept, removeQuestion, removeAnswer, view, list, search };

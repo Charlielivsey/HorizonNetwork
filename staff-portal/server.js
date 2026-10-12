@@ -40,6 +40,8 @@ const qa = require("./lib/qa");
 const wiki = require("./lib/wiki");
 const mentoring = require("./lib/mentoring");
 const oncall = require("./lib/oncall");
+const security = require("./lib/security");
+const retention = require("./lib/retention");
 
 const PORT = parseInt(process.env.PORT || "3200", 10);
 const HOST = process.env.HOST || "127.0.0.1";
@@ -103,7 +105,7 @@ invoices.init(DATA_DIR);
 notifications.init(DATA_DIR);
 resume.init(DATA_DIR);
 bills.init(DATA_DIR);
-for (const mod of [objectives, feedback, pulse, exitinterviews, flexible, chat, qa, wiki, mentoring, oncall]) mod.init(DATA_DIR);
+for (const mod of [objectives, feedback, pulse, exitinterviews, flexible, chat, qa, wiki, mentoring, oncall, security]) mod.init(DATA_DIR);
 training.init(DATA_DIR);
 cases.init(DATA_DIR);
 recruitment.init(DATA_DIR);
@@ -134,7 +136,7 @@ function reloadAll() {
   kudos.init(DATA_DIR);
   ideas.init(DATA_DIR);
   bills.init(DATA_DIR);
-  for (const mod of [objectives, feedback, pulse, exitinterviews, flexible, chat, qa, wiki, mentoring, oncall]) mod.init(DATA_DIR);
+  for (const mod of [objectives, feedback, pulse, exitinterviews, flexible, chat, qa, wiki, mentoring, oncall, security]) mod.init(DATA_DIR);
 }
 
 backup.scheduleNightly((err, name) => {
@@ -505,7 +507,7 @@ function completeLogin(req, res, person, how) {
   store.recordLogin(person);
   const token = createSession(person.id, req, { allowPageLoad: true });
   console.log(`${store.meView(person).username} signed in from ${clientIp(req)}${how ? ` (${how})` : ""}`);
-  logEvent(req, null, "signed-in", { actor: store.loginName(person), detail: how || undefined });
+  logEvent(req, null, "signed-in", { actor: store.loginName(person), detail: how || undefined, ua: String(req.headers["user-agent"] || "").slice(0, 300) });
   const cookies = [cookieFor(req, token)];
   // Remember this browser for "Resume session" (only for people with a sign-in code, which it asks for).
   if (store.hasCode(person)) cookies.push(resume.cookie(req, resume.issue(person.id, parseCookies(req)[resume.COOKIE], req.headers["user-agent"])));
@@ -648,13 +650,14 @@ async function handleChangePassword(req, res, session) {
   if (session.data.impersonatorId) throw httpError(403, "You can't change passwords while logged in as someone else.");
   const { currentPassword, newPassword } = await readJsonBody(req);
   const person = session.person;
-  // Someone who has just signed in with a temporary password doesn't need to type it again.
-  if (!person.account.passwordTemporary && !store.verifyPassword(person, currentPassword)) {
+  // Someone who has just signed in with a temporary (or expired) password doesn't need to type it again.
+  const forced = person.account.passwordTemporary || security.passwordExpired(person);
+  if (!forced && !store.verifyPassword(person, currentPassword)) {
     return sendJson(res, 400, { error: "Your current password is incorrect." });
   }
-  store.validateNewPassword(newPassword, person.account.passwordTemporary ? undefined : currentPassword);
-  if (person.account.passwordTemporary && store.verifyPassword(person, newPassword)) {
-    return sendJson(res, 400, { error: "Choose a new password rather than reusing the temporary one." });
+  store.validateNewPassword(newPassword, forced ? undefined : currentPassword, person);
+  if (forced && store.verifyPassword(person, newPassword)) {
+    return sendJson(res, 400, { error: person.account.passwordTemporary ? "Choose a new password rather than reusing the temporary one." : "Choose a different password from your old one." });
   }
   store.setPassword(person, newPassword);
   endSessionsFor(person.id, session.token);
@@ -868,6 +871,7 @@ async function routeSystem(req, res, pathname, session) {
   if (!session.data.systemUnlockedUntil || session.data.systemUnlockedUntil < Date.now()) {
     return sendJson(res, 403, { error: "Enter the system PIN to continue.", code: "PIN_REQUIRED" });
   }
+  if (await extraRoutes.handleSystem(req, res, pathname, session)) return;
   session.data.systemUnlockedUntil = Date.now() + SYSTEM_UNLOCK_MS;
 
   if (method === "GET" && pathname === "/api/system/overview") {
@@ -1122,7 +1126,7 @@ async function routeApi(req, res, pathname, session) {
   if (method === "POST" && pathname === "/api/me/code") return handleSetCode(req, res, session);
 
   // Everything else waits until a temporary password has been replaced.
-  if (me.account.passwordTemporary && !session.data.impersonatorId) {
+  if ((me.account.passwordTemporary || security.passwordExpired(me)) && !session.data.impersonatorId) {
     return sendJson(res, 403, { error: "Please create a new password first.", code: "PASSWORD_CHANGE_REQUIRED" });
   }
   // ...and until a sign-in code has been set.
@@ -2062,7 +2066,20 @@ function fundsSummary() {
   return { balances: b, nextPayroll, warning, overdrawn: b.main < 0 || b.payroll < 0 };
 }
 
+// Data retention: deletes old personal data once a day, as set in System Admin.
+function runRetention(run) {
+  const r = run((p) => {
+    endSessionsFor(p.id);
+    store.audit({ action: "leaver-record-deleted", actor: "(automatic)", target: p.displayName, detail: "Data retention" });
+  });
+  const total = Object.values(r).reduce((a, b) => a + b, 0);
+  if (total) store.audit({ action: "retention-cleanup", actor: "(automatic)", detail: `${r.audit} log entries, ${r.applicants} applicants, ${r.chat} chat messages, ${r.tickets} IT tickets, ${r.leavers} leavers` });
+  return r;
+}
+retention.schedule(runRetention);
+
 extraRoutes.init({
+  runRetention,
   sendJson, httpError, readJsonBody, readRawBody, headerJson, logEvent, meResponse, endSessionsFor, reloadAll, clientIp,
   notify: (ids, item, from) => notifications.notify(ids, item, from),
   sessions: () => sessions,

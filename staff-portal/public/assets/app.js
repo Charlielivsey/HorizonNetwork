@@ -123,7 +123,7 @@
             throw new Error("Signed out");
         }
         if (res.status === 403 && data.code === "PASSWORD_CHANGE_REQUIRED") {
-            state.me.passwordTemporary = true;
+            if (!state.me.passwordExpired) state.me.passwordTemporary = true;
             render();
         }
         if (res.status === 403 && data.code === "CODE_SETUP_REQUIRED") {
@@ -692,7 +692,7 @@
         const root = old.cloneNode(false);
         old.replaceWith(root);
 
-        if (state.me.passwordTemporary) {
+        if (state.me.passwordTemporary || state.me.passwordExpired) {
             document.body.classList.add("locked");
             return viewForcePassword(root);
         }
@@ -863,26 +863,31 @@
             '<a class="small link-arrow" href="/announcements" data-link>View all</a></div>' +
             '<div id="home-news" class="announcements wide"><p class="muted small">Loading\u2026</p></div></section>' +
 
-            '<aside class="home-side">' +
-            '<section class="panel" id="home-todo" hidden></section>' +
-            '<section class="panel" id="home-onboarding" hidden></section>' +
-            (me.pulseDue ? '<section class="panel" id="home-pulse"></section>' : "") +
-            '<section class="panel" id="home-celebrate" hidden></section>' +
-            '<section class="panel" id="home-coming"><p class="muted small">Loading\u2026</p></section>' +
-            '<section class="panel me-panel"><div class="me-card">' + avatar(me, "lg") + '<div><div class="me-name">' + esc(me.displayName) + "</div>" +
+            '<aside class="home-side" id="home-side">' +
+            '<section class="panel" id="home-todo" data-widget="todo" hidden></section>' +
+            '<section class="panel" id="home-onboarding" data-widget="onboarding" hidden></section>' +
+            (me.pulseDue ? '<section class="panel" id="home-pulse" data-widget="pulse"></section>' : "") +
+            (me.system ? "" : '<section class="panel" data-widget="leave" hidden></section>') +
+            '<section class="panel" id="home-celebrate" data-widget="celebrate" hidden></section>' +
+            '<section class="panel" id="home-coming" data-widget="coming"><p class="muted small">Loading\u2026</p></section>' +
+            '<section class="panel" data-widget="questions" hidden></section>' +
+            '<section class="panel me-panel" data-widget="me"><div class="me-card">' + avatar(me, "lg") + '<div><div class="me-name">' + esc(me.displayName) + "</div>" +
             '<div class="muted small">' + esc(me.jobTitle) + "</div>" + (me.isOwner ? '<span class="badge badge-owner">System owner</span>' : "") + "</div></div>" +
             '<button type="button" class="status-set" id="home-status">' + (me.status ? statusPill(me.status) : '<span class="status-pill st-none"><span class="status-dot"></span>Set a status</span>') + icon("edit") + "</button>" +
             rolesHtml(me) +
             (primaryEmail(me) ? '<div class="me-email">' + icon("mail") + esc(primaryEmail(me)) + "</div>" : "") +
             '<a class="btn btn-ghost btn-block-sm" href="/settings" data-link>' + icon("settings") + "Settings</a></section>" +
-            '<section class="panel help-panel">' + icon("lifebuoy") + '<div><h2 class="section-title">Need help?</h2>' +
+            '<section class="panel help-panel" data-widget="help">' + icon("lifebuoy") + '<div><h2 class="section-title">Need help?</h2>' +
             '<p class="muted small">For access problems or anything IT related, contact the IT team.</p>' +
             ((me.onCallNow || []).length ? '<div class="oc-home">' + me.onCallNow.map(function (r) {
                 return '<a class="oc-home-row" href="/on-call" data-link>' + avatar(r.person, "sm") + '<span><strong>' + esc(r.person.displayName) + '</strong><span class="muted small">On call · ' + esc(r.name) +
                     (r.contact || r.person.phone ? " · " + esc(r.contact || r.person.phone) : "") + "</span></span></a>";
             }).join("") + "</div>" : "") +
             "</div></section>" +
+            '<button type="button" class="btn btn-ghost btn-small home-customise" id="home-customise">' + icon("settings") + "Customise this page</button>" +
             "</aside></div>";
+        applyHomeLayout($("#home-side"));
+        $("#home-customise").addEventListener("click", openHomeCustomiser);
 
         // Live panels: the latest announcements, and anything waiting for the user to acknowledge.
         api("/api/announcements").then(function (d) {
@@ -903,7 +908,7 @@
             if (unread.length && !$(".modal-backdrop")) showNewAnnouncements(unread);
         }).catch(function () {});
 
-        $("#home-status").addEventListener("click", openStatusModal);
+        if ($("#home-status")) $("#home-status").addEventListener("click", openStatusModal);
         if ($("[data-rota-approvals]", root)) $("[data-rota-approvals]", root).addEventListener("click", function () { state.rotaTab = "approvals"; });
         if ($("[data-rtw-chip]", root)) $("[data-rtw-chip]", root).addEventListener("click", function () { state.leaveTab = "rtw"; });
         if (me.leaveApprovals) $('.hero-chip[href="/leave"]', root).addEventListener("click", function () { state.leaveTab = "approvals"; });
@@ -914,7 +919,7 @@
                 if (t && !t.hidden) t.scrollIntoView({ behavior: "smooth", block: "center" });
             });
         });
-        loadComingUp($("#home-coming"));
+        if ($("#home-coming")) loadComingUp($("#home-coming"));
         loadCelebrations($("#home-celebrate"));
         if ($("#home-pulse")) api("/api/pulse").then(function (p) {
             const box = $("#home-pulse");
@@ -922,9 +927,9 @@
             box.innerHTML = pulseCardHtml(p.question);
             wirePulse(box);
         }).catch(function () {});
-        loadMyOnboarding($("#home-onboarding"));
+        if ($("#home-onboarding")) loadMyOnboarding($("#home-onboarding"));
 
-        if (me.pendingAcks) {
+        if (me.pendingAcks && $("#home-todo")) {
             Promise.all([api("/api/documents"), api("/api/announcements")]).then(function (r) {
                 const box = $("#home-todo");
                 if (!box) return;
@@ -2057,16 +2062,33 @@
                 '<button type="button" class="menu-item compact danger" data-act="delete">' + icon("trash") + "<span>Delete</span></button></div></div>" : "";
         };
 
+        const tab = data.canPost && state.annTab === "schedule" ? "schedule" : "feed";
         root.innerHTML =
             '<div class="page-head"><div><h1>Announcements</h1><p class="muted">News and updates from across HN Group. React, comment and acknowledge.</p></div>' +
             (data.canPost ? '<div class="page-actions"><button type="button" class="btn btn-primary" id="new-announcement">' + icon("plus") + "New announcement</button></div>" : "") +
             "</div>" +
-            (list.length ? '<div class="announcements" id="ann-list"></div>'
+            (data.canPost ? '<div class="company-tabs" id="ann-tabs"><button type="button" data-ann-tab="feed"' + (tab === "feed" ? ' class="active"' : "") + ">" + icon("list") + "Announcements</button>" +
+                '<button type="button" data-ann-tab="schedule"' + (tab === "schedule" ? ' class="active"' : "") + ">" + icon("calendar") + "Schedule" +
+                (list.filter(function (a) { return a.state === "scheduled"; }).length ? ' <span class="tab-count">' + list.filter(function (a) { return a.state === "scheduled"; }).length + "</span>" : "") + "</button></div>" : "") +
+            (tab === "schedule" ? '<div id="ann-schedule"></div>' :
+            list.length ? '<div class="announcements" id="ann-list"></div>'
                 : '<div class="empty-page">' + icon("bell", "big") + "<h2>No announcements yet</h2>" +
                   '<p class="muted">' + (data.canPost ? "Post the first one with <strong>New announcement</strong>." : "Check back soon.") + "</p></div>");
 
-        const mounted = list.length ? mountAnnouncements($("#ann-list"), list, { menuFor: menuFor }) : null;
+        const mounted = list.length && tab === "feed" ? mountAnnouncements($("#ann-list"), list, { menuFor: menuFor }) : null;
         if ($("#new-announcement")) $("#new-announcement").addEventListener("click", function () { openAnnouncementForm(null); });
+        if ($("#ann-tabs")) $("#ann-tabs").addEventListener("click", function (e) {
+            const b = e.target.closest("[data-ann-tab]");
+            if (b && b.dataset.annTab !== tab) { state.annTab = b.dataset.annTab; render(); }
+        });
+        if (tab === "schedule") {
+            drawAnnouncementSchedule($("#ann-schedule"), list, function (id) {
+                const a = list.find(function (x) { return x.id === id; });
+                if (a) openAnnouncementForm(a);
+            }, function (day) {
+                openAnnouncementForm(null, day + "T09:00");
+            });
+        }
         root.addEventListener("click", async function (e) {
             const btn = e.target.closest("[data-act]");
             if (!btn || !mounted) return;
@@ -2093,7 +2115,7 @@
         }
     }
 
-    function openAnnouncementForm(a) {
+    function openAnnouncementForm(a, publishLocal) {
         const v = a || { title: "", body: "", companies: [], pinned: false, important: false, allowComments: true, requireAck: false, publishAt: null, expiresAt: null };
         const scheduled = a && a.state === "scheduled";
         const m = openModal(
@@ -2104,7 +2126,7 @@
             '<p class="hint">Line breaks are kept and web links become clickable.</p>' +
             audienceField(v.companies) +
             '<div class="grid-2"><div><label for="ann-publish">Publish <span class="muted small">(optional)</span></label>' +
-            '<input type="datetime-local" id="ann-publish" value="' + esc(scheduled || !a ? toLocalInput(scheduled ? v.publishAt : null) : "") + '">' +
+            '<input type="datetime-local" id="ann-publish" value="' + esc(publishLocal || (scheduled || !a ? toLocalInput(scheduled ? v.publishAt : null) : "")) + '">' +
             '<p class="hint">Leave empty to publish now.</p></div>' +
             '<div><label for="ann-expire">Remove after <span class="muted small">(optional)</span></label>' +
             '<input type="datetime-local" id="ann-expire" value="' + esc(toLocalInput(v.expiresAt)) + '">' +
@@ -3406,7 +3428,7 @@
     let searchOpen = false;
 
     function openSearch() {
-        if (searchOpen || !state.me || state.me.passwordTemporary || state.me.codeSetupRequired) return;
+        if (searchOpen || !state.me || state.me.passwordTemporary || state.me.passwordExpired || state.me.codeSetupRequired) return;
         searchOpen = true;
         closeMenus();
         const overlay = document.createElement("div");
@@ -5871,7 +5893,7 @@
             '<label for="pw-current">Current password</label><input type="password" id="pw-current" autocomplete="current-password">' +
             '<label for="pw-new">New password</label><input type="password" id="pw-new" autocomplete="new-password">' +
             '<label for="pw-confirm">Confirm new password</label><input type="password" id="pw-confirm" autocomplete="new-password">' +
-            '<p class="hint">At least 8 characters.</p>' +
+            '<p class="hint">At least ' + (me.passwordMinLength || 8) + ' characters. Avoid common passwords and your name: three random words work well.</p>' +
             '<div class="form-error" id="pw-error" hidden></div>' +
             '<div class="form-actions"><button type="submit" class="btn btn-primary" id="pw-save">Update password</button></div>' +
             "</form></section>" +
@@ -5885,11 +5907,17 @@
             '<div class="form-error" id="cc-error" hidden></div>' +
             '<div class="form-actions"><button type="submit" class="btn btn-primary" id="cc-save">Update code</button></div>' +
             "</form></section>" +
-            '<section class="panel narrow-panel" id="my-sessions"><p class="muted small">Loading\u2026</p></section></div>' +
+            '<section class="panel narrow-panel" id="my-sessions"><p class="muted small">Loading\u2026</p></section>' +
+            '<section class="panel narrow-panel" id="my-logins"><p class="muted small">Loading\u2026</p></section>' +
+            '<section class="panel narrow-panel"><h2 class="panel-title">' + icon("download") + "Your data</h2>" +
+            '<p class="muted small">Download a copy of the personal data the portal holds about you: your profile, leave, payslips, expenses, timesheets, training, goals, messages and more, as a JSON file.</p>' +
+            (me.impersonatedBy ? '<p class="muted small">You can\'t download someone else\'s data while logged in as them.</p>' : '<a class="btn btn-ghost" href="/api/me/export" download id="my-export">' + icon("download") + "Download my data</a>") +
+            "</section></div>" +
 
             "</div></div>";
 
         loadMySessions($("#my-sessions"));
+        loadMyLogins($("#my-logins"));
         const ccNew = wireCodeBoxes($("#cc-new"), function () { $("#cc-confirm input").focus(); });
         const ccConfirm = wireCodeBoxes($("#cc-confirm"));
         $("#code-change-form").addEventListener("submit", async function (e) {
@@ -6043,7 +6071,7 @@
             const err = $("#pw-error");
             formError(err, "");
             const next = $("#pw-new").value;
-            if (next.length < 8) return formError(err, "New password must be at least 8 characters.");
+            if (next.length < (state.me.passwordMinLength || 8)) return formError(err, "New password must be at least " + (state.me.passwordMinLength || 8) + " characters.");
             if (next !== $("#pw-confirm").value) return formError(err, "New passwords don't match.");
             $("#pw-save").disabled = true;
             try {
@@ -6277,6 +6305,13 @@
         "wiki-page-edited": ["edited the knowledge base page", "workplace"],
         "wiki-page-restored": ["restored an old version of the knowledge base page", "workplace"],
         "mentoring-requested": ["set up mentoring with", "staff"],
+        "sign-in-reported": ["reported a sign-in they don\u2019t recognise", "signin"],
+        "data-exported": ["downloaded their data", "accounts"],
+        "password-rules-changed": ["changed the password rules", "system"],
+        "retention-changed": ["changed the data retention settings", "system"],
+        "retention-run": ["ran the data retention clean-up", "system"],
+        "retention-cleanup": ["\u2014 old data was deleted:", "system"],
+        "leaver-record-deleted": ["\u2014 a leaver\u2019s record was deleted:", "system"],
         "oncall-rota-created": ["created the on-call rota", "helpdesk"],
         "oncall-rota-changed": ["changed the on-call rota", "helpdesk"],
     };
@@ -6389,6 +6424,7 @@
             '<button type="button" class="btn btn-ghost btn-small audit-more" id="audit-more" hidden>Show more</button>' +
             "</section>" +
 
+            '<section class="panel sys-section" id="sys-security"></section>' +
             '<section class="panel sys-section" id="sys-maint"></section>' +
             '<section class="panel sys-section" id="sys-backups"></section>' +
 
@@ -6403,6 +6439,7 @@
 
         mountBackups($("#sys-backups"));
         mountMaintenance($("#sys-maint"));
+        mountSecurityAdmin($("#sys-security"));
 
         function drawUsers() {
             const q = $("#sys-user-search").value.trim().toLowerCase();
@@ -6602,11 +6639,11 @@
             '<div class="force-wrap"><div class="force-card">' +
             '<div class="success-mark">' + icon("lock") + "</div>" +
             '<h1 class="center">Welcome, ' + esc(me.firstName || me.displayName) + "</h1>" +
-            '<p class="muted center">You signed in with a temporary password. Create your own password to continue.</p>' +
+            '<p class="muted center">' + (me.passwordTemporary ? "You signed in with a temporary password. Create your own password to continue." : "Your password has expired. Choose a new one to continue.") + "</p>" +
             '<form id="force-form" novalidate>' +
             '<label for="fp-new">New password</label><input type="password" id="fp-new" autocomplete="new-password" autofocus>' +
             '<label for="fp-confirm">Confirm new password</label><input type="password" id="fp-confirm" autocomplete="new-password">' +
-            '<p class="hint">At least 8 characters.</p>' +
+            '<p class="hint">At least ' + (me.passwordMinLength || 8) + ' characters. Avoid common passwords and your name: three random words work well.</p>' +
             '<div class="form-error" id="fp-error" hidden></div>' +
             '<button type="submit" class="btn btn-primary btn-block" id="fp-save">Set password and continue</button>' +
             "</form>" +
@@ -6618,16 +6655,17 @@
             const err = $("#fp-error");
             formError(err, "");
             const next = $("#fp-new").value;
-            if (next.length < 8) return formError(err, "Password must be at least 8 characters.");
+            if (next.length < (me.passwordMinLength || 8)) return formError(err, "Password must be at least " + (me.passwordMinLength || 8) + " characters.");
             if (next !== $("#fp-confirm").value) return formError(err, "Passwords don't match.");
             $("#fp-save").disabled = true;
+            const wasTemporary = me.passwordTemporary;
             try {
                 state.me = (await api("/api/me/password", { newPassword: next })).user;
                 if (state.me.codeSetupRequired) return render();
                 if (!state.meta) state.meta = await api("/api/meta");
                 renderChrome();
                 navigate("/home", true);
-                toast("Password set. Welcome to the Staff Portal!");
+                toast(wasTemporary ? "Password set. Welcome to the Staff Portal!" : "Password changed.");
             } catch (ex) {
                 formError(err, ex.message);
                 $("#fp-save").disabled = false;
@@ -6642,7 +6680,7 @@
         try {
             state.me = (await api("/api/me")).user;
             applyTheme(state.me.theme);
-            if (!state.me.passwordTemporary && !state.me.codeSetupRequired) state.meta = await api("/api/meta");
+            if (!state.me.passwordTemporary && !state.me.passwordExpired && !state.me.codeSetupRequired) state.meta = await api("/api/meta");
         } catch (e) {
             return;
         }
@@ -6653,7 +6691,7 @@
         let justSignedIn = false;
         try { justSignedIn = sessionStorage.getItem("hn-just-signed-in") === "1"; sessionStorage.removeItem("hn-just-signed-in"); } catch (e) { /* ignore */ }
         const mainRole = (state.me.roles || []).find(function (r) { return r.main; });
-        if (justSignedIn && mainRole && !state.me.system && !state.me.passwordTemporary && !state.me.codeSetupRequired) {
+        if (justSignedIn && mainRole && !state.me.system && !state.me.passwordTemporary && !state.me.passwordExpired && !state.me.codeSetupRequired) {
             toast("Signed in as " + mainRole.jobTitle + ", " + mainRole.company);
         }
 
@@ -9385,6 +9423,288 @@
             e.preventDefault();
             try { await api("/api/oncall/" + r.id + "/rotate", { people: $$(".member-row input:checked", m.el).map(function (c) { return c.value; }), from: $("#ot-from", m.el).value, count: $("#ot-count", m.el).value }); closeModal(); toast("Weeks filled."); render(); } catch (err) { formError($("#ot-error", m.el), err.message); }
         });
+    }
+
+
+    // ================= Sign-in history (Settings → Security) =================
+
+    async function loadMyLogins(box) {
+        let d;
+        try { d = await api("/api/me/logins"); } catch (e) { box.hidden = true; return; }
+        let showAll = false;
+        function draw() {
+            const list = showAll ? d.logins : d.logins.slice(0, 8);
+            box.innerHTML = '<div class="panel-head"><h2 class="panel-title">' + icon("clock") + "Sign-in history</h2></div>" +
+                '<p class="muted small">Recent sign-ins and failed attempts on your account. If you don’t recognise one, press <strong>This wasn’t me</strong>: we’ll sign you out everywhere else and tell the IT team.</p>' +
+                (list.length ? '<ul class="session-list login-list">' + list.map(function (l) {
+                    const canReport = !l.reported && (l.action === "signed-in" || l.failed) && !state.me.impersonatedBy;
+                    return '<li class="session-row' + (l.failed ? " is-failed" : "") + '"><span class="session-icon">' + icon(l.failed ? "alert" : l.action === "signed-in" ? "login" : "key") + "</span>" +
+                        '<div class="session-text"><div class="emp-name">' + esc(l.label) + (l.detail === "resumed" ? ' <span class="badge">Resumed session</span>' : "") +
+                        (l.reported ? ' <span class="badge badge-red">Reported</span>' : "") + "</div>" +
+                        '<div class="muted small">' + esc(fmtDateTime(l.at)) + (l.ip ? " · " + esc(l.ip) : "") + (l.ua ? " · " + esc(deviceName(l.ua)) : "") + "</div></div>" +
+                        (canReport ? '<button type="button" class="btn btn-ghost btn-small" data-report-at="' + esc(l.at) + '" data-report-ip="' + esc(l.ip) + '">This wasn’t me</button>' : "") + "</li>";
+                }).join("") + "</ul>" : '<p class="muted small">No sign-ins recorded yet.</p>') +
+                (!showAll && d.logins.length > 8 ? '<button type="button" class="btn btn-ghost btn-small" id="ml-more">Show all ' + d.logins.length + "</button>" : "");
+        }
+        draw();
+        box.onclick = async function (e) {
+            if (e.target.closest("#ml-more")) { showAll = true; return draw(); }
+            const b = e.target.closest("[data-report-at]");
+            if (!b) return;
+            const ok = await confirmDialog({
+                title: "Report this sign-in?",
+                message: "We’ll sign you out on every other device, forget any remembered browsers and raise an urgent IT ticket. You should then change your password and sign-in code.",
+                confirmLabel: "Report it", danger: true,
+            });
+            if (!ok) return;
+            try {
+                const r = await api("/api/me/logins/report", { at: b.dataset.reportAt, ip: b.dataset.reportIp });
+                d = await api("/api/me/logins");
+                draw();
+                if ($("#my-sessions")) loadMySessions($("#my-sessions"));
+                openModal('<h2 class="modal-title">Thanks for telling us</h2>' +
+                    '<p>You’ve been signed out everywhere else, and IT ticket <strong>#' + r.ticket + "</strong> has been raised so the IT team can look into it.</p>" +
+                    '<p class="muted">Now change your password and sign-in code, just in case.</p>' +
+                    '<div class="modal-actions"><button type="button" class="btn btn-primary" data-close id="ml-change">Change my password</button></div>');
+                $("#ml-change").addEventListener("click", function () { setTimeout(function () { const f = $("#pw-current"); if (f) { f.scrollIntoView({ block: "center" }); f.focus(); } }, 50); });
+            } catch (err) { toast(err.message); }
+        };
+    }
+
+    // ================= Security & data (System Admin) =================
+
+    function mountSecurityAdmin(box) {
+        const RET = {
+            auditDays: ["Activity log", "Sign-ins and actions in the activity log", "days"],
+            applicantsDays: ["Unsuccessful job applicants", "Applicants marked “Not progressing” or withdrawn, with their CVs", "days"],
+            chatDays: ["Chat messages", "Messages in every chat channel and direct message", "days"],
+            ticketsDays: ["Closed IT tickets", "Resolved and closed helpdesk tickets", "days"],
+            leaversYears: ["Leavers’ records", "Staff records, payslips and checklists of leavers whose login is off, counted from their last day", "years"],
+        };
+        const label = function (n, unit) {
+            if (!n) return "Keep forever";
+            if (unit === "years") return n + " years";
+            return n % 365 === 0 ? (n / 365) + (n === 365 ? " year" : " years") : n + " days";
+        };
+        async function draw() {
+            let d;
+            try { d = await api("/api/system/security"); } catch (err) { box.innerHTML = '<p class="muted">' + esc(err.message) + "</p>"; return; }
+            const p = d.password, r = d.retention;
+            box.innerHTML = '<div class="panel-head"><h2 class="panel-title">' + icon("shield") + "Password rules</h2></div>" +
+                '<form id="sec-pw" novalidate><div class="grid-2">' +
+                '<div><label for="sec-min">Minimum length</label><input type="number" id="sec-min" min="8" max="32" value="' + p.minLength + '"></div>' +
+                '<div><label for="sec-exp">Make people change their password</label><select id="sec-exp">' + d.choices.expiry.map(function (n) {
+                    return '<option value="' + n + '"' + (n === p.expiryDays ? " selected" : "") + ">" + (n ? "Every " + (n === 365 ? "year" : n + " days") : "Never") + "</option>";
+                }).join("") + "</select></div></div>" +
+                '<label class="inline-check"><input type="checkbox" id="sec-common"' + (p.blockCommon ? " checked" : "") + "> Block common and leaked passwords, and passwords based on someone’s name</label>" +
+                '<p class="hint">Changes apply the next time someone sets a password. ' + (p.expiryDays ? "Passwords expire " + p.expiryDays + " days after they were last changed (or since expiry was turned on, " + esc(fmtDate(p.expirySince)) + "). People are asked for a new one when they next sign in." : "National Cyber Security Centre advice is not to force regular changes unless a password may have leaked.") + "</p>" +
+                '<div class="form-actions"><button type="submit" class="btn btn-primary">Save password rules</button></div></form>' +
+
+                '<div class="panel-head sec-split"><h2 class="panel-title">' + icon("archive") + "Data retention</h2>" +
+                '<button type="button" class="btn btn-ghost btn-small" id="sec-run">' + icon("refresh") + "Run clean-up now</button></div>" +
+                '<p class="muted small">How long personal data is kept. Anything older is deleted automatically every night (around 3am). Backups taken before then still contain it until they’re rotated out after 14 days.</p>' +
+                '<form id="sec-ret" novalidate><div class="ret-grid">' + Object.keys(RET).map(function (k) {
+                    return '<div class="ret-row"><div><strong>' + RET[k][0] + '</strong><span class="muted small">' + RET[k][1] + "</span></div>" +
+                        '<select data-ret="' + k + '" aria-label="' + esc(RET[k][0]) + '">' + d.choices.retention[k].map(function (n) {
+                            return '<option value="' + n + '"' + (n === r[k] ? " selected" : "") + ">" + label(n, RET[k][2]) + "</option>";
+                        }).join("") + "</select></div>";
+                }).join("") + "</div>" +
+                (d.preview.leavers.length ? '<div class="banner banner-warn">' + icon("alert") + "<div><strong>The next clean-up will delete " + d.preview.leavers.length + " leaver" + (d.preview.leavers.length === 1 ? "’s" : "s’") + " records:</strong> " + d.preview.leavers.map(esc).join(", ") + "</div></div>" : "") +
+                '<p class="hint">' + (r.lastCleanup ? "Last clean-up " + esc(fmtDateTime(r.lastCleanup.at)) + ": deleted " + r.lastCleanup.audit + " log entries, " + r.lastCleanup.applicants + " applicants, " + r.lastCleanup.chat + " chat messages, " + r.lastCleanup.tickets + " IT tickets and " + r.lastCleanup.leavers + " leavers." : "The clean-up hasn’t run yet.") + "</p>" +
+                '<div class="form-actions"><button type="submit" class="btn btn-primary">Save retention settings</button></div></form>';
+        }
+        box.addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try {
+                if (e.target.id === "sec-pw") {
+                    await api("/api/system/security/password", { minLength: $("#sec-min", box).value, expiryDays: $("#sec-exp", box).value, blockCommon: $("#sec-common", box).checked });
+                    toast("Password rules saved.");
+                } else {
+                    const body = {};
+                    $$("[data-ret]", box).forEach(function (s) { body[s.dataset.ret] = s.value; });
+                    const leavers = Number(body.leaversYears) > 0;
+                    if (leavers && !(await confirmDialog({ title: "Delete old leavers’ records?", message: "Leavers’ staff records, payslips and checklists will be permanently deleted once they left more than " + body.leaversYears + " years ago. UK employers must keep payroll records for at least 3 years after the tax year they relate to.", confirmLabel: "Save" }))) return;
+                    await api("/api/system/security/retention", body);
+                    toast("Retention settings saved.");
+                }
+                draw();
+            } catch (err) { toast(err.message); }
+        });
+        box.addEventListener("click", async function (e) {
+            if (!e.target.closest("#sec-run")) return;
+            if (!(await confirmDialog({ title: "Run the clean-up now?", message: "Data older than the limits below will be deleted straight away. This can’t be undone (except by restoring a backup).", confirmLabel: "Run clean-up", danger: true }))) return;
+            try {
+                const r = (await api("/api/system/security/cleanup", {})).result;
+                toast("Deleted " + r.audit + " log entries, " + r.applicants + " applicants, " + r.chat + " messages, " + r.tickets + " tickets and " + r.leavers + " leavers.");
+                draw();
+            } catch (err) { toast(err.message); }
+        });
+        draw();
+    }
+
+    // ================= Announcement schedule (calendar of what goes out when) =================
+
+    function drawAnnouncementSchedule(box, list, onEdit, onNew) {
+        let month = state.annMonth || isoDay(new Date()).slice(0, 7);
+        function draw() {
+            const y = Number(month.slice(0, 4)), mth = Number(month.slice(5, 7));
+            const first = new Date(y, mth - 1, 1);
+            const start = new Date(first);
+            start.setDate(1 - ((first.getDay() + 6) % 7));
+            const today = isoDay(new Date());
+            const byDay = {};
+            list.forEach(function (a) {
+                const k = isoDay(new Date(a.publishAt));
+                (byDay[k] = byDay[k] || []).push({ a: a, kind: "out" });
+                if (a.expiresAt) { const e = isoDay(new Date(a.expiresAt)); (byDay[e] = byDay[e] || []).push({ a: a, kind: "end" }); }
+            });
+            let cells = "";
+            for (let i = 0; i < 42; i++) {
+                const d = new Date(start);
+                d.setDate(start.getDate() + i);
+                if (i >= 35 && d.getMonth() !== mth - 1) break;
+                const key = isoDay(d);
+                const items = byDay[key] || [];
+                cells += '<div class="cal-day' + (d.getMonth() !== mth - 1 ? " other" : "") + (key === today ? " today" : "") + (d.getDay() % 6 === 0 ? " weekend" : "") + '" data-day="' + key + '">' +
+                    '<span class="cal-num">' + d.getDate() + "</span>" +
+                    items.map(function (it) {
+                        return '<button type="button" class="cal-item ac-' + (it.kind === "end" ? "end" : it.a.state) + '" data-ann="' + esc(it.a.id) + '" title="' + esc(it.a.title) + '">' +
+                            '<span class="cal-time">' + esc(new Date(it.kind === "end" ? it.a.expiresAt : it.a.publishAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })) + "</span>" +
+                            (it.kind === "end" ? "Ends: " : "") + esc(it.a.title) + "</button>";
+                    }).join("") + "</div>";
+            }
+            const upcoming = list.filter(function (a) { return a.state === "scheduled"; }).sort(function (a, b) { return a.publishAt.localeCompare(b.publishAt); });
+            box.innerHTML = '<div class="cal-layout"><section class="panel cal-panel">' +
+                '<div class="cal-toolbar"><div class="btn-row"><button type="button" class="icon-btn" data-am="-1" aria-label="Previous month">' + icon("chevronLeft") + "</button>" +
+                '<button type="button" class="btn btn-ghost btn-small" data-am="0">Today</button>' +
+                '<button type="button" class="icon-btn" data-am="1" aria-label="Next month">' + icon("chevronRight") + "</button></div>" +
+                '<h2 class="cal-title">' + esc(first.toLocaleDateString("en-GB", { month: "long", year: "numeric" })) + "</h2>" +
+                '<div class="cal-legend"><span class="ac-scheduled">Scheduled</span><span class="ac-live">Published</span><span class="ac-end">Removed</span></div></div>' +
+                '<div class="cal-grid"><div class="cal-dow">Mon</div><div class="cal-dow">Tue</div><div class="cal-dow">Wed</div><div class="cal-dow">Thu</div><div class="cal-dow">Fri</div><div class="cal-dow">Sat</div><div class="cal-dow">Sun</div>' + cells + "</div>" +
+                '<p class="hint">Click an empty day to schedule an announcement for 9am that day.</p></section>' +
+                '<aside class="panel cal-side"><h2 class="section-title">' + icon("clock") + "Coming up</h2>" +
+                (upcoming.length ? '<div class="ann-upcoming">' + upcoming.map(function (a) {
+                    return '<button type="button" class="ann-up-row" data-ann="' + esc(a.id) + '"><strong>' + esc(a.title) + '</strong><span class="muted small">' + esc(fmtDateTime(a.publishAt)) +
+                        (a.companies && a.companies.length ? " · " + esc(a.companies.join(", ")) : " · Everyone") + "</span></button>";
+                }).join("") + "</div>" : '<p class="muted small">Nothing scheduled. Set a publish time when you write an announcement to schedule it.</p>') +
+                "</aside></div>";
+        }
+        box.onclick = function (e) {
+            const nav = e.target.closest("[data-am]");
+            if (nav) {
+                month = nav.dataset.am === "0" ? isoDay(new Date()).slice(0, 7) : shiftMonth(month, Number(nav.dataset.am));
+                state.annMonth = month;
+                return draw();
+            }
+            const it = e.target.closest("[data-ann]");
+            if (it) return onEdit(it.dataset.ann);
+            const day = e.target.closest(".cal-day");
+            if (day && day.dataset.day >= isoDay(new Date())) onNew(day.dataset.day);
+        };
+        draw();
+    }
+
+    // ================= Home page panels: choose which show, and in what order =================
+
+    const HOME_WIDGETS = [
+        { key: "todo", label: "To do", desc: "Things waiting for you to acknowledge" },
+        { key: "onboarding", label: "Onboarding", desc: "Your joiner or leaver checklist" },
+        { key: "pulse", label: "Pulse", desc: "This week’s quick question" },
+        { key: "leave", label: "Leave balance", desc: "Days left this year and what’s booked", off: true },
+        { key: "celebrate", label: "Celebrations", desc: "Birthdays and work anniversaries" },
+        { key: "coming", label: "Coming up", desc: "Events and holidays in the next few weeks" },
+        { key: "questions", label: "Unanswered questions", desc: "Q&A questions waiting for an answer", off: true },
+        { key: "me", label: "Your profile", desc: "Your status, roles and settings" },
+        { key: "help", label: "Need help? / On call", desc: "IT contact and who’s on call" },
+    ];
+
+    function homeLayout() {
+        const saved = state.me.homeLayout;
+        const keys = HOME_WIDGETS.map(function (w) { return w.key; });
+        const order = (saved && saved.order || []).filter(function (k) { return keys.indexOf(k) !== -1; });
+        keys.forEach(function (k) { if (order.indexOf(k) === -1) order.splice(keys.indexOf(k), 0, k); });
+        const hidden = saved ? (saved.hidden || []) : HOME_WIDGETS.filter(function (w) { return w.off; }).map(function (w) { return w.key; });
+        return { order: order, hidden: hidden };
+    }
+
+    // Puts the side panels in the person's order and removes the ones they've turned off.
+    function applyHomeLayout(aside) {
+        const l = homeLayout();
+        l.order.forEach(function (k) {
+            const el = $('[data-widget="' + k + '"]', aside);
+            if (!el) return;
+            if (l.hidden.indexOf(k) !== -1) el.remove(); else aside.insertBefore(el, $(".home-customise", aside));
+        });
+        if (l.hidden.indexOf("leave") === -1 && $('[data-widget="leave"]', aside)) loadLeaveWidget($('[data-widget="leave"]', aside));
+        if (l.hidden.indexOf("questions") === -1 && $('[data-widget="questions"]', aside)) loadQuestionsWidget($('[data-widget="questions"]', aside));
+    }
+
+    async function loadLeaveWidget(box) {
+        try {
+            const d = await api("/api/leave");
+            if (!d.summary) { box.remove(); return; }
+            const s = d.summary;
+            const next = (d.mine || []).filter(function (r) { return r.status === "approved" && r.endDate >= isoDay(new Date()); }).sort(function (a, b) { return a.startDate.localeCompare(b.startDate); })[0];
+            box.hidden = false;
+            box.innerHTML = '<div class="panel-head tight"><h2 class="section-title">' + icon("sun") + 'Leave</h2><a class="small link-arrow" href="/leave" data-link>Book leave</a></div>' +
+                '<div class="lw-stats"><div><strong>' + esc(fmtDays(s.remaining)) + '</strong><span class="muted small">left in ' + s.year + "</span></div>" +
+                "<div><strong>" + esc(fmtDays(s.booked + s.pending)) + '</strong><span class="muted small">booked or waiting</span></div>' +
+                (s.toilHours ? "<div><strong>" + esc(fmtHours(s.toilHours)) + '</strong><span class="muted small">time off in lieu</span></div>' : "") + "</div>" +
+                (next ? '<p class="muted small">Next: ' + esc(dateRange(next.startDate, next.endDate)) + "</p>" : "");
+        } catch (e) { box.remove(); }
+    }
+
+    async function loadQuestionsWidget(box) {
+        try {
+            const d = await api("/api/qa");
+            const open = d.questions.filter(function (q) { return !q.answerCount && !q.mine; }).slice(0, 4);
+            box.hidden = false;
+            box.innerHTML = '<div class="panel-head tight"><h2 class="section-title">' + icon("help") + 'Can you help?</h2><a class="small link-arrow" href="/questions" data-link>All questions</a></div>' +
+                (open.length ? '<div class="qw-list">' + open.map(function (q) {
+                    return '<a class="qw-row" href="/questions?q=' + q.id + '" data-link><strong>' + esc(q.title) + '</strong><span class="muted small">' + esc(q.author.displayName) + " · " + esc(timeAgo(q.createdAt)) + "</span></a>";
+                }).join("") + "</div>" : '<p class="muted small">Every question has an answer. Nice work!</p>');
+        } catch (e) { box.remove(); }
+    }
+
+    function openHomeCustomiser() {
+        const l = homeLayout();
+        let order = l.order.slice();
+        const hidden = {};
+        l.hidden.forEach(function (k) { hidden[k] = true; });
+        const byKey = {};
+        HOME_WIDGETS.forEach(function (w) { byKey[w.key] = w; });
+        const m = openModal('<h2 class="modal-title">Customise your home page</h2><p class="muted">Choose which panels show down the side of your home page, and move them into the order you like.</p>' +
+            '<ul class="hw-list" id="hw-list"></ul>' +
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" id="hw-reset">Reset</button><button type="button" class="btn btn-primary" id="hw-save">Save</button></div>');
+        function draw() {
+            $("#hw-list", m.el).innerHTML = order.map(function (k, i) {
+                const w = byKey[k];
+                return '<li class="hw-row' + (hidden[k] ? " is-off" : "") + '"><label class="hw-toggle"><input type="checkbox" data-hw-show="' + k + '"' + (hidden[k] ? "" : " checked") + "><span><strong>" + esc(w.label) + '</strong><span class="muted small">' + esc(w.desc) + "</span></span></label>" +
+                    '<span class="hw-move"><button type="button" class="icon-btn icon-btn-sm" data-hw-up="' + i + '" aria-label="Move ' + esc(w.label) + ' up"' + (i ? "" : " disabled") + ">" + icon("chevronLeft", "hw-up") + "</button>" +
+                    '<button type="button" class="icon-btn icon-btn-sm" data-hw-down="' + i + '" aria-label="Move ' + esc(w.label) + ' down"' + (i < order.length - 1 ? "" : " disabled") + ">" + icon("chevronRight", "hw-down") + "</button></span></li>";
+            }).join("");
+        }
+        m.el.addEventListener("change", function (e) {
+            const c = e.target.closest("[data-hw-show]");
+            if (c) { hidden[c.dataset.hwShow] = !c.checked; draw(); }
+        });
+        m.el.addEventListener("click", async function (e) {
+            const up = e.target.closest("[data-hw-up]"), down = e.target.closest("[data-hw-down]");
+            if (up || down) {
+                const i = Number((up || down).dataset[up ? "hwUp" : "hwDown"]), j = up ? i - 1 : i + 1;
+                const t = order[i]; order[i] = order[j]; order[j] = t;
+                return draw();
+            }
+            const reset = e.target.closest("#hw-reset");
+            if (!reset && !e.target.closest("#hw-save")) return;
+            try {
+                state.me = (await api("/api/me/home-layout", reset ? {} : { order: order, hidden: Object.keys(hidden).filter(function (k) { return hidden[k]; }) })).user;
+                closeModal();
+                toast(reset ? "Home page reset." : "Home page updated.");
+                render();
+            } catch (err) { toast(err.message); }
+        });
+        draw();
     }
 
     start();

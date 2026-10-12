@@ -106,8 +106,30 @@ function channels(person, extra) {
   }).sort((a, b) => (a.kind === "dm") - (b.kind === "dm") || (a.kind === "dm" ? (b.last ? b.last.at : "").localeCompare(a.last ? a.last.at : "") : 0));
 }
 
+// Data retention: deletes messages older than the cutoff.
+function prune(cutoffIso) {
+  let n = 0;
+  for (const [id, list] of Object.entries(db.data.messages)) {
+    const kept = list.filter((m) => m.at >= cutoffIso);
+    n += list.length - kept.length;
+    if (kept.length) db.data.messages[id] = kept; else delete db.data.messages[id];
+  }
+  if (n) db.save();
+  return n;
+}
+
+// Everything someone has written, for "Download my data".
+function writtenBy(personId) {
+  const out = [];
+  for (const [id, list] of Object.entries(db.data.messages)) {
+    const c = parse(id);
+    for (const m of list) if (m.by === personId && !m.deleted) out.push({ channel: c ? (c.kind === "dm" ? "Direct message" : c.name) : id, text: m.text, at: m.at });
+  }
+  return out.sort((a, b) => a.at.localeCompare(b.at));
+}
+
 function unreadTotal(person) {
   return channels(person).reduce((n, c) => n + c.unread, 0);
 }
 
-module.exports = { init, dmId, canAccess, post, remove, markRead, messages, channels, unreadTotal };
+module.exports = { prune, writtenBy, init, dmId, canAccess, post, remove, markRead, messages, channels, unreadTotal };
