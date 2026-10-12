@@ -35,6 +35,7 @@ function init(dataDir) {
   if (db.data.maxOffPerCompany === undefined) { db.data.maxOffPerCompany = 3; changed = true; }
   if (!db.data.shutdowns) { db.data.shutdowns = []; changed = true; }
   if (!db.data.toil) { db.data.toil = {}; changed = true; }
+  if (!db.data.patterns) { db.data.patterns = {}; changed = true; }
   if (changed) db.save();
   // Leave starts and ends at midnight, so check statuses regularly as well as on every change.
   if (!statusTimer) {
@@ -133,7 +134,57 @@ function carriedInto(personId, year) {
 }
 
 function allowanceFor(personId, year) {
-  return baseAllowance(personId) + carriedInto(personId, year || new Date().getFullYear());
+  return baseAllowance(personId) + carriedInto(personId, year || new Date().getFullYear()) + bankHolidayAdjustment(personId, year || new Date().getFullYear()).adjustment;
+}
+
+// ---------- Work patterns and bank holidays ----------
+// Most people work Monday to Friday. Part-time and shift staff can have their own working days.
+// Bank holidays are shared out fairly: everyone gets bank holidays in proportion to the days they
+// work (a 3-day week gets 3/5 of them). The ones that fall on their working days they get off
+// anyway; the difference is added to (or taken from) their holiday allowance.
+
+const FULL_WEEK = [1, 2, 3, 4, 5];
+
+function patternOf(personId) {
+  const p = db.data.patterns[personId];
+  return Array.isArray(p) && p.length ? p : FULL_WEEK;
+}
+
+function setPattern(personId, days) {
+  const clean = [...new Set((Array.isArray(days) ? days : []).map(Number).filter((d) => d >= 0 && d <= 6))].sort();
+  if (!clean.length) throw new store.ValidationError("Choose at least one working day.");
+  if (clean.join() === FULL_WEEK.join()) delete db.data.patterns[personId];
+  else db.data.patterns[personId] = clean;
+  db.save();
+}
+
+function bankHolidaysIn(year) {
+  return Object.keys(calendar.BANK_HOLIDAYS).filter((d) => d.startsWith(String(year)));
+}
+
+function bankHolidayAdjustment(personId, year) {
+  const pattern = patternOf(personId);
+  const holidays = bankHolidaysIn(year);
+  if (pattern.join() === FULL_WEEK.join() || !holidays.length) return { entitled: holidays.length, onWorkingDays: holidays.length, adjustment: 0 };
+  const entitled = Math.round((holidays.length * pattern.length / 5) * 2) / 2;
+  const onWorkingDays = holidays.filter((d) => pattern.includes(new Date(d + "T12:00:00Z").getUTCDay())).length;
+  return { entitled, onWorkingDays, adjustment: Math.round((entitled - onWorkingDays) * 2) / 2 };
+}
+
+// Working days in a range for one person: their pattern, less bank holidays.
+function workingDaysFor(personId, from, to) {
+  const pattern = patternOf(personId);
+  let n = 0;
+  for (let d = new Date(from + "T12:00:00Z"); d.toISOString().slice(0, 10) <= to; d.setUTCDate(d.getUTCDate() + 1)) {
+    if (pattern.includes(d.getUTCDay()) && !calendar.BANK_HOLIDAYS[d.toISOString().slice(0, 10)]) n++;
+  }
+  return n;
+}
+
+function patternLabel(personId) {
+  const p = patternOf(personId);
+  if (p.join() === FULL_WEEK.join()) return "Mon–Fri";
+  return p.map((d) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d]).join(", ");
 }
 
 function usedIn(personId, year) {
@@ -172,7 +223,8 @@ function summary(personId, year) {
   const booked = sum(approved.filter((r) => r.endDate >= today()));
   const pending = sum(annual.filter((r) => r.status === "pending"));
   const sickDays = sum(db.data.requests.filter((r) => r.personId === personId && r.type === "sick" && r.status === "approved" && r.startDate.startsWith(y)));
-  return { year: Number(y), allowance, base: allowance - carried, carried, taken, booked, pending, remaining: allowance - taken - booked - pending, sickDays, toilHours: toilBalance(personId) };
+  const bh = bankHolidayAdjustment(personId, y);
+  return { year: Number(y), allowance, base: allowance - carried - bh.adjustment, carried, bankHolidayAdjustment: bh.adjustment, bankHolidays: bh, pattern: patternOf(personId), patternLabel: patternLabel(personId), taken, booked, pending, remaining: allowance - taken - booked - pending, sickDays, toilHours: toilBalance(personId) };
 }
 
 function canApprove(approver, request) {
@@ -189,7 +241,7 @@ function createRequest(person, input, by, opts) {
   if (endDate < startDate) throw new store.ValidationError("The end date can't be before the start date.");
   if ((Date.parse(endDate) - Date.parse(startDate)) / 86400000 > 366) throw new store.ValidationError("Requests can be at most a year long.");
   const halfDay = startDate === endDate && (input.halfDay === "am" || input.halfDay === "pm") ? input.halfDay : "";
-  let days = workingDays(startDate, endDate);
+  let days = workingDaysFor(person.id, startDate, endDate);
   if (halfDay && days) days = 0.5;
   if (!days) throw new store.ValidationError("Those dates are all weekends or bank holidays, so there's nothing to book.");
   const overlap = db.data.requests.find((r) => r.personId === person.id && (r.status === "pending" || r.status === "approved") && r.startDate <= endDate && r.endDate >= startDate);
@@ -581,6 +633,7 @@ function leaveBetween(from, to) {
 }
 
 module.exports = {
+  patternOf, setPattern, bankHolidayAdjustment, workingDaysFor, patternLabel,
   TOIL_HOURS_PER_DAY, clashFor, setMaxOffPerCompany, grid, createShutdown, deleteShutdown, shutdowns, toilBalance, addToil, toilHistory, leaveBetween,
   syncStatuses,
   TYPES, MANAGE, init, workingDays, summary, createRequest, getRequest, decide, cancel, mine, approvals,

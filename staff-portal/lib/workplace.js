@@ -378,9 +378,16 @@ function updateDocument(doc, meta) {
   return doc;
 }
 
-// A new file is a new version: everyone has to acknowledge it again.
-function replaceFile(doc, fileName, buffer) {
+// A new file is a new version: everyone has to acknowledge it again. The old file is kept, along
+// with who had acknowledged it, so you can see what changed and who signed off which version.
+function replaceFile(doc, fileName, buffer, note, by) {
   const ext = checkFile(fileName, buffer);
+  const acks = Object.entries(doc.acks || {}).filter(([, a]) => a.version === doc.version).map(([personId, a]) => ({ personId, at: a.at }));
+  const current = path.join(filesDir, doc.id);
+  if (fs.existsSync(current)) fs.renameSync(current, path.join(filesDir, `${doc.id}.v${doc.version}`));
+  (doc.history = doc.history || []).push({ version: doc.version, file: doc.file, note: doc.versionNote || "", uploadedBy: doc.versionBy || doc.authorId, acks, replacedAt: new Date().toISOString() });
+  doc.versionNote = str(note, 300);
+  doc.versionBy = by ? by.id : null;
   writeFile(doc, buffer, fileName, ext);
   doc.version++;
   doc.updatedAt = new Date().toISOString();
@@ -391,6 +398,7 @@ function replaceFile(doc, fileName, buffer) {
 function deleteDocument(doc) {
   documents = documents.filter((d) => d.id !== doc.id);
   fs.rmSync(path.join(filesDir, doc.id), { force: true });
+  for (const h of doc.history || []) fs.rmSync(path.join(filesDir, `${doc.id}.v${h.version}`), { force: true });
   saveDocuments();
 }
 
@@ -412,12 +420,38 @@ function acknowledgements(doc) {
   }).sort((a, b) => (!!a.acknowledgedAt - !!b.acknowledgedAt) || a.displayName.localeCompare(b.displayName));
 }
 
+// Every version, newest first. People who manage documents also see who acknowledged each one.
+function versions(doc, viewer) {
+  const manager = store.can(viewer, "documents.manage");
+  const name = (id) => { const p = id ? store.getPerson(id) : null; return p ? p.displayName : id ? "Former staff" : ""; };
+  const current = {
+    version: doc.version, current: true, file: doc.file, note: doc.versionNote || "", uploadedByName: name(doc.versionBy || doc.authorId), uploadedAt: doc.file.uploadedAt,
+    acks: Object.entries(doc.acks || {}).filter(([, a]) => a.version === doc.version).map(([personId, a]) => ({ personId, at: a.at })),
+  };
+  const old = (doc.history || []).slice().reverse().map((h) => ({ version: h.version, current: false, file: h.file, note: h.note, uploadedByName: name(h.uploadedBy), uploadedAt: h.file.uploadedAt, replacedAt: h.replacedAt, acks: h.acks }));
+  return [current].concat(old).map((v) => ({
+    ...v,
+    ackCount: v.acks.length,
+    acks: manager ? v.acks.map((a) => ({ name: name(a.personId), at: a.at })) : undefined,
+    acknowledgedByMe: v.acks.some((a) => a.personId === viewer.id),
+  }));
+}
+
+function versionFile(doc, version) {
+  const h = (doc.history || []).find((x) => x.version === Number(version));
+  if (!h) return null;
+  const type = FILE_TYPES[h.file.ext] || { mime: "application/octet-stream", inline: false };
+  return { path: path.join(filesDir, `${doc.id}.v${h.version}`), name: h.file.name.replace(/(\.[^.]+)?$/, ` (version ${h.version})$1`), mime: type.mime, inline: type.inline };
+}
+
 function fileFor(doc) {
   const type = FILE_TYPES[doc.file.ext] || { mime: "application/octet-stream", inline: false };
   return { path: path.join(filesDir, doc.id), name: doc.file.name, mime: type.mime, inline: type.inline };
 }
 
 module.exports = {
+  versions,
+  versionFile,
   CATEGORIES,
   MAX_FILE_BYTES,
   FILE_TYPES,

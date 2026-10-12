@@ -26,7 +26,7 @@ const DEFAULT_TEMPLATE = {
 // Leavers: the same kind of checklist, for when someone leaves. Ticking a task with the
 // "disable-login" action switches their login off.
 const KINDS = { starter: "New starter", leaver: "Leaver" };
-const ACTIONS = { "disable-login": "Disables their login when ticked" };
+const ACTIONS = { "disable-login": "Disables their login when ticked", "exit-interview": "Ticked automatically when they send their exit interview" };
 
 const LEAVER_TEMPLATE = {
   name: "Leaver",
@@ -60,6 +60,31 @@ function init(dataDir) {
     data.leaverTemplateAdded = true;
     save();
   }
+  // Leaver checklists get an exit interview task (added once to existing leaver templates).
+  if (!data.exitInterviewAdded) {
+    for (const t of data.templates) {
+      if ((t.kind || "starter") !== "leaver" || t.tasks.some((x) => x.action === "exit-interview")) continue;
+      t.tasks.splice(Math.max(0, t.tasks.length - 1), 0, { id: newId(), title: "Fill in your exit interview", description: "A short form about your time here. Only HR see your answers. Open it from the Exit interview page.", owner: "employee", action: "exit-interview" });
+    }
+    data.exitInterviewAdded = true;
+    save();
+  }
+}
+
+// The person's leaving checklist in progress, if they have one.
+function leaverChecklistOf(personId) {
+  return data.checklists.find((c) => c.personId === personId && !c.completedAt && (c.kind || "starter") === "leaver") || null;
+}
+
+// Ticks a task with a given automatic action (e.g. the exit interview being sent).
+function completeAction(personId, action) {
+  const c = leaverChecklistOf(personId);
+  const task = c && c.tasks.find((t) => t.action === action && !t.doneAt);
+  if (!task) return;
+  task.doneAt = new Date().toISOString();
+  task.doneBy = personId;
+  c.completedAt = c.tasks.every((t) => t.doneAt) ? new Date().toISOString() : null;
+  save();
 }
 
 function save() {
@@ -196,6 +221,8 @@ function removePerson(personId) {
 module.exports = {
   KINDS,
   ACTIONS,
+  leaverChecklistOf,
+  completeAction,
   OWNERS, init, listTemplates, saveTemplate, getTemplate, deleteTemplate,
   startChecklist, getChecklist, setTask, deleteChecklist, listChecklists, forPerson, removePerson, view,
 };

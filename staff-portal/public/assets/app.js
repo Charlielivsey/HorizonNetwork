@@ -362,6 +362,7 @@
                 { title: "Calendar", desc: "Events, bank holidays and celebrations", href: "/calendar", icon: "calendar" },
                 { title: "Polls & surveys", desc: "Have your say", href: "/polls", icon: "chart", badge: "openPolls" },
                 { title: "Ideas", desc: "Suggest improvements and vote", href: "/ideas", icon: "flag", badge: "newIdeas" },
+                { title: "Pulse", desc: "This week’s quick anonymous question", href: "/pulse", icon: "activity" },
                 { title: "Email signature", desc: "Make your branded email signature", href: "/signature", icon: "mail" },
             ],
         },
@@ -370,6 +371,10 @@
                 { title: "Leave & Absence", desc: "Book holidays and report absence", href: "/leave", icon: "sun", badge: "leaveApprovals" },
                 { title: "Rotas & Timesheets", desc: "Shifts, hours and approvals", href: "/rotas", icon: "clock", badge: "timesheetApprovals" },
                 { title: "Probation & reviews", desc: "Probation dates and reviews", href: "/reviews", icon: "star", badge: "reviewsDue" },
+                { title: "Goals", desc: "Quarterly goals and progress", href: "/objectives", icon: "flag" },
+                { title: "360 feedback", desc: "Anonymous feedback from colleagues", href: "/feedback", icon: "message", badge: "feedbackDue" },
+                { title: "Flexible working", desc: "Ask for a different working pattern", href: "/flexible", icon: "clock", badge: "flexibleDecisions" },
+                { title: "Exit interviews", desc: "What leavers told us", href: "/exit-interviews", icon: "logout", requires: "staff.manage" },
                 { title: "Staff documents", desc: "Contracts and personal documents", href: "/staff-files", icon: "file" },
                 { title: "Training", desc: "Courses, certificates and renewals", href: "/training", icon: "star", badge: "trainingDue" },
                 { title: "HR cases", desc: "Disciplinary and grievance records", href: "/cases", icon: "shield", requires: "cases.manage", badge: "casesOpen" },
@@ -595,6 +600,12 @@
         "/team": viewTeam,
         "/reports": viewReports,
         "/bills": viewBills,
+        "/objectives": viewObjectives,
+        "/feedback": viewFeedback,
+        "/pulse": viewPulse,
+        "/exit-interview": viewExitInterview,
+        "/exit-interviews": viewExitInterviews,
+        "/flexible": viewFlexible,
     };
 
     function navigate(href, replace) {
@@ -638,6 +649,12 @@
         "/team": "building",
         "/reports": "chart",
         "/bills": "card",
+        "/objectives": "flag",
+        "/feedback": "message",
+        "/pulse": "activity",
+        "/exit-interview": "logout",
+        "/exit-interviews": "logout",
+        "/flexible": "clock",
     };
 
     function decoratePageHead(root, path) {
@@ -669,7 +686,7 @@
         const path = window.location.pathname;
         let view = ROUTES[path];
         if (!view) return navigate("/home", true);
-        const NEEDS = { "/employees": "staff.manage", "/onboarding": "onboarding.manage", "/roles": "access.manage", "/payroll": "payroll.manage", "/funds": "payroll.manage", "/invoices": "payroll.manage", "/cases": "cases.manage", "/reports": "reports.view", "/bills": "payroll.manage" };
+        const NEEDS = { "/employees": "staff.manage", "/onboarding": "onboarding.manage", "/roles": "access.manage", "/payroll": "payroll.manage", "/funds": "payroll.manage", "/invoices": "payroll.manage", "/cases": "cases.manage", "/reports": "reports.view", "/bills": "payroll.manage", "/exit-interviews": "staff.manage" };
         if (NEEDS[path] && !can(NEEDS[path])) view = viewNoAccess;
         if (path === "/system" && (!can("system.admin") || state.me.impersonatedBy)) view = viewNoSystemAccess;
 
@@ -799,13 +816,16 @@
             (me.timesheetApprovals ? '<a class="hero-chip" href="/rotas" data-link data-rota-approvals>' + icon("clock") + me.timesheetApprovals + " timesheet" + (me.timesheetApprovals === 1 ? "" : "s") + " to approve</a>" : "") +
             (me.expenseApprovals ? '<a class="hero-chip" href="/expenses" data-link>' + icon("pound") + me.expenseApprovals + " expense claim" + (me.expenseApprovals === 1 ? "" : "s") + " to deal with</a>" : "") +
             (me.budgetWarnings ? '<a class="hero-chip warn" href="/funds" data-link>' + icon("flag") + me.budgetWarnings + (me.budgetWarnings === 1 ? " budget is" : " budgets are") + " nearly used up</a>" : "") +
+            (me.exitInterviewDue ? '<a class="hero-chip" href="/exit-interview" data-link>' + icon("logout") + "Fill in your exit interview</a>" : "") +
+            (me.feedbackDue ? '<a class="hero-chip" href="/feedback" data-link>' + icon("message") + me.feedbackDue + " feedback request" + (me.feedbackDue === 1 ? "" : "s") + "</a>" : "") +
+            (me.flexibleDecisions ? '<a class="hero-chip" href="/flexible" data-link>' + icon("clock") + me.flexibleDecisions + " flexible working request" + (me.flexibleDecisions === 1 ? "" : "s") + " to decide</a>" : "") +
             (me.billsDue ? '<a class="hero-chip warn" href="/bills" data-link>' + icon("card") + me.billsDue + " bill" + (me.billsDue === 1 ? "" : "s") + " due this week</a>" : "") +
             (me.invoicesOverdue ? '<a class="hero-chip warn" href="/invoices" data-link>' + icon("file") + me.invoicesOverdue + " overdue invoice" + (me.invoicesOverdue === 1 ? "" : "s") + "</a>" : "") +
             (me.backupStale ? '<a class="hero-chip danger" href="/system#sys-backups" data-link>' + icon("archive") + "No backup in the last 36 hours</a>" : "") +
             (me.trainingDue ? '<a class="hero-chip warn" href="/training" data-link>' + icon("star") + me.trainingDue + " training item" + (me.trainingDue === 1 ? "" : "s") + " expiring or missing</a>" : "") +
             (me.newApplicants ? '<a class="hero-chip" href="/jobs" data-link>' + icon("briefcase") + me.newApplicants + " new job applicant" + (me.newApplicants === 1 ? "" : "s") + "</a>" : "") +
             (me.helpdeskBadge ? '<a class="hero-chip" href="/helpdesk" data-link>' + icon("lifebuoy") + me.helpdeskBadge + " IT ticket" + (me.helpdeskBadge === 1 ? "" : "s") + " need" + (me.helpdeskBadge === 1 ? "s" : "") + " attention</a>" : "") +
-            (!me.unreadAnnouncements && !me.pendingAcks && !me.openPolls && !me.onboardingTasks && !me.leaveApprovals && !me.timesheetApprovals && !me.helpdeskBadge && !me.payrollOverdrawn && !me.reviewsDue && !me.returnToWorkDue && !me.servicesDown && !me.expenseApprovals && !me.budgetWarnings && !me.invoicesOverdue && !me.trainingDue && !me.newApplicants && !me.backupStale && !me.billsDue ? '<span class="hero-chip calm">' + icon("tick") + "You\u2019re all caught up</span>" : "") +
+            (!me.unreadAnnouncements && !me.pendingAcks && !me.openPolls && !me.onboardingTasks && !me.leaveApprovals && !me.timesheetApprovals && !me.helpdeskBadge && !me.payrollOverdrawn && !me.reviewsDue && !me.returnToWorkDue && !me.servicesDown && !me.expenseApprovals && !me.budgetWarnings && !me.invoicesOverdue && !me.trainingDue && !me.newApplicants && !me.backupStale && !me.billsDue && !me.exitInterviewDue && !me.feedbackDue && !me.flexibleDecisions ? '<span class="hero-chip calm">' + icon("tick") + "You\u2019re all caught up</span>" : "") +
             "</div></div>" +
             '<div class="hero-clocks">' +
             '<div class="glass-clock"><div class="gc-label">' + icon("monitor") + "Your time \u00b7 " + esc(tzCity(deviceTz)) + "</div>" +
@@ -825,6 +845,7 @@
             '<aside class="home-side">' +
             '<section class="panel" id="home-todo" hidden></section>' +
             '<section class="panel" id="home-onboarding" hidden></section>' +
+            (me.pulseDue ? '<section class="panel" id="home-pulse"></section>' : "") +
             '<section class="panel" id="home-celebrate" hidden></section>' +
             '<section class="panel" id="home-coming"><p class="muted small">Loading\u2026</p></section>' +
             '<section class="panel me-panel"><div class="me-card">' + avatar(me, "lg") + '<div><div class="me-name">' + esc(me.displayName) + "</div>" +
@@ -869,6 +890,12 @@
         });
         loadComingUp($("#home-coming"));
         loadCelebrations($("#home-celebrate"));
+        if ($("#home-pulse")) api("/api/pulse").then(function (p) {
+            const box = $("#home-pulse");
+            if (!box || p.answered) { if (box) box.remove(); return; }
+            box.innerHTML = pulseCardHtml(p.question);
+            wirePulse(box);
+        }).catch(function () {});
         loadMyOnboarding($("#home-onboarding"));
 
         if (me.pendingAcks) {
@@ -2137,7 +2164,7 @@
                     '<div class="doc-main"><div class="doc-title">' + esc(d.title) + (d.requiresAck ? ' <span class="badge">Must read</span>' : "") + "</div>" +
                     (d.description ? '<div class="doc-desc muted small">' + esc(d.description) + "</div>" : "") +
                     '<div class="doc-meta muted small">' + esc(d.category) + " · " + esc(FILE_KINDS[d.file.ext] || d.file.ext) + " · " + fileSize(d.file.size) +
-                    " · Updated " + esc(fmtDate(d.updatedAt)) + (d.version > 1 ? " · Version " + d.version : "") + "</div>" +
+                    " · Updated " + esc(fmtDate(d.updatedAt)) + (d.version > 1 ? ' · <button type="button" class="link-btn" data-act="versions">Version ' + d.version + " \u00b7 history</button>" : "") + "</div>" +
                     '<div class="chips">' + audienceChips(d.companies) + "</div></div>" +
                     '<div class="doc-side">' + status + progress +
                     '<div class="btn-row">' +
@@ -2170,6 +2197,7 @@
             if (act === "edit") return openDocumentForm(d, data.categories);
             if (act === "replace") return openReplaceFile(d);
             if (act === "acks") return openAcknowledgements(d);
+            if (act === "versions") return openVersions(d);
             if (act === "delete") {
                 if (!(await confirmDialog({ title: "Delete “" + d.title + "”?", message: "The document and its acknowledgements will be removed for everyone.", confirmLabel: "Delete", danger: true }))) return;
                 try {
@@ -2283,6 +2311,24 @@
         });
     }
 
+    async function openVersions(d) {
+        let r;
+        try { r = await api("/api/documents/" + d.id + "/versions"); } catch (err) { return toast(err.message); }
+        openModal(
+            '<h2 class="modal-title">Version history</h2><p class="muted">' + esc(r.title) + "</p>" +
+            '<ol class="version-list">' + r.versions.map(function (v) {
+                return '<li class="' + (v.current ? "current" : "") + '"><div class="vl-head"><strong>Version ' + v.version + "</strong>" + (v.current ? ' <span class="badge badge-green">Current</span>' : "") +
+                    '<span class="muted small">' + esc(fmtDate(v.uploadedAt)) + (v.uploadedByName ? " \u00b7 " + esc(v.uploadedByName) : "") + (v.replacedAt ? " \u00b7 replaced " + esc(fmtDate(v.replacedAt)) : "") + "</span>" +
+                    (v.current ? '<a class="btn btn-ghost btn-small" href="/api/documents/' + d.id + '/file?download=1">' + icon("download") + "</a>" : '<a class="btn btn-ghost btn-small" href="/api/documents/' + d.id + "/versions/" + v.version + '/file">' + icon("download") + "</a>") + "</div>" +
+                    (v.note ? '<p class="vl-note">' + esc(v.note) + "</p>" : "") +
+                    '<div class="muted small">' + esc(v.file.name) + " \u00b7 " + fileSize(v.file.size) + (d.requiresAck ? " \u00b7 acknowledged by " + v.ackCount + (v.acknowledgedByMe ? " (including you)" : "") : "") + "</div>" +
+                    (v.acks && v.acks.length ? '<details class="vl-acks"><summary>Who acknowledged version ' + v.version + "</summary><ul>" + v.acks.map(function (a) { return "<li>" + esc(a.name) + ' <span class="muted small">' + esc(fmtDateTime(a.at)) + "</span></li>"; }).join("") + "</ul></details>" : "") +
+                    "</li>";
+            }).join("") + "</ol>" +
+            '<div class="modal-actions"><button type="button" class="btn btn-primary" data-close>Done</button></div>'
+        );
+    }
+
     function openReplaceFile(d) {
         let file = null;
         const m = openModal(
@@ -2290,6 +2336,7 @@
             '<p class="muted">Replaces the file for “' + esc(d.title) + "” (currently " + esc(d.file.name) + ")." +
             (d.requiresAck ? " Everyone will be asked to acknowledge the new version." : "") + "</p>" +
             fileDropField("rep-file") +
+            '<label for="rep-note">What\u2019s changed? <span class="muted small">(shown in the version history)</span></label><input type="text" id="rep-note" maxlength="300" placeholder="e.g. Updated the holiday section for 2027">' +
             '<div class="form-error" id="rep-error" hidden></div>' +
             '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button>' +
             '<button type="button" class="btn btn-primary" id="rep-save">Upload new version</button></div>'
@@ -2302,7 +2349,7 @@
             if (!file) return formError($("#rep-error", m.el), "Choose a file to upload.");
             $("#rep-save", m.el).disabled = true;
             try {
-                await uploadFile("/api/documents/" + d.id + "/file", file, {}, function (pct) { showProgress(m.el, pct); });
+                await uploadFile("/api/documents/" + d.id + "/file", file, { note: $("#rep-note", m.el).value }, function (pct) { showProgress(m.el, pct); });
                 closeModal();
                 toast("New version uploaded.");
                 render();
@@ -3835,7 +3882,8 @@
                 "<span>" + year + " holiday allowance</span>" +
                 '<button type="button" class="icon-btn icon-btn-sm" data-year="' + (year + 1) + '" aria-label="Next year">' + icon("chevronRight") + "</button></div>" +
                 '<div class="ls-remaining"><span class="ls-big">' + (Math.round(s.remaining * 2) / 2) + '</span><span class="muted">of ' + s.allowance + " days left</span>" +
-                (s.carried ? '<span class="badge badge-soft">Includes ' + s.carried + (s.carried === 1 ? " day" : " days") + " carried over from " + (year - 1) + "</span>" : "") + "</div>" +
+                (s.carried ? '<span class="badge badge-soft">Includes ' + s.carried + (s.carried === 1 ? " day" : " days") + " carried over from " + (year - 1) + "</span>" : "") +
+                (s.bankHolidayAdjustment ? '<span class="badge badge-soft">' + (s.bankHolidayAdjustment > 0 ? "Includes " + s.bankHolidayAdjustment : "Less " + (-s.bankHolidayAdjustment)) + " for bank holidays (you work " + esc(s.patternLabel) + ")</span>" : "") + "</div>" +
                 '<div class="ls-bar"><span class="ls-taken" data-pct="' + pct(s.taken, s.allowance) + '"></span><span class="ls-booked" data-pct="' + pct(s.booked, s.allowance) + '"></span><span class="ls-pending" data-pct="' + pct(s.pending, s.allowance) + '"></span></div>' +
                 '<div class="ls-legend"><span class="ls-k taken">Taken ' + s.taken + '</span><span class="ls-k booked">Booked ' + s.booked + '</span><span class="ls-k pending">Waiting for approval ' + s.pending + "</span></div></div>" +
                 '<div class="ls-side"><div class="stat"><div class="stat-value">' + s.sickDays + '</div><div class="stat-label">Sick days in ' + year + "</div></div>" +
@@ -3903,7 +3951,7 @@
                     '<form class="allow-default" id="lv-clash"><label for="lv-clash-n">Warn when more than</label><input type="number" id="lv-clash-n" min="0" max="100" value="' + d.allowances.maxOffPerCompany + '"><span class="muted small">people from one company are off (0 = never)</span>' +
                     '<button type="submit" class="btn btn-ghost btn-small">Save</button></form></div></div>' +
                     '<p class="muted small">Annual leave days per year, not counting bank holidays. Leave a person’s box empty to use the default.</p>' +
-                    '<div class="table-card flat"><table class="table"><thead><tr><th>Person</th><th>Allowance</th><th>Carried</th><th>Taken</th><th>Booked</th><th>Waiting</th><th>Left</th><th title="Sickness in the last 52 weeks">Sickness (52 wks)</th><th title="Occurrences squared × days. Higher scores mean frequent short absences.">Bradford</th><th>TOIL</th></tr></thead><tbody>' +
+                    '<div class="table-card flat"><table class="table"><thead><tr><th>Person</th><th>Allowance</th><th>Carried</th><th>Taken</th><th>Booked</th><th>Waiting</th><th>Left</th><th title="Sickness in the last 52 weeks">Sickness (52 wks)</th><th title="Occurrences squared × days. Higher scores mean frequent short absences.">Bradford</th><th>TOIL</th><th>Working days</th></tr></thead><tbody>' +
                     d.people.map(function (p) {
                         const custom = d.allowances.custom[p.id];
                         return '<tr><td><div class="emp-cell">' + avatar(p, "sm") + '<div><div class="emp-name">' + esc(p.displayName) + '</div><div class="muted small">' + esc(p.jobTitle) + "</div></div></div></td>" +
@@ -3912,7 +3960,9 @@
                             '<td data-label="Left"><strong' + (p.summary.remaining < 0 ? ' class="danger-text"' : "") + ">" + p.summary.remaining + "</strong></td>" +
                             '<td data-label="Sickness">' + (p.absence.occurrences ? p.absence.occurrences + (p.absence.occurrences === 1 ? " time, " : " times, ") + fmtDays(p.absence.days) : '<span class="muted">None</span>') + "</td>" +
                             '<td data-label="Bradford"><span class="bradford ' + (p.absence.bradford >= 200 ? "b-high" : p.absence.bradford >= 50 ? "b-mid" : "b-low") + '">' + p.absence.bradford + "</span></td>" +
-                            '<td data-label="TOIL"><button type="button" class="btn btn-ghost btn-small" data-toil="' + p.id + '" data-name="' + esc(p.displayName) + '">' + (p.summary.toilHours || 0) + " hrs</button></td></tr>";
+                            '<td data-label="TOIL"><button type="button" class="btn btn-ghost btn-small" data-toil="' + p.id + '" data-name="' + esc(p.displayName) + '">' + (p.summary.toilHours || 0) + " hrs</button></td>" +
+                            '<td data-label="Working days"><button type="button" class="btn btn-ghost btn-small" data-wp="' + p.id + '" data-name="' + esc(p.displayName) + '" data-days="' + p.summary.pattern.join(",") + '">' + esc(p.summary.patternLabel) + "</button>" +
+                            (p.summary.bankHolidayAdjustment ? '<div class="muted small">Bank holidays ' + (p.summary.bankHolidayAdjustment > 0 ? "+" : "") + p.summary.bankHolidayAdjustment + "</div>" : "") + "</td></tr>";
                     }).join("") + "</tbody></table></div></section>";
                 $("#lv-clash").addEventListener("submit", async function (e) {
                     e.preventDefault();
@@ -3942,6 +3992,8 @@
             if (e.target.closest("#lv-new")) return openLeaveForm(d, "annual");
             if (e.target.closest("#lv-sick")) return openLeaveForm(d, "sick");
             if (e.target.closest("#lv-set")) return openLeaveForm(d, "annual", true);
+            const wp = e.target.closest("[data-wp]");
+            if (wp) return openWorkPattern(wp.dataset.wp, wp.dataset.name, wp.dataset.days.split(",").map(Number));
             const toil = e.target.closest("[data-toil]");
             if (toil) return openToil(toil.dataset.toil, toil.dataset.name, true);
             if (e.target.closest("#lv-mytoil")) return openToil(state.me.id, state.me.displayName, false);
@@ -8423,6 +8475,349 @@
                 toast("Bill saved.");
                 render();
             } catch (err) { formError($("#bf-error", m.el), err.message); }
+        });
+    }
+
+    // ================= Objectives (goals) =================
+
+    const OBJ_CLS = { "on-track": "badge-green", "at-risk": "badge-yellow", "off-track": "badge-red", done: "badge-soft", dropped: "" };
+
+    async function viewObjectives(root, current) {
+        const q = new URLSearchParams(window.location.search);
+        const quarter = state.objQuarter || "";
+        const d = await api("/api/objectives?" + (quarter ? "quarter=" + quarter + "&" : "") + (q.get("person") ? "person=" + q.get("person") : ""));
+        if (!current()) return;
+        root.innerHTML = '<div class="page-head"><div><h1>' + (d.isSelf ? "My goals" : "Goals · " + esc(d.person.displayName)) + '</h1><p class="muted">Goals for each quarter, with progress updates. Managers can set goals for their team, and they show alongside reviews.</p></div>' +
+            '<div class="page-actions">' + (d.isSelf ? "" : '<a class="btn btn-ghost" href="/objectives" data-link>My goals</a>') + '<button type="button" class="btn btn-primary" id="ob-new">' + icon("plus") + "Add a goal</button></div></div>" +
+            '<div class="week-nav"><button type="button" class="icon-btn" data-q="' + d.prev + '" aria-label="Previous quarter">' + icon("chevronLeft") + '</button><h2 class="week-title">' + esc(d.quarterLabel) + "</h2>" +
+            '<button type="button" class="icon-btn" data-q="' + d.next + '" aria-label="Next quarter">' + icon("chevronRight") + "</button></div>" +
+            '<div class="obj-layout"><div class="obj-list">' + (d.objectives.length ? d.objectives.map(function (o) {
+                return '<article class="obj-card" data-obj="' + o.id + '"><div class="obj-head"><h3>' + esc(o.title) + '</h3><span class="badge ' + (OBJ_CLS[o.status] || "") + '">' + esc(o.statusLabel) + "</span></div>" +
+                    (o.description ? '<p class="muted">' + esc(o.description) + "</p>" : "") + (o.measure ? '<p class="small"><strong>Done when:</strong> ' + esc(o.measure) + "</p>" : "") +
+                    '<div class="obj-progress"><div class="br-bar"><span data-w="' + o.progress + '"></span></div><strong>' + o.progress + "%</strong></div>" +
+                    (o.updates.length ? '<details class="obj-updates"><summary>' + o.updates.length + " update" + (o.updates.length === 1 ? "" : "s") + "</summary>" + o.updates.map(function (u) {
+                        return '<div class="ic-row"><div><strong>' + u.progress + "% · " + esc(u.statusLabel) + '</strong> <span class="muted small">' + esc(u.byName) + " · " + esc(fmtDate(u.at)) + "</span>" + (u.note ? "<p>" + esc(u.note) + "</p>" : "") + "</div></div>";
+                    }).join("") + "</details>" : "") +
+                    (o.canEdit ? '<div class="btn-row obj-actions"><button type="button" class="btn btn-primary btn-small" data-oa="progress">Update progress</button><button type="button" class="btn btn-ghost btn-small" data-oa="edit">' + icon("edit") + 'Edit</button><button type="button" class="btn btn-link btn-small danger-text" data-oa="delete">Delete</button></div>' : "") + "</article>";
+            }).join("") : '<div class="empty-page">' + icon("flag", "big") + '<h2>No goals for this quarter</h2><p class="muted">Use <strong>Add a goal</strong> to set one.</p></div>') + "</div>" +
+            (d.team.length ? '<aside class="panel obj-team"><h2 class="panel-title">' + icon("users") + "Your team</h2>" + d.team.map(function (p) {
+                return '<a class="obj-member" href="/objectives?person=' + p.id + '" data-link>' + avatar(p, "sm") + '<span><span class="emp-name">' + esc(p.displayName) + '</span><span class="muted small">' + (p.count ? p.count + " goal" + (p.count === 1 ? "" : "s") + " · " + p.average + "% average" + (p.atRisk ? " · " + p.atRisk + " at risk" : "") : "No goals yet") + "</span></span></a>";
+            }).join("") + "</aside>" : "") + "</div>";
+        $$(".br-bar [data-w]", root).forEach(function (s) { s.style.width = s.dataset.w + "%"; });
+        root.addEventListener("click", async function (e) {
+            const qb = e.target.closest("[data-q]");
+            if (qb) { state.objQuarter = qb.dataset.q; return render(); }
+            if (e.target.closest("#ob-new")) return openObjectiveForm(d, null);
+            const b = e.target.closest("[data-oa]");
+            if (!b) return;
+            const o = d.objectives.find(function (x) { return x.id === b.closest("[data-obj]").dataset.obj; });
+            if (b.dataset.oa === "edit") return openObjectiveForm(d, o);
+            if (b.dataset.oa === "progress") return openObjectiveProgress(d, o);
+            if (await confirmDialog({ title: "Delete this goal?", message: o.title, confirmLabel: "Delete", danger: true })) {
+                try { await api("/api/objectives/" + o.id + "/delete", {}); render(); } catch (err) { toast(err.message); }
+            }
+        });
+    }
+
+    function openObjectiveForm(d, o) {
+        const v = o || { title: "", description: "", measure: "", quarter: d.quarter };
+        const m = openModal('<h2 class="modal-title">' + (o ? "Edit goal" : "Add a goal" + (d.isSelf ? "" : " for " + esc(d.person.displayName))) + '</h2><form id="of-form" novalidate>' +
+            '<label for="of-title">Goal</label><input type="text" id="of-title" maxlength="150" value="' + esc(v.title) + '" placeholder="e.g. Launch the new Horizon Advertising website">' +
+            '<label for="of-desc">Details <span class="muted small">(optional)</span></label><textarea id="of-desc" rows="3" maxlength="2000">' + esc(v.description) + "</textarea>" +
+            '<label for="of-measure">How we’ll know it’s done <span class="muted small">(optional)</span></label><input type="text" id="of-measure" maxlength="300" value="' + esc(v.measure || "") + '">' +
+            '<label for="of-q">Quarter</label><select id="of-q">' + [d.prev, d.quarter, d.next].map(function (q) { return '<option value="' + q + '"' + (q === v.quarter ? " selected" : "") + ">" + q.replace("-", " ") + "</option>"; }).join("") + "</select>" +
+            '<div class="form-error" id="of-error" hidden></div><div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">Save goal</button></div></form>');
+        $("#of-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try {
+                await api(o ? "/api/objectives/" + o.id : "/api/objectives", { personId: d.person.id, title: $("#of-title", m.el).value, description: $("#of-desc", m.el).value, measure: $("#of-measure", m.el).value, quarter: $("#of-q", m.el).value });
+                closeModal(); toast("Goal saved."); render();
+            } catch (err) { formError($("#of-error", m.el), err.message); }
+        });
+    }
+
+    function openObjectiveProgress(d, o) {
+        const m = openModal('<h2 class="modal-title">Update progress</h2><p class="muted">' + esc(o.title) + '</p><form id="op-form" novalidate>' +
+            '<label for="op-pct">Progress: <strong id="op-val">' + o.progress + '%</strong></label><input type="range" id="op-pct" min="0" max="100" step="5" value="' + o.progress + '">' +
+            '<label for="op-st">Status</label><select id="op-st">' + Object.keys(d.statuses).map(function (k) { return '<option value="' + k + '"' + (k === o.status ? " selected" : "") + ">" + esc(d.statuses[k]) + "</option>"; }).join("") + "</select>" +
+            '<label for="op-note">What’s happened? <span class="muted small">(optional)</span></label><textarea id="op-note" rows="3" maxlength="1000"></textarea>' +
+            '<div class="form-error" id="op-error" hidden></div><div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">Save update</button></div></form>');
+        $("#op-pct", m.el).addEventListener("input", function (e) { $("#op-val", m.el).textContent = e.target.value + "%"; if (e.target.value === "100") $("#op-st", m.el).value = "done"; });
+        $("#op-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try { await api("/api/objectives/" + o.id + "/progress", { progress: $("#op-pct", m.el).value, status: $("#op-st", m.el).value, note: $("#op-note", m.el).value }); closeModal(); toast("Progress updated."); render(); } catch (err) { formError($("#op-error", m.el), err.message); }
+        });
+    }
+
+    // ================= 360 feedback =================
+
+    function ratingInput(name, value) {
+        return '<div class="rating-row" role="radiogroup">' + [1, 2, 3, 4, 5].map(function (n) {
+            return '<label class="rating-pill"><input type="radio" name="' + name + '" value="' + n + '"' + (value === n ? " checked" : "") + "><span>" + n + "</span></label>";
+        }).join("") + '<span class="muted small rating-key">1 = poor · 5 = excellent</span></div>';
+    }
+
+    async function viewFeedback(root, current) {
+        const d = await api("/api/feedback");
+        if (!current()) return;
+        const canAsk = d.people.some(function (p) { return p.canRequest; });
+        root.innerHTML = '<div class="page-head"><div><h1>360 feedback</h1><p class="muted">Anonymous feedback from colleagues before a review. Nobody sees who said what, and answers only show once at least two people have replied.</p></div>' +
+            (canAsk ? '<div class="page-actions"><button type="button" class="btn btn-primary" id="fb-new">' + icon("plus") + "Ask for feedback</button></div>" : "") + "</div>" +
+            (d.toGive.length ? '<section class="panel"><h2 class="panel-title">' + icon("message") + "Feedback you’ve been asked for</h2>" + d.toGive.map(function (r) {
+                return '<div class="leave-row"><span>' + avatar(r.subject, "md") + '</span><div class="lr-main"><div class="lr-title">' + esc(r.subject.displayName) + '</div><div class="muted small">Asked by ' + esc(r.requestedBy.displayName) + " · by " + esc(fmtDate(r.dueDate + "T12:00:00")) + "</div>" + (r.note ? '<div class="lr-note">' + esc(r.note) + "</div>" : "") + "</div>" +
+                    '<div class="lr-side"><button type="button" class="btn btn-primary btn-small" data-give="' + r.id + '">Give feedback</button></div></div>';
+            }).join("") + "</section>" : "") +
+            '<section class="panel"><h2 class="panel-title">' + icon("chart") + "Results</h2>" + (d.requests.length ? d.requests.map(function (r) {
+                return '<div class="fb-request"><div class="fb-head">' + avatar(r.subject, "md") + '<div><strong>' + esc(r.subject.displayName) + '</strong><div class="muted small">' + r.answeredCount + " of " + r.asked + " answered · asked by " + esc(r.requestedBy.displayName) + " · " + esc(fmtDate(r.createdAt)) + (r.closed ? " · closed" : "") + "</div></div>" +
+                    (r.canManage ? '<div class="btn-row">' + (r.closed ? "" : '<button type="button" class="btn btn-ghost btn-small" data-fbc="close" data-id="' + r.id + '">Close</button>') + '<button type="button" class="icon-btn" data-fbc="delete" data-id="' + r.id + '" aria-label="Delete">' + icon("trash") + "</button></div>" : "") + "</div>" +
+                    (r.results ? feedbackResultsHtml(d.questions, r.results) : '<p class="muted small">Results appear once at least ' + r.minResponses + " people have answered.</p>") + "</div>";
+            }).join("") : '<p class="muted small">No feedback requests yet.</p>') + "</section>";
+        root.addEventListener("click", async function (e) {
+            if (e.target.closest("#fb-new")) return openFeedbackRequest(d);
+            const g = e.target.closest("[data-give]");
+            if (g) return openGiveFeedback(d, d.toGive.find(function (x) { return x.id === g.dataset.give; }));
+            const c = e.target.closest("[data-fbc]");
+            if (c && (c.dataset.fbc === "close" || await confirmDialog({ title: "Delete this request and its answers?", message: "This can’t be undone.", confirmLabel: "Delete", danger: true }))) {
+                try { await api("/api/feedback/" + c.dataset.id + "/" + c.dataset.fbc, {}); render(); } catch (err) { toast(err.message); }
+            }
+        });
+    }
+
+    function feedbackResultsHtml(questions, res) {
+        return '<div class="fb-results">' + questions.map(function (q) {
+            const v = res[q.key];
+            if (q.type === "rating") return '<div class="fb-rating"><span>' + esc(q.label) + '</span><strong>' + v.average + ' / 5</strong><div class="fb-dist">' + v.counts.map(function (n, i) { return '<span title="' + (i + 1) + ": " + n + '">' + (i + 1) + "<b>" + n + "</b></span>"; }).join("") + "</div></div>";
+            return v.length ? '<div class="fb-text"><span>' + esc(q.label) + "</span><ul>" + v.map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + "</ul></div>" : "";
+        }).join("") + "</div>";
+    }
+
+    function openFeedbackRequest(d) {
+        const subjects = d.people.filter(function (p) { return p.canRequest; });
+        const m = openModal('<h2 class="modal-title">Ask for feedback</h2><form id="fr-form" novalidate>' +
+            '<label for="fr-subject">Feedback about</label><select id="fr-subject">' + subjects.map(function (p) { return '<option value="' + p.id + '"' + (p.id === state.me.id ? " selected" : "") + ">" + esc(p.displayName) + (p.id === state.me.id ? " (me)" : "") + "</option>"; }).join("") + "</select>" +
+            '<label>Who to ask <span class="muted small">(at least 2)</span></label><div class="member-list fr-people">' + d.people.map(function (p) {
+                return '<label class="member-row" data-pid="' + p.id + '"><span class="mr-text"><span class="emp-name">' + esc(p.displayName) + '</span><span class="muted small">' + esc(p.jobTitle) + '</span></span><input type="checkbox" value="' + p.id + '"><span class="mr-check">' + icon("tick") + "</span></label>";
+            }).join("") + "</div>" +
+            '<div class="grid-2"><div><label for="fr-due">Answer by</label><input type="date" id="fr-due" value="' + isoDay(new Date(Date.now() + 14 * 86400000)) + '"></div>' +
+            '<div><label class="inline-check fr-share"><input type="checkbox" id="fr-share" checked> They can see the results too</label></div></div>' +
+            '<label for="fr-note">Note to the people you ask <span class="muted small">(optional)</span></label><input type="text" id="fr-note" maxlength="500">' +
+            '<div class="form-error" id="fr-error" hidden></div><div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">Send requests</button></div></form>', { cls: "modal-members" });
+        function sync() {
+            const subject = $("#fr-subject", m.el).value;
+            $$(".fr-people .member-row", m.el).forEach(function (r) { r.hidden = r.dataset.pid === subject; });
+        }
+        $("#fr-subject", m.el).addEventListener("change", sync);
+        m.el.addEventListener("change", function (e) { const row = e.target.closest(".member-row"); if (row) row.classList.toggle("on", e.target.checked); });
+        sync();
+        $("#fr-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try {
+                await api("/api/feedback", { subjectId: $("#fr-subject", m.el).value, reviewers: $$(".fr-people .member-row:not([hidden]) input:checked", m.el).map(function (c) { return c.value; }), dueDate: $("#fr-due", m.el).value, note: $("#fr-note", m.el).value, shareWithSubject: $("#fr-share", m.el).checked });
+                closeModal(); toast("Feedback requests sent."); render();
+            } catch (err) { formError($("#fr-error", m.el), err.message); }
+        });
+    }
+
+    function openGiveFeedback(d, r) {
+        const m = openModal('<h2 class="modal-title">Feedback on ' + esc(r.subject.displayName) + '</h2><p class="muted">Your answers are anonymous: nobody will see that they came from you.</p><form id="gf-form" novalidate>' +
+            d.questions.map(function (q) {
+                return '<div class="gf-q"><label>' + esc(q.label) + (q.optional ? ' <span class="muted small">(optional)</span>' : "") + "</label>" + (q.type === "rating" ? ratingInput("gf-" + q.key) : '<textarea name="gf-' + q.key + '" rows="3" maxlength="2000"></textarea>') + "</div>";
+            }).join("") +
+            '<div class="form-error" id="gf-error" hidden></div><div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">Send feedback</button></div></form>', { wide: true });
+        $("#gf-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            const answers = {};
+            d.questions.forEach(function (q) {
+                if (q.type === "rating") { const c = $('input[name="gf-' + q.key + '"]:checked', m.el); answers[q.key] = c ? c.value : ""; }
+                else answers[q.key] = $('textarea[name="gf-' + q.key + '"]', m.el).value;
+            });
+            try { const res = await api("/api/feedback/" + r.id + "/respond", { answers: answers }); state.me = res.user; renderChrome(); closeModal(); toast("Thanks for your feedback."); render(); } catch (err) { formError($("#gf-error", m.el), err.message); }
+        });
+    }
+
+    // ================= Pulse =================
+
+    const PULSE_FACES = ["😞", "😕", "😐", "🙂", "😀"];
+
+    function pulseCardHtml(question) {
+        return '<div class="pulse-card"><h2 class="section-title">' + icon("activity") + "This week’s pulse</h2><p class=\"pulse-q\">" + esc(question) + '</p><div class="pulse-faces">' +
+            PULSE_FACES.map(function (f, i) { return '<button type="button" class="pulse-face" data-pulse="' + (i + 1) + '" aria-label="' + (i + 1) + ' out of 5">' + f + "</button>"; }).join("") + "</div>" +
+            '<input type="text" class="pulse-comment" maxlength="500" placeholder="Anything to add? (optional, anonymous)"><p class="muted small">Anonymous. Only overall scores are shown.</p></div>';
+    }
+
+    function wirePulse(box, after) {
+        box.addEventListener("click", async function (e) {
+            const b = e.target.closest("[data-pulse]");
+            if (!b) return;
+            try {
+                const r = await api("/api/pulse", { score: b.dataset.pulse, comment: ($(".pulse-comment", box) || {}).value || "" });
+                state.me = r.user; renderChrome();
+                box.innerHTML = '<div class="pulse-done">' + icon("tick") + "<span>Thanks! See you next week.</span></div>";
+                if (after) after();
+            } catch (err) { toast(err.message); }
+        });
+    }
+
+    async function viewPulse(root, current) {
+        const d = await api("/api/pulse");
+        if (!current()) return;
+        root.innerHTML = '<div class="page-head"><div><h1>Pulse</h1><p class="muted">One quick, anonymous question each week so leadership can see how everyone’s doing.</p></div></div>' +
+            '<section class="panel" id="pl-answer">' + (d.answered ? '<div class="pulse-done">' + icon("tick") + "<span>You’ve answered this week. Thank you!</span></div>" : pulseCardHtml(d.question)) + "</section>" +
+            (d.canSeeResults ? '<section class="panel"><div class="panel-head"><h2 class="panel-title">' + icon("chart") + "Results</h2>" +
+                '<form id="pl-q" class="inline-form"><input type="text" id="pl-qtext" maxlength="200" placeholder="Change this week’s question (before anyone answers)"><button type="submit" class="btn btn-ghost btn-small">Set</button></form></div>' +
+                (d.results.length ? '<div class="pulse-trend">' + d.results.map(function (w) {
+                    return '<div class="pt-col" title="' + esc(w.question) + '"><span class="pt-val">' + (w.average === null ? "–" : w.average) + '</span><span class="pt-bar"><i data-h="' + (w.average ? Math.round(w.average / 5 * 100) : 0) + '"></i></span><small>' + esc(w.week.slice(5)) + "</small><small>" + w.responses + "</small></div>";
+                }).join("") + "</div>" +
+                d.results.slice().reverse().slice(0, 4).map(function (w) {
+                    return '<div class="pulse-week"><div class="pw-head"><strong>' + esc(w.week) + "</strong> · " + esc(w.question) + ' <span class="muted small">' + w.responses + " answers · average " + (w.average === null ? "–" : w.average) + "</span></div>" +
+                        (w.byCompany.length ? '<div class="chips">' + w.byCompany.map(function (c) { return '<span class="chip">' + esc(c.company) + " " + c.average + "</span>"; }).join("") + "</div>" : "") +
+                        (w.comments.length ? "<ul>" + w.comments.map(function (c) { return "<li>" + esc(c) + "</li>"; }).join("") + "</ul>" : "") + "</div>";
+                }).join("") : '<p class="muted small">No answers yet.</p>') +
+                '<p class="muted small">Company scores and comments only show when at least ' + d.minGroup + " people answered, so nobody can be identified.</p></section>" : "");
+        $$(".pt-bar [data-h]", root).forEach(function (b) { b.style.height = b.dataset.h + "%"; });
+        if (!d.answered) wirePulse($("#pl-answer"), function () { if (d.canSeeResults) render(); });
+        const qf = $("#pl-q");
+        if (qf) qf.addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try { await api("/api/pulse/question", { text: $("#pl-qtext").value }); toast("This week’s question updated."); render(); } catch (err) { toast(err.message); }
+        });
+    }
+
+    // ================= Exit interviews =================
+
+    async function viewExitInterview(root, current) {
+        const d = await api("/api/exit-interview");
+        if (!current()) return;
+        if (!d.eligible) { root.innerHTML = '<div class="empty-page">' + icon("logout", "big") + "<h2>Nothing here</h2><p class=\"muted\">The exit interview opens when your leaving process starts.</p></div>"; return; }
+        if (d.submitted) { root.innerHTML = '<div class="empty-page">' + icon("check", "big") + "<h2>Thank you</h2><p class=\"muted\">You sent your exit interview on " + esc(fmtDate(d.submitted)) + ". Only HR can read it.</p></div>"; return; }
+        root.innerHTML = '<div class="page-head"><div><h1>Exit interview</h1><p class="muted">We’re sorry to see you go' + (d.lastDay ? " (your last day is " + esc(fmtDate(d.lastDay + "T12:00:00")) + ")" : "") + ". A few honest answers help us make HN Group better. Only HR can read them.</p></div></div>" +
+            '<form class="panel exit-form" id="xi-form" novalidate>' + d.questions.map(function (q) {
+                let input;
+                if (q.type === "reasons") input = '<div class="check-grid">' + Object.keys(d.reasons).map(function (k) { return '<label class="inline-check"><input type="checkbox" name="xi-reasons" value="' + k + '"> ' + esc(d.reasons[k]) + "</label>"; }).join("") + "</div>";
+                else if (q.type === "rating") input = ratingInput("xi-" + q.key);
+                else if (q.type === "choice") input = '<div class="option-row">' + q.options.map(function (o) { return '<label class="inline-check"><input type="radio" name="xi-' + q.key + '" value="' + o + '"> ' + o + "</label>"; }).join("") + "</div>";
+                else input = '<textarea name="xi-' + q.key + '" rows="3" maxlength="3000"></textarea>';
+                return '<div class="gf-q"><label>' + esc(q.label) + (q.optional ? ' <span class="muted small">(optional)</span>' : "") + "</label>" + input + "</div>";
+            }).join("") + '<div class="form-error" id="xi-error" hidden></div><div class="form-actions"><button type="submit" class="btn btn-primary">Send exit interview</button></div></form>';
+        $("#xi-form").addEventListener("submit", async function (e) {
+            e.preventDefault();
+            const answers = {};
+            d.questions.forEach(function (q) {
+                if (q.type === "reasons") answers[q.key] = $$('input[name="xi-reasons"]:checked').map(function (c) { return c.value; });
+                else if (q.type === "rating" || q.type === "choice") { const c = $('input[name="xi-' + q.key + '"]:checked'); answers[q.key] = c ? c.value : ""; }
+                else answers[q.key] = $('textarea[name="xi-' + q.key + '"]').value;
+            });
+            try { const r = await api("/api/exit-interview", { answers: answers }); state.me = r.user; renderChrome(); toast("Thank you. Your exit interview has been sent."); render(); } catch (err) { formError($("#xi-error"), err.message); }
+        });
+    }
+
+    async function viewExitInterviews(root, current) {
+        const d = await api("/api/exit-interviews");
+        if (!current()) return;
+        const qs = {};
+        d.questions.forEach(function (q) { qs[q.key] = q; });
+        root.innerHTML = '<div class="page-head"><div><h1>Exit interviews</h1><p class="muted">What leavers told us. Only HR can see this page.</p></div></div>' +
+            (d.summary.length ? '<section class="panel"><h2 class="panel-title">' + icon("chart") + "Why people leave</h2><div class=\"budget-list\">" + d.summary.map(function (s) {
+                return '<div class="budget-row"><div class="br-head"><strong>' + esc(s.label) + "</strong><span>" + s.count + "</span></div></div>";
+            }).join("") + "</div></section>" : "") +
+            (d.interviews.length ? d.interviews.map(function (i) {
+                return '<section class="panel xi-card"><div class="panel-head"><h2 class="panel-title">' + esc(i.name) + ' <span class="muted small">' + esc(i.jobTitle) + " · " + esc(i.company) + "</span></h2><span class=\"muted small\">" + esc(fmtDate(i.at)) + "</span></div>" +
+                    '<div class="chips">' + i.answers.reasons.map(function (r) { return '<span class="chip">' + esc(d.reasons[r]) + "</span>"; }).join("") + "</div>" +
+                    '<dl class="xi-answers">' + ["enjoyed", "improve", "manager", "recommend", "return", "other"].filter(function (k) { return i.answers[k] !== "" && i.answers[k] !== undefined; }).map(function (k) {
+                        return "<dt>" + esc(qs[k].label) + "</dt><dd>" + esc(qs[k].type === "rating" ? i.answers[k] + " / 5" : i.answers[k]) + "</dd>";
+                    }).join("") + "</dl></section>";
+            }).join("") : '<div class="empty-page">' + icon("logout", "big") + "<h2>No exit interviews yet</h2></div>");
+    }
+
+    // ================= Flexible working =================
+
+    const FLEX_CLS = { pending: "badge-yellow", approved: "badge-green", trial: "badge-soft", declined: "badge-red", withdrawn: "" };
+
+    async function viewFlexible(root, current) {
+        const d = await api("/api/flexible");
+        if (!current()) return;
+        function card(r) {
+            return '<article class="panel flex-card" data-flex="' + r.id + '"><div class="panel-head"><div class="emp-cell">' + avatar(r.person, "md") + "<div><strong>" + esc(r.typeLabel) + '</strong><div class="muted small">' + esc(r.person.displayName) + " · asked " + esc(fmtDate(r.createdAt)) + " · from " + esc(fmtDate(r.startDate + "T12:00:00")) + "</div></div></div>" +
+                '<span class="badge ' + (FLEX_CLS[r.status] || "") + '">' + esc(r.statusLabel) + (r.status === "trial" && r.trialUntil ? " until " + esc(fmtDate(r.trialUntil + "T12:00:00")) : "") + "</span></div>" +
+                '<dl class="xi-answers">' + (r.current ? "<dt>Now</dt><dd>" + esc(r.current) + "</dd>" : "") + "<dt>Asking for</dt><dd>" + esc(r.requested) + "</dd>" +
+                (r.reason ? "<dt>Why</dt><dd>" + esc(r.reason) + "</dd>" : "") + (r.impact ? "<dt>Effect on work and how to handle it</dt><dd>" + esc(r.impact) + "</dd>" : "") +
+                (r.decisionNote ? "<dt>Decision" + (r.decidedByName ? " by " + esc(r.decidedByName) : "") + "</dt><dd>" + esc(r.decisionNote) + "</dd>" : "") + "</dl>" +
+                (r.status === "pending" ? '<p class="small ' + (r.overdue ? "danger-text" : "muted") + '">A decision is due by ' + esc(fmtDate(r.decideBy + "T12:00:00")) + " (within two months).</p>" : "") +
+                (r.comments.length ? r.comments.map(function (c) { return '<div class="ic-row">' + avatar(c.author, "sm") + "<div><strong>" + esc(c.author.displayName) + '</strong> <span class="muted small">' + esc(fmtDateTime(c.at)) + "</span><p>" + esc(c.text) + "</p></div></div>"; }).join("") : "") +
+                '<form class="inline-form" data-flex-comment><input type="text" maxlength="1500" placeholder="Add a comment"><button type="submit" class="btn btn-ghost btn-small">Post</button></form>' +
+                '<div class="btn-row flex-actions">' + (r.canDecide ? '<button type="button" class="btn btn-primary btn-small" data-fx="decide">Decide</button>' : "") + (r.mine && r.status === "pending" ? '<button type="button" class="btn btn-link btn-small" data-fx="withdraw">Withdraw</button>' : "") + "</div></article>";
+        }
+        root.innerHTML = '<div class="page-head"><div><h1>Flexible working</h1><p class="muted">Ask for a different working pattern: hours, hybrid working, compressed hours and so on. Your supervisor or HR decide, normally within two months, and give a reason if it’s a no.</p></div>' +
+            (state.me.system ? "" : '<div class="page-actions"><button type="button" class="btn btn-primary" id="fx-new">' + icon("plus") + "Make a request</button></div>") + "</div>" +
+            (d.others.length ? '<h2 class="section-title">' + icon("users") + "Requests from others</h2>" + d.others.map(card).join("") : "") +
+            '<h2 class="section-title">' + icon("user") + "My requests</h2>" + (d.mine.length ? d.mine.map(card).join("") : '<p class="muted small">You haven’t made any requests.</p>');
+        root.addEventListener("submit", async function (e) {
+            const f = e.target.closest("[data-flex-comment]");
+            if (!f) return;
+            e.preventDefault();
+            try { await api("/api/flexible/" + f.closest("[data-flex]").dataset.flex + "/comment", { text: $("input", f).value }); render(); } catch (err) { toast(err.message); }
+        });
+        root.addEventListener("click", async function (e) {
+            if (e.target.closest("#fx-new")) return openFlexibleForm(d);
+            const b = e.target.closest("[data-fx]");
+            if (!b) return;
+            const r = d.mine.concat(d.others).find(function (x) { return x.id === b.closest("[data-flex]").dataset.flex; });
+            if (b.dataset.fx === "decide") return openFlexibleDecision(r);
+            if (await confirmDialog({ title: "Withdraw this request?", message: "You can make a new one later.", confirmLabel: "Withdraw" })) {
+                try { await api("/api/flexible/" + r.id + "/withdraw", {}); render(); } catch (err) { toast(err.message); }
+            }
+        });
+    }
+
+    function openFlexibleForm(d) {
+        const m = openModal('<h2 class="modal-title">Flexible working request</h2><form id="ff-form" novalidate>' +
+            '<label for="ff-type">What kind of change?</label><select id="ff-type">' + Object.keys(d.types).map(function (k) { return '<option value="' + k + '">' + esc(d.types[k]) + "</option>"; }).join("") + "</select>" +
+            '<label for="ff-current">How you work now</label><textarea id="ff-current" rows="2" maxlength="1000" placeholder="e.g. Monday to Friday, 9 to 5.30, in the office"></textarea>' +
+            '<label for="ff-req">What you’d like</label><textarea id="ff-req" rows="2" maxlength="2000" placeholder="e.g. Work from home on Tuesdays and Thursdays"></textarea>' +
+            '<label for="ff-start">From</label><input type="date" id="ff-start" value="' + isoDay(new Date(Date.now() + 30 * 86400000)) + '">' +
+            '<label for="ff-reason">Why <span class="muted small">(optional)</span></label><textarea id="ff-reason" rows="2" maxlength="2000"></textarea>' +
+            '<label for="ff-impact">How it might affect your work, and how that could be handled <span class="muted small">(optional)</span></label><textarea id="ff-impact" rows="2" maxlength="2000"></textarea>' +
+            '<div class="form-error" id="ff-error" hidden></div><div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">Send request</button></div></form>', { wide: true });
+        $("#ff-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try {
+                await api("/api/flexible", { type: $("#ff-type", m.el).value, current: $("#ff-current", m.el).value, requested: $("#ff-req", m.el).value, startDate: $("#ff-start", m.el).value, reason: $("#ff-reason", m.el).value, impact: $("#ff-impact", m.el).value });
+                closeModal(); toast("Request sent."); render();
+            } catch (err) { formError($("#ff-error", m.el), err.message); }
+        });
+    }
+
+    function openFlexibleDecision(r) {
+        const m = openModal('<h2 class="modal-title">Decide: ' + esc(r.typeLabel) + "</h2><p class=\"muted\">" + esc(r.person.displayName) + " · " + esc(r.requested) + '</p><form id="fd2-form" novalidate>' +
+            '<div class="option-row"><label class="inline-check"><input type="radio" name="fd2" value="approved" checked> Approve</label><label class="inline-check"><input type="radio" name="fd2" value="trial"> Agree on a trial</label><label class="inline-check"><input type="radio" name="fd2" value="declined"> Decline</label></div>' +
+            '<div id="fd2-trial" hidden><label for="fd2-until">Trial until</label><input type="date" id="fd2-until"></div>' +
+            '<label for="fd2-note">Note <span class="muted small" id="fd2-hint">(optional)</span></label><textarea id="fd2-note" rows="3" maxlength="2000"></textarea>' +
+            '<div class="form-error" id="fd2-error" hidden></div><div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">Save decision</button></div></form>');
+        m.el.addEventListener("change", function () {
+            const v = $('input[name="fd2"]:checked', m.el).value;
+            $("#fd2-trial", m.el).hidden = v !== "trial";
+            $("#fd2-hint", m.el).textContent = v === "declined" ? "(required: the business reason)" : "(optional)";
+        });
+        $("#fd2-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            try { await api("/api/flexible/" + r.id + "/decide", { status: $('input[name="fd2"]:checked', m.el).value, trialUntil: $("#fd2-until", m.el).value, note: $("#fd2-note", m.el).value }); closeModal(); toast("Decision saved."); render(); } catch (err) { formError($("#fd2-error", m.el), err.message); }
+        });
+    }
+
+    // ================= Work patterns =================
+
+    function openWorkPattern(personId, name, current) {
+        const days = [[1, "Mon"], [2, "Tue"], [3, "Wed"], [4, "Thu"], [5, "Fri"], [6, "Sat"], [0, "Sun"]];
+        const m = openModal('<h2 class="modal-title">Working days · ' + esc(name) + '</h2><p class="muted">For part-time and shift staff. Leave only counts their working days, and bank holidays are shared out fairly: they get bank holidays in proportion to the days they work, and the difference from the ones that fall on their working days is added to (or taken from) their allowance.</p>' +
+            '<div class="day-pick">' + days.map(function (d) { return '<label class="day-chip"><input type="checkbox" value="' + d[0] + '"' + (current.indexOf(d[0]) !== -1 ? " checked" : "") + "><span>" + d[1] + "</span></label>"; }).join("") + "</div>" +
+            '<div class="form-error" id="wp-error" hidden></div><div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="button" class="btn btn-primary" id="wp-save">Save</button></div>');
+        $("#wp-save", m.el).addEventListener("click", async function () {
+            try {
+                const r = await api("/api/leave/pattern/" + personId, { days: $$(".day-pick input:checked", m.el).map(function (c) { return Number(c.value); }) });
+                closeModal();
+                toast("Saved. Bank holiday adjustment this year: " + (r.summary.bankHolidayAdjustment > 0 ? "+" : "") + r.summary.bankHolidayAdjustment + " days.");
+                render();
+            } catch (err) { formError($("#wp-error", m.el), err.message); }
         });
     }
 

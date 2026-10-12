@@ -30,6 +30,11 @@ const ideas = require("./lib/ideas");
 const extraRoutes = require("./lib/routes-extra");
 const resume = require("./lib/resume");
 const bills = require("./lib/bills");
+const objectives = require("./lib/objectives");
+const feedback = require("./lib/feedback");
+const pulse = require("./lib/pulse");
+const exitinterviews = require("./lib/exitinterviews");
+const flexible = require("./lib/flexible");
 
 const PORT = parseInt(process.env.PORT || "3200", 10);
 const HOST = process.env.HOST || "127.0.0.1";
@@ -49,7 +54,7 @@ const APP_ROUTES = new Set([
   "/home", "/directory", "/employees", "/settings", "/system", "/announcements", "/documents",
   "/calendar", "/polls", "/onboarding", "/roles", "/about", "/signature",
   "/leave", "/rotas", "/payslips", "/payroll", "/funds", "/helpdesk", "/reviews", "/staff-files", "/status",
-  "/expenses", "/invoices", "/notifications", "/training", "/cases", "/jobs", "/kudos", "/ideas", "/team", "/reports", "/bills",
+  "/expenses", "/invoices", "/notifications", "/training", "/cases", "/jobs", "/kudos", "/ideas", "/team", "/reports", "/bills", "/objectives", "/feedback", "/pulse", "/exit-interview", "/exit-interviews", "/flexible",
 ]);
 const SYSTEM_UNLOCK_MS = 15 * 60 * 1000; // System Admin stays unlocked for 15 minutes of inactivity
 const MAX_PIN_ATTEMPTS = 5;
@@ -93,6 +98,7 @@ invoices.init(DATA_DIR);
 notifications.init(DATA_DIR);
 resume.init(DATA_DIR);
 bills.init(DATA_DIR);
+for (const mod of [objectives, feedback, pulse, exitinterviews, flexible]) mod.init(DATA_DIR);
 training.init(DATA_DIR);
 cases.init(DATA_DIR);
 recruitment.init(DATA_DIR);
@@ -123,6 +129,7 @@ function reloadAll() {
   kudos.init(DATA_DIR);
   ideas.init(DATA_DIR);
   bills.init(DATA_DIR);
+  for (const mod of [objectives, feedback, pulse, exitinterviews, flexible]) mod.init(DATA_DIR);
 }
 
 backup.scheduleNightly((err, name) => {
@@ -605,6 +612,10 @@ function meResponse(session) {
   user.expenseApprovals = expenses.approvalCount(session.person);
   user.notificationsUnread = notifications.unreadCount(session.person.id);
   user.trainingDue = training.dueCount(session.person);
+  user.feedbackDue = feedback.pendingCount(session.person);
+  user.pulseDue = !session.person.system && !pulse.hasAnswered(session.person);
+  user.flexibleDecisions = flexible.pendingCount(session.person);
+  user.exitInterviewDue = !!onboarding.leaverChecklistOf(session.person.id) && !exitinterviews.forPerson(session.person.id);
   user.jobsOpen = recruitment.openCount();
   if (store.can(session.person, cases.MANAGE)) user.casesOpen = cases.openCount();
   if (store.can(session.person, recruitment.MANAGE)) user.newApplicants = recruitment.newApplicantsCount();
@@ -737,6 +748,19 @@ async function routeWorkplace(req, res, pathname, session) {
     logEvent(req, session, "document-uploaded", { target: doc.title, detail: `${doc.category} · ${doc.file.name}` });
     return sendJson(res, 201, { document: workplace.documentView(doc, me) });
   }
+  if ((m = /^\/api\/documents\/([a-f0-9]{16})\/versions(?:\/(\d+)\/file)?$/.exec(pathname)) && method === "GET") {
+    const doc = workplace.getDocument(m[1]);
+    if (!doc || !workplace.canSee(me, doc)) throw httpError(404, "Document not found.");
+    if (!m[2]) return sendJson(res, 200, { versions: workplace.versions(doc, me), title: doc.title });
+    const file = workplace.versionFile(doc, m[2]);
+    if (!file) throw httpError(404, "That version isn't available.");
+    const encoded = encodeURIComponent(file.name);
+    return fs.readFile(file.path, (err, content) => {
+      if (err) return sendJson(res, 404, { error: "The file is missing." });
+      res.writeHead(200, { "X-Content-Type-Options": "nosniff", "Content-Type": file.mime, "Content-Length": content.length, "Content-Disposition": `attachment; filename="${encoded}"; filename*=UTF-8''${encoded}`, "Content-Security-Policy": "sandbox; default-src 'none'", "Cache-Control": "private, no-store" });
+      res.end(content);
+    });
+  }
   if ((m = /^\/api\/documents\/([a-f0-9]{16})(?:\/(file|delete|acknowledge|acknowledgements))?$/.exec(pathname))) {
     const doc = workplace.getDocument(m[1]);
     if (!doc || !workplace.canSee(me, doc)) throw httpError(404, "Document not found.");
@@ -774,9 +798,9 @@ async function routeWorkplace(req, res, pathname, session) {
     }
     if (method === "POST" && action === "file") {
       requireDocs();
-      const { fileName } = headerJson(req, "x-document");
+      const { fileName, note } = headerJson(req, "x-document");
       const buffer = await readRawBody(req, workplace.MAX_FILE_BYTES);
-      workplace.replaceFile(doc, fileName, buffer);
+      workplace.replaceFile(doc, fileName, buffer, note, me);
       logEvent(req, session, "document-replaced", { target: doc.title, detail: `Version ${doc.version} · ${doc.file.name}` });
       return sendJson(res, 200, { document: workplace.documentView(doc, me) });
     }
@@ -1574,7 +1598,7 @@ async function routeApi(req, res, pathname, session) {
         const p = store.getPerson(personId);
         who = p && !p.system && (leaveManager || store.supervises(me, p)) ? p : null;
       }
-      return sendJson(res, 200, { days: leave.workingDays(startDate, endDate), remaining: who ? leave.summary(who.id, startDate.slice(0, 4)).remaining : null });
+      return sendJson(res, 200, { days: who ? leave.workingDaysFor(who.id, startDate, endDate) : leave.workingDays(startDate, endDate), remaining: who ? leave.summary(who.id, startDate.slice(0, 4)).remaining : null });
     }
     if (method === "POST" && pathname === "/api/leave") {
       const body = await readJsonBody(req);
@@ -1708,6 +1732,15 @@ async function routeApi(req, res, pathname, session) {
       rotas.decide(sheet, m[2] === "approve", me, body.note);
       const who = store.getPerson(sheet.personId);
       logEvent(req, session, m[2] === "approve" ? "timesheet-approved" : "timesheet-rejected", { target: (who || {}).displayName, detail: `Week of ${sheet.week}` });
+      // Hours worked on a bank holiday are given back as time off in lieu automatically.
+      if (m[2] === "approve" && who) {
+        const bhHours = Math.round(sheet.days.filter((d) => calendar.BANK_HOLIDAYS[d.date]).reduce((n, d) => n + rotas.hoursOf(d.start, d.end, d.breakMins), 0) * 100) / 100;
+        if (bhHours > 0) {
+          const names = sheet.days.filter((d) => calendar.BANK_HOLIDAYS[d.date] && rotas.hoursOf(d.start, d.end, d.breakMins) > 0).map((d) => calendar.BANK_HOLIDAYS[d.date]).join(", ");
+          leave.addToil(who, bhHours, `Worked on a bank holiday (${names})`, me, "bank-holiday");
+          logEvent(req, session, "toil-added", { target: who.displayName, detail: `${bhHours} hours for working on ${names}` });
+        }
+      }
       // Extra hours on an approved timesheet can be banked as time off in lieu.
       if (m[2] === "approve" && who && Number(body.toilHours) > 0) {
         leave.addToil(who, Number(body.toilHours), `Extra hours, week of ${sheet.week}`, me, "timesheet");

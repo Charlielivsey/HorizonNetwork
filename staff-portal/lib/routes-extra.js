@@ -21,6 +21,11 @@ const helpdesk = require("./helpdesk");
 const uptime = require("./uptime");
 const onboarding = require("./onboarding");
 const bills = require("./bills");
+const objectives = require("./objectives");
+const feedback = require("./feedback");
+const pulse = require("./pulse");
+const exitinterviews = require("./exitinterviews");
+const flexible = require("./flexible");
 
 let ctx;
 function init(helpers) {
@@ -91,6 +96,141 @@ async function handle(req, res, pathname, session) {
       } else {
         expenses.cancel(c, me);
         logEvent(req, session, "expense-withdrawn", { target: who, detail: `£${c.amount.toFixed(2)} – ${c.description}` });
+      }
+      return sendJson(res, 200, { ok: true, user: meResponse(session) }), true;
+    }
+  }
+
+  // ----- Work patterns (part-time and shift staff) -----
+  if ((m = /^\/api\/leave\/pattern\/([a-f0-9]{16})$/.exec(pathname)) && method === "POST") {
+    if (!can(leave.MANAGE)) throw httpError(403, "Only people who manage leave can change work patterns.");
+    const p = store.getPerson(m[1]);
+    if (!p || p.system) throw httpError(404, "Employee not found.");
+    leave.setPattern(p.id, (await readJsonBody(req)).days);
+    logEvent(req, session, "work-pattern-changed", { target: p.displayName, detail: leave.patternLabel(p.id) });
+    return sendJson(res, 200, { summary: leave.summary(p.id, new Date().getFullYear()) }), true;
+  }
+
+  // ----- Objectives -----
+  if (pathname.startsWith("/api/objectives")) {
+    if (method === "GET" && pathname === "/api/objectives") {
+      const q = query(req);
+      const quarter = /^\d{4}-Q[1-4]$/.test(q.get("quarter") || "") ? q.get("quarter") : objectives.quarterOf();
+      const personId = q.get("person") || me.id;
+      const person = store.getPerson(personId);
+      if (!person || (personId !== me.id && !objectives.canManage(me, person))) throw httpError(404, "Not found.");
+      return sendJson(res, 200, {
+        quarter, quarterLabel: objectives.quarterLabel(quarter), prev: objectives.shiftQuarter(quarter, -1), next: objectives.shiftQuarter(quarter, 1),
+        person: { id: person.id, displayName: person.displayName, jobTitle: person.jobTitle }, objectives: objectives.forPerson(personId, me, quarter),
+        team: objectives.team(me, quarter), statuses: objectives.STATUSES, isSelf: personId === me.id,
+      }), true;
+    }
+    if (method === "POST" && pathname === "/api/objectives") {
+      const body = await readJsonBody(req);
+      const person = store.getPerson(body.personId || me.id);
+      const o = objectives.save(person, body, me, null);
+      logEvent(req, session, "objective-set", { target: person.displayName, detail: o.title });
+      if (notify && person.id !== me.id) notify([person.id], { type: "review", title: `${me.displayName} set you a goal`, body: o.title, link: "/objectives" }, me);
+      return sendJson(res, 201, { ok: true }), true;
+    }
+    if ((m = /^\/api\/objectives\/([a-f0-9]{16})(?:\/(progress|delete))?$/.exec(pathname)) && method === "POST") {
+      const o = objectives.get(m[1]);
+      const person = o && store.getPerson(o.personId);
+      if (!o || !objectives.canManage(me, person)) throw httpError(404, "Goal not found.");
+      const body = await readJsonBody(req);
+      if (!m[2]) objectives.save(person, body, me, o);
+      else if (m[2] === "progress") objectives.update(o, body, me);
+      else objectives.remove(o);
+      return sendJson(res, 200, { ok: true }), true;
+    }
+  }
+
+  // ----- 360 feedback -----
+  if (pathname.startsWith("/api/feedback")) {
+    if (method === "GET" && pathname === "/api/feedback") {
+      return sendJson(res, 200, { ...feedback.forViewer(me), people: store.employees().map((p) => ({ id: p.id, displayName: p.displayName, jobTitle: p.jobTitle, canRequest: feedback.canRequest(me, p) })) }), true;
+    }
+    if (method === "POST" && pathname === "/api/feedback") {
+      const body = await readJsonBody(req);
+      const subject = store.getPerson(body.subjectId);
+      const r = feedback.create(subject, body, me);
+      logEvent(req, session, "feedback-requested", { target: subject.displayName, detail: `${r.reviewers.length} people asked` });
+      if (notify) notify(r.reviewers, { type: "review", title: `Feedback wanted on ${subject.displayName}`, body: `Anonymous, by ${r.dueDate}. It only takes a few minutes.`, link: "/feedback" }, me);
+      return sendJson(res, 201, { ok: true }), true;
+    }
+    if ((m = /^\/api\/feedback\/([a-f0-9]{16})\/(respond|close|delete)$/.exec(pathname)) && method === "POST") {
+      const r = feedback.get(m[1]);
+      if (!r) throw httpError(404, "Not found.");
+      const body = await readJsonBody(req);
+      if (m[2] === "respond") {
+        feedback.respond(r, me, body.answers);
+        logEvent(req, session, "feedback-given");
+      } else {
+        if (!(r.requestedBy === me.id || can("staff.manage"))) throw httpError(403, "You can't change that request.");
+        if (m[2] === "close") feedback.close(r); else feedback.remove(r);
+      }
+      return sendJson(res, 200, { ok: true, user: meResponse(session) }), true;
+    }
+  }
+
+  // ----- Pulse -----
+  if (pathname.startsWith("/api/pulse")) {
+    if (method === "GET" && pathname === "/api/pulse") return sendJson(res, 200, pulse.forViewer(me)), true;
+    if (method === "POST" && pathname === "/api/pulse") {
+      pulse.answer(me, await readJsonBody(req));
+      return sendJson(res, 200, { ok: true, user: meResponse(session) }), true;
+    }
+    if (method === "POST" && pathname === "/api/pulse/question") {
+      if (!pulse.canSeeResults(me)) throw httpError(403, "Only leadership can change the question.");
+      const { text } = await readJsonBody(req);
+      pulse.setQuestion(text);
+      logEvent(req, session, "pulse-question-set", { detail: text || "Default question" });
+      return sendJson(res, 200, pulse.forViewer(me)), true;
+    }
+  }
+
+  // ----- Exit interviews -----
+  if (pathname === "/api/exit-interview") {
+    const mine = exitinterviews.forPerson(me.id);
+    const leaving = onboarding.leaverChecklistOf(me.id);
+    if (method === "GET") return sendJson(res, 200, { eligible: !!leaving || !!mine, submitted: mine ? mine.at : null, lastDay: leaving ? leaving.lastDay : null, questions: exitinterviews.QUESTIONS, reasons: exitinterviews.REASONS }), true;
+    if (method === "POST") {
+      if (!leaving) throw httpError(403, "The exit interview opens once your leaving process has started.");
+      exitinterviews.submit(me, (await readJsonBody(req)).answers);
+      onboarding.completeAction(me.id, "exit-interview");
+      logEvent(req, session, "exit-interview-sent");
+      if (notify) notify(store.employees().filter((p) => store.can(p, "staff.manage")).map((p) => p.id), { type: "review", title: `${me.displayName} sent their exit interview`, link: "/exit-interviews" }, me);
+      return sendJson(res, 200, { ok: true, user: meResponse(session) }), true;
+    }
+  }
+  if (pathname === "/api/exit-interviews" && method === "GET") {
+    if (!can("staff.manage")) throw httpError(403, "Only HR can read exit interviews.");
+    return sendJson(res, 200, { interviews: exitinterviews.list(), summary: exitinterviews.reasonSummary(), questions: exitinterviews.QUESTIONS, reasons: exitinterviews.REASONS }), true;
+  }
+
+  // ----- Flexible working -----
+  if (pathname.startsWith("/api/flexible")) {
+    if (method === "GET" && pathname === "/api/flexible") return sendJson(res, 200, flexible.forViewer(me)), true;
+    if (method === "POST" && pathname === "/api/flexible") {
+      const r = flexible.create(me, await readJsonBody(req));
+      logEvent(req, session, "flexible-requested", { detail: flexible.TYPES[r.type] });
+      const sups = [me.supervisorId].filter(Boolean);
+      const to = sups.length ? sups : store.employees().filter((p) => store.can(p, "staff.manage")).map((p) => p.id);
+      if (notify) notify(to, { type: "leave", title: `${me.displayName} asked for flexible working`, body: flexible.TYPES[r.type], link: "/flexible" }, me);
+      return sendJson(res, 201, { ok: true }), true;
+    }
+    if ((m = /^\/api\/flexible\/([a-f0-9]{16})\/(decide|withdraw|comment)$/.exec(pathname)) && method === "POST") {
+      const r = flexible.get(m[1]);
+      if (!r || !flexible.canSee(me, r)) throw httpError(404, "Not found.");
+      const body = await readJsonBody(req);
+      if (m[2] === "decide") {
+        flexible.decide(r, body, me);
+        logEvent(req, session, "flexible-decided", { target: (store.getPerson(r.personId) || {}).displayName, detail: flexible.STATUSES[r.status] });
+        if (notify) notify([r.personId], { type: "leave", title: `Your flexible working request: ${flexible.STATUSES[r.status]}`, body: r.decisionNote, link: "/flexible" }, me);
+      } else if (m[2] === "withdraw") flexible.withdraw(r, me);
+      else {
+        flexible.comment(r, me, body.text);
+        if (notify) notify([r.personId, r.decidedBy, store.getPerson(r.personId) && store.getPerson(r.personId).supervisorId].filter(Boolean), { type: "leave", title: `${me.displayName} commented on a flexible working request`, link: "/flexible" }, me);
       }
       return sendJson(res, 200, { ok: true, user: meResponse(session) }), true;
     }

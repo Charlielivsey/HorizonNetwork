@@ -3534,3 +3534,87 @@ input[type="date"], input[type="time"], input[type="month"], input[type="datetim
 .fc-dot.neg { stroke: var(--danger-text); }
 .forecast-table td, .forecast-table th { white-space: nowrap; }
 #fd-forecast > .panel { margin-bottom: 1.25rem; }
+
+/* ---------- Document versions ---------- */
+.link-btn { border: 0; background: none; padding: 0; font: inherit; color: var(--primary); cursor: pointer; text-decoration: underline; }
+.version-list { list-style: none; padding: 0; margin: 0.6rem 0 0; display: grid; gap: 0.6rem; }
+.version-list li { border: 1px solid var(--border); border-radius: 12px; padding: 0.7rem 0.9rem; background: var(--surface-2); }
+.version-list li.current { border-color: var(--success-border); background: var(--success-bg); }
+.vl-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.vl-head .btn { margin-left: auto; }
+.vl-note { margin: 0.35rem 0; }
+.vl-acks summary { cursor: pointer; font-size: 0.85rem; color: var(--primary); margin-top: 0.3rem; }
+.vl-acks ul { margin: 0.4rem 0 0; padding-left: 1.1rem; font-size: 0.88rem; }
+
+/* ---------- Goals ---------- */
+.obj-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 1.25rem; align-items: start; }
+@media (max-width: 960px) { .obj-layout { grid-template-columns: 1fr; } }
+.obj-list { display: grid; gap: 1rem; }
+.obj-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.2rem; box-shadow: var(--shadow); }
+.obj-head { display: flex; justify-content: space-between; gap: 0.8rem; align-items: flex-start; }
+.obj-head h3 { margin: 0; font-size: 1.05rem; }
+.obj-progress { display: grid; grid-template-columns: 1fr auto; gap: 0.7rem; align-items: center; margin: 0.7rem 0 0.3rem; }
+.obj-progress .br-bar span { background: var(--primary); }
+.obj-updates summary { cursor: pointer; font-size: 0.85rem; color: var(--primary); }
+.obj-actions { margin-top: 0.6rem; }
+.obj-team { display: grid; gap: 0.5rem; }
+.obj-member { display: flex; gap: 0.6rem; align-items: center; padding: 0.45rem; border-radius: 10px; text-decoration: none; color: inherit; }
+.obj-member:hover { background: var(--surface-2); }
+.obj-member > span:last-child { display: flex; flex-direction: column; }
+input[type="range"] { width: 100%; accent-color: var(--primary); }
+
+/* ---------- 360 feedback ---------- */
+.rating-row { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+.rating-pill input { position: absolute; opacity: 0; pointer-events: none; }
+.rating-pill span { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--border); cursor: pointer; font-weight: 700; }
+.rating-pill input:checked + span { background: var(--primary); border-color: var(--primary); color: #fff; }
+.rating-pill input:focus-visible + span { box-shadow: 0 0 0 3px var(--focus-ring); }
+.rating-key { margin-left: 0.4rem; }
+.gf-q { margin-bottom: 1rem; }
+.gf-q > label { display: block; font-weight: 600; margin-bottom: 0.35rem; }
+.fb-request { border-top: 1px solid var(--border); padding: 0.9rem 0; }
+.fb-request:first-of-type { border-top: 0; }
+.fb-head { display: flex; align-items: center; gap: 0.7rem; }
+.fb-head .btn-row { margin-left: auto; }
+.fb-results { display: grid; gap: 0.7rem; margin-top: 0.7rem; }
+.fb-rating { display: grid; grid-template-columns: 1fr auto; gap: 0.3rem 1rem; align-items: center; padding: 0.6rem 0.8rem; border-radius: 10px; background: var(--surface-2); }
+.fb-dist { grid-column: 1 / -1; display: flex; gap: 0.3rem; }
+.fb-dist span { font-size: 0.75rem; color: var(--text-muted); padding: 0.1rem 0.45rem; border-radius: 6px; background: var(--surface); border: 1px solid var(--border); }
+.fb-dist b { margin-left: 0.3rem; color: var(--text); }
+.fb-text > span { font-weight: 600; font-size: 0.9rem; }
+.fb-text ul { margin: 0.3rem 0 0; padding-left: 1.1rem; }
+.fr-share { margin-top: 1.9rem; }
+
+/* ---------- Pulse ---------- */
+.pulse-q { font-size: 1.05rem; font-weight: 600; margin: 0.5rem 0 0.7rem; }
+.pulse-faces { display: flex; gap: 0.4rem; }
+.pulse-face { flex: 1; font-size: 1.7rem; padding: 0.45rem 0; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); cursor: pointer; transition: transform 0.12s, border-color 0.12s; }
+.pulse-face:hover { transform: translateY(-2px); border-color: var(--primary); }
+.pulse-comment { margin-top: 0.6rem; }
+.pulse-done { display: flex; align-items: center; gap: 0.5rem; color: var(--success-text); font-weight: 600; }
+.pulse-done .icon { width: 18px; height: 18px; }
+.pulse-trend { display: flex; align-items: flex-end; gap: 6px; height: 170px; margin: 0.6rem 0 1rem; }
+.pt-col { flex: 1; height: 100%; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; }
+.pt-val { font-weight: 700; font-size: 0.8rem; }
+.pt-bar { flex: 1; width: 100%; max-width: 40px; display: flex; align-items: flex-end; }
+.pt-bar i { display: block; width: 100%; border-radius: 6px 6px 0 0; background: linear-gradient(180deg, #3e9ba3, var(--primary)); }
+.pt-col small { font-size: 0.68rem; color: var(--text-muted); }
+.pulse-week { border-top: 1px solid var(--border); padding: 0.6rem 0; }
+.pulse-week ul { margin: 0.4rem 0 0; padding-left: 1.1rem; font-size: 0.9rem; }
+
+/* ---------- Exit interviews and flexible working ---------- */
+.exit-form { max-width: 760px; }
+.xi-answers { display: grid; gap: 0.2rem 0; margin: 0.6rem 0 0; }
+.xi-answers dt { font-weight: 600; font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem; }
+.xi-answers dd { margin: 0; }
+.flex-card { margin-bottom: 1rem; }
+.flex-card .inline-form { margin-top: 0.7rem; }
+.flex-actions { margin-top: 0.6rem; }
+.day-pick { display: flex; gap: 0.4rem; flex-wrap: wrap; margin: 0.6rem 0; }
+.day-chip input { position: absolute; opacity: 0; pointer-events: none; }
+.day-chip span { display: inline-grid; place-items: center; width: 56px; height: 44px; border-radius: 10px; border: 1px solid var(--border); cursor: pointer; font-weight: 700; }
+.day-chip input:checked + span { background: var(--primary); border-color: var(--primary); color: #fff; }
+.day-chip input:focus-visible + span { box-shadow: 0 0 0 3px var(--focus-ring); }
+.section-title + .flex-card { margin-top: 0.6rem; }
+.version-list li { position: relative; padding-right: 3.6rem; }
+.vl-head .btn { position: absolute; right: 0.8rem; top: 0.7rem; margin: 0; }
