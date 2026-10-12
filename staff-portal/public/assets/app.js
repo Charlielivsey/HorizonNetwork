@@ -6118,6 +6118,7 @@
         "maintenance-on": ["turned maintenance mode on", "system"],
         "maintenance-off": ["turned maintenance mode off", "system"],
         "sign-in-maintenance": ["tried to sign in during maintenance", "signin"],
+        "maintenance-pin-failed": ["entered a wrong maintenance PIN", "system"],
         "service-down": ["\u2014 a service went down:", "helpdesk"],
         "service-up": ["\u2014 a service came back up:", "helpdesk"],
     };
@@ -6217,6 +6218,7 @@
 
             '<section class="panel sys-section"><div class="panel-head"><h2 class="panel-title">' + icon("login") + "Log in as</h2></div>" +
             '<p class="muted small">Open the portal as another user without their password. You\'ll see a banner the whole time, and can return to your own account from it.</p>' +
+            (state.me.maintenance && state.me.maintenance.on ? '<div class="banner banner-warn">' + icon("lock") + "<div><strong>Turned off during maintenance mode.</strong> Turn maintenance mode off to log in as someone.</div></div>" : "") +
             '<label class="search sys-search">' + icon("search") + '<input type="search" id="sys-user-search" placeholder="Search users" aria-label="Search users"></label>' +
             '<div class="user-pick" id="sys-users"></div></section>' +
 
@@ -7968,9 +7970,13 @@
             const b = e.target.closest("#mt-on, #mt-off, #mt-save");
             if (!b) return;
             const on = b.id !== "mt-off";
-            if (b.id === "mt-on" && !(await confirmDialog({ title: "Turn on maintenance mode?", message: "Everyone except you will be signed out now and won’t be able to sign in until you turn it off.", confirmLabel: "Turn on", danger: true }))) return;
+            let pin = "";
+            if (b.id === "mt-on") {
+                pin = await askMaintenancePin();
+                if (pin === null) return;
+            }
             try {
-                const r = await api("/api/system/maintenance", { on: on, message: $("#mt-msg", box).value });
+                const r = await api("/api/system/maintenance", { on: on, message: $("#mt-msg", box).value, pin: pin });
                 toast(b.id === "mt-save" ? "Message updated." : on ? "Maintenance mode is on" + (r.ended ? ": " + r.ended + " signed out." : ".") : "Maintenance mode is off. Everyone can sign in again.");
                 state.me = (await api("/api/me")).user;
                 renderChrome();
@@ -7978,6 +7984,27 @@
             } catch (err) { toast(err.message); }
         });
         draw();
+    }
+
+    // Turning maintenance mode on needs the separate maintenance PIN.
+    function askMaintenancePin() {
+        return new Promise(function (resolve) {
+            let done = false;
+            const m = openModal(
+                '<h2 class="modal-title">Turn on maintenance mode?</h2>' +
+                '<p class="muted">Everyone except you will be signed out now, and nobody else can sign in (or be logged in as) until you turn it off. Enter the maintenance PIN to confirm.</p>' +
+                '<form id="mp-form" novalidate><label for="mp-pin">Maintenance PIN</label><input type="password" id="mp-pin" inputmode="numeric" maxlength="8" autocomplete="off">' +
+                '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-danger">Turn on</button></div></form>',
+                { onClose: function () { if (!done) resolve(null); } }
+            );
+            $("#mp-form", m.el).addEventListener("submit", function (e) {
+                e.preventDefault();
+                done = true;
+                const v = $("#mp-pin", m.el).value;
+                closeModal();
+                resolve(v);
+            });
+        });
     }
 
     // ================= Service outage banner =================

@@ -904,6 +904,7 @@ async function routeSystem(req, res, pathname, session) {
   }
 
   if (method === "POST" && (m = /^\/api\/system\/impersonate\/([a-f0-9]{16})$/.exec(pathname))) {
+    if (store.maintenance().on) throw httpError(403, "“Log in as” is turned off while maintenance mode is on.");
     const target = store.getPerson(m[1]);
     if (!target || target.id === me.id) throw httpError(404, "User not found.");
     if (protectedPerson(target.id)) throw httpError(403, "Only the system owner can log in as the system owner.");
@@ -938,13 +939,25 @@ async function routeSystem(req, res, pathname, session) {
   if (method === "POST" && pathname === "/api/system/maintenance") {
     if (!owner) throw httpError(403, "Only the system owner can turn maintenance mode on or off.");
     const body = await readJsonBody(req);
+    // Turning it on needs the separate maintenance PIN, with the same lockout as the System Admin PIN.
+    if (body.on && !store.maintenance().on) {
+      const entry = pinFailures.get("maint:" + me.id);
+      if (entry && entry.count >= MAX_PIN_ATTEMPTS && Date.now() - entry.first < LOCKOUT_WINDOW_MS) throw httpError(429, "Too many wrong PINs. Try again in 15 minutes.");
+      if (!store.verifyMaintenancePin(String(body.pin || ""))) {
+        if (!entry || Date.now() - entry.first > LOCKOUT_WINDOW_MS) pinFailures.set("maint:" + me.id, { count: 1, first: Date.now() });
+        else entry.count++;
+        logEvent(req, session, "maintenance-pin-failed");
+        throw httpError(401, "That maintenance PIN isn't right.");
+      }
+      pinFailures.delete("maint:" + me.id);
+    }
     const m = store.setMaintenance(!!body.on, body.message, me);
     let ended = 0;
     if (m.on) {
       // Sign out everyone except the owner straight away.
       for (const [token, s] of sessions) {
         const p = store.getPerson(s.personId);
-        if (!p || !store.isOwner(p) || s.impersonatorId) { sessions.delete(token); ended++; }
+        if (!p || !store.isOwner(p)) { sessions.delete(token); ended++; }
       }
     }
     logEvent(req, session, m.on ? "maintenance-on" : "maintenance-off", { detail: m.on ? `${m.message}${ended ? ` (${ended} signed out)` : ""}` : undefined });
@@ -1057,8 +1070,8 @@ async function routeApi(req, res, pathname, session) {
 
   if (!session) return sendJson(res, 401, { error: "Not signed in." });
   const me = session.person;
-  // Maintenance mode signs everyone but the owner out (the owner logged in as someone is fine).
-  if (store.maintenance().on && !store.isOwner(me) && !session.data.impersonatorId) {
+  // Maintenance mode signs everyone but the owner out, including "log in as" sessions.
+  if (store.maintenance().on && !store.isOwner(me)) {
     sessions.delete(session.token);
     return sendJson(res, 503, { error: "The staff portal is in maintenance mode.", code: "MAINTENANCE" }, { "Set-Cookie": sessionCookie(req, "", 0) });
   }
@@ -2024,7 +2037,7 @@ async function route(req, res) {
   // doesn't reload the page, so it isn't affected.
   if (APP_ROUTES.has(pathname)) {
     if (!session) return redirect(res, "/login");
-    if (store.maintenance().on && !store.isOwner(session.person) && !session.data.impersonatorId) {
+    if (store.maintenance().on && !store.isOwner(session.person)) {
       sessions.delete(session.token);
       return send(res, 302, "", { Location: "/login?maintenance=1", "Cache-Control": "no-store", "Set-Cookie": sessionCookie(req, "", 0) });
     }

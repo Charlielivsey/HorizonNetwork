@@ -50,6 +50,7 @@ const ADMIN_USERNAME = "admin@hngroup.org.uk";
 // The system owner has access to everything, including PIN-protected System Admin.
 const DEFAULT_OWNER_EMAIL = "charlie.livsey@hngroup.org.uk";
 const DEFAULT_SYSTEM_PIN = "0103";
+const DEFAULT_MAINTENANCE_PIN = "1101";
 const TIMEZONES = new Set([...Intl.supportedValuesOf("timeZone"), "UTC"]);
 const LOCAL_PART_RE = /^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/;
 const MAX_EMAILS = 10;
@@ -95,6 +96,8 @@ function init(dir) {
     : { managementTitles: DEFAULT_MANAGEMENT_TITLES };
   if (!settings.ownerEmail) settings.ownerEmail = DEFAULT_OWNER_EMAIL;
   if (!settings.systemPin) settings.systemPin = hashPassword(DEFAULT_SYSTEM_PIN);
+  // A second PIN, needed to turn maintenance mode on.
+  if (!settings.maintenancePin) settings.maintenancePin = hashPassword(DEFAULT_MAINTENANCE_PIN);
   if (!settings.roles) migrateToRoles();
   if (!settings.superAdminRoleAdded) {
     // Added once; if it's deleted later it stays deleted.
@@ -945,6 +948,12 @@ function verifySystemPin(pin) {
   return crypto.timingSafeEqual(Buffer.from(hash, "hex"), Buffer.from(settings.systemPin.hash, "hex"));
 }
 
+function verifyMaintenancePin(pin) {
+  if (typeof pin !== "string" || !settings.maintenancePin) return false;
+  const { hash } = hashPassword(pin, settings.maintenancePin.salt);
+  return crypto.timingSafeEqual(Buffer.from(hash, "hex"), Buffer.from(settings.maintenancePin.hash, "hex"));
+}
+
 function setSystemPin(pin) {
   if (!/^\d{4,8}$/.test(String(pin || ""))) throw new ValidationError("The PIN must be 4 to 8 digits.");
   settings.systemPin = hashPassword(pin);
@@ -987,6 +996,7 @@ function allPeople() {
 }
 
 module.exports = {
+  verifyMaintenancePin,
   maintenance,
   setMaintenance,
   ADMIN_USERNAME,
