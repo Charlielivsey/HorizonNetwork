@@ -48,7 +48,7 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       logEvent(req, session, 'status-admin-sign-in');
       redirect(res, `${STATUS_ORIGIN}/auth/callback?code=${code}&state=${state}`); return true;
     }
-    if (!['/api/status-sso/exchange', '/api/status-sso/session'].includes(pathname)) return false;
+    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar'].includes(pathname)) return false;
     if (req.method !== 'POST') { sendJson(res, 405, { error: 'Method not allowed.' }); return true; }
     if (!credentials(req)) { sendJson(res, 401, { error: 'Status integration not authenticated.' }); return true; }
     const body = await readJsonBody(req);
@@ -64,6 +64,23 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
     }
     const active = HEX.test(token || '') ? current(token) : null;
     if (!active) { sendJson(res, 401, { error: 'Staff sign-in expired. Please sign in again.' }); return true; }
+    if (pathname.startsWith('/api/auth/')) {
+      if (!active.person.account?.enabled || active.data.impersonatorId || (store.maintenance().on && !store.isOwner(active.person))) {
+        sendJson(res, 403, { error: 'This account cannot sign in right now.' }); return true;
+      }
+      if (pathname === '/api/auth/avatar') {
+        const avatar = store.avatarFile(active.person);
+        if (!avatar) { sendJson(res, 404, { error: 'No profile picture.' }); return true; }
+        res.writeHead(200, { 'Content-Type': avatar.mime, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+        fs.createReadStream(avatar.file).on('error', () => res.destroy()).pipe(res); return true;
+      }
+      const p = active.person;
+      sendJson(res, 200, { session: token, expires: active.data.expires, user: {
+        id: p.id, displayName: p.displayName, email: (p.emails || []).find(e => e.primary)?.address || p.emails?.[0]?.address || store.loginName(p),
+        jobTitle: p.jobTitle || '', company: p.company || '', avatarUrl: store.avatarFile(p) ? '/api/avatar' : null,
+        statusAdminAllowed: allowed(active, store)
+      } }); return true;
+    }
     if (!allowed(active, store)) { sendJson(res, 403, { error: 'Only the system owner and Super Admin members can manage status.' }); return true; }
     sendJson(res, 200, { session: token, expires: active.data.expires, user: { id: active.person.id, displayName: active.person.displayName } });
     return true;

@@ -37,7 +37,7 @@ for config in /etc/nginx/sites-enabled/* /etc/nginx/conf.d/*.conf; do
     fi
 done
 # The status Admin button uses existing staff credentials and roles.
-bash "$SCRIPT_DIR/install-portal-sso.sh"
+bash "$SCRIPT_DIR/../auth-site/install.sh" "$EMAIL"
 
 mkdir -p "$APP_DIR/public" "$DATA_DIR" "$SSL_DIR" "$CHALLENGE_DIR" /etc/nginx/sites-available /etc/nginx/sites-enabled
 chmod 700 "$DATA_DIR"
@@ -104,9 +104,9 @@ echo ''
 echo "Status installed: https://$DOMAIN"
 echo 'PM2 process: hn-status (port 3300, loopback only)'
 echo 'Admin page: https://status.hngroup.org.uk/admin'
-echo 'Admin sign-in: staff portal (system owner and Super Admin role only)'
+echo 'Admin sign-in: auth.hngroup.org.uk (system owner and Super Admin role only)'
 if [ "$HTTPS_OK" != 1 ]; then
     echo 'WARNING: Trusted SSL could not be issued/refreshed. An existing certificate or temporary self-signed certificate is in use.'
     echo 'Point the status DNS record at this VPS, allow inbound ports 80/443, then rerun this installer.'
-    echo 'Staff sign-in requires trusted HTTPS on both staff and status domains.'
+    echo 'Sign-in requires trusted HTTPS on auth and status domains.'
 fi

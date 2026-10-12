@@ -9,7 +9,7 @@ async function fixture() {
     ['leadership', { name: 'Leadership & HR', permissions: ['system.admin'] }]
   ]);
   let maintenance = false;
-  const store = { getPerson: id => people.get(id), getRole: id => roles.get(id), isOwner: p => p?.id === 'owner', maintenance: () => ({ on: maintenance }) };
+  const store = { avatarFile: () => null, loginName: p => p.id + '@hngroup.org.uk', getPerson: id => people.get(id), getRole: id => roles.get(id), isOwner: p => p?.id === 'owner', maintenance: () => ({ on: maintenance }) };
   function addUser(id, roleIds = [], extra = {}) {
     const raw = crypto.randomBytes(32).toString('hex');
     const token = crypto.createHash('sha256').update(raw).digest('hex');
@@ -25,6 +25,11 @@ async function fixture() {
   const readJsonBody = async req => { let text = ''; for await (const c of req) text += c; return JSON.parse(text); };
   const handler = createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent: () => {} });
   const server = http.createServer(async (req, res) => {
+    if (req.url === '/api/login' && req.method === 'POST') {
+      const data = await readJsonBody(req); const user = users[data.username];
+      if (!user || data.password !== 'test-password') return sendJson(res, 401, { error: 'Incorrect credentials.' });
+      res.setHeader('Set-Cookie', 'hn_staff_session=' + user.raw + '; Path=/; HttpOnly'); return sendJson(res, 200, { user: {} });
+    }
     const raw = (req.headers.cookie || '').replace('hn_staff_session=', '');
     const token = crypto.createHash('sha256').update(raw).digest('hex'), data = sessions.get(token);
     const person = data && people.get(data.personId);

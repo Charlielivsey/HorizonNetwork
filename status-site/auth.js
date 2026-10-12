@@ -1,13 +1,13 @@
 'use strict';
 const fs = require('node:fs');
 const crypto = require('node:crypto');
-const PORTAL_ORIGIN = 'https://staff.hngroup.org.uk';
+const PORTAL_ORIGIN = 'https://auth.hngroup.org.uk';
 const STATUS_ORIGIN = 'https://status.hngroup.org.uk';
 const SESSION_COOKIE = '__Host-hn_status_session';
 const STATE_COOKIE = '__Host-hn_status_state';
 const HEX = /^[a-f0-9]{64}$/;
 const secretFile = process.env.STATUS_SSO_SECRET_FILE || '/var/lib/hn-status-sso/secret';
-const portalBackend = process.env.STAFF_PORTAL_BACKEND || 'http://127.0.0.1:3200';
+const portalBackend = process.env.AUTH_BACKEND || 'http://127.0.0.1:3400';
 function cookie(req, name) {
   return (req.headers.cookie || '').split(';').map(x => x.trim()).find(x => x.startsWith(name + '='))?.slice(name.length + 1) || '';
 }
@@ -18,12 +18,12 @@ function createAuth() {
   const error = (res, status, message) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify({ error: message })); };
   async function portal(endpoint, data) {
     let secret;
-    try { secret = fs.readFileSync(secretFile, 'utf8').trim(); } catch { throw Object.assign(new Error('Staff sign-in integration is not installed. Please run the status installer.'), { status: 503 }); }
-    if (!HEX.test(secret)) throw Object.assign(new Error('Staff sign-in integration is not configured.'), { status: 503 });
+    try { secret = fs.readFileSync(secretFile, 'utf8').trim(); } catch { throw Object.assign(new Error('HN Group Auth integration is not installed. Please run the status installer.'), { status: 503 }); }
+    if (!HEX.test(secret)) throw Object.assign(new Error('HN Group Auth integration is not configured.'), { status: 503 });
     let response;
-    try { response = await fetch(portalBackend + '/api/status-sso/' + endpoint, {
+    try { response = await fetch(portalBackend + '/api/sso/' + endpoint, {
       method: 'POST', headers: { Authorization: 'Bearer ' + secret, 'Content-Type': 'application/json' }, body: JSON.stringify(data), signal: AbortSignal.timeout(5000), redirect: 'error'
-    }); } catch { throw Object.assign(new Error('Staff portal is unavailable. Please try again shortly.'), { status: 503 }); }
+    }); } catch { throw Object.assign(new Error('HN Group Auth is unavailable. Please try again shortly.'), { status: 503 }); }
     const value = await response.json();
     if (!response.ok) throw Object.assign(new Error(value.error || 'Staff sign-in could not be verified.'), { status: response.status === 403 ? 403 : response.status === 401 ? 401 : 503 });
     if (!HEX.test(value.session || '') || !value.user || !Number.isFinite(value.expires)) throw Object.assign(new Error('Invalid staff sign-in response.'), { status: 503 });
@@ -41,9 +41,9 @@ function createAuth() {
   async function handle(req, res, route) {
     if (route === '/auth/login' && req.method === 'GET') {
       const state = crypto.randomBytes(32).toString('hex');
-      const next = '/status-admin/authorize?state=' + state;
+      const next = '/authorize?client_id=status&state=' + state;
       const switchAccount = new URL(req.url, STATUS_ORIGIN).searchParams.get('switch') === '1';
-      redirect(res, PORTAL_ORIGIN + (switchAccount ? '/login?next=' + encodeURIComponent(next) : next), [setCookie(STATE_COOKIE, state, 600)]); return true;
+      redirect(res, PORTAL_ORIGIN + (next + (switchAccount ? '&switch=1' : '')), [setCookie(STATE_COOKIE, state, 600)]); return true;
     }
     if (route === '/auth/callback' && req.method === 'GET') {
       const query = new URL(req.url, STATUS_ORIGIN).searchParams;

@@ -13,6 +13,10 @@ test('protected management, real checks, incidents and persistent history', asyn
   process.env.STATUS_SSO_SECRET_FILE = secretFile;
   const portal = await require('./test-portal.cjs').fixture();
   process.env.STAFF_PORTAL_BACKEND = portal.base;
+  const { server: authServer } = require('../auth-site/server');
+  await new Promise(r => authServer.listen(0, '127.0.0.1', r));
+  const authBase = `http://127.0.0.1:${authServer.address().port}`;
+  process.env.AUTH_BACKEND = authBase;
   const { server, checkAll } = require('./server');
   let healthy = true;
   const target = http.createServer((req, res) => { res.writeHead(healthy ? 200 : 503); res.end(); });
@@ -26,9 +30,12 @@ test('protected management, real checks, incidents and persistent history', asyn
     const stateCookie = start.headers.getSetCookie()[0].split(';')[0];
     assert.match(stateCookie, /^__Host-hn_status_state=/);
     const authorize = new URL(start.headers.get('location'));
-    assert.equal(authorize.origin, 'https://staff.hngroup.org.uk');
-    const grant = await fetch(portal.base + authorize.pathname + authorize.search, { headers: { Cookie: 'hn_staff_session=' + user.raw }, redirect: 'manual' });
-    const callback = new URL(grant.headers.get('location'));
+    assert.equal(authorize.origin, 'https://auth.hngroup.org.uk');
+    const login = await fetch(authBase + '/api/login', { method: 'POST', headers: { Origin: 'https://auth.hngroup.org.uk', 'Content-Type': 'application/json' }, body: JSON.stringify({ username: user.person.id, password: 'test-password' }) });
+    assert.equal(login.status, 200);
+    const authCookie = login.headers.getSetCookie().find(c => c.startsWith('__Host-hn_auth_session=')).split(';')[0];
+    const grant = await fetch(authBase + '/api/continue', { method: 'POST', headers: { Cookie: authCookie, Origin: 'https://auth.hngroup.org.uk', 'Content-Type': 'application/json' }, body: JSON.stringify({ client_id: 'status', state: authorize.searchParams.get('state') }) });
+    const callback = new URL((await grant.json()).redirect);
     assert.equal(callback.origin, 'https://status.hngroup.org.uk');
     const result = await fetch(base + callback.pathname + callback.search, { headers: { Cookie: stateCookie }, redirect: 'manual' });
     return { result, callback, stateCookie };
@@ -128,7 +135,8 @@ test('protected management, real checks, incidents and persistent history', asyn
     portal.users.super.person.account.enabled = false;
     assert.equal((await request('/api/admin')).code, 403);
     portal.users.owner.data.impersonatorId = 'other';
-    assert.equal((await signIn(portal.users.owner)).result.headers.get('location'), '/admin/denied');
+    const impersonated = await fetch(authBase + '/api/login', { method: 'POST', headers: { Origin: 'https://auth.hngroup.org.uk', 'Content-Type': 'application/json' }, body: JSON.stringify({ username: 'owner', password: 'test-password' }) });
+    assert.equal(impersonated.status, 403);
     delete portal.users.owner.data.impersonatorId;
     const logoutLogin = await signIn(portal.users.owner);
     statusCookie = logoutLogin.result.headers.getSetCookie().find(c => c.startsWith('__Host-hn_status_session=')).split(';')[0];
@@ -155,6 +163,7 @@ test('protected management, real checks, incidents and persistent history', asyn
     await new Promise(r => setTimeout(r, 30));
     await new Promise(r => server.close(r));
     await new Promise(r => target.close(r));
+    await new Promise(r => authServer.close(r));
     if (portal.server.listening) await new Promise(r => portal.server.close(r));
     fs.rmSync(dir, { recursive: true, force: true });
   }

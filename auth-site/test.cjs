@@ -1,0 +1,58 @@
+'use strict';
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs'), os = require('node:os'), path = require('node:path'), http = require('node:http');
+const { spawn } = require('node:child_process');
+test('real staff password and PIN, minimal live profile, avatar, fixed clients and central logout', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-auth-test-'));
+  const store = require('../staff-portal/lib/store'); store.init(dir);
+  const person = store.saveEmployee({ firstName: 'Test', lastName: 'Owner', jobTitle: 'System owner', company: store.COMPANIES[0], emails: [{ local: 'test.owner', domain: 'hngroup.org.uk', primary: true }] });
+  store.issueTemporaryPassword(person); store.setPassword(person, 'Test-password-582!'); store.setCode(person, '582947');
+  const avatar = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6zSsAAAAASUVORK5CYII=';
+  store.saveAvatar(person, 'data:image/png;base64,' + avatar);
+  const settingsFile = path.join(dir, 'settings.json'), settings = JSON.parse(fs.readFileSync(settingsFile));
+  settings.ownerEmail = 'test.owner@hngroup.org.uk'; fs.writeFileSync(settingsFile, JSON.stringify(settings));
+  const secret = path.join(dir, 'secret'); fs.writeFileSync(secret, 'c'.repeat(64));
+  process.env.STATUS_SSO_SECRET_FILE = secret;
+  const reserve = http.createServer(); await new Promise(r => reserve.listen(0, '127.0.0.1', r));
+  const port = reserve.address().port; await new Promise(r => reserve.close(r));
+  const child = spawn(process.execPath, ['staff-portal/server.js'], { cwd: path.join(__dirname, '..'), env: { ...process.env, PORT: String(port), DATA_DIR: dir }, stdio: ['ignore','ignore','pipe'] });
+  let errors=''; child.stderr.on('data', c=>errors+=c);
+  process.env.STAFF_PORTAL_BACKEND = `http://127.0.0.1:${port}`;
+  const { server } = require('./server'); await new Promise(r => server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${server.address().port}`, origin = 'https://auth.hngroup.org.uk';
+  async function post(route, data, cookie = '', extra = {}) { return fetch(base + route, { method:'POST', headers:{ Origin:origin, 'Content-Type':'application/json', Cookie:cookie, ...extra }, body:JSON.stringify(data) }); }
+  try {
+    let started=false; for(let n=0;n<100;n++){try{if((await fetch(process.env.STAFF_PORTAL_BACKEND+'/healthz')).ok){started=true;break;}}catch{} await new Promise(r=>setTimeout(r,50));} assert.ok(started,errors);
+    assert.equal((await fetch(base+'/api/me')).status,401);
+    assert.equal((await post('/api/login',{ username:'test.owner@hngroup.org.uk',password:'bad' })).status,401);
+    assert.equal((await post('/api/login',{ username:'test.owner@hngroup.org.uk',password:'Test-password-582!' },'',{Origin:'https://evil.example'})).status,403);
+    const login = await post('/api/login',{ username:'test.owner@hngroup.org.uk',password:'Test-password-582!' });
+    assert.deepEqual(await login.json(),{codeRequired:true});
+    const flow = login.headers.getSetCookie()[0].split(';')[0]; assert.match(login.headers.getSetCookie()[0],/HttpOnly; Secure; SameSite=Lax/);
+    assert.equal((await post('/api/login/code',{code:'582947'})).status,401);
+    assert.equal((await post('/api/login/code',{code:'111111'},flow)).status,401);
+    const verified = await post('/api/login/code',{code:'582947'},flow); assert.equal(verified.status,200);
+    const account = (await verified.json()).user;
+    assert.deepEqual(Object.keys(account).sort(),['id','displayName','email','jobTitle','company','avatarUrl','statusAdminAllowed'].sort());
+    assert.equal(account.email,'test.owner@hngroup.org.uk'); assert.equal(account.displayName,'Test Owner'); assert.equal(account.jobTitle,'System owner'); assert.equal(account.company,store.COMPANIES[0]); assert.equal(account.statusAdminAllowed,true);
+    const cookie = verified.headers.getSetCookie().find(c=>c.startsWith('__Host-hn_auth_session=')).split(';')[0];
+    assert.ok(!verified.headers.get('set-cookie').includes('hn_staff_session='));
+    assert.equal((await post('/api/login/code',{code:'582947'},flow)).status,401);
+    const picture = await fetch(base+'/api/avatar',{headers:{Cookie:cookie}}); assert.equal(picture.status,200); assert.deepEqual(Buffer.from(await picture.arrayBuffer()),Buffer.from(avatar,'base64'));
+    assert.equal((await fetch(base+'/api/avatar')).status,401);
+    assert.equal((await fetch(base+'/authorize?client_id=evil&state='+'a'.repeat(64)+'&redirect_uri=https://evil.example')).status,400);
+    assert.equal((await post('/api/continue',{client_id:'evil',state:'a'.repeat(64)},cookie)).status,400);
+    const state='a'.repeat(64), grant=await post('/api/continue',{client_id:'status',state},cookie), callback=new URL((await grant.json()).redirect);
+    assert.equal(callback.origin,'https://status.hngroup.org.uk');
+    assert.equal((await post('/api/sso/exchange',{code:callback.searchParams.get('code'),state})).status,401);
+    const exchange=await post('/api/sso/exchange',{code:callback.searchParams.get('code'),state},'',{Authorization:'Bearer '+'c'.repeat(64)}); assert.equal(exchange.status,200);
+    const sso=await exchange.json();
+    assert.equal((await post('/api/sso/exchange',{code:callback.searchParams.get('code'),state},'',{Authorization:'Bearer '+'c'.repeat(64)})).status,401);
+    const authHeader={Authorization:'Bearer '+'c'.repeat(64)};
+    assert.equal((await post('/api/sso/session',{session:sso.session},'',authHeader)).status,200);
+    assert.equal((await post('/api/logout',{},cookie)).status,200);
+    assert.equal((await post('/api/sso/session',{session:sso.session},'',authHeader)).status,401);
+    assert.equal((await fetch(base+'/api/me',{headers:{Cookie:cookie}})).status,401);
+  } finally { await new Promise(r=>server.close(r)); if(child.exitCode===null){child.kill('SIGTERM');await new Promise(r=>child.once('exit',r));} fs.rmSync(dir,{recursive:true,force:true}); }
+});

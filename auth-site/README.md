@@ -1,0 +1,13 @@
+# HN Group Auth — auth.hngroup.org.uk
+
+Authentication-only service backed by the existing staff portal. No duplicate accounts, passwords or PINs. Uses the portal's real login handlers, including account blocking, password rate limits and the configured six-digit sign-in PIN. A narrow service-authenticated bridge provides only the signed-in person's name, email, job title, company, avatar and status access decision.
+
+`sudo bash auth-site/install.sh` installs only Auth and the necessary staff bridge, with PM2 `hn-auth`, loopback port 3400 and a dedicated nginx/Let's Encrypt configuration. `sudo bash status-site/install.sh` updates both Auth and status. Other website installers and nginx hosts are untouched. Existing staff portal installation and PM2 `hn-staff-portal` on port 3200 are required. Set the auth DNS record to the VPS first. An existing Let's Encrypt registration is reused; otherwise append your email. The installer stops if trusted SSL cannot be issued, before status switches to Auth.
+
+Registered application: `status`, fixed callback `https://status.hngroup.org.uk/auth/callback`. Start through that site's Admin button. The Auth root page also allows signing in and viewing your own connected identity. Future clients must be registered server-side with fixed callbacks and explicit access rules; arbitrary return URLs are rejected.
+
+Authentication cookies are Secure, HttpOnly, SameSite=Lax and host-only. One-time authorization codes expire in 60 seconds and are bound to the client and browser state. All application writes require the Auth origin; backend exchanges require the root-only service secret. Staff session tokens are hashed before Auth keeps them; passwords and PINs are never retained. Auth session/grant state is held in memory, so PM2 restarts sign users out. Staff session validity, role membership and profile data are fetched afresh; central sign-out revokes access for connected status sessions.
+
+Production settings: `HOST=127.0.0.1`, `PORT=3400`, `STAFF_PORTAL_BACKEND=http://127.0.0.1:3200`, `STATUS_SSO_SECRET_FILE=/var/lib/hn-status-sso/secret`. No browser redirects or callbacks are derived from request headers.
+
+Verification: `node --test auth-site/test.cjs status-site/test.cjs status-site/portal-smoke.test.cjs`. Tests use temporary staff data, including a real password, PIN and avatar; production staff records are never used or changed.
