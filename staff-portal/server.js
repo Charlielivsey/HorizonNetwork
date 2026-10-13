@@ -410,6 +410,7 @@ const TRACKED_FIELDS = {
   lastName: "last name",
   displayName: "display name",
   jobTitle: "job title",
+  department: "department",
   company: "company",
   supervisorId: "supervisor",
   otherRoles: "other companies",
@@ -524,6 +525,26 @@ function resumePerson(req) {
   return { raw, person };
 }
 
+// What the sign-in page shows for "Welcome back".
+function resumeInfo(person) {
+  const v = store.publicView(person);
+  return { available: true, displayName: person.displayName, firstName: person.firstName || person.displayName.split(" ")[0], username: store.meView(person).username, avatarUrl: v.avatarUrl ? "/api/resume/avatar?v=" + person.avatar.version : null, id: person.id };
+}
+
+// The sign-in page, with the remembered person (if any) built in, so it opens straight on the
+// "Welcome back" step instead of showing the email and password form first.
+function sendLoginPage(req, res) {
+  fs.readFile(path.join(PUBLIC_DIR, "login.html"), "utf8", (err, html) => {
+    if (err) return send(res, 500, "Server error", { "Content-Type": "text/plain" });
+    const { person } = resumePerson(req);
+    if (person) {
+      const json = JSON.stringify(resumeInfo(person)).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+      html = html.replace('<body class="login-page">', `<body class="login-page" data-resume="${json}">`);
+    }
+    send(res, 200, html, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+  });
+}
+
 async function handleResume(req, res, pathname) {
   const { raw, person } = resumePerson(req);
   if (req.method === "GET" && pathname === "/api/resume/avatar") {
@@ -533,8 +554,7 @@ async function handleResume(req, res, pathname) {
   }
   if (req.method === "GET") {
     if (!person) return sendJson(res, 200, { available: false }, raw ? { "Set-Cookie": resume.cookie(req, "", true) } : {});
-    const v = store.publicView(person);
-    return sendJson(res, 200, { available: true, displayName: person.displayName, firstName: person.firstName || person.displayName.split(" ")[0], username: store.meView(person).username, avatarUrl: v.avatarUrl ? "/api/resume/avatar?v=" + person.avatar.version : null, id: person.id });
+    return sendJson(res, 200, resumeInfo(person));
   }
   if (pathname === "/api/resume/forget") {
     resume.forget(raw);
@@ -1075,8 +1095,8 @@ function search(me, query) {
   const has = (...fields) => fields.join(" ").toLowerCase().includes(q);
   const people = [];
   for (const p of store.employees()) {
-    const roles = [{ company: p.company, jobTitle: p.jobTitle }].concat((p.otherRoles || []).map((r) => ({ company: r.company, jobTitle: r.jobTitle || p.jobTitle })));
-    if (!has(p.displayName, p.firstName, p.lastName, p.location, p.emails.map((e) => e.address).join(" "), roles.map((r) => r.jobTitle + " " + r.company).join(" "), (p.skills || []).join(" "), (p.languages || []).join(" "))) continue;
+    const roles = [{ company: p.company, jobTitle: p.jobTitle, department: p.department || "" }].concat((p.otherRoles || []).map((r) => ({ company: r.company, jobTitle: r.jobTitle || p.jobTitle, department: r.department || p.department || "" })));
+    if (!has(p.displayName, p.firstName, p.lastName, p.location, p.emails.map((e) => e.address).join(" "), roles.map((r) => r.jobTitle + " " + r.department + " " + r.company).join(" "), (p.skills || []).join(" "), (p.languages || []).join(" "))) continue;
     people.push({ id: p.id, displayName: p.displayName, jobTitle: p.jobTitle, company: p.company, avatarUrl: store.publicView(p).avatarUrl });
     if (people.length >= 6) break;
   }
@@ -2110,7 +2130,7 @@ async function route(req, res) {
       sessions.delete(session.token);
       return send(res, 302, "", { Location: "/login", "Cache-Control": "no-store", "Set-Cookie": sessionCookie(req, "", 0) });
     }
-    return sendFile(res, path.join(PUBLIC_DIR, "login.html"), { "Cache-Control": "no-store" });
+    return sendLoginPage(req, res);
   }
 
   // Loading or refreshing a portal page signs you out. The only page load allowed is the one

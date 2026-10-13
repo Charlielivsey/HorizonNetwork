@@ -239,8 +239,26 @@
         showStep("password");
     });
 
+    // The server builds the remembered person into the page (data-resume), so "Welcome back" shows
+    // straight away. The page's steps stay invisible until this has run, so the email and password
+    // form never flashes up first.
+    (function () {
+        let r = null;
+        try { r = JSON.parse(document.body.getAttribute("data-resume") || "null"); } catch (e) { r = null; }
+        // Visible first: a hidden code box can't take focus.
+        document.body.classList.add("resume-ready");
+        if (r && r.available) {
+            remembered = r;
+            document.getElementById("offer-avatar").innerHTML = avatarHtml(r);
+            document.getElementById("resume-avatar").innerHTML = avatarHtml(r);
+            document.getElementById("offer-name").textContent = r.displayName;
+            document.getElementById("resume-offer").hidden = false;
+            startResume();
+        }
+    })();
+
     // On load: is the portal in maintenance mode (show a banner, or the full message if we were sent
-    // here by it), and does this browser remember someone?
+    // here by it)?
     (async function () {
         try {
             const m = await (await fetch("/api/maintenance")).json();
@@ -250,16 +268,6 @@
                 if (/[?&]maintenance=1/.test(window.location.search)) return showMaintenance(m);
             }
         } catch (e) { /* ignore */ }
-        try {
-            const r = await (await fetch("/api/resume", { headers: { Accept: "application/json" } })).json();
-            if (!r.available) return;
-            remembered = r;
-            const offer = document.getElementById("resume-offer");
-            document.getElementById("offer-avatar").innerHTML = avatarHtml(r);
-            document.getElementById("resume-avatar").innerHTML = avatarHtml(r);
-            document.getElementById("offer-name").textContent = r.displayName;
-            offer.hidden = false;
-            startResume();
-        } catch (e) { /* ignore */ }
     })();
+
 })();

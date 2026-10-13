@@ -506,6 +506,7 @@ function publicView(p) {
     lastName: p.lastName,
     displayName: p.displayName,
     jobTitle: p.jobTitle,
+    department: p.department || "",
     company: p.company,
     otherRoles: p.otherRoles || [],
     supervisorId: p.supervisorId,
@@ -560,13 +561,15 @@ function rolesOf(p) {
       id: s.id,
       displayName: s.displayName,
       jobTitle: other ? other.jobTitle || s.jobTitle : s.jobTitle,
+      department: other ? other.department || s.department || "" : s.department || "",
       company: sameCompany ? company : s.company,
     };
   };
-  return [{ company: p.company, jobTitle: p.jobTitle, supervisor: brief(p.supervisorId, p.company), main: true }].concat(
+  return [{ company: p.company, jobTitle: p.jobTitle, department: p.department || "", supervisor: brief(p.supervisorId, p.company), main: true }].concat(
     (p.otherRoles || []).map((r) => ({
       company: r.company,
       jobTitle: r.jobTitle || p.jobTitle,
+      department: r.department || p.department || "",
       supervisor: brief(r.supervisorId || p.supervisorId, r.company),
       main: false,
     }))
@@ -686,6 +689,7 @@ function saveEmployee(input, existing) {
   const lastName = str(input.lastName, 60);
   const displayName = str(input.displayName, 80) || `${firstName} ${lastName}`.trim();
   const jobTitle = str(input.jobTitle, 100);
+  const department = str(input.department, 80);
   const company = str(input.company, 60);
   const timezone = TIMEZONES.has(input.timezone) ? input.timezone : DEFAULT_TIMEZONE;
   const otherRoles = [];
@@ -700,7 +704,7 @@ function saveEmployee(input, existing) {
         roleSupervisor = null;
       }
     }
-    otherRoles.push({ company: roleCompany, jobTitle: str(r.jobTitle, 100), supervisorId: roleSupervisor });
+    otherRoles.push({ company: roleCompany, jobTitle: str(r.jobTitle, 100), department: str(r.department, 80), supervisorId: roleSupervisor });
   }
 
   if (!firstName) errors.push("First name is required.");
@@ -733,6 +737,7 @@ function saveEmployee(input, existing) {
     lastName,
     displayName,
     jobTitle,
+    department,
     company,
     otherRoles,
     supervisorId,

@@ -966,9 +966,9 @@
     function roleFor(p, company) {
         if (company && company !== p.company) {
             const r = (p.otherRoles || []).find(function (x) { return x.company === company; });
-            if (r) return { company: company, jobTitle: r.jobTitle || p.jobTitle, supervisorId: r.supervisorId || p.supervisorId, main: false };
+            if (r) return { company: company, jobTitle: r.jobTitle || p.jobTitle, department: r.department || p.department || "", supervisorId: r.supervisorId || p.supervisorId, main: false };
         }
-        return { company: p.company, jobTitle: p.jobTitle, supervisorId: p.supervisorId, main: true };
+        return { company: p.company, jobTitle: p.jobTitle, department: p.department || "", supervisorId: p.supervisorId, main: true };
     }
 
     function worksAt(p, company) {
@@ -989,7 +989,7 @@
         people.forEach(function (p) {
             companiesOf(p).forEach(function (c) {
                 const r = roleFor(p, c);
-                out.push({ key: p.id + "|" + c, person: p, company: c, jobTitle: r.jobTitle, supervisorId: r.supervisorId, main: r.main });
+                out.push({ key: p.id + "|" + c, person: p, company: c, jobTitle: r.jobTitle, department: r.department, supervisorId: r.supervisorId, main: r.main });
             });
         });
         return out;
@@ -1007,7 +1007,7 @@
     function rolesHtml(me) {
         return '<div class="role-list compact">' + (me.roles || []).map(function (r) {
             return '<div class="role-item"><div><div class="role-company">' + esc(r.company) + (r.main && me.roles.length > 1 ? ' <span class="badge">Main</span>' : "") + "</div>" +
-                '<div class="small">' + esc(r.jobTitle) + '</div></div><div class="small muted">' +
+                '<div class="small">' + esc(r.jobTitle) + (r.department ? ' <span class="muted">\u00b7 ' + esc(r.department) + "</span>" : "") + '</div></div><div class="small muted">' +
                 (r.supervisor ? "Reports to " + esc(r.supervisor.displayName) + " (" + esc(r.supervisor.jobTitle) + ")" : "No supervisor") + "</div></div>";
         }).join("") + "</div>";
     }
@@ -1059,7 +1059,13 @@
                 return '<button type="button" data-company="' + esc(c) + '">' + esc(c) + ' <span class="tab-count">' + n + "</span></button>";
             }).join("") + "</div>" +
             '<div class="toolbar">' +
-            '<label class="search">' + icon("search") + '<input type="search" id="dir-search" placeholder="Search by name, job title, skill, language or location" aria-label="Search"></label>' +
+            '<label class="search">' + icon("search") + '<input type="search" id="dir-search" placeholder="Search by name, job title, department, skill or location" aria-label="Search"></label>' +
+            (function () {
+                const depts = {};
+                ctx.entries.forEach(function (e) { if (e.department) depts[e.department] = true; });
+                const list = Object.keys(depts).sort();
+                return list.length ? '<select id="dir-dept" aria-label="Department"><option value="">All departments</option>' + list.map(function (d) { return '<option value="' + esc(d) + '">' + esc(d) + "</option>"; }).join("") + "</select>" : "";
+            })() +
             "</div>" +
             '<p class="muted small" id="dir-count"></p>' +
             '<div id="dir-body"></div>';
@@ -1068,10 +1074,11 @@
 
         function matches(e) {
             if (company && e.company !== company) return false;
+            if ($("#dir-dept") && $("#dir-dept").value && e.department !== $("#dir-dept").value) return false;
             const q = $("#dir-search").value.trim().toLowerCase();
             if (!q) return true;
             const p = e.person;
-            return [p.displayName, p.firstName, p.lastName, e.jobTitle, e.company, p.location]
+            return [p.displayName, p.firstName, p.lastName, e.jobTitle, e.department, e.company, p.location]
                 .concat(p.skills || [], p.languages || [])
                 .concat(p.emails.map(function (x) { return x.address; }))
                 .join(" ").toLowerCase().indexOf(q) !== -1;
@@ -1092,6 +1099,7 @@
             return '<button type="button" class="person-card" data-entry="' + esc(e.key) + '">' + bannerHtml(p, "pc-band") + avatar(p, "lg") +
                 '<span class="pc-name">' + esc(p.displayName) + "</span>" +
                 '<span class="pc-title">' + esc(e.jobTitle) + "</span>" +
+                (e.department ? '<span class="pc-dept">' + esc(e.department) + "</span>" : "") +
                 '<span class="pc-company">' + esc(e.company) + "</span>" +
                 roleTag(e) + statusPill(p.status) +
                 (sup ? '<span class="pc-reports">Reports to ' + sup + "</span>" : "") +
@@ -1104,7 +1112,7 @@
             const sup = supLabel(e);
             const email = primaryEmail(p);
             return '<tr data-entry="' + esc(e.key) + '" tabindex="0">' +
-                '<td><div class="emp-cell">' + avatar(p, "sm") + '<div><div class="emp-name">' + esc(p.displayName) + ownerBadge(p) + '</div><div class="muted small">' + esc(e.jobTitle) + "</div>" + statusPill(p.status) + "</div></div></td>" +
+                '<td><div class="emp-cell">' + avatar(p, "sm") + '<div><div class="emp-name">' + esc(p.displayName) + ownerBadge(p) + '</div><div class="muted small">' + esc(e.jobTitle) + (e.department ? " \u00b7 " + esc(e.department) : "") + "</div>" + statusPill(p.status) + "</div></div></td>" +
                 '<td data-label="Company">' + esc(e.company) + " " + roleTag(e) + "</td>" +
                 '<td data-label="Reports to">' + (sup || '<span class="muted">—</span>') + "</td>" +
                 '<td data-label="Email">' + (email ? '<a href="mailto:' + esc(email) + '" data-stop>' + esc(email) + "</a>" : "") + "</td>" +
@@ -1206,6 +1214,7 @@
             if (tr && e.key === "Enter") openPersonModal(tr.dataset.entry, ctx);
         });
         $("#dir-search").addEventListener("input", draw);
+        if ($("#dir-dept")) $("#dir-dept").addEventListener("change", draw);
         if (state.pendingCompany) {
             company = state.pendingCompany;
             state.pendingCompany = null;
@@ -1296,6 +1305,7 @@
             '<div class="profile-avatar">' + avatar(p, "xl") + "</div>" +
             '<div class="profile-id"><h2 class="modal-title">' + esc(p.displayName) + "</h2>" +
             '<div class="profile-role">' + esc(e.jobTitle) + "</div>" +
+            (e.department ? '<div class="profile-dept">' + icon("users") + esc(e.department) + " department</div>" : "") +
             '<div class="profile-company">' + icon("building") + esc(e.company) + "</div></div>" +
             '<div class="profile-badges">' + (roles.length > 1 ? (e.main ? '<span class="badge">Main role</span>' : '<span class="badge badge-soft">Additional role</span>') : "") +
             (p.isOwner ? '<span class="badge badge-owner">System owner</span>' : "") + "</div>" +
@@ -1305,7 +1315,7 @@
             (roles.length > 1
                 ? '<div class="role-tabs" role="tablist" aria-label="Roles">' + roles.map(function (r) {
                     return '<button type="button" role="tab" class="role-tab' + (r.key === key ? " active" : "") + '" aria-selected="' + (r.key === key) + '" data-entry="' + esc(r.key) + '">' +
-                        '<span class="rt-company">' + esc(r.company) + '</span><span class="rt-title">' + esc(r.jobTitle) + "</span></button>";
+                        '<span class="rt-company">' + esc(r.company) + '</span><span class="rt-title">' + esc(r.jobTitle) + (r.department ? " \u00b7 " + esc(r.department) : "") + "</span></button>";
                 }).join("") + "</div>"
                 : "") +
 
@@ -1390,7 +1400,7 @@
         function draw() {
             const q = $("#emp-search").value.trim().toLowerCase();
             const list = employees.filter(function (e) {
-                return !q || [e.displayName, e.jobTitle, e.company, e.loginUsername].join(" ").toLowerCase().indexOf(q) !== -1;
+                return !q || [e.displayName, e.jobTitle, e.department, e.company, e.loginUsername].join(" ").toLowerCase().indexOf(q) !== -1;
             });
             $("#emp-body").innerHTML = list.length ? list.map(function (e) {
                 const sup = byId[e.supervisorId];
@@ -1420,7 +1430,7 @@
                 return '<tr data-id="' + e.id + '">' +
                     '<td><div class="emp-cell">' + avatar(e, "sm") + '<div><div class="emp-name">' + esc(e.displayName) + ownerBadge(e) + (isMe ? ' <span class="muted small">(you)</span>' : "") +
                     '</div><div class="muted small">' + esc(e.loginUsername) + (e.emails.length > 1 ? ' <span class="count-pill">+' + (e.emails.length - 1) + "</span>" : "") + "</div></div></div></td>" +
-                    '<td data-label="Job title">' + esc(e.jobTitle) + "</td>" +
+                    '<td data-label="Job title">' + esc(e.jobTitle) + (e.department ? '<div class="muted small">' + esc(e.department) + "</div>" : "") + "</td>" +
                     '<td data-label="Company">' + esc(e.company) + (e.otherRoles.length ? ' <span class="count-pill" title="' + esc(e.otherRoles.map(function (r) { return r.company + (r.jobTitle ? " — " + r.jobTitle : ""); }).join(", ")) + '">+' + e.otherRoles.length + "</span>" : "") + "</td>" +
                     '<td data-label="Reports to">' + (sup ? esc(sup.displayName) : '<span class="muted">—</span>') + "</td>" +
                     '<td data-label="Login">' + accountBadge(e) + "</td>" +
@@ -1520,7 +1530,11 @@
         const supervisors = employees.filter(function (p) { return !emp || p.id !== emp.id; });
         // Job title and supervisor for each extra company; blank means "same as main company".
         const roleState = {};
-        (v.otherRoles || []).forEach(function (r) { roleState[r.company] = { jobTitle: r.jobTitle || "", supervisorId: r.supervisorId || "" }; });
+        (v.otherRoles || []).forEach(function (r) { roleState[r.company] = { jobTitle: r.jobTitle || "", department: r.department || "", supervisorId: r.supervisorId || "" }; });
+        // Departments already in use, offered as suggestions.
+        const departments = {};
+        employees.forEach(function (p) { [p.department].concat((p.otherRoles || []).map(function (r) { return r.department; })).forEach(function (d) { if (d) departments[d] = true; }); });
+        const departmentList = '<datalist id="f-departments">' + Object.keys(departments).sort().map(function (d) { return '<option value="' + esc(d) + '">'; }).join("") + "</datalist>";
         const supervisorOptions = function (selected, emptyLabel) {
             return '<option value="">' + esc(emptyLabel) + "</option>" + supervisors.map(function (p) {
                 return '<option value="' + p.id + '"' + (p.id === selected ? " selected" : "") + ">" + esc(p.displayName) + " — " + esc(p.jobTitle) + "</option>";
@@ -1544,7 +1558,8 @@
             "</fieldset>" +
 
             '<fieldset><legend>Role</legend>' +
-            '<label for="f-title">Job title <span class="req">*</span></label><input type="text" id="f-title" maxlength="100" value="' + esc(v.jobTitle) + '" placeholder="e.g. Marketing Executive" required>' +
+            '<div class="grid-2"><div><label for="f-title">Job title <span class="req">*</span></label><input type="text" id="f-title" maxlength="100" value="' + esc(v.jobTitle) + '" placeholder="e.g. Marketing Executive" required></div>' +
+            '<div><label for="f-dept">Department</label><input type="text" id="f-dept" maxlength="80" value="' + esc(v.department || "") + '" placeholder="e.g. Marketing" list="f-departments"></div></div>' + departmentList +
             '<div class="grid-2">' +
             '<div><label for="f-company">Company <span class="req">*</span></label><select id="f-company">' + companyOptions + "</select></div>" +
             '<div><label for="f-supervisor">Supervisor</label><select id="f-supervisor"><option value="">No supervisor</option>' +
@@ -1589,7 +1604,7 @@
                 cb.disabled = own;
                 if (own) cb.checked = false;
                 cb.parentNode.classList.toggle("disabled", own);
-                if (cb.checked && !roleState[cb.value]) roleState[cb.value] = { jobTitle: "", supervisorId: "" };
+                if (cb.checked && !roleState[cb.value]) roleState[cb.value] = { jobTitle: "", department: "", supervisorId: "" };
                 if (!cb.checked) delete roleState[cb.value];
             });
             drawRoles();
@@ -1602,13 +1617,15 @@
                 return '<div class="role-row" data-company="' + esc(c) + '"><div class="role-row-head">' + icon("building") + esc(c) + "</div>" +
                     '<div class="grid-2"><div><label>Job title at ' + esc(c) + '</label><input type="text" class="role-title" maxlength="100" value="' + esc(r.jobTitle) +
                     '" placeholder="Same as main job title"></div>' +
-                    "<div><label>Supervisor at " + esc(c) + '</label><select class="role-sup">' + supervisorOptions(r.supervisorId, "Same as main supervisor") + "</select></div></div></div>";
+                    "<div><label>Department at " + esc(c) + '</label><input type="text" class="role-dept" maxlength="80" value="' + esc(r.department || "") + '" placeholder="Same as main department" list="f-departments"></div></div>' +
+                    "<label>Supervisor at " + esc(c) + '</label><select class="role-sup">' + supervisorOptions(r.supervisorId, "Same as main supervisor") + "</select></div>";
             }).join("");
         }
 
         f("f-roles").addEventListener("input", function (e) {
             const row = e.target.closest(".role-row");
             if (row && e.target.classList.contains("role-title")) roleState[row.dataset.company].jobTitle = e.target.value;
+            if (row && e.target.classList.contains("role-dept")) roleState[row.dataset.company].department = e.target.value;
         });
         f("f-roles").addEventListener("change", function (e) {
             const row = e.target.closest(".role-row");
@@ -1750,10 +1767,11 @@
                 lastName: f("f-last").value,
                 displayName: f("f-display").value,
                 jobTitle: f("f-title").value,
+                department: f("f-dept").value,
                 company: f("f-company").value,
                 supervisorId: f("f-supervisor").value || null,
                 otherRoles: meta.companies.filter(function (c) { return roleState[c] && c !== f("f-company").value; }).map(function (c) {
-                    return { company: c, jobTitle: roleState[c].jobTitle, supervisorId: roleState[c].supervisorId || null };
+                    return { company: c, jobTitle: roleState[c].jobTitle, department: roleState[c].department, supervisorId: roleState[c].supervisorId || null };
                 }),
                 emails: rows.map(function (r) { return { local: r.local, domain: r.domain, auto: r.auto, primary: r.primary }; }),
                 location: f("f-location").value,

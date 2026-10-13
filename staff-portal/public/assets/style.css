@@ -3800,3 +3800,12 @@ input[type="range"] { width: 100%; accent-color: var(--primary); }
 .enq-actions { align-items: center; }
 .enq-actions #enq-del { margin-right: auto; }
 @media (max-width: 860px) { .enq-layout { grid-template-columns: minmax(0, 1fr); } .enq-detail { position: static; } }
+
+/* Sign-in page: when the browser remembers someone, keep the steps hidden until login.js has
+   switched to "Welcome back", so the email and password form doesn't flash up first. */
+.login-page[data-resume]:not(.resume-ready) .login-step { visibility: hidden; }
+
+/* Department, shown under the job title */
+.pc-dept { font-size: 0.8rem; color: var(--text-muted); margin-top: -0.1rem; }
+.profile-dept { display: flex; align-items: center; gap: 0.35rem; font-size: 0.9rem; color: var(--text-muted); margin-top: 0.15rem; }
+.profile-dept .icon { width: 15px; height: 15px; }

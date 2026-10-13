@@ -139,6 +139,16 @@ The owner can open **System Admin** from the menu under their name. It's protect
 - **Change System Admin PIN.**
 - **Activity log.** Every action across the portal is recorded in `audit.log`. That covers sign-ins (including failed ones), sign-outs, password changes and resets, login accounts being created, disabled or enabled, staff added, edited or deleted (with which fields changed), profile and photo changes, access rule changes and every System Admin action. Actions done through "log in as" are marked with who was really doing them. You can search and filter the log by type.
 
+### Departments
+
+Each employee can have a **Department** (for example Marketing or Creative), set next to their Job title in the employee form.
+
+- **Optional.** Existing records stay valid without one.
+- **Per company.** Like Job title, someone who works at several companies can have a different department at each. Left blank, it uses their main department.
+- **Suggestions.** The form suggests departments already in use, to keep spellings consistent.
+- **Where it shows.** Under the job title on directory cards, the list view, profiles and Settings.
+- **Finding people.** The search box finds people by department, and the directory has an **All departments** filter.
+
 ### Working at more than one company
 
 In the employee form, ticking a company under **Also works at** lets you set a separate **job title** and **supervisor** for that company. Leave either blank to use the main company's details.
@@ -157,7 +167,7 @@ Staff see their main role under the greeting on the home page, and in a short "S
 
 ### Signing in
 
-- **Resume session.** After a full sign-in, the browser remembers who signed in (for 30 days). Next time the sign-in page shows **Welcome back** with the person's photo and only asks for their 6-digit sign-in code; **Resume session** also appears above the email box. "Not you?" signs in as someone else and **Forget me on this browser** removes it. It stops working after 5 wrong codes, or when the person's password or code changes, their login is disabled or they're signed out everywhere. Only a hash of the remembered token is stored (`resume.json`, not included in backups).
+- **Resume session.** After a full sign-in, the browser remembers who signed in (for 30 days). Next time the sign-in page opens straight on **Welcome back** (it never flashes the email and password form first) with the person's photo and only asks for their 6-digit sign-in code; **Resume session** also appears above the email box. "Not you?" signs in as someone else and **Forget me on this browser** removes it. It stops working after 5 wrong codes, or when the person's password or code changes, their login is disabled or they're signed out everywhere. Only a hash of the remembered token is stored (`resume.json`, not included in backups).
 - **Maintenance mode** (System Admin → Maintenance mode, system owner only). Turning it on needs a second, separate **maintenance PIN** (default `1101`; 5 wrong tries locks it for 15 minutes). While it's on, everyone except the system owner is signed out straight away, including anyone being "logged in as", and **Log in as** is turned off. When they sign in (after their password, or their code for Resume session) they see the HN Group logo and your maintenance message instead of the portal. The owner sees a purple reminder banner until it's turned off.
 
 Signing in has two steps: your **email and password**, then your personal **6-digit sign-in code**.
