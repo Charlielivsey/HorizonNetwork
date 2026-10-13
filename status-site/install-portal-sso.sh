@@ -12,6 +12,7 @@ if [ ! -f "$PORTAL/server.js" ] || [ ! -f "$PORTAL/public/assets/login.js" ] || 
 fi
 node --check "$SOURCE/server.js"
 node --check "$SOURCE/lib/status-sso.js"
+node --check "$SOURCE/lib/network-leadership.js"
 node --check "$SOURCE/lib/portal-auth.js"
 node --check "$SOURCE/public/assets/login.js"
 mkdir -p "$SECRET_DIR"
@@ -22,6 +23,7 @@ fi
 chmod 600 "$SECRET_DIR/secret"
 # Skip restarting the portal on future status-only updates if these integration files match.
 if cmp -s "$SOURCE/server.js" "$PORTAL/server.js" && \
+   cmp -s "$SOURCE/lib/network-leadership.js" "$PORTAL/lib/network-leadership.js" && \
    cmp -s "$SOURCE/lib/status-sso.js" "$PORTAL/lib/status-sso.js" && \
    cmp -s "$SOURCE/lib/portal-auth.js" "$PORTAL/lib/portal-auth.js" && \
    cmp -s "$SOURCE/public/login.html" "$PORTAL/public/login.html" && \
@@ -35,6 +37,8 @@ cp "$PORTAL/public/assets/login.js" "$BACKUP/login.js"
 cp "$PORTAL/public/login.html" "$BACKUP/login.html"
 [ ! -f "$PORTAL/lib/status-sso.js" ] || cp "$PORTAL/lib/status-sso.js" "$BACKUP/status-sso.js"
 [ ! -f "$PORTAL/lib/portal-auth.js" ] || cp "$PORTAL/lib/portal-auth.js" "$BACKUP/portal-auth.js"
+[ ! -f "$PORTAL/lib/network-leadership.js" ] || cp "$PORTAL/lib/network-leadership.js" "$BACKUP/network-leadership.js"
+cp "$SOURCE/lib/network-leadership.js" "$PORTAL/lib/network-leadership.js"
 cp "$SOURCE/lib/status-sso.js" "$PORTAL/lib/status-sso.js"
 cp "$SOURCE/lib/portal-auth.js" "$PORTAL/lib/portal-auth.js"
 cp "$SOURCE/public/login.html" "$PORTAL/public/login.html"
@@ -48,6 +52,7 @@ if pm2 restart hn-staff-portal; then
     done
 fi
 if [ "$healthy" != 1 ]; then
+    if [ -f "$BACKUP/network-leadership.js" ]; then cp "$BACKUP/network-leadership.js" "$PORTAL/lib/network-leadership.js"; else rm -f "$PORTAL/lib/network-leadership.js"; fi
     cp "$BACKUP/server.js" "$PORTAL/server.js"
     cp "$BACKUP/login.js" "$PORTAL/public/assets/login.js"
     cp "$BACKUP/login.html" "$PORTAL/public/login.html"

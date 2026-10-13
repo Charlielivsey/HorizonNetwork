@@ -3,6 +3,11 @@
 (function () {
     "use strict";
     document.documentElement.classList.add("js");
+    // Keep existing links to the former one-page sections useful.
+    const oldSection = location.hash.slice(1);
+    if (location.pathname === "/" && ["about", "companies", "careers", "contact"].includes(oldSection)) {
+        location.replace("/" + oldSection); return;
+    }
 
     const $ = function (sel, root) { return (root || document).querySelector(sel); };
     const esc = function (s) {
@@ -52,6 +57,7 @@
         reveals.forEach(function (el) { el.classList.add("in"); });
     }
 
+    document.querySelectorAll(".site-nav a").forEach(a=>{if(a.pathname===location.pathname&&a.origin===location.origin)a.setAttribute("aria-current","page");});
     const year = $("#year");
     if (year) year.textContent = new Date().getFullYear();
 
@@ -61,7 +67,7 @@
     function noJobs(message) {
         jobsBox.innerHTML = '<div class="jobs-empty"><h3>' + esc(message) + "</h3>" +
             '<p class="muted">We’re always happy to hear from talented people. Send us a message with a little about yourself and the kind of role you’re looking for.</p>' +
-            '<p><a class="link-arrow" href="#contact" data-topic="careers">Get in touch about careers</a></p></div>';
+            '<p><a class="link-arrow" href="/contact?topic=careers">Get in touch about careers</a></p></div>';
     }
     if (jobsBox) {
         fetch("/api/public/jobs").then(function (r) { if (!r.ok) throw new Error(); return r.json(); }).then(function (d) {
@@ -131,6 +137,8 @@
     // ----- Contact form: lands in the staff portal under Website enquiries -----
     const form = $("#contact-form");
     if (form) {
+        const topic = new URLSearchParams(location.search).get("topic");
+        if (topic && [...$("#cf-topic").options].some(o => o.value === topic)) $("#cf-topic").value = topic;
         form.addEventListener("submit", async function (e) {
             e.preventDefault();
             const err = $("#cf-error");

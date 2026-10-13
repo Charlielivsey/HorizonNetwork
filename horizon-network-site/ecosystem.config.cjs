@@ -1,0 +1,1 @@
+module.exports={apps:[{name:'hn-network',script:'/opt/hn-network/server.js',cwd:'/opt/hn-network',instances:1,exec_mode:'fork',autorestart:true,max_memory_restart:'256M',env:{NODE_ENV:'production',PORT:3600,HOST:'127.0.0.1',NETWORK_PUBLIC_DIR:'/var/www/hn-network'}}]};

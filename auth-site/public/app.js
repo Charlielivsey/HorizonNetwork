@@ -49,6 +49,8 @@ async function view(id, focus) {
   ]);
   stage.classList.remove('transitioning'); transitioning = false;
   if (focus) $(focus).focus({preventScroll:true});
+  // Typing can complete during the entry animation; verify as soon as it finishes.
+  maybeVerifyPin();
 }
 function resetPin() { pendingPinSubmit = false; $('code').value = ''; $('code').removeAttribute('aria-invalid'); syncPin(); }
 async function account(user) {
@@ -183,5 +185,8 @@ api('me').then(data => account(data.user)).catch(async e => {
   if (e.status !== 401) { await view('login'); return message(e.message); }
   const resume = query.get('switch') !== '1' && query.get('account') !== 'other';
   try { await loadRemembered(false, rememberedRequest); } catch (error) { await view('login'); return message(error.message); }
-  if (remembered && resume) await startResume(); else await view('login');
+  if (remembered && resume) await startResume(); else {
+    $('card-title').textContent = 'Welcome back'; $('subtitle').textContent = 'Sign in with your staff account.';
+    await view('login');
+  }
 });

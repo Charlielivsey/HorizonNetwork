@@ -134,3 +134,9 @@ This isolated updater installs the website service and registered Auth client, c
 Verification: `node --test hngroup-site/test.cjs auth-site/test.cjs auth-site/portal-auth.test.cjs status-site/test.cjs`. Coverage includes fixed callbacks, permission denial/removal, CSRF, persistent maintenance, content/API gating, admin access during maintenance and unchanged public CV metadata/body forwarding.
 
 Optional browser regression: `node hngroup-site/browser-smoke.cjs` with Playwright/Chromium installed (or `PLAYWRIGHT_MODULE` pointing to an existing module). It uses temporary staff data and a local HTTPS proxy to check the real main-site → Auth/password/PIN → configuration flow, maintenance and restoration, maintenance login and mobile layouts. No production accounts or settings are changed.
+
+## Public pages and company structure
+
+The homepage contains the introductory hero. About, Companies, Careers and Contact have dedicated routes, alongside Privacy. Horizon Network and Horizon Media Group sit under HN Group; Horizon Advertising and Horizon Development sit within Horizon Network. Navigation, careers applications, enquiry topics, metadata and sitemap follow the separate-page layout. Maintenance gating continues to cover all these pages and their public APIs.
+
+`sudo bash install-public-sites.sh` updates these pages, the Auth remembered-browser entry screen and the dedicated Horizon Network website using their isolated installers. It preserves the main website’s maintenance setting.

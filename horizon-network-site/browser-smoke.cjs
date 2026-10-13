@@ -1,0 +1,22 @@
+// Optional public-page browser checks with fixture responses; no production data or submissions.
+'use strict';
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright'),http=require('node:http'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),assert=require('node:assert/strict');
+(async()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-public-browser-'));const secret=path.join(dir,'secret');fs.writeFileSync(secret,'f'.repeat(64));process.env.STATUS_SSO_SECRET_FILE=secret;process.env.WEBSITE_DATA_DIR=dir;
+ let enquiry;
+ const backend=http.createServer(async(req,res)=>{let body='';for await(const c of req)body+=c;res.setHeader('Content-Type','application/json');if(req.url==='/api/auth/network-leadership')return res.end(JSON.stringify({leaders:[{name:'Example Leader',jobTitle:'Network director',avatarUrl:null}]}));if(req.url==='/api/public/jobs')return res.end(JSON.stringify({jobs:[{id:'1234567890abcdef',title:'Example role',company:'Horizon Network',contract:'Full time',description:'Example job description.'}]}));if(req.url==='/api/public/enquiry'){enquiry=JSON.parse(body);res.writeHead(201);return res.end('{"ok":true}');}res.writeHead(404);res.end('{}');});
+ await new Promise(r=>backend.listen(0,'127.0.0.1',r));process.env.STAFF_PORTAL_BACKEND='http://127.0.0.1:'+backend.address().port;
+ const group=require('../hngroup-site/server').server,network=require('./server').server;
+ await new Promise(r=>group.listen(0,'127.0.0.1',r));await new Promise(r=>network.listen(0,'127.0.0.1',r));let browser;
+ try{
+ browser=await chromium.launch({headless:true,args:['--no-sandbox']});const page=await browser.newPage({colorScheme:'dark',viewport:{width:1440,height:1000}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const sites=[[group,['/','/about','/companies','/careers','/contact','/privacy']],[network,['/','/about','/services','/contact','/privacy']]];
+ for(const [server,routes] of sites){const base='http://127.0.0.1:'+server.address().port;for(const width of [320,390,1440]){await page.setViewportSize({width,height:1000});for(const route of routes){const response=await page.goto(base+route);assert.equal(response.status(),200);await page.locator('h1,h2').first().waitFor();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Overflow '+base+route+' at '+width);if(route==='/about'&&server===network)await page.getByRole('heading',{name:'Example Leader'}).waitFor();}}}
+ const g='http://127.0.0.1:'+group.address().port,n='http://127.0.0.1:'+network.address().port;
+ await page.goto(g);assert.equal(await page.locator('main section').count(),1);assert.equal(await page.locator('#contact-form').count(),0);await page.getByRole('link',{name:'Explore our companies'}).click();await page.waitForURL(g+'/companies');assert.match(await page.locator('main').innerText(),/part of Horizon Network/i);
+ await page.goto(g+'/careers');await page.getByRole('button',{name:'View and apply'}).click();await page.locator('#apply-dialog').waitFor({state:'visible'});assert.equal(await page.locator('#ap-name').isVisible(),true);
+ await page.goto(n+'/contact?topic=development');assert.equal(await page.locator('#cf-topic').inputValue(),'development');await page.locator('#cf-name').fill('Browser Test');await page.locator('#cf-email').fill('browser@example.com');await page.locator('#cf-message').fill('Please discuss this example development project.');await page.locator('#cf-send').click();await page.locator('#contact-done').waitFor({state:'visible'});assert.equal(enquiry.company,'Horizon Network');assert.equal(enquiry.topic,'development');
+ for(const scheme of ['light','dark']){await page.emulateMedia({colorScheme:scheme});await page.goto(n+'/about');await page.getByRole('heading',{name:'Example Leader'}).waitFor();await page.waitForTimeout(600);await page.screenshot({path:'/tmp/hn-network-about-'+scheme+'.png',fullPage:true});}
+ await page.goto(g);await page.waitForTimeout(600);await page.screenshot({path:'/tmp/hn-group-home.png',fullPage:true});assert.deepEqual(errors,[]);console.log('Public browser checks passed: separate pages, group structure, leadership, contact routing, careers dialog, light/dark branding and responsive layouts.');
+ }finally{if(browser)await browser.close();for(const server of [group,network,backend])await new Promise(r=>server.close(r));fs.rmSync(dir,{recursive:true,force:true});}
+})().catch(e=>{console.error(e);process.exitCode=1});

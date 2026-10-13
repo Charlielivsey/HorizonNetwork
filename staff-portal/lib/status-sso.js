@@ -1,4 +1,5 @@
 'use strict';
+const network = require('./network-leadership');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const STATUS_ORIGIN = 'https://status.hngroup.org.uk';
@@ -50,10 +51,20 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       logEvent(req, session, 'status-admin-sign-in');
       redirect(res, `${STATUS_ORIGIN}/auth/callback?code=${code}&state=${state}`); return true;
     }
-    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar'].includes(pathname)) return false;
+    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/network-leadership', '/api/auth/network-avatar'].includes(pathname)) return false;
     if (req.method !== 'POST') { sendJson(res, 405, { error: 'Method not allowed.' }); return true; }
     if (!credentials(req)) { sendJson(res, 401, { error: 'Status integration not authenticated.' }); return true; }
     const body = await readJsonBody(req);
+    if (pathname === '/api/auth/network-leadership') {
+      sendJson(res, 200, { leaders: network.publicMembers(store) }); return true;
+    }
+    if (pathname === '/api/auth/network-avatar') {
+      const person = network.members(store).find(p => p.id === body.id);
+      const avatar = person && store.avatarFile(person);
+      if (!avatar) { sendJson(res, 404, { error: 'Not found.' }); return true; }
+      res.writeHead(200, { 'Content-Type': avatar.mime, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+      fs.createReadStream(avatar.file).on('error', () => res.destroy()).pipe(res); return true;
+    }
     let token = body.session;
     if (pathname.endsWith('/exchange')) {
       const grant = codes.get(body.code);
