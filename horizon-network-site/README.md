@@ -30,7 +30,7 @@ Checks: `node --test horizon-network-site/test.cjs` exercises the real staff por
 
 The same running site is also configured for `horizonetwork.com`, using its own nginx host `hn-network-com` and certificate. It shares the existing PM2 `hn-network` service and live leadership feed; canonical page URLs remain on horizon-network.co.uk. No primary host or other website configuration is replaced.
 
-Create an A record for `@` pointing to `217.154.34.205`. Optionally add `www` pointing to the same address. At the time this host was prepared, neither name had a web DNS record. The alias installer prepares HTTP/ACME routing, then waits for DNS before requesting SSL. Once DNS resolves to this VPS, rerun:
+Create an A record for `@` pointing to `217.154.34.205`. Optionally add `www` pointing to the same address. At the time this host was prepared, neither name had a web DNS record. The alias installer prepares HTTP/ACME routing, then waits for DNS before requesting SSL. The installer checks independent public DNS when the VPS still caches an older missing-record response. Once DNS resolves to this VPS, rerun:
 
 ```bash
 cd /root/HorizonNetwork && git pull && sudo bash horizon-network-site/install-alias.sh

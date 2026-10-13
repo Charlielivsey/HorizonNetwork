@@ -50,8 +50,45 @@ PY
     systemctl reload nginx
 }
 write_config
+# A newly created record can be visible publicly while the VPS caches its old negative answer.
+# Consult independent public resolvers before deciding that DNS is missing. Never change system DNS.
+has_web_dns() {
+    if getent ahosts "$1" >/dev/null 2>&1; then return 0; fi
+    if command -v dig >/dev/null 2>&1; then
+        local resolver answers
+        for resolver in 1.1.1.1 8.8.8.8; do
+            answers="$(dig @"$resolver" +time=2 +tries=1 +short "$1" A 2>/dev/null || true)
+$(dig @"$resolver" +time=2 +tries=1 +short "$1" AAAA 2>/dev/null || true)"
+            if printf '%s\n' "$answers" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}$|^[0-9a-fA-F:]*:[0-9a-fA-F:]+$'; then
+                echo "Public DNS resolves $1; ignoring the stale local DNS result." >&2
+                return 0
+            fi
+        done
+    else
+        # Standard-library fallback for hosts without the optional dig command.
+        if python3 - "$1" <<'PYDNS'
+import json,sys,urllib.request,ipaddress
+for domain_type in ('A','AAAA'):
+    try:
+        url='https://dns.google/resolve?name='+sys.argv[1]+'&type='+domain_type
+        with urllib.request.urlopen(url,timeout=5) as response: value=json.load(response)
+        for record in value.get('Answer',[]):
+            if record.get('type') not in (1,28): continue
+            ipaddress.ip_address(record['data'])
+            sys.exit(0)
+    except Exception:
+        pass
+sys.exit(1)
+PYDNS
+        then
+            echo "Public DNS resolves $1; ignoring the stale local DNS result." >&2
+            return 0
+        fi
+    fi
+    return 1
+}
 # DNS can be created after the host is prepared. Do not attempt ACME for absent names.
-if ! getent ahosts "$DOMAIN" >/dev/null 2>&1; then
+if ! has_web_dns "$DOMAIN"; then
     echo 'Hosting prepared for horizonetwork.com; DNS and SSL are pending.'
     echo 'Add A @ -> 217.154.34.205 (and optionally A www -> 217.154.34.205).'
     echo 'Then rerun: sudo bash horizon-network-site/install-alias.sh'
@@ -61,7 +98,7 @@ CERT_ARGS=()
 if [ -n "$EMAIL" ]; then CERT_ARGS+=(--email "$EMAIL"); fi
 # www is optional: include it only when it resolves, so an absent www cannot block the root.
 DOMAIN_ARGS=(-d "$DOMAIN")
-if getent ahosts "www.$DOMAIN" >/dev/null 2>&1; then DOMAIN_ARGS+=(-d "www.$DOMAIN"); fi
+if has_web_dns "www.$DOMAIN"; then DOMAIN_ARGS+=(-d "www.$DOMAIN"); fi
 if certbot certonly --webroot -w "$CHALLENGE_DIR" "${DOMAIN_ARGS[@]}" --cert-name "$DOMAIN" \
     --non-interactive --agree-tos --keep-until-expiring --expand "${CERT_ARGS[@]}" \
     --deploy-hook 'nginx -t && systemctl reload nginx'; then
