@@ -60,6 +60,15 @@ test('protected management, real checks, incidents and persistent history', asyn
     const sessionCookie = owner.result.headers.getSetCookie().find(c => c.startsWith('__Host-hn_status_session='));
     assert.match(sessionCookie, /HttpOnly; Secure; SameSite=Lax/);
     statusCookie = sessionCookie.split(';')[0];
+    const identity = await request('/api/account');
+    assert.equal(identity.code, 200); assert.equal(identity.data.user.displayName, 'owner');
+    assert.equal(identity.data.user.jobTitle, 'Test role'); assert.equal(identity.data.user.company, 'HN Group');
+    assert.equal(identity.data.user.avatarUrl, '/api/account/avatar');
+    assert.equal((await request('/api/account', null, false)).code, 401);
+    const avatar = await fetch(base + '/api/account/avatar', { headers: { Cookie: statusCookie } });
+    assert.equal(avatar.status, 200); assert.equal(avatar.headers.get('content-type'), 'image/png');
+    assert.equal((await request('/api/account/avatar', null, false)).code, 401);
+    assert.equal('user' in (await request('/api/status', null, false)).data, false);
     const replay = await fetch(base + owner.callback.pathname + owner.callback.search, { headers: { Cookie: owner.stateCookie }, redirect: 'manual' });
     assert.equal(replay.headers.get('location'), '/admin/denied?reason=expired');
     const forged = await fetch(base + owner.callback.pathname + owner.callback.search, { redirect: 'manual' });
@@ -98,6 +107,7 @@ test('protected management, real checks, incidents and persistent history', asyn
     await request('/api/admin/service', { ...admin.services[0], override: 'maintenance' });
     assert.equal((await request('/api/status', null, false)).data.services[0].status, 'maintenance');
     const stored = JSON.parse(fs.readFileSync(path.join(dir, 'status.json'), 'utf8'));
+    assert.equal('user' in stored, false);
     assert.equal(stored.services[0].override, 'maintenance');
     assert.equal(stored.incidents[0].updates.length, 2);
     assert.equal(fs.existsSync(path.join(dir, 'admin-token')), false);

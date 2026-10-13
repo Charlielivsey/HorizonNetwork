@@ -63,6 +63,13 @@ async function finishLogin(req, res, response) {
   challenges.delete(hash(cookie(req, FLOW)));
   send(res, 200, { user }, [setCookie(COOKIE, token), setCookie(FLOW, '', 0)]);
 }
+async function serveAvatar(entry, res) {
+  const response = await fetch(backend + '/api/auth/avatar', { method: 'POST', headers: { Authorization: 'Bearer ' + secret(), 'Content-Type': 'application/json' }, body: JSON.stringify({ session: entry.staffSession }), signal: AbortSignal.timeout(5000) });
+  if (!response.ok) return send(res, response.status, { error: 'Profile picture unavailable.' });
+  const image = Buffer.from(await response.arrayBuffer());
+  res.writeHead(200, { 'Content-Type': response.headers.get('content-type'), 'Cache-Control': 'no-store' });
+  return res.end(image);
+}
 function destination(url) {
   const id = url.searchParams.get('client_id'), state = url.searchParams.get('state');
   return CLIENTS[id] && HEX.test(state || '') ? { id, state, ...CLIENTS[id] } : null;
@@ -84,9 +91,10 @@ const server = http.createServer(async (req, res) => {
         const grant = codes.get(data.code); codes.delete(data.code);
         if (!grant || grant.expires <= Date.now() || grant.state !== data.state || grant.client !== 'status') throw fail(401, 'Sign-in link expired or already used.');
         token = grant.session;
-      } else if (route !== '/api/sso/session') return send(res, 404, { error: 'Not found.' });
+      } else if (!['/api/sso/session','/api/sso/avatar'].includes(route)) return send(res, 404, { error: 'Not found.' });
       const entry = HEX.test(token || '') && sessions.get(token), user = await profile(entry);
       if (!user.statusAdminAllowed) throw fail(403, 'Only the system owner and Super Admin members can manage status.');
+      if (route === '/api/sso/avatar') return await serveAvatar(entry, res);
       return send(res, 200, { session: token, expires: entry.expires, user });
     }
     if (req.method === 'POST') {
@@ -127,10 +135,7 @@ const server = http.createServer(async (req, res) => {
     if (route === '/api/me') return send(res, 200, { user: await profile(entryFor(req)) });
     if (route === '/api/avatar') {
       const entry = entryFor(req); await profile(entry);
-      const response = await fetch(backend + '/api/auth/avatar', { method: 'POST', headers: { Authorization: 'Bearer ' + secret(), 'Content-Type': 'application/json' }, body: JSON.stringify({ session: entry.staffSession }), signal: AbortSignal.timeout(5000) });
-      if (!response.ok) return send(res, response.status, { error: 'Profile picture unavailable.' });
-      res.writeHead(200, { 'Content-Type': response.headers.get('content-type'), 'Cache-Control': 'no-store' });
-      return res.end(Buffer.from(await response.arrayBuffer()));
+      return await serveAvatar(entry, res);
     }
     if (route === '/authorize') {
       if (!destination(url)) throw fail(400, 'Invalid application. Start from the application’s sign-in button.');

@@ -4,16 +4,18 @@ const crypto = require('node:crypto');
 async function fixture() {
   const { createStatusSso } = require('../staff-portal/lib/status-sso');
   const sessions = new Map(), people = new Map();
+  const avatarFile = require('node:path').join(process.env.DATA_DIR, 'test-avatar.png');
+  require('node:fs').writeFileSync(avatarFile, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6zSsAAAAASUVORK5CYII=', 'base64'));
   const roles = new Map([
     ['super', { name: 'Super Admin', permissions: ['system.admin'] }],
     ['leadership', { name: 'Leadership & HR', permissions: ['system.admin'] }]
   ]);
   let maintenance = false;
-  const store = { avatarFile: () => null, loginName: p => p.id + '@hngroup.org.uk', getPerson: id => people.get(id), getRole: id => roles.get(id), isOwner: p => p?.id === 'owner', maintenance: () => ({ on: maintenance }) };
+  const store = { avatarFile: () => ({ file: avatarFile, mime: 'image/png' }), loginName: p => p.id + '@hngroup.org.uk', getPerson: id => people.get(id), getRole: id => roles.get(id), isOwner: p => p?.id === 'owner', maintenance: () => ({ on: maintenance }) };
   function addUser(id, roleIds = [], extra = {}) {
     const raw = crypto.randomBytes(32).toString('hex');
     const token = crypto.createHash('sha256').update(raw).digest('hex');
-    const person = { id, displayName: id, roleIds, account: { enabled: true }, ...extra };
+    const person = { id, displayName: id, jobTitle: 'Test role', company: 'HN Group', roleIds, account: { enabled: true }, ...extra };
     people.set(id, person);
     const data = { personId: id, expires: Date.now() + 3600000 };
     sessions.set(token, data);

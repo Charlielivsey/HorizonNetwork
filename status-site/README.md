@@ -14,7 +14,7 @@ If this server has no Let's Encrypt registration yet, append your email to the i
 
 ## HN Group Auth sign-in
 
-The Admin button sends visitors to **auth.hngroup.org.uk**, which checks the existing staff password and six-digit sign-in PIN (when configured). Auth displays the user's current name, email, job title, company and profile picture from the staff service. Continue returns to status administration. There is no separate status password and no password or PIN database in Auth.
+The Admin button sends visitors to **auth.hngroup.org.uk**, which checks the existing staff password and six-digit sign-in PIN (when configured). Auth displays the user's current name, email, job title, company and profile picture from the staff service. Successful sign-in returns automatically to status administration. Signed-in users have a private profile menu on both the public and admin pages, showing their name, email, job title, company and avatar. Profile data and images require the current status session and never appear in the public status feed or persisted monitor data. There is no separate status password and no password or PIN database in Auth.
 
 Only the portal's system owner and members of its exact **Super Admin** role are admitted. The built-in Administrator account, other roles with broad system permissions, disabled accounts and impersonated sessions are denied. Permissions and staff session validity are checked on every protected status request. Portal maintenance admits only the owner. If authentication is unavailable, public status still works.
 

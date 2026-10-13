@@ -4,7 +4,7 @@ const query = new URLSearchParams(location.search);
 const client = query.get('client_id'), state = query.get('state');
 const connecting = client === 'status' && /^[a-f0-9]{64}$/.test(state || '');
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
-let working = false, transitioning = false;
+let working = false, transitioning = false, pendingPinSubmit = false;
 $('year').textContent = new Date().getFullYear();
 $('destination').hidden = !connecting;
 async function api(route, data) {
@@ -38,12 +38,13 @@ async function view(id, focus) {
   stage.classList.remove('transitioning'); transitioning = false;
   if (focus) $(focus).focus({preventScroll:true});
 }
-function resetPin() { $('code').value = ''; $('code').removeAttribute('aria-invalid'); syncPin(); }
+function resetPin() { pendingPinSubmit = false; $('code').value = ''; $('code').removeAttribute('aria-invalid'); syncPin(); }
 async function account(user) {
   $('card-title').textContent = 'You’re in.'; $('subtitle').textContent = 'One identity. Everything connected.';
   $('name').textContent = user.displayName; $('email').textContent = user.email; $('job').textContent = user.jobTitle || 'Not provided'; $('company').textContent = user.company || 'Not provided';
   $('initials').textContent = user.displayName.split(/\s+/).filter(Boolean).slice(0,2).map(n=>n[0]).join('');
   $('avatar').hidden = true; $('initials').hidden = false;
+  $('avatar').onerror = () => { $('avatar').hidden = true; $('initials').hidden = false; };
   if (user.avatarUrl) { $('avatar').onload = () => { $('avatar').hidden = false; $('initials').hidden = true; }; $('avatar').src = user.avatarUrl; }
   $('destination').hidden = true;
   $('application-panel').hidden = !connecting; $('root-account-note').hidden = connecting;
@@ -53,15 +54,21 @@ async function account(user) {
   $('account-note').textContent = !user.statusAdminAllowed ? 'Only the system owner and Super Admin members can manage status. Contact your system owner if you need access.' : 'You have permission to manage services and publish incident updates.';
   await view('account');
   $('card-title').setAttribute('tabindex','-1'); $('card-title').focus({preventScroll:true});
+  if (connecting) {
+    $('account-note').textContent = user.statusAdminAllowed ? 'Signed in. Taking you to Status administration…' : 'Checking your access to Status administration…';
+    await connectToStatus();
+  }
 }
 async function busy(button, action, label) {
   if (working || transitioning) return;
   working = true; const controls = [...document.querySelectorAll('.card button')];
+  const verifyingPin = button === $('pin').querySelector('[type=submit]');
+  if (verifyingPin) $('code').readOnly = true;
   controls.forEach(b=>b.disabled=true); button.setAttribute('aria-busy','true'); message('');
   const previous = button.innerHTML;
   if (label) button.textContent = label;
   try { await action(); } catch(e) { message(e.message); }
-  finally { button.innerHTML = previous; button.removeAttribute('aria-busy'); controls.forEach(b=>b.disabled=false); working=false; }
+  finally { button.innerHTML = previous; button.removeAttribute('aria-busy'); controls.forEach(b=>b.disabled=false); $('code').readOnly = false; working=false; maybeVerifyPin(); }
 }
 $('login').addEventListener('submit', event => { event.preventDefault(); busy(event.submitter, async () => {
   const identity = $('username').value.trim();
@@ -73,7 +80,7 @@ $('login').addEventListener('submit', event => { event.preventDefault(); busy(ev
     await view('pin','code');
   } else await account(data.user);
 }, 'Signing in…'); });
-$('pin').addEventListener('submit', event => { event.preventDefault(); busy(event.submitter, async () => {
+$('pin').addEventListener('submit', event => { event.preventDefault(); pendingPinSubmit = false; busy(event.submitter, async () => {
   const data = await api('login/code', { code: $('code').value });
   document.querySelector('.pin-entry').classList.add('verified');
   $('pin-help').textContent = 'Verified. Welcome to HN Group.';
@@ -87,12 +94,20 @@ async function logout() {
 }
 for(const id of ['logout','back']) $(id).onclick = () => busy($(id),logout);
 $('show-password').onclick = () => { const show = $('password').type === 'password'; $('password').type = show ? 'text' : 'password'; $('show-password').textContent = show ? 'Hide' : 'Show'; $('show-password').setAttribute('aria-pressed',String(show)); };
-$('continue').onclick = () => busy($('continue'), async () => { const result = await api('continue',{ client_id: client, state }); location.assign(result.redirect); }, 'Connecting to Status…');
+async function connectToStatus() {
+  const result = await api('continue', { client_id: client, state });
+  location.replace(result.redirect);
+}
+$('continue').onclick = () => busy($('continue'), connectToStatus, 'Connecting to Status…');
+function maybeVerifyPin() {
+  if (!pendingPinSubmit || working || transitioning || $('pin').hidden || $('code').value.length !== 6) return;
+  pendingPinSubmit = false; $('pin').requestSubmit($('pin').querySelector('[type=submit]'));
+}
 const boxes = [...document.querySelectorAll('.pin-boxes span')];
 let pinLength = 0;
 function syncPin() {
   const input = $('code'), length = input.value.length;
-  const position = Math.min(input.selectionStart ?? length, 5);
+  const position = input.selectionStart ?? length;
   boxes.forEach((box,index)=>{
     const wasFilled = box.classList.contains('filled');
     box.classList.toggle('filled',index<length);
@@ -100,11 +115,11 @@ function syncPin() {
     if(!wasFilled && index<length) animate(box,[{transform:'scale(.94)'},{transform:'scale(1.045)'},{transform:'scale(1)'}],{duration:230,easing:'ease-out'});
   });
   document.querySelector('.pin-entry').classList.toggle('complete',length===6);
-  $('pin-help').textContent = length===6 ? 'PIN entered. Ready to verify.' : 'Use the same PIN as your staff portal.';
+  $('pin-help').textContent = length===6 ? 'PIN entered. Checking your sign-in…' : 'Use the same PIN as your staff portal.';
   if(length!==pinLength) input.removeAttribute('aria-invalid');
   pinLength = length;
 }
-$('code').addEventListener('input',()=>{ const input=$('code'); const caret=input.selectionStart; const clean=input.value.replace(/[^0-9]/g,'').slice(0,6); if(clean!==input.value){input.value=clean;input.setSelectionRange(Math.min(caret,clean.length),Math.min(caret,clean.length));} syncPin(); });
+$('code').addEventListener('input',()=>{ const input=$('code'); const caret=input.selectionStart; const clean=input.value.replace(/[^0-9]/g,'').slice(0,6); if(clean!==input.value){input.value=clean;input.setSelectionRange(Math.min(caret,clean.length),Math.min(caret,clean.length));} syncPin(); pendingPinSubmit = clean.length === 6; maybeVerifyPin(); });
 for(const event of ['focus','blur','keyup','click','select']) $('code').addEventListener(event,syncPin);
 // A single native password field preserves paste, autofill, editing and screen-reader behaviour.
 // The decorative boxes contain only dots, never copies of the PIN digits.

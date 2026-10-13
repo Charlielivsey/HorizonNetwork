@@ -77,12 +77,19 @@ const server = http.createServer(async (req, res) => {
     if (await auth.handle(req, res, route)) return;
     if (route === '/healthz' && req.method === 'GET') return send(200, { ok: true });
     if (route === '/api/status' && req.method === 'GET') return send(200, snapshot());
+    if (['/api/account','/api/account/avatar'].includes(route) && req.method === 'GET') {
+      let user;
+      try { user = await auth.authorize(req); } catch (e) { return send(e.status || 503, { error: e.message }); }
+      if (!user) return send(401, { error: 'Sign in through HN Group Auth.' });
+      if (route.endsWith('/avatar')) return await auth.avatar(req, res);
+      return send(200, { user: { ...user, avatarUrl: user.avatarUrl ? '/api/account/avatar' : null } });
+    }
     if (route.startsWith('/api/admin')) {
       let user;
       try { user = await auth.authorize(req); } catch (e) { return send(e.status || 503, { error: e.message }); }
-      if (!user) return send(401, { error: 'Sign in through the staff portal to manage status.' });
+      if (!user) return send(401, { error: 'Sign in through HN Group Auth to manage status.' });
       if (req.method === 'POST' && (req.headers.origin !== STATUS_ORIGIN || !(req.headers['content-type'] || '').startsWith('application/json'))) return send(403, { error: 'Request origin or content type not allowed.' });
-      if (route === '/api/admin' && req.method === 'GET') return send(200, db);
+      if (route === '/api/admin' && req.method === 'GET') return send(200, { ...db, user: { ...user, avatarUrl: user.avatarUrl ? '/api/account/avatar' : null } });
       if (req.method !== 'POST') return send(405, { error: 'Method not allowed' });
       const b = await body(req);
       if (route === '/api/admin/service') {

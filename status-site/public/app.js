@@ -41,6 +41,26 @@ async function api(route, data) {
   if (!response.ok) throw Object.assign(new Error(result.error || 'Unable to load status'), { status: response.status });
   return result;
 }
+function renderAccount(user) {
+  const menu = $('#account-menu');
+  if (!menu) return;
+  menu.hidden = !user;
+  if (!user) return;
+  $$('.account-name').forEach(el => { el.textContent = user.displayName; });
+  setText('.account-email', user.email || ''); setText('.account-job', user.jobTitle || 'Not provided'); setText('.account-company', user.company || 'Not provided');
+  setText('.account-initials', user.displayName.split(/\s+/).filter(Boolean).slice(0,2).map(n=>n[0]).join(''));
+  const photo = $('.account-photo'), initials = $('.account-initials');
+  if (user.avatarUrl && photo.getAttribute('src') !== user.avatarUrl) {
+    photo.onload = () => { photo.hidden = false; initials.hidden = true; };
+    photo.onerror = () => { photo.hidden = true; initials.hidden = false; };
+    photo.src = user.avatarUrl;
+  } else if (!user.avatarUrl) { photo.removeAttribute('src'); photo.hidden = true; initials.hidden = false; }
+}
+async function loadAccount() {
+  try { renderAccount((await api('/api/account')).user); } catch { renderAccount(null); }
+}
+document.addEventListener('click',event=>{const menu=$('#account-menu');if(menu && !menu.contains(event.target))menu.open=false;});
+document.addEventListener('keydown',event=>{if(event.key==='Escape'){const menu=$('#account-menu');if(menu?.open){menu.open=false;menu.querySelector('summary').focus();}}});
 function setText(selector, text) { $(selector).textContent = text; }
 function serviceState(s) { return Object.hasOwn(labels, s.status) ? s.status : 'unknown'; }
 function renderIncidents(animate = false) {
@@ -114,6 +134,7 @@ async function loadAdmin() {
   const selectedIncident = $('#incident-picker').value;
   const affected = new FormData($('#incident-form')).getAll('serviceIds');
   [adminData, publicData] = await Promise.all([api('/api/admin'), api('/api/status')]);
+  renderAccount(adminData.user);
   const first = $('#dashboard').hidden;
   $('#admin-loading').hidden = true; $('#sign-in-again').hidden = true; $('#dashboard').hidden = false;
   setText('#admin-count-services', adminData.services.length); setText('#nav-service-count', adminData.services.length);
@@ -131,7 +152,7 @@ function feedback(error) {
   const message = $('#message'); clearTimeout(messageTimer);
   message.hidden = false; message.textContent = error.message || error; message.className = error instanceof Error ? 'toast error' : 'toast success';
   if (motion()) message.animate([{ opacity: 0, transform: 'translateY(12px)' }, { opacity: 1, transform: 'translateY(0)' }], { duration: 250 });
-  if ([401, 403, 503].includes(error.status)) { $('#dashboard').hidden = true; $('#sign-in-again').hidden = false; $('#admin-loading').hidden = true; adminData = null; $$('dialog[open]').forEach(d => d.close()); }
+  if ([401, 403, 503].includes(error.status)) { renderAccount(null); $('#dashboard').hidden = true; $('#sign-in-again').hidden = false; $('#admin-loading').hidden = true; adminData = null; $$('dialog[open]').forEach(d => d.close()); }
   else if (error instanceof Error && !adminData) { $('#admin-loading').hidden = true; $('#sign-in-again').hidden = false; }
   else if (!(error instanceof Error)) messageTimer = setTimeout(() => { message.hidden = true; }, 5000);
 }
@@ -155,6 +176,7 @@ if (document.body.dataset.denied) {
   if (reason === 'unavailable') { setText('#denied-title', 'Sign-in temporarily unavailable'); setText('#denied-message', 'The staff portal could not verify your access. Please try again shortly or contact the system owner.'); }
   if (reason === 'expired') { setText('#denied-title', 'Please sign in again'); setText('#denied-message', 'Your staff sign-in or return link has expired. Start again below.'); }
 } else if (!document.body.dataset.admin) {
+  void loadAccount(); window.addEventListener('focus', loadAccount);
   refresh(); setInterval(() => { if (!document.hidden) refresh(); }, 30000);
   $$('[data-filter]').forEach(button => button.onclick = () => { incidentFilter = button.dataset.filter; $$('[data-filter]').forEach(b => { b.classList.toggle('selected', b === button); b.setAttribute('aria-pressed', String(b === button)); }); if (publicData) renderIncidents(true); });
 } else {

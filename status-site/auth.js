@@ -38,6 +38,20 @@ function createAuth() {
       return result.user;
     } catch (e) { if ([401, 403].includes(e.status)) sessions.delete(token); throw e; }
   }
+  async function avatar(req, res) {
+    const entry = sessions.get(cookie(req, SESSION_COOKIE));
+    if (!entry || entry.expires <= Date.now()) return error(res, 401, 'Please sign in again.');
+    let response;
+    try {
+      const secret = fs.readFileSync(secretFile, 'utf8').trim();
+      if (!HEX.test(secret)) throw new Error('Invalid configuration');
+      response = await fetch(portalBackend + '/api/sso/avatar', { method: 'POST', headers: { Authorization: 'Bearer ' + secret, 'Content-Type': 'application/json' }, body: JSON.stringify({ session: entry.portalSession }), signal: AbortSignal.timeout(5000), redirect: 'error' });
+    } catch { return error(res, 503, 'Profile picture is temporarily unavailable.'); }
+    if (!response.ok) return error(res, [401,403,404].includes(response.status) ? response.status : 503, 'Profile picture is unavailable.');
+    const image = Buffer.from(await response.arrayBuffer());
+    res.writeHead(200, { 'Content-Type': response.headers.get('content-type'), 'Cache-Control': 'no-store' });
+    res.end(image);
+  }
   async function handle(req, res, route) {
     if (route === '/auth/login' && req.method === 'GET') {
       const state = crypto.randomBytes(32).toString('hex');
@@ -77,6 +91,6 @@ function createAuth() {
     }
     return false;
   }
-  return { authorize, handle };
+  return { authorize, handle, avatar };
 }
 module.exports = { createAuth, STATUS_ORIGIN };

@@ -51,6 +51,10 @@ test('real staff password and PIN, minimal live profile, avatar, fixed clients a
     assert.equal((await post('/api/sso/exchange',{code:callback.searchParams.get('code'),state},'',{Authorization:'Bearer '+'c'.repeat(64)})).status,401);
     const authHeader={Authorization:'Bearer '+'c'.repeat(64)};
     assert.equal((await post('/api/sso/session',{session:sso.session},'',authHeader)).status,200);
+    const ssoAvatar = await post('/api/sso/avatar',{session:sso.session},'',authHeader);
+    assert.equal(ssoAvatar.status,200); assert.equal(ssoAvatar.headers.get('content-type'),'image/png');
+    assert.deepEqual(Buffer.from(await ssoAvatar.arrayBuffer()),Buffer.from(avatar,'base64'));
+    assert.equal((await post('/api/sso/avatar',{session:sso.session})).status,401);
     const refreshed = await fetch(base + '/', { headers: { Cookie: cookie } });
     assert.equal(refreshed.status, 200);
     assert.equal(refreshed.headers.getSetCookie().filter(c => /Max-Age=0/.test(c)).length, 2);
