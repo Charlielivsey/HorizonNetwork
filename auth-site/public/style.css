@@ -84,3 +84,14 @@
 .side footer{font-size:11px;padding:20px 36px}
 @media(max-width:900px){.side header{padding:16px 20px}.side main>.card{padding:32px 24px 24px}.side .card h2{font-size:26px}}
 @media(prefers-color-scheme:dark){.side main>.card{box-shadow:0 1px 0 #ffffff0d inset,0 30px 90px -40px #b98afa40,0 14px 34px -24px #000000aa}}
+
+/* Remembered identity: the PIN is still required for every new sign-in. */
+.resume-portrait{width:88px;height:88px;border-radius:50%;padding:5px;border:2px solid var(--purple);background:var(--soft);margin:0 auto 22px;display:grid;place-items:center;overflow:hidden;position:relative}
+.resume-portrait img{width:100%;height:100%;object-fit:cover;border-radius:50%;grid-area:1/1}
+.resume-portrait>span{grid-area:1/1;font-size:26px;font-weight:800;color:var(--purple)}
+.resume-offer{display:flex;align-items:center;gap:12px;width:100%;padding:14px;border:1px solid var(--border);border-radius:14px;background:var(--soft);color:var(--ink);text-align:left;cursor:pointer;transition:transform .2s,border-color .2s;margin-bottom:22px}
+.resume-offer:hover{border-color:var(--purple);transform:translateY(-2px)}
+.resume-offer>span:last-child{margin-left:auto}.resume-offer small,.resume-offer strong{display:block}.resume-offer small{font-size:10px;letter-spacing:.1em;color:var(--purple);margin-bottom:4px}.resume-offer strong{font-size:14px;overflow-wrap:anywhere}
+.resume-mini{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:var(--surface);color:var(--purple);font-weight:800;flex-shrink:0}
+.resume-portrait[hidden],.resume-offer[hidden],.resume-portrait img[hidden],.resume-portrait span[hidden]{display:none}
+@media(prefers-reduced-motion:reduce){.resume-offer{transition:none}}

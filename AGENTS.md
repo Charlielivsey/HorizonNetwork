@@ -10,3 +10,5 @@
 - Auth must end the browser session on refresh, matching the staff portal. Keep PIN entry masked; use the six-box HN design with smooth transitions and reduced-motion support. Completing six digits verifies automatically once; successful application sign-ins return automatically to the registered site. Status shows the signed-in user’s profile privately.
 
 - The main website has a protected configuration panel at /admin for the system owner and Super Admin members, using HN Group Auth. Maintenance must hide all public pages and public APIs while retaining Auth login and protected configuration access. Preserve maintenance settings across deployments and default new installations to off. Use hngroup-site/install-admin.sh for isolated updates to this feature.
+
+- Auth remembers the last account independently in each browser, matching staff Resume session: require the same masked PIN after refresh/navigation, verify six digits automatically, show the remembered name/avatar, and offer account switching and Forget me. Use staff-backed rotating remembered tokens and existing revocation/attempt limits; remembering must never bypass PIN or application permissions.

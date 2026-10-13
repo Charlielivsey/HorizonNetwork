@@ -76,9 +76,9 @@ test('portal sign-in goes through Auth and returns to the portal; resume session
     const replay = await portalGet(cb2.pathname + cb2.search, cookieOf(start2, 'hn_staff_auth_state'));
     assert.equal(replay.headers.get('location'), '/login?auth_error=expired');
 
-    // Auth's own server-side sign-in didn't leave a remembered browser behind: only the real one.
+    // Two independent Auth browser sign-ins and the portal browser each have their own remembered token.
     const resumeTokens = Object.keys(JSON.parse(fs.readFileSync(path.join(dir, 'resume.json'))).tokens);
-    assert.equal(resumeTokens.length, 1);
+    assert.equal(resumeTokens.length, 3);
 
     // Resume session: the sign-in page is shown (not sent to Auth) and the code alone signs in.
     assert.equal((await portalGet('/login', remembered)).status, 200);

@@ -67,5 +67,42 @@ test('real staff password and PIN, minimal live profile, avatar, fixed clients a
     const pinRefresh = await fetch(base + '/authorize?client_id=status&state=' + state, { headers: { Cookie: pendingFlow } });
     assert.equal(pinRefresh.status, 200);
     assert.equal((await post('/api/login/code',{code:'582947'},pendingFlow)).status,401);
+    // Remembering an account is separate from signing in, and is isolated per browser.
+    const resumeCookie = verified.headers.getSetCookie().find(c=>c.startsWith('__Host-hn_auth_resume=')).split(';')[0];
+    assert.match(verified.headers.getSetCookie().find(c=>c.startsWith('__Host-hn_auth_resume=')), /HttpOnly; Secure; SameSite=Lax; Max-Age=2592000/);
+    assert.deepEqual(await (await fetch(base+'/api/resume')).json(), { available:false });
+    assert.equal((await fetch(base+'/api/me',{headers:{Cookie:resumeCookie}})).status,401);
+    const remembered = await (await fetch(base+'/api/resume',{headers:{Cookie:resumeCookie}})).json();
+    assert.equal(remembered.available,true); assert.equal(remembered.firstName,'Test'); assert.equal(remembered.username,'test.owner@hngroup.org.uk');
+    const rememberedAvatar = await fetch(base+'/api/resume/avatar',{headers:{Cookie:resumeCookie}});
+    assert.equal(rememberedAvatar.status,200); assert.deepEqual(Buffer.from(await rememberedAvatar.arrayBuffer()),Buffer.from(avatar,'base64'));
+    assert.equal((await fetch(base+'/api/resume/avatar')).status,401);
+    assert.equal((await post('/api/resume',{code:'582947'})).status,401);
+    assert.equal((await post('/api/resume',{code:'582947'},resumeCookie,{Origin:'https://evil.example'})).status,403);
+    assert.equal((await post('/api/resume',{code:'111111'},resumeCookie)).status,401);
+    const resumed = await post('/api/resume',{code:'582947'},resumeCookie);
+    assert.equal(resumed.status,200); assert.equal((await resumed.json()).user.email,account.email);
+    const rotated = resumed.headers.getSetCookie().find(c=>c.startsWith('__Host-hn_auth_resume=')).split(';')[0];
+    assert.notEqual(rotated,resumeCookie);
+    assert.equal((await (await fetch(base+'/api/resume',{headers:{Cookie:resumeCookie}})).json()).available,false);
+    const resumedSession = resumed.headers.getSetCookie().find(c=>c.startsWith('__Host-hn_auth_session=')).split(';')[0];
+    const resumeGrant = await post('/api/continue',{client_id:'website',state},resumedSession);
+    const resumeCallback = new URL((await resumeGrant.json()).redirect);
+    assert.equal(resumeCallback.origin,'https://hngroup.org.uk');
+    assert.equal((await post('/api/sso/exchange',{client_id:'website',code:resumeCallback.searchParams.get('code'),state},'',authHeader)).status,200);
+    await fetch(base+'/',{headers:{Cookie:resumedSession+'; '+rotated}});
+    assert.equal((await fetch(base+'/api/me',{headers:{Cookie:resumedSession}})).status,401);
+    assert.equal((await (await fetch(base+'/api/resume',{headers:{Cookie:rotated}})).json()).available,true);
+    for(let i=0;i<5;i++) {
+      const wrong = await post('/api/resume',{code:'111111'},rotated); assert.equal(wrong.status,401);
+      if(i===4) { assert.equal((await wrong.json()).restart,true); assert.match(wrong.headers.get('set-cookie'),/Max-Age=0/); }
+    }
+    assert.equal((await post('/api/resume',{code:'582947'},rotated)).status,401);
+    const again = await post('/api/login',{username:account.email,password:'Test-password-582!'});
+    const againVerified = await post('/api/login/code',{code:'582947'},again.headers.getSetCookie()[0].split(';')[0]);
+    const againRemembered = againVerified.headers.getSetCookie().find(c=>c.startsWith('__Host-hn_auth_resume=')).split(';')[0];
+    assert.equal((await post('/api/resume/forget',{},againRemembered)).status,200);
+    assert.equal((await (await fetch(base+'/api/resume',{headers:{Cookie:againRemembered}})).json()).available,false);
+
   } finally { await new Promise(r=>server.close(r)); if(child.exitCode===null){child.kill('SIGTERM');await new Promise(r=>child.once('exit',r));} fs.rmSync(dir,{recursive:true,force:true}); }
 });

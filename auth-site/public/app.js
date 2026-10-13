@@ -15,12 +15,13 @@ const app = Object.prototype.hasOwnProperty.call(APPS, client) ? APPS[client] : 
 const connecting = !!app && /^[a-f0-9]{64}$/.test(state || '');
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 let working = false, transitioning = false, pendingPinSubmit = false;
+let remembered = null, resumeMode = false;
 $('year').textContent = new Date().getFullYear();
 $('destination').hidden = !connecting;
 if (connecting) { $('destination-name').textContent = app.name; $('application-name').textContent = app.name; $('continue-label').textContent = 'Continue to ' + app.short; }
 async function api(route, data) {
   const response = await fetch('/api/' + route, { method: data ? 'POST' : 'GET', headers: data ? { 'Content-Type': 'application/json' } : {}, body: data ? JSON.stringify(data) : undefined, credentials: 'same-origin' });
-  const value = await response.json(); if (!response.ok) { const e = new Error(value.error || 'Please try again.'); e.status = response.status; throw e; } return value;
+  const value = await response.json(); if (!response.ok) { const e = new Error(value.error || 'Please try again.'); e.status = response.status; e.restart = !!value.restart; throw e; } return value;
 }
 async function animate(element, frames, options) {
   if (reducedMotion.matches || !element.animate) return;
@@ -83,17 +84,20 @@ async function busy(button, action, label) {
   finally { button.innerHTML = previous; button.removeAttribute('aria-busy'); controls.forEach(b=>b.disabled=false); $('code').readOnly = false; working=false; maybeVerifyPin(); }
 }
 $('login').addEventListener('submit', event => { event.preventDefault(); busy(event.submitter, async () => {
+  resumeMode = false; $('resume-portrait').hidden = true; $('forget').hidden = true;
   const identity = $('username').value.trim();
   const data = await api('login', { username: identity, password: $('password').value }); $('password').value = '';
   $('password').type = 'password'; $('show-password').textContent = 'Show'; $('show-password').setAttribute('aria-pressed','false');
   if (data.codeRequired) {
-    resetPin(); $('pin-identity').textContent = identity;
+    resetPin(); $('pin').querySelector('[type=submit]').innerHTML = 'Verify &amp; sign in <span aria-hidden="true">→</span>'; $('pin-identity').textContent = identity;
     $('card-title').textContent = 'One more step'; $('subtitle').textContent = 'A little extra security. The same familiar PIN.';
     await view('pin','code');
   } else await account(data.user);
 }, 'Signing in…'); });
 $('pin').addEventListener('submit', event => { event.preventDefault(); pendingPinSubmit = false; busy(event.submitter, async () => {
-  const data = await api('login/code', { code: $('code').value });
+  let data;
+  try { data = await api(resumeMode ? 'resume' : 'login/code', { code: $('code').value }); }
+  catch (e) { if (e.restart) { clearRemembered(); await logout(); } throw e; }
   document.querySelector('.pin-entry').classList.add('verified');
   $('pin-help').textContent = 'Verified. Welcome to HN Group.';
   await animate(document.querySelector('.pin-boxes'),[{transform:'scale(1)'},{transform:'scale(1.025)'},{transform:'scale(1)'}],{duration:350});
@@ -104,7 +108,10 @@ async function logout() {
   $('card-title').textContent = 'Welcome back'; $('subtitle').textContent = 'Sign in with your staff account.';
   await view('login','username');
 }
-for(const id of ['logout','back']) $(id).onclick = () => busy($(id),logout);
+$('logout').onclick = () => busy($('logout'), async () => { await logout(); await loadRemembered(true); });
+$('back').onclick = () => busy($('back'), async () => { await logout(); resumeMode = false; $('resume-portrait').hidden = true; $('forget').hidden = true; });
+$('forget').onclick = () => busy($('forget'), async () => { await api('resume/forget', {}); clearRemembered(); await logout(); });
+$('resume-offer').onclick = () => busy($('resume-offer'), startResume);
 $('show-password').onclick = () => { const show = $('password').type === 'password'; $('password').type = show ? 'text' : 'password'; $('show-password').textContent = show ? 'Hide' : 'Show'; $('show-password').setAttribute('aria-pressed',String(show)); };
 async function connectToStatus() {
   const result = await api('continue', { client_id: client, state });
@@ -141,4 +148,34 @@ document.querySelector('.pin-entry').addEventListener('pointerdown',event=>{
 });
 for(const id of ['username','password']) $(id).addEventListener('input',()=>{ const input=$(id); input.classList.toggle('has-value',!!input.value); animate(input,[{boxShadow:'0 0 0 3px var(--soft)'},{boxShadow:'0 0 0 5px transparent'}],{duration:320}); });
 window.addEventListener('pageshow',event=>{if(event.persisted)location.reload();});
-api('me').then(data => account(data.user)).catch(async e => { await view('login'); if (e.status !== 401) message(e.message); });
+function clearRemembered() {
+  remembered = null; resumeMode = false; $('resume-offer').hidden = true; $('resume-portrait').hidden = true; $('forget').hidden = true;
+  $('resume-avatar').removeAttribute('src'); $('resume-avatar').hidden = true;
+}
+async function startResume() {
+  if (!remembered) return;
+  resumeMode = true; resetPin(); $('resume-portrait').hidden = false; $('forget').hidden = false;
+  $('card-title').textContent = 'Welcome back, ' + remembered.firstName;
+  $('subtitle').textContent = 'Enter your six-digit PIN to resume your session.';
+  $('pin-identity').textContent = remembered.username;
+  $('pin').querySelector('[type=submit]').innerHTML = 'Resume session <span aria-hidden="true">→</span>';
+  await view('pin', 'code');
+}
+async function loadRemembered(start) {
+  const data = await api('resume');
+  if (!data.available) { clearRemembered(); return; }
+  remembered = data;
+  const initials = data.displayName.split(/\s+/).filter(Boolean).slice(0,2).map(n=>n[0]).join('');
+  $('offer-initials').textContent = initials; $('resume-initials').textContent = initials;
+  $('offer-name').textContent = data.displayName; $('resume-offer').hidden = false;
+  $('resume-avatar').hidden = true; $('resume-initials').hidden = false;
+  $('resume-avatar').onload = () => { $('resume-avatar').hidden = false; $('resume-initials').hidden = true; };
+  $('resume-avatar').onerror = () => { $('resume-avatar').hidden = true; $('resume-initials').hidden = false; };
+  if (data.avatarUrl) $('resume-avatar').src = data.avatarUrl + '?v=' + Date.now();
+  if (start) await startResume();
+}
+api('me').then(data => account(data.user)).catch(async e => {
+  await view('login');
+  if (e.status !== 401) return message(e.message);
+  try { await loadRemembered(query.get('switch') !== '1' && query.get('account') !== 'other'); } catch (error) { message(error.message); }
+});

@@ -12,7 +12,7 @@ const CLIENTS = {
   portal: { name: 'Staff portal', callback: 'https://staff.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use the staff portal.' },
 };
 const HEX = /^[a-f0-9]{64}$/;
-const COOKIE = '__Host-hn_auth_session', FLOW = '__Host-hn_auth_flow';
+const COOKIE = '__Host-hn_auth_session', FLOW = '__Host-hn_auth_flow', REMEMBER = '__Host-hn_auth_resume';
 const secretFile = process.env.STATUS_SSO_SECRET_FILE || '/var/lib/hn-status-sso/secret';
 const backend = process.env.STAFF_PORTAL_BACKEND || 'http://127.0.0.1:3200';
 const sessions = new Map(), challenges = new Map(), codes = new Map();
@@ -34,9 +34,12 @@ function service(req) {
   const expected = secret();
   return HEX.test(supplied) && crypto.timingSafeEqual(Buffer.from(supplied), Buffer.from(expected));
 }
-async function staff(endpoint, data, req, login = false) {
+async function staff(endpoint, data, req, login = false, method = 'POST') {
   const headers = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + secret() };
-  if (login && req) {
+  if (req) {
+    const remembered = cookie(req, REMEMBER);
+    if (HEX.test(remembered)) headers.Cookie = 'hn_staff_resume=' + remembered;
+    if (login) headers['X-Auth-Remember'] = '1';
     // Only the local reverse proxy can supply the original client address.
     const local = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress);
     headers['X-Real-IP'] = local ? (req.headers['x-real-ip'] || req.socket.remoteAddress) : req.socket.remoteAddress;
@@ -44,10 +47,10 @@ async function staff(endpoint, data, req, login = false) {
     headers['X-Forwarded-Proto'] = 'https';
   }
   let response;
-  try { response = await fetch(backend + endpoint, { method: 'POST', headers, body: JSON.stringify(data), signal: AbortSignal.timeout(8000), redirect: 'error' }); }
+  try { response = await fetch(backend + endpoint, { method, headers, body: method === 'GET' ? undefined : JSON.stringify(data), signal: AbortSignal.timeout(8000), redirect: 'error' }); }
   catch { throw fail(503, 'Staff account service is unavailable. Please try again shortly.'); }
   const value = await response.json();
-  if (!response.ok) throw fail(response.status, value.error || 'Sign-in could not be verified.');
+  if (!response.ok) throw Object.assign(fail(response.status, value.error || 'Sign-in could not be verified.'), { restart: !!value.restart });
   return { value, response };
 }
 async function profile(entry) {
@@ -66,7 +69,14 @@ async function finishLogin(req, res, response) {
   sessions.delete(hash(cookie(req, COOKIE)));
   const token = random(); sessions.set(hash(token), entry);
   challenges.delete(hash(cookie(req, FLOW)));
-  send(res, 200, { user }, [setCookie(COOKIE, token), setCookie(FLOW, '', 0)]);
+  const remembered = (response.headers.get('set-cookie') || '').match(/(?:^|,\s*)hn_staff_resume=([a-f0-9]{64})(?:;|$)/)?.[1];
+  const cookies = [setCookie(COOKIE, token), setCookie(FLOW, '', 0)];
+  if (remembered) cookies.push(setCookie(REMEMBER, remembered, 30 * 86400));
+  else {
+    if (HEX.test(cookie(req, REMEMBER))) await staff('/api/resume/forget', {}, req);
+    cookies.push(setCookie(REMEMBER, '', 0));
+  }
+  send(res, 200, { user }, cookies);
 }
 async function serveAvatar(entry, res) {
   const response = await fetch(backend + '/api/auth/avatar', { method: 'POST', headers: { Authorization: 'Bearer ' + secret(), 'Content-Type': 'application/json' }, body: JSON.stringify({ session: entry.staffSession }), signal: AbortSignal.timeout(5000) });
@@ -113,6 +123,15 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST') {
       if (req.headers.origin !== ORIGIN) throw fail(403, 'Request origin not allowed.');
       const data = await body(req);
+      if (route === '/api/resume/forget') {
+        await staff('/api/resume/forget', {}, req);
+        sessions.delete(hash(cookie(req, COOKIE))); challenges.delete(hash(cookie(req, FLOW)));
+        return send(res, 200, { ok: true }, [setCookie(REMEMBER, '', 0), setCookie(COOKIE, '', 0), setCookie(FLOW, '', 0)]);
+      }
+      if (route === '/api/resume') {
+        const { response } = await staff('/api/resume', { code: data.code }, req, true);
+        return await finishLogin(req, res, response);
+      }
       if (route === '/api/login') {
         challenges.delete(hash(cookie(req, FLOW)));
         const { value, response } = await staff('/api/login', { username: data.username, password: data.password }, req, true);
@@ -145,6 +164,19 @@ const server = http.createServer(async (req, res) => {
       return send(res, 404, { error: 'Not found.' });
     }
     if (req.method !== 'GET') return send(res, 405, { error: 'Method not allowed.' });
+    if (route === '/api/resume') {
+      const { value } = await staff('/api/resume', null, req, false, 'GET');
+      if (value.avatarUrl) value.avatarUrl = '/api/resume/avatar';
+      return send(res, 200, value, value.available ? [] : [setCookie(REMEMBER, '', 0)]);
+    }
+    if (route === '/api/resume/avatar') {
+      const remembered = cookie(req, REMEMBER);
+      if (!HEX.test(remembered)) throw fail(401, 'Please sign in again.');
+      const response = await fetch(backend + '/api/resume/avatar', { headers: { Cookie: 'hn_staff_resume=' + remembered }, signal: AbortSignal.timeout(5000), redirect: 'error' });
+      if (!response.ok) return send(res, response.status, { error: 'Profile picture unavailable.' });
+      res.writeHead(200, { 'Content-Type': response.headers.get('content-type'), 'Cache-Control': 'no-store' });
+      return res.end(Buffer.from(await response.arrayBuffer()));
+    }
     if (route === '/api/me') return send(res, 200, { user: await profile(entryFor(req)) });
     if (route === '/api/avatar') {
       const entry = entryFor(req); await profile(entry);
@@ -154,7 +186,7 @@ const server = http.createServer(async (req, res) => {
       if (!destination(url)) throw fail(400, 'Invalid application. Start from the application’s sign-in button.');
       if (url.searchParams.get('switch') === '1') {
         sessions.delete(hash(cookie(req, COOKIE))); res.setHeader('Set-Cookie', setCookie(COOKIE, '', 0));
-        url.searchParams.delete('switch'); return redirect(res, url.pathname + url.search);
+        url.searchParams.delete('switch'); url.searchParams.set('account', 'other'); return redirect(res, url.pathname + url.search);
       }
     }
     const file = staticFiles[route];
@@ -168,7 +200,7 @@ const server = http.createServer(async (req, res) => {
     }
     res.writeHead(200, { 'Content-Type': mime[path.extname(file)], 'Cache-Control': file.endsWith('.html') ? 'no-store' : 'public, max-age=3600' });
     fs.createReadStream(path.join(__dirname, 'public', file)).pipe(res);
-  } catch (e) { send(res, e.status || 503, { error: e.status ? e.message : 'Authentication service is unavailable. Please try again shortly.' }); }
+  } catch (e) { send(res, e.status || 503, { error: e.status ? e.message : 'Authentication service is unavailable. Please try again shortly.', ...(e.restart ? { restart: true } : {}) }, e.restart ? [setCookie(REMEMBER, '', 0)] : []); }
 });
 setInterval(() => { for (const map of [sessions, challenges, codes]) for (const [key, value] of map) if (value.expires <= Date.now()) map.delete(key); }, 60000).unref();
 if (require.main === module) server.listen(Number(process.env.PORT || 3400), process.env.HOST || '127.0.0.1');

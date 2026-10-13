@@ -18,3 +18,11 @@ Verification: `node --test auth-site/test.cjs auth-site/portal-auth.test.cjs sta
 Optional full browser regression: `node auth-site/browser-smoke.cjs` with Playwright and Chromium installed (or set `PLAYWRIGHT_MODULE` to an existing Playwright module). It runs the real password/PIN and Auth-to-Status flow using temporary staff data through a loopback HTTPS proxy, including automatic verification/return, wrong-PIN retries, private profile/avatar rendering, mobile menus and refresh sign-out. It does not sign in to production accounts.
 
 Registered client `website` uses `https://hngroup.org.uk/auth/callback` for HN Group website configuration. It requires the same system-owner / Super Admin membership as status administration and retains a live Auth session for access rechecks. Application exchange, session and avatar requests carry `client_id: "website"`; codes cannot be exchanged as a different application. The existing portal client continues using its own session exchange.
+
+## Remembered browsers and PIN resume
+
+After a successful password and PIN sign-in, Auth keeps a separate secure, HttpOnly cookie for that browser, just like the staff portal. Returning to Auth shows the remembered name and profile picture and asks for the same six-digit PIN. Refresh still ends the active Auth session: remembering the account never grants access without verifying the PIN. Six digits verify automatically, then return to the registered application with fresh permission checks.
+
+The staff portal issues and validates these independent remembered tokens, stores only their hashes, rotates them after successful resume, and applies its existing attempt limits, account checks, expiry and password/PIN-change revocation. Auth never stores passwords or PINs. Remembering lasts up to 30 days, matching the portal. “Not you?” opens full sign-in while retaining the resume offer; “Forget me on this browser” revokes that browser’s remembered token. Other browsers remain independent. The narrow integration helper updates the portal’s token issuance condition; other portal sign-in behaviour is unchanged.
+
+Update this service with `cd /root/HorizonNetwork && git pull && sudo bash auth-site/install.sh`.

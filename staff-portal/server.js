@@ -513,8 +513,8 @@ function completeLogin(req, res, person, how) {
   logEvent(req, null, "signed-in", { actor: store.loginName(person), detail: how || undefined, ua: String(req.headers["user-agent"] || "").slice(0, 300) });
   const cookies = [cookieFor(req, token)];
   // Remember this browser for "Resume session" (only for people with a sign-in code, which it asks for).
-  // Not for HN Group Auth's own server-side sign-in check: that "browser" is the Auth service.
-  if (store.hasCode(person) && !serviceRequest(req)) cookies.push(resume.cookie(req, resume.issue(person.id, parseCookies(req)[resume.COOKIE], req.headers["user-agent"])));
+  // Auth explicitly requests a separate remembered token for its own browser cookie.
+  if (store.hasCode(person) && (!serviceRequest(req) || req.headers["x-auth-remember"] === "1")) cookies.push(resume.cookie(req, resume.issue(person.id, parseCookies(req)[resume.COOKIE], req.headers["user-agent"])));
   sendJson(res, 200, { user: store.meView(person) }, { "Set-Cookie": cookies });
 }
 
