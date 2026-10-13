@@ -5,7 +5,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const ORIGIN = 'https://auth.hngroup.org.uk';
-const CLIENTS = { status: { name: 'Status administration', callback: 'https://status.hngroup.org.uk/auth/callback' } };
+// Registered applications: fixed callbacks and who may use them.
+const CLIENTS = {
+  status: { name: 'Status administration', callback: 'https://status.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage status.' },
+  portal: { name: 'Staff portal', callback: 'https://staff.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use the staff portal.' },
+};
 const HEX = /^[a-f0-9]{64}$/;
 const COOKIE = '__Host-hn_auth_session', FLOW = '__Host-hn_auth_flow';
 const secretFile = process.env.STATUS_SSO_SECRET_FILE || '/var/lib/hn-status-sso/secret';
@@ -72,7 +76,7 @@ async function serveAvatar(entry, res) {
 }
 function destination(url) {
   const id = url.searchParams.get('client_id'), state = url.searchParams.get('state');
-  return CLIENTS[id] && HEX.test(state || '') ? { id, state, ...CLIENTS[id] } : null;
+  return Object.hasOwn(CLIENTS, id || '') && HEX.test(state || '') ? { id, state, ...CLIENTS[id] } : null;
 }
 const staticFiles = { '/': 'index.html', '/authorize': 'index.html', '/style.css': 'style.css', '/app.js': 'app.js', '/assets/favicon.svg': 'assets/favicon.svg', '/assets/brand/hn-group-wordmark-white.svg': 'assets/brand/hn-group-wordmark-white.svg', '/assets/brand/hn-group-wordmark.svg': 'assets/brand/hn-group-wordmark.svg', '/assets/fonts/plus-jakarta-sans.woff2': 'assets/fonts/plus-jakarta-sans.woff2' };
 const mime = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'application/javascript', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' };
@@ -87,13 +91,21 @@ const server = http.createServer(async (req, res) => {
       if (req.method !== 'POST') return send(res, 405, { error: 'POST required.' });
       if (!service(req)) return send(res, 401, { error: 'Client not authenticated.' });
       const data = await body(req); let token = data.session;
+      // Status keeps its long-lived Auth session; other applications exchange the code once.
+      const clientId = route === '/api/sso/exchange' && data.client_id ? data.client_id : 'status';
+      if (!Object.hasOwn(CLIENTS, clientId)) return send(res, 400, { error: 'Unknown application.' });
       if (route === '/api/sso/exchange') {
         const grant = codes.get(data.code); codes.delete(data.code);
-        if (!grant || grant.expires <= Date.now() || grant.state !== data.state || grant.client !== 'status') throw fail(401, 'Sign-in link expired or already used.');
+        if (!grant || grant.expires <= Date.now() || grant.state !== data.state || grant.client !== clientId) throw fail(401, 'Sign-in link expired or already used.');
         token = grant.session;
       } else if (!['/api/sso/session','/api/sso/avatar'].includes(route)) return send(res, 404, { error: 'Not found.' });
       const entry = HEX.test(token || '') && sessions.get(token), user = await profile(entry);
-      if (!user.statusAdminAllowed) throw fail(403, 'Only the system owner and Super Admin members can manage status.');
+      if (!CLIENTS[clientId].allowed(user)) throw fail(403, CLIENTS[clientId].denied);
+      if (clientId !== 'status') {
+        // The application starts its own session; this Auth sign-in has done its job.
+        sessions.delete(token);
+        return send(res, 200, { user, staffSession: entry.staffSession });
+      }
       if (route === '/api/sso/avatar') return await serveAvatar(entry, res);
       return send(res, 200, { session: token, expires: entry.expires, user });
     }
@@ -124,7 +136,7 @@ const server = http.createServer(async (req, res) => {
         const client = destination(new URL('/authorize?client_id=' + encodeURIComponent(data.client_id) + '&state=' + encodeURIComponent(data.state), ORIGIN));
         if (!client) throw fail(400, 'Invalid application. Start from the application’s sign-in button.');
         const entry = entryFor(req), user = await profile(entry);
-        if (!user.statusAdminAllowed) return send(res, 200, { redirect: client.callback + '?error=access_denied&state=' + client.state });
+        if (!client.allowed(user)) return send(res, 200, { redirect: client.callback + '?error=access_denied&state=' + client.state });
         if (codes.size >= 10000) throw fail(503, 'Please try again shortly.');
         const code = random(); codes.set(code, { session: hash(cookie(req, COOKIE)), state: client.state, client: client.id, expires: Date.now() + 60000 });
         return send(res, 200, { redirect: client.callback + '?code=' + code + '&state=' + client.state });

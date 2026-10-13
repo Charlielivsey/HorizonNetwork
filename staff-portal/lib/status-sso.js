@@ -14,6 +14,13 @@ function allowed(session, store) {
     return role?.name.toLowerCase() === 'super admin';
   }));
 }
+// True for a request made by HN Group Auth itself, carrying the shared service secret.
+function serviceRequest(req) {
+  let secret;
+  try { secret = fs.readFileSync(SECRET_FILE, 'utf8').trim(); } catch { return false; }
+  const supplied = (req.headers.authorization || '').replace(/^Bearer /, '');
+  return HEX.test(secret) && HEX.test(supplied) && crypto.timingSafeEqual(Buffer.from(supplied), Buffer.from(secret));
+}
 function loginNext(value) {
   return typeof value === 'string' && /^\/status-admin\/authorize\?state=[a-f0-9]{64}$/.test(value) ? value : null;
 }
@@ -25,12 +32,7 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
     const person = store.getPerson(data.personId);
     return person ? { token, data, person } : null;
   }
-  function credentials(req) {
-    let secret;
-    try { secret = fs.readFileSync(SECRET_FILE, 'utf8').trim(); } catch { return false; }
-    const supplied = (req.headers.authorization || '').replace(/^Bearer /, '');
-    return HEX.test(secret) && HEX.test(supplied) && supplied.length === secret.length && crypto.timingSafeEqual(Buffer.from(supplied), Buffer.from(secret));
-  }
+  const credentials = serviceRequest;
   return async function handle(req, res, pathname, session) {
     if (pathname === '/status-admin/authorize') {
       if (req.method !== 'GET') { sendJson(res, 405, { error: 'Method not allowed.' }); return true; }
@@ -86,4 +88,4 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
     return true;
   };
 }
-module.exports = { createStatusSso, allowed, loginNext };
+module.exports = { createStatusSso, allowed, loginNext, serviceRequest };

@@ -2,11 +2,21 @@
 const $ = id => document.getElementById(id);
 const query = new URLSearchParams(location.search);
 const client = query.get('client_id'), state = query.get('state');
-const connecting = client === 'status' && /^[a-f0-9]{64}$/.test(state || '');
+// Must match the applications registered in server.js.
+const APPS = {
+  status: { name: 'Status administration', short: 'Status', allowed: user => user.statusAdminAllowed,
+    granted: 'You have permission to manage services and publish incident updates.',
+    restricted: 'Only the system owner and Super Admin members can manage status. Contact your system owner if you need access.' },
+  portal: { name: 'Staff portal', short: 'the staff portal', allowed: () => true,
+    granted: 'Your staff portal account is ready.', restricted: '' },
+};
+const app = Object.prototype.hasOwnProperty.call(APPS, client) ? APPS[client] : null;
+const connecting = !!app && /^[a-f0-9]{64}$/.test(state || '');
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 let working = false, transitioning = false, pendingPinSubmit = false;
 $('year').textContent = new Date().getFullYear();
 $('destination').hidden = !connecting;
+if (connecting) { $('destination-name').textContent = app.name; $('application-name').textContent = app.name; $('continue-label').textContent = 'Continue to ' + app.short; }
 async function api(route, data) {
   const response = await fetch('/api/' + route, { method: data ? 'POST' : 'GET', headers: data ? { 'Content-Type': 'application/json' } : {}, body: data ? JSON.stringify(data) : undefined, credentials: 'same-origin' });
   const value = await response.json(); if (!response.ok) { const e = new Error(value.error || 'Please try again.'); e.status = response.status; throw e; } return value;
@@ -48,14 +58,15 @@ async function account(user) {
   if (user.avatarUrl) { $('avatar').onload = () => { $('avatar').hidden = false; $('initials').hidden = true; }; $('avatar').src = user.avatarUrl; }
   $('destination').hidden = true;
   $('application-panel').hidden = !connecting; $('root-account-note').hidden = connecting;
-  $('continue').hidden = !connecting || !user.statusAdminAllowed;
-  $('access-badge').textContent = user.statusAdminAllowed ? 'Access granted' : 'Restricted';
-  $('access-badge').classList.toggle('restricted',!user.statusAdminAllowed);
-  $('account-note').textContent = !user.statusAdminAllowed ? 'Only the system owner and Super Admin members can manage status. Contact your system owner if you need access.' : 'You have permission to manage services and publish incident updates.';
+  const allowed = connecting && app.allowed(user);
+  $('continue').hidden = !allowed;
+  $('access-badge').textContent = allowed ? 'Access granted' : 'Restricted';
+  $('access-badge').classList.toggle('restricted',!allowed);
+  $('account-note').textContent = connecting ? (allowed ? app.granted : app.restricted) : '';
   await view('account');
   $('card-title').setAttribute('tabindex','-1'); $('card-title').focus({preventScroll:true});
   if (connecting) {
-    $('account-note').textContent = user.statusAdminAllowed ? 'Signed in. Taking you to Status administration…' : 'Checking your access to Status administration…';
+    $('account-note').textContent = allowed ? 'Signed in. Taking you to ' + app.name + '…' : 'Checking your access to ' + app.name + '…';
     await connectToStatus();
   }
 }
@@ -98,7 +109,7 @@ async function connectToStatus() {
   const result = await api('continue', { client_id: client, state });
   location.replace(result.redirect);
 }
-$('continue').onclick = () => busy($('continue'), connectToStatus, 'Connecting to Status…');
+$('continue').onclick = () => busy($('continue'), connectToStatus, 'Connecting…');
 function maybeVerifyPin() {
   if (!pendingPinSubmit || working || transitioning || $('pin').hidden || $('code').value.length !== 6) return;
   pendingPinSubmit = false; $('pin').requestSubmit($('pin').querySelector('[type=submit]'));
