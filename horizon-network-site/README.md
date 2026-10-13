@@ -24,3 +24,16 @@ cd /root/HorizonNetwork && git pull && sudo bash install-public-sites.sh
 ```
 
 Checks: `node --test horizon-network-site/test.cjs` exercises the real staff portal and company/department filtering, minimal public fields and protected photos. Optional `PLAYWRIGHT_MODULE=/path/to/playwright node horizon-network-site/browser-smoke.cjs` checks both public sites and forms with fixture responses, without production data or submissions.
+
+
+## Additional domain: horizonetwork.com
+
+The same running site is also configured for `horizonetwork.com`, using its own nginx host `hn-network-com` and certificate. It shares the existing PM2 `hn-network` service and live leadership feed; canonical page URLs remain on horizon-network.co.uk. No primary host or other website configuration is replaced.
+
+Create an A record for `@` pointing to `217.154.34.205`. Optionally add `www` pointing to the same address. At the time this host was prepared, neither name had a web DNS record. The alias installer prepares HTTP/ACME routing, then waits for DNS before requesting SSL. Once DNS resolves to this VPS, rerun:
+
+```bash
+cd /root/HorizonNetwork && git pull && sudo bash horizon-network-site/install-alias.sh
+```
+
+The installer obtains a trusted Let's Encrypt certificate and enables HTTPS with automatic renewal. The optional www name is added to the certificate when it resolves. The regular Network installer also runs this alias setup, so future updates retain both domains. A message that DNS/SSL is pending does not mean the domain is live.

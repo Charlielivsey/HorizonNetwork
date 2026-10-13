@@ -15,3 +15,5 @@
 
 - The HN Group homepage contains only the introductory hero; About, Companies, Careers and Contact are separate pages. HN Group brings together Horizon Network and Horizon Media Group. Horizon Advertising and Horizon Development are part of Horizon Network.
 - Horizon Network has its own site at horizon-network.co.uk (PM2 hn-network). Its About page shows only staff with company Horizon Network and department Network Leadership on the same primary/additional role. Publish only names, Network job titles and eligible photos via the protected staff bridge. Use its isolated installer; install-public-sites.sh applies the coordinated public websites and Auth update without replacing other hosts.
+
+- Also serve Horizon Network at horizonetwork.com using the same hn-network service and a dedicated nginx alias host/certificate. Keep horizon-network.co.uk as the canonical URL. Use horizon-network-site/install-alias.sh for alias-only updates; DNS must resolve to the VPS before SSL can be issued.

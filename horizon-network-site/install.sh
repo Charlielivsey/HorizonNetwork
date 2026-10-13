@@ -140,3 +140,6 @@ if [ "$HTTPS_OK" != 1 ]; then
     echo 'Trusted public HTTPS could not be verified. Check root and www DNS/Cloudflare settings, then rerun.'
     exit 1
 fi
+
+# Add the requested extra domain without changing the primary virtual host.
+bash "$SCRIPT_DIR/install-alias.sh" "$EMAIL"
