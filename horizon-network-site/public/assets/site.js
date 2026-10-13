@@ -168,4 +168,68 @@
     }
 })();
 
-(async function(){const target=document.getElementById('leadership');if(!target)return;try{const response=await fetch('/api/leadership');if(!response.ok)throw Error();const data=await response.json();target.replaceChildren();if(!data.leaders.length){const p=document.createElement('p');p.className='leadership-notice muted';p.textContent='Our leadership team will be introduced here soon.';target.append(p);return;}for(const person of data.leaders){const card=document.createElement('article');card.className='leader';const initials=document.createElement('span');initials.className='leader-initials';initials.setAttribute('aria-hidden','true');initials.textContent=person.name.split(/\s+/).slice(0,2).map(n=>n[0]).join('');card.append(initials);if(person.avatarUrl){const photo=document.createElement('img');photo.className='leader-photo';photo.alt='';photo.hidden=true;photo.onload=()=>{photo.hidden=false;initials.hidden=true;};photo.onerror=()=>{photo.hidden=true;initials.hidden=false;};photo.src=person.avatarUrl;card.append(photo);}const name=document.createElement('h3');name.textContent=person.name;const job=document.createElement('p');job.textContent=person.jobTitle;card.append(name,job);target.append(card);}}catch{target.replaceChildren();const p=document.createElement('p');p.className='leadership-notice muted';p.textContent='Our leadership team couldn’t be loaded just now. Please try again shortly.';target.append(p);}})();
+// Live public leadership profiles. Staff records remain the source of names, roles and photos.
+(async function () {
+    const target = document.getElementById('leadership');
+    if (!target) return;
+    const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+    function notice(text) {
+        const p = document.createElement('p');
+        p.className = 'leadership-notice muted'; p.textContent = text;
+        target.replaceChildren(p);
+    }
+    function rank(person) {
+        const role = person.jobTitle.trim().toLowerCase();
+        if (role === 'president') return 0;
+        if (role === 'vice president') return 1;
+        return 2;
+    }
+    try {
+        const response = await fetch('/api/leadership');
+        if (!response.ok) throw Error();
+        const data = await response.json();
+        const people = data.leaders.slice().sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+        target.replaceChildren();
+        if (!people.length) return notice('Our leadership team will be introduced here soon.');
+        const observer = !reducedMotion.matches && 'IntersectionObserver' in window ? new IntersectionObserver(entries => {
+            entries.forEach(entry => {
+                if (!entry.isIntersecting) return;
+                entry.target.classList.remove('leader-awaiting');
+                entry.target.classList.add('leader-entering');
+                entry.target.addEventListener('animationend', () => entry.target.classList.remove('leader-entering'), { once: true });
+                observer.unobserve(entry.target);
+            });
+        }, { threshold: 0.12 }) : null;
+        people.forEach((person, index) => {
+            const card = document.createElement('article');
+            card.className = 'leader leader-tone-' + (index % 3);
+            card.style.setProperty('--entry-delay', Math.min(index, 5) * 90 + 'ms');
+            const banner = document.createElement('div'); banner.className = 'leader-banner'; banner.setAttribute('aria-hidden', 'true');
+            const logo = document.createElement('img'); logo.src = '/assets/brand/horizon-network-wordmark-white.svg'; logo.alt = ''; logo.className = 'leader-brand';
+            const orbit = document.createElement('span'); orbit.className = 'leader-orbit';
+            banner.append(logo, orbit);
+            const body = document.createElement('div'); body.className = 'leader-body';
+            const portrait = document.createElement('div'); portrait.className = 'leader-portrait';
+            const initials = document.createElement('span'); initials.className = 'leader-initials'; initials.setAttribute('aria-hidden', 'true');
+            initials.textContent = person.name.split(/\s+/).filter(Boolean).slice(0, 2).map(n => n[0]).join('');
+            portrait.append(initials);
+            if (person.avatarUrl) {
+                const photo = document.createElement('img'); photo.className = 'leader-photo'; photo.alt = ''; photo.hidden = true;
+                photo.onload = () => { photo.hidden = false; initials.hidden = true; };
+                photo.onerror = () => { photo.hidden = true; initials.hidden = false; };
+                photo.src = person.avatarUrl; portrait.append(photo);
+            }
+            const name = document.createElement('h3'); name.textContent = person.name;
+            const job = document.createElement('p'); job.className = 'leader-role'; job.textContent = person.jobTitle;
+            const footer = document.createElement('div'); footer.className = 'leader-footer';
+            const dot = document.createElement('span'); dot.className = 'leader-team-dot'; dot.setAttribute('aria-hidden', 'true');
+            const label = document.createElement('span'); label.textContent = 'Network leadership';
+            footer.append(dot, label); body.append(portrait, name, job, footer); card.append(banner, body); target.append(card);
+            if (observer) { card.classList.add('leader-awaiting'); observer.observe(card); }
+        });
+    } catch {
+        notice('Our leadership team couldn’t be loaded just now. Please try again shortly.');
+    } finally {
+        target.setAttribute('aria-busy', 'false');
+    }
+})();

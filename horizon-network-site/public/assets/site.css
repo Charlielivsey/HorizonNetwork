@@ -275,8 +275,38 @@ dialog.apply::backdrop { background: rgba(14, 16, 32, 0.6); backdrop-filter: blu
 
 .home-page main{min-height:calc(100svh - 300px);display:grid;align-items:center}.network-family{margin-top:70px}.site-nav a[aria-current="page"]{color:var(--accent);font-weight:700}
 
-.hero h1{max-width:760px}.brand img{width:160px;height:auto}.leadership-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px}.leader{padding:32px;border:1px solid var(--border);border-radius:24px;background:var(--surface);animation:network-arrive .5s both}.leader-photo,.leader-initials{width:88px;height:88px;border-radius:50%;object-fit:cover;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);font-size:28px;font-weight:700;margin-bottom:24px}.leader h3{margin:0 0 8px}.leader p{color:var(--muted)}.leadership-notice{grid-column:1/-1;padding:24px;border:1px solid var(--border);border-radius:16px}@keyframes network-arrive{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}@media(max-width:850px){.leadership-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:560px){.leadership-grid{grid-template-columns:1fr}}@media(prefers-reduced-motion:reduce){.leader{animation:none}}
-
-.leader-photo[hidden],.leader-initials[hidden]{display:none}
-
+.hero h1{max-width:760px}.brand img{width:160px;height:auto}
 .pillars{grid-template-columns:repeat(2,minmax(0,1fr))}@media(max-width:560px){.pillars{grid-template-columns:1fr}}
+
+/* The leadership team: layered profile cards, using the original Network artwork. */
+.leadership-section{position:relative;overflow:hidden;background:radial-gradient(ellipse at 90% 0%,color-mix(in srgb,var(--accent) 9%,transparent),transparent 55%),var(--tint)}
+.leadership-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:48px;margin-bottom:48px}
+.leadership-heading h2{font-size:clamp(2rem,4vw,3.4rem);letter-spacing:-.045em;margin:0;line-height:1.1}
+.heading-dot{color:var(--accent)}
+.leadership-heading>.lead{max-width:300px;margin:0 0 4px;line-height:1.7;font-size:1rem}
+.leadership-heading .eyebrow{display:flex;align-items:center;gap:10px}
+.leadership-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 5px color-mix(in srgb,var(--accent) 10%,transparent)}
+.leadership-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;align-items:stretch}
+.leader{--card-accent:#a47bf0;min-width:0;border:1px solid color-mix(in srgb,var(--accent) 12%,var(--border));border-radius:24px;background:var(--surface);overflow:hidden;box-shadow:0 8px 32px -24px #1c213560;transition:transform .25s,border-color .25s,box-shadow .25s;position:relative}
+.leader-tone-1{--card-accent:#3e9ba3}.leader-tone-2{--card-accent:#c2306b}
+.leader:hover{transform:translateY(-6px);border-color:color-mix(in srgb,var(--card-accent) 55%,var(--border));box-shadow:0 18px 45px -28px color-mix(in srgb,var(--card-accent) 65%,transparent)}
+.leader-banner{position:relative;height:145px;overflow:hidden;background:radial-gradient(ellipse at 100% 0%,color-mix(in srgb,var(--card-accent) 50%,transparent),transparent 75%),linear-gradient(125deg,#1c2135,#281943)}
+.leader-banner::after{content:'';position:absolute;width:160px;height:160px;border-radius:50%;background:var(--card-accent);filter:blur(70px);opacity:.22;right:-55px;bottom:-110px}
+.leader-brand{position:relative;z-index:1;width:130px;height:auto;margin:23px 26px;opacity:.9}
+.leader-orbit{position:absolute;width:220px;height:220px;border:1px solid #ffffff15;border-radius:50%;right:-75px;top:-80px;transform:rotate(-25deg);transition:transform .7s}
+.leader-orbit::before,.leader-orbit::after{content:'';position:absolute;inset:24px;border:1px solid #ffffff12;border-radius:50%}.leader-orbit::after{inset:48px}
+.leader:hover .leader-orbit{transform:rotate(10deg) scale(1.06)}
+.leader-body{position:relative;padding:0 28px 23px;display:flex;flex-direction:column;min-height:250px}
+.leader-portrait{width:110px;height:110px;padding:6px;margin-top:-55px;margin-bottom:22px;border-radius:50%;background:var(--surface);box-shadow:0 4px 18px -10px #0006;display:grid;place-items:center;position:relative;isolation:isolate}
+.leader-photo,.leader-initials{grid-area:1/1;width:98px;height:98px;aspect-ratio:1;border-radius:50%;margin:0;object-fit:cover;object-position:center}
+.leader-initials{display:grid;place-items:center;background:linear-gradient(145deg,color-mix(in srgb,var(--card-accent) 20%,var(--surface)),color-mix(in srgb,var(--card-accent) 8%,var(--surface)));color:var(--accent);font-size:32px;font-weight:700;border:1px solid color-mix(in srgb,var(--card-accent) 16%,transparent)}
+.leader-photo[hidden],.leader-initials[hidden]{display:none}
+.leader h3{font-size:clamp(1.35rem,2.4vw,1.7rem);letter-spacing:-.035em;margin:0 0 8px;overflow-wrap:anywhere}
+.leader-role{font-size:.95rem;line-height:1.5;color:var(--muted);margin:0 0 26px;min-height:2.85em}
+.leader-footer{display:flex;align-items:center;gap:8px;border-top:1px solid var(--border);margin-top:auto;padding-top:17px;color:var(--muted);font-size:.72rem;font-weight:600;letter-spacing:.015em}
+.leader-team-dot{width:6px;height:6px;flex-shrink:0;border-radius:50%;background:var(--card-accent)}
+.leadership-notice{grid-column:1/-1;padding:26px;border:1px solid var(--border);border-radius:18px;background:var(--surface);margin:0}
+@media(prefers-reduced-motion:no-preference){.leader-awaiting{opacity:0;transform:translateY(20px)}.leader-entering{animation:leader-arrive .55s var(--entry-delay,0ms) both cubic-bezier(.2,.8,.2,1)}@keyframes leader-arrive{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}}
+@media(max-width:850px){.leadership-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.leadership-heading{gap:28px;align-items:flex-start}.leadership-heading>.lead{max-width:250px}.leader-body{padding-left:24px;padding-right:24px}}
+@media(max-width:560px){.leadership-grid{grid-template-columns:1fr;gap:22px}.leadership-heading{display:block;margin-bottom:32px}.leadership-heading>.lead{margin-top:20px;max-width:100%}.leader-banner{height:135px}.leader-body{min-height:230px}.leader h3{font-size:1.55rem}.leader-role{min-height:0;margin-bottom:24px}}
+@media(prefers-reduced-motion:reduce){.leader,.leader-orbit{animation:none;transition:none}.leader-awaiting{opacity:1;transform:none}.leader:hover{transform:none}}
