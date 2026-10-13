@@ -1,0 +1,1 @@
+module.exports={apps:[{name:'hn-website',script:'/opt/hn-website/server.js',cwd:'/opt/hn-website',instances:1,exec_mode:'fork',autorestart:true,max_memory_restart:'256M',env:{NODE_ENV:'production',HOST:'127.0.0.1',PORT:'3500',WEBSITE_PUBLIC_DIR:'/var/www/hngroup',WEBSITE_DATA_DIR:'/var/lib/hn-website'}}]};

@@ -222,3 +222,6 @@ echo -e "  ${CYAN}Files:${RESET}    $WEB_DIR"
 
 # Check what the domain really serves, and say what to fix if it isn't the website.
 bash "$SCRIPT_DIR/check.sh" || true
+
+# Website configuration, Auth and server-enforced maintenance.
+bash "$SCRIPT_DIR/install-admin.sh" "$EMAIL"

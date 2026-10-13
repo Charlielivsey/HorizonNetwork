@@ -8,6 +8,7 @@ const ORIGIN = 'https://auth.hngroup.org.uk';
 // Registered applications: fixed callbacks and who may use them.
 const CLIENTS = {
   status: { name: 'Status administration', callback: 'https://status.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage status.' },
+  website: { name: 'HN Group website configuration', callback: 'https://hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can configure the website.' },
   portal: { name: 'Staff portal', callback: 'https://staff.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use the staff portal.' },
 };
 const HEX = /^[a-f0-9]{64}$/;
@@ -91,8 +92,8 @@ const server = http.createServer(async (req, res) => {
       if (req.method !== 'POST') return send(res, 405, { error: 'POST required.' });
       if (!service(req)) return send(res, 401, { error: 'Client not authenticated.' });
       const data = await body(req); let token = data.session;
-      // Status keeps its long-lived Auth session; other applications exchange the code once.
-      const clientId = route === '/api/sso/exchange' && data.client_id ? data.client_id : 'status';
+      // Status and website keep live Auth sessions; the portal starts its own staff session.
+      const clientId = data.client_id || 'status';
       if (!Object.hasOwn(CLIENTS, clientId)) return send(res, 400, { error: 'Unknown application.' });
       if (route === '/api/sso/exchange') {
         const grant = codes.get(data.code); codes.delete(data.code);
@@ -101,7 +102,7 @@ const server = http.createServer(async (req, res) => {
       } else if (!['/api/sso/session','/api/sso/avatar'].includes(route)) return send(res, 404, { error: 'Not found.' });
       const entry = HEX.test(token || '') && sessions.get(token), user = await profile(entry);
       if (!CLIENTS[clientId].allowed(user)) throw fail(403, CLIENTS[clientId].denied);
-      if (clientId !== 'status') {
+      if (clientId === 'portal') {
         // The application starts its own session; this Auth sign-in has done its job.
         sessions.delete(token);
         return send(res, 200, { user, staffSession: entry.staffSession });

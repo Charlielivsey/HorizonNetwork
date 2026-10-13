@@ -7,6 +7,7 @@ const APPS = {
   status: { name: 'Status administration', short: 'Status', allowed: user => user.statusAdminAllowed,
     granted: 'You have permission to manage services and publish incident updates.',
     restricted: 'Only the system owner and Super Admin members can manage status. Contact your system owner if you need access.' },
+  website: { name: 'HN Group website configuration', short: 'website configuration', allowed: user => user.statusAdminAllowed, granted: 'You can manage the HN Group website and maintenance mode.', restricted: 'Only the system owner and Super Admin members can configure this website.' },
   portal: { name: 'Staff portal', short: 'the staff portal', allowed: () => true,
     granted: 'Your staff portal account is ready.', restricted: '' },
 };

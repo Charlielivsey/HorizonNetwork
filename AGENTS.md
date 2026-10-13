@@ -8,3 +8,5 @@
 - Provide a single-line VPS update/install command when delivering website changes.
 
 - Auth must end the browser session on refresh, matching the staff portal. Keep PIN entry masked; use the six-box HN design with smooth transitions and reduced-motion support. Completing six digits verifies automatically once; successful application sign-ins return automatically to the registered site. Status shows the signed-in user’s profile privately.
+
+- The main website has a protected configuration panel at /admin for the system owner and Super Admin members, using HN Group Auth. Maintenance must hide all public pages and public APIs while retaining Auth login and protected configuration access. Preserve maintenance settings across deployments and default new installations to off. Use hngroup-site/install-admin.sh for isolated updates to this feature.
