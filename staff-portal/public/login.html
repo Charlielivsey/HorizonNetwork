@@ -52,7 +52,7 @@
                         <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
                     </button>
                     <h1>Welcome back</h1>
-                    <p class="muted">Sign in with your work email address.</p>
+                    <p class="muted" id="login-sub">Sign in with your work email address.</p>
 
                     <form id="login-form" novalidate>
                         <label for="username">Email</label>
@@ -76,6 +76,14 @@
                             <span class="spinner" aria-hidden="true"></span>
                         </button>
                     </form>
+
+                    <div id="auth-signin" hidden>
+                        <div class="form-error" id="auth-error" role="alert" hidden></div>
+                        <a href="/auth/start" class="btn btn-primary btn-block btn-login" id="auth-btn">
+                            <span class="btn-label">Sign in with HN Group Auth</span>
+                            <svg class="icon btn-arrow" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+                        </a>
+                    </div>
                 </div>
 
                 <div id="step-code" class="login-step" hidden>

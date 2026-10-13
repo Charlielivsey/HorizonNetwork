@@ -2,10 +2,10 @@
 
 The public website for HN Group: who we are, the four Horizon companies, open jobs and a contact form.
 
-- **Plain files.** It's HTML, CSS and a little JavaScript in `public/`, with no build step and nothing to install. nginx serves the files straight from `/var/www/hngroup`.
+- **Website service.** Public HTML, CSS and JavaScript remain in `public/` with no build step. nginx passes requests to the dedicated PM2 service `hn-website` on loopback port 3500, which serves `/var/www/hngroup` and enforces maintenance mode.
 - **Light and dark.** It follows the visitor's light or dark setting and works on phones.
 - **Brand.** It uses the brand font (Plus Jakarta Sans), the HN Group colours and the company logos from the staff portal.
-- **No tracking.** There are no cookies, analytics or third-party scripts, and every file comes from our own server.
+- **No tracking.** There are no analytics or third-party scripts. Public browsing sets no cookies; administrator sign-in uses Secure, HttpOnly host-only authentication cookies. Every asset is served locally.
 
 ## What's on it
 
@@ -116,3 +116,21 @@ cd /root/HorizonNetwork && git pull && sudo bash staff-portal/install.sh
 | `nginx/hngroup-cloudflare.conf` | Gets visitors' real IP addresses from Cloudflare (used for spam limits). |
 | `check.sh` | Checks what the domain really serves and says what to fix. |
 | `install.sh` | The installer described above. |
+
+## Website configuration and maintenance
+
+Use **Admin access** in the footer, or `https://hngroup.org.uk/admin`. Sign-in runs through HN Group Auth using the existing staff password/PIN and returns automatically. Only the system owner and exact Super Admin role members are authorised; permissions, account state and session validity are checked on every protected request. Other roles with broad system permissions are not sufficient.
+
+The maintenance switch replaces every public page with a branded 503 maintenance page. Direct page URLs, original site assets, jobs, applications and enquiries are blocked too. Dedicated maintenance assets, Auth login/callback, the protected configuration panel and certificate challenges stay available. Administrators can sign in from the maintenance page to restore the website. The switch affects only hngroup.org.uk, and never the staff, Auth or Status sites. The initial setting is off. Settings are saved atomically in `/var/lib/hn-website/settings.json`, survive updates/restarts, and default to maintenance if an existing settings file is corrupt.
+
+For this existing VPS, update with:
+
+```bash
+cd /root/HorizonNetwork && git pull && sudo bash hngroup-site/install-admin.sh
+```
+
+This isolated updater installs the website service and registered Auth client, copies public assets, and updates only `/etc/nginx/snippets/hngroup-site.conf`. It preserves the main site's existing SSL and host configuration and other sites' nginx configurations. The original full installer also invokes this helper after initial website/SSL setup. It never enables maintenance during installation or overwrites saved settings. PM2 startup/save provide reboot recovery.
+
+Verification: `node --test hngroup-site/test.cjs auth-site/test.cjs auth-site/portal-auth.test.cjs status-site/test.cjs`. Coverage includes fixed callbacks, permission denial/removal, CSRF, persistent maintenance, content/API gating, admin access during maintenance and unchanged public CV metadata/body forwarding.
+
+Optional browser regression: `node hngroup-site/browser-smoke.cjs` with Playwright/Chromium installed (or `PLAYWRIGHT_MODULE` pointing to an existing module). It uses temporary staff data and a local HTTPS proxy to check the real main-site → Auth/password/PIN → configuration flow, maintenance and restoration, maintenance login and mobile layouts. No production accounts or settings are changed.

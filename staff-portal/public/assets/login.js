@@ -12,6 +12,19 @@
     const toggle = document.getElementById("toggle-pw");
     const boxes = Array.prototype.slice.call(document.querySelectorAll("#code-boxes input"));
     let challenge = null;
+    // Only the fixed local status authorization route is an allowed return destination.
+    const requestedNext = new URLSearchParams(window.location.search).get("next") || "";
+    const nextPage = /^\/status-admin\/authorize\?state=[a-f0-9]{64}$/.test(requestedNext) ? requestedNext : "/home";
+    // With HN Group Auth installed, new sign-ins go through auth.hngroup.org.uk; "Resume session" stays here.
+    let useAuth = false;
+    let authProblem = null;
+    const authStart = "/auth/start" + (nextPage !== "/home" ? "?next=" + encodeURIComponent(nextPage) : "");
+    const AUTH_ERRORS = {
+        denied: "This account can't use the staff portal. Contact the IT team if you think that's wrong.",
+        expired: "That sign-in didn't finish. Please try again.",
+        unavailable: "HN Group Auth isn't responding. Please try again in a moment.",
+    };
+    function goToAuth() { window.location.href = authStart; }
 
     toggle.addEventListener("click", function () {
         const show = password.type === "password";
@@ -41,7 +54,7 @@
         button.classList.add("done");
         button.querySelector(".btn-label").textContent = "Welcome";
         document.body.classList.add("leaving");
-        setTimeout(function () { window.location.href = "/home"; }, 350);
+        setTimeout(function () { window.location.href = nextPage; }, 350);
     }
 
     function showStep(step) {
@@ -50,6 +63,7 @@
         stepMaint.hidden = step !== "maint";
         ({ code: stepCode, maint: stepMaint, password: stepPassword })[step].classList.add("step-enter");
         if (step === "maint") return;
+        if (step === "password" && useAuth) return document.getElementById("auth-btn").focus();
         if (step === "code") {
             boxes.forEach(function (b) { b.value = ""; b.classList.remove("filled"); });
             boxes[0].focus();
@@ -161,7 +175,7 @@
                 if (codeMode === "resume") forgetLocally();
                 setCodeMode("code");
                 showStep("password");
-                showError("login-error", friendly(err));
+                showError(useAuth ? "auth-error" : "login-error", friendly(err));
             } else {
                 showError("code-error", friendly(err));
                 boxes.forEach(function (b) { b.value = ""; b.classList.remove("filled"); });
@@ -171,6 +185,7 @@
     });
 
     document.getElementById("code-back").addEventListener("click", function () {
+        if (useAuth) return goToAuth();
         challenge = null;
         document.getElementById("code-error").hidden = true;
         setCodeMode("code");
@@ -253,13 +268,31 @@
             document.getElementById("resume-avatar").innerHTML = avatarHtml(r);
             document.getElementById("offer-name").textContent = r.displayName;
             document.getElementById("resume-offer").hidden = false;
-            startResume();
+            // After a failed Auth sign-in, show what went wrong first; the resume card is still there.
+            if (!new URLSearchParams(window.location.search).get("auth_error")) startResume();
         }
     })();
 
     // On load: is the portal in maintenance mode (show a banner, or the full message if we were sent
     // here by it)?
     (async function () {
+        try {
+            useAuth = !!(await (await fetch("/api/login/options")).json()).auth;
+        } catch (e) { /* ignore: keep the portal's own form */ }
+        if (useAuth) {
+            form.hidden = true;
+            document.getElementById("login-sub").textContent = "Sign in with your HN Group account.";
+            document.getElementById("auth-btn").href = authStart;
+            document.getElementById("auth-signin").hidden = false;
+            authProblem = new URLSearchParams(window.location.search).get("auth_error");
+            const problem = authProblem;
+            if (problem) {
+                const box = document.getElementById("auth-error");
+                box.textContent = AUTH_ERRORS[problem] || AUTH_ERRORS.expired;
+                box.hidden = false;
+                try { history.replaceState(null, "", "/login"); } catch (e) { /* ignore */ }
+            }
+        }
         try {
             const m = await (await fetch("/api/maintenance")).json();
             if (m.on) {

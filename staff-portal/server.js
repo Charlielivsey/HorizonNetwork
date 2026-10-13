@@ -43,6 +43,8 @@ const oncall = require("./lib/oncall");
 const security = require("./lib/security");
 const enquiries = require("./lib/enquiries");
 const retention = require("./lib/retention");
+const { createStatusSso, loginNext, serviceRequest } = require("./lib/status-sso");
+const portalAuthLib = require("./lib/portal-auth");
 
 const PORT = parseInt(process.env.PORT || "3200", 10);
 const HOST = process.env.HOST || "127.0.0.1";
@@ -512,7 +514,8 @@ function completeLogin(req, res, person, how) {
   logEvent(req, null, "signed-in", { actor: store.loginName(person), detail: how || undefined, ua: String(req.headers["user-agent"] || "").slice(0, 300) });
   const cookies = [cookieFor(req, token)];
   // Remember this browser for "Resume session" (only for people with a sign-in code, which it asks for).
-  if (store.hasCode(person)) cookies.push(resume.cookie(req, resume.issue(person.id, parseCookies(req)[resume.COOKIE], req.headers["user-agent"])));
+  // Auth explicitly requests a separate remembered token for its own browser cookie.
+  if (store.hasCode(person) && (!serviceRequest(req) || req.headers["x-auth-remember"] === "1")) cookies.push(resume.cookie(req, resume.issue(person.id, parseCookies(req)[resume.COOKIE], req.headers["user-agent"])));
   sendJson(res, 200, { user: store.meView(person) }, { "Set-Cookie": cookies });
 }
 
@@ -2111,9 +2114,16 @@ extraRoutes.init({
 
 // ---------- Routing ----------
 
+const statusSso = createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent });
+const portalAuth = portalAuthLib.createPortalAuth({ store, sessions, resume, createSession, cookieFor, parseCookies, send, redirect, logEvent, loginNext, clientIp });
+
 async function route(req, res) {
   const pathname = new URL(req.url, "http://localhost").pathname;
   const session = getSession(req);
+
+  if (await statusSso(req, res, pathname, session)) return;
+  if (await portalAuth(req, res, pathname)) return;
+  if (pathname === "/api/login/options") return sendJson(res, 200, { auth: portalAuthLib.enabled() });
 
   if (pathname.startsWith("/api/")) return routeApi(req, res, pathname, session);
 
@@ -2125,10 +2135,17 @@ async function route(req, res) {
   if (pathname === "/" || pathname === "/dashboard") return redirect(res, session ? "/home" : "/login");
 
   if (pathname === "/login") {
+    const next = loginNext(new URL(req.url, "http://localhost").searchParams.get("next"));
     // Opening the sign-in page always ends any existing sign-in.
     if (session) {
       sessions.delete(session.token);
-      return send(res, 302, "", { Location: "/login", "Cache-Control": "no-store", "Set-Cookie": sessionCookie(req, "", 0) });
+      return send(res, 302, "", { Location: "/login" + (next ? "?next=" + encodeURIComponent(next) : ""), "Cache-Control": "no-store", "Set-Cookie": sessionCookie(req, "", 0) });
+    }
+    // With HN Group Auth installed, signing in happens on auth.hngroup.org.uk. This page is only
+    // shown to offer "Resume session", or to explain why the Auth sign-in didn't complete.
+    const params = new URL(req.url, "http://localhost").searchParams;
+    if (portalAuthLib.enabled() && !resumePerson(req).person && !params.has("maintenance") && !params.has("auth_error")) {
+      return redirect(res, "/auth/start" + (next ? "?next=" + encodeURIComponent(next) : ""));
     }
     return sendLoginPage(req, res);
   }
