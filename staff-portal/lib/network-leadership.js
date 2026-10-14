@@ -10,6 +10,6 @@ function members(store) {
 }
 // "About me" is published too, unless the person has unticked "Show on the Horizon Network website".
 function publicMembers(store) {
-  return members(store).map(person => ({name:person.displayName,jobTitle:networkRole(person).jobTitle || '',bio:person.bioPublic === false ? '' : String(person.bio || ''),avatarUrl:store.avatarFile(person)?'/api/leadership/avatar/'+person.id:null}));
+  return members(store).map(person => ({name:person.displayName,jobTitle:networkRole(person).jobTitle || '',phone:person.phone || '',location:person.location || '',timezone:person.timezone || '',skills:person.skills || [],languages:person.languages || [],bio:person.bioPublic === false ? '' : String(person.bio || ''),avatarUrl:store.avatarFile(person)?'/api/leadership/avatar/'+person.id:null}));
 }
 module.exports={networkRole,members,publicMembers};

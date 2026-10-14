@@ -315,3 +315,12 @@ dialog.apply::backdrop { background: rgba(14, 16, 32, 0.6); backdrop-filter: blu
 .leader-bio{font-size:.9rem;line-height:1.6;color:var(--text);margin:0 0 22px;overflow-wrap:anywhere}
 .leader-bio p{margin:0 0 .6em}
 .leader-bio p:last-child{margin-bottom:0}
+
+/* Profile information explicitly selected for the public leadership cards. */
+.leader-details{margin:0 0 22px;padding-top:18px;border-top:1px solid var(--border);display:grid;gap:14px}
+.leader-details>div{display:grid;gap:3px}.leader-details dt,.leader-tag-group h4{font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin:0}
+.leader-details dd{margin:0;font-size:.85rem;line-height:1.55;overflow-wrap:anywhere;color:var(--text)}
+.leader-details a{color:var(--accent);text-decoration:none}.leader-details a:hover{text-decoration:underline}
+.leader-tags{display:grid;gap:18px;margin-bottom:24px}.leader-tag-group ul{list-style:none;padding:0;margin:9px 0 0;display:flex;flex-wrap:wrap;gap:6px}
+.leader-tag-group li{max-width:100%;overflow-wrap:anywhere;font-size:.72rem;line-height:1.5;padding:5px 9px;border-radius:8px;background:var(--accent-soft);color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 12%,transparent)}
+.leader-bio p{white-space:pre-line}

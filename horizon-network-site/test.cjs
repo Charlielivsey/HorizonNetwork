@@ -9,7 +9,7 @@ test('live public leadership matches Network company and department on the same 
  const wrongCompany=person('Media','Horizon Media Group','Network Leadership');
  person('Engineer','Horizon Network','Engineering');
  person('Split','Horizon Network','Engineering',[{company:'Horizon Advertising',department:'Network Leadership',jobTitle:'Ads lead'}]);
- store.updateOwnProfile(leader,{displayName:'Network Example',bio:'Leads the network.\n\nLoves cycling.'});
+ store.updateOwnProfile(leader,{displayName:'Network Example',bio:'Leads the network.\n\nLoves cycling.',phone:'+44 20 7946 0958',location:'Doncaster, United Kingdom',timezone:'Europe/London',skills:'Software, Leadership',languages:'English, BSL'});
  store.updateOwnProfile(shared,{displayName:'Shared Example',bio:'Private intro.',bioPublic:false});
  const image='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6zSsAAAAASUVORK5CYII=';
  store.saveAvatar(leader,'data:image/png;base64,'+image);store.saveAvatar(wrongCompany,'data:image/png;base64,'+image);
@@ -24,8 +24,14 @@ test('live public leadership matches Network company and department on the same 
   const data=await (await fetch(base+'/api/leadership')).json();assert.equal(data.leaders.length,2);
   assert.deepEqual(data.leaders.map(p=>p.name),['Network Example','Shared Example']);
   assert.equal(data.leaders[1].jobTitle,'Network director');
-  assert.deepEqual(Object.keys(data.leaders[0]).sort(),['avatarUrl','bio','jobTitle','name']);
+  assert.deepEqual(Object.keys(data.leaders[0]).sort(),['avatarUrl','bio','jobTitle','languages','location','name','phone','skills','timezone']);
   assert.equal(data.leaders[0].bio,'Leads the network.\n\nLoves cycling.');
+  assert.equal(data.leaders[0].phone,'+44 20 7946 0958');
+  assert.equal(data.leaders[0].location,'Doncaster, United Kingdom');
+  assert.equal(data.leaders[0].timezone,'Europe/London');
+  assert.deepEqual(data.leaders[0].skills,['Software','Leadership']);
+  assert.deepEqual(data.leaders[0].languages,['English','BSL']);
+  assert.equal(data.leaders[1].phone,'');
   assert.equal(data.leaders[1].bio,'','About me stays off the website when the person unticks it');
   assert.ok(!JSON.stringify(data).includes('@'));
   const avatar=await fetch(base+data.leaders[0].avatarUrl);assert.equal(avatar.status,200);assert.deepEqual(Buffer.from(await avatar.arrayBuffer()),Buffer.from(image,'base64'));

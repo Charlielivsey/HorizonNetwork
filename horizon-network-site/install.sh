@@ -135,7 +135,7 @@ if systemctl list-unit-files certbot.timer --no-legend 2>/dev/null | grep -q cer
 fi
 echo "Horizon Network: https://$DOMAIN"
 echo 'PM2 process: hn-network (port 3600, loopback only)'
-echo 'Live Network Leadership from staff records; only public names, Network job titles and photos.'
+echo 'Live Network Leadership profiles from selected staff records.'
 if [ "$HTTPS_OK" != 1 ]; then
     echo 'Trusted public HTTPS could not be verified. Check root and www DNS/Cloudflare settings, then rerun.'
     exit 1

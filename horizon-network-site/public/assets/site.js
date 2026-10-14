@@ -224,10 +224,31 @@
             // "About me" from their staff profile (plain text; line breaks become paragraphs).
             const bio = document.createElement('div'); bio.className = 'leader-bio';
             String(person.bio || '').split(/\n{2,}/).map(t => t.trim()).filter(Boolean).forEach(t => { const para = document.createElement('p'); para.textContent = t; bio.append(para); });
+            const details = document.createElement('dl'); details.className = 'leader-details';
+            [['Phone', person.phone], ['Location', person.location], ['Time zone', person.timezone]].forEach(([label, value]) => {
+                if (!value) return;
+                const row = document.createElement('div');
+                const term = document.createElement('dt'); term.textContent = label;
+                const description = document.createElement('dd');
+                const telephone = String(value).replace(/[^+0-9]/g, '');
+                if (label === 'Phone' && /^\+?[0-9]+$/.test(telephone)) {
+                    const link = document.createElement('a'); link.href = 'tel:' + telephone; link.textContent = value; description.append(link);
+                } else description.textContent = value;
+                row.append(term, description); details.append(row);
+            });
+            const tags = document.createElement('div'); tags.className = 'leader-tags';
+            [['Skills', person.skills], ['Languages', person.languages]].forEach(([label, values]) => {
+                if (!Array.isArray(values) || !values.length) return;
+                const group = document.createElement('div'); group.className = 'leader-tag-group';
+                const heading = document.createElement('h4'); heading.textContent = label;
+                const list = document.createElement('ul');
+                values.forEach(value => { const item = document.createElement('li'); item.textContent = value; list.append(item); });
+                group.append(heading, list); tags.append(group);
+            });
             const footer = document.createElement('div'); footer.className = 'leader-footer';
             const dot = document.createElement('span'); dot.className = 'leader-team-dot'; dot.setAttribute('aria-hidden', 'true');
             const label = document.createElement('span'); label.textContent = 'Network leadership';
-            footer.append(dot, label); body.append(portrait, name, job); if (bio.childElementCount) { job.classList.add('has-bio'); body.append(bio); } body.append(footer); card.append(banner, body); target.append(card);
+            footer.append(dot, label); body.append(portrait, name, job); if (bio.childElementCount) { job.classList.add('has-bio'); body.append(bio); } if (details.childElementCount) body.append(details); if (tags.childElementCount) body.append(tags); body.append(footer); card.append(banner, body); target.append(card);
             if (observer) { card.classList.add('leader-awaiting'); observer.observe(card); }
         });
     } catch {
