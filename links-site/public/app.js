@@ -1,0 +1,6 @@
+'use strict';
+const search=document.getElementById('search'),cards=[...document.querySelectorAll('.link-card')],buttons=[...document.querySelectorAll('[data-filter]')];let selected='all';
+function filter(){const query=search.value.trim().toLocaleLowerCase();let count=0;for(const card of cards){const matches=(selected==='all'||card.dataset.category===selected)&&card.textContent.toLocaleLowerCase().includes(query);card.hidden=!matches;if(matches)count++;}document.getElementById('count').textContent=count+' '+(count===1?'destination':'destinations');document.getElementById('empty').hidden=count!==0;}
+buttons.forEach(button=>button.addEventListener('click',()=>{selected=button.dataset.filter;buttons.forEach(b=>b.setAttribute('aria-pressed',String(b===button)));filter();}));search.addEventListener('input',filter);
+document.getElementById('reset').onclick=()=>{search.value='';buttons[0].click();search.focus();};document.addEventListener('keydown',event=>{if(event.key==='/'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)&&!document.activeElement.isContentEditable){event.preventDefault();search.focus();}if(event.key==='Escape'&&document.activeElement===search){search.value='';filter();}});
+document.getElementById('year').textContent=new Date().getFullYear();filter();

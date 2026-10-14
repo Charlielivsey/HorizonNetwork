@@ -24,3 +24,5 @@
 - Horizon Network footer descriptions and copyright identify it as “A subsidiary of HN Group Limited”. Desktop leadership cards adjust their column count to the live team size so they fit one row; preserve readable layouts on smaller screens.
 
 - Auth must enforce account setup on direct visits as well as application sign-ins: temporary passwords from new accounts/resets require replacement, and missing PINs require masked six-digit setup/confirmation. Normal permanent-password/existing-PIN accounts skip setup. Delegate validation and changes to the existing staff handlers; do not issue application access before setup is complete. Show the profile photo on the remembered-account offer as well as the PIN screen, falling back to initials.
+
+- HN Group Links is the branded public directory at links.hngroup.org.uk (PM2 hn-links, port 3700). Use approved company logos and preserve the Network/Advertising/Development hierarchy. It links to existing companies and services, offers local search and filters, and uses its own isolated links-site/install.sh without restarting other services.

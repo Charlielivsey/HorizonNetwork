@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://links.hngroup.org.uk/sitemap.xml

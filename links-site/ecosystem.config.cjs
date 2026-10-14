@@ -1,0 +1,1 @@
+module.exports={apps:[{name:'hn-links',script:'/opt/hn-links/server.js',cwd:'/opt/hn-links',instances:1,exec_mode:'fork',autorestart:true,max_memory_restart:'128M',env:{NODE_ENV:'production',PORT:3700}}]};
