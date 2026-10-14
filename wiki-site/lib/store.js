@@ -1,6 +1,7 @@
 'use strict';
 // Wiki pages and their full revision history, kept in DATA_DIR/pages.json. Articles in seed/ are
-// added the first time they're missing; after that, edits on the wiki are never overwritten.
+// added the first time they're missing. A starting article nobody has edited yet is refreshed when its
+// seed changes; once someone edits it on the wiki, it is never overwritten.
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
@@ -35,8 +36,19 @@ function seed(dir) {
     const meta = {};
     for (const line of raw.slice(0, split).split('\n')) { const m = /^(\w+):\s*(.*)$/.exec(line); if (m) meta[m[1]] = m[2].trim(); }
     const title = normaliseTitle(meta.title);
-    if (!title || data.seeded[key(title)] || get(title)) { if (title) data.seeded[key(title)] = true; continue; }
-    create(title, raw.slice(split + 5).trim() + '\n', { name: 'HN Group Wiki', id: 'system' }, 'Initial article', { protected: meta.protected === 'yes' });
+    const text = raw.slice(split + 5).trim() + '\n';
+    const existing = title && get(title);
+    if (existing) {
+      const last = latest(existing);
+      if (last.author && last.author.id === 'system' && last.text !== text) {
+        addRevision(existing, text, { name: 'HN Group Wiki', id: 'system' }, 'Updated article');
+        changed = true;
+      }
+      data.seeded[key(title)] = true;
+      continue;
+    }
+    if (!title || data.seeded[key(title)]) continue;
+    create(title, text, { name: 'HN Group Wiki', id: 'system' }, 'Initial article', { protected: meta.protected === 'yes' });
     data.seeded[key(title)] = true;
     changed = true;
   }

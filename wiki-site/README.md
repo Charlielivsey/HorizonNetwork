@@ -4,7 +4,7 @@ A Wikipedia-style encyclopedia of HN Group and its companies, in the HN Group br
 
 ## What's on it
 
-- **Company articles, pre-filled.** HN Group, Horizon Network, Horizon Advertising, Horizon Development, Horizon Media Group and Horizon Holding Co, plus a List of HN Group companies. Each has an infobox with the company's logo, its place in the group, sections, references to the group's public websites and categories.
+- **Company articles, pre-filled.** HN Group, Horizon Network, Horizon Advertising, Horizon Development, Horizon Media Group and Horizon Holding Co, plus a List of HN Group companies. Each has an infobox with the company's logo, its place in the group, its staff email domain, sections, references to the group's public websites and categories.
   - **Horizon Advertising's ownership.** It is shown as a subsidiary of Horizon Media Group that is managed by Horizon Network.
   - **Companies only.** As requested, there are no articles about the websites or online services yet.
   - **Facts only.** Articles only state what the group's public websites and brand guide say. Nothing about dates, figures or people has been invented; Horizon Holding Co's role isn't documented, so its article is a stub that says so.
@@ -33,7 +33,7 @@ A Wikipedia-style encyclopedia of HN Group and its companies, in the HN Group br
 ## Content and data
 
 - **Stored pages.** Pages and their full history live in `/var/lib/hn-wiki/pages.json`. Reinstalling or updating never touches them.
-- **Starting articles.** The articles in `seed/` are added only when a page with that title doesn't exist yet. Edits made on the wiki are never overwritten, and pages an administrator deleted don't come back.
+- **Starting articles.** The articles in `seed/` are added when a page with that title doesn't exist yet. If a starting article changes in an update and nobody has edited that page on the wiki, the page gets the new version as a new history entry. Edits made on the wiki are never overwritten, and pages an administrator deleted don't come back.
 - **Page format.** Articles use simple wikitext: `== Heading ==`, `'''bold'''`, `[[Links]]`, `[https://… text]`, `<ref>…</ref>`, `{{Infobox …}}` and `[[Category:…]]`. See `Help:Editing` on the wiki.
 
 ## Install / update

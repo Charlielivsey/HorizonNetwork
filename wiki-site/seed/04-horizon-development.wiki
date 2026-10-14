@@ -5,9 +5,9 @@ title: Horizon Development
 | logo = horizon-development-logo.svg
 | Type = Part of [[Horizon Network]]
 | Parent = [[Horizon Network]]
-| Ultimate parent = [[HN Group]]
 | Industry = Software development
 | Services = Web applications<br>Custom software<br>From concept to deployment
+| Email domain = hngroup.org.uk
 | Brand colour = {{Swatch|#5514B4}}Indigo <code>#5514B4</code>
 | Website = [https://horizon-network.co.uk/services horizon-network.co.uk/services]
 }}

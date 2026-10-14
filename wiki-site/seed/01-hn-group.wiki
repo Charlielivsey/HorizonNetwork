@@ -7,9 +7,8 @@ title: HN Group
 | Type = Parent company
 | Industry = Digital infrastructure<br>Advertising<br>Software development<br>Media
 | Subsidiaries = [[Horizon Network]]<br>[[Horizon Media Group]]
-| Part of Horizon Network = [[Horizon Development]]
-| Subsidiary of Horizon Media Group = [[Horizon Advertising]] (managed by Horizon Network)
 | Country = United Kingdom
+| Email domain = hngroup.org.uk
 | Website = [https://hngroup.org.uk hngroup.org.uk]
 }}
 '''HN Group''' (legally '''HN Group Limited''') is the parent company of the Horizon businesses: [[Horizon Network]] and [[Horizon Media Group]]. [[Horizon Development]] is part of Horizon Network, and [[Horizon Advertising]] is a subsidiary of Horizon Media Group that is managed by Horizon Network.<ref>[https://hngroup.org.uk/about About HN Group], hngroup.org.uk.</ref> Together the companies cover what a modern business needs online: the infrastructure it runs on, the software it uses, the advertising that brings customers in and the media that tells its story.

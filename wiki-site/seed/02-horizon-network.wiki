@@ -4,12 +4,11 @@ title: Horizon Network
 | name = Horizon Network
 | logo = horizon-network-wordmark.svg
 | Type = Subsidiary
-| Parent = [[HN Group]] (HN Group Limited)
 | Industry = Digital infrastructure<br>Advertising<br>Software development
 | Divisions = [[Horizon Development]]
-| Manages = [[Horizon Advertising]] (a [[Horizon Media Group]] subsidiary)
 | Products = Horizon Hosting (coming soon)
 | Country = United Kingdom
+| Email domain = horizon-network.co.uk
 | Website = [https://horizon-network.co.uk horizon-network.co.uk]<br>[https://horizonetwork.com horizonetwork.com]
 }}
 '''Horizon Network''' is the [[HN Group]] business for digital infrastructure, advertising and software. It brings together its own digital services and infrastructure with [[Horizon Development]], which is part of Horizon Network, and [[Horizon Advertising]], a [[Horizon Media Group]] subsidiary that Horizon Network manages.<ref>[https://horizon-network.co.uk/ Horizon Network], horizon-network.co.uk.</ref> Its websites describe it as "a subsidiary of HN Group Limited".

@@ -5,6 +5,7 @@ title: Horizon Holding Co
 | name = Horizon Holding Co
 | logo = horizon-holding-co-logo.svg
 | Type = Not yet documented
+| Email domain = Not yet documented
 }}
 '''Horizon Holding Co''' is a company name in the [[HN Group#Brand|HN Group brand library]], which includes an approved logo, roundel and app icon for it. Its role within [[HN Group]] has not yet been documented on this wiki.
 

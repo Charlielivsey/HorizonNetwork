@@ -179,3 +179,23 @@ test('HN Group Wiki: reading, editing, history, protection and safety', async ()
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('HN Group Wiki: seed updates refresh unedited articles only', () => {
+  const store = require('./lib/store');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-wiki-seed-'));
+  const seedDir = path.join(dir, 'seed'), dataDir = path.join(dir, 'data');
+  fs.mkdirSync(seedDir);
+  const write = (name, title, text) => fs.writeFileSync(path.join(seedDir, name), 'title: ' + title + '\n---\n' + text + '\n');
+  try {
+    write('a.wiki', 'Alpha', 'First'); write('b.wiki', 'Beta', 'First');
+    store.init(dataDir, seedDir);
+    store.edit('Beta', 'Edited by staff\n', { id: 's1', name: 'Staff' }, '', store.latest(store.get('Beta')).id);
+    write('a.wiki', 'Alpha', 'Second'); write('b.wiki', 'Beta', 'Second');
+    store.init(dataDir, seedDir);
+    assert.equal(store.latest(store.get('Alpha')).text, 'Second\n');
+    assert.equal(store.get('Alpha').revisions.length, 2);
+    assert.equal(store.latest(store.get('Beta')).text, 'Edited by staff\n');
+    store.init(dataDir, seedDir);
+    assert.equal(store.get('Alpha').revisions.length, 2, 'no duplicate revision when unchanged');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});

@@ -6,9 +6,9 @@ title: Horizon Advertising
 | Type = Subsidiary
 | Parent = [[Horizon Media Group]]
 | Managed by = [[Horizon Network]]
-| Ultimate parent = [[HN Group]]
 | Industry = Digital advertising
 | Services = Display advertising<br>Campaign management<br>Analytics and reporting
+| Email domain = horizonadvertising.co.uk
 | Brand colour = {{Swatch|#7B52C4}}Lavender <code>#7B52C4</code>
 | Website = [https://horizonadvertising.co.uk horizonadvertising.co.uk]
 }}
