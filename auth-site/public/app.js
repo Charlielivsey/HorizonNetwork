@@ -11,6 +11,7 @@ const APPS = {
   website: { name: 'HN Group website configuration', short: 'website configuration', allowed: user => user.statusAdminAllowed, granted: 'You can manage the HN Group website and maintenance mode.', restricted: 'Only the system owner and Super Admin members can configure this website.' },
   portal: { name: 'Staff portal', short: 'the staff portal', allowed: () => true,
     granted: 'Your staff portal account is ready.', restricted: '' },
+  wiki: { name: 'HN Group Wiki', short: 'the wiki', allowed: () => true, granted: 'You can edit HN Group Wiki articles.', restricted: '' },
 };
 const app = Object.prototype.hasOwnProperty.call(APPS, client) ? APPS[client] : null;
 const connecting = !!app && /^[a-f0-9]{64}$/.test(state || '');

@@ -1,0 +1,55 @@
+title: Horizon Advertising
+---
+{{Infobox
+| name = Horizon Advertising
+| logo = horizon-advertising-logo.svg
+| Type = Subsidiary
+| Parent = [[Horizon Media Group]]
+| Managed by = [[Horizon Network]]
+| Ultimate parent = [[HN Group]]
+| Industry = Digital advertising
+| Services = Display advertising<br>Campaign management<br>Analytics and reporting
+| Brand colour = {{Swatch|#7B52C4}}Lavender <code>#7B52C4</code>
+| Website = [https://horizonadvertising.co.uk horizonadvertising.co.uk]
+}}
+'''Horizon Advertising''' provides digital advertising solutions powered by [[Horizon Network]]. It is a subsidiary of [[Horizon Media Group]], but is managed by Horizon Network. It focuses on reaching audiences with precision and scale, with measurable results.<ref>[https://hngroup.org.uk/companies Our companies], hngroup.org.uk.</ref>
+
+== Services ==
+* '''Display advertising'''
+* '''Campaign management'''
+* '''Analytics and reporting''' — clear reporting on how campaigns perform
+
+Horizon Advertising works alongside the rest of Horizon Network, so advertising can be combined with the network's digital infrastructure and with software from [[Horizon Development]].<ref>[https://horizon-network.co.uk/services Our services], horizon-network.co.uk.</ref>
+
+== Structure ==
+Horizon Advertising has an unusual position in [[HN Group]]:
+
+* '''Ownership:''' it is a '''subsidiary of [[Horizon Media Group]]''', the group's media business.
+* '''Management:''' it is '''managed by [[Horizon Network]]''', which runs it alongside its digital infrastructure and [[Horizon Development]].
+
+Because Horizon Network manages it, the group's websites list Horizon Advertising among Horizon Network's services. Staff can hold roles at Horizon Advertising and at other group companies at the same time.
+
+* [[HN Group]]
+** [[Horizon Network]]
+*** [[Horizon Development]]
+** [[Horizon Media Group]]
+*** [[Horizon Advertising]] (managed by Horizon Network)
+
+== Brand ==
+[[File:horizon-advertising-roundel.svg|thumb|The Horizon Advertising roundel]]
+Horizon Advertising's logo is a thick ring containing the initials '''HA''', alongside the company name. Unlike the other roundel logos in the group, which are indigo, Horizon Advertising's is '''lavender''' ({{Swatch|#7B52C4}}<code>#7B52C4</code>). The roundel is also used on its own and as an app icon.
+
+== See also ==
+* [[Horizon Media Group]]
+* [[Horizon Network]]
+* [[Horizon Development]]
+* [[HN Group#Brand|HN Group brand]]
+
+== References ==
+{{Reflist}}
+
+== External links ==
+* [https://horizonadvertising.co.uk Official website]
+
+[[Category:Companies]]
+[[Category:Horizon Network]]

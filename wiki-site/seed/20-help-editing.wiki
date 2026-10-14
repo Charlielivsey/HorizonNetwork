@@ -1,0 +1,59 @@
+title: Help:Editing
+---
+{{Hatnote|This page explains how to edit articles on HN Group Wiki.}}
+Any member of HN Group staff can edit HN Group Wiki. Select '''Staff sign in''' at the top of any page and sign in with your staff account, then choose '''Edit''' on the article you want to change. Use '''Show preview''' to check your changes before you publish them, and add a short summary of what you changed.
+
+Every change is kept in the article's '''View history''' tab, so any version can be viewed and restored. Some pages, such as the [[Main Page]], are protected so that only wiki administrators (the system owner and Super Admin members) can change them.
+
+== Formatting ==
+{| class="wikitable"
+! You type !! You get
+|-
+| <code>'''bold'''</code> || '''bold'''
+|-
+| <code>''italic''</code> || ''italic''
+|-
+| <code>[[Horizon Network]]</code> || A link to another article: [[Horizon Network]]
+|-
+| <code>[[Horizon Network|the network]]</code> || A link with different text: [[Horizon Network|the network]]
+|-
+| <code>[[HN Group#Brand|brand]]</code> || A link to a section: [[HN Group#Brand|brand]]
+|-
+| <code>[https://hngroup.org.uk HN Group website]</code> || An external link: [https://hngroup.org.uk HN Group website]
+|-
+| <code>== Heading ==</code> and <code>=== Subheading ===</code> || Section headings (three or more add a contents box)
+|-
+| <code>* item</code> and <code># item</code> || Bulleted and numbered lists (use <code>**</code> to nest)
+|-
+| <code><ref>Source</ref></code> || A numbered reference, listed where <code>{{Reflist}}</code> appears
+|-
+| <code>[[Category:Companies]]</code> || Adds the page to a category
+|-
+| <code>[[File:horizon-network-wordmark.svg|thumb|Caption]]</code> || A logo with a caption, on the right
+|-
+| <code>#REDIRECT [[HN Group]]</code> || Makes the page redirect to another one
+|}
+
+== Infoboxes ==
+Company articles start with an infobox, the summary box on the right:
+<code>{{Infobox</code><br>
+<code>| name = Company name</code><br>
+<code>| logo = horizon-network-wordmark.svg</code><br>
+<code>| Parent = [[HN Group]]</code><br>
+<code>| Website = [https://example.co.uk example.co.uk]</code><br>
+<code>}}</code>
+
+Any <code>| Label = value</code> line becomes a row. Logos are the approved HN Group logo files; the white version is shown automatically in dark mode.
+
+== Other templates ==
+* <code>{{Main|Page}}</code> — "Main article" note under a heading
+* <code>{{Hatnote|text}}</code> — a short italic note at the top of a section
+* <code>{{Stub}}</code> — marks an article that needs expanding
+* <code>{{Swatch|#5514B4}}</code> — a colour swatch
+
+== Good practice ==
+* Write in a neutral, factual tone, like an encyclopedia.
+* Only add information that's accurate and suitable for the public: the wiki can be read by anyone. Don't add personal details, passwords, internal system details or anything confidential.
+* Back up facts with references, such as pages on the group's websites.
+
+[[Category:Help]]

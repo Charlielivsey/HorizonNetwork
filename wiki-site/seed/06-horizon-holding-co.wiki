@@ -1,0 +1,22 @@
+title: Horizon Holding Co
+---
+{{Stub}}
+{{Infobox
+| name = Horizon Holding Co
+| logo = horizon-holding-co-logo.svg
+| Type = Not yet documented
+}}
+'''Horizon Holding Co''' is a company name in the [[HN Group#Brand|HN Group brand library]], which includes an approved logo, roundel and app icon for it. Its role within [[HN Group]] has not yet been documented on this wiki.
+
+Horizon Holding Co is a separate name from HN Group: its logo is not a substitute for the HN Group wordmark.
+
+== Brand ==
+[[File:horizon-holding-co-roundel.svg|thumb|The Horizon Holding Co roundel]]
+Like the other Horizon companies' logos, Horizon Holding Co's logo is a thick indigo ring containing its initials, alongside the company name.
+
+== See also ==
+* [[List of HN Group companies]]
+* [[HN Group#Brand|HN Group brand]]
+
+[[Category:Companies]]
+[[Category:Stubs]]

@@ -1,0 +1,67 @@
+title: Horizon Network
+---
+{{Infobox
+| name = Horizon Network
+| logo = horizon-network-wordmark.svg
+| Type = Subsidiary
+| Parent = [[HN Group]] (HN Group Limited)
+| Industry = Digital infrastructure<br>Advertising<br>Software development
+| Divisions = [[Horizon Development]]
+| Manages = [[Horizon Advertising]] (a [[Horizon Media Group]] subsidiary)
+| Products = Horizon Hosting (coming soon)
+| Country = United Kingdom
+| Website = [https://horizon-network.co.uk horizon-network.co.uk]<br>[https://horizonetwork.com horizonetwork.com]
+}}
+'''Horizon Network''' is the [[HN Group]] business for digital infrastructure, advertising and software. It brings together its own digital services and infrastructure with [[Horizon Development]], which is part of Horizon Network, and [[Horizon Advertising]], a [[Horizon Media Group]] subsidiary that Horizon Network manages.<ref>[https://horizon-network.co.uk/ Horizon Network], horizon-network.co.uk.</ref> Its websites describe it as "a subsidiary of HN Group Limited".
+
+Its tagline is "Connecting ideas. Building what's next." — digital infrastructure, advertising and software, brought together to help businesses build, connect and grow.
+
+== Overview ==
+Horizon Network describes itself as a growing network of digital services and solutions, building the infrastructure for tomorrow's businesses. It is UK based, with 24/7 monitoring and a stated 99.9% uptime for its services. Digital infrastructure is the foundation; advertising helps businesses reach people; development turns ideas into useful software. The network brings them together.<ref>[https://horizon-network.co.uk/services Our services], horizon-network.co.uk.</ref>
+
+== Services ==
+{| class="wikitable"
+! Service !! Provided by !! Includes
+|-
+| Digital infrastructure || Horizon Network || Digital services and the infrastructure behind them; Horizon Hosting (coming soon)
+|-
+| Digital advertising || [[Horizon Advertising]] || Display advertising, campaign management, analytics and reporting
+|-
+| Software development || [[Horizon Development]] || Web applications, custom software, from concept to deployment
+|}
+
+=== Horizon Hosting ===
+Horizon Hosting is Horizon Network's planned hosting service, offering VPS, dedicated servers and managed cloud. It is listed as "coming soon".
+
+== Structure ==
+Horizon Network is part of [[HN Group]], alongside [[Horizon Media Group]]. [[Horizon Development]] is part of Horizon Network. Horizon Network also manages [[Horizon Advertising]], which is a subsidiary of Horizon Media Group. Together they combine specialist skills with the shared people and systems of HN Group.
+
+* [[HN Group]]
+** '''Horizon Network'''
+*** [[Horizon Development]]
+** [[Horizon Media Group]]
+*** [[Horizon Advertising]] (managed by Horizon Network)
+
+== Leadership ==
+The "About us" page of the Horizon Network website introduces the people guiding the network. It is published live from HN Group's staff records and shows staff whose role at Horizon Network is in the '''Network Leadership''' department, with their job title, photo and the introduction they choose to share.<ref>[https://horizon-network.co.uk/about About us], horizon-network.co.uk.</ref>
+
+== Website ==
+Horizon Network's website is at [https://horizon-network.co.uk horizon-network.co.uk], with pages about the company, its services, its leadership and a contact form. The same site is also served at '''horizonetwork.com'''; horizon-network.co.uk remains the main address.
+
+== Brand ==
+[[File:horizon-network-wordmark-stacked.svg|thumb|The stacked Horizon Network wordmark, used where space is tight]]
+Like HN Group, Horizon Network uses a heavy wordmark above a stepped line of the eight [[HN Group#Brand|brand colours]]. A stacked version, with "Horizon" above "Network", is used where space is tight. White versions are used on dark backgrounds.
+
+== See also ==
+* [[HN Group]]
+* [[List of HN Group companies]]
+
+== References ==
+{{Reflist}}
+
+== External links ==
+* [https://horizon-network.co.uk Official website]
+* [https://horizon-network.co.uk/contact Contact Horizon Network]
+
+[[Category:Companies]]
+[[Category:Horizon Network]]

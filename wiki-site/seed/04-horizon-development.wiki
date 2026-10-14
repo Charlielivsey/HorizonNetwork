@@ -1,0 +1,42 @@
+title: Horizon Development
+---
+{{Infobox
+| name = Horizon Development
+| logo = horizon-development-logo.svg
+| Type = Part of [[Horizon Network]]
+| Parent = [[Horizon Network]]
+| Ultimate parent = [[HN Group]]
+| Industry = Software development
+| Services = Web applications<br>Custom software<br>From concept to deployment
+| Brand colour = {{Swatch|#5514B4}}Indigo <code>#5514B4</code>
+| Website = [https://horizon-network.co.uk/services horizon-network.co.uk/services]
+}}
+'''Horizon Development''' builds custom software and web applications, from concept to deployment, using modern technologies. It is part of [[Horizon Network]].<ref>[https://hngroup.org.uk/companies Our companies], hngroup.org.uk.</ref>
+
+== Services ==
+* '''Web applications'''
+* '''Custom software'''
+* '''From concept to deployment''' — taking a project from first idea to launch
+
+Horizon Development turns ideas into useful software. As part of Horizon Network, its work can sit on the network's digital infrastructure and be promoted through [[Horizon Advertising]].<ref>[https://horizon-network.co.uk/services Our services], horizon-network.co.uk.</ref> Enquiries about projects are handled through the Horizon Network and HN Group contact forms.
+
+== Structure ==
+Horizon Development is part of [[Horizon Network]], which is in turn part of [[HN Group]].
+
+== Brand ==
+[[File:horizon-development-roundel.svg|thumb|The Horizon Development roundel]]
+Horizon Development's logo is a thick indigo ring containing the initials '''HD''', alongside the company name. The roundel is also used on its own and as an app icon.
+
+== See also ==
+* [[Horizon Network]]
+* [[Horizon Advertising]]
+
+== References ==
+{{Reflist}}
+
+== External links ==
+* [https://horizon-network.co.uk/services Horizon Network services]
+* [https://horizon-network.co.uk/contact?topic=development Talk to us about a project]
+
+[[Category:Companies]]
+[[Category:Horizon Network]]

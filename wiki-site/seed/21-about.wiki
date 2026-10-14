@@ -1,0 +1,9 @@
+title: HN Group Wiki:About
+---
+'''HN Group Wiki''' is the encyclopedia of [[HN Group]] and its companies. It works like Wikipedia: articles have infoboxes, references and categories, and every change is kept in each page's history.
+
+Anyone can read the wiki. HN Group staff can edit it by signing in with their staff account. To learn how, see [[Help:Editing]].
+
+The wiki is published by HN Group Limited. For questions about its content, use the [https://hngroup.org.uk/contact HN Group contact form].
+
+[[Category:HN Group Wiki]]

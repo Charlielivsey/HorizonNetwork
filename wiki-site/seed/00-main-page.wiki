@@ -1,0 +1,40 @@
+title: Main Page
+protected: yes
+---
+'''HN Group Wiki''' is the encyclopedia of [[HN Group]] and its companies, written and maintained by HN Group staff. It covers the [[List of HN Group companies|companies in the group]], their [[Horizon Network#Services|services]] and their brands.
+
+{{Cards start}}
+{{Company card|HN Group|hn-group-wordmark.svg|The parent company that brings the Horizon businesses together.}}
+{{Company card|Horizon Network|horizon-network-wordmark.svg|Digital infrastructure, advertising and software.}}
+{{Company card|Horizon Advertising|horizon-advertising-logo.svg|Digital advertising. A Horizon Media Group company, managed by Horizon Network.}}
+{{Company card|Horizon Development|horizon-development-logo.svg|Custom software and web applications, part of Horizon Network.}}
+{{Company card|Horizon Media Group|horizon-media-group-logo.svg|The media arm of HN Group.}}
+{{Cards end}}
+
+{{Columns start}}
+{{Box start|From today's featured article|purple}}
+[[File:hn-group-wordmark.svg|thumb|The HN Group wordmark]]
+'''[[HN Group]]''' brings together [[Horizon Network]] and [[Horizon Media Group]]. [[Horizon Development]] brings software expertise to Horizon Network, and [[Horizon Advertising]], a Horizon Media Group company, is managed by Horizon Network alongside its digital infrastructure. The businesses share people, systems and standards across the group, so a client of one Horizon business can draw on the skills of all of them. ('''[[HN Group|Full article…]]''')
+{{Box end}}
+
+{{Box start|Did you know…|teal}}
+* … that the stripe under the [[HN Group#Brand|HN Group wordmark]] is made of '''eight colours''' arranged in steps?
+* … that [[Horizon Advertising]] is a subsidiary of [[Horizon Media Group]], but is managed by [[Horizon Network]]?
+* … that Horizon Hosting, [[Horizon Network]]'s planned hosting service, will offer VPS, dedicated servers and managed cloud?
+* … that Horizon Network can also be reached at '''horizonetwork.com''', with '''horizon-network.co.uk''' as its main address?
+* … that [[Horizon Advertising]]'s roundel logo is lavender, while the other Horizon roundels are indigo?
+{{Box end}}
+{{Column}}
+{{Box start|Explore the group|pink}}
+* '''Companies:''' [[HN Group]] · [[Horizon Network]] · [[Horizon Advertising]] · [[Horizon Development]] · [[Horizon Media Group]] · [[Horizon Holding Co]]
+* '''Services:''' [[Horizon Network#Services|Infrastructure]] · [[Horizon Advertising#Services|Advertising]] · [[Horizon Development#Services|Software development]] · [[Horizon Media Group#Activities|Media]]
+* '''Brand:''' [[HN Group#Brand|HN Group brand]] · [[Horizon Advertising#Brand|Horizon Advertising roundel]]
+* '''Lists:''' [[List of HN Group companies]]
+{{Box end}}
+
+{{Box start|Contributing|green}}
+HN Group staff can improve any article: sign in with your staff account using '''Staff sign in''' at the top of the page, then choose '''Edit'''. Every change is kept in the page's history and can be undone. New to editing? Read [[Help:Editing]].
+{{Box end}}
+{{Columns end}}
+
+[[Category:HN Group Wiki]]

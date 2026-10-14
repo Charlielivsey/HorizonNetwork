@@ -1,0 +1,129 @@
+title: HN Group
+---
+{{Infobox
+| name = HN Group
+| logo = hn-group-wordmark.svg
+| Legal name = HN Group Limited
+| Type = Parent company
+| Industry = Digital infrastructure<br>Advertising<br>Software development<br>Media
+| Subsidiaries = [[Horizon Network]]<br>[[Horizon Media Group]]
+| Part of Horizon Network = [[Horizon Development]]
+| Subsidiary of Horizon Media Group = [[Horizon Advertising]] (managed by Horizon Network)
+| Country = United Kingdom
+| Website = [https://hngroup.org.uk hngroup.org.uk]
+}}
+'''HN Group''' (legally '''HN Group Limited''') is the parent company of the Horizon businesses: [[Horizon Network]] and [[Horizon Media Group]]. [[Horizon Development]] is part of Horizon Network, and [[Horizon Advertising]] is a subsidiary of Horizon Media Group that is managed by Horizon Network.<ref>[https://hngroup.org.uk/about About HN Group], hngroup.org.uk.</ref> Together the companies cover what a modern business needs online: the infrastructure it runs on, the software it uses, the advertising that brings customers in and the media that tells its story.
+
+The group describes its purpose as "building the digital infrastructure, products and media for tomorrow's businesses".<ref>[https://hngroup.org.uk/ HN Group home page], hngroup.org.uk.</ref>
+
+== Structure ==
+{{Main|List of HN Group companies}}
+HN Group brings together two businesses, [[Horizon Network]] and [[Horizon Media Group]], each with a company beneath it:<ref>[https://hngroup.org.uk/companies Our companies], hngroup.org.uk.</ref>
+
+* '''[[HN Group]]''' — parent company
+** '''[[Horizon Network]]''' — digital infrastructure, advertising and software
+*** '''[[Horizon Development]]''' — custom software and web applications
+** '''[[Horizon Media Group]]''' — media and content
+*** '''[[Horizon Advertising]]''' — digital advertising (managed by Horizon Network)
+
+=== Horizon Advertising ===
+[[Horizon Advertising]] has an unusual arrangement. It is a '''subsidiary of [[Horizon Media Group]]''', but it is '''managed by [[Horizon Network]]''', which runs it day to day alongside its digital infrastructure and [[Horizon Development]]. This is why the group's websites present Horizon Advertising among Horizon Network's services.
+
+{| class="wikitable"
+|+ Companies in HN Group
+! Company !! Part of !! Focus !! Website
+|-
+| [[Horizon Network]] || HN Group || Digital infrastructure, advertising and software || [https://horizon-network.co.uk horizon-network.co.uk]
+|-
+| [[Horizon Advertising]] || Horizon Media Group (managed by Horizon Network) || Display advertising, campaign management, analytics and reporting || [https://horizonadvertising.co.uk horizonadvertising.co.uk]
+|-
+| [[Horizon Development]] || Horizon Network || Custom software and web applications || Through [https://horizon-network.co.uk/services Horizon Network]
+|-
+| [[Horizon Media Group]] || HN Group || Media and content || Through [https://hngroup.org.uk/companies hngroup.org.uk]
+|}
+
+== How the group works ==
+HN Group describes its way of working as "shared people, shared systems, shared standards". Being one group means the companies work as one team, and a client of one Horizon business can draw on the skills of all of them.<ref>[https://hngroup.org.uk/about About HN Group], hngroup.org.uk.</ref> The group sets out three principles:
+
+; One team across the group
+: People work across companies, so the right expertise is always close by. Staff can hold roles at more than one company at the same time.
+; Built to keep running
+: Services are monitored 24/7, and the systems behind them are built and run in-house.
+; Clear and straightforward
+: Plain answers, honest reporting and no surprises.
+
+== Areas of work ==
+=== Infrastructure ===
+Digital services and hosting from [[Horizon Network]], monitored around the clock. Horizon Network is developing Horizon Hosting, offering VPS, dedicated servers and managed cloud.
+
+=== Advertising ===
+Display advertising and campaign management from [[Horizon Advertising]], with clear reporting.
+
+=== Software ===
+Custom software and web applications from [[Horizon Development]], from first idea to launch.
+
+=== Media ===
+Content and media from [[Horizon Media Group]], the group's media arm.
+
+== Brand ==
+[[File:hn-group-wordmark.svg|thumb|The HN Group wordmark, with the stepped eight-colour stripe]]
+The HN Group wordmark is a heavy logotype set above a stepped line of eight brand colours. Purple is the group's core accent colour, and the typeface used across the group is '''Plus Jakarta Sans'''.
+
+=== Colours ===
+{| class="wikitable"
+|+ The eight colours of the HN Group stripe, in order
+! Colour !! Name !! Hex
+|-
+| {{Swatch|#E97DE8}} || Pink || <code>#E97DE8</code>
+|-
+| {{Swatch|#5514B4}} || Purple (core accent) || <code>#5514B4</code>
+|-
+| {{Swatch|#E3E65B}} || Yellow || <code>#E3E65B</code>
+|-
+| {{Swatch|#3E9BA3}} || Teal || <code>#3E9BA3</code>
+|-
+| {{Swatch|#7A1F6C}} || Plum || <code>#7A1F6C</code>
+|-
+| {{Swatch|#C2306B}} || Raspberry || <code>#C2306B</code>
+|-
+| {{Swatch|#5FAE7B}} || Green || <code>#5FAE7B</code>
+|-
+| {{Swatch|#1C2135}} || Navy || <code>#1C2135</code>
+|}
+
+=== Logos ===
+HN Group and [[Horizon Network]] use wordmarks: the company name above the stepped colour stripe. [[Horizon Advertising]], [[Horizon Development]], [[Horizon Media Group]] and [[Horizon Holding Co]] use roundels: a thick ring containing the company's initials, shown alongside the company name. Horizon Advertising's roundel is lavender ({{Swatch|#7B52C4}}<code>#7B52C4</code>); the others are indigo ({{Swatch|#5514B4}}<code>#5514B4</code>). Every logo has a white version for dark backgrounds, and the roundel companies also have an app icon.
+
+{| class="wikitable"
+! Company !! Logo style !! Colour
+|-
+| [[HN Group]] || Wordmark with colour stripe || Multicolour
+|-
+| [[Horizon Network]] || Wordmark with colour stripe (also stacked) || Multicolour
+|-
+| [[Horizon Advertising]] || Roundel "HA" || Lavender
+|-
+| [[Horizon Development]] || Roundel "HD" || Indigo
+|-
+| [[Horizon Media Group]] || Roundel "HM" || Indigo
+|-
+| [[Horizon Holding Co]] || Roundel || Indigo
+|}
+
+Logos are used as supplied: they aren't recoloured, stretched, cropped or redrawn, and the regular version is used on light backgrounds with the white version on dark ones.
+
+== Careers ==
+HN Group advertises open roles across all of its companies on the careers page of its website, where anyone can apply with a CV.<ref>[https://hngroup.org.uk/careers Careers], hngroup.org.uk.</ref> Because people work across the group, a role in one company can lead to opportunities in the others.
+
+== See also ==
+* [[List of HN Group companies]]
+
+== References ==
+{{Reflist}}
+
+== External links ==
+* [https://hngroup.org.uk Official website]
+* [https://hngroup.org.uk/contact Contact HN Group]
+
+[[Category:Companies]]
+[[Category:HN Group]]

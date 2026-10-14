@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /wiki/
+Disallow: /auth/
+Sitemap: https://wiki.hngroup.org.uk/sitemap.xml
