@@ -1341,6 +1341,7 @@
                 ? '<div class="profile-section"><h3 class="detail-head">Team <span class="tab-count">' + reports.length + "</span></h3>" +
                   '<div class="team-grid">' + reports.map(personRow).join("") + "</div></div>"
                 : "") +
+            (p.bio ? '<div class="profile-section"><h3 class="detail-head">About</h3><div class="profile-bio">' + richText(p.bio) + "</div></div>" : "") +
             ((p.skills || []).length || (p.languages || []).length
                 ? '<div class="profile-section">' +
                   ((p.skills || []).length ? '<h3 class="detail-head">Skills</h3><div class="tag-list">' + p.skills.map(function (t) { return '<span class="tag">' + esc(t) + "</span>"; }).join("") + "</div>" : "") +
@@ -5877,6 +5878,10 @@
             '<label for="p-skills">Skills</label><input type="text" id="p-skills" maxlength="400" value="' + esc((me.skills || []).join(", ")) + '" placeholder="e.g. Photoshop, Excel, first aid">' +
             '<label for="p-langs">Languages</label><input type="text" id="p-langs" maxlength="300" value="' + esc((me.languages || []).join(", ")) + '" placeholder="e.g. English, Polish, BSL">' +
             '<p class="muted small">Separate with commas. Colleagues can search the directory by these.</p>' +
+            '<label for="p-bio">About me <span class="muted small">(optional)</span></label>' +
+            '<textarea id="p-bio" rows="4" maxlength="600" placeholder="A short introduction: what you do, what you\u2019re working on, something about you.">' + esc(me.bio || "") + "</textarea>" +
+            '<p class="muted small"><span id="p-bio-count">' + (me.bio || "").length + "</span>/600 \u00b7 Shown on your staff profile.</p>" +
+            (me.onNetworkSite ? '<label class="inline-check"><input type="checkbox" id="p-bio-public"' + (me.bioPublic ? " checked" : "") + "> Also show my About me on the Horizon Network website, where you\u2019re listed as part of the leadership team</label>" : "") +
             '<p class="hint">Your location and time zone are shown on your home page and in the staff directory.</p>' +
             (me.system ? "" :
                 '<div class="grid-2"><div><label for="p-bday">Birthday <span class="muted small">(optional)</span></label><select id="p-bday"><option value="">Day</option>' +
@@ -6065,6 +6070,7 @@
             });
         }
 
+        $("#p-bio").addEventListener("input", function () { $("#p-bio-count").textContent = $("#p-bio").value.length; });
         $("#profile-form").addEventListener("submit", async function (e) {
             e.preventDefault();
             formError($("#p-error"), "");
@@ -6079,6 +6085,8 @@
                     timezone: $("#p-tz").value,
                     skills: $("#p-skills").value,
                     languages: $("#p-langs").value,
+                    bio: $("#p-bio").value,
+                    bioPublic: $("#p-bio-public") ? $("#p-bio-public").checked : undefined,
                 }))).user;
                 renderChrome();
                 toast("Profile saved.");

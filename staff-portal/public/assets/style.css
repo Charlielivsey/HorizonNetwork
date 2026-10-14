@@ -3809,3 +3809,7 @@ input[type="range"] { width: 100%; accent-color: var(--primary); }
 .pc-dept { font-size: 0.8rem; color: var(--text-muted); margin-top: -0.1rem; }
 .profile-dept { display: flex; align-items: center; gap: 0.35rem; font-size: 0.9rem; color: var(--text-muted); margin-top: 0.15rem; }
 .profile-dept .icon { width: 15px; height: 15px; }
+
+/* About me on staff profiles */
+.profile-bio { line-height: 1.55; overflow-wrap: anywhere; }
+.profile-bio p { margin: 0 0 0.6rem; }

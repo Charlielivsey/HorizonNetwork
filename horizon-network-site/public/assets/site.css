@@ -310,3 +310,8 @@ dialog.apply::backdrop { background: rgba(14, 16, 32, 0.6); backdrop-filter: blu
 @media(max-width:850px){.leadership-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.leadership-heading{gap:28px;align-items:flex-start}.leadership-heading>.lead{max-width:250px}.leader-body{padding-left:24px;padding-right:24px}}
 @media(max-width:560px){.leadership-grid{grid-template-columns:1fr;gap:22px}.leadership-heading{display:block;margin-bottom:32px}.leadership-heading>.lead{margin-top:20px;max-width:100%}.leader-banner{height:135px}.leader-body{min-height:230px}.leader h3{font-size:1.55rem}.leader-role{min-height:0;margin-bottom:24px}}
 @media(prefers-reduced-motion:reduce){.leader,.leader-orbit{animation:none;transition:none}.leader-awaiting{opacity:1;transform:none}.leader:hover{transform:none}}
+/* About me from the staff profile */
+.leader-role.has-bio{min-height:0;margin-bottom:14px}
+.leader-bio{font-size:.9rem;line-height:1.6;color:var(--text);margin:0 0 22px;overflow-wrap:anywhere}
+.leader-bio p{margin:0 0 .6em}
+.leader-bio p:last-child{margin-bottom:0}

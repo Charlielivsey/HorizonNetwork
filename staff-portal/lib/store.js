@@ -522,6 +522,7 @@ function publicView(p) {
     startDate: p.startDate || null,
     skills: p.skills || [],
     languages: p.languages || [],
+    bio: p.bio || "",
   };
 }
 
@@ -854,6 +855,10 @@ function updateOwnProfile(person, input) {
   });
   if ("skills" in input) person.skills = cleanTagList(input.skills, 20);
   if ("languages" in input) person.languages = cleanTagList(input.languages, 10);
+  // About me: a short introduction shown on their profile, and on a public company website if they
+  // appear on one (e.g. Horizon Network leadership) unless they turn that off.
+  if ("bio" in input) person.bio = String(input.bio == null ? "" : input.bio).replace(/\r/g, "").replace(/\n{3,}/g, "\n\n").trim().slice(0, 600);
+  if ("bioPublic" in input) person.bioPublic = !!input.bioPublic;
   // Birthday: day and month only (no year), shown to colleagues only if the person chooses.
   if ("birthdayMonth" in input) {
     const month = Number(input.birthdayMonth);

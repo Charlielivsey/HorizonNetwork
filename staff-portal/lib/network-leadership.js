@@ -8,7 +8,8 @@ function networkRole(person) {
 function members(store) {
   return store.employees().filter(person => networkRole(person)).sort((a,b)=>a.displayName.localeCompare(b.displayName));
 }
+// "About me" is published too, unless the person has unticked "Show on the Horizon Network website".
 function publicMembers(store) {
-  return members(store).map(person => ({name:person.displayName,jobTitle:networkRole(person).jobTitle || '',avatarUrl:store.avatarFile(person)?'/api/leadership/avatar/'+person.id:null}));
+  return members(store).map(person => ({name:person.displayName,jobTitle:networkRole(person).jobTitle || '',bio:person.bioPublic === false ? '' : String(person.bio || ''),avatarUrl:store.avatarFile(person)?'/api/leadership/avatar/'+person.id:null}));
 }
 module.exports={networkRole,members,publicMembers};

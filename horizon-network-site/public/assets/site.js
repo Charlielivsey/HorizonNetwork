@@ -221,10 +221,13 @@
             }
             const name = document.createElement('h3'); name.textContent = person.name;
             const job = document.createElement('p'); job.className = 'leader-role'; job.textContent = person.jobTitle;
+            // "About me" from their staff profile (plain text; line breaks become paragraphs).
+            const bio = document.createElement('div'); bio.className = 'leader-bio';
+            String(person.bio || '').split(/\n{2,}/).map(t => t.trim()).filter(Boolean).forEach(t => { const para = document.createElement('p'); para.textContent = t; bio.append(para); });
             const footer = document.createElement('div'); footer.className = 'leader-footer';
             const dot = document.createElement('span'); dot.className = 'leader-team-dot'; dot.setAttribute('aria-hidden', 'true');
             const label = document.createElement('span'); label.textContent = 'Network leadership';
-            footer.append(dot, label); body.append(portrait, name, job, footer); card.append(banner, body); target.append(card);
+            footer.append(dot, label); body.append(portrait, name, job); if (bio.childElementCount) { job.classList.add('has-bio'); body.append(bio); } body.append(footer); card.append(banner, body); target.append(card);
             if (observer) { card.classList.add('leader-awaiting'); observer.observe(card); }
         });
     } catch {

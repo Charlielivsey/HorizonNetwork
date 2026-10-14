@@ -1,6 +1,6 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),http=require('node:http'),{spawn}=require('node:child_process');
-test('live public leadership matches Network company and department on the same role and exposes only public fields',async()=>{
+test('live public leadership matches Network company and department on the same role and exposes only public fields (About me only when allowed)',async()=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-network-test-'));
  const store=require('../staff-portal/lib/store');store.init(dir);
  function person(first,company,department,otherRoles=[]){return store.saveEmployee({firstName:first,lastName:'Example',company,department,jobTitle:'Primary title',otherRoles,emails:[{local:first.toLowerCase(),domain:'hngroup.org.uk',primary:true}]});}
@@ -9,6 +9,8 @@ test('live public leadership matches Network company and department on the same 
  const wrongCompany=person('Media','Horizon Media Group','Network Leadership');
  person('Engineer','Horizon Network','Engineering');
  person('Split','Horizon Network','Engineering',[{company:'Horizon Advertising',department:'Network Leadership',jobTitle:'Ads lead'}]);
+ store.updateOwnProfile(leader,{displayName:'Network Example',bio:'Leads the network.\n\nLoves cycling.'});
+ store.updateOwnProfile(shared,{displayName:'Shared Example',bio:'Private intro.',bioPublic:false});
  const image='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6zSsAAAAASUVORK5CYII=';
  store.saveAvatar(leader,'data:image/png;base64,'+image);store.saveAvatar(wrongCompany,'data:image/png;base64,'+image);
  const secret=path.join(dir,'secret');fs.writeFileSync(secret,'e'.repeat(64));process.env.STATUS_SSO_SECRET_FILE=secret;
@@ -22,7 +24,9 @@ test('live public leadership matches Network company and department on the same 
   const data=await (await fetch(base+'/api/leadership')).json();assert.equal(data.leaders.length,2);
   assert.deepEqual(data.leaders.map(p=>p.name),['Network Example','Shared Example']);
   assert.equal(data.leaders[1].jobTitle,'Network director');
-  assert.deepEqual(Object.keys(data.leaders[0]).sort(),['avatarUrl','jobTitle','name']);
+  assert.deepEqual(Object.keys(data.leaders[0]).sort(),['avatarUrl','bio','jobTitle','name']);
+  assert.equal(data.leaders[0].bio,'Leads the network.\n\nLoves cycling.');
+  assert.equal(data.leaders[1].bio,'','About me stays off the website when the person unticks it');
   assert.ok(!JSON.stringify(data).includes('@'));
   const avatar=await fetch(base+data.leaders[0].avatarUrl);assert.equal(avatar.status,200);assert.deepEqual(Buffer.from(await avatar.arrayBuffer()),Buffer.from(image,'base64'));
   assert.equal((await fetch(base+'/api/leadership/avatar/'+wrongCompany.id)).status,404);

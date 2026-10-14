@@ -44,6 +44,7 @@ const security = require("./lib/security");
 const enquiries = require("./lib/enquiries");
 const retention = require("./lib/retention");
 const { createStatusSso, loginNext, serviceRequest } = require("./lib/status-sso");
+const networkLeadership = require("./lib/network-leadership");
 const portalAuthLib = require("./lib/portal-auth");
 
 const PORT = parseInt(process.env.PORT || "3200", 10);
@@ -646,6 +647,9 @@ function meResponse(session) {
   user.feedbackDue = feedback.pendingCount(session.person);
   user.chatUnread = chat.unreadTotal(session.person);
   user.mentoringDue = mentoring.dueCount(session.person);
+  // Whether their About me can appear on the Horizon Network website (leadership page).
+  user.onNetworkSite = !!networkLeadership.networkRole(session.person);
+  user.bioPublic = session.person.bioPublic !== false;
   if (store.can(session.person, enquiries.MANAGE)) user.enquiriesNew = enquiries.newCount();
   user.onCallNow = oncall.current();
   user.pulseDue = !session.person.system && !pulse.hasAnswered(session.person);
