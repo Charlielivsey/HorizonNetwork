@@ -189,6 +189,8 @@
         if (!response.ok) throw Error();
         const data = await response.json();
         const people = data.leaders.slice().sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+        target.style.setProperty('--leader-count', Math.max(people.length, 1));
+        target.classList.toggle('is-compact', people.length > 3);
         target.replaceChildren();
         if (!people.length) return notice('Our leadership team will be introduced here soon.');
         const observer = !reducedMotion.matches && 'IntersectionObserver' in window ? new IntersectionObserver(entries => {

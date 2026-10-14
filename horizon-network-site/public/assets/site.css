@@ -286,7 +286,7 @@ dialog.apply::backdrop { background: rgba(14, 16, 32, 0.6); backdrop-filter: blu
 .leadership-heading>.lead{max-width:300px;margin:0 0 4px;line-height:1.7;font-size:1rem}
 .leadership-heading .eyebrow{display:flex;align-items:center;gap:10px}
 .leadership-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 5px color-mix(in srgb,var(--accent) 10%,transparent)}
-.leadership-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;align-items:stretch}
+.leadership-grid{display:grid;grid-template-columns:repeat(var(--leader-count,3),minmax(0,1fr));gap:24px;align-items:stretch}
 .leader{--card-accent:#a47bf0;min-width:0;border:1px solid color-mix(in srgb,var(--accent) 12%,var(--border));border-radius:24px;background:var(--surface);overflow:hidden;box-shadow:0 8px 32px -24px #1c213560;transition:transform .25s,border-color .25s,box-shadow .25s;position:relative}
 .leader-tone-1{--card-accent:#3e9ba3}.leader-tone-2{--card-accent:#c2306b}
 .leader:hover{transform:translateY(-6px);border-color:color-mix(in srgb,var(--card-accent) 55%,var(--border));box-shadow:0 18px 45px -28px color-mix(in srgb,var(--card-accent) 65%,transparent)}
@@ -324,3 +324,7 @@ dialog.apply::backdrop { background: rgba(14, 16, 32, 0.6); backdrop-filter: blu
 .leader-tags{display:grid;gap:18px;margin-bottom:24px}.leader-tag-group ul{list-style:none;padding:0;margin:9px 0 0;display:flex;flex-wrap:wrap;gap:6px}
 .leader-tag-group li{max-width:100%;overflow-wrap:anywhere;font-size:.72rem;line-height:1.5;padding:5px 9px;border-radius:8px;background:var(--accent-soft);color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 12%,transparent)}
 .leader-bio p{white-space:pre-line}
+
+@media(min-width:851px){.leadership-grid.is-compact{gap:18px}.is-compact .leader-body{padding-left:20px;padding-right:20px}.is-compact .leader-brand{margin-left:20px;margin-right:20px;max-width:calc(100% - 40px)}.is-compact .leader h3{font-size:1.35rem}}
+/* Keep card footers aligned when profiles contain different amounts of information. */
+.leader{display:flex;flex-direction:column}.leader-banner{flex-shrink:0}.leader-body{flex:1}

@@ -38,11 +38,13 @@ for config in /etc/nginx/sites-enabled/* /etc/nginx/conf.d/*.conf; do
     fi
 done
 # Install only the staff bridge files needed to read the selected public leadership records.
-bash "$SCRIPT_DIR/../status-site/install-portal-sso.sh"
+bash "$SCRIPT_DIR/../auth-site/install.sh" "$EMAIL"
 
 mkdir -p "$APP_DIR/public" "$DATA_DIR" "$SSL_DIR" "$CHALLENGE_DIR" /etc/nginx/sites-available /etc/nginx/sites-enabled
 chmod 700 "$DATA_DIR"
-cp "$SCRIPT_DIR/server.js" "$APP_DIR/"
+cp "$SCRIPT_DIR/server.js" "$SCRIPT_DIR/auth.js" "$APP_DIR/"
+mkdir -p "$APP_DIR/control"
+cp -r "$SCRIPT_DIR/control/." "$APP_DIR/control/"
 mkdir -p /var/www/hn-network
 cp -r "$SCRIPT_DIR/public/." /var/www/hn-network/
 chown -R www-data:www-data /var/www/hn-network

@@ -26,3 +26,5 @@ After a successful password and PIN sign-in, Auth keeps a separate secure, HttpO
 The staff portal issues and validates these independent remembered tokens, stores only their hashes, rotates them after successful resume, and applies its existing attempt limits, account checks, expiry and password/PIN-change revocation. Auth never stores passwords or PINs. Remembering lasts up to 30 days, matching the portal. “Not you?” opens full sign-in while retaining the resume offer; “Forget me on this browser” revokes that browser’s remembered token. Other browsers remain independent. The narrow integration helper updates the portal’s token issuance condition; other portal sign-in behaviour is unchanged.
 
 Update this service with `cd /root/HorizonNetwork && git pull && sudo bash auth-site/install.sh`.
+
+The `network` application has fixed callback `https://horizon-network.co.uk/auth/callback` and admits the system owner and Super Admin members to Horizon Network’s website configuration. Admin entry from horizonetwork.com first redirects to this registered domain, keeping state and session cookies on the callback host.

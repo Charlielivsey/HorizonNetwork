@@ -39,3 +39,9 @@ cd /root/HorizonNetwork && git pull && sudo bash horizon-network-site/install-al
 The installer obtains a trusted Let's Encrypt certificate and enables HTTPS with automatic renewal. The optional www name is added to the certificate when it resolves. The regular Network installer also runs this alias setup, so future updates retain both domains. A message that DNS/SSL is pending does not mean the domain is live.
 
 The user also requested public leadership cards to include phone, location, time zone, skills and languages from staff profiles. Populated values appear automatically; phone numbers are call links and skills/languages are tags. Empty fields stay hidden. About me continues to respect its publication checkbox. Emails, credentials and unrelated personnel information remain excluded.
+
+## Website administration
+
+Public navigation and footer sign-in links open this website’s `/admin` panel through HN Group Auth. Only the system owner and Super Admin members can use it. Auth registers the `network` client with a fixed `https://horizon-network.co.uk/auth/callback`; admin links from horizonetwork.com first go to the registered domain so the state cookie and callback stay together. The configuration panel shows the authorised profile and controls availability for both Network domains. Maintenance is off on a new installation, hides public pages/leadership/contact endpoints when enabled, and persists in `/var/lib/hn-network/settings.json`. It does not affect the HN Group site’s separate setting.
+
+Desktop leadership cards use the live team count to fit one row. Smaller screens retain readable two-column or single-column layouts. Both footer lines identify Horizon Network as “A subsidiary of HN Group Limited”.

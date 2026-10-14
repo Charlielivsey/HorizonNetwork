@@ -4,6 +4,7 @@ const query = new URLSearchParams(location.search);
 const client = query.get('client_id'), state = query.get('state');
 // Must match the applications registered in server.js.
 const APPS = {
+  network: { name: 'Horizon Network website configuration', short: 'Horizon Network configuration', allowed: user => user.statusAdminAllowed, granted: 'You can manage the Horizon Network website and maintenance mode.', restricted: 'Only the system owner and Super Admin members can configure Horizon Network.' },
   status: { name: 'Status administration', short: 'Status', allowed: user => user.statusAdminAllowed,
     granted: 'You have permission to manage services and publish incident updates.',
     restricted: 'Only the system owner and Super Admin members can manage status. Contact your system owner if you need access.' },

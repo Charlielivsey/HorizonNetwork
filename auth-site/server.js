@@ -7,6 +7,7 @@ const crypto = require('node:crypto');
 const ORIGIN = 'https://auth.hngroup.org.uk';
 // Registered applications: fixed callbacks and who may use them.
 const CLIENTS = {
+  network: { name: 'Horizon Network website configuration', callback: 'https://horizon-network.co.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can configure Horizon Network.' },
   status: { name: 'Status administration', callback: 'https://status.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage status.' },
   website: { name: 'HN Group website configuration', callback: 'https://hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can configure the website.' },
   portal: { name: 'Staff portal', callback: 'https://staff.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use the staff portal.' },

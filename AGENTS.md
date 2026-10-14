@@ -19,3 +19,6 @@
 - Also serve Horizon Network at horizonetwork.com using the same hn-network service and a dedicated nginx alias host/certificate. Keep horizon-network.co.uk as the canonical URL. Use horizon-network-site/install-alias.sh for alias-only updates; DNS must resolve to the VPS before SSL can be issued.
 
 - The user explicitly requested that public Network leadership cards also show staff-profile phone, location, time zone, skills and languages. Keep these live alongside display name, Network job title and photo. Continue respecting the About me publication checkbox; omit empty fields and do not add emails or unrelated private personnel data.
+
+- Public HN Group and Horizon Network sign-in buttons lead through Auth to their own site administration panels, not the staff portal. Network admin uses the registered horizon-network.co.uk callback and redirects alias-domain admin entry there before starting authentication. Owner/Super Admin only; Network availability settings apply to both Network domains independently of HN Group.
+- Horizon Network footer descriptions and copyright identify it as “A subsidiary of HN Group Limited”. Desktop leadership cards adjust their column count to the live team size so they fit one row; preserve readable layouts on smaller screens.

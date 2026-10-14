@@ -13,7 +13,7 @@ test('live public leadership matches Network company and department on the same 
  store.updateOwnProfile(shared,{displayName:'Shared Example',bio:'Private intro.',bioPublic:false});
  const image='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6zSsAAAAASUVORK5CYII=';
  store.saveAvatar(leader,'data:image/png;base64,'+image);store.saveAvatar(wrongCompany,'data:image/png;base64,'+image);
- const secret=path.join(dir,'secret');fs.writeFileSync(secret,'e'.repeat(64));process.env.STATUS_SSO_SECRET_FILE=secret;
+ const secret=path.join(dir,'secret');fs.writeFileSync(secret,'e'.repeat(64));process.env.STATUS_SSO_SECRET_FILE=secret;process.env.NETWORK_DATA_DIR=path.join(dir,'network');
  const reserve=http.createServer();await new Promise(r=>reserve.listen(0,'127.0.0.1',r));const port=reserve.address().port;await new Promise(r=>reserve.close(r));
  const child=spawn(process.execPath,[path.resolve(__dirname,'../staff-portal/server.js')],{env:{...process.env,PORT:String(port),DATA_DIR:dir},stdio:'ignore'});
  const backend='http://127.0.0.1:'+port;process.env.STAFF_PORTAL_BACKEND=backend;
