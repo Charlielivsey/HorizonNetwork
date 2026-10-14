@@ -93,6 +93,20 @@ test('HN Group Wiki: reading, editing, history, protection and safety', async ()
     assert.equal((await anon.go('/wiki/No_such_page')).status, 404);
     assert.ok((await anon.go('/wiki/Special:Search?search=lavender&fulltext=1')).text.includes('Horizon Advertising'));
     assert.ok((await anon.go('/sitemap.xml')).text.includes('/wiki/Horizon_Network'));
+
+    // Search suggestions: prefix matches first, short descriptions, logos, redirects resolved, no duplicates.
+    const sug = async (q) => JSON.parse((await anon.go('/w/api/suggest?q=' + encodeURIComponent(q))).text).results;
+    const hor = await sug('horizon a');
+    assert.equal(hor[0].title, 'Horizon Advertising');
+    assert.equal(hor[0].description, 'Digital advertising company managed by Horizon Network');
+    assert.equal(hor[0].image.light, '/assets/brand/horizon-advertising-logo.svg');
+    const hn = await sug('hngroup');
+    assert.equal(hn[0].title, 'HN Group'); assert.equal(hn[0].redirectFrom, 'HNGroup');
+    assert.equal(new Set(hn.map((r) => r.title)).size, hn.length, 'no duplicate targets');
+    assert.ok((await sug('development')).some((r) => r.title === 'Horizon Development'), 'word matches');
+    assert.deepEqual(await sug(''), []);
+    assert.ok((await sug('Horizon')).length <= 8);
+    assert.ok(!(await anon.go('/wiki/Horizon_Advertising')).text.includes('Short description'), 'short description is hidden');
     assert.equal((await anon.go('/assets/../server.js')).status, 404);
     // No articles about the websites (the user asked for companies only).
     for (const t of ['HN_Group_Staff_Portal', 'HN_Group_Auth', 'HN_Group_Status', 'HN_Group_Links', 'List_of_HN_Group_websites']) assert.equal((await anon.go('/wiki/' + t)).status, 404, t);

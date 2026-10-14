@@ -1,5 +1,6 @@
 title: Horizon Holding Co
 ---
+{{Short description|Company in HN Group}}
 {{Stub}}
 {{Infobox
 | name = Horizon Holding Co

@@ -1,5 +1,6 @@
 title: Horizon Advertising
 ---
+{{Short description|Digital advertising company managed by Horizon Network}}
 {{Infobox
 | name = Horizon Advertising
 | logo = horizon-advertising-logo.svg

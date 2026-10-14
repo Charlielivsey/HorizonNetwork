@@ -182,6 +182,7 @@ function render(source, opts) {
     if (name === 'cards end') return keepBlock('</div>');
     if (name === 'swatch') return null;
     if (name === 'clear') return keepBlock('<div class="clear"></div>');
+    if (name === 'short description') return '';
     return keepBlock('<span class="unknown-template">{{' + esc(body) + '}}</span>');
   });
 
@@ -276,4 +277,21 @@ function plainText(source) {
     .replace(/\{\|[\s\S]*?\|\}/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-module.exports = { render, plainText, normaliseTitle, pageUrl, anchorId, esc, setFileCheck, imageHtml };
+// For search suggestions: the page's {{Short description|…}}, or the start of its first sentence.
+function shortDescription(source) {
+  const m = /\{\{\s*short description\s*\|([^{}]*)\}\}/i.exec(String(source || ''));
+  if (m) return m[1].trim().slice(0, 120);
+  const first = plainText(extractTemplates(String(source || ''), () => ' ').replace(/<[^>]*>/g, '')).replace(/\s*\[\d+\]/g, '');
+  const sentence = (/^.*?[.!?](?=\s|$)/.exec(first) || [first])[0];
+  return sentence.length > 100 ? sentence.slice(0, 97).replace(/\s+\S*$/, '') + '…' : sentence;
+}
+
+// For search suggestions: the infobox logo, as light and (when there is one) dark image paths.
+function infoboxImage(source) {
+  const m = /\{\{\s*infobox[\s\S]*?\|\s*logo\s*=\s*([a-z0-9][a-z0-9._-]*\.(?:svg|png|jpe?g|webp))/i.exec(String(source || ''));
+  if (!m || !fileExists(m[1])) return null;
+  const white = m[1].replace(/\.(svg|png)$/i, '-white.$1');
+  return { light: '/assets/brand/' + m[1], dark: white !== m[1] && fileExists(white) ? '/assets/brand/' + white : null };
+}
+
+module.exports = { shortDescription, infoboxImage, render, plainText, normaliseTitle, pageUrl, anchorId, esc, setFileCheck, imageHtml };

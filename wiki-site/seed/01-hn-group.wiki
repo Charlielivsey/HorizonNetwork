@@ -1,5 +1,6 @@
 title: HN Group
 ---
+{{Short description|Parent company of the Horizon businesses}}
 {{Infobox
 | name = HN Group
 | logo = hn-group-wordmark.svg

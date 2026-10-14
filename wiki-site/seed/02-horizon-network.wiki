@@ -1,5 +1,6 @@
 title: Horizon Network
 ---
+{{Short description|Digital infrastructure, advertising and software company}}
 {{Infobox
 | name = Horizon Network
 | logo = horizon-network-wordmark.svg

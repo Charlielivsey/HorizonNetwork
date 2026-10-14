@@ -11,7 +11,8 @@ A Wikipedia-style encyclopedia of HN Group and its companies, in the HN Group br
 - **Wikipedia features.** Every article has these:
   - an infobox, a contents box, numbered references and categories;
   - redirects, such as "HNGroup" → HN Group, and a red link to any page that doesn't exist yet;
-  - search (an exact title goes straight to the page) and a random article;
+  - search with suggestions as you type, like Wikipedia's: matching articles with their logo and a short description (`{{Short description|…}}`), then a full-text search option; an exact title goes straight to the page;
+  - a random article;
   - all pages, a categories list and recent changes;
   - full page history: view any old version and restore it.
 - **Main Page.** It has company cards with logos, a featured article, "Did you know…", links to explore the group and how to contribute. It's protected.

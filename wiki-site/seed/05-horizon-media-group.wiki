@@ -1,5 +1,6 @@
 title: Horizon Media Group
 ---
+{{Short description|Media and content company}}
 {{Infobox
 | name = Horizon Media Group
 | logo = horizon-media-group-logo.svg

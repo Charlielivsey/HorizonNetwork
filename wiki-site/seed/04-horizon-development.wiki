@@ -1,5 +1,6 @@
 title: Horizon Development
 ---
+{{Short description|Software development business of Horizon Network}}
 {{Infobox
 | name = Horizon Development
 | logo = horizon-development-logo.svg

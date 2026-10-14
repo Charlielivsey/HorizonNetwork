@@ -45,7 +45,23 @@ a.external::after { content: "↗"; font-size: .75em; margin-left: .15em; opacit
 .brand img { height: 32px; width: auto; }
 .brand-wiki { font-weight: 800; font-size: 1.05rem; color: var(--text); letter-spacing: -.01em; padding-left: .55rem; border-left: 2px solid var(--border); }
 .brand:hover { text-decoration: none; }
-.search { flex: 1; max-width: 560px; display: flex; border: 1.5px solid var(--border-strong); border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.search { position: relative; flex: 1; max-width: 560px; display: flex; border: 1.5px solid var(--border-strong); border-radius: 999px; background: var(--surface-2); }
+.search.suggesting { border-radius: 22px 22px 0 0; border-bottom-color: var(--border); }
+.suggestions { position: absolute; z-index: 30; top: 100%; left: -1.5px; right: -1.5px; margin: 0; padding: .3rem 0; list-style: none; background: var(--surface); border: 1.5px solid var(--link); border-top: 0; border-radius: 0 0 18px 18px; box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow); max-height: min(70vh, 560px); overflow-y: auto; }
+.search.suggesting:focus-within { border-color: var(--link); border-bottom-color: var(--border); }
+.suggestions[hidden] { display: none; }
+.suggestion a { display: flex; align-items: center; gap: .75rem; padding: .45rem 1rem; color: var(--text); text-decoration: none; }
+.suggestion.active a, .suggestion a:hover { background: var(--accent-soft); }
+.sg-thumb { flex: none; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); overflow: hidden; }
+.sg-thumb img { max-width: 36px; max-height: 36px; }
+.sg-thumb svg { width: 22px; height: 22px; fill: none; stroke: var(--muted); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.sg-text { min-width: 0; display: flex; flex-direction: column; line-height: 1.35; }
+.sg-title { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sg-title b { font-weight: 800; }
+.sg-desc, .sg-from { font-size: .82rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.suggestion.fulltext { border-top: 1px solid var(--border); margin-top: .3rem; padding-top: .3rem; }
+.suggestion.fulltext .sg-title { white-space: normal; }
+.suggestion.fulltext .sg-thumb { border: 0; background: none; }
 .search:focus-within { border-color: var(--link); box-shadow: 0 0 0 3px var(--accent-soft); }
 .search input { flex: 1; min-width: 0; border: 0; background: none; padding: .55rem 1rem; font: inherit; font-size: .95rem; color: var(--text); outline: none; }
 .search button { border: 0; background: none; padding: 0 1rem; cursor: pointer; color: var(--muted); }

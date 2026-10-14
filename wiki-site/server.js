@@ -49,7 +49,7 @@ function layout(o) {
     (o.noindex ? '<meta name="robots" content="noindex">' : '') +
     (o.canonical ? '<link rel="canonical" href="' + esc(auth.WIKI_ORIGIN + o.canonical) + '">' : '') +
     '<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="preload" href="/assets/fonts/plus-jakarta-sans.woff2" as="font" type="font/woff2" crossorigin>' +
-    '<link rel="stylesheet" href="/assets/wiki.css?v=20261015"><script src="/assets/wiki.js?v=20261015" defer></script></head><body>' +
+    '<link rel="stylesheet" href="/assets/wiki.css?v=20261015b"><script src="/assets/wiki.js?v=20261015b" defer></script></head><body>' +
     '<a class="skip" href="#content">Skip to content</a><div class="stripe" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>' +
     '<header class="site-header"><button class="menu-toggle" type="button" aria-expanded="false" aria-controls="sidebar" aria-label="Main menu"><span></span><span></span><span></span></button>' +
     '<a class="brand" href="/wiki/Main_Page" aria-label="HN Group Wiki main page"><img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="92" height="32"><img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="92" height="32"><span class="brand-wiki">Wiki</span></a>' +
@@ -259,6 +259,29 @@ function specialPage(req, res, url, user, name) {
   return errorPage(res, 404, 'No such special page', 'You have requested an invalid special page.');
 }
 
+// Search-as-you-type suggestions, like Wikipedia's: titles starting with the text first, then
+// titles with a word starting with it, then titles containing it. Redirects lead to their target.
+function suggest(raw) {
+  const q = String(raw || '').trim().toLowerCase().replace(/_/g, ' ').slice(0, 100);
+  if (!q) return [];
+  const best = new Map();
+  for (const p of store.all()) {
+    const t = p.title.toLowerCase();
+    const rank = t.startsWith(q) ? 0 : t.split(/[\s:()-]+/).some((w) => w.startsWith(q)) ? 1 : t.includes(q) ? 2 : -1;
+    if (rank < 0) continue;
+    const r = rendered(p);
+    const target = r.redirect ? store.get(r.redirect) : p;
+    if (!target) continue;
+    const score = rank * 2 + (r.redirect ? 1 : 0) + (namespaceOf(target.title) ? 6 : 0);
+    const prev = best.get(target.title);
+    if (!prev || score < prev.score) best.set(target.title, { score, target, from: r.redirect ? p.title : null, anchor: r.redirectAnchor || '' });
+  }
+  return [...best.values()].sort((a, b) => a.score - b.score || a.target.title.length - b.target.title.length || a.target.title.localeCompare(b.target.title)).slice(0, 8).map((x) => {
+    const text = store.latest(x.target).text;
+    return { title: x.target.title, url: pageUrl(x.target.title, x.anchor || undefined), description: markup.shortDescription(text), image: markup.infoboxImage(text), redirectFrom: x.from };
+  });
+}
+
 // ---------- Saving ----------
 
 function readForm(req, limit) {
@@ -334,6 +357,10 @@ const server = http.createServer(async (req, res) => {
     if (route === '/sitemap.xml' && req.method === 'GET') {
       res.writeHead(200, { 'Content-Type': 'application/xml' });
       return res.end('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + store.all().filter((p) => !rendered(p).redirect).map((p) => '<url><loc>' + esc(auth.WIKI_ORIGIN + pageUrl(p.title)) + '</loc><lastmod>' + store.latest(p).at.slice(0, 10) + '</lastmod></url>').join('') + '</urlset>');
+    }
+    if (route === '/w/api/suggest' && req.method === 'GET') {
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+      return res.end(JSON.stringify({ results: suggest(url.searchParams.get('q')) }));
     }
     if (route.startsWith('/wiki/')) {
       let raw;
