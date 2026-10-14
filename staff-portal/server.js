@@ -610,11 +610,11 @@ async function handleLoginCode(req, res) {
   completeLogin(req, res, person);
 }
 
-async function handleSetCode(req, res, session) {
+async function handleSetCode(req, res, session, suppliedBody) {
   if (session.data.impersonatorId) throw httpError(403, "You can't change sign-in codes while logged in as someone else.");
   const person = session.person;
   if (person.account.passwordTemporary) throw httpError(403, "Please create your password first.");
-  const { code, currentPassword } = await readJsonBody(req);
+  const { code, currentPassword } = suppliedBody || await readJsonBody(req);
   const changing = store.hasCode(person);
   // Changing an existing code needs the password; setting the first one happens straight after signing in.
   if (changing && !store.verifyPassword(person, currentPassword)) {
@@ -622,6 +622,7 @@ async function handleSetCode(req, res, session) {
   }
   store.setCode(person, code);
   logEvent(req, session, changing ? "code-changed" : "code-set");
+  if (serviceRequest(req)) res.setHeader("Set-Cookie", resume.cookie(req, resume.issue(person.id, parseCookies(req)[resume.COOKIE], req.headers["user-agent"])));
   sendJson(res, 200, { user: meResponse(session) });
 }
 
@@ -675,9 +676,9 @@ function meResponse(session) {
   return user;
 }
 
-async function handleChangePassword(req, res, session) {
+async function handleChangePassword(req, res, session, suppliedBody) {
   if (session.data.impersonatorId) throw httpError(403, "You can't change passwords while logged in as someone else.");
-  const { currentPassword, newPassword } = await readJsonBody(req);
+  const { currentPassword, newPassword } = suppliedBody || await readJsonBody(req);
   const person = session.person;
   // Someone who has just signed in with a temporary (or expired) password doesn't need to type it again.
   const forced = person.account.passwordTemporary || security.passwordExpired(person);
@@ -2118,7 +2119,7 @@ extraRoutes.init({
 
 // ---------- Routing ----------
 
-const statusSso = createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent });
+const statusSso = createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent, handleChangePassword, handleSetCode });
 const portalAuth = portalAuthLib.createPortalAuth({ store, sessions, resume, createSession, cookieFor, parseCookies, send, redirect, logEvent, loginNext, clientIp });
 
 async function route(req, res) {

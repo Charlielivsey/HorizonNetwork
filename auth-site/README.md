@@ -28,3 +28,11 @@ The staff portal issues and validates these independent remembered tokens, store
 Update this service with `cd /root/HorizonNetwork && git pull && sudo bash auth-site/install.sh`.
 
 The `network` application has fixed callback `https://horizon-network.co.uk/auth/callback` and admits the system owner and Super Admin members to Horizon Network’s website configuration. Admin entry from horizonetwork.com first redirects to this registered domain, keeping state and session cookies on the callback host.
+
+## Required account setup, including direct Auth visits
+
+Auth checks the staff account’s actual `passwordTemporary` and missing-PIN flags. Signing in directly at auth.hngroup.org.uk follows the same setup flow as an application sign-in: replace a temporary password, then set and confirm a masked six-digit PIN if the account does not have one. Accounts with a permanent password and an existing PIN skip both steps. Password expiry alone does not trigger this temporary-password screen. The staff portal currently clears the PIN during a password reset; Auth requests a replacement PIN whenever it is missing.
+
+The protected staff bridge delegates changes to the portal’s existing password/PIN handlers, retaining its password policy, weak-PIN validation, audit events and session revocation. Auth blocks application continuations and session exchanges until required setup is complete. First PIN setup also remembers that browser for future PIN resume. Remembered-account tiles and the PIN screen both display the staff profile picture with initials as fallback.
+
+Checks: `node --test auth-site/setup.test.cjs` verifies new/temporary accounts, existing-PIN accounts, normal sign-ins, policy enforcement and server-side application gating. `PLAYWRIGHT_MODULE=/path/to/playwright node auth-site/setup-browser-smoke.cjs` checks the direct Auth setup and subsequent PIN resume with isolated fixture accounts.

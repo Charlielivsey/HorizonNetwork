@@ -11,7 +11,7 @@ async function fixture() {
     ['leadership', { name: 'Leadership & HR', permissions: ['system.admin'] }]
   ]);
   let maintenance = false;
-  const store = { avatarFile: () => ({ file: avatarFile, mime: 'image/png' }), loginName: p => p.id + '@hngroup.org.uk', getPerson: id => people.get(id), getRole: id => roles.get(id), isOwner: p => p?.id === 'owner', maintenance: () => ({ on: maintenance }) };
+  const store = { hasCode: () => true, avatarFile: () => ({ file: avatarFile, mime: 'image/png' }), loginName: p => p.id + '@hngroup.org.uk', getPerson: id => people.get(id), getRole: id => roles.get(id), isOwner: p => p?.id === 'owner', maintenance: () => ({ on: maintenance }) };
   function addUser(id, roleIds = [], extra = {}) {
     const raw = crypto.randomBytes(32).toString('hex');
     const token = crypto.createHash('sha256').update(raw).digest('hex');

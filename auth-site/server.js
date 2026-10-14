@@ -60,6 +60,7 @@ async function profile(entry) {
   entry.expires = Math.min(entry.expires, value.expires);
   return value.user;
 }
+function requireReady(user) { if (user.passwordChangeRequired) throw fail(403, 'Create a new password before continuing.'); if (user.codeSetupRequired) throw fail(403, 'Set your sign-in PIN before continuing.'); }
 function entryFor(req) { return sessions.get(hash(cookie(req, COOKIE))); }
 async function finishLogin(req, res, response) {
   const raw = (response.headers.get('set-cookie') || '').match(/(?:^|,\s*)hn_staff_session=([a-f0-9]{64})(?:;|$)/)?.[1];
@@ -112,6 +113,7 @@ const server = http.createServer(async (req, res) => {
         token = grant.session;
       } else if (!['/api/sso/session','/api/sso/avatar'].includes(route)) return send(res, 404, { error: 'Not found.' });
       const entry = HEX.test(token || '') && sessions.get(token), user = await profile(entry);
+      requireReady(user);
       if (!CLIENTS[clientId].allowed(user)) throw fail(403, CLIENTS[clientId].denied);
       if (clientId === 'portal') {
         // The application starts its own session; this Auth sign-in has done its job.
@@ -149,6 +151,20 @@ const server = http.createServer(async (req, res) => {
         const { response } = await staff('/api/login/code', { challenge: flow.challenge, code: data.code }, req, true);
         challenges.delete(key); return await finishLogin(req, res, response);
       }
+      if (route === '/api/setup-code') {
+        const entry = entryFor(req), user = await profile(entry);
+        if (user.passwordChangeRequired) throw fail(403, 'Create a new password first.');
+        if (!user.codeSetupRequired) throw fail(403, 'A sign-in PIN is already configured.');
+        const { response } = await staff('/api/auth/code', { session: entry.staffSession, code: data.code }, req, true);
+        const remembered = (response.headers.get('set-cookie') || '').match(/(?:^|,\s*)hn_staff_resume=([a-f0-9]{64})(?:;|$)/)?.[1];
+        return send(res, 200, { user: await profile(entry) }, remembered ? [setCookie(REMEMBER, remembered, 30 * 86400)] : []);
+      }
+      if (route === '/api/password') {
+        const entry = entryFor(req), user = await profile(entry);
+        if (!user.passwordChangeRequired) throw fail(403, 'A temporary password change is not required.');
+        await staff('/api/auth/password', { session: entry.staffSession, newPassword: data.newPassword });
+        return send(res, 200, { user: await profile(entry) }, [setCookie(REMEMBER, '', 0)]);
+      }
       if (route === '/api/logout') {
         sessions.delete(hash(cookie(req, COOKIE))); challenges.delete(hash(cookie(req, FLOW)));
         return send(res, 200, { ok: true }, [setCookie(COOKIE, '', 0), setCookie(FLOW, '', 0)]);
@@ -157,6 +173,7 @@ const server = http.createServer(async (req, res) => {
         const client = destination(new URL('/authorize?client_id=' + encodeURIComponent(data.client_id) + '&state=' + encodeURIComponent(data.state), ORIGIN));
         if (!client) throw fail(400, 'Invalid application. Start from the application’s sign-in button.');
         const entry = entryFor(req), user = await profile(entry);
+        requireReady(user);
         if (!client.allowed(user)) return send(res, 200, { redirect: client.callback + '?error=access_denied&state=' + client.state });
         if (codes.size >= 10000) throw fail(503, 'Please try again shortly.');
         const code = random(); codes.set(code, { session: hash(cookie(req, COOKIE)), state: client.state, client: client.id, expires: Date.now() + 60000 });

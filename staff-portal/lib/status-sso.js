@@ -8,7 +8,7 @@ const HEX = /^[a-f0-9]{64}$/;
 
 // Role membership is deliberately narrower than system.admin permission.
 function allowed(session, store) {
-  if (!session || session.data.impersonatorId || !session.person.account?.enabled) return false;
+  if (!session || session.data.impersonatorId || !session.person.account?.enabled || session.person.account.passwordTemporary || !store.hasCode(session.person)) return false;
   if (store.maintenance().on && !store.isOwner(session.person)) return false;
   return store.isOwner(session.person) || (!session.person.system && (session.person.roleIds || []).some(id => {
     const role = store.getRole(id);
@@ -25,7 +25,7 @@ function serviceRequest(req) {
 function loginNext(value) {
   return typeof value === 'string' && /^\/status-admin\/authorize\?state=[a-f0-9]{64}$/.test(value) ? value : null;
 }
-function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent }) {
+function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent, handleChangePassword, handleSetCode }) {
   const codes = new Map();
   function current(token) {
     const data = sessions.get(token);
@@ -51,7 +51,7 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       logEvent(req, session, 'status-admin-sign-in');
       redirect(res, `${STATUS_ORIGIN}/auth/callback?code=${code}&state=${state}`); return true;
     }
-    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/network-leadership', '/api/auth/network-avatar'].includes(pathname)) return false;
+    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/password', '/api/auth/code', '/api/auth/network-leadership', '/api/auth/network-avatar'].includes(pathname)) return false;
     if (req.method !== 'POST') { sendJson(res, 405, { error: 'Method not allowed.' }); return true; }
     if (!credentials(req)) { sendJson(res, 401, { error: 'Status integration not authenticated.' }); return true; }
     const body = await readJsonBody(req);
@@ -81,6 +81,14 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       if (!active.person.account?.enabled || active.data.impersonatorId || (store.maintenance().on && !store.isOwner(active.person))) {
         sendJson(res, 403, { error: 'This account cannot sign in right now.' }); return true;
       }
+      if (pathname === '/api/auth/password') {
+        if (!active.person.account.passwordTemporary) { sendJson(res, 403, { error: 'A temporary password change is not required.' }); return true; }
+        await handleChangePassword(req, res, active, { newPassword: body.newPassword }); return true;
+      }
+      if (pathname === '/api/auth/code') {
+        if (store.hasCode(active.person)) { sendJson(res, 403, { error: 'A sign-in PIN is already configured.' }); return true; }
+        await handleSetCode(req, res, active, { code: body.code }); return true;
+      }
       if (pathname === '/api/auth/avatar') {
         const avatar = store.avatarFile(active.person);
         if (!avatar) { sendJson(res, 404, { error: 'No profile picture.' }); return true; }
@@ -91,6 +99,8 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       sendJson(res, 200, { session: token, expires: active.data.expires, user: {
         id: p.id, displayName: p.displayName, email: (p.emails || []).find(e => e.primary)?.address || p.emails?.[0]?.address || store.loginName(p),
         jobTitle: p.jobTitle || '', company: p.company || '', avatarUrl: store.avatarFile(p) ? '/api/avatar' : null,
+        ...(p.account.passwordTemporary ? { passwordChangeRequired: true, passwordMinLength: store.meView(p).passwordMinLength } : {}),
+        ...(!store.hasCode(p) ? { codeSetupRequired: true } : {}),
         statusAdminAllowed: allowed(active, store)
       } }); return true;
     }

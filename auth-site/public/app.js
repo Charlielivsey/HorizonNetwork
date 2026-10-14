@@ -37,11 +37,11 @@ function message(text) {
 }
 async function view(id, focus) {
   const stage = $('auth-stage');
-  const previous = ['login','pin','account','loading'].find(name => !$(name).hidden);
+  const previous = ['login','pin','change-password','setup-code','account','loading'].find(name => !$(name).hidden);
   transitioning = true;
   const oldHeight = stage.getBoundingClientRect().height;
   if (previous && previous !== id) await animate($(previous), [{ opacity:1, transform:'translateY(0)' },{opacity:0,transform:'translateY(-8px)'}],{duration:130,easing:'ease-in'});
-  for (const name of ['login','pin','account','loading']) $(name).hidden = name !== id;
+  for (const name of ['login','pin','change-password','setup-code','account','loading']) $(name).hidden = name !== id;
   const nextHeight = stage.getBoundingClientRect().height;
   stage.classList.add('transitioning');
   await Promise.all([
@@ -55,6 +55,20 @@ async function view(id, focus) {
 }
 function resetPin() { pendingPinSubmit = false; $('code').value = ''; $('code').removeAttribute('aria-invalid'); syncPin(); }
 async function account(user) {
+  if (user.passwordChangeRequired) {
+    $('card-title').textContent = 'Create your password';
+    $('subtitle').textContent = 'A fresh password, just for you.';
+    $('password-requirements').textContent = 'At least ' + (user.passwordMinLength || 12) + ' characters. Follow your staff account’s password requirements.';
+    $('new-password').minLength = user.passwordMinLength || 12;
+    $('new-password').value = ''; $('confirm-password').value = '';
+    return await view('change-password', 'new-password');
+  }
+  if (user.codeSetupRequired) {
+    $('card-title').textContent = 'Set your sign-in PIN';
+    $('subtitle').textContent = 'Six digits. One familiar way to sign in.';
+    for (const id of ['new-code','confirm-code']) { $(id).value = ''; syncSetupPin($(id)); }
+    return await view('setup-code', 'new-code');
+  }
   $('card-title').textContent = 'You’re in.'; $('subtitle').textContent = 'One identity. Everything connected.';
   $('name').textContent = user.displayName; $('email').textContent = user.email; $('job').textContent = user.jobTitle || 'Not provided'; $('company').textContent = user.company || 'Not provided';
   $('initials').textContent = user.displayName.split(/\s+/).filter(Boolean).slice(0,2).map(n=>n[0]).join('');
@@ -84,7 +98,7 @@ async function busy(button, action, label) {
   const previous = button.innerHTML;
   if (label) button.textContent = label;
   try { await action(); } catch(e) { message(e.message); }
-  finally { button.innerHTML = previous; button.removeAttribute('aria-busy'); controls.forEach(b=>b.disabled=false); $('code').readOnly = false; working=false; maybeVerifyPin(); }
+  finally { if (label) button.innerHTML = previous; button.removeAttribute('aria-busy'); controls.forEach(b=>b.disabled=false); $('code').readOnly = false; working=false; maybeVerifyPin(); }
 }
 $('login').addEventListener('submit', event => { event.preventDefault(); busy(event.submitter, async () => {
   resumeMode = false; $('resume-portrait').hidden = true; $('forget').hidden = true;
@@ -107,7 +121,7 @@ $('pin').addEventListener('submit', event => { event.preventDefault(); pendingPi
   resetPin(); await account(data.user); document.querySelector('.pin-entry').classList.remove('verified');
 }, 'Verifying…'); });
 async function logout() {
-  await api('logout', {}); resetPin(); $('password').value=''; $('destination').hidden = !connecting;
+  await api('logout', {}); $('new-code').value = ''; $('confirm-code').value = ''; $('new-password').value = ''; $('confirm-password').value = ''; resetPin(); $('password').value=''; $('destination').hidden = !connecting;
   $('card-title').textContent = 'Welcome back'; $('subtitle').textContent = 'Sign in with your staff account.';
   await view('login','username');
 }
@@ -115,6 +129,36 @@ $('logout').onclick = () => busy($('logout'), async () => { await logout(); awai
 $('back').onclick = () => busy($('back'), async () => { await logout(); resumeMode = false; $('resume-portrait').hidden = true; $('forget').hidden = true; });
 $('forget').onclick = () => busy($('forget'), async () => { await api('resume/forget', {}); clearRemembered(); await logout(); });
 $('resume-offer').onclick = () => busy($('resume-offer'), startResume);
+$('change-password').addEventListener('submit', event => {
+  event.preventDefault();
+  busy(event.submitter, async () => {
+    if ($('new-password').value !== $('confirm-password').value) throw new Error('Your passwords do not match.');
+    const data = await api('password', { newPassword: $('new-password').value });
+    $('new-password').value = ''; $('confirm-password').value = '';
+    await account(data.user);
+  }, 'Saving password…');
+});
+function syncSetupPin(input) {
+  input.value = input.value.replace(/[^0-9]/g, '').slice(0,6);
+  const position = input.selectionStart ?? input.value.length;
+  [...input.parentElement.querySelectorAll('.pin-boxes span')].forEach((box,index) => {
+    box.classList.toggle('filled', index < input.value.length);
+    box.classList.toggle('active', document.activeElement === input && index === position);
+  });
+}
+for (const id of ['new-code','confirm-code']) {
+  for (const event of ['input','focus','blur','keyup','click','select']) $(id).addEventListener(event, () => syncSetupPin($(id)));
+}
+$('setup-code').addEventListener('submit', event => {
+  event.preventDefault(); busy(event.submitter, async () => {
+    if ($('new-code').value !== $('confirm-code').value) throw new Error('Your PINs do not match.');
+    const data = await api('setup-code', { code: $('new-code').value });
+    $('new-code').value = ''; $('confirm-code').value = '';
+    await account(data.user);
+  }, 'Saving PIN…');
+});
+$('code-cancel').onclick = () => busy($('code-cancel'), logout);
+$('password-cancel').onclick = () => busy($('password-cancel'), logout);
 $('show-password').onclick = () => { const show = $('password').type === 'password'; $('password').type = show ? 'text' : 'password'; $('show-password').textContent = show ? 'Hide' : 'Show'; $('show-password').setAttribute('aria-pressed',String(show)); };
 async function connectToStatus() {
   const result = await api('continue', { client_id: client, state });
@@ -125,7 +169,7 @@ function maybeVerifyPin() {
   if (!pendingPinSubmit || working || transitioning || $('pin').hidden || $('code').value.length !== 6) return;
   pendingPinSubmit = false; $('pin').requestSubmit($('pin').querySelector('[type=submit]'));
 }
-const boxes = [...document.querySelectorAll('.pin-boxes span')];
+const boxes = [...$('pin').querySelectorAll('.pin-boxes span')];
 let pinLength = 0;
 function syncPin() {
   const input = $('code'), length = input.value.length;
@@ -154,6 +198,7 @@ window.addEventListener('pageshow',event=>{if(event.persisted)location.reload();
 function clearRemembered() {
   remembered = null; resumeMode = false; $('resume-offer').hidden = true; $('resume-portrait').hidden = true; $('forget').hidden = true;
   $('resume-avatar').removeAttribute('src'); $('resume-avatar').hidden = true;
+  $('offer-avatar').removeAttribute('src'); $('offer-avatar').hidden = true; $('offer-initials').hidden = false;
 }
 async function startResume() {
   if (!remembered) return;
@@ -174,7 +219,13 @@ async function loadRemembered(start, pending) {
   $('resume-avatar').hidden = true; $('resume-initials').hidden = false;
   $('resume-avatar').onload = () => { $('resume-avatar').hidden = false; $('resume-initials').hidden = true; };
   $('resume-avatar').onerror = () => { $('resume-avatar').hidden = true; $('resume-initials').hidden = false; };
-  if (data.avatarUrl) $('resume-avatar').src = data.avatarUrl + '?v=' + Date.now();
+  $('offer-avatar').hidden = true; $('offer-initials').hidden = false;
+  $('offer-avatar').onload = () => { $('offer-avatar').hidden = false; $('offer-initials').hidden = true; };
+  $('offer-avatar').onerror = () => { $('offer-avatar').hidden = true; $('offer-initials').hidden = false; };
+  if (data.avatarUrl) {
+    const avatar = data.avatarUrl + '?v=' + Date.now();
+    $('resume-avatar').src = avatar; $('offer-avatar').src = avatar;
+  }
   if (start) await startResume();
 }
 // Ask "who's signed in?" and "does this browser remember someone?" together, and only then show a

@@ -22,3 +22,5 @@
 
 - Public HN Group and Horizon Network sign-in buttons lead through Auth to their own site administration panels, not the staff portal. Network admin uses the registered horizon-network.co.uk callback and redirects alias-domain admin entry there before starting authentication. Owner/Super Admin only; Network availability settings apply to both Network domains independently of HN Group.
 - Horizon Network footer descriptions and copyright identify it as “A subsidiary of HN Group Limited”. Desktop leadership cards adjust their column count to the live team size so they fit one row; preserve readable layouts on smaller screens.
+
+- Auth must enforce account setup on direct visits as well as application sign-ins: temporary passwords from new accounts/resets require replacement, and missing PINs require masked six-digit setup/confirmation. Normal permanent-password/existing-PIN accounts skip setup. Delegate validation and changes to the existing staff handlers; do not issue application access before setup is complete. Show the profile photo on the remembered-account offer as well as the PIN screen, falling back to initials.
