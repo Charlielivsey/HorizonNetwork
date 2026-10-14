@@ -232,14 +232,16 @@
         return Math.round((asUtc - now.getTime()) / 60000);
     }
 
-    function tzDifference(tz) {
-        const diff = tzOffsetMinutes(tz) - tzOffsetMinutes(deviceTz);
-        if (diff === 0) return "Same time as your device";
+    // How far `tz` is ahead of or behind `baseTz` (default: this device), e.g. "10 hours behind you".
+    function tzDifference(tz, baseTz, who) {
+        const diff = tzOffsetMinutes(tz) - tzOffsetMinutes(baseTz || deviceTz);
+        who = who || "your device";
+        if (diff === 0) return "Same time as " + who;
         const abs = Math.abs(diff);
         const h = Math.floor(abs / 60);
         const m = abs % 60;
         const amount = (h ? h + (h === 1 ? " hour" : " hours") : "") + (h && m ? " " : "") + (m ? m + " min" : "");
-        return amount + (diff > 0 ? " ahead of" : " behind") + " your device";
+        return amount + (diff > 0 ? " ahead of " : " behind ") + who;
     }
 
     function tzCity(tz) {
@@ -807,11 +809,14 @@
             renderChrome();
         } catch (e) { /* keep what we have */ }
         const me = state.me;
-        const hour = Number(fmt(deviceTz, { hour: "2-digit", hourCycle: "h23" }));
-        const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-        const firstName = me.firstName || me.displayName.split(" ")[0];
+        // Their own time comes from the time zone in their profile (not the device), and the second
+        // clock is always UK time, where HN Group is based (shows BST or GMT).
         const profileTz = me.timezone || state.meta.defaultTimezone;
         const placeName = me.location || tzCity(profileTz);
+        const UK_TZ = "Europe/London";
+        const hour = Number(fmt(profileTz, { hour: "2-digit", hourCycle: "h23" }));
+        const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+        const firstName = me.firstName || me.displayName.split(" ")[0];
 
 
         root.innerHTML =
@@ -822,7 +827,7 @@
             '<section class="home-hero">' +
             '<div class="hero-glow g1"></div><div class="hero-glow g2"></div>' +
             '<div class="hero-main">' +
-            '<p class="hero-date">' + clock(deviceTz, "date") + "</p>" +
+            '<p class="hero-date">' + clock(profileTz, "date") + "</p>" +
             "<h1>" + esc(greeting) + ", " + esc(firstName) + "</h1>" +
             mainRoleHtml(me) +
             '<div class="hero-chips">' +
@@ -853,13 +858,12 @@
             (!me.unreadAnnouncements && !me.pendingAcks && !me.openPolls && !me.onboardingTasks && !me.leaveApprovals && !me.timesheetApprovals && !me.helpdeskBadge && !me.payrollOverdrawn && !me.reviewsDue && !me.returnToWorkDue && !me.servicesDown && !me.expenseApprovals && !me.budgetWarnings && !me.invoicesOverdue && !me.trainingDue && !me.newApplicants && !me.backupStale && !me.billsDue && !me.exitInterviewDue && !me.feedbackDue && !me.flexibleDecisions && !me.chatUnread && !me.mentoringDue && !me.enquiriesNew ? '<span class="hero-chip calm">' + icon("tick") + "You\u2019re all caught up</span>" : "") +
             "</div></div>" +
             '<div class="hero-clocks">' +
-            '<div class="glass-clock"><div class="gc-label">' + icon("monitor") + "Your time \u00b7 " + esc(tzCity(deviceTz)) + "</div>" +
-            '<div class="gc-time">' + clock(deviceTz, "time") + "</div>" +
-            '<div class="gc-sub">' + clock(deviceTz, "zone") + "</div></div>" +
-            '<div class="glass-clock"><div class="gc-label">' + icon("pin") + esc(placeName) + "</div>" +
+            '<div class="glass-clock"><div class="gc-label">' + icon("pin") + "Your time \u00b7 " + esc(placeName) + "</div>" +
             '<div class="gc-time">' + clock(profileTz, "time") + "</div>" +
-            '<div class="gc-sub">' + clock(profileTz, "zone") + " \u00b7 " + esc(tzDifference(profileTz)) +
-            (me.location ? "" : ' \u00b7 <a href="/settings" data-link>Set location</a>') + "</div></div>" +
+            '<div class="gc-sub">' + clock(profileTz, "zone") + (me.location ? "" : ' \u00b7 <a href="/settings" data-link>Set location</a>') + "</div></div>" +
+            '<div class="glass-clock"><div class="gc-label">' + icon("clock") + "UK time \u00b7 London</div>" +
+            '<div class="gc-time">' + clock(UK_TZ, "time") + "</div>" +
+            '<div class="gc-sub">' + clock(UK_TZ, "zone") + " \u00b7 " + esc(tzDifference(UK_TZ, profileTz, "you")) + "</div></div>" +
             "</div></section>" +
 
             '<div class="home-layout">' +
