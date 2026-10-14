@@ -49,7 +49,7 @@ function layout(o) {
     (o.noindex ? '<meta name="robots" content="noindex">' : '') +
     (o.canonical ? '<link rel="canonical" href="' + esc(auth.WIKI_ORIGIN + o.canonical) + '">' : '') +
     '<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="preload" href="/assets/fonts/plus-jakarta-sans.woff2" as="font" type="font/woff2" crossorigin>' +
-    '<link rel="stylesheet" href="/assets/wiki.css?v=20261015b"><script src="/assets/wiki.js?v=20261015b" defer></script></head><body>' +
+    '<link rel="stylesheet" href="/assets/wiki.css?v=20261015c"><script src="/assets/wiki.js?v=20261015b" defer></script></head><body>' +
     '<a class="skip" href="#content">Skip to content</a><div class="stripe" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>' +
     '<header class="site-header"><button class="menu-toggle" type="button" aria-expanded="false" aria-controls="sidebar" aria-label="Main menu"><span></span><span></span><span></span></button>' +
     '<a class="brand" href="/wiki/Main_Page" aria-label="HN Group Wiki main page"><img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="92" height="32"><img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="92" height="32"><span class="brand-wiki">Wiki</span></a>' +
@@ -61,7 +61,7 @@ function layout(o) {
     '<div class="page"><nav class="sidebar" id="sidebar" aria-label="Wiki navigation"><ul>' +
     '<li><a href="/wiki/Main_Page">Main page</a></li><li><a href="/wiki/Special:AllPages">All pages</a></li><li><a href="/wiki/Special:Categories">Categories</a></li>' +
     '<li><a href="/wiki/Special:Random">Random article</a></li><li><a href="/wiki/Special:RecentChanges">Recent changes</a></li></ul>' +
-    '<h3>Companies</h3><ul><li><a href="/wiki/HN_Group">HN Group</a></li><li><a href="/wiki/Horizon_Network">Horizon Network</a></li><li><a href="/wiki/Horizon_Advertising">Horizon Advertising</a></li><li><a href="/wiki/Horizon_Development">Horizon Development</a></li><li><a href="/wiki/Horizon_Media_Group">Horizon Media Group</a></li></ul>' +
+    '<h3>Companies</h3><ul><li><a href="/wiki/HN_Group">HN Group</a></li><li><a href="/wiki/Horizon_Network">Horizon Network</a></li><li><a href="/wiki/Horizon_Advertising">Horizon Advertising</a></li><li><a href="/wiki/Horizon_Development">Horizon Development</a></li><li><a href="/wiki/Horizon_Media_Group">Horizon Media Group</a></li><li><a href="/wiki/Horizon_Holding_Co">Horizon Holding Co</a></li></ul>' +
     '<h3>Help</h3><ul><li><a href="/wiki/Help:Editing">How to edit</a></li><li><a href="/wiki/HN_Group_Wiki:About">About this wiki</a></li></ul>' +
     '<h3>HN Group sites</h3><ul><li><a class="external" href="https://hngroup.org.uk">hngroup.org.uk</a></li><li><a class="external" href="https://horizon-network.co.uk">horizon-network.co.uk</a></li><li><a class="external" href="https://staff.hngroup.org.uk">Staff portal</a></li><li><a class="external" href="https://status.hngroup.org.uk">Service status</a></li></ul></nav>' +
     '<main class="content" id="content">' +

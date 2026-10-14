@@ -7,39 +7,45 @@ title: HN Group
 | Legal name = HN Group Limited
 | Type = Parent company
 | Industry = Digital infrastructure<br>Advertising<br>Software development<br>Media
-| Subsidiaries = [[Horizon Network]]<br>[[Horizon Media Group]]
+| Subsidiaries = [[Horizon Network]]<br>[[Horizon Media Group]]<br>[[Horizon Holding Co]]
 | Country = United Kingdom
 | Email domain = hngroup.org.uk
 | Website = [https://hngroup.org.uk hngroup.org.uk]
 }}
-'''HN Group''' (legally '''HN Group Limited''') is the parent company of the Horizon businesses: [[Horizon Network]] and [[Horizon Media Group]]. [[Horizon Development]] is part of Horizon Network, and [[Horizon Advertising]] is a subsidiary of Horizon Media Group that is managed by Horizon Network.<ref>[https://hngroup.org.uk/about About HN Group], hngroup.org.uk.</ref> Together the companies cover what a modern business needs online: the infrastructure it runs on, the software it uses, the advertising that brings customers in and the media that tells its story.
+'''HN Group''' (legally '''HN Group Limited''') is the parent company of the Horizon businesses. It has three direct, wholly owned subsidiaries: [[Horizon Network]] (Horizon Network Limited), [[Horizon Media Group]] (Horizon Media Group Limited) and [[Horizon Holding Co]] (Horizon Holding Co Limited). [[Horizon Development]] is part of Horizon Network, and [[Horizon Advertising]] is a subsidiary of Horizon Media Group that is managed by Horizon Network.<ref>[https://hngroup.org.uk/about About HN Group], hngroup.org.uk.</ref> Together the companies cover what a modern business needs online: the infrastructure it runs on, the software it uses, the advertising that brings customers in and the media that tells its story.
 
 The group describes its purpose as "building the digital infrastructure, products and media for tomorrow's businesses".<ref>[https://hngroup.org.uk/ HN Group home page], hngroup.org.uk.</ref>
 
 == Structure ==
 {{Main|List of HN Group companies}}
-HN Group brings together two businesses, [[Horizon Network]] and [[Horizon Media Group]], each with a company beneath it:<ref>[https://hngroup.org.uk/companies Our companies], hngroup.org.uk.</ref>
+HN Group Limited directly and wholly owns three companies: two operating businesses, [[Horizon Network]] and [[Horizon Media Group]], each with a company beneath it, and [[Horizon Holding Co]], which holds the group's assets:<ref>[https://hngroup.org.uk/companies Our companies], hngroup.org.uk.</ref>
 
-* '''[[HN Group]]''' — parent company
-** '''[[Horizon Network]]''' — digital infrastructure, advertising and software
+* '''[[HN Group]]''' (HN Group Limited) — parent company
+** '''[[Horizon Network]]''' (Horizon Network Limited) — digital infrastructure, advertising and software
 *** '''[[Horizon Development]]''' — custom software and web applications
-** '''[[Horizon Media Group]]''' — media and content
-*** '''[[Horizon Advertising]]''' — digital advertising (managed by Horizon Network)
+** '''[[Horizon Media Group]]''' (Horizon Media Group Limited) — media and content
+*** '''[[Horizon Advertising]]''' (Horizon Advertising Limited) — digital advertising (managed by Horizon Network)
+** '''[[Horizon Holding Co]]''' (Horizon Holding Co Limited) — owns the group's assets and manages its email services
+
+=== Horizon Holding Co ===
+[[Horizon Holding Co]] owns the group's assets, including its domains, Discord servers and technical assets, and manages all of HN Group's email services. It has no staff of its own and is managed directly by HN Group staff.
 
 === Horizon Advertising ===
 [[Horizon Advertising]] has an unusual arrangement. It is a '''subsidiary of [[Horizon Media Group]]''', but it is '''managed by [[Horizon Network]]''', which runs it day to day alongside its digital infrastructure and [[Horizon Development]]. This is why the group's websites present Horizon Advertising among Horizon Network's services.
 
 {| class="wikitable"
 |+ Companies in HN Group
-! Company !! Part of !! Focus !! Website
+! Company !! Legal name !! Part of !! Focus !! Website
 |-
-| [[Horizon Network]] || HN Group || Digital infrastructure, advertising and software || [https://horizon-network.co.uk horizon-network.co.uk]
+| [[Horizon Network]] || Horizon Network Limited || HN Group || Digital infrastructure, advertising and software || [https://horizon-network.co.uk horizon-network.co.uk]
 |-
-| [[Horizon Advertising]] || Horizon Media Group (managed by Horizon Network) || Display advertising, campaign management, analytics and reporting || [https://horizonadvertising.co.uk horizonadvertising.co.uk]
+| [[Horizon Advertising]] || Horizon Advertising Limited || Horizon Media Group (managed by Horizon Network) || Display advertising, campaign management, analytics and reporting || [https://horizonadvertising.co.uk horizonadvertising.co.uk]
 |-
-| [[Horizon Development]] || Horizon Network || Custom software and web applications || Through [https://horizon-network.co.uk/services Horizon Network]
+| [[Horizon Development]] || Part of Horizon Network Limited || Horizon Network || Custom software and web applications || Through [https://horizon-network.co.uk/services Horizon Network]
 |-
-| [[Horizon Media Group]] || HN Group || Media and content || Through [https://hngroup.org.uk/companies hngroup.org.uk]
+| [[Horizon Media Group]] || Horizon Media Group Limited || HN Group || Media and content || Through [https://hngroup.org.uk/companies hngroup.org.uk]
+|-
+| [[Horizon Holding Co]] || Horizon Holding Co Limited || HN Group || Group assets, domains and email services || —
 |}
 
 == How the group works ==

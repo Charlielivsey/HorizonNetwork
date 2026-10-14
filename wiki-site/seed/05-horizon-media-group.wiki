@@ -4,7 +4,8 @@ title: Horizon Media Group
 {{Infobox
 | name = Horizon Media Group
 | logo = horizon-media-group-logo.svg
-| Type = Subsidiary
+| Legal name = Horizon Media Group Limited
+| Type = Wholly owned subsidiary
 | Parent = [[HN Group]]
 | Industry = Media and content
 | Services = Media and content<br>Press enquiries
@@ -13,20 +14,21 @@ title: Horizon Media Group
 | Brand colour = {{Swatch|#5514B4}}Indigo <code>#5514B4</code>
 | Website = [https://hngroup.org.uk/companies hngroup.org.uk/companies]
 }}
-'''Horizon Media Group''' is the media arm of [[HN Group]], telling stories for the group and the businesses it works with.<ref>[https://hngroup.org.uk/companies Our companies], hngroup.org.uk.</ref> Alongside [[Horizon Network]], it is one of the two businesses HN Group brings together.
+'''Horizon Media Group''' (legally '''Horizon Media Group Limited''') is the media arm of [[HN Group]], telling stories for the group and the businesses it works with.<ref>[https://hngroup.org.uk/companies Our companies], hngroup.org.uk.</ref> Alongside [[Horizon Network]] and [[Horizon Holding Co]], it is one of HN Group's three direct, wholly owned subsidiaries.
 
 == Activities ==
 * '''Media and content''' — content and media for the group and the businesses it works with
 * '''Press enquiries''' — media and press enquiries to the group are directed to Horizon Media Group through the HN Group contact form<ref>[https://hngroup.org.uk/contact?topic=media Contact], hngroup.org.uk.</ref>
 
 == Structure ==
-Horizon Media Group is part of [[HN Group]] and sits alongside [[Horizon Network]]. Its staff use email addresses at '''media.hngroup.org.uk'''. [[Horizon Advertising]] is a subsidiary of Horizon Media Group, but is managed by Horizon Network.
+Horizon Media Group Limited is a direct, wholly owned subsidiary of HN Group Limited, alongside [[Horizon Network]] and [[Horizon Holding Co]]. Its staff use email addresses at '''media.hngroup.org.uk'''. [[Horizon Advertising]] is a subsidiary of Horizon Media Group, but is managed by Horizon Network.
 
 * [[HN Group]]
 ** [[Horizon Network]]
 *** [[Horizon Development]]
 ** '''Horizon Media Group'''
 *** [[Horizon Advertising]] (managed by Horizon Network)
+** [[Horizon Holding Co]]
 
 == Brand ==
 [[File:horizon-media-group-roundel.svg|thumb|The Horizon Media Group roundel]]

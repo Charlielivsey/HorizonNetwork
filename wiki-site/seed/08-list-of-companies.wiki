@@ -1,22 +1,22 @@
 title: List of HN Group companies
 ---
 {{Short description|List of the companies in HN Group}}
-This is a list of the companies in '''[[HN Group]]'''. HN Group brings together [[Horizon Network]] and [[Horizon Media Group]]. [[Horizon Development]] is part of Horizon Network; [[Horizon Advertising]] is a subsidiary of Horizon Media Group and is managed by Horizon Network.<ref>[https://hngroup.org.uk/companies Our companies], hngroup.org.uk.</ref>
+This is a list of the companies in '''[[HN Group]]'''. HN Group Limited has three direct, wholly owned subsidiaries: [[Horizon Network]], [[Horizon Media Group]] and [[Horizon Holding Co]]. [[Horizon Development]] is part of Horizon Network; [[Horizon Advertising]] is a subsidiary of Horizon Media Group and is managed by Horizon Network.<ref>[https://hngroup.org.uk/companies Our companies], hngroup.org.uk.</ref>
 
 {| class="wikitable"
-! Company !! Part of !! Focus !! Website
+! Company !! Legal name !! Part of !! Focus !! Website
 |-
-| '''[[HN Group]]''' || — (parent company) || Brings the Horizon businesses together || [https://hngroup.org.uk hngroup.org.uk]
+| '''[[HN Group]]''' || HN Group Limited || — (parent company) || Brings the Horizon businesses together || [https://hngroup.org.uk hngroup.org.uk]
 |-
-| '''[[Horizon Network]]''' || HN Group || Digital infrastructure, advertising and software || [https://horizon-network.co.uk horizon-network.co.uk]
+| '''[[Horizon Network]]''' || Horizon Network Limited || HN Group (wholly owned) || Digital infrastructure, advertising and software || [https://horizon-network.co.uk horizon-network.co.uk]
 |-
-| '''[[Horizon Advertising]]''' || Horizon Media Group (managed by Horizon Network) || Display advertising, campaign management, analytics and reporting || [https://horizonadvertising.co.uk horizonadvertising.co.uk]
+| '''[[Horizon Advertising]]''' || Horizon Advertising Limited || Horizon Media Group (managed by Horizon Network) || Display advertising, campaign management, analytics and reporting || [https://horizonadvertising.co.uk horizonadvertising.co.uk]
 |-
-| '''[[Horizon Development]]''' || Horizon Network || Custom software and web applications || Through Horizon Network
+| '''[[Horizon Development]]''' || Part of Horizon Network Limited || Horizon Network || Custom software and web applications || Through Horizon Network
 |-
-| '''[[Horizon Media Group]]''' || HN Group || Media and content, press enquiries || Through HN Group
+| '''[[Horizon Media Group]]''' || Horizon Media Group Limited || HN Group (wholly owned) || Media and content, press enquiries || Through HN Group
 |-
-| '''[[Horizon Holding Co]]''' || Not yet documented || Not yet documented || —
+| '''[[Horizon Holding Co]]''' || Horizon Holding Co Limited || HN Group (wholly owned) || Owns the group's assets, domains, Discord servers and technical assets; manages email services || —
 |}
 
 == Group structure ==
@@ -25,6 +25,7 @@ This is a list of the companies in '''[[HN Group]]'''. HN Group brings together 
 *** [[Horizon Development]]
 ** [[Horizon Media Group]]
 *** [[Horizon Advertising]] (managed by Horizon Network)
+** [[Horizon Holding Co]]
 
 == References ==
 {{Reflist}}

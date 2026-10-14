@@ -185,6 +185,7 @@ p { margin: 0 0 1em; }
 .company-logo { height: 64px; margin-bottom: 1.4rem; display: flex; align-items: center; }
 .company-logo img { height: 100%; width: auto; max-width: 100%; object-fit: contain; object-position: left; }
 .company p { color: var(--muted); }
+.company-wide { grid-column: 1 / -1; }
 .company .link-arrow { margin-top: auto; }
 .ticks { list-style: none; padding: 0; margin: 0 0 1.4rem; display: grid; gap: 0.45rem; }
 .ticks li { position: relative; padding-left: 1.7rem; font-size: 0.97rem; }

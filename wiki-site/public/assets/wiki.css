@@ -177,7 +177,9 @@ a.external::after { content: "↗"; font-size: .75em; margin-left: .15em; opacit
 .mp-body { padding: .6rem 1.1rem .8rem; }
 .mp-body > p:first-child { margin-top: .3rem; }
 .mp-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 1.2rem; }
-.company-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: .8rem; margin: .4rem 0 .6rem; }
+.company-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; margin: .4rem 0 .6rem; }
+@media (max-width: 1100px) { .company-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .company-cards { grid-template-columns: minmax(0, 1fr); } }
 .company-card { display: flex; flex-direction: column; gap: .35rem; padding: .9rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); color: var(--text); transition: border-color .15s, transform .15s; }
 .company-card:hover { text-decoration: none; border-color: var(--link); transform: translateY(-2px); }
 .cc-logo { height: 54px; display: flex; align-items: center; }

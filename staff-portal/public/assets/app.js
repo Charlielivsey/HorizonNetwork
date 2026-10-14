@@ -3564,7 +3564,7 @@
     // "pngOnly" files have no SVG version.
     const BRANDS = [
         {
-            name: "HN Group", logo: "hn-group-wordmark", domain: "hngroup.org.uk",
+            name: "HN Group", legal: "HN Group Limited", logo: "hn-group-wordmark", domain: "hngroup.org.uk",
             about: "The parent company that brings all of the Horizon businesses together under one group, with shared leadership, people and standards.",
             files: [
                 ["hn-group-wordmark", "Wordmark"], ["hn-group-wordmark-white", "Wordmark – white", true],
@@ -3572,7 +3572,7 @@
             ],
         },
         {
-            name: "Horizon Network", logo: "horizon-network-wordmark", domain: "horizon-network.co.uk",
+            name: "Horizon Network", legal: "Horizon Network Limited", logo: "horizon-network-wordmark", domain: "horizon-network.co.uk",
             about: "A growing network of digital services and solutions, building the infrastructure for tomorrow's businesses. UK based, with 24/7 monitoring and 99.9% uptime.",
             points: ["Horizon Hosting (coming soon): VPS, dedicated servers and managed cloud"],
             files: [
@@ -3582,23 +3582,25 @@
             ],
         },
         {
-            name: "Horizon Advertising", logo: "horizon-advertising-logo", domain: "horizonadvertising.co.uk",
+            name: "Horizon Advertising", legal: "Horizon Advertising Limited", logo: "horizon-advertising-logo", domain: "horizonadvertising.co.uk",
             about: "Digital advertising solutions powered by the Horizon Network. Reaching audiences with precision and scale, with measurable results.",
             points: ["Display advertising", "Campaign management", "Analytics & reporting"],
             files: roundelSet("horizon-advertising").concat([["horizon-advertising-email-logo", "Email signature logo", false, true]]),
         },
         {
-            name: "Horizon Development", logo: "horizon-development-logo",
+            name: "Horizon Development", legal: "Part of Horizon Network Limited", logo: "horizon-development-logo",
             about: "Custom software development and web applications, from concept to deployment, built with modern technologies.",
             files: roundelSet("horizon-development").concat([["horizon-development-email-logo", "Email signature logo", false, true]]),
         },
         {
-            name: "Horizon Media Group", logo: "horizon-media-group-logo", domain: "media.hngroup.org.uk",
+            name: "Horizon Media Group", legal: "Horizon Media Group Limited", logo: "horizon-media-group-logo", domain: "media.hngroup.org.uk",
             about: "The media arm of HN Group.",
             files: roundelSet("horizon-media-group").concat([["horizon-media-group-email-logo", "Email signature logo", false, true]]),
         },
         {
-            name: "Horizon Holding Co", logo: "horizon-holding-co-logo", logosOnly: true,
+            name: "Horizon Holding Co", legal: "Horizon Holding Co Limited", logo: "horizon-holding-co-logo", domain: "holding.hngroup.org.uk",
+            about: "Owns HN Group's assets and manages email services for the whole group. It has no staff of its own and is managed directly by HN Group staff.",
+            points: ["Domains", "Discord servers", "Technical assets", "Email services"],
             files: roundelSet("horizon-holding-co").concat([["horizon-holding-co-email-logo", "Email signature logo", false, true]]),
         },
     ];
@@ -3637,7 +3639,7 @@
             '<section class="about-hero">' +
             '<div class="about-hero-text"><p class="eyebrow">One group, ' + companies.length + " companies</p>" +
             "<h2>Building the digital infrastructure, products and media for tomorrow’s businesses.</h2>" +
-            '<p class="muted">HN Group brings together Horizon Network, Horizon Advertising, Horizon Development and Horizon Media Group. Each company has its own focus, and they share people, systems and standards across the group.</p></div>' +
+            '<p class="muted">HN Group Limited wholly owns Horizon Network, Horizon Media Group and Horizon Holding Co. Horizon Development is part of Horizon Network, and Horizon Advertising is a Horizon Media Group subsidiary managed by Horizon Network. Each company has its own focus, and they share people, systems and standards across the group.</p></div>' +
             '<div class="about-hero-logo">' + brandImg(["hn-group-wordmark"], "logo-light-theme", "HN Group") + brandImg(["hn-group-wordmark-white"], "logo-dark-theme", "HN Group") + "</div>" +
             "</section>" +
 
@@ -3647,6 +3649,7 @@
                 return '<article class="company-card">' +
                     '<div class="cc-logo">' + brandImg([b.logo], "logo-light-theme", b.name) + brandImg([b.logo + "-white"], "logo-dark-theme", b.name) + "</div>" +
                     '<h3 class="cc-name">' + esc(b.name) + "</h3>" +
+                    (b.legal ? '<p class="muted small">' + esc(b.legal) + "</p>" : "") +
                     '<p class="cc-about">' + esc(b.about) + "</p>" +
                     (b.points ? '<ul class="cc-points">' + b.points.map(function (p) { return "<li>" + icon("tick") + esc(p) + "</li>"; }).join("") + "</ul>" : "") +
                     '<div class="cc-meta">' +
@@ -3710,9 +3713,9 @@
     const SIGNATURE_COMPANIES = {
         "HN Group": { logo: "hn-group-email-logo", accent: "#5514B4", web: "hngroup.org.uk", domain: "hngroup.org.uk", legal: "HN Group Limited" },
         "Horizon Network": { logo: "horizon-network-email-logo", accent: "#5514B4", web: "horizon-network.co.uk", domain: "horizon-network.co.uk", legal: "Horizon Network Limited", parent: "HN Group", parentLegal: "HN Group Limited" },
-        "Horizon Advertising": { logo: "horizon-advertising-email-logo", accent: "#7B52C4", web: "horizonadvertising.co.uk", domain: "horizonadvertising.co.uk", legal: "Horizon Advertising Limited", parent: "Horizon Network", parentLegal: "Horizon Network Limited" },
+        "Horizon Advertising": { logo: "horizon-advertising-email-logo", accent: "#7B52C4", web: "horizonadvertising.co.uk", domain: "horizonadvertising.co.uk", legal: "Horizon Advertising Limited", parent: "Horizon Media Group", parentLegal: "Horizon Media Group Limited" },
         "Horizon Development": { logo: "horizon-development-email-logo", accent: "#5514B4", web: "horizon-network.co.uk", legal: "Horizon Development", parent: "Horizon Network", parentLegal: "Horizon Network Limited" },
-        "Horizon Media Group": { logo: "horizon-media-group-email-logo", accent: "#5514B4", web: "hngroup.org.uk", domain: "media.hngroup.org.uk", legal: "Horizon Media Group", parent: "HN Group", parentLegal: "HN Group Limited" },
+        "Horizon Media Group": { logo: "horizon-media-group-email-logo", accent: "#5514B4", web: "hngroup.org.uk", domain: "media.hngroup.org.uk", legal: "Horizon Media Group Limited", parent: "HN Group", parentLegal: "HN Group Limited" },
     };
     const SIG_STRIPE = [["#E97DE8", 14], ["#5514B4", 14], ["#E3E65B", 6], ["#3E9BA3", 20], ["#7A1F6C", 10], ["#C2306B", 10], ["#5FAE7B", 13], ["#1C2235", 13]];
 

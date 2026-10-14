@@ -9,12 +9,13 @@ protected: yes
 {{Company card|Horizon Advertising|horizon-advertising-logo.svg|Digital advertising. A Horizon Media Group company, managed by Horizon Network.}}
 {{Company card|Horizon Development|horizon-development-logo.svg|Custom software and web applications, part of Horizon Network.}}
 {{Company card|Horizon Media Group|horizon-media-group-logo.svg|The media arm of HN Group.}}
+{{Company card|Horizon Holding Co|horizon-holding-co-logo.svg|Owns the group's assets and domains, and manages its email services.}}
 {{Cards end}}
 
 {{Columns start}}
 {{Box start|From today's featured article|purple}}
 [[File:hn-group-wordmark.svg|thumb|The HN Group wordmark]]
-'''[[HN Group]]''' brings together [[Horizon Network]] and [[Horizon Media Group]]. [[Horizon Development]] brings software expertise to Horizon Network, and [[Horizon Advertising]], a Horizon Media Group company, is managed by Horizon Network alongside its digital infrastructure. The businesses share people, systems and standards across the group, so a client of one Horizon business can draw on the skills of all of them. ('''[[HN Group|Full article…]]''')
+'''[[HN Group]]''' brings together [[Horizon Network]], [[Horizon Media Group]] and [[Horizon Holding Co]]. [[Horizon Development]] brings software expertise to Horizon Network, and [[Horizon Advertising]], a Horizon Media Group company, is managed by Horizon Network alongside its digital infrastructure. The businesses share people, systems and standards across the group, so a client of one Horizon business can draw on the skills of all of them. ('''[[HN Group|Full article…]]''')
 {{Box end}}
 
 {{Box start|Did you know…|teal}}
@@ -22,6 +23,7 @@ protected: yes
 * … that [[Horizon Advertising]] is a subsidiary of [[Horizon Media Group]], but is managed by [[Horizon Network]]?
 * … that Horizon Hosting, [[Horizon Network]]'s planned hosting service, will offer VPS, dedicated servers and managed cloud?
 * … that Horizon Network can also be reached at '''horizonetwork.com''', with '''horizon-network.co.uk''' as its main address?
+* … that [[Horizon Holding Co]] owns the group's domains, Discord servers and technical assets, but has no staff of its own?
 * … that [[Horizon Advertising]]'s roundel logo is lavender, while the other Horizon roundels are indigo?
 {{Box end}}
 {{Column}}

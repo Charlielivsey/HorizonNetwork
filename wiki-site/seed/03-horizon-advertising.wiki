@@ -4,6 +4,7 @@ title: Horizon Advertising
 {{Infobox
 | name = Horizon Advertising
 | logo = horizon-advertising-logo.svg
+| Legal name = Horizon Advertising Limited
 | Type = Subsidiary
 | Parent = [[Horizon Media Group]]
 | Managed by = [[Horizon Network]]
@@ -13,7 +14,7 @@ title: Horizon Advertising
 | Brand colour = {{Swatch|#7B52C4}}Lavender <code>#7B52C4</code>
 | Website = [https://horizonadvertising.co.uk horizonadvertising.co.uk]
 }}
-'''Horizon Advertising''' provides digital advertising solutions powered by [[Horizon Network]]. It is a subsidiary of [[Horizon Media Group]], but is managed by Horizon Network. It focuses on reaching audiences with precision and scale, with measurable results.<ref>[https://hngroup.org.uk/companies Our companies], hngroup.org.uk.</ref>
+'''Horizon Advertising''' (legally '''Horizon Advertising Limited''') provides digital advertising solutions powered by [[Horizon Network]]. It is a subsidiary of [[Horizon Media Group]], but is managed by Horizon Network. It focuses on reaching audiences with precision and scale, with measurable results.<ref>[https://hngroup.org.uk/companies Our companies], hngroup.org.uk.</ref>
 
 == Services ==
 * '''Display advertising'''
@@ -35,6 +36,7 @@ Because Horizon Network manages it, the group's websites list Horizon Advertisin
 *** [[Horizon Development]]
 ** [[Horizon Media Group]]
 *** [[Horizon Advertising]] (managed by Horizon Network)
+** [[Horizon Holding Co]]
 
 == Brand ==
 [[File:horizon-advertising-roundel.svg|thumb|The Horizon Advertising roundel]]
