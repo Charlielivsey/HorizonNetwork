@@ -4,6 +4,14 @@ const query = new URLSearchParams(location.search);
 const client = query.get('client_id'), state = query.get('state');
 // Must match the applications registered in server.js.
 const APPS = {
+  media: { name: 'Horizon Media Group administration', short: 'Horizon Media Group', allowed: user => user.statusAdminAllowed, granted: 'You can manage this website.', restricted: 'Only the system owner and Super Admin members can manage this website.' },
+  holding: { name: 'Horizon Holding Co administration', short: 'Horizon Holding Co', allowed: user => user.statusAdminAllowed, granted: 'You can manage this website.', restricted: 'Only the system owner and Super Admin members can manage this website.' },
+  development: { name: 'Horizon Development administration', short: 'Horizon Development', allowed: user => user.statusAdminAllowed, granted: 'You can manage this website.', restricted: 'Only the system owner and Super Admin members can manage this website.' },
+  support: { name: 'HN Group Support administration', short: 'HN Group Support', allowed: user => user.statusAdminAllowed, granted: 'You can manage this website.', restricted: 'Only the system owner and Super Admin members can manage this website.' },
+  clients: { name: 'HN Group Clients administration', short: 'HN Group Clients', allowed: user => user.statusAdminAllowed, granted: 'You can manage this website.', restricted: 'Only the system owner and Super Admin members can manage this website.' },
+  careers: { name: 'HN Group Careers administration', short: 'HN Group Careers', allowed: user => user.statusAdminAllowed, granted: 'You can manage this website.', restricted: 'Only the system owner and Super Admin members can manage this website.' },
+  docs: { name: 'HN Group Docs administration', short: 'HN Group Docs', allowed: user => user.statusAdminAllowed, granted: 'You can manage this website.', restricted: 'Only the system owner and Super Admin members can manage this website.' },
+  news: { name: 'HN Group News administration', short: 'HN Group News', allowed: user => user.statusAdminAllowed, granted: 'You can manage this website.', restricted: 'Only the system owner and Super Admin members can manage this website.' },
   network: { name: 'Horizon Network website configuration', short: 'Horizon Network configuration', allowed: user => user.statusAdminAllowed, granted: 'You can manage the Horizon Network website and maintenance mode.', restricted: 'Only the system owner and Super Admin members can configure Horizon Network.' },
   status: { name: 'Status administration', short: 'Status', allowed: user => user.statusAdminAllowed,
     granted: 'You have permission to manage services and publish incident updates.',

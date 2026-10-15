@@ -1,0 +1,18 @@
+[
+  {
+    "id": "000000000000000000000001",
+    "title": "Using your private ticket reference",
+    "summary": "Checking and replying to a support request",
+    "category": "Support requests",
+    "body": "After creating a support request, copy the private reference shown below the form and keep it safe.\n\nPaste it into \u201cAlready have a request?\u201d on this site to read replies, check the current status or send another message. Replies appear on the site; email notifications are not currently sent.\n\nAnyone with the reference can access the request. Keep it private and do not include passwords or payment details in your messages.",
+    "published": true
+  },
+  {
+    "id": "000000000000000000000002",
+    "title": "Checking service availability",
+    "summary": "Where to find incidents and maintenance updates",
+    "category": "Service status",
+    "body": "Visit status.hngroup.org.uk to see current service availability, maintenance announcements and incident updates.\n\nIf your issue is not covered by an existing update, create a support request and describe the affected service, what happened and any error message. Do not send passwords.",
+    "published": true
+  }
+]

@@ -38,6 +38,21 @@ test('real staff password and PIN, minimal live profile, avatar, fixed clients a
     assert.equal(account.email,'test.owner@hngroup.org.uk'); assert.equal(account.displayName,'Test Owner'); assert.equal(account.jobTitle,'System owner'); assert.equal(account.company,store.COMPANIES[0]); assert.equal(account.statusAdminAllowed,true);
     const cookie = verified.headers.getSetCookie().find(c=>c.startsWith('__Host-hn_auth_session=')).split(';')[0];
     assert.ok(!verified.headers.get('set-cookie').includes('hn_staff_session='));
+    // Every new site uses its registered callback and its own one-use grant.
+    for (const client of ['media','holding','development','support','clients','careers','docs','news']) {
+      const state = 'e'.repeat(64);
+      const grant = await post('/api/continue', {client_id:client,state}, cookie);
+      assert.equal(grant.status,200);
+      const callback = new URL((await grant.json()).redirect);
+      assert.equal(callback.origin,`https://${client}.hngroup.org.uk`);
+      assert.equal(callback.pathname,'/auth/callback');
+      const exchanged = await post('/api/sso/exchange',{client_id:client,state,code:callback.searchParams.get('code')},'',{Authorization:'Bearer '+'c'.repeat(64)});
+      assert.equal(exchanged.status,200);
+      const session = (await exchanged.json()).session;
+      assert.equal((await post('/api/sso/session',{client_id:client,session},'',{Authorization:'Bearer '+'c'.repeat(64)})).status,200);
+      assert.equal((await post('/api/sso/session',{client_id:'wiki',session},'',{Authorization:'Bearer '+'c'.repeat(64)})).status,401);
+    }
+
     assert.equal((await post('/api/login/code',{code:'582947'},flow)).status,401);
     const picture = await fetch(base+'/api/avatar',{headers:{Cookie:cookie}}); assert.equal(picture.status,200); assert.deepEqual(Buffer.from(await picture.arrayBuffer()),Buffer.from(avatar,'base64'));
     assert.equal((await fetch(base+'/api/avatar')).status,401);

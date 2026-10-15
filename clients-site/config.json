@@ -1,0 +1,9 @@
+{
+  "id": "clients",
+  "domain": "clients.hngroup.org.uk",
+  "port": 4300,
+  "kind": "clients",
+  "name": "HN Group Clients",
+  "logo": "hn-group-wordmark",
+  "legal": "HN Group Limited"
+}
