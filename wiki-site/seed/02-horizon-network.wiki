@@ -4,7 +4,6 @@ title: Horizon Network
 {{Infobox
 | name = Horizon Network
 | logo = horizon-network-wordmark.svg
-| Legal name = Horizon Network Limited
 | Type = Wholly owned subsidiary
 | Industry = Digital infrastructure<br>Advertising<br>Software development
 | Divisions = [[Horizon Development]]
@@ -13,7 +12,7 @@ title: Horizon Network
 | Email domain = horizon-network.co.uk
 | Website = [https://horizon-network.co.uk horizon-network.co.uk]<br>[https://horizonetwork.com horizonetwork.com]
 }}
-'''Horizon Network''' (legally '''Horizon Network Limited''') is the [[HN Group]] business for digital infrastructure, advertising and software. It brings together its own digital services and infrastructure with [[Horizon Development]], which is part of Horizon Network, and [[Horizon Advertising]], a [[Horizon Media Group]] subsidiary that Horizon Network manages.<ref>[https://horizon-network.co.uk/ Horizon Network], horizon-network.co.uk.</ref> Its websites describe it as "a subsidiary of HN Group Limited".
+'''Horizon Network''' is the [[HN Group]] business for digital infrastructure, advertising and software. It brings together its own digital services and infrastructure with [[Horizon Development]], which is part of Horizon Network, and [[Horizon Advertising]], a [[Horizon Media Group]] subsidiary that Horizon Network manages.<ref>[https://horizon-network.co.uk/ Horizon Network], horizon-network.co.uk.</ref>
 
 Its tagline is "Connecting ideas. Building what's next." — digital infrastructure, advertising and software, brought together to help businesses build, connect and grow.
 
@@ -35,7 +34,7 @@ Horizon Network describes itself as a growing network of digital services and so
 Horizon Hosting is Horizon Network's planned hosting service, offering VPS, dedicated servers and managed cloud. It is listed as "coming soon".
 
 == Structure ==
-Horizon Network Limited is a direct, wholly owned subsidiary of HN Group Limited, alongside [[Horizon Media Group]] and [[Horizon Holding Co]]. [[Horizon Development]] is part of Horizon Network. Horizon Network also manages [[Horizon Advertising]], which is a subsidiary of Horizon Media Group. Together they combine specialist skills with the shared people and systems of HN Group.
+Horizon Network is a direct, wholly owned subsidiary of [[HN Group]], alongside [[Horizon Media Group]] and [[Horizon Holding Co]]. [[Horizon Development]] is part of Horizon Network. Horizon Network also manages [[Horizon Advertising]], which is a subsidiary of Horizon Media Group. Together they combine specialist skills with the shared people and systems of HN Group.
 
 * [[HN Group]]
 ** '''Horizon Network'''

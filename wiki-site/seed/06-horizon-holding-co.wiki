@@ -4,7 +4,6 @@ title: Horizon Holding Co
 {{Infobox
 | name = Horizon Holding Co
 | logo = horizon-holding-co-logo.svg
-| Legal name = Horizon Holding Co Limited
 | Type = Wholly owned subsidiary
 | Industry = Asset holding
 | Holds = Domains<br>Discord servers<br>Technical assets
@@ -13,9 +12,9 @@ title: Horizon Holding Co
 | Country = United Kingdom
 | Email domain = holding.hngroup.org.uk
 }}
-'''Horizon Holding Co''' (legally '''Horizon Holding Co Limited''') is the company that holds the assets of [[HN Group]]. It owns the group's domains, Discord servers and technical assets, and manages all of HN Group's email services.
+'''Horizon Holding Co''' is the company that holds the assets of [[HN Group]]. It owns the group's domains, Discord servers and technical assets, and manages all of HN Group's email services.
 
-It is a direct, wholly owned subsidiary of HN Group Limited, alongside [[Horizon Network]] (Horizon Network Limited) and [[Horizon Media Group]] (Horizon Media Group Limited).
+It is a direct, wholly owned subsidiary of [[HN Group]], alongside [[Horizon Network]] and [[Horizon Media Group]].
 
 == Role ==
 Horizon Holding Co keeps the things the whole group relies on in one place, separate from the companies that trade:
@@ -31,12 +30,12 @@ Its own domain is '''holding.hngroup.org.uk'''.
 Horizon Holding Co has no staff of its own. It is managed directly by the staff of [[HN Group]].
 
 == Structure ==
-* [[HN Group]] (HN Group Limited)
-** [[Horizon Network]] (Horizon Network Limited)
+* [[HN Group]]
+** [[Horizon Network]]
 *** [[Horizon Development]]
-** [[Horizon Media Group]] (Horizon Media Group Limited)
-*** [[Horizon Advertising]] (Horizon Advertising Limited, managed by Horizon Network)
-** '''Horizon Holding Co''' (Horizon Holding Co Limited)
+** [[Horizon Media Group]]
+*** [[Horizon Advertising]] (managed by Horizon Network)
+** '''Horizon Holding Co'''
 
 == Brand ==
 [[File:horizon-holding-co-roundel.svg|thumb|The Horizon Holding Co roundel]]
