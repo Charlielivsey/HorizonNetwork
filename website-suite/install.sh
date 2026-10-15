@@ -87,12 +87,23 @@ if [ ! -f /etc/systemd/system/pm2-root.service ]; then pm2 startup systemd -u ro
 systemctl enable pm2-root >/dev/null
 has_origin_dns() {
     python3 - "$DOMAIN" <<'PY'
-import json,sys,urllib.request,ipaddress,socket
+import json,sys,urllib.request,ipaddress,socket,subprocess,shutil
 answers=[]
 try:
     with urllib.request.urlopen('https://dns.google/resolve?name='+sys.argv[1]+'&type=A',timeout=8) as r:
         answers=[a['data'] for a in json.load(r).get('Answer',[]) if a.get('type')==1]
-except Exception:
+except Exception: pass
+# Recently added records can remain negatively cached at one resolver.
+if not answers and shutil.which('dig'):
+    for resolver in ('1.1.1.1','8.8.8.8'):
+        try:
+            result=subprocess.run(['dig','@'+resolver,'+time=2','+tries=1','+short',sys.argv[1],'A'],capture_output=True,text=True,timeout=4)
+            for value in result.stdout.splitlines():
+                try: ipaddress.IPv4Address(value);answers.append(value)
+                except ValueError: pass
+            if answers: break
+        except Exception: pass
+if not answers:
     try: answers=socket.gethostbyname_ex(sys.argv[1])[2]
     except Exception: pass
 # Accept direct origin and Cloudflare proxied records; ACME checks actual routing.
