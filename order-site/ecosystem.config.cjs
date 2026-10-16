@@ -1,1 +1,0 @@
-module.exports={apps:[{name:'hn-order',script:'/opt/hn-order/server.js',cwd:'/opt/hn-order',instances:1,exec_mode:'fork',autorestart:true,max_memory_restart:'160M',node_args:'--max-old-space-size=64 --max-semi-space-size=2',env:{NODE_ENV:'production',PORT:5180,DATA_DIR:'/var/lib/hn-order'}}]};

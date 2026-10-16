@@ -2120,7 +2120,7 @@ extraRoutes.init({
 
 // ---------- Routing ----------
 
-const statusSso = createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent, handleChangePassword, handleSetCode, routeApi });
+const statusSso = createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent, handleChangePassword, handleSetCode });
 const portalAuth = portalAuthLib.createPortalAuth({ store, sessions, resume, createSession, cookieFor, parseCookies, send, redirect, logEvent, loginNext, clientIp });
 
 async function route(req, res) {

@@ -1,1 +1,0 @@
-module.exports={apps:[{name:'hn-sign',script:'/opt/hn-sign/server.js',cwd:'/opt/hn-sign',instances:1,exec_mode:'fork',autorestart:true,max_memory_restart:'160M',node_args:'--max-old-space-size=64 --max-semi-space-size=2',env:{NODE_ENV:'production',PORT:5040,DATA_DIR:'/var/lib/hn-sign'}}]};
