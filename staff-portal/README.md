@@ -246,7 +246,7 @@ You then choose who has each role. Someone with several roles gets every permiss
 - A **Super Admin** role with every permission except *Run payroll*, including System Admin, is created automatically.
 - *HR cases*, *Recruitment* and *Activity reports* are given to the Super Admin, Leadership & HR and Human Resources roles the first time this version starts.
 - A **Human Resources** role (staff, onboarding, leave, rotas and payroll) is created and given to everyone whose job title mentions Human Resources or HR. An empty **IT Support** role (helpdesk) is created too.
-- The built-in admin account (`admin@hngroup.org.uk`) has the same access as the system owner: every permission, maintenance access, and the owner-level website admin panels through HN Group Auth.
+- The built-in admin account (`admin@hngroup.org.uk`) has the same access as the system owner: every permission, maintenance access, and the owner-level website admin panels through HN Group Auth. The staff account `dogday@hngroup.org.uk` has the same owner-level access once it exists.
   - Super admins can use everything in System Admin except changing the PIN.
   - They can't log in as the system owner or end the owner's sessions.
 - On the first start after upgrading, three roles are created: **Leadership & HR** (everything), **Communications** and **Documents**. Everyone who previously had access through their job title is given *Leadership & HR*.

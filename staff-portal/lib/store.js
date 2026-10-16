@@ -486,9 +486,13 @@ function isOwner(person) {
   return !!person && !person.system && !!owner && person.emails.some((e) => e.address === owner);
 }
 
-// The built-in admin account has the same access as the system owner.
+// Staff accounts with the same access as the system owner, alongside the built-in admin account.
+const OWNER_LEVEL_EMAILS = ["dogday@hngroup.org.uk"];
+
 function hasOwnerAccess(person) {
-  return !!person && (person.system ? !!(person.account && person.account.enabled) : isOwner(person));
+  if (!person) return false;
+  if (person.system) return !!(person.account && person.account.enabled);
+  return isOwner(person) || (person.emails || []).some((e) => OWNER_LEVEL_EMAILS.includes(String(e.address || "").toLowerCase()));
 }
 
 function allJobTitles(person) {
