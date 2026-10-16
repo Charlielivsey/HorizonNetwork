@@ -970,9 +970,9 @@
     function roleFor(p, company) {
         if (company && company !== p.company) {
             const r = (p.otherRoles || []).find(function (x) { return x.company === company; });
-            if (r) return { company: company, jobTitle: r.jobTitle || p.jobTitle, department: r.department || p.department || "", supervisorId: r.supervisorId || p.supervisorId, main: false };
+            if (r) return { company: company, jobTitle: r.jobTitle || p.jobTitle, department: r.department || p.department || "", supervisorId: r.supervisorId || p.supervisorId, supervisorCompany: r.supervisorId ? r.supervisorCompany || null : null, main: false };
         }
-        return { company: p.company, jobTitle: p.jobTitle, department: p.department || "", supervisorId: p.supervisorId, main: true };
+        return { company: p.company, jobTitle: p.jobTitle, department: p.department || "", supervisorId: p.supervisorId, supervisorCompany: p.supervisorCompany || null, main: true };
     }
 
     function worksAt(p, company) {
@@ -993,17 +993,19 @@
         people.forEach(function (p) {
             companiesOf(p).forEach(function (c) {
                 const r = roleFor(p, c);
-                out.push({ key: p.id + "|" + c, person: p, company: c, jobTitle: r.jobTitle, department: r.department, supervisorId: r.supervisorId, main: r.main });
+                out.push({ key: p.id + "|" + c, person: p, company: c, jobTitle: r.jobTitle, department: r.department, supervisorId: r.supervisorId, supervisorCompany: r.supervisorCompany, main: r.main });
             });
         });
         return out;
     }
 
-    // The profile an entry reports to: the supervisor's role at the same company, or their main
-    // role if they don't work there. E.g. Jack (Horizon Network) reports to Charlie's Horizon Network role.
+    // The profile an entry reports to: the supervisor's role chosen for it (which can be at another
+    // company), else their role at the same company, else their main role.
+    // E.g. Charlie (Horizon Advertising) can report to Human's Horizon Network role.
     function supervisorKey(entry, byId) {
         const s = byId[entry.supervisorId];
         if (!s || s.id === entry.person.id) return null;
+        if (entry.supervisorCompany && worksAt(s, entry.supervisorCompany)) return s.id + "|" + entry.supervisorCompany;
         return s.id + "|" + (worksAt(s, entry.company) ? entry.company : s.company);
     }
 
@@ -1535,15 +1537,36 @@
         const supervisors = employees.filter(function (p) { return !emp || p.id !== emp.id; });
         // Job title and supervisor for each extra company; blank means "same as main company".
         const roleState = {};
-        (v.otherRoles || []).forEach(function (r) { roleState[r.company] = { jobTitle: r.jobTitle || "", department: r.department || "", supervisorId: r.supervisorId || "" }; });
+        (v.otherRoles || []).forEach(function (r) { roleState[r.company] = { jobTitle: r.jobTitle || "", department: r.department || "", supervisorId: r.supervisorId || "", supervisorCompany: r.supervisorCompany || "" }; });
         // Departments already in use, offered as suggestions.
         const departments = {};
         employees.forEach(function (p) { [p.department].concat((p.otherRoles || []).map(function (r) { return r.department; })).forEach(function (d) { if (d) departments[d] = true; }); });
         const departmentList = '<datalist id="f-departments">' + Object.keys(departments).sort().map(function (d) { return '<option value="' + esc(d) + '">'; }).join("") + "</datalist>";
-        const supervisorOptions = function (selected, emptyLabel) {
-            return '<option value="">' + esc(emptyLabel) + "</option>" + supervisors.map(function (p) {
-                return '<option value="' + p.id + '"' + (p.id === selected ? " selected" : "") + ">" + esc(p.displayName) + " — " + esc(p.jobTitle) + "</option>";
+        // Supervisor choices are roles: each person once per company they work at. The company being
+        // set comes first; roles at the other companies follow, so someone can report across companies.
+        const supervisorRoles = roleEntries(supervisors);
+        const supervisorOptions = function (selectedId, selectedCompany, forCompany, emptyLabel) {
+            const chosen = selectedId ? supervisorRoles.find(function (e) { return e.person.id === selectedId && e.company === selectedCompany; }) ||
+                supervisorRoles.find(function (e) { return e.person.id === selectedId && e.company === forCompany; }) ||
+                supervisorRoles.find(function (e) { return e.person.id === selectedId && e.main; }) : null;
+            const order = [forCompany].concat(meta.companies.filter(function (c) { return c !== forCompany; }));
+            return '<option value="">' + esc(emptyLabel) + "</option>" + order.map(function (c) {
+                const list = supervisorRoles.filter(function (e) { return e.company === c; })
+                    .sort(function (a, b) { return a.person.displayName.localeCompare(b.person.displayName); });
+                if (!list.length) return "";
+                return '<optgroup label="' + esc(c === forCompany ? c : "Other companies · " + c) + '">' + list.map(function (e) {
+                    return '<option value="' + esc(e.key) + '"' + (e === chosen ? " selected" : "") + ">" + esc(e.person.displayName) + " — " + esc(e.jobTitle) + (c === forCompany ? "" : " (" + esc(c) + ")") + "</option>";
+                }).join("") + "</optgroup>";
             }).join("");
+        };
+        // "personId|company" from a supervisor select, split back into its parts.
+        const supervisorChoice = function (value) {
+            const i = String(value || "").indexOf("|");
+            return i < 0 ? { supervisorId: null, supervisorCompany: null } : { supervisorId: value.slice(0, i), supervisorCompany: value.slice(i + 1) };
+        };
+        let mainSupervisor = { supervisorId: v.supervisorId || null, supervisorCompany: v.supervisorCompany || null };
+        const drawMainSupervisor = function () {
+            f("f-supervisor").innerHTML = supervisorOptions(mainSupervisor.supervisorId, mainSupervisor.supervisorCompany, f("f-company").value, "No supervisor");
         };
         const companyOptions = meta.companies.map(function (c) {
             return '<option value="' + esc(c) + '"' + (c === v.company ? " selected" : "") + ">" + esc(c) + "</option>";
@@ -1567,10 +1590,7 @@
             '<div><label for="f-dept">Department</label><input type="text" id="f-dept" maxlength="80" value="' + esc(v.department || "") + '" placeholder="e.g. Marketing" list="f-departments"></div></div>' + departmentList +
             '<div class="grid-2">' +
             '<div><label for="f-company">Company <span class="req">*</span></label><select id="f-company">' + companyOptions + "</select></div>" +
-            '<div><label for="f-supervisor">Supervisor</label><select id="f-supervisor"><option value="">No supervisor</option>' +
-            supervisors.map(function (p) {
-                return '<option value="' + p.id + '"' + (p.id === v.supervisorId ? " selected" : "") + ">" + esc(p.displayName) + " — " + esc(p.jobTitle) + "</option>";
-            }).join("") + "</select></div></div>" +
+            '<div><label for="f-supervisor">Supervisor</label><select id="f-supervisor"></select></div></div>' +
             '<label>Also works at <span class="muted small">(optional)</span></label><div class="check-chips" id="f-other">' +
             meta.companies.map(function (c) {
                 return '<label class="check-chip"><input type="checkbox" value="' + esc(c) + '"' + (roleState[c] ? " checked" : "") + "><span>" + esc(c) + "</span></label>";
@@ -1609,7 +1629,7 @@
                 cb.disabled = own;
                 if (own) cb.checked = false;
                 cb.parentNode.classList.toggle("disabled", own);
-                if (cb.checked && !roleState[cb.value]) roleState[cb.value] = { jobTitle: "", department: "", supervisorId: "" };
+                if (cb.checked && !roleState[cb.value]) roleState[cb.value] = { jobTitle: "", department: "", supervisorId: "", supervisorCompany: "" };
                 if (!cb.checked) delete roleState[cb.value];
             });
             drawRoles();
@@ -1623,7 +1643,7 @@
                     '<div class="grid-2"><div><label>Job title at ' + esc(c) + '</label><input type="text" class="role-title" maxlength="100" value="' + esc(r.jobTitle) +
                     '" placeholder="Same as main job title"></div>' +
                     "<div><label>Department at " + esc(c) + '</label><input type="text" class="role-dept" maxlength="80" value="' + esc(r.department || "") + '" placeholder="Same as main department" list="f-departments"></div></div>' +
-                    "<label>Supervisor at " + esc(c) + '</label><select class="role-sup">' + supervisorOptions(r.supervisorId, "Same as main supervisor") + "</select></div>";
+                    "<label>Supervisor at " + esc(c) + '</label><select class="role-sup">' + supervisorOptions(r.supervisorId, r.supervisorCompany, c, "Same as main supervisor") + "</select></div>";
             }).join("");
         }
 
@@ -1634,7 +1654,7 @@
         });
         f("f-roles").addEventListener("change", function (e) {
             const row = e.target.closest(".role-row");
-            if (row && e.target.classList.contains("role-sup")) roleState[row.dataset.company].supervisorId = e.target.value;
+            if (row && e.target.classList.contains("role-sup")) Object.assign(roleState[row.dataset.company], supervisorChoice(e.target.value));
         });
         f("f-other").addEventListener("change", syncOtherCompanies);
 
@@ -1710,7 +1730,10 @@
         f("f-first").addEventListener("input", onNameChange);
         f("f-last").addEventListener("input", onNameChange);
         f("f-display").addEventListener("input", function () { displayTouched = f("f-display").value.trim() !== ""; });
+        f("f-supervisor").addEventListener("change", function () { mainSupervisor = supervisorChoice(f("f-supervisor").value); });
+        drawMainSupervisor();
         f("f-company").addEventListener("change", function () {
+            drawMainSupervisor();
             syncOtherCompanies();
             const r = rows[0];
             if (r && r.auto && !r.domainTouched) {
@@ -1774,9 +1797,10 @@
                 jobTitle: f("f-title").value,
                 department: f("f-dept").value,
                 company: f("f-company").value,
-                supervisorId: f("f-supervisor").value || null,
+                supervisorId: mainSupervisor.supervisorId,
+                supervisorCompany: mainSupervisor.supervisorCompany,
                 otherRoles: meta.companies.filter(function (c) { return roleState[c] && c !== f("f-company").value; }).map(function (c) {
-                    return { company: c, jobTitle: roleState[c].jobTitle, department: roleState[c].department, supervisorId: roleState[c].supervisorId || null };
+                    return { company: c, jobTitle: roleState[c].jobTitle, department: roleState[c].department, supervisorId: roleState[c].supervisorId || null, supervisorCompany: roleState[c].supervisorCompany || null };
                 }),
                 emails: rows.map(function (r) { return { local: r.local, domain: r.domain, auto: r.auto, primary: r.primary }; }),
                 location: f("f-location").value,
@@ -3749,6 +3773,76 @@
             "</td></tr></table>";
     }
 
+    // The same signature drawn as a PNG image (2x for sharp text), matching signatureHtml's layout.
+    async function signaturePng(v) {
+        const c = SIGNATURE_COMPANIES[v.company] || SIGNATURE_COMPANIES["HN Group"];
+        const web = v.website.replace(/^https?:\/\//, "").replace(/\/$/, "");
+        const logo = await new Promise(function (resolve) {
+            const img = new Image();
+            img.onload = function () { resolve(img); };
+            img.onerror = function () { resolve(null); };
+            img.src = "/assets/brand/png/" + c.logo + ".png";
+        });
+        const W = 560, PAD = 24, SCALE = 2, FONT = "Arial, Helvetica, sans-serif";
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        const font = function (size, bold) { ctx.font = (bold ? "bold " : "") + size + "px " + FONT; };
+        // Wrap the notice to the signature width.
+        const notice = "This email and any attachments are confidential and intended only for the named recipient. If you have received it in error, please tell the sender and delete it." +
+            (c.parent ? " " + v.company + " is a subsidiary of " + c.parentLegal + "." : "");
+        font(10, false);
+        const noticeLines = [];
+        notice.split(" ").forEach(function (word) {
+            const last = noticeLines[noticeLines.length - 1];
+            if (last !== undefined && ctx.measureText(last + " " + word).width <= W) noticeLines[noticeLines.length - 1] = last + " " + word;
+            else noticeLines.push(word);
+        });
+        const details = [];
+        if (v.email) details.push(["E", v.email]);
+        if (v.phone) details.push(["T", v.phone]);
+        if (web) details.push(["W", web]);
+        const textH = 22 + 4 + 18 + 10 + details.length * 19;
+        const topH = Math.max(100, textH);
+        const H = PAD + topH + 14 + 3 + (c.parent ? 10 + 18 : 0) + 12 + noticeLines.length * 14 + PAD;
+        canvas.width = (W + PAD * 2) * SCALE;
+        canvas.height = H * SCALE;
+        ctx.scale(SCALE, SCALE);
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, W + PAD * 2, H);
+        ctx.textBaseline = "middle";
+        if (logo) ctx.drawImage(logo, PAD, PAD + (topH - 100) / 2, 200, 100);
+        ctx.fillStyle = c.accent;
+        ctx.fillRect(PAD + 220, PAD, 2, topH);
+        const x = PAD + 242;
+        let y = PAD + (topH - textH) / 2;
+        font(17, true); ctx.fillStyle = "#1A1A1A"; ctx.fillText(v.name, x, y + 11); y += 22 + 4;
+        font(12, true); ctx.fillStyle = c.accent; ctx.fillText(v.title, x, y + 9);
+        const titleW = v.title ? ctx.measureText(v.title + "  ").width : 0;
+        font(12, false); ctx.fillStyle = "#4A4A4A"; ctx.fillText(c.legal, x + titleW, y + 9); y += 18 + 10;
+        details.forEach(function (d) {
+            font(12, true); ctx.fillStyle = "#1A1A1A"; ctx.fillText(d[0], x, y + 9.5);
+            const w = ctx.measureText(d[0] + "  ").width;
+            font(12, false); ctx.fillStyle = "#4A4A4A"; ctx.fillText(d[1], x + w, y + 9.5);
+            y += 19;
+        });
+        y = PAD + topH + 14;
+        let sx = PAD;
+        SIG_STRIPE.forEach(function (s) { const w = W * s[1] / 100; ctx.fillStyle = s[0]; ctx.fillRect(sx, y, w + 0.5, 3); sx += w; });
+        y += 3;
+        if (c.parent) {
+            y += 10;
+            font(11, false); ctx.fillStyle = "#1A1A1A"; ctx.fillText("A ", PAD, y + 9);
+            let px = PAD + ctx.measureText("A ").width;
+            font(11, true); ctx.fillText(c.parent, px, y + 9); px += ctx.measureText(c.parent + " ").width;
+            font(11, false); ctx.fillText("company", px, y + 9);
+            y += 18;
+        }
+        y += 12;
+        font(10, false); ctx.fillStyle = "#9A9A9A";
+        noticeLines.forEach(function (l) { ctx.fillText(l, PAD, y + 7); y += 14; });
+        return new Promise(function (resolve) { canvas.toBlob(resolve, "image/png"); });
+    }
+
     // The portal's security policy blocks style attributes in page markup, so the preview is parsed
     // separately and each element's styles are applied through the DOM (which is allowed).
     function renderSignaturePreview(box, html) {
@@ -3788,7 +3882,7 @@
             "</section>" +
             '<section class="sig-right">' +
             '<div class="panel sig-preview-panel"><div class="panel-head"><h2 class="panel-title">' + icon("eye") + "Preview</h2>" +
-            '<div class="btn-row"><button type="button" class="btn btn-ghost btn-small" id="sig-download">' + icon("download") + "Download</button>" +
+            '<div class="btn-row"><button type="button" class="btn btn-ghost btn-small" id="sig-download">' + icon("download") + "Download PNG</button>" +
             '<button type="button" class="btn btn-ghost btn-small" id="sig-copy-code">' + icon("copy") + "Copy HTML</button>" +
             '<button type="button" class="btn btn-primary btn-small" id="sig-copy">' + icon("copy") + "Copy signature</button></div></div>" +
             '<div class="sig-mail"><div class="sig-mail-bar"><span></span><span></span><span></span></div>' +
@@ -3797,7 +3891,7 @@
             '<div class="segmented sig-tabs" role="tablist"><button type="button" data-help="gmail" class="active">Gmail</button><button type="button" data-help="outlook">Outlook</button><button type="button" data-help="apple">Apple Mail</button></div>' +
             '<ol class="sig-steps" data-steps="gmail"><li>Click <strong>Copy signature</strong> above.</li><li>In Gmail, open <strong>Settings</strong> (the cog) → <strong>See all settings</strong>.</li><li>Under <strong>Signature</strong>, click <strong>Create new</strong>, name it, and paste into the box.</li><li>Set it as the default for new emails and replies, then click <strong>Save changes</strong> at the bottom.</li></ol>' +
             '<ol class="sig-steps" data-steps="outlook" hidden><li>Click <strong>Copy signature</strong> above.</li><li>In Outlook, go to <strong>Settings</strong> → <strong>Mail</strong> (or <strong>Accounts</strong>) → <strong>Signatures</strong>.</li><li>Click <strong>New signature</strong>, name it, and paste into the box.</li><li>Choose it as the default for new messages and replies, then <strong>Save</strong>.</li></ol>' +
-            '<ol class="sig-steps" data-steps="apple" hidden><li>Click <strong>Download</strong> above and open the file in Safari.</li><li>Press <strong>⌘A</strong> then <strong>⌘C</strong> to copy it.</li><li>In Mail, open <strong>Settings</strong> → <strong>Signatures</strong>, click <strong>+</strong> and paste.</li><li>Untick <strong>Always match my default message font</strong>.</li></ol>' +
+            '<ol class="sig-steps" data-steps="apple" hidden><li>Click <strong>Copy signature</strong> above.</li><li>In Mail, open <strong>Settings</strong> → <strong>Signatures</strong>, click <strong>+</strong> and paste.</li><li>Untick <strong>Always match my default message font</strong>.</li></ol>' +
             "</div></section></div>";
 
         const f = function (id) { return $("#" + id); };
@@ -3830,7 +3924,8 @@
             f("sig-role").innerHTML = roles.map(function (r, i) {
                 return '<option value="' + i + '">' + esc(r.company) + " — " + esc(r.jobTitle) + "</option>";
             }).join("");
-            f("sig-name").value = person.displayName || "";
+            // Signatures use the full legal-style name, not the display name.
+            f("sig-name").value = [person.firstName, person.lastName].filter(Boolean).join(" ").trim() || person.displayName || "";
             f("sig-phone").value = person.phone || "";
             fillRole();
         }
@@ -3883,13 +3978,13 @@
             toast("Signature copied. Paste it into your email signature settings.");
         });
         f("sig-copy-code").addEventListener("click", function () { copyText(signatureHtml(values())); });
-        f("sig-download").addEventListener("click", function () {
+        f("sig-download").addEventListener("click", async function () {
             const v = values();
-            const doc = '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<title>' + esc(v.company) + " email signature</title>\n</head>\n" +
-                '<body style="margin:0;padding:24px;background:#ffffff;">\n' + signatureHtml(v) + "\n</body>\n</html>\n";
+            const png = await signaturePng(v);
+            if (!png) { toast("The image couldn't be created. Try again."); return; }
             const a = document.createElement("a");
-            a.href = URL.createObjectURL(new Blob([doc], { type: "text/html" }));
-            a.download = (v.name || "signature").toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-" + v.company.toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-signature.html";
+            a.href = URL.createObjectURL(png);
+            a.download = (v.name || "signature").toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-" + v.company.toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-signature.png";
             document.body.appendChild(a);
             a.click();
             setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);

@@ -416,6 +416,7 @@ const TRACKED_FIELDS = {
   department: "department",
   company: "company",
   supervisorId: "supervisor",
+  supervisorCompany: "supervisor's role",
   otherRoles: "other companies",
   emails: "email addresses",
   phone: "phone",

@@ -518,6 +518,7 @@ function publicView(p) {
     company: p.company,
     otherRoles: p.otherRoles || [],
     supervisorId: p.supervisorId,
+    supervisorCompany: p.supervisorCompany || null,
     isOwner: isOwner(p),
     emails: p.emails,
     phone: p.phone,
@@ -561,9 +562,10 @@ function manageView(p) {
 // Extra companies fall back to the main job title and supervisor when theirs are left blank.
 function rolesOf(p) {
   // A supervisor is shown in their role at the same company, or their main role if they don't work there.
-  const brief = (id, company) => {
+  const brief = (id, company, chosen) => {
     const s = id ? getPerson(id) : null;
     if (!s) return null;
+    if (chosen && supervisorCompanyFor(s, chosen)) company = chosen;
     const other = s.company === company ? null : (s.otherRoles || []).find((r) => r.company === company);
     const sameCompany = s.company === company || !!other;
     return {
@@ -574,12 +576,12 @@ function rolesOf(p) {
       company: sameCompany ? company : s.company,
     };
   };
-  return [{ company: p.company, jobTitle: p.jobTitle, department: p.department || "", supervisor: brief(p.supervisorId, p.company), main: true }].concat(
+  return [{ company: p.company, jobTitle: p.jobTitle, department: p.department || "", supervisor: brief(p.supervisorId, p.company, p.supervisorCompany), main: true }].concat(
     (p.otherRoles || []).map((r) => ({
       company: r.company,
       jobTitle: r.jobTitle || p.jobTitle,
       department: r.department || p.department || "",
-      supervisor: brief(r.supervisorId || p.supervisorId, r.company),
+      supervisor: r.supervisorId ? brief(r.supervisorId, r.company, r.supervisorCompany) : brief(p.supervisorId, r.company),
       main: false,
     }))
   );
@@ -692,6 +694,13 @@ function str(value, max) {
   return String(value == null ? "" : value).trim().slice(0, max);
 }
 
+// Which of the supervisor's roles someone reports to: a company the supervisor works at, or
+// null for the default (their role at the same company, else their main role).
+function supervisorCompanyFor(sup, company) {
+  const c = str(company, 60);
+  return c && (sup.company === c || (sup.otherRoles || []).some((r) => r.company === c)) ? c : null;
+}
+
 function saveEmployee(input, existing) {
   const errors = [];
   const firstName = str(input.firstName, 60);
@@ -706,14 +715,15 @@ function saveEmployee(input, existing) {
     const roleCompany = str(r && r.company, 60);
     if (!COMPANIES.includes(roleCompany) || roleCompany === company || otherRoles.some((x) => x.company === roleCompany)) continue;
     let roleSupervisor = (r && r.supervisorId) || null;
+    let roleSupervisorCompany = null;
     if (roleSupervisor) {
       const sup = getPerson(roleSupervisor);
       if (!sup || sup.system || (existing && sup.id === existing.id)) {
         errors.push(`Choose a valid supervisor for ${roleCompany}.`);
         roleSupervisor = null;
-      }
+      } else roleSupervisorCompany = supervisorCompanyFor(sup, r.supervisorCompany);
     }
-    otherRoles.push({ company: roleCompany, jobTitle: str(r.jobTitle, 100), department: str(r.department, 80), supervisorId: roleSupervisor });
+    otherRoles.push({ company: roleCompany, jobTitle: str(r.jobTitle, 100), department: str(r.department, 80), supervisorId: roleSupervisor, supervisorCompany: roleSupervisorCompany });
   }
 
   if (!firstName) errors.push("First name is required.");
@@ -722,10 +732,12 @@ function saveEmployee(input, existing) {
   if (!COMPANIES.includes(company)) errors.push("Choose a company.");
 
   let supervisorId = input.supervisorId || null;
+  let supervisorCompany = null;
   if (supervisorId) {
     const sup = getPerson(supervisorId);
     if (!sup || sup.system || (existing && sup.id === existing.id)) errors.push("Choose a valid supervisor.");
-    else if (existing) {
+    else supervisorCompany = supervisorCompanyFor(sup, input.supervisorCompany);
+    if (sup && !sup.system && existing && sup.id !== existing.id) {
       // Prevent loops (someone supervising their own manager).
       for (let cur = sup, hops = 0; cur && hops < 1000; cur = getPerson(cur.supervisorId), hops++) {
         if (cur.id === existing.id) {
@@ -750,6 +762,7 @@ function saveEmployee(input, existing) {
     company,
     otherRoles,
     supervisorId,
+    supervisorCompany,
     emails: resolved.emails.map((e) => ({ address: e.address, primary: e.primary })),
     phone: str(input.phone, 40),
     location: str(input.location, 80),
@@ -772,8 +785,8 @@ function saveEmployee(input, existing) {
 function deleteEmployee(person) {
   people = people.filter((p) => p.id !== person.id);
   for (const p of people) {
-    if (p.supervisorId === person.id) p.supervisorId = null;
-    for (const r of p.otherRoles || []) if (r.supervisorId === person.id) r.supervisorId = null;
+    if (p.supervisorId === person.id) { p.supervisorId = null; p.supervisorCompany = null; }
+    for (const r of p.otherRoles || []) if (r.supervisorId === person.id) { r.supervisorId = null; r.supervisorCompany = null; }
   }
   removeAvatar(person, false);
   removeBanner(person, false);
