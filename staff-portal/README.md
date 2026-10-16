@@ -131,7 +131,7 @@ Both lists are at the top of `lib/store.js` if you need to change them.
 
 The **system owner** has access to everything. The owner is whoever has the email `charlie.livsey@hngroup.org.uk`, set in `settings.json` as `ownerEmail`.
 
-The owner's record is locked to everyone else. HR, leadership and the admin account can create the owner's first login, but they can't edit, reset, disable or delete the owner after that.
+The owner's record is locked to everyone else. HR and leadership can create the owner's first login, but they can't edit, reset, disable or delete the owner after that. The built-in admin account can, as it has owner-level access.
 
 The owner can open **System Admin** from the menu under their name. It's protected by the master system PIN, which starts as `0103`. It locks itself after 15 minutes of inactivity, and 5 wrong PINs lock it for 15 minutes. It has:
 
@@ -246,7 +246,7 @@ You then choose who has each role. Someone with several roles gets every permiss
 - A **Super Admin** role with every permission except *Run payroll*, including System Admin, is created automatically.
 - *HR cases*, *Recruitment* and *Activity reports* are given to the Super Admin, Leadership & HR and Human Resources roles the first time this version starts.
 - A **Human Resources** role (staff, onboarding, leave, rotas and payroll) is created and given to everyone whose job title mentions Human Resources or HR. An empty **IT Support** role (helpdesk) is created too.
-- The built-in admin account gets every permission except System Admin and *Run payroll*.
+- The built-in admin account (`admin@hngroup.org.uk`) has the same access as the system owner: every permission, maintenance access, and the owner-level website admin panels through HN Group Auth.
   - Super admins can use everything in System Admin except changing the PIN.
   - They can't log in as the system owner or end the owner's sessions.
 - On the first start after upgrading, three roles are created: **Leadership & HR** (everything), **Communications** and **Documents**. Everyone who previously had access through their job title is given *Leadership & HR*.

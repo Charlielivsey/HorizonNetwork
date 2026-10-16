@@ -474,7 +474,7 @@ function headerJson(req, name) {
 // During maintenance only the system owner gets in; everyone else is shown the message instead
 // (after their password is checked, so the message isn't shown to just anyone).
 function blockedByMaintenance(person) {
-  return store.maintenance().on && !store.isOwner(person);
+  return store.maintenance().on && !store.hasOwnerAccess(person);
 }
 
 function maintenanceReply(req, res, person) {
@@ -525,7 +525,7 @@ function resumePerson(req) {
   const raw = parseCookies(req)[resume.COOKIE];
   const t = resume.lookup(raw);
   const person = t ? store.getPerson(t.personId) : null;
-  if (!person || person.system || !person.account || !person.account.enabled || !store.hasCode(person)) return { raw, person: null };
+  if (!person || !person.account || !person.account.enabled || !store.hasCode(person)) return { raw, person: null };
   return { raw, person };
 }
 
@@ -705,7 +705,7 @@ function requireEmployee(id, me, action) {
   if (!person || person.system) throw httpError(404, "Employee not found.");
   // The owner's record is locked to everyone else, except for setting up their first login.
   const firstLogin = action === "account" && !person.account;
-  if (store.isOwner(person) && !store.isOwner(me) && !firstLogin) {
+  if (store.isOwner(person) && !store.hasOwnerAccess(me) && !firstLogin) {
     throw httpError(403, "Only the system owner can change the system owner's record.");
   }
   return person;
@@ -869,7 +869,7 @@ async function routeWorkplace(req, res, pathname, session) {
 async function routeSystem(req, res, pathname, session) {
   const me = session.person;
   const method = req.method;
-  const owner = store.isOwner(me);
+  const owner = store.hasOwnerAccess(me);
   if (!store.can(me, "system.admin") || session.data.impersonatorId) {
     logEvent(req, session, "system-admin-denied");
     throw httpError(403, "You don't have access to System Admin.");
@@ -1028,7 +1028,7 @@ async function routeSystem(req, res, pathname, session) {
       // Sign out everyone except the owner straight away.
       for (const [token, s] of sessions) {
         const p = store.getPerson(s.personId);
-        if (!p || !store.isOwner(p)) { sessions.delete(token); ended++; }
+        if (!p || !store.hasOwnerAccess(p)) { sessions.delete(token); ended++; }
       }
     }
     logEvent(req, session, m.on ? "maintenance-on" : "maintenance-off", { detail: m.on ? `${m.message}${ended ? ` (${ended} signed out)` : ""}` : undefined });
@@ -1146,7 +1146,7 @@ async function routeApi(req, res, pathname, session) {
   if (!session) return sendJson(res, 401, { error: "Not signed in." });
   const me = session.person;
   // Maintenance mode signs everyone but the owner out, including "log in as" sessions.
-  if (store.maintenance().on && !store.isOwner(me)) {
+  if (store.maintenance().on && !store.hasOwnerAccess(me)) {
     sessions.delete(session.token);
     return sendJson(res, 503, { error: "The staff portal is in maintenance mode.", code: "MAINTENANCE" }, { "Set-Cookie": sessionCookie(req, "", 0) });
   }
@@ -1169,7 +1169,7 @@ async function routeApi(req, res, pathname, session) {
 
   // The owner can turn maintenance mode off from the banner on any page.
   if (method === "POST" && pathname === "/api/maintenance/off") {
-    if (!store.isOwner(me) || session.data.impersonatorId) throw httpError(403, "Only the system owner can turn maintenance mode off.");
+    if (!store.hasOwnerAccess(me) || session.data.impersonatorId) throw httpError(403, "Only the system owner can turn maintenance mode off.");
     const mt = store.setMaintenance(false, store.maintenance().message, me);
     logEvent(req, session, "maintenance-off");
     return sendJson(res, 200, { ...mt, user: meResponse(session) });
@@ -2161,7 +2161,7 @@ async function route(req, res) {
   // doesn't reload the page, so it isn't affected.
   if (APP_ROUTES.has(pathname)) {
     if (!session) return redirect(res, "/login");
-    if (store.maintenance().on && !store.isOwner(session.person)) {
+    if (store.maintenance().on && !store.hasOwnerAccess(session.person)) {
       sessions.delete(session.token);
       return send(res, 302, "", { Location: "/login?maintenance=1", "Cache-Control": "no-store", "Set-Cookie": sessionCookie(req, "", 0) });
     }

@@ -58,7 +58,7 @@ function addMonths(date, n) {
 function create(input, by) {
   const person = store.getPerson(input.personId);
   if (!person || person.system) throw new store.ValidationError("Choose the employee the case is about.");
-  if (store.isOwner(person) && !store.isOwner(by)) throw new store.ValidationError("Only the system owner can open a case about the system owner.");
+  if (store.isOwner(person) && !store.hasOwnerAccess(by)) throw new store.ValidationError("Only the system owner can open a case about the system owner.");
   const title = str(input.title, 150);
   if (!title) throw new store.ValidationError("Give the case a short title.");
   const c = {

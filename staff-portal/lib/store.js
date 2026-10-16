@@ -247,12 +247,11 @@ function setRoleMembers(role, personIds) {
   savePeople();
 }
 
-// The owner can do everything. The built-in admin account can do everything except open
-// System Admin. Everyone else gets the permissions of the roles they've been given.
+// The owner and the built-in admin account can do everything. Everyone else gets the
+// permissions of the roles they've been given.
 function permissionsOf(person) {
   if (!person) return [];
-  if (isOwner(person)) return PERMISSION_KEYS.slice();
-  if (person.system) return PERMISSION_KEYS.filter((k) => k !== SYSTEM_ADMIN && k !== PAYROLL);
+  if (hasOwnerAccess(person)) return PERMISSION_KEYS.slice();
   const out = new Set();
   for (const id of person.roleIds || []) {
     const role = getRole(id);
@@ -485,6 +484,11 @@ function titleGrantsManagement(title) {
 function isOwner(person) {
   const owner = String(settings.ownerEmail || "").toLowerCase();
   return !!person && !person.system && !!owner && person.emails.some((e) => e.address === owner);
+}
+
+// The built-in admin account has the same access as the system owner.
+function hasOwnerAccess(person) {
+  return !!person && (person.system ? !!(person.account && person.account.enabled) : isOwner(person));
 }
 
 function allJobTitles(person) {
@@ -1112,6 +1116,7 @@ module.exports = {
   getManagementTitles,
   setManagementTitles,
   isOwner,
+  hasOwnerAccess,
   verifySystemPin,
   setSystemPin,
   audit,

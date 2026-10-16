@@ -9,8 +9,8 @@ const HEX = /^[a-f0-9]{64}$/;
 // Role membership is deliberately narrower than system.admin permission.
 function allowed(session, store) {
   if (!session || session.data.impersonatorId || !session.person.account?.enabled || session.person.account.passwordTemporary || !store.hasCode(session.person)) return false;
-  if (store.maintenance().on && !store.isOwner(session.person)) return false;
-  return store.isOwner(session.person) || (!session.person.system && (session.person.roleIds || []).some(id => {
+  if (store.maintenance().on && !store.hasOwnerAccess(session.person)) return false;
+  return store.hasOwnerAccess(session.person) || (!session.person.system && (session.person.roleIds || []).some(id => {
     const role = store.getRole(id);
     return role?.name.toLowerCase() === 'super admin';
   }));
@@ -78,7 +78,7 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
     const active = HEX.test(token || '') ? current(token) : null;
     if (!active) { sendJson(res, 401, { error: 'Staff sign-in expired. Please sign in again.' }); return true; }
     if (pathname.startsWith('/api/auth/')) {
-      if (!active.person.account?.enabled || active.data.impersonatorId || (store.maintenance().on && !store.isOwner(active.person))) {
+      if (!active.person.account?.enabled || active.data.impersonatorId || (store.maintenance().on && !store.hasOwnerAccess(active.person))) {
         sendJson(res, 403, { error: 'This account cannot sign in right now.' }); return true;
       }
       if (pathname === '/api/auth/password') {

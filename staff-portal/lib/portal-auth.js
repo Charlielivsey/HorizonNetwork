@@ -79,8 +79,8 @@ function createPortalAuth({ store, sessions, resume, createSession, cookieFor, p
     }
 
     const person = user && store.getPerson(user.id);
-    if (!person || person.system || !person.account || !person.account.enabled) return back(req, res, 'auth_error=denied');
-    if (store.maintenance().on && !store.isOwner(person)) return back(req, res, 'maintenance=1');
+    if (!person || !person.account || !person.account.enabled) return back(req, res, 'auth_error=denied');
+    if (store.maintenance().on && !store.hasOwnerAccess(person)) return back(req, res, 'maintenance=1');
 
     // Auth checked the password and PIN through its own portal session; end it now the browser gets its own.
     const used = HEX.test(staffSession || '') && sessions.get(staffSession);
