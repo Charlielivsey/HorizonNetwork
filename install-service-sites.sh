@@ -8,6 +8,9 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 EMAIL="${1:-}"
 [ "$(id -u)" = 0 ] || { echo 'Run with sudo.'; exit 1; }
+LOG=/var/log/hn-service-install.log
+exec > >(tee -a "$LOG") 2>&1
+echo "== $(date -Is) install-service-sites.sh ($(git -C "$ROOT" log -1 --format=%h))"
 SITES=$(python3 -c 'import json,sys;print(" ".join(s["id"] for s in json.load(open(sys.argv[1]))))' "$ROOT/service-suite/catalog.json")
 COUNT=$(echo "$SITES" | wc -w)
 
@@ -25,9 +28,10 @@ fi
 [ "$DISK" -gt 1024 ] || { echo 'Less than 1 GB of disk is free. Stopping before installing.'; exit 1; }
 
 echo "== HN Group Auth (registered callbacks and the staff-portal sync bridge)"
-bash "$ROOT/auth-site/install.sh" "$EMAIL" || { echo 'Auth installation failed; no service websites were changed.'; exit 1; }
-
 failed=()
+# Websites still install if Auth fails: public pages work; staff sign-in needs Auth.
+bash "$ROOT/auth-site/install.sh" "$EMAIL" || { echo 'Auth installation failed (staff sign-in will not work until it is fixed). Continuing with the websites.'; failed+=("auth"); }
+
 for id in $SITES; do
     echo "== $id"
     bash "$ROOT/$id-site/install.sh" "$EMAIL" || failed+=("$id")
@@ -64,5 +68,5 @@ ids=sys.argv[1].split()
 apps={a["name"]:a["pm2_env"]["status"] for a in json.load(sys.stdin)}
 for i in ids: print(f"hn-{i:14} {apps.get(\"hn-\"+i,\"missing\")}")
 ' "$SITES"
-if [ ${#failed[@]} -gt 0 ]; then echo "Needs attention: ${failed[*]} (rerun this command after fixing; completed websites are unaffected)"; exit 1; fi
-echo "All ${COUNT} service websites installed."
+if [ ${#failed[@]} -gt 0 ]; then echo "Needs attention: ${failed[*]} (rerun this command after fixing; completed websites are unaffected)"; echo "Full log: $LOG"; exit 1; fi
+echo "All ${COUNT} service websites installed. Log: $LOG"
