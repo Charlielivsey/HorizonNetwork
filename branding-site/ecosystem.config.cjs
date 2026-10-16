@@ -1,0 +1,1 @@
+module.exports={apps:[{name:'hn-branding',script:'/opt/hn-branding/server.js',cwd:'/opt/hn-branding',instances:1,exec_mode:'fork',autorestart:true,max_memory_restart:'128M',env:{NODE_ENV:'production',HOST:'127.0.0.1',PORT:4800,BRANDING_PUBLIC_DIR:'/opt/hn-branding/public'}}]};

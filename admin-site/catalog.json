@@ -67,6 +67,15 @@
     ]
   },
   {
+    "id": "branding",
+    "name": "Brand centre",
+    "process": "hn-branding",
+    "port": 4800,
+    "hosts": [
+      "branding.hngroup.org.uk"
+    ]
+  },
+  {
     "id": "media",
     "name": "Horizon Media Group",
     "process": "hn-media",
