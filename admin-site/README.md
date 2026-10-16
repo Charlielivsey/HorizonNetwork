@@ -10,7 +10,7 @@ Add `A admin → 217.154.34.205` in the `hngroup.org.uk` zone, initially DNS onl
 
 ## Access
 
-Sign-in uses the registered `control` HN Group Auth client and existing staff password/PIN/setup rules. Only `charlie.livsey@hngroup.org.uk` initially has access (case-insensitive); no system role automatically grants access to this panel. Charlie has permanent access and cannot be removed or downgraded. Authorised access managers can grant/revoke staff emails and choose separate permissions:
+Sign-in uses the registered `control` HN Group Auth client and existing staff password/PIN/setup rules. `charlie.livsey@hngroup.org.uk` has access (case-insensitive), and the system owner and owner-level staff accounts (`admin@hngroup.org.uk`, `dogday@hngroup.org.uk`) automatically hold every permission. Super Admin membership alone does not grant access. Charlie has permanent access and cannot be removed or downgraded. Authorised access managers can grant/revoke staff emails and choose separate permissions:
 
 - `maintenance`: per-site and global messages/modes.
 - `power`: stop/start managed website processes.

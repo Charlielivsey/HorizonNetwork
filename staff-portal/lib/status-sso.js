@@ -101,7 +101,8 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
         jobTitle: p.jobTitle || '', company: p.company || '', avatarUrl: store.avatarFile(p) ? '/api/avatar' : null,
         ...(p.account.passwordTemporary ? { passwordChangeRequired: true, passwordMinLength: store.meView(p).passwordMinLength } : {}),
         ...(!store.hasCode(p) ? { codeSetupRequired: true } : {}),
-        statusAdminAllowed: allowed(active, store)
+        statusAdminAllowed: allowed(active, store),
+        ownerAccess: store.hasOwnerAccess(p) && !active.data.impersonatorId
       } }); return true;
     }
     if (!allowed(active, store)) { sendJson(res, 403, { error: 'Only the system owner and Super Admin members can manage status.' }); return true; }
