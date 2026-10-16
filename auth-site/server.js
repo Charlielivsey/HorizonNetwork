@@ -7,6 +7,16 @@ const crypto = require('node:crypto');
 const ORIGIN = 'https://auth.hngroup.org.uk';
 // Registered applications: fixed callbacks and who may use them.
 const CLIENTS = {
+  control: { name: 'HN Group website control', callback: 'https://admin.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'Panel access is granted separately.' },
+  maintenance: { name: 'Website maintenance bypass', callback: 'https://admin.hngroup.org.uk/bypass/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can bypass maintenance.' },
+  media: { name: 'Horizon Media Group administration', callback: 'https://media.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage this website.' },
+  holding: { name: 'Horizon Holding Co administration', callback: 'https://holding.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage this website.' },
+  development: { name: 'Horizon Development administration', callback: 'https://development.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage this website.' },
+  support: { name: 'HN Group Support administration', callback: 'https://support.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage this website.' },
+  clients: { name: 'HN Group Clients administration', callback: 'https://clients.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage this website.' },
+  careers: { name: 'HN Group Careers administration', callback: 'https://careers.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage this website.' },
+  docs: { name: 'HN Group Docs administration', callback: 'https://docs.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage this website.' },
+  news: { name: 'HN Group News administration', callback: 'https://news.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage this website.' },
   network: { name: 'Horizon Network website configuration', callback: 'https://horizon-network.co.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can configure Horizon Network.' },
   status: { name: 'Status administration', callback: 'https://status.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage status.' },
   website: { name: 'HN Group website configuration', callback: 'https://hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can configure the website.' },
@@ -17,7 +27,7 @@ const HEX = /^[a-f0-9]{64}$/;
 const COOKIE = '__Host-hn_auth_session', FLOW = '__Host-hn_auth_flow', REMEMBER = '__Host-hn_auth_resume';
 const secretFile = process.env.STATUS_SSO_SECRET_FILE || '/var/lib/hn-status-sso/secret';
 const backend = process.env.STAFF_PORTAL_BACKEND || 'http://127.0.0.1:3200';
-const sessions = new Map(), challenges = new Map(), codes = new Map();
+const sessions = new Map(), challenges = new Map(), codes = new Map(), applicationSessions = new Map();
 const random = () => crypto.randomBytes(32).toString('hex');
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 function cookie(req, name) { return (req.headers.cookie || '').split(';').map(s => s.trim()).find(s => s.startsWith(name + '='))?.slice(name.length + 1) || ''; }
@@ -104,7 +114,7 @@ const server = http.createServer(async (req, res) => {
     if (route.startsWith('/api/sso/')) {
       if (req.method !== 'POST') return send(res, 405, { error: 'POST required.' });
       if (!service(req)) return send(res, 401, { error: 'Client not authenticated.' });
-      const data = await body(req); let token = data.session;
+      const data = await body(req); let token, applicationToken, detachedEntry;
       // Status and website keep live Auth sessions; the portal starts its own staff session.
       const clientId = data.client_id || 'status';
       if (!Object.hasOwn(CLIENTS, clientId)) return send(res, 400, { error: 'Unknown application.' });
@@ -112,8 +122,13 @@ const server = http.createServer(async (req, res) => {
         const grant = codes.get(data.code); codes.delete(data.code);
         if (!grant || grant.expires <= Date.now() || grant.state !== data.state || grant.client !== clientId) throw fail(401, 'Sign-in link expired or already used.');
         token = grant.session;
-      } else if (!['/api/sso/session','/api/sso/avatar'].includes(route)) return send(res, 404, { error: 'Not found.' });
-      const entry = HEX.test(token || '') && sessions.get(token), user = await profile(entry);
+      } else {
+        if (!['/api/sso/session','/api/sso/avatar'].includes(route)) return send(res, 404, { error: 'Not found.' });
+        const application = HEX.test(data.session || '') && applicationSessions.get(hash(data.session));
+        if (!application || application.client !== clientId || application.expires <= Date.now()) throw fail(401, 'Application sign-in expired.');
+        token = application.session; applicationToken = data.session; detachedEntry = application.entry;
+      }
+      const entry = detachedEntry || (HEX.test(token || '') && sessions.get(token)), user = await profile(entry);
       requireReady(user);
       if (!CLIENTS[clientId].allowed(user)) throw fail(403, CLIENTS[clientId].denied);
       if (clientId === 'portal') {
@@ -122,7 +137,12 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, { user, staffSession: entry.staffSession });
       }
       if (route === '/api/sso/avatar') return await serveAvatar(entry, res);
-      return send(res, 200, { session: token, expires: entry.expires, user });
+      if (!applicationToken) {
+        if (applicationSessions.size >= 10000) throw fail(503, 'Please try signing in again shortly.');
+        applicationToken = random();
+        applicationSessions.set(hash(applicationToken), {session:token,client:clientId,expires:entry.expires,...(['control','maintenance'].includes(clientId)?{entry:{...entry}}:{})});
+      }
+      return send(res, 200, { session: applicationToken, expires: entry.expires, user });
     }
     if (req.method === 'POST') {
       if (req.headers.origin !== ORIGIN) throw fail(403, 'Request origin not allowed.');
@@ -221,6 +241,6 @@ const server = http.createServer(async (req, res) => {
     fs.createReadStream(path.join(__dirname, 'public', file)).pipe(res);
   } catch (e) { send(res, e.status || 503, { error: e.status ? e.message : 'Authentication service is unavailable. Please try again shortly.', ...(e.restart ? { restart: true } : {}) }, e.restart ? [setCookie(REMEMBER, '', 0)] : []); }
 });
-setInterval(() => { for (const map of [sessions, challenges, codes]) for (const [key, value] of map) if (value.expires <= Date.now()) map.delete(key); }, 60000).unref();
+setInterval(() => { for (const [key, value] of applicationSessions) if (value.expires <= Date.now() || !value.entry && !sessions.has(value.session)) applicationSessions.delete(key); for (const map of [sessions, challenges, codes]) for (const [key, value] of map) if (value.expires <= Date.now()) map.delete(key); }, 60000).unref();
 if (require.main === module) server.listen(Number(process.env.PORT || 3400), process.env.HOST || '127.0.0.1');
 module.exports = { server };

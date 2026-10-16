@@ -1,0 +1,1 @@
+module.exports={apps:[{name:'ha-website',script:'/opt/ha-website/server.js',cwd:'/opt/ha-website',instances:1,exec_mode:'fork',autorestart:true,max_memory_restart:'128M',env:{NODE_ENV:'production'}}]};

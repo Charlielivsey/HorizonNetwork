@@ -8198,6 +8198,7 @@
         async function draw() {
             let m;
             try { m = await api("/api/system/maintenance"); } catch (err) { box.innerHTML = '<p class="muted">' + esc(err.message) + "</p>"; return; }
+            if (m.central) { box.innerHTML = '<h3>Website maintenance</h3><p class="muted small">Maintenance is managed through the HN Group website control panel. Access is granted separately.</p><a class="btn btn-primary" href="https://admin.hngroup.org.uk">Open website control →</a>'; return; }
             box.innerHTML = '<div class="panel-head"><h2 class="panel-title">' + icon("settings") + "Maintenance mode</h2>" +
                 '<span class="badge ' + (m.on ? "badge-red" : "badge-green") + '">' + (m.on ? "On" : "Off") + "</span></div>" +
                 '<p class="muted small">While maintenance mode is on, only the system owner can sign in. Everyone else is signed out straight away, and when they sign in they see the HN Group logo and this message instead of the portal.</p>' +

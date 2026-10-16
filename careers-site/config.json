@@ -1,0 +1,9 @@
+{
+  "id": "careers",
+  "domain": "careers.hngroup.org.uk",
+  "port": 4400,
+  "kind": "careers",
+  "name": "HN Group Careers",
+  "logo": "hn-group-wordmark",
+  "legal": "HN Group Limited"
+}

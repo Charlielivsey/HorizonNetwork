@@ -1,0 +1,9 @@
+{
+  "id": "news",
+  "domain": "news.hngroup.org.uk",
+  "port": 4600,
+  "kind": "news",
+  "name": "HN Group News",
+  "logo": "hn-group-wordmark",
+  "legal": "HN Group Limited"
+}

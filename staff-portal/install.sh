@@ -62,13 +62,18 @@ ok "PM2 installed"
 mkdir -p "$APP_DIR" "$DATA_DIR"
 chmod 700 "$DATA_DIR"
 rm -rf "$APP_DIR/public" "$APP_DIR/lib"
-cp "$SCRIPT_DIR/server.js" "$SCRIPT_DIR/reset-admin.js" "$APP_DIR/"
+cp "$SCRIPT_DIR/server.js" "$SCRIPT_DIR/reset-admin.js" "$SCRIPT_DIR/public-proxy.js" "$APP_DIR/"
 cp -r "$SCRIPT_DIR/lib" "$SCRIPT_DIR/public" "$APP_DIR/"
 ok "Portal deployed to $APP_DIR (user data kept in $DATA_DIR)"
 
 # ---- Run under PM2 ----
 pm2 delete "$PM2_NAME" 2>/dev/null || true
-PORT=$PORT HOST=127.0.0.1 DATA_DIR="$DATA_DIR" pm2 start "$APP_DIR/server.js" --name "$PM2_NAME" --update-env
+if [ -f /var/lib/hn-control/accounts-enabled ]; then
+    PORT=$PORT HOST=127.0.0.1 DATA_DIR="$DATA_DIR" pm2 start "$APP_DIR/public-proxy.js" --name "$PM2_NAME" --update-env
+    pm2 restart hn-auth
+else
+    PORT=$PORT HOST=127.0.0.1 DATA_DIR="$DATA_DIR" pm2 start "$APP_DIR/server.js" --name "$PM2_NAME" --update-env
+fi
 pm2 save
 sleep 1
 if curl -fsS "http://127.0.0.1:$PORT/healthz" >/dev/null; then
@@ -143,3 +148,6 @@ fi
 echo -e "  ${CYAN}Default login:${RESET} admin@hngroup.org.uk / admin (if you haven't changed it yet)"
 echo -e "  ${CYAN}Logs:${RESET}          pm2 logs $PM2_NAME"
 echo ""
+
+if [ -f /opt/hn-admin/reconcile-power.cjs ]; then node /opt/hn-admin/reconcile-power.cjs staff; fi
+pm2 save

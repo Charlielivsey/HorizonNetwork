@@ -1,0 +1,1 @@
+module.exports={apps:[{name:'hn-development',script:'/opt/hn-development/server.js',cwd:'/opt/hn-development',instances:1,exec_mode:'fork',autorestart:true,max_memory_restart:'256M',env:{NODE_ENV:'production',PORT:4100,DATA_DIR:'/var/lib/hn-development'}}]};

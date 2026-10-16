@@ -1,0 +1,44 @@
+{
+  "id": "media",
+  "domain": "media.hngroup.org.uk",
+  "port": 3900,
+  "kind": "company",
+  "name": "Horizon Media Group",
+  "logo": "horizon-media-group-logo",
+  "legal": "Horizon Media Group Limited \u00b7 A subsidiary of HN Group Limited",
+  "content": {
+    "eyebrow": "HORIZON MEDIA GROUP",
+    "title": "Media, with a wider perspective.",
+    "lead": "The media business within HN Group. Bringing media and advertising together, with the support of a connected group.",
+    "cta": "Make an enquiry",
+    "sectionLabel": "OUR FOCUS",
+    "sectionTitle": "Media. Advertising. Connected.",
+    "cards": [
+      {
+        "label": "MEDIA",
+        "title": "A home for media.",
+        "text": "Horizon Media Group brings together the group\u2019s media activity. Contact us to discuss publications, media projects and opportunities."
+      },
+      {
+        "label": "ADVERTISING",
+        "title": "Horizon Advertising.",
+        "text": "Horizon Advertising is a subsidiary of Horizon Media Group. Its services are managed by Horizon Network."
+      },
+      {
+        "label": "ENQUIRIES",
+        "title": "The right conversation.",
+        "text": "For media, press or partnership enquiries, our group team will connect you with the appropriate people."
+      }
+    ],
+    "aboutTitle": "Part of something connected.",
+    "about": "Horizon Media Group Limited is a direct wholly owned subsidiary of HN Group Limited, alongside Horizon Network Limited and Horizon Holding Co Limited.",
+    "relatedLabel": "Meet Horizon Advertising",
+    "relatedUrl": "https://horizonadvertising.co.uk",
+    "detailTitle": "Ownership and management, made clear.",
+    "detail": "Horizon Media Group owns Horizon Advertising. Horizon Network manages its advertising services, supported by the wider HN Group.",
+    "contactLabel": "MEDIA & PRESS",
+    "contactTitle": "Let\u2019s talk media.",
+    "contactText": "Tell us about your enquiry, publication or project. Our group team will route it to the right place.",
+    "topic": "media"
+  }
+}

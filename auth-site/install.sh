@@ -41,7 +41,7 @@ bash "$SCRIPT_DIR/../status-site/install-portal-sso.sh"
 
 mkdir -p "$APP_DIR/public" "$DATA_DIR" "$SSL_DIR" "$CHALLENGE_DIR" /etc/nginx/sites-available /etc/nginx/sites-enabled
 chmod 700 "$DATA_DIR"
-cp "$SCRIPT_DIR/server.js" "$APP_DIR/"
+cp "$SCRIPT_DIR/server.js" "$SCRIPT_DIR/supervisor.js" "$APP_DIR/"
 cp -r "$SCRIPT_DIR/public/." "$APP_DIR/public/"
 PORT=3400 HOST=127.0.0.1 DATA_DIR="$DATA_DIR" pm2 startOrRestart "$SCRIPT_DIR/ecosystem.config.cjs" --update-env
 healthy=0

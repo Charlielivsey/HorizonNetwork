@@ -3,7 +3,7 @@ const fs = require("fs");
 const path = require("path");
 
 const PORT = 3100;
-const HOST = "0.0.0.0";
+const HOST = "127.0.0.1";
 
 const MIME_TYPES = {
   ".html": "text/html",
@@ -16,7 +16,14 @@ const MIME_TYPES = {
 };
 
 const server = http.createServer((req, res) => {
-  let filePath = path.join(__dirname, "public", req.url === "/" ? "index.html" : req.url);
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  if (!["GET", "HEAD"].includes(req.method)) { res.writeHead(405); return res.end(); }
+  const route = new URL(req.url, "http://localhost").pathname;
+  if (route === "/healthz") { res.writeHead(200, {"Content-Type":"application/json"}); return res.end('{"ok":true}'); }
+  let decoded; try { decoded = decodeURIComponent(route); } catch { res.writeHead(400); return res.end(); }
+  const root = path.join(__dirname, "public");
+  let filePath = path.resolve(root, "." + (decoded === "/" ? "/index.html" : decoded));
+  if (!filePath.startsWith(root + path.sep) || decoded.split("/").some(p => p.startsWith("."))) { res.writeHead(404); return res.end(); }
   const ext = path.extname(filePath);
   const contentType = MIME_TYPES[ext] || "application/octet-stream";
 
@@ -27,7 +34,7 @@ const server = http.createServer((req, res) => {
       return;
     }
     res.writeHead(200, { "Content-Type": contentType });
-    res.end(content);
+    res.end(req.method === "HEAD" ? undefined : content);
   });
 });
 

@@ -1,0 +1,1 @@
+module.exports={apps:[{name:'hn-careers',script:'/opt/hn-careers/server.js',cwd:'/opt/hn-careers',instances:1,exec_mode:'fork',autorestart:true,max_memory_restart:'256M',env:{NODE_ENV:'production',PORT:4400,DATA_DIR:'/var/lib/hn-careers'}}]};

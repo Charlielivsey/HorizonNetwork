@@ -45,9 +45,12 @@ cp "$SOURCE/public/login.html" "$PORTAL/public/login.html"
 cp "$SOURCE/server.js" "$PORTAL/server.js"
 cp "$SOURCE/public/assets/login.js" "$PORTAL/public/assets/login.js"
 healthy=0
-if pm2 restart hn-staff-portal; then
+RESTART_APP=hn-staff-portal
+CHECK_PORT=3200
+if [ -f /var/lib/hn-control/accounts-enabled ]; then RESTART_APP=hn-auth; CHECK_PORT=3250; fi
+if pm2 restart "$RESTART_APP"; then
     for attempt in {1..15}; do
-        if curl -fsS --max-time 2 http://127.0.0.1:3200/healthz >/dev/null; then healthy=1; break; fi
+        if curl -fsS --max-time 2 http://127.0.0.1:$CHECK_PORT/healthz >/dev/null; then healthy=1; break; fi
         sleep 1
     done
 fi
@@ -58,7 +61,7 @@ if [ "$healthy" != 1 ]; then
     cp "$BACKUP/login.html" "$PORTAL/public/login.html"
     if [ -f "$BACKUP/portal-auth.js" ]; then cp "$BACKUP/portal-auth.js" "$PORTAL/lib/portal-auth.js"; else rm -f "$PORTAL/lib/portal-auth.js"; fi
     if [ -f "$BACKUP/status-sso.js" ]; then cp "$BACKUP/status-sso.js" "$PORTAL/lib/status-sso.js"; else rm -f "$PORTAL/lib/status-sso.js"; fi
-    pm2 restart hn-staff-portal || true
+    pm2 restart "$RESTART_APP" || true
     echo "Staff sign-in integration failed; previous portal files restored. Backup: $BACKUP"
     exit 1
 fi
