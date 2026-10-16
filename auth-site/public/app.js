@@ -4,6 +4,8 @@ const query = new URLSearchParams(location.search);
 const client = query.get('client_id'), state = query.get('state');
 // Must match the applications registered in server.js.
 const APPS = {
+  control: { name: 'HN Group website control', short: 'website control', allowed: () => true, granted: 'Your panel access will be checked by website control.', restricted: '' },
+  maintenance: { name: 'Website maintenance bypass', short: 'the website', allowed: user => user.statusAdminAllowed, granted: 'You can access websites in administrator maintenance mode.', restricted: 'Only the system owner and Super Admin members can bypass maintenance.' },
   media: { name: 'Horizon Media Group administration', short: 'Horizon Media Group', allowed: user => user.statusAdminAllowed, granted: 'You can manage this website.', restricted: 'Only the system owner and Super Admin members can manage this website.' },
   holding: { name: 'Horizon Holding Co administration', short: 'Horizon Holding Co', allowed: user => user.statusAdminAllowed, granted: 'You can manage this website.', restricted: 'Only the system owner and Super Admin members can manage this website.' },
   development: { name: 'Horizon Development administration', short: 'Horizon Development', allowed: user => user.statusAdminAllowed, granted: 'You can manage this website.', restricted: 'Only the system owner and Super Admin members can manage this website.' },

@@ -1,0 +1,141 @@
+[
+  {
+    "id": "website",
+    "name": "HN Group",
+    "process": "hn-website",
+    "port": 3500,
+    "hosts": [
+      "hngroup.org.uk",
+      "www.hngroup.org.uk"
+    ]
+  },
+  {
+    "id": "network",
+    "name": "Horizon Network",
+    "process": "hn-network",
+    "port": 3600,
+    "hosts": [
+      "horizon-network.co.uk",
+      "www.horizon-network.co.uk",
+      "horizonetwork.com",
+      "www.horizonetwork.com"
+    ]
+  },
+  {
+    "id": "staff",
+    "name": "Staff portal",
+    "process": "hn-staff-portal",
+    "port": 3200,
+    "hosts": [
+      "staff.hngroup.org.uk"
+    ]
+  },
+  {
+    "id": "status",
+    "name": "Service status",
+    "process": "hn-status",
+    "port": 3300,
+    "hosts": [
+      "status.hngroup.org.uk"
+    ]
+  },
+  {
+    "id": "links",
+    "name": "HN Group Links",
+    "process": "hn-links",
+    "port": 3700,
+    "hosts": [
+      "links.hngroup.org.uk"
+    ]
+  },
+  {
+    "id": "wiki",
+    "name": "HN Group Wiki",
+    "process": "hn-wiki",
+    "port": 3800,
+    "hosts": [
+      "wiki.hngroup.org.uk"
+    ]
+  },
+  {
+    "id": "advertising",
+    "name": "Horizon Advertising",
+    "process": "ha-website",
+    "port": 3100,
+    "hosts": [
+      "horizonadvertising.co.uk"
+    ]
+  },
+  {
+    "id": "media",
+    "name": "Horizon Media Group",
+    "process": "hn-media",
+    "port": 3900,
+    "hosts": [
+      "media.hngroup.org.uk"
+    ]
+  },
+  {
+    "id": "holding",
+    "name": "Horizon Holding Co",
+    "process": "hn-holding",
+    "port": 4000,
+    "hosts": [
+      "holding.hngroup.org.uk"
+    ]
+  },
+  {
+    "id": "development",
+    "name": "Horizon Development",
+    "process": "hn-development",
+    "port": 4100,
+    "hosts": [
+      "development.hngroup.org.uk"
+    ]
+  },
+  {
+    "id": "support",
+    "name": "Support",
+    "process": "hn-support",
+    "port": 4200,
+    "hosts": [
+      "support.hngroup.org.uk"
+    ]
+  },
+  {
+    "id": "clients",
+    "name": "Client portal",
+    "process": "hn-clients",
+    "port": 4300,
+    "hosts": [
+      "clients.hngroup.org.uk"
+    ]
+  },
+  {
+    "id": "careers",
+    "name": "Careers",
+    "process": "hn-careers",
+    "port": 4400,
+    "hosts": [
+      "careers.hngroup.org.uk"
+    ]
+  },
+  {
+    "id": "docs",
+    "name": "Documentation",
+    "process": "hn-docs",
+    "port": 4500,
+    "hosts": [
+      "docs.hngroup.org.uk"
+    ]
+  },
+  {
+    "id": "news",
+    "name": "News",
+    "process": "hn-news",
+    "port": 4600,
+    "hosts": [
+      "news.hngroup.org.uk"
+    ]
+  }
+]

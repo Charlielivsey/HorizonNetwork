@@ -40,8 +40,9 @@ const server=http.createServer(async(req,res)=>{
       if(!user)return json(res,401,{error:'Sign in through HN Group Auth.'});
       if(route==='/admin'&&req.method==='GET')return file(res,path.join(CONTROL,'admin.html'));
       if(route==='/api/admin/avatar'&&req.method==='GET')return await auth.avatar(req,res);
-      if(route==='/api/admin'&&req.method==='GET')return json(res,200,{...settings,user:{...user,avatarUrl:user.avatarUrl?'/api/admin/avatar':null}});
+      if(route==='/api/admin'&&req.method==='GET')return json(res,200,{...settings,centralMaintenance:process.env.HN_CONTROL_MANAGED==='1',user:{...user,avatarUrl:user.avatarUrl?'/api/admin/avatar':null}});
       if(route==='/api/admin/maintenance'&&req.method==='POST'){
+        if(process.env.HN_CONTROL_MANAGED==='1')return json(res,409,{error:'Maintenance is managed at https://admin.hngroup.org.uk.'});
         if(req.headers.origin!==ORIGIN)return json(res,403,{error:'Request origin not allowed.'});
         const data=await body(req);if(typeof data.maintenance!=='boolean')return json(res,400,{error:'Choose whether maintenance is enabled.'});
         save(data.maintenance,user);return json(res,200,{...settings});
@@ -57,7 +58,7 @@ const server=http.createServer(async(req,res)=>{
       '/_maintenance/favicon.svg':path.join(PUBLIC,'assets/favicon.svg')
     };
     if(Object.hasOwn(assets,route)&&req.method==='GET')return file(res,assets[route]);
-    if(settings.maintenance){res.setHeader('Retry-After','300');if(route.startsWith('/api/'))return json(res,503,{error:'The website is undergoing maintenance.'});res.setHeader('X-Robots-Tag','noindex');return file(res,path.join(CONTROL,'maintenance.html'),503);}
+    if(settings.maintenance&&process.env.HN_CONTROL_MANAGED!=='1'){res.setHeader('Retry-After','300');if(route.startsWith('/api/'))return json(res,503,{error:'The website is undergoing maintenance.'});res.setHeader('X-Robots-Tag','noindex');return file(res,path.join(CONTROL,'maintenance.html'),503);}
     if(route.startsWith('/api/public/'))return publicApi(req,res);
     if(route.startsWith('/api/'))return json(res,404,{error:'Not found.'});
     if(!['GET','HEAD'].includes(req.method))return json(res,405,{error:'Method not allowed.'});

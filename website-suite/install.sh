@@ -82,6 +82,7 @@ PYHTTP
     systemctl reload nginx
 }
 write_config
+if [ -f /opt/hn-admin/reconcile-power.cjs ]; then node /opt/hn-admin/reconcile-power.cjs "$SLUG"; fi
 pm2 save
 if [ ! -f /etc/systemd/system/pm2-root.service ]; then pm2 startup systemd -u root --hp /root; fi
 systemctl enable pm2-root >/dev/null

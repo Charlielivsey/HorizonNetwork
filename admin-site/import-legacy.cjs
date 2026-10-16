@@ -1,0 +1,3 @@
+'use strict';
+// Only the first install imports old availability settings. Later installs preserve all controls.
+const fs=require('node:fs'),{createStore}=require('./lib/store');const dir='/var/lib/hn-control';if(!fs.existsSync(dir+'/state.json')){const store=createStore(dir);store.change('installer','control.initialise',d=>{for(const[id,file]of [['website','/var/lib/hn-website/settings.json'],['network','/var/lib/hn-network/settings.json'],['staff','/var/lib/hn-staff-portal/settings.json']]){if(!fs.existsSync(file))continue;const old=JSON.parse(fs.readFileSync(file,'utf8'));if(id==='staff'&&old.maintenance?.on){d.sites[id].mode='admins';d.sites[id].message=old.maintenance.message||d.sites[id].message;}else if(id!=='staff'&&old.maintenance){d.sites[id].mode='all';}}});}

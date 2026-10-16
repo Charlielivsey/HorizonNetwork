@@ -50,6 +50,7 @@ for attempt in {1..15}; do
     sleep 1
 done
 [ "$healthy" = 1 ] || { echo 'Status failed to start. Check: pm2 logs hn-status'; exit 1; }
+if [ -f /opt/hn-admin/reconcile-power.cjs ]; then node /opt/hn-admin/reconcile-power.cjs status; fi
 pm2 save
 if [ ! -f /etc/systemd/system/pm2-root.service ]; then pm2 startup systemd -u root --hp /root; fi
 systemctl enable pm2-root >/dev/null

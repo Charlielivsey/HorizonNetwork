@@ -1,0 +1,1 @@
+module.exports={apps:[{name:'hn-admin',script:'/opt/hn-admin/server.js',cwd:'/opt/hn-admin',instances:1,exec_mode:'fork',autorestart:true,max_memory_restart:'256M',env:{NODE_ENV:'production',PORT:4700,CONTROL_DATA_DIR:'/var/lib/hn-control'}}]};

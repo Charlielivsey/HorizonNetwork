@@ -1007,6 +1007,7 @@ async function routeSystem(req, res, pathname, session) {
     return sendJson(res, 200, { ...store.maintenance(), canChange: owner });
   }
   if (method === "POST" && pathname === "/api/system/maintenance") {
+    if (process.env.HN_CONTROL_MANAGED === "1") throw httpError(409, "Maintenance is managed at https://admin.hngroup.org.uk.");
     if (!owner) throw httpError(403, "Only the system owner can turn maintenance mode on or off.");
     const body = await readJsonBody(req);
     // Turning it on needs the separate maintenance PIN, with the same lockout as the System Admin PIN.

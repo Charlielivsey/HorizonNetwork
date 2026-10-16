@@ -7,6 +7,8 @@ const crypto = require('node:crypto');
 const ORIGIN = 'https://auth.hngroup.org.uk';
 // Registered applications: fixed callbacks and who may use them.
 const CLIENTS = {
+  control: { name: 'HN Group website control', callback: 'https://admin.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'Panel access is granted separately.' },
+  maintenance: { name: 'Website maintenance bypass', callback: 'https://admin.hngroup.org.uk/bypass/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can bypass maintenance.' },
   media: { name: 'Horizon Media Group administration', callback: 'https://media.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage this website.' },
   holding: { name: 'Horizon Holding Co administration', callback: 'https://holding.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage this website.' },
   development: { name: 'Horizon Development administration', callback: 'https://development.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage this website.' },
@@ -112,7 +114,7 @@ const server = http.createServer(async (req, res) => {
     if (route.startsWith('/api/sso/')) {
       if (req.method !== 'POST') return send(res, 405, { error: 'POST required.' });
       if (!service(req)) return send(res, 401, { error: 'Client not authenticated.' });
-      const data = await body(req); let token, applicationToken;
+      const data = await body(req); let token, applicationToken, detachedEntry;
       // Status and website keep live Auth sessions; the portal starts its own staff session.
       const clientId = data.client_id || 'status';
       if (!Object.hasOwn(CLIENTS, clientId)) return send(res, 400, { error: 'Unknown application.' });
@@ -124,9 +126,9 @@ const server = http.createServer(async (req, res) => {
         if (!['/api/sso/session','/api/sso/avatar'].includes(route)) return send(res, 404, { error: 'Not found.' });
         const application = HEX.test(data.session || '') && applicationSessions.get(hash(data.session));
         if (!application || application.client !== clientId || application.expires <= Date.now()) throw fail(401, 'Application sign-in expired.');
-        token = application.session; applicationToken = data.session;
+        token = application.session; applicationToken = data.session; detachedEntry = application.entry;
       }
-      const entry = HEX.test(token || '') && sessions.get(token), user = await profile(entry);
+      const entry = detachedEntry || (HEX.test(token || '') && sessions.get(token)), user = await profile(entry);
       requireReady(user);
       if (!CLIENTS[clientId].allowed(user)) throw fail(403, CLIENTS[clientId].denied);
       if (clientId === 'portal') {
@@ -138,7 +140,7 @@ const server = http.createServer(async (req, res) => {
       if (!applicationToken) {
         if (applicationSessions.size >= 10000) throw fail(503, 'Please try signing in again shortly.');
         applicationToken = random();
-        applicationSessions.set(hash(applicationToken), {session:token,client:clientId,expires:entry.expires});
+        applicationSessions.set(hash(applicationToken), {session:token,client:clientId,expires:entry.expires,...(['control','maintenance'].includes(clientId)?{entry:{...entry}}:{})});
       }
       return send(res, 200, { session: applicationToken, expires: entry.expires, user });
     }
@@ -239,6 +241,6 @@ const server = http.createServer(async (req, res) => {
     fs.createReadStream(path.join(__dirname, 'public', file)).pipe(res);
   } catch (e) { send(res, e.status || 503, { error: e.status ? e.message : 'Authentication service is unavailable. Please try again shortly.', ...(e.restart ? { restart: true } : {}) }, e.restart ? [setCookie(REMEMBER, '', 0)] : []); }
 });
-setInterval(() => { for (const [key, value] of applicationSessions) if (value.expires <= Date.now() || !sessions.has(value.session)) applicationSessions.delete(key); for (const map of [sessions, challenges, codes]) for (const [key, value] of map) if (value.expires <= Date.now()) map.delete(key); }, 60000).unref();
+setInterval(() => { for (const [key, value] of applicationSessions) if (value.expires <= Date.now() || !value.entry && !sessions.has(value.session)) applicationSessions.delete(key); for (const map of [sessions, challenges, codes]) for (const [key, value] of map) if (value.expires <= Date.now()) map.delete(key); }, 60000).unref();
 if (require.main === module) server.listen(Number(process.env.PORT || 3400), process.env.HOST || '127.0.0.1');
 module.exports = { server };

@@ -1032,7 +1032,7 @@ const DEFAULT_MAINTENANCE_MESSAGE = "The staff portal is having some planned mai
 
 function maintenance() {
   const m = settings.maintenance || {};
-  return { on: !!m.on, message: m.message || DEFAULT_MAINTENANCE_MESSAGE, since: m.since || null, by: m.by || null };
+  return { on: process.env.HN_CONTROL_MANAGED === '1' ? false : !!m.on, message: m.message || DEFAULT_MAINTENANCE_MESSAGE, since: m.since || null, by: m.by || null, ...(process.env.HN_CONTROL_MANAGED === '1' ? { central: true } : {}) };
 }
 
 function setMaintenance(on, message, by) {
