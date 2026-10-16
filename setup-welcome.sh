@@ -58,7 +58,9 @@ echo -e "${GREEN}  [✓] /usr/local/bin/horizon installed${RESET}"
 echo -e "${YELLOW}[3/4] Setting up system-wide login hook...${RESET}"
 
 cat > /etc/profile.d/horizon.sh << 'EOF'
-if [ -z "$HN_IN_CONSOLE" ] && [ -t 0 ] && [ -x /usr/local/bin/horizon ]; then
+# Only for people logging in at a terminal: never for tools (Codex, scp, rsync) running commands over SSH.
+case $- in *i*) ;; *) return 0 2>/dev/null ;; esac
+if [ -z "$HN_IN_CONSOLE" ] && [ -t 0 ] && [ -t 1 ] && [ -x /usr/local/bin/horizon ]; then
     /usr/local/bin/horizon
 fi
 EOF
