@@ -16,6 +16,32 @@ for tool in node pm2 nginx certbot; do command -v "$tool" >/dev/null || { echo "
 exec > >(tee -a "$LOG") 2>&1
 echo "=== HN Group install $(date -Is) ($(git -C "$ROOT" log -1 --format='%h %s' 2>/dev/null)) ==="
 
+# Updates don't contact Let's Encrypt for certificates that already exist: certbot.timer renews them
+# automatically. A small certbot wrapper reuses an existing certificate straight away and only asks
+# Let's Encrypt for new ones. Set HN_RENEW_SSL=1 to make every installer check its certificate.
+if [ "${HN_RENEW_SSL:-0}" != 1 ] && REAL_CERTBOT="$(command -v certbot)"; then
+    SHIM_DIR="$(mktemp -d)"
+    trap 'rm -rf "$SHIM_DIR"' EXIT
+    cat > "$SHIM_DIR/certbot" <<SHIM
+#!/usr/bin/env bash
+name=""; nginx=0; prev=""
+for arg in "\$@"; do
+    case "\$prev" in --cert-name) name="\$arg" ;; -d) [ -n "\$name" ] || name="\$arg" ;; esac
+    [ "\$arg" = --nginx ] && nginx=1
+    prev="\$arg"
+done
+if [ "\${1:-}" != install ] && [ -n "\$name" ] && [ -f "/etc/letsencrypt/live/\$name/fullchain.pem" ]; then
+    echo "SSL certificate for \$name is already in place (it renews automatically)."
+    # The staff portal's nginx file is rewritten on install, so put its existing certificate back in.
+    if [ "\$nginx" = 1 ]; then exec "$REAL_CERTBOT" install --nginx --cert-name "\$name" --redirect --non-interactive; fi
+    exit 0
+fi
+exec "$REAL_CERTBOT" "\$@"
+SHIM
+    chmod +x "$SHIM_DIR/certbot"
+    export PATH="$SHIM_DIR:$PATH"
+fi
+
 FAILED=()
 step() {
     local name="$1"; shift
