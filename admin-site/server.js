@@ -11,8 +11,16 @@ function file(res,name){res.writeHead(200,{'Content-Type':mime[path.extname(name
 async function body(req){if(!(req.headers['content-type']||'').startsWith('application/json'))throw fail(415,'JSON required.');let size=0,chunks=[];for await(const c of req){size+=c.length;if(size>16384)throw fail(413,'Request too large.');chunks.push(c);}try{return JSON.parse(Buffer.concat(chunks));}catch{throw fail(400,'Invalid request.');}}
 function edge(req){const supplied=req.headers['x-hn-control-key']||'';return /^[a-f0-9]{64}$/.test(supplied)&&crypto.timingSafeEqual(Buffer.from(supplied),Buffer.from(edgeSecret));}
 function siteFor(req){const site=sites.find(s=>s.id===req.headers['x-hn-control-site']),host=String(req.headers['x-hn-control-host']||'').toLowerCase();if(!site||!site.hosts.includes(host))throw fail(400,'Invalid website.');return{site,host};}
+function authOffline(res,uri='/'){
+const message='The authentication portal is currently offline. Please try again later.';
+res.setHeader('Retry-After','300');res.setHeader('X-Robots-Tag','noindex');
+if(uri.startsWith('/api/'))return json(res,503,{error:message,authenticationOffline:true});
+const retry=uri.startsWith('/')&&!uri.startsWith('//')&&!uri.includes(String.fromCharCode(92))&&!/[\r\n]/.test(uri)?uri:'/';
+res.writeHead(503,{'Content-Type':'text/html; charset=utf-8'});
+res.end(`<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Authentication portal offline · HN Group</title><link rel="icon" href="/__hn_control/assets/favicon.svg"><link rel="stylesheet" href="/__hn_control/style.css"></head><body class="maintenance-body"><main class="maintenance-card"><img class="on-light" src="/__hn_control/assets/brand/hn-group-wordmark.svg" alt="HN Group"><img class="on-dark" src="/__hn_control/assets/brand/hn-group-wordmark-white.svg" alt="HN Group"><div class="orbit" aria-hidden="true">◇</div><p class="eyebrow">HN Group Auth</p><h1>Authentication portal<br>currently offline.</h1><p class="maintenance-message">${message}</p><a class="button primary" href="${esc(retry)}">Try again →</a></main><div class="brand-stripe" aria-hidden="true"></div></body></html>`);
+}
 function maintenance(res,site,host,state,uri='/'){
-if(state.power==='off'){res.writeHead(444);return res.end();}
+if(state.power==='off'){if(site.id==='auth')return authOffline(res,uri);res.writeHead(444);return res.end();}
 res.setHeader('Retry-After','300');res.setHeader('X-Robots-Tag','noindex');if(uri.startsWith('/api/'))return json(res,503,{error:state.message,maintenance:true});
 const login=new URL('/bypass/start',ORIGIN);login.searchParams.set('site',site.id);login.searchParams.set('host',host);if(uri.startsWith('/')&&!uri.startsWith('//')&&uri.length<1500)login.searchParams.set('back',uri);
 res.writeHead(503,{'Content-Type':'text/html; charset=utf-8'});res.end(`<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Maintenance · ${esc(site.name)}</title><link rel="icon" href="/__hn_control/assets/favicon.svg"><link rel="stylesheet" href="/__hn_control/style.css"></head><body class="maintenance-body"><main class="maintenance-card"><img class="on-light" src="/__hn_control/assets/brand/hn-group-wordmark.svg" alt="HN Group"><img class="on-dark" src="/__hn_control/assets/brand/hn-group-wordmark-white.svg" alt="HN Group"><div class="orbit" aria-hidden="true">◇</div><p class="eyebrow">${esc(site.name)}</p><h1>A little time<br>behind the scenes.</h1><p class="maintenance-message">${esc(state.message)}</p><p class="muted">Please check back shortly.</p>${state.mode==='admins'?`<a class="button primary" href="${esc(login.href)}">Administrator sign in →</a><p class="hint">System owner and Super Admin members only.</p>`:''}<a class="quiet" href="${ORIGIN}">Website control panel ↗</a></main><div class="brand-stripe" aria-hidden="true"></div></body></html>`);}
@@ -22,7 +30,7 @@ try{const url=new URL(req.url,ORIGIN),route=url.pathname;
 if(edge(req)){
 const{site,host}=siteFor(req),state=store.state.sites[site.id];
 if(route==='/_edge/gate'){
-let allowed=state.power==='on'&&(state.mode==='off'||state.mode==='admins'&&await identity.canBypass(req,site.id,host));res.setHeader('X-HN-Control-Action',state.power==='off'?'shutdown':'maintenance');res.writeHead(allowed?204:403);return res.end();}
+let allowed=state.power==='on'&&(state.mode==='off'||state.mode==='admins'&&await identity.canBypass(req,site.id,host));res.setHeader('X-HN-Control-Action',state.power==='off'?(site.id==='auth'?'auth-offline':'shutdown'):'maintenance');res.writeHead(allowed?204:403);return res.end();}
 if(route==='/__hn_control/accept'&&req.method==='GET')return await identity.accept(req,res,site.id,host,url);
 if(route.startsWith('/__hn_control/')&&req.method==='GET'){
 const relative=route.slice('/__hn_control'.length),target=path.resolve(PUBLIC,'.'+relative);if(target.startsWith(PUBLIC+path.sep)&&mime[path.extname(target)]&&fs.existsSync(target)&&fs.statSync(target).isFile())return file(res,target);throw fail(404,'Not found.');}
