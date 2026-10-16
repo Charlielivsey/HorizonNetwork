@@ -35,7 +35,7 @@ Global shutdown first persists the offline intent for all managed websites, clos
 
 The public staff portal is a stoppable proxy on port 3200. Its **single account backend** runs privately on port 3250 as a child of the `hn-auth` supervisor alongside the Auth broker on port 3400. Thus stopping `hn-staff-portal` stops the public website while account authentication remains available. Both children stop/restart with Auth; no two account-backend processes write the data concurrently. Staff installs and the narrow authentication bridge recognise this topology.
 
-Power operations run serially, report progress, and log individual failures. Failed stops leave the public gate closed and are shown as partial failures; failed starts remain offline. Retry the relevant global action after fixing a missing process or failed health check. Browser confirmation phrases are also required by the API. No production shutdown is performed by installation or tests.
+Power operations can act on every website at once or on one website from its card. They run serially, report progress, and log individual failures. Failed stops leave the public gate closed and are shown as partial failures; failed starts remain offline. Retry the relevant global action after fixing a missing process or failed health check. The dialog asks for a single confirmation click; the API still requires the matching action phrase, which the panel sends. No production shutdown is performed by installation or tests.
 
 ## Persistence and recovery
 
