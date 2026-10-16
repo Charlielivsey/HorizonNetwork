@@ -40,7 +40,7 @@ if ! grep -qF "$MARKER" "$BASHRC" 2>/dev/null; then
     cat >> "$BASHRC" << 'EOF'
 
 # Horizon Network Welcome Screen
-if [[ $- == *i* ]] && [ -z "$HORIZON_WELCOME_SHOWN" ]; then
+if [[ $- == *i* ]] && [ -t 0 ] && [ -t 1 ] && [ -z "$HORIZON_WELCOME_SHOWN" ]; then
     export HORIZON_WELCOME_SHOWN=1
     /usr/local/bin/horizon-welcome
 fi
