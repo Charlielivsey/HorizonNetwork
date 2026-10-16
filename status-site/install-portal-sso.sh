@@ -47,7 +47,8 @@ cp "$SOURCE/public/assets/login.js" "$PORTAL/public/assets/login.js"
 healthy=0
 RESTART_APP=hn-staff-portal
 CHECK_PORT=3200
-if [ -f /var/lib/hn-control/accounts-enabled ]; then RESTART_APP=hn-auth; CHECK_PORT=3250; fi
+if [ -f /var/lib/hn-control/accounts-independent ]; then RESTART_APP=hn-accounts; CHECK_PORT=3250
+elif [ -f /var/lib/hn-control/accounts-enabled ]; then RESTART_APP=hn-auth; CHECK_PORT=3250; fi
 if pm2 restart "$RESTART_APP"; then
     for attempt in {1..15}; do
         if curl -fsS --max-time 2 http://127.0.0.1:$CHECK_PORT/healthz >/dev/null; then healthy=1; break; fi

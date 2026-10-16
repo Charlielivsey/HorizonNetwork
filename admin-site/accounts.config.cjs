@@ -1,0 +1,1 @@
+module.exports={apps:[{name:'hn-accounts',script:'/opt/hn-admin/accounts-server.js',cwd:'/opt/hn-staff-portal',instances:1,exec_mode:'fork',autorestart:true,max_memory_restart:'512M',kill_timeout:10000,env:{NODE_ENV:'production'}}]};

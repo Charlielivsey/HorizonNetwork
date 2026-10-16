@@ -43,6 +43,14 @@ mkdir -p "$APP_DIR/public" "$DATA_DIR" "$SSL_DIR" "$CHALLENGE_DIR" /etc/nginx/si
 chmod 700 "$DATA_DIR"
 cp "$SCRIPT_DIR/server.js" "$SCRIPT_DIR/supervisor.js" "$APP_DIR/"
 cp -r "$SCRIPT_DIR/public/." "$APP_DIR/public/"
+# Keep a deliberately stopped Auth portal stopped during deployments.
+AUTH_OFF=0
+if [ -f /var/lib/hn-control/accounts-independent ] && [ -f /var/lib/hn-control/state.json ]; then
+    AUTH_OFF="$(node -e "const s=require('/var/lib/hn-control/state.json');process.stdout.write(s.sites?.auth?.power==='off'?'1':'0')")"
+fi
+if [ "$AUTH_OFF" = 1 ]; then
+    pm2 stop hn-auth
+else
 PORT=3400 HOST=127.0.0.1 DATA_DIR="$DATA_DIR" pm2 startOrRestart "$SCRIPT_DIR/ecosystem.config.cjs" --update-env
 healthy=0
 for attempt in {1..15}; do
@@ -50,6 +58,7 @@ for attempt in {1..15}; do
     sleep 1
 done
 [ "$healthy" = 1 ] || { echo 'Status failed to start. Check: pm2 logs hn-auth'; exit 1; }
+fi
 pm2 save
 if [ ! -f /etc/systemd/system/pm2-root.service ]; then pm2 startup systemd -u root --hp /root; fi
 systemctl enable pm2-root >/dev/null

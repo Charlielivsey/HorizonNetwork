@@ -8,7 +8,7 @@ for(const site of sites){const headers=`        proxy_set_header X-HN-Control-Ke
         proxy_set_header X-HN-Original-URI $request_uri;
         proxy_set_header Cookie $http_cookie;
         proxy_set_header X-Real-IP $remote_addr;`;
-const text=`# HN Group central website control. Auth and the control panel have no such gate.
+const text=`# HN Group central website control. The control panel and private account service have no such gate.
 auth_request /__hn_control/gate;
 auth_request_set $hn_control_action $upstream_http_x_hn_control_action;
 error_page 403 = @hn_control_hold;

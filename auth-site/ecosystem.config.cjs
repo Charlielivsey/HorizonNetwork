@@ -1,7 +1,7 @@
 module.exports = {
   apps: [{
     name: 'hn-auth',
-    script: require('node:fs').existsSync('/var/lib/hn-control/accounts-enabled') ? '/opt/hn-auth/supervisor.js' : '/opt/hn-auth/server.js',
+    script: require('node:fs').existsSync('/var/lib/hn-control/accounts-enabled') && !require('node:fs').existsSync('/var/lib/hn-control/accounts-independent') ? '/opt/hn-auth/supervisor.js' : '/opt/hn-auth/server.js',
     cwd: '/opt/hn-auth',
     instances: 1,
     exec_mode: 'fork',
