@@ -129,7 +129,7 @@
         h('p', { class: 'eyebrow' }, site.hero?.eyebrow || site.brand), h('h1', {}, site.hero?.title || site.name), h('p', { class: 'lead' }, site.hero?.lead || ''),
         h('div', { class: 'hero-actions' }, ...(site.hero?.actions || []).filter(a => !a.staff || staff).map((a, i) => h('a', { class: 'btn' + (i ? ' ghost' : ''), href: a.href }, a.label)))),
       ...site.notices.map(n => h('div', { class: 'notice reveal', role: 'note' }, h('strong', {}, n.title), ' ', n.text)),
-      visible.length ? h('div', { class: 'cards reveal' }, ...visible.map(m => h('a', { class: 'card', href: moduleHref(m) }, h('h2', {}, m.title), h('p', {}, m.intro || ''), h('span', { class: 'card-link' }, m.cardCta || 'Open')))) : null,
+      visible.length ? h('div', { class: 'cards reveal' }, ...visible.map(m => h('a', { class: 'card', href: moduleHref(m) }, h('h2', {}, m.title), h('p', {}, m.intro || (m.reference ? 'Send a request and follow it with your private reference.' : m.type === 'items' && m.publish ? 'Browse ' + m.title.toLowerCase() + '.' : '')), h('span', { class: 'card-link' }, m.cardCta || 'Open')))) : null,
       ...site.sections.map(s => h('section', { class: 'panel reveal' }, s.eyebrow ? h('p', { class: 'eyebrow' }, s.eyebrow) : null, h('h2', {}, s.title), ...paragraphs(s.text), s.points ? h('ul', { class: 'ticks' }, ...s.points.map(p => h('li', {}, p))) : null, s.link ? h('p', {}, link(s.link.url, s.link.label)) : null)),
       Object.keys(site.providers).length ? providersPanel() : null,
       site.related.length ? h('section', { class: 'panel reveal' }, h('h2', {}, 'Related'), h('ul', { class: 'related' }, ...site.related.map(r => h('li', {}, link(r.url, r.label), r.text ? h('span', { class: 'muted' }, ' — ' + r.text) : null)))) : null);
@@ -181,7 +181,12 @@
   async function fieldGrid(fields, values, prefix) { const grid = h('div', { class: 'grid-fields' }); for (const f of fields) grid.append(await fieldInput(f, values?.[f.name], prefix)); return grid; }
 
   // ---------- items ----------
+  function accountPrompt(m) {
+    view(pageHead(site.brand, m.title, m.intro), section('Sign in to continue', h('p', {}, 'This area is for ' + (site.accounts?.label || 'account').toLowerCase() + ' holders.' + (site.accounts?.mode === 'invite' ? ' Accounts are created by invitation from our team.' : '')),
+      h('p', {}, h('a', { class: 'btn', href: '#/account?next=' + encodeURIComponent(location.hash) }, 'Sign in'), ' ', h('a', { class: 'btn ghost', href: '/admin' }, 'Staff sign in'))));
+  }
   async function itemsList(m) {
+    if (!account && !staff && m.create !== 'public' && m.view !== 'public' && (['account', 'members'].includes(m.view) || m.create === 'account')) return accountPrompt(m);
     let data;
     try { data = await api('/api/m/' + m.key); } catch (e) { return failure(e); }
     if (m.fields.some(f => f.type === 'user')) await loadUsers().catch(() => {});
