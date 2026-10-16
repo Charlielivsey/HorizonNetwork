@@ -1,0 +1,180 @@
+{
+  "engine": "service-suite",
+  "id": "domains",
+  "domain": "domains.horizon-network.co.uk",
+  "aliases": [
+    "domains.horizonetwork.com"
+  ],
+  "port": 5120,
+  "company": "network",
+  "name": "Horizon Network Domains",
+  "brand": "Horizon Network",
+  "logo": "horizon-network-wordmark",
+  "staffOnly": false,
+  "staffSignIn": "admin",
+  "staffLabel": "Horizon Network",
+  "hero": {
+    "eyebrow": "HORIZON NETWORK DOMAINS",
+    "title": "Domain services.",
+    "lead": "Ask Horizon Network for help registering, transferring or managing a domain name. Requests are reviewed by our team.",
+    "actions": [
+      {
+        "label": "Request domain help",
+        "href": "#/m/requests/new"
+      }
+    ]
+  },
+  "sections": [],
+  "notices": [
+    {
+      "title": "No automatic emails.",
+      "text": "This website does not send email notifications. Keep your private reference to check progress and read replies here.",
+      "email": false
+    }
+  ],
+  "related": [],
+  "providers": {
+    "registrar": {
+      "label": "Domain registrar",
+      "status": "awaiting-configuration",
+      "note": "No registrar is connected, so domains are not registered or transferred automatically. Nothing is registered until the team confirms it with you."
+    }
+  },
+  "accounts": null,
+  "securityTxt": null,
+  "brandkit": null,
+  "tools": null,
+  "privacy": "https://horizon-network.co.uk/privacy",
+  "footer": {
+    "text": "Horizon Network brings together digital infrastructure, advertising and software. A subsidiary of HN Group Limited.",
+    "copyright": "Horizon Network · A subsidiary of HN Group Limited",
+    "links": [
+      {
+        "label": "horizon-network.co.uk",
+        "url": "https://horizon-network.co.uk"
+      },
+      {
+        "label": "Network status",
+        "url": "https://status.horizon-network.co.uk"
+      },
+      {
+        "label": "All HN Group links",
+        "url": "https://links.hngroup.org.uk"
+      }
+    ]
+  },
+  "storageLimitMb": 2048,
+  "modules": [
+    {
+      "key": "requests",
+      "type": "items",
+      "title": "Domain requests",
+      "view": "manager",
+      "create": "public",
+      "manage": "admin",
+      "reference": true,
+      "comments": true,
+      "consent": "I understand Horizon Network will use these details to respond, as described in the Horizon Network privacy notice.",
+      "scope": "own",
+      "singular": "request",
+      "cta": "Request domain help",
+      "successTitle": "Request received",
+      "successText": "We have your request. This does not register or reserve a domain.",
+      "fields": [
+        {
+          "name": "domain",
+          "label": "Domain name",
+          "type": "text",
+          "required": true,
+          "max": 253,
+          "help": "For example example.co.uk"
+        },
+        {
+          "name": "service",
+          "label": "What do you need?",
+          "type": "select",
+          "required": true,
+          "filter": true,
+          "options": [
+            {
+              "value": "register-a-new-domain",
+              "label": "Register a new domain"
+            },
+            {
+              "value": "transfer-a-domain",
+              "label": "Transfer a domain"
+            },
+            {
+              "value": "renew-a-domain",
+              "label": "Renew a domain"
+            },
+            {
+              "value": "dns-help",
+              "label": "DNS help"
+            },
+            {
+              "value": "other",
+              "label": "Other"
+            }
+          ]
+        },
+        {
+          "name": "name",
+          "label": "Your name",
+          "type": "text",
+          "required": true,
+          "max": 120,
+          "autocomplete": "name"
+        },
+        {
+          "name": "email",
+          "label": "Email",
+          "type": "email",
+          "required": true,
+          "contact": true,
+          "autocomplete": "email"
+        },
+        {
+          "name": "organisation",
+          "label": "Organisation",
+          "type": "text",
+          "max": 160
+        },
+        {
+          "name": "body",
+          "label": "Anything else",
+          "type": "textarea",
+          "max": 20000
+        }
+      ],
+      "listFields": [
+        "domain",
+        "service"
+      ],
+      "statuses": [
+        {
+          "id": "new",
+          "label": "New"
+        },
+        {
+          "id": "reviewing",
+          "label": "Reviewing"
+        },
+        {
+          "id": "awaiting-registrar",
+          "label": "Awaiting registrar configuration"
+        },
+        {
+          "id": "contacted",
+          "label": "Contacted"
+        },
+        {
+          "id": "closed",
+          "label": "Closed"
+        }
+      ],
+      "empty": "Submissions are private to the person who sent them and our team. Use the button above to send one, or check an existing one with your private reference."
+    }
+  ],
+  "seedAuthor": "Horizon Network"
+}

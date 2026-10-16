@@ -1,0 +1,539 @@
+{
+  "engine": "service-suite",
+  "id": "reports",
+  "domain": "reports.hngroup.org.uk",
+  "aliases": [],
+  "port": 5030,
+  "company": "group",
+  "name": "HN Group Reports",
+  "brand": "HN Group",
+  "logo": "hn-group-wordmark",
+  "staffOnly": true,
+  "staffSignIn": "any",
+  "staffLabel": "HN Group",
+  "hero": {
+    "eyebrow": "HN GROUP REPORTS",
+    "title": "Reports and dashboards.",
+    "lead": "Live monthly figures from the staff portal, live website health across the group, and a library of published reports.",
+    "actions": [
+      {
+        "label": "Monthly report",
+        "href": "#/bridge/monthly"
+      },
+      {
+        "label": "Website health",
+        "href": "#/health/health"
+      }
+    ]
+  },
+  "sections": [],
+  "notices": [],
+  "related": [],
+  "providers": {},
+  "accounts": null,
+  "securityTxt": null,
+  "brandkit": null,
+  "tools": null,
+  "privacy": "https://hngroup.org.uk/privacy",
+  "footer": {
+    "text": "HN Group brings together Horizon Network, Horizon Media Group and Horizon Holding Co.",
+    "copyright": "HN Group Limited",
+    "links": [
+      {
+        "label": "hngroup.org.uk",
+        "url": "https://hngroup.org.uk"
+      },
+      {
+        "label": "Support",
+        "url": "https://support.hngroup.org.uk"
+      },
+      {
+        "label": "Service status",
+        "url": "https://status.hngroup.org.uk"
+      },
+      {
+        "label": "All HN Group links",
+        "url": "https://links.hngroup.org.uk"
+      }
+    ]
+  },
+  "storageLimitMb": 2048,
+  "modules": [
+    {
+      "key": "monthly",
+      "type": "bridge",
+      "title": "Monthly staff report",
+      "nav": "Monthly report",
+      "intro": "Live monthly report from the staff portal (requires the reports permission there).",
+      "render": "report",
+      "portalUrl": "https://staff.hngroup.org.uk/reports",
+      "load": {
+        "path": "/api/reports",
+        "query": [
+          {
+            "name": "month",
+            "label": "Month",
+            "type": "month",
+            "default": "thisMonth"
+          }
+        ]
+      },
+      "views": []
+    },
+    {
+      "key": "health",
+      "type": "health",
+      "title": "Website health",
+      "intro": "Whether each HN Group website process on the server is responding right now.",
+      "targets": [
+        {
+          "id": "website",
+          "name": "HN Group website",
+          "port": 3500,
+          "domain": "hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "network",
+          "name": "Horizon Network website",
+          "port": 3600,
+          "domain": "horizon-network.co.uk",
+          "company": "Horizon Network"
+        },
+        {
+          "id": "staff",
+          "name": "Staff portal",
+          "port": 3200,
+          "domain": "staff.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "status",
+          "name": "Service status",
+          "port": 3300,
+          "domain": "status.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "links",
+          "name": "HN Group Links",
+          "port": 3700,
+          "domain": "links.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "wiki",
+          "name": "HN Group Wiki",
+          "port": 3800,
+          "domain": "wiki.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "media",
+          "name": "Horizon Media Group",
+          "port": 3900,
+          "domain": "media.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "holding",
+          "name": "Horizon Holding Co",
+          "port": 4000,
+          "domain": "holding.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "development",
+          "name": "Horizon Development",
+          "port": 4100,
+          "domain": "development.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "support",
+          "name": "Support",
+          "port": 4200,
+          "domain": "support.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "clients",
+          "name": "Client portal",
+          "port": 4300,
+          "domain": "clients.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "careers",
+          "name": "Careers",
+          "port": 4400,
+          "domain": "careers.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "docs",
+          "name": "Documentation",
+          "port": 4500,
+          "domain": "docs.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "news",
+          "name": "News",
+          "port": 4600,
+          "domain": "news.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "billing",
+          "name": "HN Group Billing",
+          "port": 4800,
+          "domain": "billing.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "projects",
+          "name": "HN Group Projects",
+          "port": 4810,
+          "domain": "projects.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "brand",
+          "name": "HN Group Brand",
+          "port": 4820,
+          "domain": "brand.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "downloads",
+          "name": "HN Group Downloads",
+          "port": 4830,
+          "domain": "downloads.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "feedback",
+          "name": "HN Group Feedback",
+          "port": 4840,
+          "domain": "feedback.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "events",
+          "name": "HN Group Events",
+          "port": 4850,
+          "domain": "events.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "partners",
+          "name": "HN Group Partners",
+          "port": 4860,
+          "domain": "partners.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "services",
+          "name": "HN Group Services",
+          "port": 4870,
+          "domain": "services.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "trust",
+          "name": "HN Group Trust Centre",
+          "port": 4880,
+          "domain": "trust.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "learn",
+          "name": "HN Group Learn",
+          "port": 4890,
+          "domain": "learn.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "assets",
+          "name": "HN Group Assets",
+          "port": 4900,
+          "domain": "assets.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "email",
+          "name": "HN Group Email",
+          "port": 4910,
+          "domain": "email.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "community",
+          "name": "HN Group Community",
+          "port": 4920,
+          "domain": "community.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "bookings",
+          "name": "HN Group Bookings",
+          "port": 4930,
+          "domain": "bookings.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "forms",
+          "name": "HN Group Forms",
+          "port": 4940,
+          "domain": "forms.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "surveys",
+          "name": "HN Group Surveys",
+          "port": 4950,
+          "domain": "surveys.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "suppliers",
+          "name": "HN Group Suppliers",
+          "port": 4960,
+          "domain": "suppliers.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "procurement",
+          "name": "HN Group Procurement",
+          "port": 4970,
+          "domain": "procurement.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "expenses",
+          "name": "HN Group Expenses",
+          "port": 4980,
+          "domain": "expenses.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "licenses",
+          "name": "HN Group Licences",
+          "port": 4990,
+          "domain": "licenses.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "developers",
+          "name": "HN Group Developers",
+          "port": 5010,
+          "domain": "developers.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "labs",
+          "name": "HN Group Labs",
+          "port": 5020,
+          "domain": "labs.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "reports",
+          "name": "HN Group Reports",
+          "port": 5030,
+          "domain": "reports.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "sign",
+          "name": "HN Group Sign",
+          "port": 5040,
+          "domain": "sign.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "vault",
+          "name": "HN Group Vault",
+          "port": 5050,
+          "domain": "vault.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "security",
+          "name": "HN Group Security",
+          "port": 5060,
+          "domain": "security.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "competitions",
+          "name": "HN Group Competitions",
+          "port": 5070,
+          "domain": "competitions.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "members",
+          "name": "HN Group Members",
+          "port": 5080,
+          "domain": "members.hngroup.org.uk",
+          "company": "HN Group"
+        },
+        {
+          "id": "hosting",
+          "name": "Horizon Hosting",
+          "port": 5090,
+          "domain": "hosting.horizon-network.co.uk",
+          "company": "Horizon Network"
+        },
+        {
+          "id": "panel",
+          "name": "Horizon Network Panel",
+          "port": 5100,
+          "domain": "panel.horizon-network.co.uk",
+          "company": "Horizon Network"
+        },
+        {
+          "id": "netstatus",
+          "name": "Horizon Network Status",
+          "port": 5110,
+          "domain": "status.horizon-network.co.uk",
+          "company": "Horizon Network"
+        },
+        {
+          "id": "domains",
+          "name": "Horizon Network Domains",
+          "port": 5120,
+          "domain": "domains.horizon-network.co.uk",
+          "company": "Horizon Network"
+        },
+        {
+          "id": "netdevelopers",
+          "name": "Horizon Network Developers",
+          "port": 5130,
+          "domain": "developers.horizonetwork.com",
+          "company": "Horizon Network"
+        },
+        {
+          "id": "showcase",
+          "name": "Horizon Network Showcase",
+          "port": 5140,
+          "domain": "showcase.horizonetwork.com",
+          "company": "Horizon Network"
+        },
+        {
+          "id": "ads",
+          "name": "Horizon Advertising Services",
+          "port": 5150,
+          "domain": "ads.horizonetwork.com",
+          "company": "Horizon Network"
+        },
+        {
+          "id": "tools",
+          "name": "Horizon Network Tools",
+          "port": 5160,
+          "domain": "tools.horizonetwork.com",
+          "company": "Horizon Network"
+        },
+        {
+          "id": "sandbox",
+          "name": "Horizon Network Sandbox",
+          "port": 5170,
+          "domain": "sandbox.horizonetwork.com",
+          "company": "Horizon Network"
+        },
+        {
+          "id": "order",
+          "name": "Horizon Network Order",
+          "port": 5180,
+          "domain": "order.horizon-network.co.uk",
+          "company": "Horizon Network"
+        },
+        {
+          "id": "my",
+          "name": "My Horizon Network",
+          "port": 5190,
+          "domain": "my.horizonetwork.com",
+          "company": "Horizon Network"
+        },
+        {
+          "id": "netcommunity",
+          "name": "Horizon Network Community",
+          "port": 5200,
+          "domain": "community.horizonetwork.com",
+          "company": "Horizon Network"
+        }
+      ]
+    },
+    {
+      "key": "library",
+      "type": "items",
+      "title": "Report library",
+      "view": "staff",
+      "create": "manager",
+      "manage": "admin",
+      "comments": true,
+      "display": "cards",
+      "singular": "report",
+      "files": "manager",
+      "fields": [
+        {
+          "name": "title",
+          "label": "Report",
+          "type": "text",
+          "required": true,
+          "max": 160
+        },
+        {
+          "name": "period",
+          "label": "Period",
+          "type": "text",
+          "max": 60
+        },
+        {
+          "name": "company",
+          "label": "Company",
+          "type": "select",
+          "options": [
+            "HN Group",
+            "Horizon Network",
+            "Horizon Media Group",
+            "Horizon Holding Co",
+            "Horizon Advertising",
+            "Horizon Development"
+          ],
+          "filter": true
+        },
+        {
+          "name": "summary",
+          "label": "Summary",
+          "type": "text",
+          "max": 300
+        },
+        {
+          "name": "body",
+          "label": "Findings",
+          "type": "textarea",
+          "max": 20000
+        }
+      ],
+      "listFields": [
+        "period",
+        "company"
+      ],
+      "statuses": [
+        {
+          "id": "draft",
+          "label": "draft"
+        },
+        {
+          "id": "published",
+          "label": "published"
+        }
+      ],
+      "empty": "No reports have been added to the library yet."
+    }
+  ],
+  "seedAuthor": "HN Group"
+}

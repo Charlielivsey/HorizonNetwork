@@ -1,0 +1,187 @@
+{
+  "engine": "service-suite",
+  "id": "sandbox",
+  "domain": "sandbox.horizonetwork.com",
+  "aliases": [
+    "sandbox.horizon-network.co.uk"
+  ],
+  "port": 5170,
+  "company": "network",
+  "name": "Horizon Network Sandbox",
+  "brand": "Horizon Network",
+  "logo": "horizon-network-wordmark",
+  "staffOnly": false,
+  "staffSignIn": "any",
+  "staffLabel": "Horizon Network",
+  "hero": {
+    "eyebrow": "HORIZON NETWORK SANDBOX",
+    "title": "Previews and experiments.",
+    "lead": "Controlled previews of work in progress from Horizon Network. Some previews are for staff only.",
+    "actions": [
+      {
+        "label": "Previews",
+        "href": "#/m/previews"
+      }
+    ]
+  },
+  "sections": [],
+  "notices": [
+    {
+      "title": "No automatic emails.",
+      "text": "This website does not send email notifications. Keep your private reference to check progress and read replies here.",
+      "email": false
+    }
+  ],
+  "related": [],
+  "providers": {},
+  "accounts": null,
+  "securityTxt": null,
+  "brandkit": null,
+  "tools": null,
+  "privacy": "https://horizon-network.co.uk/privacy",
+  "footer": {
+    "text": "Horizon Network brings together digital infrastructure, advertising and software. A subsidiary of HN Group Limited.",
+    "copyright": "Horizon Network · A subsidiary of HN Group Limited",
+    "links": [
+      {
+        "label": "horizon-network.co.uk",
+        "url": "https://horizon-network.co.uk"
+      },
+      {
+        "label": "Network status",
+        "url": "https://status.horizon-network.co.uk"
+      },
+      {
+        "label": "All HN Group links",
+        "url": "https://links.hngroup.org.uk"
+      }
+    ]
+  },
+  "storageLimitMb": 2048,
+  "modules": [
+    {
+      "key": "previews",
+      "type": "items",
+      "title": "Previews",
+      "view": "public",
+      "create": "manager",
+      "manage": "admin",
+      "publish": true,
+      "comments": false,
+      "singular": "preview",
+      "intro": "Previews may change, break or be removed at any time.",
+      "fields": [
+        {
+          "name": "title",
+          "label": "Preview",
+          "type": "text",
+          "required": true,
+          "max": 160
+        },
+        {
+          "name": "summary",
+          "label": "Summary",
+          "type": "text",
+          "max": 300
+        },
+        {
+          "name": "stage",
+          "label": "Stage",
+          "type": "select",
+          "filter": true,
+          "options": [
+            {
+              "value": "prototype",
+              "label": "Prototype"
+            },
+            {
+              "value": "preview",
+              "label": "Preview"
+            },
+            {
+              "value": "ended",
+              "label": "Ended"
+            }
+          ]
+        },
+        {
+          "name": "link",
+          "label": "Open preview",
+          "type": "url"
+        },
+        {
+          "name": "ends",
+          "label": "Available until",
+          "type": "date"
+        },
+        {
+          "name": "body",
+          "label": "About",
+          "type": "textarea",
+          "max": 20000
+        }
+      ],
+      "listFields": [
+        "stage",
+        "ends"
+      ],
+      "empty": "No previews are public at the moment."
+    },
+    {
+      "key": "feedback",
+      "type": "items",
+      "title": "Preview feedback",
+      "view": "manager",
+      "create": "public",
+      "manage": "admin",
+      "reference": true,
+      "comments": true,
+      "consent": "I understand Horizon Network will use these details to respond, as described in the Horizon Network privacy notice.",
+      "scope": "own",
+      "singular": "feedback",
+      "parent": {
+        "module": "previews",
+        "label": "Preview",
+        "cta": "Give feedback"
+      },
+      "fields": [
+        {
+          "name": "body",
+          "label": "Your feedback",
+          "type": "textarea",
+          "max": 20000
+        },
+        {
+          "name": "name",
+          "label": "Name (optional)",
+          "type": "text",
+          "max": 120
+        },
+        {
+          "name": "email",
+          "label": "Email",
+          "type": "email",
+          "required": false,
+          "contact": true,
+          "autocomplete": "email"
+        }
+      ],
+      "statuses": [
+        {
+          "id": "new",
+          "label": "New"
+        },
+        {
+          "id": "reviewing",
+          "label": "Reviewing"
+        },
+        {
+          "id": "closed",
+          "label": "Closed"
+        }
+      ],
+      "empty": "Submissions are private to the person who sent them and our team. Use the button above to send one, or check an existing one with your private reference."
+    }
+  ],
+  "seedAuthor": "Horizon Network"
+}

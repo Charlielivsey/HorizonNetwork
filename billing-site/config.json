@@ -1,0 +1,280 @@
+{
+  "engine": "service-suite",
+  "id": "billing",
+  "domain": "billing.hngroup.org.uk",
+  "aliases": [],
+  "port": 4800,
+  "company": "group",
+  "name": "HN Group Billing",
+  "brand": "HN Group",
+  "logo": "hn-group-wordmark",
+  "staffOnly": true,
+  "staffSignIn": "any",
+  "staffLabel": "HN Group",
+  "hero": {
+    "eyebrow": "HN GROUP BILLING",
+    "title": "Invoices and payments.",
+    "lead": "Create and track customer invoices and record payments. Records are shared with the staff portal, so finance always works from one set of figures.",
+    "actions": [
+      {
+        "label": "Open invoices",
+        "href": "#/bridge/invoices"
+      }
+    ]
+  },
+  "sections": [],
+  "notices": [],
+  "related": [],
+  "providers": {
+    "payments": {
+      "label": "Online card payments",
+      "status": "awaiting-configuration",
+      "note": "No payment provider is connected, so customers cannot pay online yet. Record payments here when funds arrive by bank transfer or PayPal."
+    }
+  },
+  "accounts": null,
+  "securityTxt": null,
+  "brandkit": null,
+  "tools": null,
+  "privacy": "https://hngroup.org.uk/privacy",
+  "footer": {
+    "text": "HN Group brings together Horizon Network, Horizon Media Group and Horizon Holding Co.",
+    "copyright": "HN Group Limited",
+    "links": [
+      {
+        "label": "hngroup.org.uk",
+        "url": "https://hngroup.org.uk"
+      },
+      {
+        "label": "Support",
+        "url": "https://support.hngroup.org.uk"
+      },
+      {
+        "label": "Service status",
+        "url": "https://status.hngroup.org.uk"
+      },
+      {
+        "label": "All HN Group links",
+        "url": "https://links.hngroup.org.uk"
+      }
+    ]
+  },
+  "storageLimitMb": 2048,
+  "modules": [
+    {
+      "key": "invoices",
+      "type": "bridge",
+      "title": "Invoices",
+      "intro": "Create, send and track customer invoices. Invoices are shared with the staff portal (payroll & finance permission required).",
+      "portalUrl": "https://staff.hngroup.org.uk/invoices",
+      "load": {
+        "path": "/api/invoices"
+      },
+      "views": [
+        {
+          "id": "invoices",
+          "label": "Invoices",
+          "items": "invoices",
+          "columns": [
+            {
+              "field": "number",
+              "label": "Number"
+            },
+            {
+              "field": "company",
+              "label": "Company"
+            },
+            {
+              "field": "customer.name",
+              "label": "Customer"
+            },
+            {
+              "field": "issueDate",
+              "label": "Issued",
+              "format": "date"
+            },
+            {
+              "field": "dueDate",
+              "label": "Due",
+              "format": "date"
+            },
+            {
+              "field": "total",
+              "label": "Total",
+              "format": "pounds"
+            },
+            {
+              "field": "status",
+              "label": "Status",
+              "format": "status",
+              "labelField": "statusLabel"
+            }
+          ],
+          "actions": [
+            {
+              "id": "sent",
+              "label": "Mark sent",
+              "path": "/api/invoices/{id}/sent",
+              "when": "status",
+              "equals": "draft"
+            },
+            {
+              "id": "paid",
+              "label": "Mark paid",
+              "path": "/api/invoices/{id}/paid",
+              "when": "status",
+              "in": [
+                "draft",
+                "sent"
+              ],
+              "fields": [
+                {
+                  "name": "source",
+                  "label": "Received by",
+                  "type": "select",
+                  "required": true,
+                  "options": [
+                    {
+                      "value": "bank",
+                      "label": "Bank transfer"
+                    },
+                    {
+                      "value": "paypal",
+                      "label": "PayPal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "void",
+              "label": "Void",
+              "path": "/api/invoices/{id}/void",
+              "when": "status",
+              "in": [
+                "draft",
+                "sent"
+              ],
+              "confirm": "Void this invoice?",
+              "danger": true
+            },
+            {
+              "id": "delete",
+              "label": "Delete",
+              "path": "/api/invoices/{id}/delete",
+              "when": "status",
+              "equals": "draft",
+              "confirm": "Delete this draft?",
+              "danger": true
+            }
+          ],
+          "empty": "No invoices yet, or your account does not have payroll & finance permission."
+        }
+      ],
+      "forms": [
+        {
+          "id": "invoice",
+          "label": "Create invoice",
+          "path": "/api/invoices",
+          "passthrough": true,
+          "success": "Draft invoice saved to the staff portal.",
+          "fields": [
+            {
+              "name": "company",
+              "label": "Invoice from",
+              "type": "select",
+              "required": true,
+              "options": [
+                {
+                  "value": "HN Group",
+                  "label": "HN Group"
+                },
+                {
+                  "value": "Horizon Network",
+                  "label": "Horizon Network"
+                },
+                {
+                  "value": "Horizon Advertising",
+                  "label": "Horizon Advertising"
+                },
+                {
+                  "value": "Horizon Development",
+                  "label": "Horizon Development"
+                },
+                {
+                  "value": "Horizon Media Group",
+                  "label": "Horizon Media Group"
+                }
+              ]
+            },
+            {
+              "name": "customerName",
+              "label": "Customer name",
+              "type": "text",
+              "required": true,
+              "max": 120
+            },
+            {
+              "name": "customerEmail",
+              "label": "Customer email",
+              "type": "email"
+            },
+            {
+              "name": "customerAddress",
+              "label": "Customer address",
+              "type": "textarea",
+              "max": 400
+            },
+            {
+              "name": "issueDate",
+              "label": "Issue date",
+              "type": "date"
+            },
+            {
+              "name": "dueDate",
+              "label": "Due date",
+              "type": "date"
+            },
+            {
+              "name": "reference",
+              "label": "Reference",
+              "type": "text",
+              "max": 80
+            },
+            {
+              "name": "vatRate",
+              "label": "VAT rate",
+              "type": "select",
+              "options": [
+                {
+                  "value": "0",
+                  "label": "No VAT"
+                },
+                {
+                  "value": "5",
+                  "label": "5%"
+                },
+                {
+                  "value": "20",
+                  "label": "20%"
+                }
+              ]
+            },
+            {
+              "name": "notes",
+              "label": "Notes",
+              "type": "textarea",
+              "max": 1000
+            },
+            {
+              "name": "lines",
+              "label": "Lines",
+              "type": "lines"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "seedAuthor": "HN Group"
+}

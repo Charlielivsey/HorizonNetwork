@@ -1,0 +1,221 @@
+{
+  "engine": "service-suite",
+  "id": "labs",
+  "domain": "labs.hngroup.org.uk",
+  "aliases": [],
+  "port": 5020,
+  "company": "group",
+  "name": "HN Group Labs",
+  "brand": "HN Group",
+  "logo": "hn-group-wordmark",
+  "staffOnly": false,
+  "staffSignIn": "any",
+  "staffLabel": "HN Group",
+  "hero": {
+    "eyebrow": "HN GROUP LABS",
+    "title": "Experiments and previews.",
+    "lead": "Early ideas and previews from across HN Group. Things here may change or disappear — tell us what you think.",
+    "actions": [
+      {
+        "label": "Experiments",
+        "href": "#/m/experiments"
+      }
+    ]
+  },
+  "sections": [],
+  "notices": [
+    {
+      "title": "No automatic emails.",
+      "text": "This website does not send email notifications. Keep your private reference to check progress and read replies here.",
+      "email": false
+    }
+  ],
+  "related": [],
+  "providers": {},
+  "accounts": null,
+  "securityTxt": null,
+  "brandkit": null,
+  "tools": null,
+  "privacy": "https://hngroup.org.uk/privacy",
+  "footer": {
+    "text": "HN Group brings together Horizon Network, Horizon Media Group and Horizon Holding Co.",
+    "copyright": "HN Group Limited",
+    "links": [
+      {
+        "label": "hngroup.org.uk",
+        "url": "https://hngroup.org.uk"
+      },
+      {
+        "label": "Support",
+        "url": "https://support.hngroup.org.uk"
+      },
+      {
+        "label": "Service status",
+        "url": "https://status.hngroup.org.uk"
+      },
+      {
+        "label": "All HN Group links",
+        "url": "https://links.hngroup.org.uk"
+      }
+    ]
+  },
+  "storageLimitMb": 2048,
+  "modules": [
+    {
+      "key": "experiments",
+      "type": "items",
+      "title": "Experiments",
+      "view": "public",
+      "create": "manager",
+      "manage": "admin",
+      "publish": true,
+      "comments": false,
+      "singular": "experiment",
+      "intro": "Some experiments are visible to staff only.",
+      "fields": [
+        {
+          "name": "title",
+          "label": "Experiment",
+          "type": "text",
+          "required": true,
+          "max": 160
+        },
+        {
+          "name": "summary",
+          "label": "Summary",
+          "type": "text",
+          "max": 300
+        },
+        {
+          "name": "stage",
+          "label": "Stage",
+          "type": "select",
+          "filter": true,
+          "options": [
+            {
+              "value": "idea",
+              "label": "Idea"
+            },
+            {
+              "value": "prototype",
+              "label": "Prototype"
+            },
+            {
+              "value": "preview",
+              "label": "Preview"
+            },
+            {
+              "value": "retired",
+              "label": "Retired"
+            }
+          ]
+        },
+        {
+          "name": "company",
+          "label": "From",
+          "type": "select",
+          "options": [
+            "HN Group",
+            "Horizon Network",
+            "Horizon Media Group",
+            "Horizon Holding Co",
+            "Horizon Advertising",
+            "Horizon Development"
+          ],
+          "filter": true
+        },
+        {
+          "name": "link",
+          "label": "Try it",
+          "type": "url"
+        },
+        {
+          "name": "body",
+          "label": "About",
+          "type": "textarea",
+          "max": 20000
+        }
+      ],
+      "listFields": [
+        "stage",
+        "company"
+      ],
+      "empty": "No experiments are public at the moment."
+    },
+    {
+      "key": "reactions",
+      "type": "items",
+      "title": "Experiment feedback",
+      "view": "manager",
+      "create": "public",
+      "manage": "admin",
+      "reference": true,
+      "comments": true,
+      "consent": "I understand HN Group will use these details to respond, as described in the HN Group privacy notice.",
+      "scope": "own",
+      "singular": "feedback",
+      "parent": {
+        "module": "experiments",
+        "label": "Experiment",
+        "cta": "Give feedback"
+      },
+      "fields": [
+        {
+          "name": "rating",
+          "label": "How useful is this?",
+          "type": "select",
+          "options": [
+            {
+              "value": "very-useful",
+              "label": "Very useful"
+            },
+            {
+              "value": "somewhat-useful",
+              "label": "Somewhat useful"
+            },
+            {
+              "value": "not-useful",
+              "label": "Not useful"
+            }
+          ]
+        },
+        {
+          "name": "body",
+          "label": "Your feedback",
+          "type": "textarea",
+          "max": 20000
+        },
+        {
+          "name": "name",
+          "label": "Name (optional)",
+          "type": "text",
+          "max": 120
+        },
+        {
+          "name": "email",
+          "label": "Email",
+          "type": "email",
+          "required": false,
+          "contact": true,
+          "autocomplete": "email"
+        }
+      ],
+      "statuses": [
+        {
+          "id": "new",
+          "label": "New"
+        },
+        {
+          "id": "reviewing",
+          "label": "Reviewing"
+        },
+        {
+          "id": "closed",
+          "label": "Closed"
+        }
+      ],
+      "empty": "Submissions are private to the person who sent them and our team. Use the button above to send one, or check an existing one with your private reference."
+    }
+  ],
+  "seedAuthor": "HN Group"
+}

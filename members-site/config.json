@@ -1,0 +1,232 @@
+{
+  "engine": "service-suite",
+  "id": "members",
+  "domain": "members.hngroup.org.uk",
+  "aliases": [],
+  "port": 5080,
+  "company": "group",
+  "name": "HN Group Members",
+  "brand": "HN Group",
+  "logo": "hn-group-wordmark",
+  "staffOnly": false,
+  "staffSignIn": "admin",
+  "staffLabel": "HN Group",
+  "hero": {
+    "eyebrow": "HN GROUP MEMBERS",
+    "title": "Membership.",
+    "lead": "Apply for HN Group membership. Approved members get a member account with member resources and a private way to request member services.",
+    "actions": [
+      {
+        "label": "Apply",
+        "href": "#/m/applications/new"
+      },
+      {
+        "label": "Member sign in",
+        "href": "#/account"
+      }
+    ]
+  },
+  "sections": [],
+  "notices": [
+    {
+      "title": "No automatic emails.",
+      "text": "This website does not send email notifications. Keep your private reference to check progress and read replies here.",
+      "email": false
+    }
+  ],
+  "related": [],
+  "providers": {},
+  "accounts": {
+    "mode": "invite",
+    "label": "Member account",
+    "memberships": true
+  },
+  "securityTxt": null,
+  "brandkit": null,
+  "tools": null,
+  "privacy": "https://hngroup.org.uk/privacy",
+  "footer": {
+    "text": "HN Group brings together Horizon Network, Horizon Media Group and Horizon Holding Co.",
+    "copyright": "HN Group Limited",
+    "links": [
+      {
+        "label": "hngroup.org.uk",
+        "url": "https://hngroup.org.uk"
+      },
+      {
+        "label": "Support",
+        "url": "https://support.hngroup.org.uk"
+      },
+      {
+        "label": "Service status",
+        "url": "https://status.hngroup.org.uk"
+      },
+      {
+        "label": "All HN Group links",
+        "url": "https://links.hngroup.org.uk"
+      }
+    ]
+  },
+  "storageLimitMb": 2048,
+  "modules": [
+    {
+      "key": "applications",
+      "type": "items",
+      "title": "Membership applications",
+      "view": "manager",
+      "create": "public",
+      "manage": "admin",
+      "reference": true,
+      "comments": true,
+      "consent": "I understand HN Group will use these details to respond, as described in the HN Group privacy notice.",
+      "scope": "own",
+      "singular": "application",
+      "cta": "Apply for membership",
+      "invite": {
+        "status": "approved"
+      },
+      "fields": [
+        {
+          "name": "name",
+          "label": "Your name",
+          "type": "text",
+          "required": true,
+          "max": 120,
+          "autocomplete": "name"
+        },
+        {
+          "name": "email",
+          "label": "Email",
+          "type": "email",
+          "required": true,
+          "contact": true,
+          "autocomplete": "email"
+        },
+        {
+          "name": "organisation",
+          "label": "Organisation (optional)",
+          "type": "text",
+          "max": 160
+        },
+        {
+          "name": "reason",
+          "label": "Why would you like to join?",
+          "type": "textarea",
+          "required": true,
+          "max": 3000
+        }
+      ],
+      "statuses": [
+        {
+          "id": "new",
+          "label": "New"
+        },
+        {
+          "id": "reviewing",
+          "label": "Reviewing"
+        },
+        {
+          "id": "approved",
+          "label": "Approved"
+        },
+        {
+          "id": "declined",
+          "label": "Declined"
+        }
+      ],
+      "empty": "Submissions are private to the person who sent them and our team. Use the button above to send one, or check an existing one with your private reference."
+    },
+    {
+      "key": "resources",
+      "type": "items",
+      "title": "Member resources",
+      "view": "members",
+      "create": "manager",
+      "manage": "admin",
+      "publish": true,
+      "comments": false,
+      "singular": "resource",
+      "defaultVisibility": "members",
+      "membersVisibility": true,
+      "files": "manager",
+      "intro": "Resources for members.",
+      "fields": [
+        {
+          "name": "title",
+          "label": "Resource",
+          "type": "text",
+          "required": true,
+          "max": 160
+        },
+        {
+          "name": "summary",
+          "label": "Summary",
+          "type": "text",
+          "max": 300
+        },
+        {
+          "name": "link",
+          "label": "Link",
+          "type": "url"
+        },
+        {
+          "name": "body",
+          "label": "Details",
+          "type": "textarea",
+          "max": 20000
+        }
+      ],
+      "empty": "No member resources have been published yet."
+    },
+    {
+      "key": "requests",
+      "type": "items",
+      "title": "Member services",
+      "singular": "request",
+      "cta": "Request a member service",
+      "view": "members",
+      "create": "account",
+      "manage": "admin",
+      "scope": "own",
+      "comments": true,
+      "display": "table",
+      "intro": "Ask for member services. Only you and our team can see your requests.",
+      "fields": [
+        {
+          "name": "title",
+          "label": "Subject",
+          "type": "text",
+          "required": true,
+          "max": 160
+        },
+        {
+          "name": "body",
+          "label": "Details",
+          "type": "textarea",
+          "max": 20000
+        }
+      ],
+      "statuses": [
+        {
+          "id": "open",
+          "label": "Open"
+        },
+        {
+          "id": "in-progress",
+          "label": "In progress"
+        },
+        {
+          "id": "resolved",
+          "label": "Resolved"
+        },
+        {
+          "id": "closed",
+          "label": "Closed"
+        }
+      ],
+      "empty": "You have not made any requests yet.",
+      "staffOnly": false
+    }
+  ],
+  "seedAuthor": "HN Group"
+}

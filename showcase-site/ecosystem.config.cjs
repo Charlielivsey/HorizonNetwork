@@ -1,0 +1,1 @@
+module.exports={apps:[{name:'hn-showcase',script:'/opt/hn-showcase/server.js',cwd:'/opt/hn-showcase',instances:1,exec_mode:'fork',autorestart:true,max_memory_restart:'160M',node_args:'--max-old-space-size=64 --max-semi-space-size=2',env:{NODE_ENV:'production',PORT:5140,DATA_DIR:'/var/lib/hn-showcase'}}]};

@@ -1,0 +1,156 @@
+{
+  "engine": "service-suite",
+  "id": "surveys",
+  "domain": "surveys.hngroup.org.uk",
+  "aliases": [],
+  "port": 4950,
+  "company": "group",
+  "name": "HN Group Surveys",
+  "brand": "HN Group",
+  "logo": "hn-group-wordmark",
+  "staffOnly": false,
+  "staffSignIn": "any",
+  "staffLabel": "HN Group",
+  "hero": {
+    "eyebrow": "HN GROUP SURVEYS",
+    "title": "Surveys and results.",
+    "lead": "Have your say in HN Group surveys. Some surveys share their results publicly once you respond. Staff also see staff polls from the staff portal.",
+    "actions": [
+      {
+        "label": "Open surveys",
+        "href": "#/b/surveys"
+      }
+    ]
+  },
+  "sections": [],
+  "notices": [],
+  "related": [],
+  "providers": {},
+  "accounts": null,
+  "securityTxt": null,
+  "brandkit": null,
+  "tools": null,
+  "privacy": "https://hngroup.org.uk/privacy",
+  "footer": {
+    "text": "HN Group brings together Horizon Network, Horizon Media Group and Horizon Holding Co.",
+    "copyright": "HN Group Limited",
+    "links": [
+      {
+        "label": "hngroup.org.uk",
+        "url": "https://hngroup.org.uk"
+      },
+      {
+        "label": "Support",
+        "url": "https://support.hngroup.org.uk"
+      },
+      {
+        "label": "Service status",
+        "url": "https://status.hngroup.org.uk"
+      },
+      {
+        "label": "All HN Group links",
+        "url": "https://links.hngroup.org.uk"
+      }
+    ]
+  },
+  "storageLimitMb": 2048,
+  "modules": [
+    {
+      "key": "surveys",
+      "type": "builder",
+      "mode": "survey",
+      "title": "Surveys",
+      "manage": "admin",
+      "intro": "Surveys that are currently open.",
+      "empty": "No surveys are open at the moment."
+    },
+    {
+      "key": "staffpolls",
+      "type": "bridge",
+      "title": "Staff polls & surveys",
+      "nav": "Staff polls",
+      "intro": "Polls and surveys for staff from the staff portal. Answer here or in the portal; results are the same.",
+      "render": "polls",
+      "portalUrl": "https://staff.hngroup.org.uk/polls",
+      "load": {
+        "path": "/api/polls"
+      },
+      "views": [
+        {
+          "id": "polls",
+          "label": "Polls",
+          "items": "polls",
+          "columns": [],
+          "actions": [
+            {
+              "id": "respond",
+              "label": "Respond",
+              "path": "/api/polls/{id}/respond",
+              "passthrough": true
+            },
+            {
+              "id": "close",
+              "label": "Close",
+              "path": "/api/polls/{id}/close"
+            },
+            {
+              "id": "reopen",
+              "label": "Reopen",
+              "path": "/api/polls/{id}/reopen"
+            },
+            {
+              "id": "delete",
+              "label": "Delete",
+              "path": "/api/polls/{id}/delete"
+            }
+          ]
+        }
+      ],
+      "forms": [
+        {
+          "id": "poll",
+          "label": "Create a staff poll",
+          "path": "/api/polls",
+          "when": "canManage",
+          "passthrough": true,
+          "fields": [
+            {
+              "name": "title",
+              "label": "Title",
+              "type": "text",
+              "required": true,
+              "max": 150
+            },
+            {
+              "name": "description",
+              "label": "Description",
+              "type": "textarea",
+              "max": 2000
+            },
+            {
+              "name": "anonymous",
+              "label": "Anonymous",
+              "type": "checkbox"
+            },
+            {
+              "name": "showResults",
+              "label": "Show results to respondents",
+              "type": "checkbox"
+            },
+            {
+              "name": "closesAt",
+              "label": "Closes",
+              "type": "date"
+            },
+            {
+              "name": "questions",
+              "label": "Questions",
+              "type": "questions"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "seedAuthor": "HN Group"
+}

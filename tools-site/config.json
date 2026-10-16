@@ -1,0 +1,60 @@
+{
+  "engine": "service-suite",
+  "id": "tools",
+  "domain": "tools.horizonetwork.com",
+  "aliases": [
+    "tools.horizon-network.co.uk"
+  ],
+  "port": 5160,
+  "company": "network",
+  "name": "Horizon Network Tools",
+  "brand": "Horizon Network",
+  "logo": "horizon-network-wordmark",
+  "staffOnly": false,
+  "staffSignIn": "admin",
+  "staffLabel": "Horizon Network",
+  "hero": {
+    "eyebrow": "HORIZON NETWORK TOOLS",
+    "title": "Useful working tools.",
+    "lead": "Free tools for everyday work — password and UUID generators, colour contrast, JSON, encoding, checksums, time zones and subnets. Everything runs in your browser; nothing you type is sent to us.",
+    "actions": [
+      {
+        "label": "Open tools",
+        "href": "#/tools"
+      }
+    ]
+  },
+  "sections": [],
+  "notices": [],
+  "related": [],
+  "providers": {},
+  "accounts": null,
+  "securityTxt": null,
+  "brandkit": null,
+  "tools": {
+    "title": "Tools",
+    "intro": "Everything runs in your browser. Nothing you enter is sent to Horizon Network."
+  },
+  "privacy": "https://horizon-network.co.uk/privacy",
+  "footer": {
+    "text": "Horizon Network brings together digital infrastructure, advertising and software. A subsidiary of HN Group Limited.",
+    "copyright": "Horizon Network · A subsidiary of HN Group Limited",
+    "links": [
+      {
+        "label": "horizon-network.co.uk",
+        "url": "https://horizon-network.co.uk"
+      },
+      {
+        "label": "Network status",
+        "url": "https://status.horizon-network.co.uk"
+      },
+      {
+        "label": "All HN Group links",
+        "url": "https://links.hngroup.org.uk"
+      }
+    ]
+  },
+  "storageLimitMb": 2048,
+  "modules": [],
+  "seedAuthor": "Horizon Network"
+}

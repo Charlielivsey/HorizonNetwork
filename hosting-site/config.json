@@ -1,0 +1,249 @@
+{
+  "engine": "service-suite",
+  "id": "hosting",
+  "domain": "hosting.horizon-network.co.uk",
+  "aliases": [
+    "hosting.horizonetwork.com"
+  ],
+  "port": 5090,
+  "company": "network",
+  "name": "Horizon Hosting",
+  "brand": "Horizon Network",
+  "logo": "horizon-network-wordmark",
+  "staffOnly": false,
+  "staffSignIn": "admin",
+  "staffLabel": "Horizon Network",
+  "hero": {
+    "eyebrow": "HORIZON HOSTING",
+    "title": "Hosting from Horizon Network.",
+    "lead": "Horizon Hosting is Horizon Network’s planned hosting service, offering VPS, dedicated servers and managed cloud. It is coming soon — register your requirements now.",
+    "actions": [
+      {
+        "label": "Hosting options",
+        "href": "#/m/plans"
+      },
+      {
+        "label": "Make a request",
+        "href": "#/m/requests/new"
+      }
+    ]
+  },
+  "sections": [],
+  "notices": [
+    {
+      "title": "No automatic emails.",
+      "text": "This website does not send email notifications. Keep your private reference to check progress and read replies here.",
+      "email": false
+    }
+  ],
+  "related": [],
+  "providers": {
+    "provisioning": {
+      "label": "Automatic server provisioning",
+      "status": "awaiting-configuration",
+      "note": "No hosting provisioning system is connected. Requests are reviewed by the team; nothing is created automatically."
+    }
+  },
+  "accounts": null,
+  "securityTxt": null,
+  "brandkit": null,
+  "tools": null,
+  "privacy": "https://horizon-network.co.uk/privacy",
+  "footer": {
+    "text": "Horizon Network brings together digital infrastructure, advertising and software. A subsidiary of HN Group Limited.",
+    "copyright": "Horizon Network · A subsidiary of HN Group Limited",
+    "links": [
+      {
+        "label": "horizon-network.co.uk",
+        "url": "https://horizon-network.co.uk"
+      },
+      {
+        "label": "Network status",
+        "url": "https://status.horizon-network.co.uk"
+      },
+      {
+        "label": "All HN Group links",
+        "url": "https://links.hngroup.org.uk"
+      }
+    ]
+  },
+  "storageLimitMb": 2048,
+  "modules": [
+    {
+      "key": "plans",
+      "type": "items",
+      "title": "Hosting options",
+      "view": "public",
+      "create": "manager",
+      "manage": "admin",
+      "publish": true,
+      "comments": false,
+      "singular": "option",
+      "fields": [
+        {
+          "name": "title",
+          "label": "Option",
+          "type": "text",
+          "required": true,
+          "max": 160
+        },
+        {
+          "name": "availability",
+          "label": "Availability",
+          "type": "select",
+          "options": [
+            {
+              "value": "coming-soon",
+              "label": "Coming soon"
+            },
+            {
+              "value": "available",
+              "label": "Available"
+            }
+          ],
+          "filter": true
+        },
+        {
+          "name": "summary",
+          "label": "Summary",
+          "type": "text",
+          "max": 300
+        },
+        {
+          "name": "body",
+          "label": "Details",
+          "type": "textarea",
+          "max": 20000
+        }
+      ],
+      "listFields": [
+        "availability"
+      ],
+      "seed": [
+        {
+          "id": "plan-vps",
+          "fields": {
+            "title": "VPS",
+            "availability": "coming-soon",
+            "summary": "Virtual private servers.",
+            "body": "Part of Horizon Hosting, coming soon."
+          }
+        },
+        {
+          "id": "plan-dedicated",
+          "fields": {
+            "title": "Dedicated servers",
+            "availability": "coming-soon",
+            "summary": "Dedicated server hosting.",
+            "body": "Part of Horizon Hosting, coming soon."
+          }
+        },
+        {
+          "id": "plan-cloud",
+          "fields": {
+            "title": "Managed cloud",
+            "availability": "coming-soon",
+            "summary": "Managed cloud hosting.",
+            "body": "Part of Horizon Hosting, coming soon."
+          }
+        }
+      ]
+    },
+    {
+      "key": "requests",
+      "type": "items",
+      "title": "Hosting requests",
+      "view": "manager",
+      "create": "public",
+      "manage": "admin",
+      "reference": true,
+      "comments": true,
+      "consent": "I understand Horizon Network will use these details to respond, as described in the Horizon Network privacy notice.",
+      "scope": "own",
+      "singular": "request",
+      "parent": {
+        "module": "plans",
+        "label": "Hosting option",
+        "cta": "Request this"
+      },
+      "successTitle": "Request received",
+      "fields": [
+        {
+          "name": "name",
+          "label": "Your name",
+          "type": "text",
+          "required": true,
+          "max": 120,
+          "autocomplete": "name"
+        },
+        {
+          "name": "email",
+          "label": "Email",
+          "type": "email",
+          "required": true,
+          "contact": true,
+          "autocomplete": "email"
+        },
+        {
+          "name": "organisation",
+          "label": "Organisation",
+          "type": "text",
+          "max": 160
+        },
+        {
+          "name": "start",
+          "label": "When do you need it?",
+          "type": "select",
+          "options": [
+            {
+              "value": "as-soon-as-available",
+              "label": "As soon as available"
+            },
+            {
+              "value": "within-3-months",
+              "label": "Within 3 months"
+            },
+            {
+              "value": "later",
+              "label": "Later"
+            },
+            {
+              "value": "just-exploring",
+              "label": "Just exploring"
+            }
+          ]
+        },
+        {
+          "name": "body",
+          "label": "Your requirements",
+          "type": "textarea",
+          "max": 20000
+        }
+      ],
+      "listFields": [
+        "organisation",
+        "start"
+      ],
+      "statuses": [
+        {
+          "id": "new",
+          "label": "New"
+        },
+        {
+          "id": "reviewing",
+          "label": "Reviewing"
+        },
+        {
+          "id": "contacted",
+          "label": "Contacted"
+        },
+        {
+          "id": "closed",
+          "label": "Closed"
+        }
+      ],
+      "empty": "Submissions are private to the person who sent them and our team. Use the button above to send one, or check an existing one with your private reference."
+    }
+  ],
+  "seedAuthor": "Horizon Network"
+}

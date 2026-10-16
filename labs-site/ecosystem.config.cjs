@@ -1,0 +1,1 @@
+module.exports={apps:[{name:'hn-labs',script:'/opt/hn-labs/server.js',cwd:'/opt/hn-labs',instances:1,exec_mode:'fork',autorestart:true,max_memory_restart:'160M',node_args:'--max-old-space-size=64 --max-semi-space-size=2',env:{NODE_ENV:'production',PORT:5020,DATA_DIR:'/var/lib/hn-labs'}}]};

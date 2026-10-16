@@ -1,0 +1,1 @@
+module.exports={apps:[{name:'hn-forms',script:'/opt/hn-forms/server.js',cwd:'/opt/hn-forms',instances:1,exec_mode:'fork',autorestart:true,max_memory_restart:'160M',node_args:'--max-old-space-size=64 --max-semi-space-size=2',env:{NODE_ENV:'production',PORT:4940,DATA_DIR:'/var/lib/hn-forms'}}]};

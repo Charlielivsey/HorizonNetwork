@@ -1,0 +1,352 @@
+{
+  "engine": "service-suite",
+  "id": "expenses",
+  "domain": "expenses.hngroup.org.uk",
+  "aliases": [],
+  "port": 4980,
+  "company": "group",
+  "name": "HN Group Expenses",
+  "brand": "HN Group",
+  "logo": "hn-group-wordmark",
+  "staffOnly": true,
+  "staffSignIn": "any",
+  "staffLabel": "HN Group",
+  "hero": {
+    "eyebrow": "HN GROUP EXPENSES",
+    "title": "Expenses, simply.",
+    "lead": "Submit expense and mileage claims with receipts, and approve claims for your team. Claims are the same records as in the staff portal.",
+    "actions": [
+      {
+        "label": "My claims",
+        "href": "#/bridge/claims"
+      },
+      {
+        "label": "Submit a claim",
+        "href": "#/bridge/claims/form/claim"
+      }
+    ]
+  },
+  "sections": [],
+  "notices": [],
+  "related": [],
+  "providers": {},
+  "accounts": null,
+  "securityTxt": null,
+  "brandkit": null,
+  "tools": null,
+  "privacy": "https://hngroup.org.uk/privacy",
+  "footer": {
+    "text": "HN Group brings together Horizon Network, Horizon Media Group and Horizon Holding Co.",
+    "copyright": "HN Group Limited",
+    "links": [
+      {
+        "label": "hngroup.org.uk",
+        "url": "https://hngroup.org.uk"
+      },
+      {
+        "label": "Support",
+        "url": "https://support.hngroup.org.uk"
+      },
+      {
+        "label": "Service status",
+        "url": "https://status.hngroup.org.uk"
+      },
+      {
+        "label": "All HN Group links",
+        "url": "https://links.hngroup.org.uk"
+      }
+    ]
+  },
+  "storageLimitMb": 2048,
+  "modules": [
+    {
+      "key": "claims",
+      "type": "bridge",
+      "title": "Expense claims",
+      "nav": "Claims",
+      "intro": "Submit, approve and pay expense claims. Claims are shared with the staff portal.",
+      "portalUrl": "https://staff.hngroup.org.uk/expenses",
+      "load": {
+        "path": "/api/expenses"
+      },
+      "views": [
+        {
+          "id": "mine",
+          "label": "My claims",
+          "items": "mine",
+          "columns": [
+            {
+              "field": "date",
+              "label": "Date",
+              "format": "date"
+            },
+            {
+              "field": "category",
+              "label": "Category"
+            },
+            {
+              "field": "description",
+              "label": "Description"
+            },
+            {
+              "field": "amount",
+              "label": "Amount",
+              "format": "pounds"
+            },
+            {
+              "field": "status",
+              "label": "Status",
+              "format": "status",
+              "labelField": "statusLabel"
+            }
+          ],
+          "download": {
+            "path": "/api/expenses/{id}/receipt",
+            "when": "receipt",
+            "label": "Receipt"
+          },
+          "actions": [
+            {
+              "id": "cancel",
+              "label": "Withdraw",
+              "path": "/api/expenses/{id}/cancel",
+              "when": "canCancel",
+              "confirm": "Withdraw this claim? It will be deleted.",
+              "danger": true
+            }
+          ],
+          "empty": "You have no expense claims."
+        },
+        {
+          "id": "approve",
+          "label": "Waiting for your approval",
+          "items": "toApprove",
+          "when": "toApprove",
+          "columns": [
+            {
+              "field": "person.displayName",
+              "label": "Person"
+            },
+            {
+              "field": "date",
+              "label": "Date",
+              "format": "date"
+            },
+            {
+              "field": "description",
+              "label": "Description"
+            },
+            {
+              "field": "amount",
+              "label": "Amount",
+              "format": "pounds"
+            }
+          ],
+          "download": {
+            "path": "/api/expenses/{id}/receipt",
+            "when": "receipt",
+            "label": "Receipt"
+          },
+          "actions": [
+            {
+              "id": "approve",
+              "label": "Approve",
+              "path": "/api/expenses/{id}/approve",
+              "when": "canApprove",
+              "fields": [
+                {
+                  "name": "note",
+                  "label": "Note (optional)",
+                  "type": "text",
+                  "max": 300
+                }
+              ]
+            },
+            {
+              "id": "reject",
+              "label": "Reject",
+              "path": "/api/expenses/{id}/reject",
+              "when": "canApprove",
+              "danger": true,
+              "fields": [
+                {
+                  "name": "note",
+                  "label": "Reason",
+                  "type": "text",
+                  "max": 300,
+                  "required": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "all",
+          "label": "All claims (payroll & finance)",
+          "items": "all",
+          "when": "canPay",
+          "columns": [
+            {
+              "field": "person.displayName",
+              "label": "Person"
+            },
+            {
+              "field": "date",
+              "label": "Date",
+              "format": "date"
+            },
+            {
+              "field": "description",
+              "label": "Description"
+            },
+            {
+              "field": "amount",
+              "label": "Amount",
+              "format": "pounds"
+            },
+            {
+              "field": "status",
+              "label": "Status",
+              "format": "status",
+              "labelField": "statusLabel"
+            }
+          ],
+          "download": {
+            "path": "/api/expenses/{id}/receipt",
+            "when": "receipt",
+            "label": "Receipt"
+          },
+          "actions": [
+            {
+              "id": "pay",
+              "label": "Pay",
+              "path": "/api/expenses/{id}/pay",
+              "when": "canPay",
+              "fields": [
+                {
+                  "name": "method",
+                  "label": "How",
+                  "type": "select",
+                  "required": true,
+                  "options": [
+                    {
+                      "value": "direct",
+                      "label": "Paid now from company funds"
+                    },
+                    {
+                      "value": "payslip",
+                      "label": "Add to next payslip"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "forms": [
+        {
+          "id": "claim",
+          "label": "Submit a claim",
+          "path": "/api/expenses",
+          "upload": {
+            "header": "x-claim",
+            "required": false,
+            "label": "Receipt (PDF or image, up to 10 MB)",
+            "accept": ".pdf,.jpg,.jpeg,.png,.webp,.gif,.heic"
+          },
+          "fields": [
+            {
+              "name": "date",
+              "label": "Date of expense",
+              "type": "date",
+              "required": true
+            },
+            {
+              "name": "amount",
+              "label": "Amount (£)",
+              "type": "text",
+              "required": true,
+              "help": "For example 12.50"
+            },
+            {
+              "name": "category",
+              "label": "Category",
+              "type": "text",
+              "help": "A staff portal finance category, for example Travel. Unknown categories are filed as Other."
+            },
+            {
+              "name": "description",
+              "label": "Description",
+              "type": "text",
+              "required": true,
+              "max": 300,
+              "wide": true
+            }
+          ]
+        },
+        {
+          "id": "mileage",
+          "label": "Claim mileage",
+          "path": "/api/expenses",
+          "upload": {
+            "header": "x-claim",
+            "required": false,
+            "label": "Supporting document (optional)"
+          },
+          "fields": [
+            {
+              "name": "kind",
+              "label": "Kind",
+              "type": "text",
+              "fixed": "mileage"
+            },
+            {
+              "name": "date",
+              "label": "Date of journey",
+              "type": "date",
+              "required": true
+            },
+            {
+              "name": "miles",
+              "label": "Miles",
+              "type": "number",
+              "required": true,
+              "min": 0,
+              "max": 2000,
+              "integer": false
+            },
+            {
+              "name": "from",
+              "label": "From",
+              "type": "text",
+              "required": true,
+              "max": 120
+            },
+            {
+              "name": "to",
+              "label": "To",
+              "type": "text",
+              "required": true,
+              "max": 120
+            },
+            {
+              "name": "returnTrip",
+              "label": "Return journey",
+              "type": "checkbox"
+            },
+            {
+              "name": "description",
+              "label": "Purpose (optional)",
+              "type": "text",
+              "max": 300,
+              "wide": true
+            }
+          ],
+          "intro": "Mileage is paid at HMRC rates, calculated by the staff portal."
+        }
+      ]
+    }
+  ],
+  "seedAuthor": "HN Group"
+}

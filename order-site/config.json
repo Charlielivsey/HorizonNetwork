@@ -1,0 +1,211 @@
+{
+  "engine": "service-suite",
+  "id": "order",
+  "domain": "order.horizon-network.co.uk",
+  "aliases": [
+    "order.horizonetwork.com"
+  ],
+  "port": 5180,
+  "company": "network",
+  "name": "Horizon Network Order",
+  "brand": "Horizon Network",
+  "logo": "horizon-network-wordmark",
+  "staffOnly": false,
+  "staffSignIn": "admin",
+  "staffLabel": "Horizon Network",
+  "hero": {
+    "eyebrow": "HORIZON NETWORK ORDER",
+    "title": "Order a service.",
+    "lead": "Choose a Horizon Network service and place an order. We confirm every order with you before anything is charged or set up.",
+    "actions": [
+      {
+        "label": "Services",
+        "href": "#/m/products"
+      },
+      {
+        "label": "Check an order",
+        "href": "#/ref"
+      }
+    ]
+  },
+  "sections": [],
+  "notices": [
+    {
+      "title": "No automatic emails.",
+      "text": "This website does not send email notifications. Keep your private reference to check progress and read replies here.",
+      "email": false
+    }
+  ],
+  "related": [],
+  "providers": {
+    "payments": {
+      "label": "Online payments",
+      "status": "awaiting-configuration",
+      "note": "No payment provider is connected. Placing an order does not take payment; we will contact you to confirm and arrange payment."
+    }
+  },
+  "accounts": null,
+  "securityTxt": null,
+  "brandkit": null,
+  "tools": null,
+  "privacy": "https://horizon-network.co.uk/privacy",
+  "footer": {
+    "text": "Horizon Network brings together digital infrastructure, advertising and software. A subsidiary of HN Group Limited.",
+    "copyright": "Horizon Network · A subsidiary of HN Group Limited",
+    "links": [
+      {
+        "label": "horizon-network.co.uk",
+        "url": "https://horizon-network.co.uk"
+      },
+      {
+        "label": "Network status",
+        "url": "https://status.horizon-network.co.uk"
+      },
+      {
+        "label": "All HN Group links",
+        "url": "https://links.hngroup.org.uk"
+      }
+    ]
+  },
+  "storageLimitMb": 2048,
+  "modules": [
+    {
+      "key": "products",
+      "type": "items",
+      "title": "Services to order",
+      "view": "public",
+      "create": "manager",
+      "manage": "admin",
+      "publish": true,
+      "comments": false,
+      "singular": "service",
+      "fields": [
+        {
+          "name": "title",
+          "label": "Service",
+          "type": "text",
+          "required": true,
+          "max": 160
+        },
+        {
+          "name": "summary",
+          "label": "Summary",
+          "type": "text",
+          "max": 300
+        },
+        {
+          "name": "price",
+          "label": "Price",
+          "type": "text",
+          "max": 120,
+          "help": "As agreed and published by the team"
+        },
+        {
+          "name": "body",
+          "label": "What is included",
+          "type": "textarea",
+          "max": 20000
+        }
+      ],
+      "listFields": [
+        "price"
+      ],
+      "empty": "No services are available to order online yet. Contact Horizon Network or request hosting on hosting.horizon-network.co.uk."
+    },
+    {
+      "key": "orders",
+      "type": "items",
+      "title": "Orders",
+      "view": "manager",
+      "create": "public",
+      "manage": "admin",
+      "reference": true,
+      "comments": true,
+      "consent": "I understand Horizon Network will use these details to respond, as described in the Horizon Network privacy notice.",
+      "scope": "own",
+      "singular": "order",
+      "parent": {
+        "module": "products",
+        "label": "Service",
+        "cta": "Order"
+      },
+      "cancellable": [
+        "received"
+      ],
+      "successTitle": "Order received",
+      "successText": "Your order has been received. No payment has been taken. We will confirm details with you here.",
+      "fields": [
+        {
+          "name": "name",
+          "label": "Your name",
+          "type": "text",
+          "required": true,
+          "max": 120,
+          "autocomplete": "name"
+        },
+        {
+          "name": "email",
+          "label": "Email",
+          "type": "email",
+          "required": true,
+          "contact": true,
+          "autocomplete": "email"
+        },
+        {
+          "name": "organisation",
+          "label": "Organisation",
+          "type": "text",
+          "max": 160
+        },
+        {
+          "name": "quantity",
+          "label": "Quantity",
+          "type": "number",
+          "min": 1,
+          "max": 1000
+        },
+        {
+          "name": "address",
+          "label": "Billing address",
+          "type": "textarea",
+          "max": 600,
+          "contact": true
+        },
+        {
+          "name": "body",
+          "label": "Requirements",
+          "type": "textarea",
+          "max": 20000
+        }
+      ],
+      "listFields": [
+        "organisation",
+        "quantity"
+      ],
+      "statuses": [
+        {
+          "id": "received",
+          "label": "Received"
+        },
+        {
+          "id": "confirmed",
+          "label": "Confirmed"
+        },
+        {
+          "id": "in-progress",
+          "label": "In progress"
+        },
+        {
+          "id": "completed",
+          "label": "Completed"
+        },
+        {
+          "id": "cancelled",
+          "label": "Cancelled"
+        }
+      ],
+      "empty": "Submissions are private to the person who sent them and our team. Use the button above to send one, or check an existing one with your private reference."
+    }
+  ],
+  "seedAuthor": "Horizon Network"
+}

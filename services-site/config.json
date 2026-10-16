@@ -1,0 +1,300 @@
+{
+  "engine": "service-suite",
+  "id": "services",
+  "domain": "services.hngroup.org.uk",
+  "aliases": [],
+  "port": 4870,
+  "company": "group",
+  "name": "HN Group Services",
+  "brand": "HN Group",
+  "logo": "hn-group-wordmark",
+  "staffOnly": false,
+  "staffSignIn": "admin",
+  "staffLabel": "HN Group",
+  "hero": {
+    "eyebrow": "HN GROUP SERVICES",
+    "title": "Services across the group.",
+    "lead": "Digital infrastructure, advertising, software development and media from the HN Group companies. Choose a service to request a quote.",
+    "actions": [
+      {
+        "label": "Browse services",
+        "href": "#/m/catalogue"
+      }
+    ]
+  },
+  "sections": [],
+  "notices": [
+    {
+      "title": "No automatic emails.",
+      "text": "This website does not send email notifications. Keep your private reference to check progress and read replies here.",
+      "email": false
+    }
+  ],
+  "related": [],
+  "providers": {},
+  "accounts": null,
+  "securityTxt": null,
+  "brandkit": null,
+  "tools": null,
+  "privacy": "https://hngroup.org.uk/privacy",
+  "footer": {
+    "text": "HN Group brings together Horizon Network, Horizon Media Group and Horizon Holding Co.",
+    "copyright": "HN Group Limited",
+    "links": [
+      {
+        "label": "hngroup.org.uk",
+        "url": "https://hngroup.org.uk"
+      },
+      {
+        "label": "Support",
+        "url": "https://support.hngroup.org.uk"
+      },
+      {
+        "label": "Service status",
+        "url": "https://status.hngroup.org.uk"
+      },
+      {
+        "label": "All HN Group links",
+        "url": "https://links.hngroup.org.uk"
+      }
+    ]
+  },
+  "storageLimitMb": 2048,
+  "modules": [
+    {
+      "key": "catalogue",
+      "type": "items",
+      "title": "Services",
+      "view": "public",
+      "create": "manager",
+      "manage": "admin",
+      "publish": true,
+      "comments": false,
+      "singular": "service",
+      "fields": [
+        {
+          "name": "title",
+          "label": "Service",
+          "type": "text",
+          "required": true,
+          "max": 160
+        },
+        {
+          "name": "provider",
+          "label": "Provided by",
+          "type": "select",
+          "options": [
+            "HN Group",
+            "Horizon Network",
+            "Horizon Media Group",
+            "Horizon Holding Co",
+            "Horizon Advertising",
+            "Horizon Development"
+          ],
+          "filter": true
+        },
+        {
+          "name": "availability",
+          "label": "Availability",
+          "type": "select",
+          "options": [
+            {
+              "value": "available",
+              "label": "Available"
+            },
+            {
+              "value": "coming-soon",
+              "label": "Coming soon"
+            }
+          ],
+          "filter": true
+        },
+        {
+          "name": "summary",
+          "label": "Summary",
+          "type": "text",
+          "max": 300
+        },
+        {
+          "name": "body",
+          "label": "About this service",
+          "type": "textarea",
+          "max": 20000
+        }
+      ],
+      "listFields": [
+        "provider",
+        "availability"
+      ],
+      "seed": [
+        {
+          "id": "svc-infra",
+          "fields": {
+            "title": "Digital infrastructure",
+            "provider": "Horizon Network",
+            "availability": "available",
+            "summary": "Digital services and infrastructure from Horizon Network, monitored around the clock.",
+            "body": "Horizon Network builds and runs the digital infrastructure behind HN Group services."
+          }
+        },
+        {
+          "id": "svc-hosting",
+          "fields": {
+            "title": "Horizon Hosting",
+            "provider": "Horizon Network",
+            "availability": "coming-soon",
+            "summary": "VPS, dedicated servers and managed cloud — coming soon.",
+            "body": "Horizon Hosting is Horizon Network’s planned hosting service. Request a quote to register your interest."
+          }
+        },
+        {
+          "id": "svc-ads",
+          "fields": {
+            "title": "Digital advertising",
+            "provider": "Horizon Advertising",
+            "availability": "available",
+            "summary": "Display advertising, campaign management, analytics and reporting.",
+            "body": "Horizon Advertising is a subsidiary of Horizon Media Group and is managed by Horizon Network."
+          }
+        },
+        {
+          "id": "svc-dev",
+          "fields": {
+            "title": "Software development",
+            "provider": "Horizon Development",
+            "availability": "available",
+            "summary": "Custom software and web applications, from concept to deployment.",
+            "body": "Horizon Development is part of Horizon Network."
+          }
+        },
+        {
+          "id": "svc-media",
+          "fields": {
+            "title": "Media and content",
+            "provider": "Horizon Media Group",
+            "availability": "available",
+            "summary": "Media and content from the group’s media business.",
+            "body": "Horizon Media Group also handles press enquiries for the group."
+          }
+        }
+      ]
+    },
+    {
+      "key": "quotes",
+      "type": "items",
+      "title": "Quote requests",
+      "view": "manager",
+      "create": "public",
+      "manage": "admin",
+      "reference": true,
+      "comments": true,
+      "consent": "I understand HN Group will use these details to respond, as described in the HN Group privacy notice.",
+      "scope": "own",
+      "singular": "quote request",
+      "parent": {
+        "module": "catalogue",
+        "label": "Service",
+        "cta": "Request a quote"
+      },
+      "successTitle": "Quote request received",
+      "fields": [
+        {
+          "name": "name",
+          "label": "Your name",
+          "type": "text",
+          "required": true,
+          "max": 120,
+          "autocomplete": "name"
+        },
+        {
+          "name": "email",
+          "label": "Email",
+          "type": "email",
+          "required": true,
+          "contact": true,
+          "autocomplete": "email"
+        },
+        {
+          "name": "organisation",
+          "label": "Organisation",
+          "type": "text",
+          "max": 160
+        },
+        {
+          "name": "phone",
+          "label": "Phone (optional)",
+          "type": "text",
+          "max": 40,
+          "contact": true
+        },
+        {
+          "name": "timeline",
+          "label": "When do you need this?",
+          "type": "select",
+          "options": [
+            {
+              "value": "as-soon-as-possible",
+              "label": "As soon as possible"
+            },
+            {
+              "value": "within-1-month",
+              "label": "Within 1 month"
+            },
+            {
+              "value": "within-3-months",
+              "label": "Within 3 months"
+            },
+            {
+              "value": "just-exploring",
+              "label": "Just exploring"
+            }
+          ]
+        },
+        {
+          "name": "budget",
+          "label": "Budget (optional)",
+          "type": "text",
+          "max": 80
+        },
+        {
+          "name": "body",
+          "label": "What do you need?",
+          "type": "textarea",
+          "max": 20000
+        }
+      ],
+      "listFields": [
+        "organisation",
+        "timeline"
+      ],
+      "statuses": [
+        {
+          "id": "new",
+          "label": "New"
+        },
+        {
+          "id": "reviewing",
+          "label": "Reviewing"
+        },
+        {
+          "id": "quoted",
+          "label": "Quote sent"
+        },
+        {
+          "id": "accepted",
+          "label": "Accepted"
+        },
+        {
+          "id": "declined",
+          "label": "Declined"
+        },
+        {
+          "id": "closed",
+          "label": "Closed"
+        }
+      ],
+      "empty": "Submissions are private to the person who sent them and our team. Use the button above to send one, or check an existing one with your private reference."
+    }
+  ],
+  "seedAuthor": "HN Group"
+}

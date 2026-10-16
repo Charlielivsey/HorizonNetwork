@@ -1,0 +1,94 @@
+{
+  "engine": "service-suite",
+  "id": "community",
+  "domain": "community.hngroup.org.uk",
+  "aliases": [],
+  "port": 4920,
+  "company": "group",
+  "name": "HN Group Community",
+  "brand": "HN Group",
+  "logo": "hn-group-wordmark",
+  "staffOnly": false,
+  "staffSignIn": "admin",
+  "staffLabel": "HN Group",
+  "hero": {
+    "eyebrow": "HN GROUP COMMUNITY",
+    "title": "Community forums.",
+    "lead": "Ask questions, share ideas and talk with others around HN Group. Create a free community account to post.",
+    "actions": [
+      {
+        "label": "Browse discussions",
+        "href": "#/forum/forum"
+      }
+    ]
+  },
+  "sections": [],
+  "notices": [],
+  "related": [],
+  "providers": {},
+  "accounts": {
+    "mode": "register",
+    "label": "Community account",
+    "guidelines": "Be respectful and constructive. No harassment, hate, spam or advertising. Do not post personal information about yourself or others, passwords or account details. Moderators may hide posts or lock discussions that break these guidelines. Report anything that concerns you using the Report link."
+  },
+  "securityTxt": null,
+  "brandkit": null,
+  "tools": null,
+  "privacy": "https://hngroup.org.uk/privacy",
+  "footer": {
+    "text": "HN Group brings together Horizon Network, Horizon Media Group and Horizon Holding Co.",
+    "copyright": "HN Group Limited",
+    "links": [
+      {
+        "label": "hngroup.org.uk",
+        "url": "https://hngroup.org.uk"
+      },
+      {
+        "label": "Support",
+        "url": "https://support.hngroup.org.uk"
+      },
+      {
+        "label": "Service status",
+        "url": "https://status.hngroup.org.uk"
+      },
+      {
+        "label": "All HN Group links",
+        "url": "https://links.hngroup.org.uk"
+      }
+    ]
+  },
+  "storageLimitMb": 2048,
+  "modules": [
+    {
+      "key": "forum",
+      "type": "forum",
+      "title": "Discussions",
+      "manage": "admin",
+      "intro": "Community discussions. Staff posts are labelled.",
+      "categories": [
+        {
+          "id": "general",
+          "label": "General"
+        },
+        {
+          "id": "help",
+          "label": "Help & questions"
+        },
+        {
+          "id": "ideas",
+          "label": "Ideas & feedback"
+        },
+        {
+          "id": "introductions",
+          "label": "Introductions"
+        },
+        {
+          "id": "off-topic",
+          "label": "Off topic"
+        }
+      ],
+      "guidelines": "Be respectful and constructive. No harassment, hate, spam or advertising. Do not post personal information about yourself or others, passwords or account details. Moderators may hide posts or lock discussions that break these guidelines. Report anything that concerns you using the Report link."
+    }
+  ],
+  "seedAuthor": "HN Group"
+}

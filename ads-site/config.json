@@ -1,0 +1,234 @@
+{
+  "engine": "service-suite",
+  "id": "ads",
+  "domain": "ads.horizonetwork.com",
+  "aliases": [
+    "ads.horizon-network.co.uk"
+  ],
+  "port": 5150,
+  "company": "network",
+  "name": "Horizon Advertising Services",
+  "brand": "Horizon Advertising",
+  "logo": "horizon-advertising-logo",
+  "staffOnly": false,
+  "staffSignIn": "admin",
+  "staffLabel": "Horizon Advertising",
+  "hero": {
+    "eyebrow": "HORIZON ADVERTISING",
+    "title": "Advertising that reaches people.",
+    "lead": "Digital advertising solutions from Horizon Advertising, managed by Horizon Network: display advertising, campaign management, analytics and reporting.",
+    "actions": [
+      {
+        "label": "Our services",
+        "href": "#/m/services"
+      },
+      {
+        "label": "Make an enquiry",
+        "href": "#/m/enquiries/new"
+      }
+    ]
+  },
+  "sections": [
+    {
+      "eyebrow": "WHO WE ARE",
+      "title": "Ownership and management",
+      "text": "Horizon Advertising is a subsidiary of Horizon Media Group and is managed by Horizon Network. Both are part of HN Group.",
+      "link": {
+        "url": "https://horizonadvertising.co.uk",
+        "label": "horizonadvertising.co.uk"
+      }
+    }
+  ],
+  "notices": [
+    {
+      "title": "No automatic emails.",
+      "text": "This website does not send email notifications. Keep your private reference to check progress and read replies here.",
+      "email": false
+    }
+  ],
+  "related": [],
+  "providers": {},
+  "accounts": null,
+  "securityTxt": null,
+  "brandkit": null,
+  "tools": null,
+  "privacy": "https://horizon-network.co.uk/privacy",
+  "footer": {
+    "text": "Horizon Advertising is a subsidiary of Horizon Media Group and is managed by Horizon Network.",
+    "copyright": "Horizon Network · A subsidiary of HN Group Limited",
+    "links": [
+      {
+        "label": "horizon-network.co.uk",
+        "url": "https://horizon-network.co.uk"
+      },
+      {
+        "label": "Network status",
+        "url": "https://status.horizon-network.co.uk"
+      },
+      {
+        "label": "All HN Group links",
+        "url": "https://links.hngroup.org.uk"
+      }
+    ]
+  },
+  "storageLimitMb": 2048,
+  "modules": [
+    {
+      "key": "services",
+      "type": "items",
+      "title": "Advertising services",
+      "view": "public",
+      "create": "manager",
+      "manage": "admin",
+      "publish": true,
+      "comments": false,
+      "singular": "service",
+      "fields": [
+        {
+          "name": "title",
+          "label": "Service",
+          "type": "text",
+          "required": true,
+          "max": 160
+        },
+        {
+          "name": "summary",
+          "label": "Summary",
+          "type": "text",
+          "max": 300
+        },
+        {
+          "name": "body",
+          "label": "Details",
+          "type": "textarea",
+          "max": 20000
+        }
+      ],
+      "seed": [
+        {
+          "id": "ad-display",
+          "fields": {
+            "title": "Display advertising",
+            "summary": "Reaching audiences with display advertising.",
+            "body": ""
+          }
+        },
+        {
+          "id": "ad-campaigns",
+          "fields": {
+            "title": "Campaign management",
+            "summary": "Planning and running advertising campaigns.",
+            "body": ""
+          }
+        },
+        {
+          "id": "ad-analytics",
+          "fields": {
+            "title": "Analytics and reporting",
+            "summary": "Measuring results with clear reporting.",
+            "body": ""
+          }
+        }
+      ]
+    },
+    {
+      "key": "enquiries",
+      "type": "items",
+      "title": "Advertising enquiries",
+      "view": "manager",
+      "create": "public",
+      "manage": "admin",
+      "reference": true,
+      "comments": true,
+      "consent": "I understand Horizon Network will use these details to respond, as described in the Horizon Network privacy notice.",
+      "scope": "own",
+      "singular": "enquiry",
+      "cta": "Make an enquiry",
+      "successTitle": "Enquiry received",
+      "fields": [
+        {
+          "name": "name",
+          "label": "Your name",
+          "type": "text",
+          "required": true,
+          "max": 120,
+          "autocomplete": "name"
+        },
+        {
+          "name": "email",
+          "label": "Email",
+          "type": "email",
+          "required": true,
+          "contact": true,
+          "autocomplete": "email"
+        },
+        {
+          "name": "organisation",
+          "label": "Organisation",
+          "type": "text",
+          "max": 160
+        },
+        {
+          "name": "website",
+          "label": "Website",
+          "type": "url"
+        },
+        {
+          "name": "interest",
+          "label": "Interested in",
+          "type": "multiselect",
+          "options": [
+            {
+              "value": "display-advertising",
+              "label": "Display advertising"
+            },
+            {
+              "value": "campaign-management",
+              "label": "Campaign management"
+            },
+            {
+              "value": "analytics-and-reporting",
+              "label": "Analytics and reporting"
+            }
+          ]
+        },
+        {
+          "name": "budget",
+          "label": "Budget (optional)",
+          "type": "text",
+          "max": 80
+        },
+        {
+          "name": "body",
+          "label": "Your goals",
+          "type": "textarea",
+          "max": 20000
+        }
+      ],
+      "listFields": [
+        "organisation",
+        "interest"
+      ],
+      "statuses": [
+        {
+          "id": "new",
+          "label": "New"
+        },
+        {
+          "id": "reviewing",
+          "label": "Reviewing"
+        },
+        {
+          "id": "contacted",
+          "label": "Contacted"
+        },
+        {
+          "id": "closed",
+          "label": "Closed"
+        }
+      ],
+      "empty": "Submissions are private to the person who sent them and our team. Use the button above to send one, or check an existing one with your private reference."
+    }
+  ],
+  "seedAuthor": "Horizon Advertising"
+}

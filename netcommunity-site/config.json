@@ -1,0 +1,92 @@
+{
+  "engine": "service-suite",
+  "id": "netcommunity",
+  "domain": "community.horizonetwork.com",
+  "aliases": [
+    "community.horizon-network.co.uk"
+  ],
+  "port": 5200,
+  "company": "network",
+  "name": "Horizon Network Community",
+  "brand": "Horizon Network",
+  "logo": "horizon-network-wordmark",
+  "staffOnly": false,
+  "staffSignIn": "admin",
+  "staffLabel": "Horizon Network",
+  "hero": {
+    "eyebrow": "HORIZON NETWORK COMMUNITY",
+    "title": "Network community.",
+    "lead": "Talk about Horizon Network services, hosting, development and more. Create a free community account to post.",
+    "actions": [
+      {
+        "label": "Browse discussions",
+        "href": "#/forum/forum"
+      }
+    ]
+  },
+  "sections": [],
+  "notices": [],
+  "related": [],
+  "providers": {},
+  "accounts": {
+    "mode": "register",
+    "label": "Community account",
+    "guidelines": "Be respectful and constructive. No harassment, hate, spam or advertising. Do not post personal information about yourself or others, passwords or account details. Moderators may hide posts or lock discussions that break these guidelines. Report anything that concerns you using the Report link."
+  },
+  "securityTxt": null,
+  "brandkit": null,
+  "tools": null,
+  "privacy": "https://horizon-network.co.uk/privacy",
+  "footer": {
+    "text": "Horizon Network brings together digital infrastructure, advertising and software. A subsidiary of HN Group Limited.",
+    "copyright": "Horizon Network · A subsidiary of HN Group Limited",
+    "links": [
+      {
+        "label": "horizon-network.co.uk",
+        "url": "https://horizon-network.co.uk"
+      },
+      {
+        "label": "Network status",
+        "url": "https://status.horizon-network.co.uk"
+      },
+      {
+        "label": "All HN Group links",
+        "url": "https://links.hngroup.org.uk"
+      }
+    ]
+  },
+  "storageLimitMb": 2048,
+  "modules": [
+    {
+      "key": "forum",
+      "type": "forum",
+      "title": "Discussions",
+      "manage": "admin",
+      "intro": "Community discussions. Horizon Network staff posts are labelled.",
+      "categories": [
+        {
+          "id": "general",
+          "label": "General"
+        },
+        {
+          "id": "hosting",
+          "label": "Hosting"
+        },
+        {
+          "id": "development",
+          "label": "Development"
+        },
+        {
+          "id": "help",
+          "label": "Help & questions"
+        },
+        {
+          "id": "showcase",
+          "label": "Show & tell"
+        }
+      ],
+      "guidelines": "Be respectful and constructive. No harassment, hate, spam or advertising. Do not post personal information about yourself or others, passwords or account details. Moderators may hide posts or lock discussions that break these guidelines. Report anything that concerns you using the Report link."
+    }
+  ],
+  "seedAuthor": "Horizon Network"
+}

@@ -1,0 +1,143 @@
+{
+  "engine": "service-suite",
+  "id": "vault",
+  "domain": "vault.hngroup.org.uk",
+  "aliases": [],
+  "port": 5050,
+  "company": "group",
+  "name": "HN Group Vault",
+  "brand": "HN Group",
+  "logo": "hn-group-wordmark",
+  "staffOnly": true,
+  "staffSignIn": "any",
+  "staffLabel": "HN Group",
+  "hero": {
+    "eyebrow": "HN GROUP VAULT",
+    "title": "Your private files.",
+    "lead": "A private space for your work files. Only you can see files you upload here — not even administrators. HR documents shared with you in the staff portal appear here too.",
+    "actions": [
+      {
+        "label": "My files",
+        "href": "#/m/files"
+      },
+      {
+        "label": "HR documents",
+        "href": "#/bridge/hrfiles"
+      }
+    ]
+  },
+  "sections": [],
+  "notices": [],
+  "related": [],
+  "providers": {},
+  "accounts": null,
+  "securityTxt": null,
+  "brandkit": null,
+  "tools": null,
+  "privacy": "https://hngroup.org.uk/privacy",
+  "footer": {
+    "text": "HN Group brings together Horizon Network, Horizon Media Group and Horizon Holding Co.",
+    "copyright": "HN Group Limited",
+    "links": [
+      {
+        "label": "hngroup.org.uk",
+        "url": "https://hngroup.org.uk"
+      },
+      {
+        "label": "Support",
+        "url": "https://support.hngroup.org.uk"
+      },
+      {
+        "label": "Service status",
+        "url": "https://status.hngroup.org.uk"
+      },
+      {
+        "label": "All HN Group links",
+        "url": "https://links.hngroup.org.uk"
+      }
+    ]
+  },
+  "storageLimitMb": 2048,
+  "modules": [
+    {
+      "key": "files",
+      "type": "items",
+      "title": "My files",
+      "view": "staff",
+      "create": "staff",
+      "manage": "staff",
+      "comments": false,
+      "display": "cards",
+      "singular": "file",
+      "private": true,
+      "files": "creator",
+      "cta": "Add files",
+      "intro": "Private to you. Files can be up to 10 MB each.",
+      "fields": [
+        {
+          "name": "title",
+          "label": "Name",
+          "type": "text",
+          "required": true,
+          "max": 160
+        },
+        {
+          "name": "category",
+          "label": "Folder",
+          "type": "text",
+          "max": 60,
+          "filter": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "textarea",
+          "max": 2000
+        }
+      ],
+      "listFields": [
+        "category"
+      ],
+      "empty": "You have not stored any files yet."
+    },
+    {
+      "key": "hrfiles",
+      "type": "bridge",
+      "title": "HR documents",
+      "nav": "HR documents",
+      "intro": "Documents HR has shared with you in the staff portal, such as contracts. Only HR can add or change these.",
+      "portalUrl": "https://staff.hngroup.org.uk/staff-files",
+      "load": {
+        "path": "/api/staff-files"
+      },
+      "views": [
+        {
+          "id": "files",
+          "label": "Shared with you",
+          "items": "files",
+          "columns": [
+            {
+              "field": "title",
+              "label": "Title"
+            },
+            {
+              "field": "category",
+              "label": "Category"
+            },
+            {
+              "field": "uploadedAt",
+              "label": "Added",
+              "format": "date"
+            }
+          ],
+          "download": {
+            "path": "/api/staff-files/{id}/file",
+            "label": "Download"
+          },
+          "empty": "HR has not shared any documents with you."
+        }
+      ]
+    }
+  ],
+  "seedAuthor": "HN Group"
+}

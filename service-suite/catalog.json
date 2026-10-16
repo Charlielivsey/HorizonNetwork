@@ -1,0 +1,786 @@
+[
+  {
+    "id": "billing",
+    "name": "HN Group Billing",
+    "title": "Invoices and payments",
+    "process": "hn-billing",
+    "port": 4800,
+    "domain": "billing.hngroup.org.uk",
+    "aliases": [],
+    "company": "group",
+    "logo": "hn-group-wordmark",
+    "staffOnly": true,
+    "staffSignIn": "any",
+    "bridge": true,
+    "links": {
+      "category": "staff",
+      "description": "Customer invoices and payments, synchronised with the staff portal."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "projects",
+    "name": "HN Group Projects",
+    "title": "Projects, tasks and milestones",
+    "process": "hn-projects",
+    "port": 4810,
+    "domain": "projects.hngroup.org.uk",
+    "aliases": [],
+    "company": "group",
+    "logo": "hn-group-wordmark",
+    "staffOnly": true,
+    "staffSignIn": "any",
+    "bridge": false,
+    "links": {
+      "category": "staff",
+      "description": "Projects, tasks and milestones for group staff."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "brand",
+    "name": "HN Group Brand",
+    "title": "Brand assets and guidelines",
+    "process": "hn-brand",
+    "port": 4820,
+    "domain": "brand.hngroup.org.uk",
+    "aliases": [],
+    "company": "group",
+    "logo": "hn-group-wordmark",
+    "staffOnly": false,
+    "staffSignIn": "admin",
+    "bridge": false,
+    "links": {
+      "category": "resources",
+      "description": "Approved logos, colours, typography and brand guidance."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "downloads",
+    "name": "HN Group Downloads",
+    "title": "Downloads and releases",
+    "process": "hn-downloads",
+    "port": 4830,
+    "domain": "downloads.hngroup.org.uk",
+    "aliases": [],
+    "company": "group",
+    "logo": "hn-group-wordmark",
+    "staffOnly": false,
+    "staffSignIn": "admin",
+    "bridge": false,
+    "links": {
+      "category": "resources",
+      "description": "Versioned downloads and release notes with checksums."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "feedback",
+    "name": "HN Group Feedback",
+    "title": "Feedback, bug reports and suggestions",
+    "process": "hn-feedback",
+    "port": 4840,
+    "domain": "feedback.hngroup.org.uk",
+    "aliases": [],
+    "company": "group",
+    "logo": "hn-group-wordmark",
+    "staffOnly": false,
+    "staffSignIn": "any",
+    "bridge": true,
+    "links": {
+      "category": "support",
+      "description": "Send feedback, bug reports and suggestions with a private reference."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "events",
+    "name": "HN Group Events",
+    "title": "Events and registration",
+    "process": "hn-events",
+    "port": 4850,
+    "domain": "events.hngroup.org.uk",
+    "aliases": [],
+    "company": "group",
+    "logo": "hn-group-wordmark",
+    "staffOnly": false,
+    "staffSignIn": "any",
+    "bridge": true,
+    "links": {
+      "category": "company",
+      "description": "HN Group events with online registration."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "partners",
+    "name": "HN Group Partners",
+    "title": "Partnerships and applications",
+    "process": "hn-partners",
+    "port": 4860,
+    "domain": "partners.hngroup.org.uk",
+    "aliases": [],
+    "company": "group",
+    "logo": "hn-group-wordmark",
+    "staffOnly": false,
+    "staffSignIn": "admin",
+    "bridge": false,
+    "links": {
+      "category": "company",
+      "description": "Partnership information and applications."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "services",
+    "name": "HN Group Services",
+    "title": "Services catalogue and quote requests",
+    "process": "hn-services",
+    "port": 4870,
+    "domain": "services.hngroup.org.uk",
+    "aliases": [],
+    "company": "group",
+    "logo": "hn-group-wordmark",
+    "staffOnly": false,
+    "staffSignIn": "admin",
+    "bridge": false,
+    "links": {
+      "category": "company",
+      "description": "Services from every group company, with quote requests."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "trust",
+    "name": "HN Group Trust Centre",
+    "title": "Policies and trust information",
+    "process": "hn-trust",
+    "port": 4880,
+    "domain": "trust.hngroup.org.uk",
+    "aliases": [],
+    "company": "group",
+    "logo": "hn-group-wordmark",
+    "staffOnly": false,
+    "staffSignIn": "admin",
+    "bridge": false,
+    "links": {
+      "category": "company",
+      "description": "Approved policies and trust information."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "learn",
+    "name": "HN Group Learn",
+    "title": "Staff training and learning",
+    "process": "hn-learn",
+    "port": 4890,
+    "domain": "learn.hngroup.org.uk",
+    "aliases": [],
+    "company": "group",
+    "logo": "hn-group-wordmark",
+    "staffOnly": true,
+    "staffSignIn": "any",
+    "bridge": true,
+    "links": {
+      "category": "staff",
+      "description": "Staff courses, synchronised with staff portal training records."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "assets",
+    "name": "HN Group Assets",
+    "title": "Private asset inventory",
+    "process": "hn-assets",
+    "port": 4900,
+    "domain": "assets.hngroup.org.uk",
+    "aliases": [],
+    "company": "group",
+    "logo": "horizon-holding-co-logo",
+    "staffOnly": true,
+    "staffSignIn": "any",
+    "bridge": false,
+    "links": {
+      "category": "staff",
+      "description": "Private inventory of group assets owned by Horizon Holding Co."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "email",
+    "name": "HN Group Email",
+    "title": "Email services information and assistance",
+    "process": "hn-email",
+    "port": 4910,
+    "domain": "email.hngroup.org.uk",
+    "aliases": [],
+    "company": "group",
+    "logo": "horizon-holding-co-logo",
+    "staffOnly": false,
+    "staffSignIn": "any",
+    "bridge": false,
+    "links": {
+      "category": "support",
+      "description": "Email service information and help, managed by Horizon Holding Co."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "community",
+    "name": "HN Group Community",
+    "title": "Community forums",
+    "process": "hn-community",
+    "port": 4920,
+    "domain": "community.hngroup.org.uk",
+    "aliases": [],
+    "company": "group",
+    "logo": "hn-group-wordmark",
+    "staffOnly": false,
+    "staffSignIn": "admin",
+    "bridge": false,
+    "links": {
+      "category": "community",
+      "description": "Community forums with free community accounts."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "bookings",
+    "name": "HN Group Bookings",
+    "title": "Appointments and bookings",
+    "process": "hn-bookings",
+    "port": 4930,
+    "domain": "bookings.hngroup.org.uk",
+    "aliases": [],
+    "company": "group",
+    "logo": "hn-group-wordmark",
+    "staffOnly": false,
+    "staffSignIn": "admin",
+    "bridge": false,
+    "links": {
+      "category": "company",
+      "description": "Book appointments in UK time."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "forms",
+    "name": "HN Group Forms",
+    "title": "Branded forms and submissions",
+    "process": "hn-forms",
+    "port": 4940,
+    "domain": "forms.hngroup.org.uk",
+    "aliases": [],
+    "company": "group",
+    "logo": "hn-group-wordmark",
+    "staffOnly": false,
+    "staffSignIn": "any",
+    "bridge": false,
+    "links": {
+      "category": "resources",
+      "description": "Branded forms with secure submissions."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "surveys",
+    "name": "HN Group Surveys",
+    "title": "Surveys and results",
+    "process": "hn-surveys",
+    "port": 4950,
+    "domain": "surveys.hngroup.org.uk",
+    "aliases": [],
+    "company": "group",
+    "logo": "hn-group-wordmark",
+    "staffOnly": false,
+    "staffSignIn": "any",
+    "bridge": true,
+    "links": {
+      "category": "resources",
+      "description": "Surveys with shareable results, plus staff polls."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "suppliers",
+    "name": "HN Group Suppliers",
+    "title": "Supplier management",
+    "process": "hn-suppliers",
+    "port": 4960,
+    "domain": "suppliers.hngroup.org.uk",
+    "aliases": [],
+    "company": "group",
+    "logo": "hn-group-wordmark",
+    "staffOnly": true,
+    "staffSignIn": "any",
+    "bridge": true,
+    "links": {
+      "category": "staff",
+      "description": "Supplier directory with portal bills."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "procurement",
+    "name": "HN Group Procurement",
+    "title": "Purchase requests and approvals",
+    "process": "hn-procurement",
+    "port": 4970,
+    "domain": "procurement.hngroup.org.uk",
+    "aliases": [],
+    "company": "group",
+    "logo": "hn-group-wordmark",
+    "staffOnly": true,
+    "staffSignIn": "any",
+    "bridge": true,
+    "links": {
+      "category": "staff",
+      "description": "Purchase requests with approvals and portal bills."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "expenses",
+    "name": "HN Group Expenses",
+    "title": "Expense submissions and approvals",
+    "process": "hn-expenses",
+    "port": 4980,
+    "domain": "expenses.hngroup.org.uk",
+    "aliases": [],
+    "company": "group",
+    "logo": "hn-group-wordmark",
+    "staffOnly": true,
+    "staffSignIn": "any",
+    "bridge": true,
+    "links": {
+      "category": "staff",
+      "description": "Expense claims and approvals, synchronised with the staff portal."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "licenses",
+    "name": "HN Group Licences",
+    "title": "Software licences and renewals",
+    "process": "hn-licenses",
+    "port": 4990,
+    "domain": "licenses.hngroup.org.uk",
+    "aliases": [],
+    "company": "group",
+    "logo": "hn-group-wordmark",
+    "staffOnly": true,
+    "staffSignIn": "any",
+    "bridge": false,
+    "links": {
+      "category": "staff",
+      "description": "Software licences with renewal tracking."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "developers",
+    "name": "HN Group Developers",
+    "title": "Developer documentation and API information",
+    "process": "hn-developers",
+    "port": 5010,
+    "domain": "developers.hngroup.org.uk",
+    "aliases": [],
+    "company": "group",
+    "logo": "hn-group-wordmark",
+    "staffOnly": false,
+    "staffSignIn": "admin",
+    "bridge": false,
+    "links": {
+      "category": "resources",
+      "description": "Developer documentation and API information."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "labs",
+    "name": "HN Group Labs",
+    "title": "Experiments and previews",
+    "process": "hn-labs",
+    "port": 5020,
+    "domain": "labs.hngroup.org.uk",
+    "aliases": [],
+    "company": "group",
+    "logo": "hn-group-wordmark",
+    "staffOnly": false,
+    "staffSignIn": "any",
+    "bridge": false,
+    "links": {
+      "category": "resources",
+      "description": "Experiments and previews from across the group."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "reports",
+    "name": "HN Group Reports",
+    "title": "Private reports and dashboards",
+    "process": "hn-reports",
+    "port": 5030,
+    "domain": "reports.hngroup.org.uk",
+    "aliases": [],
+    "company": "group",
+    "logo": "hn-group-wordmark",
+    "staffOnly": true,
+    "staffSignIn": "any",
+    "bridge": true,
+    "links": {
+      "category": "staff",
+      "description": "Monthly staff report, website health and report library."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "sign",
+    "name": "HN Group Sign",
+    "title": "Document signing workflows",
+    "process": "hn-sign",
+    "port": 5040,
+    "domain": "sign.hngroup.org.uk",
+    "aliases": [],
+    "company": "group",
+    "logo": "hn-group-wordmark",
+    "staffOnly": true,
+    "staffSignIn": "any",
+    "bridge": false,
+    "links": {
+      "category": "staff",
+      "description": "PDF signing requests with a full signing record."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "vault",
+    "name": "HN Group Vault",
+    "title": "Private staff files",
+    "process": "hn-vault",
+    "port": 5050,
+    "domain": "vault.hngroup.org.uk",
+    "aliases": [],
+    "company": "group",
+    "logo": "hn-group-wordmark",
+    "staffOnly": true,
+    "staffSignIn": "any",
+    "bridge": true,
+    "links": {
+      "category": "staff",
+      "description": "Private files for each staff member, plus shared HR documents."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "security",
+    "name": "HN Group Security",
+    "title": "Security information and vulnerability reporting",
+    "process": "hn-security",
+    "port": 5060,
+    "domain": "security.hngroup.org.uk",
+    "aliases": [],
+    "company": "group",
+    "logo": "hn-group-wordmark",
+    "staffOnly": false,
+    "staffSignIn": "admin",
+    "bridge": false,
+    "links": {
+      "category": "support",
+      "description": "Security information and private vulnerability reporting."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "competitions",
+    "name": "HN Group Competitions",
+    "title": "Competitions and entries",
+    "process": "hn-competitions",
+    "port": 5070,
+    "domain": "competitions.hngroup.org.uk",
+    "aliases": [],
+    "company": "group",
+    "logo": "hn-group-wordmark",
+    "staffOnly": false,
+    "staffSignIn": "admin",
+    "bridge": false,
+    "links": {
+      "category": "community",
+      "description": "Competitions and entries."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "members",
+    "name": "HN Group Members",
+    "title": "Memberships and member services",
+    "process": "hn-members",
+    "port": 5080,
+    "domain": "members.hngroup.org.uk",
+    "aliases": [],
+    "company": "group",
+    "logo": "hn-group-wordmark",
+    "staffOnly": false,
+    "staffSignIn": "admin",
+    "bridge": false,
+    "links": {
+      "category": "community",
+      "description": "Membership applications, member accounts and member services."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "hosting",
+    "name": "Horizon Hosting",
+    "title": "Hosting information and requests",
+    "process": "hn-hosting",
+    "port": 5090,
+    "domain": "hosting.horizon-network.co.uk",
+    "aliases": [
+      "hosting.horizonetwork.com"
+    ],
+    "company": "network",
+    "logo": "horizon-network-wordmark",
+    "staffOnly": false,
+    "staffSignIn": "admin",
+    "bridge": false,
+    "links": {
+      "category": "network",
+      "description": "Horizon Hosting information and requests (coming soon)."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "panel",
+    "name": "Horizon Network Panel",
+    "title": "Hosting control panel",
+    "process": "hn-panel",
+    "port": 5100,
+    "domain": "panel.horizon-network.co.uk",
+    "aliases": [
+      "panel.horizonetwork.com"
+    ],
+    "company": "network",
+    "logo": "horizon-network-wordmark",
+    "staffOnly": true,
+    "staffSignIn": "any",
+    "bridge": false,
+    "links": {
+      "category": "network",
+      "description": "Authorised hosting control panel for Network staff."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "netstatus",
+    "name": "Horizon Network Status",
+    "title": "Network service status",
+    "process": "hn-netstatus",
+    "port": 5110,
+    "domain": "status.horizon-network.co.uk",
+    "aliases": [
+      "status.horizonetwork.com"
+    ],
+    "company": "network",
+    "logo": "horizon-network-wordmark",
+    "staffOnly": false,
+    "staffSignIn": "admin",
+    "bridge": false,
+    "links": {
+      "category": "network",
+      "description": "Live status of Horizon Network services."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "domains",
+    "name": "Horizon Network Domains",
+    "title": "Domain services and requests",
+    "process": "hn-domains",
+    "port": 5120,
+    "domain": "domains.horizon-network.co.uk",
+    "aliases": [
+      "domains.horizonetwork.com"
+    ],
+    "company": "network",
+    "logo": "horizon-network-wordmark",
+    "staffOnly": false,
+    "staffSignIn": "admin",
+    "bridge": false,
+    "links": {
+      "category": "network",
+      "description": "Domain registration, transfer and DNS requests."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "netdevelopers",
+    "name": "Horizon Network Developers",
+    "title": "Network developer resources",
+    "process": "hn-netdevelopers",
+    "port": 5130,
+    "domain": "developers.horizonetwork.com",
+    "aliases": [
+      "developers.horizon-network.co.uk"
+    ],
+    "company": "network",
+    "logo": "horizon-network-wordmark",
+    "staffOnly": false,
+    "staffSignIn": "admin",
+    "bridge": false,
+    "links": {
+      "category": "network",
+      "description": "Horizon Network developer documentation."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "showcase",
+    "name": "Horizon Network Showcase",
+    "title": "Projects and portfolio",
+    "process": "hn-showcase",
+    "port": 5140,
+    "domain": "showcase.horizonetwork.com",
+    "aliases": [
+      "showcase.horizon-network.co.uk"
+    ],
+    "company": "network",
+    "logo": "horizon-network-wordmark",
+    "staffOnly": false,
+    "staffSignIn": "admin",
+    "bridge": false,
+    "links": {
+      "category": "network",
+      "description": "Projects and portfolio from Horizon Network."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "ads",
+    "name": "Horizon Advertising Services",
+    "title": "Advertising services and enquiries",
+    "process": "hn-ads",
+    "port": 5150,
+    "domain": "ads.horizonetwork.com",
+    "aliases": [
+      "ads.horizon-network.co.uk"
+    ],
+    "company": "network",
+    "logo": "horizon-advertising-logo",
+    "staffOnly": false,
+    "staffSignIn": "admin",
+    "bridge": false,
+    "links": {
+      "category": "network",
+      "description": "Horizon Advertising services and enquiries."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "tools",
+    "name": "Horizon Network Tools",
+    "title": "Useful working tools",
+    "process": "hn-tools",
+    "port": 5160,
+    "domain": "tools.horizonetwork.com",
+    "aliases": [
+      "tools.horizon-network.co.uk"
+    ],
+    "company": "network",
+    "logo": "horizon-network-wordmark",
+    "staffOnly": false,
+    "staffSignIn": "admin",
+    "bridge": false,
+    "links": {
+      "category": "network",
+      "description": "Free browser-based working tools."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "sandbox",
+    "name": "Horizon Network Sandbox",
+    "title": "Controlled previews and experiments",
+    "process": "hn-sandbox",
+    "port": 5170,
+    "domain": "sandbox.horizonetwork.com",
+    "aliases": [
+      "sandbox.horizon-network.co.uk"
+    ],
+    "company": "network",
+    "logo": "horizon-network-wordmark",
+    "staffOnly": false,
+    "staffSignIn": "any",
+    "bridge": false,
+    "links": {
+      "category": "network",
+      "description": "Controlled previews and experiments."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "order",
+    "name": "Horizon Network Order",
+    "title": "Service ordering",
+    "process": "hn-order",
+    "port": 5180,
+    "domain": "order.horizon-network.co.uk",
+    "aliases": [
+      "order.horizonetwork.com"
+    ],
+    "company": "network",
+    "logo": "horizon-network-wordmark",
+    "staffOnly": false,
+    "staffSignIn": "admin",
+    "bridge": false,
+    "links": {
+      "category": "network",
+      "description": "Order Horizon Network services (no online payment yet)."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "my",
+    "name": "My Horizon Network",
+    "title": "Customer account and services",
+    "process": "hn-my",
+    "port": 5190,
+    "domain": "my.horizonetwork.com",
+    "aliases": [
+      "my.horizon-network.co.uk"
+    ],
+    "company": "network",
+    "logo": "horizon-network-wordmark",
+    "staffOnly": false,
+    "staffSignIn": "admin",
+    "bridge": false,
+    "links": {
+      "category": "network",
+      "description": "Horizon Network customer accounts (by invitation)."
+    },
+    "ip": "217.154.34.205"
+  },
+  {
+    "id": "netcommunity",
+    "name": "Horizon Network Community",
+    "title": "Network community",
+    "process": "hn-netcommunity",
+    "port": 5200,
+    "domain": "community.horizonetwork.com",
+    "aliases": [
+      "community.horizon-network.co.uk"
+    ],
+    "company": "network",
+    "logo": "horizon-network-wordmark",
+    "staffOnly": false,
+    "staffSignIn": "admin",
+    "bridge": false,
+    "links": {
+      "category": "network",
+      "description": "Horizon Network community forums."
+    },
+    "ip": "217.154.34.205"
+  }
+]

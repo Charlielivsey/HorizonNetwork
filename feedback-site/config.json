@@ -1,0 +1,325 @@
+{
+  "engine": "service-suite",
+  "id": "feedback",
+  "domain": "feedback.hngroup.org.uk",
+  "aliases": [],
+  "port": 4840,
+  "company": "group",
+  "name": "HN Group Feedback",
+  "brand": "HN Group",
+  "logo": "hn-group-wordmark",
+  "staffOnly": false,
+  "staffSignIn": "any",
+  "staffLabel": "HN Group",
+  "hero": {
+    "eyebrow": "HN GROUP FEEDBACK",
+    "title": "Tell us what you think.",
+    "lead": "Share feedback, report a bug or suggest an improvement to any HN Group website or service. You will get a private reference to follow up.",
+    "actions": [
+      {
+        "label": "Send feedback",
+        "href": "#/m/feedback/new"
+      },
+      {
+        "label": "Check a reference",
+        "href": "#/ref"
+      }
+    ]
+  },
+  "sections": [],
+  "notices": [
+    {
+      "title": "No automatic emails.",
+      "text": "This website does not send email notifications. Keep your private reference to check progress and read replies here.",
+      "email": false
+    }
+  ],
+  "related": [],
+  "providers": {},
+  "accounts": null,
+  "securityTxt": null,
+  "brandkit": null,
+  "tools": null,
+  "privacy": "https://hngroup.org.uk/privacy",
+  "footer": {
+    "text": "HN Group brings together Horizon Network, Horizon Media Group and Horizon Holding Co.",
+    "copyright": "HN Group Limited",
+    "links": [
+      {
+        "label": "hngroup.org.uk",
+        "url": "https://hngroup.org.uk"
+      },
+      {
+        "label": "Support",
+        "url": "https://support.hngroup.org.uk"
+      },
+      {
+        "label": "Service status",
+        "url": "https://status.hngroup.org.uk"
+      },
+      {
+        "label": "All HN Group links",
+        "url": "https://links.hngroup.org.uk"
+      }
+    ]
+  },
+  "storageLimitMb": 2048,
+  "modules": [
+    {
+      "key": "feedback",
+      "type": "items",
+      "title": "Feedback",
+      "view": "manager",
+      "create": "public",
+      "manage": "staff",
+      "reference": true,
+      "comments": true,
+      "consent": "I understand HN Group will use these details to respond, as described in the HN Group privacy notice.",
+      "scope": "own",
+      "singular": "submission",
+      "cta": "Send feedback",
+      "intro": "Feedback, bug reports and suggestions sent to HN Group.",
+      "successTitle": "Thank you for your feedback",
+      "fields": [
+        {
+          "name": "type",
+          "label": "Type",
+          "type": "select",
+          "required": true,
+          "filter": true,
+          "options": [
+            {
+              "value": "feedback",
+              "label": "Feedback"
+            },
+            {
+              "value": "bug-report",
+              "label": "Bug report"
+            },
+            {
+              "value": "suggestion",
+              "label": "Suggestion"
+            }
+          ]
+        },
+        {
+          "name": "title",
+          "label": "Subject",
+          "type": "text",
+          "required": true,
+          "max": 160
+        },
+        {
+          "name": "area",
+          "label": "Website or service",
+          "type": "text",
+          "max": 120,
+          "help": "For example staff.hngroup.org.uk or Horizon Network"
+        },
+        {
+          "name": "body",
+          "label": "Details",
+          "type": "textarea",
+          "max": 20000
+        },
+        {
+          "name": "steps",
+          "label": "Steps to reproduce (bugs)",
+          "type": "textarea",
+          "max": 5000
+        },
+        {
+          "name": "name",
+          "label": "Your name (optional)",
+          "type": "text",
+          "max": 120
+        },
+        {
+          "name": "email",
+          "label": "Email",
+          "type": "email",
+          "required": false,
+          "contact": true,
+          "autocomplete": "email"
+        }
+      ],
+      "listFields": [
+        "type",
+        "area"
+      ],
+      "statuses": [
+        {
+          "id": "new",
+          "label": "New"
+        },
+        {
+          "id": "reviewing",
+          "label": "Reviewing"
+        },
+        {
+          "id": "planned",
+          "label": "Planned"
+        },
+        {
+          "id": "fixed",
+          "label": "Fixed"
+        },
+        {
+          "id": "declined",
+          "label": "Declined"
+        },
+        {
+          "id": "closed",
+          "label": "Closed"
+        }
+      ],
+      "cancellable": [],
+      "empty": "Submissions are private to the person who sent them and our team. Use the button above to send one, or check an existing one with your private reference."
+    },
+    {
+      "key": "ideas",
+      "type": "bridge",
+      "title": "Staff ideas box",
+      "nav": "Staff ideas",
+      "intro": "Ideas from HN Group staff, shared with the staff portal ideas box. Vote and comment here or in the portal.",
+      "render": "ideas",
+      "portalUrl": "https://staff.hngroup.org.uk/ideas",
+      "load": {
+        "path": "/api/ideas"
+      },
+      "views": [
+        {
+          "id": "ideas",
+          "label": "Ideas",
+          "items": "ideas",
+          "columns": [],
+          "actions": [
+            {
+              "id": "vote",
+              "label": "Vote",
+              "path": "/api/ideas/{id}/vote"
+            },
+            {
+              "id": "comment",
+              "label": "Comment",
+              "path": "/api/ideas/{id}/comment",
+              "fields": [
+                {
+                  "name": "text",
+                  "label": "Comment",
+                  "type": "textarea",
+                  "required": true,
+                  "max": 1500
+                }
+              ]
+            },
+            {
+              "id": "status",
+              "label": "Set status",
+              "path": "/api/ideas/{id}/status",
+              "fields": [
+                {
+                  "name": "status",
+                  "label": "Status",
+                  "type": "select",
+                  "required": true,
+                  "options": [
+                    {
+                      "value": "new",
+                      "label": "New"
+                    },
+                    {
+                      "value": "review",
+                      "label": "Under review"
+                    },
+                    {
+                      "value": "planned",
+                      "label": "Planned"
+                    },
+                    {
+                      "value": "progress",
+                      "label": "In progress"
+                    },
+                    {
+                      "value": "done",
+                      "label": "Done"
+                    },
+                    {
+                      "value": "declined",
+                      "label": "Declined"
+                    }
+                  ]
+                },
+                {
+                  "name": "note",
+                  "label": "Note",
+                  "type": "textarea",
+                  "max": 1000
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "forms": [
+        {
+          "id": "idea",
+          "label": "Share an idea",
+          "path": "/api/ideas",
+          "fields": [
+            {
+              "name": "title",
+              "label": "Idea",
+              "type": "text",
+              "required": true,
+              "max": 150
+            },
+            {
+              "name": "body",
+              "label": "Details",
+              "type": "textarea",
+              "max": 3000
+            },
+            {
+              "name": "category",
+              "label": "Category",
+              "type": "select",
+              "options": [
+                {
+                  "value": "workplace",
+                  "label": "Workplace"
+                },
+                {
+                  "value": "process",
+                  "label": "Process"
+                },
+                {
+                  "value": "tech",
+                  "label": "Technology"
+                },
+                {
+                  "value": "wellbeing",
+                  "label": "Wellbeing"
+                },
+                {
+                  "value": "customers",
+                  "label": "Customers"
+                },
+                {
+                  "value": "other",
+                  "label": "Other"
+                }
+              ]
+            },
+            {
+              "name": "anonymous",
+              "label": "Post anonymously",
+              "type": "checkbox"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "seedAuthor": "HN Group"
+}

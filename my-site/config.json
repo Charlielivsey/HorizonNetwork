@@ -1,0 +1,207 @@
+{
+  "engine": "service-suite",
+  "id": "my",
+  "domain": "my.horizonetwork.com",
+  "aliases": [
+    "my.horizon-network.co.uk"
+  ],
+  "port": 5190,
+  "company": "network",
+  "name": "My Horizon Network",
+  "brand": "Horizon Network",
+  "logo": "horizon-network-wordmark",
+  "staffOnly": false,
+  "staffSignIn": "admin",
+  "staffLabel": "Horizon Network",
+  "hero": {
+    "eyebrow": "MY HORIZON NETWORK",
+    "title": "Your account.",
+    "lead": "Horizon Network customers can sign in to see their services and send requests. Accounts are created by invitation from our team.",
+    "actions": [
+      {
+        "label": "Sign in",
+        "href": "#/account"
+      },
+      {
+        "label": "My services",
+        "href": "#/m/services"
+      }
+    ]
+  },
+  "sections": [],
+  "notices": [],
+  "related": [],
+  "providers": {},
+  "accounts": {
+    "mode": "invite",
+    "label": "Customer account"
+  },
+  "securityTxt": null,
+  "brandkit": null,
+  "tools": null,
+  "privacy": "https://horizon-network.co.uk/privacy",
+  "footer": {
+    "text": "Horizon Network brings together digital infrastructure, advertising and software. A subsidiary of HN Group Limited.",
+    "copyright": "Horizon Network · A subsidiary of HN Group Limited",
+    "links": [
+      {
+        "label": "horizon-network.co.uk",
+        "url": "https://horizon-network.co.uk"
+      },
+      {
+        "label": "Network status",
+        "url": "https://status.horizon-network.co.uk"
+      },
+      {
+        "label": "All HN Group links",
+        "url": "https://links.hngroup.org.uk"
+      }
+    ]
+  },
+  "storageLimitMb": 2048,
+  "modules": [
+    {
+      "key": "services",
+      "type": "items",
+      "title": "My services",
+      "singular": "service",
+      "view": "account",
+      "scope": "own",
+      "create": "manager",
+      "manage": "admin",
+      "comments": true,
+      "display": "table",
+      "intro": "Services on your account. Ask us if anything looks wrong.",
+      "fields": [
+        {
+          "name": "customer",
+          "label": "Customer account",
+          "type": "account",
+          "required": true
+        },
+        {
+          "name": "title",
+          "label": "Service",
+          "type": "text",
+          "required": true,
+          "max": 160
+        },
+        {
+          "name": "kind",
+          "label": "Type",
+          "type": "select",
+          "options": [
+            {
+              "value": "hosting",
+              "label": "Hosting"
+            },
+            {
+              "value": "domain",
+              "label": "Domain"
+            },
+            {
+              "value": "development",
+              "label": "Development"
+            },
+            {
+              "value": "advertising",
+              "label": "Advertising"
+            },
+            {
+              "value": "support",
+              "label": "Support"
+            },
+            {
+              "value": "other",
+              "label": "Other"
+            }
+          ]
+        },
+        {
+          "name": "renewal",
+          "label": "Renewal date",
+          "type": "date"
+        },
+        {
+          "name": "notes",
+          "label": "Internal notes",
+          "type": "textarea",
+          "max": 5000,
+          "internal": true
+        }
+      ],
+      "listFields": [
+        "kind",
+        "renewal"
+      ],
+      "statuses": [
+        {
+          "id": "pending",
+          "label": "Pending"
+        },
+        {
+          "id": "active",
+          "label": "Active"
+        },
+        {
+          "id": "suspended",
+          "label": "Suspended"
+        },
+        {
+          "id": "cancelled",
+          "label": "Cancelled"
+        }
+      ],
+      "empty": "No services are on your account yet."
+    },
+    {
+      "key": "requests",
+      "type": "items",
+      "title": "Requests",
+      "singular": "request",
+      "view": "account",
+      "scope": "own",
+      "create": "account",
+      "manage": "admin",
+      "comments": true,
+      "display": "table",
+      "cta": "New request",
+      "intro": "Questions or changes for your services.",
+      "fields": [
+        {
+          "name": "title",
+          "label": "Subject",
+          "type": "text",
+          "required": true,
+          "max": 160
+        },
+        {
+          "name": "body",
+          "label": "Details",
+          "type": "textarea",
+          "max": 20000
+        }
+      ],
+      "statuses": [
+        {
+          "id": "open",
+          "label": "Open"
+        },
+        {
+          "id": "in-progress",
+          "label": "In progress"
+        },
+        {
+          "id": "resolved",
+          "label": "Resolved"
+        },
+        {
+          "id": "closed",
+          "label": "Closed"
+        }
+      ],
+      "empty": "You have not made any requests."
+    }
+  ],
+  "seedAuthor": "Horizon Network"
+}

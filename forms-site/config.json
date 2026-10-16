@@ -1,0 +1,69 @@
+{
+  "engine": "service-suite",
+  "id": "forms",
+  "domain": "forms.hngroup.org.uk",
+  "aliases": [],
+  "port": 4940,
+  "company": "group",
+  "name": "HN Group Forms",
+  "brand": "HN Group",
+  "logo": "hn-group-wordmark",
+  "staffOnly": false,
+  "staffSignIn": "any",
+  "staffLabel": "HN Group",
+  "hero": {
+    "eyebrow": "HN GROUP FORMS",
+    "title": "Forms.",
+    "lead": "Branded forms from HN Group. Staff administrators build forms, and submissions are collected securely here.",
+    "actions": [
+      {
+        "label": "Open forms",
+        "href": "#/b/forms"
+      }
+    ]
+  },
+  "sections": [],
+  "notices": [],
+  "related": [],
+  "providers": {},
+  "accounts": null,
+  "securityTxt": null,
+  "brandkit": null,
+  "tools": null,
+  "privacy": "https://hngroup.org.uk/privacy",
+  "footer": {
+    "text": "HN Group brings together Horizon Network, Horizon Media Group and Horizon Holding Co.",
+    "copyright": "HN Group Limited",
+    "links": [
+      {
+        "label": "hngroup.org.uk",
+        "url": "https://hngroup.org.uk"
+      },
+      {
+        "label": "Support",
+        "url": "https://support.hngroup.org.uk"
+      },
+      {
+        "label": "Service status",
+        "url": "https://status.hngroup.org.uk"
+      },
+      {
+        "label": "All HN Group links",
+        "url": "https://links.hngroup.org.uk"
+      }
+    ]
+  },
+  "storageLimitMb": 2048,
+  "modules": [
+    {
+      "key": "forms",
+      "type": "builder",
+      "mode": "form",
+      "title": "Forms",
+      "manage": "admin",
+      "intro": "Forms that are currently open.",
+      "empty": "No forms are open at the moment."
+    }
+  ],
+  "seedAuthor": "HN Group"
+}

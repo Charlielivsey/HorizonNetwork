@@ -43,7 +43,7 @@ def patch(text):
     return text
 paths=[]
 if args.source:
-    for folder in ['hngroup-site/nginx','horizon-network-site','staff-portal','status-site','links-site','wiki-site','horizon-advertising']+[s+'-site' for s in ['media','holding','development','support','clients','careers','docs','news']]:
+    for folder in ['hngroup-site/nginx','horizon-network-site','staff-portal','status-site','links-site','wiki-site','horizon-advertising']+[s+'-site' for s in ['media','holding','development','support','clients','careers','docs','news']]+sorted(p.name for p in repo.glob('*-site') if (p/'config.json').exists() and '"engine": "service-suite"' in (p/'config.json').read_text()):
         paths.extend((repo/folder).glob('*.conf'))
 else:
     root=Path(args.root)

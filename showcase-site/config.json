@@ -1,0 +1,152 @@
+{
+  "engine": "service-suite",
+  "id": "showcase",
+  "domain": "showcase.horizonetwork.com",
+  "aliases": [
+    "showcase.horizon-network.co.uk"
+  ],
+  "port": 5140,
+  "company": "network",
+  "name": "Horizon Network Showcase",
+  "brand": "Horizon Network",
+  "logo": "horizon-network-wordmark",
+  "staffOnly": false,
+  "staffSignIn": "admin",
+  "staffLabel": "Horizon Network",
+  "hero": {
+    "eyebrow": "HORIZON NETWORK SHOWCASE",
+    "title": "Our work.",
+    "lead": "Projects from Horizon Network, Horizon Development and Horizon Advertising.",
+    "actions": [
+      {
+        "label": "View projects",
+        "href": "#/m/projects"
+      }
+    ]
+  },
+  "sections": [],
+  "notices": [],
+  "related": [],
+  "providers": {},
+  "accounts": null,
+  "securityTxt": null,
+  "brandkit": null,
+  "tools": null,
+  "privacy": "https://horizon-network.co.uk/privacy",
+  "footer": {
+    "text": "Horizon Network brings together digital infrastructure, advertising and software. A subsidiary of HN Group Limited.",
+    "copyright": "Horizon Network · A subsidiary of HN Group Limited",
+    "links": [
+      {
+        "label": "horizon-network.co.uk",
+        "url": "https://horizon-network.co.uk"
+      },
+      {
+        "label": "Network status",
+        "url": "https://status.horizon-network.co.uk"
+      },
+      {
+        "label": "All HN Group links",
+        "url": "https://links.hngroup.org.uk"
+      }
+    ]
+  },
+  "storageLimitMb": 2048,
+  "modules": [
+    {
+      "key": "projects",
+      "type": "items",
+      "title": "Projects",
+      "view": "public",
+      "create": "manager",
+      "manage": "admin",
+      "publish": true,
+      "comments": false,
+      "singular": "project",
+      "files": "manager",
+      "fields": [
+        {
+          "name": "title",
+          "label": "Project",
+          "type": "text",
+          "required": true,
+          "max": 160
+        },
+        {
+          "name": "team",
+          "label": "By",
+          "type": "select",
+          "options": [
+            "Horizon Network",
+            "Horizon Development",
+            "Horizon Advertising"
+          ],
+          "filter": true
+        },
+        {
+          "name": "category",
+          "label": "Category",
+          "type": "select",
+          "filter": true,
+          "options": [
+            {
+              "value": "infrastructure",
+              "label": "Infrastructure"
+            },
+            {
+              "value": "web-application",
+              "label": "Web application"
+            },
+            {
+              "value": "software",
+              "label": "Software"
+            },
+            {
+              "value": "advertising-campaign",
+              "label": "Advertising campaign"
+            },
+            {
+              "value": "other",
+              "label": "Other"
+            }
+          ]
+        },
+        {
+          "name": "client",
+          "label": "Client (with permission)",
+          "type": "text",
+          "max": 160
+        },
+        {
+          "name": "link",
+          "label": "Link",
+          "type": "url"
+        },
+        {
+          "name": "completed",
+          "label": "Completed",
+          "type": "date"
+        },
+        {
+          "name": "summary",
+          "label": "Summary",
+          "type": "text",
+          "max": 300
+        },
+        {
+          "name": "body",
+          "label": "About the project",
+          "type": "textarea",
+          "max": 20000
+        }
+      ],
+      "listFields": [
+        "team",
+        "category",
+        "completed"
+      ],
+      "empty": "No projects have been published yet."
+    }
+  ],
+  "seedAuthor": "Horizon Network"
+}

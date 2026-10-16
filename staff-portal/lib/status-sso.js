@@ -25,7 +25,28 @@ function serviceRequest(req) {
 function loginNext(value) {
   return typeof value === 'string' && /^\/status-admin\/authorize\?state=[a-f0-9]{64}$/.test(value) ? value : null;
 }
-function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent, handleChangePassword, handleSetCode }) {
+// Service websites that show staff-portal records (so both stay in sync) may call only these routes,
+// as the signed-in person; the portal's normal permission checks then apply unchanged.
+const ID = '[a-f0-9]{16}';
+const BRIDGE = {
+  expenses: [['GET', '/api/expenses'], ['GET', '/api/expenses/mileage'], ['GET', `/api/expenses/${ID}/receipt`], ['POST', '/api/expenses'], ['POST', `/api/expenses/${ID}/(approve|reject|pay|cancel)`]],
+  learn: [['GET', '/api/training'], ['POST', '/api/training'], ['POST', '/api/training/required'], ['POST', `/api/training/required/${ID}/delete`], ['GET', `/api/training/${ID}/certificate`], ['POST', `/api/training/${ID}/(verify|delete)`]],
+  billing: [['GET', '/api/invoices'], ['POST', '/api/invoices'], ['POST', '/api/invoices/settings'], ['POST', `/api/invoices/${ID}`], ['POST', `/api/invoices/${ID}/(sent|paid|void|delete)`]],
+  reports: [['GET', '/api/reports']],
+  vault: [['GET', '/api/staff-files'], ['GET', `/api/staff-files/${ID}/file`], ['POST', '/api/staff-files/upload'], ['POST', `/api/staff-files/${ID}`], ['POST', `/api/staff-files/${ID}/delete`]],
+  surveys: [['GET', '/api/polls'], ['POST', '/api/polls'], ['POST', `/api/polls/${ID}/(respond|close|reopen|delete)`]],
+  feedback: [['GET', '/api/ideas'], ['POST', '/api/ideas'], ['POST', `/api/ideas/${ID}/(vote|comment|status|delete)`]],
+  events: [['GET', '/api/calendar'], ['POST', '/api/events'], ['POST', `/api/events/${ID}`], ['POST', `/api/events/${ID}/delete`]],
+  procurement: [['GET', '/api/bills'], ['POST', '/api/bills']],
+  suppliers: [['GET', '/api/bills']],
+};
+const BRIDGE_QUERY = new Set(['month', 'person', 'from', 'to', 'download', 'date', 'miles']);
+const UPLOAD_HEADERS = new Set(['x-claim', 'x-training', 'x-document']);
+function bridgeAllowed(client, method, pathname) {
+  return (BRIDGE[client] || []).some(([m, pattern]) => m === method && new RegExp('^' + pattern + '$').test(pathname));
+}
+
+function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent, handleChangePassword, handleSetCode, routeApi }) {
   const codes = new Map();
   function current(token) {
     const data = sessions.get(token);
@@ -50,6 +71,39 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       codes.set(code, { token: session.token, state, expires: Date.now() + 60000 });
       logEvent(req, session, 'status-admin-sign-in');
       redirect(res, `${STATUS_ORIGIN}/auth/callback?code=${code}&state=${state}`); return true;
+    }
+    if (pathname === '/api/auth/bridge') {
+      if (req.method !== 'POST') { sendJson(res, 405, { error: 'Method not allowed.' }); return true; }
+      if (!credentials(req) || typeof routeApi !== 'function') { sendJson(res, 401, { error: 'Integration not authenticated.' }); return true; }
+      const data = await readJsonBody(req, 30 * 1024 * 1024);
+      const active = HEX.test(data.session || '') ? current(data.session) : null;
+      if (!active || !active.person.account?.enabled || active.data.impersonatorId) { sendJson(res, 401, { error: 'Staff sign-in expired. Please sign in again.' }); return true; }
+      const method = data.method === 'POST' ? 'POST' : data.method === 'GET' ? 'GET' : '';
+      let url;
+      try { url = new URL(String(data.path || ''), 'http://localhost'); } catch { url = null; }
+      if (!method || !url || url.origin !== 'http://localhost' || !bridgeAllowed(String(data.client_id || ''), method, url.pathname) || [...url.searchParams.keys()].some(k => !BRIDGE_QUERY.has(k))) {
+        sendJson(res, 403, { error: 'This website cannot use that staff portal feature.' }); return true;
+      }
+      const headers = { 'user-agent': 'HN Group service website (' + String(data.client_id).slice(0, 20) + ')' };
+      let payload = Buffer.alloc(0);
+      if (method === 'POST') {
+        const upload = data.body?.upload;
+        if (upload) {
+          if (!UPLOAD_HEADERS.has(upload.header) || (upload.data && (typeof upload.data !== 'string' || !/^[A-Za-z0-9+/]*={0,2}$/.test(upload.data)))) { sendJson(res, 400, { error: 'Invalid upload.' }); return true; }
+          payload = Buffer.from(upload.data || '', 'base64');
+          headers['content-type'] = 'application/octet-stream';
+          headers[upload.header] = encodeURIComponent(JSON.stringify(upload.meta && typeof upload.meta === 'object' ? upload.meta : {}));
+        } else {
+          payload = Buffer.from(JSON.stringify(data.body?.json && typeof data.body.json === 'object' ? data.body.json : {}));
+          headers['content-type'] = 'application/json';
+        }
+        headers['content-length'] = String(payload.length);
+      }
+      const { Readable } = require('node:stream');
+      const synthetic = Readable.from(payload.length ? [payload] : []);
+      Object.assign(synthetic, { method, url: url.pathname + url.search, headers, socket: { remoteAddress: '127.0.0.1' } });
+      await routeApi(synthetic, res, url.pathname, { token: data.session, raw: '', person: active.person, data: active.data });
+      return true;
     }
     if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/password', '/api/auth/code', '/api/auth/network-leadership', '/api/auth/network-avatar'].includes(pathname)) return false;
     if (req.method !== 'POST') { sendJson(res, 405, { error: 'Method not allowed.' }); return true; }

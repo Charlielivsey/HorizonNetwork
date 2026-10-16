@@ -1,0 +1,141 @@
+{
+  "engine": "service-suite",
+  "id": "downloads",
+  "domain": "downloads.hngroup.org.uk",
+  "aliases": [],
+  "port": 4830,
+  "company": "group",
+  "name": "HN Group Downloads",
+  "brand": "HN Group",
+  "logo": "hn-group-wordmark",
+  "staffOnly": false,
+  "staffSignIn": "admin",
+  "staffLabel": "HN Group",
+  "hero": {
+    "eyebrow": "HN GROUP DOWNLOADS",
+    "title": "Downloads and releases.",
+    "lead": "Versioned files and release notes published by HN Group. Each file shows its SHA-256 checksum so you can confirm your download is intact.",
+    "actions": [
+      {
+        "label": "Browse releases",
+        "href": "#/m/releases"
+      }
+    ]
+  },
+  "sections": [],
+  "notices": [],
+  "related": [],
+  "providers": {},
+  "accounts": null,
+  "securityTxt": null,
+  "brandkit": null,
+  "tools": null,
+  "privacy": "https://hngroup.org.uk/privacy",
+  "footer": {
+    "text": "HN Group brings together Horizon Network, Horizon Media Group and Horizon Holding Co.",
+    "copyright": "HN Group Limited",
+    "links": [
+      {
+        "label": "hngroup.org.uk",
+        "url": "https://hngroup.org.uk"
+      },
+      {
+        "label": "Support",
+        "url": "https://support.hngroup.org.uk"
+      },
+      {
+        "label": "Service status",
+        "url": "https://status.hngroup.org.uk"
+      },
+      {
+        "label": "All HN Group links",
+        "url": "https://links.hngroup.org.uk"
+      }
+    ]
+  },
+  "storageLimitMb": 2048,
+  "modules": [
+    {
+      "key": "releases",
+      "type": "items",
+      "title": "Releases",
+      "view": "public",
+      "create": "manager",
+      "manage": "admin",
+      "publish": true,
+      "comments": false,
+      "singular": "release",
+      "files": "manager",
+      "showHash": true,
+      "maxFile": 10485760,
+      "intro": "Newest first. Verify files with the SHA-256 checksum shown on each release.",
+      "fields": [
+        {
+          "name": "title",
+          "label": "Product",
+          "type": "text",
+          "required": true,
+          "max": 160
+        },
+        {
+          "name": "version",
+          "label": "Version",
+          "type": "text",
+          "required": true,
+          "max": 40
+        },
+        {
+          "name": "channel",
+          "label": "Channel",
+          "type": "select",
+          "options": [
+            {
+              "value": "stable",
+              "label": "Stable"
+            },
+            {
+              "value": "beta",
+              "label": "Beta"
+            },
+            {
+              "value": "preview",
+              "label": "Preview"
+            }
+          ],
+          "filter": true
+        },
+        {
+          "name": "released",
+          "label": "Release date",
+          "type": "date"
+        },
+        {
+          "name": "platform",
+          "label": "Platform",
+          "type": "text",
+          "max": 80
+        },
+        {
+          "name": "summary",
+          "label": "Summary",
+          "type": "text",
+          "max": 300
+        },
+        {
+          "name": "body",
+          "label": "Release notes",
+          "type": "textarea",
+          "max": 20000
+        }
+      ],
+      "listFields": [
+        "version",
+        "channel",
+        "released",
+        "platform"
+      ],
+      "empty": "No downloads have been published yet."
+    }
+  ],
+  "seedAuthor": "HN Group"
+}
