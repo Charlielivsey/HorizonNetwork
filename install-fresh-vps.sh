@@ -55,7 +55,6 @@ step 'Horizon Advertising' bash "$ROOT/horizon-advertising/install.sh" "$EMAIL"
 step 'Links' bash "$ROOT/links-site/install.sh" "$EMAIL"
 # Central control goes last so it adds maintenance gates for every site installed above.
 step 'Website control (admin.hngroup.org.uk)' bash "$ROOT/admin-site/install.sh" "$EMAIL"
-step 'Welcome screen' bash "$ROOT/install.sh"
 pm2 save
 
 echo; echo '=================== Summary ==================='
