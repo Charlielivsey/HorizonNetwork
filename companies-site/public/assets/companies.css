@@ -217,3 +217,5 @@ h2.form-section { font-size: 1.27em; padding-top: 20px; border-top: 2px solid va
 .choice-list li { border-bottom: 1px solid var(--rule); }
 .choice-list a { display: block; padding: 14px 0; font-weight: 700; transition: padding-left .15s; }
 .choice-list a:hover { padding-left: 8px; }
+
+.inline-form { margin-top: 20px; max-width: 480px; }

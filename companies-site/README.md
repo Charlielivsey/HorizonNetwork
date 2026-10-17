@@ -10,6 +10,8 @@ A register of the group's companies in the style of Companies House, branded as 
 ## Customer accounts (anyone can register)
 Request documents or certificates, report mistakes, and **file changes** for a company: a new registered office address, appointing or removing an officer, notifying or ceasing a person with significant control, a change of name or nature of business, a confirmation statement, or any other filing as a PDF (up to 15 MB). Staff review each one; accepting it updates the company's record and adds the filing (the customer's PDF, or one generated from the details). Staff reply on the site; no emails are sent.
 
+**Company ownership.** Only customers who manage a company can file changes for it. A customer becomes a manager by applying to **register a new company** (its details, first officer and first person with significant control; when staff accept, the company is created with its generated filings and the applicant manages it) or by asking to **manage an existing company** (staff approve or reject). Managing a company also covers its subsidiaries, and managers can register new subsidiaries of it. Staff can add or remove managers on a company's admin page.
+
 Customers and staff stay signed in (across refreshes, restarts and updates) until they sign out, their cookies are cleared, or 30 days pass without a visit.
 
 ## Staff

@@ -83,11 +83,14 @@ test('company register: public records, customers, requests, submissions and sta
     const alexAccount = await (await get('/account', alex)).text();
     assert.match(alexAccount, /Alex Other/); assert.doesNotMatch(alexAccount, /Change of|R[0-9A-F]{8}/);
 
-    // Submit a filing: PDFs only.
-    assert.match(await (await upload('/company/horizon-network/file', { csrf: samCsrf, category: 'Address', description: 'Change of address' }, Buffer.from('not a pdf'), sam)).text(), /Upload a PDF file/);
-    html = await (await upload('/company/horizon-network/file', { csrf: samCsrf, category: 'Address', description: 'Change of registered office address', note: 'New office' }, PDF, sam)).text();
-    assert.match(html, /has been sent for review/);
-    assert.doesNotMatch(await (await get('/company/horizon-network/filing-history')).text(), /Change of registered office address/);
+    // Only people who manage a company can file changes; anyone else asks to manage it first.
+    assert.match(await (await get('/company/horizon-network/file', sam)).text(), /You don’t manage this company/);
+    assert.equal((await upload('/company/horizon-network/file', { csrf: samCsrf, category: 'Address', description: 'Change of address' }, PDF, sam)).status, 403);
+    html = await (await get('/company/horizon-network', sam)).text();
+    assert.match(html, /\/company\/horizon-network\/claim/); assert.doesNotMatch(html, /File a change|Register a subsidiary/);
+    assert.match(await (await upload('/company/horizon-network/claim', { csrf: samCsrf, note: '' }, null, sam)).text(), /Tell us why you should manage this company/);
+    assert.match(await (await upload('/company/horizon-network/claim', { csrf: samCsrf, note: 'I am a director of the company.' }, null, sam)).text(), /request S[0-9A-F]{8} to manage Horizon Network Limited has been sent for review/);
+    assert.match(await (await upload('/company/horizon-network/claim', { csrf: samCsrf, note: 'Again.' }, null, sam)).text(), /already asked to manage this company/);
 
     // Customers never get into administration. Staff use the register's own accounts, starting
     // with admin@hngroup.org.uk / admin, which must be changed at first sign-in.
@@ -123,6 +126,22 @@ test('company register: public records, customers, requests, submissions and sta
     assert.match(await (await post('/admin/staff/' + ownerId + '/remove', { csrf: staffCsrf }, owner)).text(), /can’t remove your own account/);
     assert.match(await (await post('/admin/staff/' + robinId + '/remove', { csrf: staffCsrf }, owner)).text(), /Staff account removed/);
     assert.equal((await get('/admin', robin)).status, 303);
+
+    // Staff approve Sam's request to manage the company; Sam can then file changes for it.
+    html = await (await get('/admin/submissions', owner)).text();
+    assert.match(html, /Request to manage a company/); assert.match(html, /I am a director of the company\./);
+    const claimId = html.match(/\/admin\/submissions\/([a-f0-9]{24})/)[1];
+    assert.match(await (await post('/admin/submissions/' + claimId, { csrf: staffCsrf, decision: 'accept' }, owner)).text(), /approved\. They now manage the company/);
+    html = await (await get('/company/horizon-network', sam)).text();
+    assert.match(html, /File a change/); assert.match(html, /Register a subsidiary/);
+    assert.match(await (await get('/account', sam)).text(), /Your companies[\s\S]*Horizon Network Limited/);
+    assert.match(await (await get('/admin/customers', owner)).text(), /sam@example\.com<\/td><td><a href="\/admin\/company\/horizon-network">/);
+
+    // Submit a filing: PDFs only.
+    assert.match(await (await upload('/company/horizon-network/file', { csrf: samCsrf, category: 'Address', description: 'Change of address' }, Buffer.from('not a pdf'), sam)).text(), /Upload a PDF file/);
+    html = await (await upload('/company/horizon-network/file', { csrf: samCsrf, category: 'Address', description: 'Change of registered office address', note: 'New office' }, PDF, sam)).text();
+    assert.match(html, /has been sent for review/);
+    assert.doesNotMatch(await (await get('/company/horizon-network/filing-history')).text(), /Change of registered office address/);
 
     // Accept the submission: it becomes a public filing with its PDF.
     html = await (await get('/admin/submissions', owner)).text();
@@ -196,6 +215,10 @@ test('company register: public records, customers, requests, submissions and sta
     assert.equal((await get('/company/horizon-network', owner)).status, 200);
     assert.equal((await get('/document/' + docId)).status, 404);
 
+    // Staff can make a customer a manager directly.
+    assert.match(await (await post('/admin/company/hn-group/managers', { csrf: staffCsrf, email: 'nobody@example.com' }, owner)).text(), /no customer account with that email/);
+    assert.match(await (await post('/admin/company/hn-group/managers', { csrf: staffCsrf, email: 'SAM@example.com' }, owner)).text(), /Manager added/);
+
     // Customers file changes; accepting them updates the record and files them.
     html = await (await get('/company/hn-group/file', sam)).text();
     assert.match(html, /What do you want to file\?/); assert.match(html, /\?type=address/); assert.match(html, /\?type=terminate/);
@@ -238,6 +261,35 @@ test('company register: public records, customers, requests, submissions and sta
     assert.match(await (await get('/company/hn-group/filing-history')).text(), /Change of name from HN Group Limited to HN Group Holdings Limited/);
     await post('/admin/company/hn-group', { csrf: staffCsrf, legalName: 'HN Group Holdings Limited', name: 'HN Group', number: '12345678', status: 'Active', incorporated: '2026-01-01', registeredOffice: '2 New Road\nCity' }, owner);
     assert.equal(((await (await get('/company/hn-group/filing-history')).text()).match(/Change of name from/g) || []).length, 1);
+
+    // Customers register new companies and subsidiaries of companies they manage.
+    const alexCsrf = csrfIn(await (await get('/account/register-company', alex)).text());
+    assert.match(await (await post('/account/register-company', { csrf: alexCsrf, legalName: 'Alex Co Limited', registeredOffice: '1 Road', parent: 'hn-group', officer_name: 'Alex Other', psc_name: 'Alex Other' }, alex)).text(), /only register subsidiaries of companies you manage/);
+    html = await (await get('/account/register-company?parent=hn-group', sam)).text();
+    assert.match(html, /Register a subsidiary/); assert.match(html, /name="psc_name" type="text" value="HN Group Holdings Limited"/); assert.match(html, /<option value="hn-group" selected>/);
+    assert.match(await (await post('/account/register-company', { csrf: samCsrf, legalName: 'HN Group Holdings Limited', registeredOffice: '1 Road', officer_name: 'A', psc_name: 'B' }, sam)).text(), /already on the register/);
+    html = await (await post('/account/register-company', { csrf: samCsrf, legalName: 'Sam Subsidiary Limited', type: 'Private limited company', registeredOffice: '3 Side Street\nCity', parent: 'hn-group', incorporated: '2026-09-01',
+      officer_name: 'Sam Customer', officer_role: 'Director', psc_name: 'HN Group Holdings Limited', psc_kind: 'Parent company', psc_share: '100', psc_control: 'Ownership of shares – 75% or more\nRight to appoint and remove directors' }, sam)).text();
+    assert.match(html, /application S[0-9A-F]{8} has been sent for review/); assert.match(html, /Application to register Sam Subsidiary Limited as a subsidiary of HN Group Holdings Limited/);
+    assert.equal((await get('/company/sam-subsidiary-limited')).status, 404);
+    html = await (await get('/admin/submissions', owner)).text();
+    assert.match(html, /Application to register a company/); assert.match(html, /First officer<\/dt><dd>Sam Customer \(Director\)/);
+    const appId = html.match(/\/admin\/submissions\/([a-f0-9]{24})"/)[1];
+    assert.match(await (await post('/admin/submissions/' + appId, { csrf: staffCsrf, decision: 'accept' }, owner)).text(), /accepted\. The company has been registered/);
+    html = await (await get('/company/sam-subsidiary-limited', sam)).text();
+    assert.match(html, /Sam Subsidiary Limited/); assert.match(html, /3 Side Street<br>City/); assert.match(html, /File a change/);
+    html = await (await get('/company/sam-subsidiary-limited/filing-history')).text();
+    assert.match(html, /Incorporation of Sam Subsidiary Limited/);
+    assert.match(html, /Appointment of Sam Customer as a director on 1 September 2026/);
+    assert.match(html, /Notification of HN Group Holdings Limited as a person with significant control on 1 September 2026/);
+    assert.match(await (await get('/company/sam-subsidiary-limited/persons-with-significant-control')).text(), /Ownership of shares – 75% or more<br>Right to appoint and remove directors/);
+    assert.match(await (await get('/company/hn-group/related-companies')).text(), /Sam Subsidiary Limited[\s\S]*Subsidiary/);
+    // Managing a parent company covers its subsidiaries.
+    const samCustomerId = JSON.parse(fs.readFileSync(path.join(dir, 'data', 'register.json'), 'utf8')).customers.find((x) => x.email === 'sam@example.com').id;
+    await post('/admin/company/sam-subsidiary-limited/managers/' + samCustomerId + '/delete', { csrf: staffCsrf }, owner);
+    assert.match(await (await get('/company/sam-subsidiary-limited/file', sam)).text(), /What do you want to file\?/);
+    await post('/admin/company/hn-group/managers/' + samCustomerId + '/delete', { csrf: staffCsrf }, owner);
+    assert.match(await (await get('/company/sam-subsidiary-limited/file', sam)).text(), /You don’t manage this company/);
 
     // Signed-in customers and staff stay signed in across a restart.
     child.kill(); await new Promise((r) => setTimeout(r, 300)); child = startServer(); await waitUp();

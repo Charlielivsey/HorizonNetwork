@@ -34,7 +34,7 @@ function blankCompany(o) {
     parent: o.parent || '', managedBy: o.managedBy || '', divisions: o.divisions || [], previousNames: [],
     accountsMadeUpTo: '', accountsNextDue: '', confirmationMadeUpTo: '', confirmationNextDue: '',
     officers: [], psc: (o.psc || []).map((p) => ({ id: id(), name: p.name, kind: p.kind, share: p.share || '', control: p.control, notified: '', ceased: '' })), charges: [],
-    hidden: false, createdAt: now(), updatedAt: now(),
+    managers: [], hidden: false, createdAt: now(), updatedAt: now(),
   };
 }
 
@@ -50,7 +50,7 @@ function init(dataDir) {
   for (const c of db.companies) for (const p of c.psc) if (p.share === undefined) {
     if (c.slug === 'horizon-network' && p.name === 'HN Group Limited' && p.kind === 'Relevant legal entity') { p.kind = 'Parent company'; p.share = '100'; } else p.share = '';
   }
-  for (const c of db.companies) generateFilings(c);
+  for (const c of db.companies) { if (!Array.isArray(c.managers)) c.managers = []; generateFilings(c); }
   for (const s of SEED) if (!db.seeded.includes(s.slug)) { if (!db.companies.some((c) => c.slug === s.slug)) db.companies.push(blankCompany(s)); db.seeded.push(s.slug); }
   save();
 }
@@ -361,6 +361,9 @@ const article = (role) => { const r = String(role || 'officer').toLowerCase(); r
 function addSubmission(cust, slug, input, pdf) {
   const c = company(slug);
   if (!c) throw Object.assign(new Error('Company not found.'), { status: 404 });
+  if (input.kind === 'claim') return addClaim(cust, c, input, pdf);
+  // Only customers who manage the company (or a company above it) can file changes for it.
+  if (!canManage(c, cust.id)) throw Object.assign(new Error('Only people who manage this company can file changes for it. Request to manage it first.'), { status: 403 });
   const kind = Object.hasOwn(CHANGE_TYPES, input.kind) ? input.kind : 'document';
   if (kind === 'document' && !pdf) throw bad('Attach the filing as a PDF.');
   const pending = db.submissions.filter((s) => s.customer === cust.id && s.status === 'Pending').length;
@@ -376,8 +379,91 @@ function addSubmission(cust, slug, input, pdf) {
   return s;
 }
 
+// ---------- Company ownership ----------
+// A customer manages a company if they're one of its managers, or manage any company above it
+// (its parent, the parent's parent and so on). Managers can file changes and register subsidiaries.
+function canManage(c, customerId) {
+  for (let cur = c, depth = 0; cur && depth < 20; cur = cur.parent ? company(cur.parent) : null, depth++) {
+    if ((cur.managers || []).includes(customerId)) return true;
+  }
+  return false;
+}
+const managedCompanies = (customerId) => companies(true).filter((c) => canManage(c, customerId));
+const pendingLimit = (cust) => {
+  if (db.submissions.filter((s) => s.customer === cust.id && s.status === 'Pending').length >= 10) throw Object.assign(new Error('You have 10 filings waiting for review. Please wait before submitting more.'), { status: 429 });
+};
+const newRef = () => 'S' + crypto.randomBytes(4).toString('hex').toUpperCase();
+
+// Asking to manage an existing company. Staff decide; there's nothing to file publicly.
+function addClaim(cust, c, input, pdf) {
+  if (canManage(c, cust.id)) throw bad('You already manage this company.');
+  if (db.submissions.some((s) => s.kind === 'claim' && s.company === c.slug && s.customer === cust.id && s.status === 'Pending')) throw bad('You’ve already asked to manage this company. Please wait for our reply.');
+  pendingLimit(cust);
+  const s = { id: id(), ref: newRef(), customer: cust.id, company: c.slug, kind: 'claim', change: {}, category: 'Other', description: 'Request to manage ' + c.legalName,
+    note: req(input.note, 'Tell us why you should manage this company (for example, your role in it).', 2000), file: pdf ? storeFile(pdf) : '', pages: pdf ? countPages(pdf) : 0, status: 'Pending', staffNote: '', createdAt: now(), decidedAt: null, filing: '' };
+  db.submissions.push(s);
+  audit('customer:' + cust.email, 'submission.add', s.ref + ' ' + s.description);
+  save();
+  return s;
+}
+
+// Applying to register a new company, optionally as a subsidiary of a company the customer manages.
+// The application holds everything needed to create the company once staff accept it.
+function addApplication(cust, input, officerInput, pscInput) {
+  pendingLimit(cust);
+  const legalName = req(input.legalName, 'Enter the company name.', 160);
+  if (companies(true).some((c) => c.legalName.toLowerCase() === legalName.toLowerCase())) throw bad('A company with that name is already on the register.');
+  let parent = '';
+  if (input.parent) {
+    const pc = company(input.parent);
+    if (!pc || !canManage(pc, cust.id)) throw Object.assign(new Error('You can only register subsidiaries of companies you manage.'), { status: 403 });
+    parent = pc.slug;
+  }
+  const incorporated = d(input.incorporated);
+  const details = { legalName, name: t(input.name, 120), type: t(input.type, 80), registeredOffice: req(input.registeredOffice, 'Enter the registered office address.', 300),
+    sic: String(input.sic || '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 4).map((x) => x.slice(0, 160)).join('\n'), incorporated, parent, website: t(input.website, 120), description: t(input.description, 1000) };
+  // Checked now so problems are reported straight away; they're checked again when staff accept.
+  const officer = LISTS.officers(officerInput || {});
+  const psc = LISTS.psc(pscInput || {});
+  const s = { id: id(), ref: newRef(), customer: cust.id, company: '', kind: 'incorporate', change: { details, officer, psc }, category: 'Incorporation',
+    description: 'Application to register ' + legalName + (parent ? ' as a subsidiary of ' + company(parent).legalName : ''),
+    note: t(input.note, 2000), file: '', pages: 0, status: 'Pending', staffNote: '', createdAt: now(), decidedAt: null, filing: '' };
+  db.submissions.push(s);
+  audit('customer:' + cust.email, 'submission.add', s.ref + ' ' + s.description);
+  save();
+  return s;
+}
+
+function addManager(slug, email, actor) {
+  const c = company(slug), cust = customerByEmail(email);
+  if (!c) throw bad('Company not found.');
+  if (!cust) throw bad('There’s no customer account with that email address.');
+  if (!c.managers.includes(cust.id)) c.managers.push(cust.id);
+  audit(actor, 'company.manager.add', slug + ' ' + cust.email);
+  save();
+}
+function removeManager(slug, customerId, actor) {
+  const c = company(slug);
+  if (!c) return;
+  c.managers = c.managers.filter((x) => x !== customerId);
+  audit(actor, 'company.manager.remove', slug + ' ' + ((customer(customerId) || {}).email || customerId));
+  save();
+}
+
 // Applies an accepted change to the company and returns the filing that records it.
 function applyChange(s) {
+  if (s.kind === 'incorporate') {
+    const ch = s.change;
+    const c = saveCompany('', { ...ch.details, status: 'Active', incorporated: ch.details.incorporated || now().slice(0, 10) }, 'customer-application:' + s.ref, { officer: ch.officer, psc: { ...ch.psc, control: (ch.psc.control || []).join('\n') } });
+    c.managers = [s.customer];
+    s.company = c.slug;
+    return c.incorporationFiling || '';
+  }
+  if (s.kind === 'claim') {
+    const c = company(s.company);
+    if (c && !c.managers.includes(s.customer)) c.managers.push(s.customer);
+    return '';
+  }
   const c = company(s.company);
   if (!c) throw bad('The company is no longer on the register.');
   const kind = s.kind || 'document';
@@ -412,6 +498,13 @@ function applyChange(s) {
 }
 // A change filed earlier may no longer fit the record (for example the officer has since resigned).
 function checkStillValid(s) {
+  if (s.kind === 'incorporate') {
+    const ch = s.change;
+    if (companies(true).some((c) => c.legalName.toLowerCase() === ch.details.legalName.toLowerCase())) throw bad('A company with that name is now on the register. Reject this application instead.');
+    if (ch.details.parent && !company(ch.details.parent)) throw bad('The parent company is no longer on the register. Reject this application instead.');
+    if (!customer(s.customer)) throw bad('The applicant’s account no longer exists. Reject this application instead.');
+    return;
+  }
   const c = company(s.company);
   if (!c) throw bad('The company is no longer on the register.');
   const ch = s.change || {};
@@ -438,6 +531,7 @@ function decideSubmission(s, accept, note, actor) {
 
 module.exports = {
   init, STATUSES, FILING_CATEGORIES, OFFICER_ROLES, PSC_KINDS, REQUEST_KINDS, CHANGE_TYPES,
+  canManage, managedCompanies, addApplication, addManager, removeManager,
   companies, company, children, search, saveCompany, deleteCompany, saveItem, deleteItem,
   filings, filing, addFiling, deleteFiling, filePath,
   customer, customerByEmail, createCustomer, checkPassword, changePassword, touchLogin, setCustomerDisabled,

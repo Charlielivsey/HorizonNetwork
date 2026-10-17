@@ -100,8 +100,17 @@ function companyHeader(c, tab, ctx) {
     '<p class="company-number">Company number <strong>' + (c.number ? esc(c.number) : 'not recorded') + '</strong></p>' +
     (c.name && c.name !== c.legalName ? '<p class="muted">Known as ' + esc(c.name) + '</p>' : '') + '</div>' +
     '<nav class="tabs" aria-label="Company record">' + tabs.map(([p, label]) => { const active = tab === p || (p === 'officers' && tab === 'persons-with-significant-control'); return '<a href="/company/' + esc(c.slug) + (p ? '/' + p : '') + '"' + (active ? ' aria-current="page"' : '') + '>' + label + '</a>'; }).join('') + '</nav>' +
-    '<div class="actions-row">' + ['request', 'report', 'file'].map((a) => '<a class="button ghost small" href="/company/' + esc(c.slug) + '/' + a + '">' + { request: 'Request a document', report: 'Report a mistake', file: 'File a change' }[a] + '</a>').join('') + '</div>';
+    '<div class="actions-row">' + companyActions(c, ctx).map(([href, label]) => '<a class="button ghost small" href="' + esc(href) + '">' + label + '</a>').join('') + '</div>';
 }
+
+// Managers can file changes and register subsidiaries; everyone else can ask to manage the company.
+function companyActions(c, ctx) {
+  const base = '/company/' + c.slug;
+  const manages = ctx.customer && store.canManage(c, ctx.customer.account.id);
+  return [[base + '/request', 'Request a document'], [base + '/report', 'Report a mistake'],
+    ...(manages ? [[base + '/file', 'File a change'], ['/account/register-company?parent=' + c.slug, 'Register a subsidiary']] : [[base + '/claim', 'Manage this company']])];
+}
+const companyName = (s) => store.company(s.company)?.legalName || (s.change && s.change.details && s.change.details.legalName) || s.company;
 
 // A parent company is linked to its own record when it's on the register.
 function parentLink(name) {
@@ -249,13 +258,17 @@ function accountPage(res, ctx, flash) {
   const me = ctx.customer.account;
   const reqs = store.db.requests.filter((r) => r.customer === me.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const subs = store.db.submissions.filter((s) => s.customer === me.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const mine = store.managedCompanies(me.id).filter((c) => !c.hidden);
   page(res, ctx, { title: 'Your account', noindex: true, flash,
     body: '<h1 class="page-title">Your account</h1><p class="muted">Signed in as ' + esc(me.name) + ' (' + esc(me.email) + ') · <a href="/account/settings">Change password</a></p>' +
+      '<section class="panel"><div class="panel-head"><h2>Your companies</h2><a class="button small" href="/account/register-company">Register a new company</a></div>' + (mine.length
+        ? '<p class="muted">You can file changes for these companies and register subsidiaries of them.</p><div class="results">' + mine.map((c) => '<a class="result" href="/company/' + esc(c.slug) + '"><span class="result-name">' + esc(c.legalName) + '</span><span class="result-meta">' + (c.number ? 'Company number ' + esc(c.number) + ' · ' : '') + (c.status ? esc(c.status) : 'Status not recorded') + (c.managers.includes(me.id) ? '' : ' · Managed through its parent company') + '</span></a>').join('') + '</div>'
+        : '<p class="muted">You don’t manage any companies yet. Register a new company, or find a company on the register and choose Manage this company.</p>') + '</section>' +
       '<section class="panel"><h2>Your requests and reports</h2>' + (reqs.length ? '<div class="table-wrap"><table><thead><tr><th>Reference</th><th>Company</th><th>Type</th><th>Status</th><th>Updated</th></tr></thead><tbody>' +
         reqs.map((r) => '<tr><td><a href="/account/requests/' + r.id + '">' + esc(r.ref) + '</a></td><td>' + esc(store.company(r.company)?.legalName || r.company) + '</td><td>' + esc(store.REQUEST_KINDS[r.kind]) + '</td><td><span class="status ' + (r.status === 'Answered' ? 'ok' : r.status === 'Open' ? 'warn' : '') + '">' + esc(r.status) + '</span></td><td>' + esc(fmtTime(r.updatedAt)) + '</td></tr>').join('') + '</tbody></table></div>'
         : '<p class="muted">You haven’t made any requests yet. Find a company, then choose Request a document or Report a mistake.</p>') + '</section>' +
-      '<section class="panel"><h2>Your filing submissions</h2>' + (subs.length ? '<div class="table-wrap"><table><thead><tr><th>Reference</th><th>Company</th><th>Filing</th><th>Status</th><th>Submitted</th></tr></thead><tbody>' +
-        subs.map((s) => '<tr><td>' + esc(s.ref) + '</td><td>' + esc(store.company(s.company)?.legalName || s.company) + '</td><td>' + esc(s.description) + (s.staffNote ? '<br><span class="muted small">Note from Horizon Holding Co: ' + esc(s.staffNote) + '</span>' : '') + '</td><td><span class="status ' + (s.status === 'Accepted' ? 'ok' : s.status === 'Pending' ? 'warn' : 'bad') + '">' + esc(s.status) + '</span></td><td>' + esc(fmtTime(s.createdAt)) + '</td></tr>').join('') + '</tbody></table></div>'
+      '<section class="panel"><h2>Your applications and filings</h2>' + (subs.length ? '<div class="table-wrap"><table><thead><tr><th>Reference</th><th>Company</th><th>Filing</th><th>Status</th><th>Submitted</th></tr></thead><tbody>' +
+        subs.map((s) => '<tr><td>' + esc(s.ref) + '</td><td>' + esc(companyName(s)) + '</td><td>' + esc(s.description) + (s.staffNote ? '<br><span class="muted small">Note from Horizon Holding Co: ' + esc(s.staffNote) + '</span>' : '') + '</td><td><span class="status ' + (s.status === 'Accepted' ? 'ok' : s.status === 'Pending' ? 'warn' : 'bad') + '">' + esc(s.status) + '</span></td><td>' + esc(fmtTime(s.createdAt)) + '</td></tr>').join('') + '</tbody></table></div>'
         : '<p class="muted">You haven’t submitted any filings.</p>') + '</section>' });
 }
 
@@ -310,6 +323,45 @@ function submitForm(res, ctx, c, values, error, kind) {
       '<form method="post" action="' + base + '" class="form" enctype="multipart/form-data">' + csrfField(ctx.customer.csrf) + '<input type="hidden" name="kind" value="' + kind + '">' + fields + pdfField +
       field('Note for our team (optional)', 'note', v.note, { textarea: true, max: 2000 }) +
       '<div class="form-actions"><button class="button" type="submit">Submit for review</button><a class="button secondary" href="' + base + '">Back</a></div></form></section>' });
+}
+
+// Applying to register a new company, or a subsidiary of a company the customer manages.
+function registerCompanyPage(res, ctx, values, error) {
+  const v = values || {};
+  const mine = store.managedCompanies(ctx.customer.account.id);
+  const parent = mine.find((c) => c.slug === v.parent);
+  const psc = v.psc || (parent ? { name: parent.legalName, kind: 'Parent company', share: '100' } : {});
+  page(res, ctx, { title: parent ? 'Register a subsidiary' : 'Register a company', noindex: true, flash: error && { error: true, text: error },
+    body: '<section class="panel"><p class="eyebrow">' + (parent ? esc(parent.legalName) : 'Your account') + '</p><h1>' + (parent ? 'Register a subsidiary' : 'Register a company') + '</h1>' +
+      '<p class="muted">Tell us about the company, its first officer and its first person with significant control. Our staff review every application. When it’s accepted, the company is added to the register with an incorporation filing, and you’ll manage it from your account.</p>' +
+      '<form method="post" action="/account/register-company" class="form grid-form">' + csrfField(ctx.customer.csrf) +
+      field('Registered name', 'legalName', v.legalName, { required: true, max: 160 }) + field('Name it’s known by (optional)', 'name', v.name, { max: 120 }) +
+      field('Company type', 'type', v.type, { max: 80, hint: 'For example: Private limited company.' }) + field('Incorporated on', 'incorporated', v.incorporated, { type: 'date', hint: 'Leave blank to use the date it’s accepted.' }) +
+      field('Registered office address', 'registeredOffice', v.registeredOffice, { textarea: true, rows: 3, required: true, max: 300 }) +
+      field('Nature of business (SIC)', 'sic', v.sic, { textarea: true, rows: 3, max: 700, hint: 'One per line, up to four.' }) +
+      (mine.length ? select('Parent company', 'parent', mine.map((c) => [c.slug, c.legalName]), v.parent, 'None: this isn’t a subsidiary') : '') +
+      field('Website (optional)', 'website', v.website, { max: 120 }) + field('About the company (optional)', 'description', v.description, { textarea: true, rows: 3, max: 1000 }) +
+      prefixed('officer_', '<h2 class="form-section">First officer</h2><p class="hint form-section">If you leave the appointment date blank, the incorporation date is used.</p>' + ITEM_FIELDS.officers(v.officer || {})) +
+      prefixed('psc_', '<h2 class="form-section">First person with significant control</h2><p class="hint form-section">' + (parent ? 'We’ve filled in the parent company. Change it if someone else controls this company.' : 'If you leave the notified date blank, the incorporation date is used.') + '</p>' + ITEM_FIELDS.psc(psc)) +
+      field('Note for our team (optional)', 'note', v.note, { textarea: true, max: 2000 }) +
+      '<div class="form-actions"><button class="button" type="submit">Submit application</button><a class="button secondary" href="' + (parent ? '/company/' + esc(parent.slug) : '/account') + '">Cancel</a></div></form></section>' });
+}
+
+function claimPage(res, ctx, c, values, error) {
+  const v = values || {};
+  page(res, ctx, { title: 'Manage this company · ' + c.legalName, noindex: true, flash: error && { error: true, text: error },
+    body: '<section class="panel narrow"><p class="eyebrow">' + esc(c.legalName) + '</p><h1>Ask to manage this company</h1>' +
+      '<p class="muted">People who manage a company can file changes for it and register its subsidiaries. Managing a company also covers its subsidiaries. Tell us your connection to the company; our staff will check it and reply in your account.</p>' +
+      '<form method="post" class="form" enctype="multipart/form-data">' + csrfField(ctx.customer.csrf) + '<input type="hidden" name="kind" value="claim">' +
+      field('Your connection to the company', 'note', v.note, { textarea: true, rows: 5, required: true, max: 2000, hint: 'For example, you’re a director or you act for the company.' }) +
+      '<label>Supporting document (PDF, optional)<input type="file" name="document" accept="application/pdf,.pdf"></label>' +
+      '<div class="form-actions"><button class="button" type="submit">Send request</button><a class="button secondary" href="/company/' + esc(c.slug) + '">Cancel</a></div></form></section>' });
+}
+
+function notManagerPage(res, ctx, c) {
+  page(res, ctx, { title: 'File a change · ' + c.legalName, noindex: true,
+    body: '<section class="panel narrow"><p class="eyebrow">' + esc(c.legalName) + '</p><h1>You don’t manage this company</h1><p>Only people who manage a company can file changes for it. If you’re connected to the company, ask to manage it first.</p>' +
+      '<div class="form-actions"><a class="button" href="/company/' + esc(c.slug) + '/claim">Ask to manage this company</a><a class="button secondary" href="/company/' + esc(c.slug) + '">Back</a></div></section>' }, 403);
 }
 
 // ---------- Staff administration ----------
@@ -376,10 +428,22 @@ function adminCompany(res, ctx, c, flash) {
   const list = store.filings(c.slug);
   page(res, ctx, { title: 'Edit ' + c.legalName, noindex: true, flash,
     body: '<p><a href="/admin">← Administration</a></p><h1 class="page-title">' + esc(c.legalName) + '</h1><p><a href="/company/' + esc(c.slug) + '">View the public record →</a></p>' +
-      '<section class="panel"><h2>Company details</h2>' + companyForm(c, ctx) + '</section>' + itemForms(c, ctx, 'officers') + itemForms(c, ctx, 'psc') + itemForms(c, ctx, 'charges') +
+      '<section class="panel"><h2>Company details</h2>' + companyForm(c, ctx) + '</section>' + managersPanel(c, ctx) + itemForms(c, ctx, 'officers') + itemForms(c, ctx, 'psc') + itemForms(c, ctx, 'charges') +
       '<section class="panel"><h2>Filing history</h2>' + (list.length ? '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Description</th><th>Document</th><th></th></tr></thead><tbody>' + list.map((f) => '<tr><td>' + esc(fmt(f.date)) + '</td><td>' + esc(f.category) + '</td><td>' + esc(f.description) + (f.source === 'customer' ? ' <span class="muted small">(customer submission)</span>' : '') + '</td><td>' + (f.file ? '<a href="/document/' + f.id + '" target="_blank" rel="noopener">PDF</a>' : '—') + '</td><td><form method="post" action="/admin/filing/' + f.id + '/delete">' + csrfField(ctx.staffUser.csrf) + '<button class="link danger-text" type="submit" data-confirm="Delete this filing and its document?">Delete</button></form></td></tr>').join('') + '</tbody></table></div>' : '<p class="muted">No filings yet.</p>') +
       '<details class="item add"><summary>Add a filing</summary><form method="post" action="/admin/company/' + esc(c.slug) + '/filings" class="form grid-form" enctype="multipart/form-data">' + csrfField(ctx.staffUser.csrf) + field('Date', 'date', new Date().toISOString().slice(0, 10), { type: 'date' }) + select('Type', 'category', store.FILING_CATEGORIES, 'Other') + field('Description', 'description', '', { required: true, max: 300 }) + '<label>Document (PDF, optional)<input type="file" name="document" accept="application/pdf,.pdf"></label><div class="form-actions"><button class="button small" type="submit">Add filing</button></div></form></details></section>' +
       '<section class="panel danger-zone"><h2>Delete company</h2><p class="muted">This removes the company, its people, charges and all its filings from the register. It can’t be undone.</p><form method="post" action="/admin/company/' + esc(c.slug) + '/delete">' + csrfField(ctx.staffUser.csrf) + '<button class="button danger" type="submit" data-confirm="Delete ' + esc(c.legalName) + ' and all its records?">Delete company</button></form></section>' });
+}
+
+// Customer accounts that manage the company. Managing a company also covers its subsidiaries.
+function managersPanel(c, ctx) {
+  const base = '/admin/company/' + esc(c.slug) + '/managers';
+  const inherited = [];
+  for (let cur = c.parent ? store.company(c.parent) : null, n = 0; cur && n < 20; cur = cur.parent ? store.company(cur.parent) : null, n++) inherited.push(cur);
+  const viaParents = inherited.filter((x) => x.managers.length);
+  return '<section class="panel"><h2>Managers</h2><p class="muted">Customers who manage this company can file changes for it and register its subsidiaries.</p>' +
+    (c.managers.length ? '<div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th></th></tr></thead><tbody>' + c.managers.map((cid) => { const cu = store.customer(cid); return '<tr><td>' + esc(cu ? cu.name : 'Deleted account') + '</td><td>' + esc(cu ? cu.email : '') + '</td><td><form method="post" action="' + base + '/' + esc(cid) + '/delete">' + csrfField(ctx.staffUser.csrf) + '<button class="link danger-text" type="submit" data-confirm="Stop this customer managing the company?">Remove</button></form></td></tr>'; }).join('') + '</tbody></table></div>' : '<p>No customers manage this company directly.</p>') +
+    (viaParents.length ? '<p class="muted small">Also managed through ' + viaParents.map((x) => esc(x.legalName)).join(', ') + '.</p>' : '') +
+    '<form method="post" action="' + base + '" class="form inline-form">' + csrfField(ctx.staffUser.csrf) + field('Add a manager by their account email', 'email', '', { type: 'email', required: true, max: 160 }) + '<div class="form-actions"><button class="button small" type="submit">Add manager</button></div></form></section>';
 }
 
 // The details of a filed change, as staff need to review it.
@@ -389,6 +453,13 @@ function changeDetails(s) {
   if (s.kind === 'appoint' && ch.officer) { const o = ch.officer; rows.push(['Name', o.name], ['Role', o.role], ['Appointed on', fmt(o.appointed)], ['Occupation', o.occupation], ['Nationality', o.nationality], ['Country of residence', o.countryOfResidence]); }
   else if (s.kind === 'psc_add' && ch.psc) { const p = ch.psc; rows.push(['Name', p.name], ['Type', p.kind], ['Shareholding', p.share ? p.share + '%' : ''], ['Nature of control', (p.control || []).join('; ')], ['Notified on', fmt(p.notified)]); }
   else if (s.kind === 'sic') rows.push(['New nature of business', ch.sic.join('; ')]);
+  else if (s.kind === 'incorporate' && ch.details) {
+    const x = ch.details, o = ch.officer || {}, p = ch.psc || {};
+    rows.push(['Registered name', x.legalName], ['Known as', x.name], ['Company type', x.type], ['Incorporated on', x.incorporated ? fmt(x.incorporated) : 'The date it’s accepted'], ['Registered office', x.registeredOffice.replace(/\n/g, ', ')],
+      ['Nature of business', x.sic.replace(/\n/g, '; ')], ['Parent company', x.parent ? (store.company(x.parent)?.legalName || 'No longer on the register') : ''], ['Website', x.website], ['About', x.description],
+      ['First officer', o.name + ' (' + o.role + ')' + (o.appointed ? ', appointed ' + fmt(o.appointed) : '')],
+      ['First person with significant control', p.name + ' (' + p.kind + (p.share ? ', ' + p.share + '%' : '') + ')' + ((p.control || []).length ? ': ' + p.control.join('; ') : '')]);
+  }
   if (!rows.length) return '';
   return dl(rows.filter((r) => r[1]).map(([k, x]) => [k, esc(x)]));
 }
@@ -398,10 +469,11 @@ function adminSubmissions(res, ctx, flash) {
   page(res, ctx, { title: 'Submissions', noindex: true, flash,
     body: '<h1 class="page-title">Filing submissions</h1>' + adminNav('/admin/submissions', ctx.staffUser) + '<section class="panel">' + (list.length ? list.map((s) => {
       const cust = store.customer(s.customer);
-      return '<article class="item-card"><h3>' + esc(s.ref) + ' · ' + esc(store.company(s.company)?.legalName || s.company) + ' <span class="status ' + (s.status === 'Accepted' ? 'ok' : s.status === 'Pending' ? 'warn' : 'bad') + '">' + esc(s.status) + '</span></h3>' +
-        '<p><strong>' + esc((store.CHANGE_TYPES[s.kind || 'document'] || {}).label || s.category) + ':</strong> ' + esc(s.description) + '</p>' + changeDetails(s) + '<p class="muted small">From ' + esc(cust ? cust.name + ' (' + cust.email + ')' : 'a deleted account') + ' · ' + esc(fmtTime(s.createdAt)) + '</p>' + (s.note ? '<p class="note">' + esc(s.note) + '</p>' : '') +
-        (s.status === 'Pending' ? (s.file ? '<p><a href="/admin/submission-file/' + s.id + '" target="_blank" rel="noopener">Open the PDF' + (s.pages ? ' (' + plural(s.pages, 'page', 'pages') + ')' : '') + '</a></p>' : '<p class="muted small">No PDF attached; one will be created from these details.</p>') + '<form method="post" action="/admin/submissions/' + s.id + '" class="form">' + csrfField(ctx.staffUser.csrf) + field('Note to the customer (optional)', 'note', '', { max: 1000 }) +
-          '<div class="form-actions"><button class="button small" type="submit" name="decision" value="accept">Accept and publish</button><button class="button small danger" type="submit" name="decision" value="reject">Reject</button></div></form>' : (s.staffNote ? '<p class="muted small">Note: ' + esc(s.staffNote) + '</p>' : '')) + '</article>';
+      const special = { incorporate: 'Application to register a company', claim: 'Request to manage a company' }[s.kind];
+      return '<article class="item-card"><h3>' + esc(s.ref) + ' · ' + esc(companyName(s)) + ' <span class="status ' + (s.status === 'Accepted' ? 'ok' : s.status === 'Pending' ? 'warn' : 'bad') + '">' + esc(s.status) + '</span></h3>' +
+        '<p><strong>' + esc(special || (store.CHANGE_TYPES[s.kind || 'document'] || {}).label || s.category) + ':</strong> ' + esc(s.description) + '</p>' + changeDetails(s) + '<p class="muted small">From ' + esc(cust ? cust.name + ' (' + cust.email + ')' : 'a deleted account') + ' · ' + esc(fmtTime(s.createdAt)) + '</p>' + (s.note ? '<p class="note">' + esc(s.note) + '</p>' : '') +
+        (s.status === 'Pending' ? (s.file ? '<p><a href="/admin/submission-file/' + s.id + '" target="_blank" rel="noopener">Open the PDF' + (s.pages ? ' (' + plural(s.pages, 'page', 'pages') + ')' : '') + '</a></p>' : '<p class="muted small">' + (special ? 'No document attached.' : 'No PDF attached; one will be created from these details.') + '</p>') + '<form method="post" action="/admin/submissions/' + s.id + '" class="form">' + csrfField(ctx.staffUser.csrf) + field('Note to the customer (optional)', 'note', '', { max: 1000 }) +
+          '<div class="form-actions"><button class="button small" type="submit" name="decision" value="accept">' + (s.kind === 'claim' ? 'Approve' : s.kind === 'incorporate' ? 'Accept and register' : 'Accept and publish') + '</button><button class="button small danger" type="submit" name="decision" value="reject">Reject</button></div></form>' : (s.staffNote ? '<p class="muted small">Note: ' + esc(s.staffNote) + '</p>' : '')) + '</article>';
     }).join('') : '<p class="muted">No filings have been submitted.</p>') + '</section>' });
 }
 
@@ -415,8 +487,8 @@ function adminRequests(res, ctx) {
 function adminCustomers(res, ctx, flash) {
   const list = [...store.db.customers].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 500);
   page(res, ctx, { title: 'Customers', noindex: true, flash,
-    body: '<h1 class="page-title">Customer accounts</h1>' + adminNav('/admin/customers', ctx.staffUser) + '<section class="panel"><p class="muted">' + plural(store.db.customers.length, 'account', 'accounts') + '. Customers can only see their own requests and submissions.</p>' + (list.length ? '<div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Created</th><th>Last sign-in</th><th></th></tr></thead><tbody>' +
-      list.map((c) => '<tr><td>' + esc(c.name) + (c.disabled ? ' <span class="status bad">Disabled</span>' : '') + '</td><td>' + esc(c.email) + '</td><td>' + esc(fmtTime(c.createdAt)) + '</td><td>' + (c.lastLoginAt ? esc(fmtTime(c.lastLoginAt)) : '—') + '</td><td><form method="post" action="/admin/customers/' + c.id + '">' + csrfField(ctx.staffUser.csrf) + '<button class="link" type="submit" name="disabled" value="' + (c.disabled ? '0' : '1') + '">' + (c.disabled ? 'Enable' : 'Disable') + '</button></form></td></tr>').join('') + '</tbody></table></div>' : '<p class="muted">Nobody has created an account yet.</p>') + '</section>' });
+    body: '<h1 class="page-title">Customer accounts</h1>' + adminNav('/admin/customers', ctx.staffUser) + '<section class="panel"><p class="muted">' + plural(store.db.customers.length, 'account', 'accounts') + '. Customers can only see their own requests and submissions.</p>' + (list.length ? '<div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Manages</th><th>Created</th><th>Last sign-in</th><th></th></tr></thead><tbody>' +
+      list.map((c) => '<tr><td>' + esc(c.name) + (c.disabled ? ' <span class="status bad">Disabled</span>' : '') + '</td><td>' + esc(c.email) + '</td><td>' + (store.companies(true).filter((x) => x.managers.includes(c.id)).map((x) => '<a href="/admin/company/' + esc(x.slug) + '">' + esc(x.legalName) + '</a>').join('<br>') || '—') + '</td><td>' + esc(fmtTime(c.createdAt)) + '</td><td>' + (c.lastLoginAt ? esc(fmtTime(c.lastLoginAt)) : '—') + '</td><td><form method="post" action="/admin/customers/' + c.id + '">' + csrfField(ctx.staffUser.csrf) + '<button class="link" type="submit" name="disabled" value="' + (c.disabled ? '0' : '1') + '">' + (c.disabled ? 'Enable' : 'Disable') + '</button></form></td></tr>').join('') + '</tbody></table></div>' : '<p class="muted">Nobody has created an account yet.</p>') + '</section>' });
 }
 
 function adminAudit(res, ctx) {
@@ -503,14 +575,26 @@ async function route(req, res) {
       if (sub === 'charges') return chargesPage(res, ctx, c);
       if (sub === 'related-companies') return relatedPage(res, ctx, c);
     }
+    if (sub === 'claim') {
+      if (needCustomer(res, ctx, p)) return;
+      if (store.canManage(c, ctx.customer.account.id)) return accountPage(res, ctx, { text: 'You already manage ' + c.legalName + '.' });
+      if (req.method === 'GET') return claimPage(res, ctx, c, {});
+      if (req.method === 'POST') {
+        const { fields, file } = await forms.parse(req);
+        if (fields.csrf !== ctx.customer.csrf) throw fail(403, 'Your session has changed. Go back, refresh the page and try again.');
+        try { const s = store.addSubmission(ctx.customer.account, c.slug, { note: fields.note, kind: 'claim' }, file); return accountPage(res, ctx, { text: 'Thanks. Your request ' + s.ref + ' to manage ' + c.legalName + ' has been sent for review.' }); }
+        catch (e) { if (e.status !== 400 && e.status !== 429) throw e; return claimPage(res, ctx, c, fields, e.message); }
+      }
+    }
     if (sub === 'request' || sub === 'report' || sub === 'file') {
       if (needCustomer(res, ctx, p)) return;
+      if (sub === 'file' && !store.canManage(c, ctx.customer.account.id)) return notManagerPage(res, ctx, c);
       if (req.method === 'GET') return sub === 'file' ? submitForm(res, ctx, c, {}, null, url.searchParams.get('type')) : requestForm(res, ctx, c, sub === 'report' ? 'mistake' : 'copy', {});
       if (req.method === 'POST') {
         const { fields, file } = await forms.parse(req);
         if (fields.csrf !== ctx.customer.csrf) throw fail(403, 'Your session has changed. Go back, refresh the page and try again.');
         try {
-          if (sub === 'file') { const s = store.addSubmission(ctx.customer.account, c.slug, fields, file); return accountPage(res, ctx, { text: 'Thanks. Your filing ' + s.ref + ' has been sent for review.' }); }
+          if (sub === 'file') { const s = store.addSubmission(ctx.customer.account, c.slug, { ...fields, kind: fields.kind === 'claim' ? 'document' : fields.kind }, file); return accountPage(res, ctx, { text: 'Thanks. Your filing ' + s.ref + ' has been sent for review.' }); }
           const r = store.addRequest(ctx.customer.account, c.slug, { ...fields, kind: sub === 'report' ? 'mistake' : ['copy', 'certificate', 'other'].includes(fields.kind) ? fields.kind : 'copy' });
           return redirect(res, '/account/requests/' + r.id);
         } catch (e) {
@@ -543,8 +627,18 @@ async function route(req, res) {
     return redirect(res, '/', [customers.end(req)]);
   }
   if (p.startsWith('/account')) {
-    if (needCustomer(res, ctx, p)) return;
+    if (needCustomer(res, ctx, p + url.search)) return;
     if (p === '/account' && req.method === 'GET') return accountPage(res, ctx);
+    if (p === '/account/register-company') {
+      if (req.method === 'GET') return registerCompanyPage(res, ctx, { parent: url.searchParams.get('parent') || '' });
+      if (req.method === 'POST') {
+        const { fields } = await forms.parse(req);
+        if (fields.csrf !== ctx.customer.csrf) throw fail(403, 'Your session has changed. Refresh the page and try again.');
+        const officer = unprefix(fields, 'officer_'), psc = unprefix(fields, 'psc_');
+        try { const s = store.addApplication(ctx.customer.account, fields, officer, psc); return accountPage(res, ctx, { text: 'Thanks. Your application ' + s.ref + ' has been sent for review.' }); }
+        catch (e) { if (e.status !== 400 && e.status !== 403 && e.status !== 429) throw e; return registerCompanyPage(res, ctx, { ...fields, officer, psc }, e.message); }
+      }
+    }
     if (p === '/account/settings') {
       let flash;
       if (req.method === 'POST') {
@@ -615,7 +709,7 @@ async function route(req, res) {
       try { const c = store.saveCompany('', fields, actor, { officer, psc }); return redirect(res, '/admin/company/' + c.slug); }
       catch (e) { if (e.status !== 400) throw e; return addPage({ company: { ...fields, sic: String(fields.sic || '').split('\n'), divisions: String(fields.divisions || '').split('\n'), hidden: fields.hidden === 'on' }, officer, psc }, { error: true, text: e.message }); }
     }
-    m = /^\/admin\/company\/([a-z0-9-]+)(?:\/(officers|psc|charges|filings|delete))?(?:\/([a-f0-9]{24}))?(\/delete)?$/.exec(p);
+    m = /^\/admin\/company\/([a-z0-9-]+)(?:\/(officers|psc|charges|filings|managers|delete))?(?:\/([a-f0-9]{24}))?(\/delete)?$/.exec(p);
     if (m) {
       const c = store.company(m[1]);
       if (!c) return messagePage(res, ctx, 404, 'Company not found', 'That company isn’t on the register.');
@@ -624,6 +718,7 @@ async function route(req, res) {
         try {
           if (!m[2]) { store.saveCompany(c.slug, fields, actor); return adminCompany(res, ctx, c, { text: 'Company details saved.' }); }
           if (m[2] === 'delete') { store.deleteCompany(c.slug, actor); return adminHome(res, ctx, { text: c.legalName + ' has been deleted.' }); }
+          if (m[2] === 'managers') { if (m[4]) store.removeManager(c.slug, m[3], actor); else store.addManager(c.slug, fields.email, actor); return adminCompany(res, ctx, c, { text: m[4] ? 'Manager removed.' : 'Manager added.' }); }
           if (m[2] === 'filings') { store.addFiling(c.slug, fields, file, actor); return adminCompany(res, ctx, c, { text: 'Filing added.' }); }
           if (m[4]) { store.deleteItem(c.slug, m[2], m[3], actor); return adminCompany(res, ctx, c, { text: 'Entry removed.' }); }
           store.saveItem(c.slug, m[2], m[3], fields, actor); return adminCompany(res, ctx, c, { text: 'Saved.' });
@@ -638,7 +733,8 @@ async function route(req, res) {
       const s = store.submission(m[1]);
       if (!s) return messagePage(res, ctx, 404, 'Not found', 'That submission doesn’t exist.');
       try { store.decideSubmission(s, fields.decision === 'accept', fields.note, actor); } catch (e) { if (e.status !== 409 && e.status !== 400) throw e; return adminSubmissions(res, ctx, { error: true, text: s.ref + ': ' + e.message }); }
-      return adminSubmissions(res, ctx, { text: s.ref + (s.status === 'Accepted' ? ' accepted. The company record has been updated and the filing published.' : ' rejected.') });
+      const done = s.kind === 'claim' ? ' approved. They now manage the company.' : s.kind === 'incorporate' ? ' accepted. The company has been registered and the applicant manages it.' : ' accepted. The company record has been updated and the filing published.';
+      return adminSubmissions(res, ctx, { text: s.ref + (s.status === 'Accepted' ? done : ' rejected.') });
     }
     m = /^\/admin\/submission-file\/([a-f0-9]{24})$/.exec(p);
     if (m && req.method === 'GET') { const s = store.submission(m[1]); if (s && servePdf(res, s.file)) return; return messagePage(res, ctx, 404, 'Not found', 'That document is no longer stored.'); }
