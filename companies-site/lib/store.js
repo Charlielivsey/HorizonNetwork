@@ -9,7 +9,7 @@ const pdf = require('./pdf');
 let dir, file, filesDir, db;
 
 const STATUSES = ['Active', 'Dormant', 'Liquidation', 'In administration', 'Dissolved'];
-const FILING_CATEGORIES = ['Accounts', 'Confirmation statement', 'Officers', 'Persons with significant control', 'Address', 'Incorporation', 'Capital', 'Change of name', 'Mortgage and charges', 'Resolution', 'Other'];
+const FILING_CATEGORIES = ['Accounts', 'Confirmation statement', 'Officers', 'Persons with significant control', 'Address', 'Incorporation', 'Capital', 'Change of name', 'Change of status', 'Mortgage and charges', 'Resolution', 'Other'];
 const OFFICER_ROLES = ['Director', 'Secretary', 'Managing director', 'Chair'];
 const PSC_KINDS = ['Individual', 'Parent company', 'Relevant legal entity'];
 
@@ -131,7 +131,7 @@ function saveCompany(slug, input, actor, opts) {
     c.slug = s;
   }
   const text = (k, max) => { c[k] = String(input[k] == null ? '' : input[k]).trim().slice(0, max); };
-  const oldName = existing ? c.legalName : '';
+  const oldName = existing ? c.legalName : '', oldStatus = existing ? c.status : '';
   c.legalName = legalName;
   text('name', 120); if (!c.name) c.name = legalName;
   text('number', 20); text('type', 80); text('incorporated', 10); text('dissolved', 10); text('registeredOffice', 300);
@@ -146,6 +146,7 @@ function saveCompany(slug, input, actor, opts) {
   c.updatedAt = now();
   if (!existing) { c.officers.push({ id: id(), ...firstOfficer }); c.psc.push({ id: id(), ...firstPsc }); db.companies.push(c); }
   if (existing && oldName && oldName !== legalName) recordNameChange(c, oldName);
+  if (existing && oldStatus !== c.status) recordStatusChange(c, oldStatus);
   generateFilings(c);
   audit(actor, existing ? 'company.update' : 'company.create', c.slug);
   save();
@@ -207,7 +208,7 @@ function deleteItem(slug, list, itemId, actor) {
 // record so later edits don't duplicate it. Deleting a generated filing doesn't recreate it.
 const FOOTER = 'Generated automatically by the Company Register run by Horizon Assets Management Limited, a wholly owned subsidiary of HN Group Limited, from the details recorded at the time. This is a group register document, not a filing with the UK government\'s Companies House.';
 // Each kind of generated document has its own form code, shown on the document.
-const FORM_CODES = { Incorporation: 'REG-INC', appoint: 'REG-APP', psc_add: 'REG-PSC1', psc_change: 'REG-PSC2', psc_cease: 'REG-PSC3', terminate: 'REG-TRM', address: 'REG-ADR', name: 'REG-NAM', sic: 'REG-SIC', confirmation: 'REG-CNF' };
+const FORM_CODES = { Incorporation: 'REG-INC', appoint: 'REG-APP', psc_add: 'REG-PSC1', psc_change: 'REG-PSC2', psc_cease: 'REG-PSC3', terminate: 'REG-TRM', address: 'REG-ADR', name: 'REG-NAM', status: 'REG-STS', sic: 'REG-SIC', confirmation: 'REG-CNF' };
 function generateFilings(c) {
   if (c.incorporated && !c.incorporationFiling) {
     c.incorporationFiling = pushGenerated(c, c.incorporated, 'Incorporation', 'Incorporation of ' + c.legalName, { code: FORM_CODES.Incorporation, heading: 'Incorporation of a company', rows: [
@@ -230,6 +231,12 @@ function recordNameChange(c, oldName) {
   c.previousNames.push({ name: oldName, until: date });
   pushGenerated(c, date, 'Change of name', 'Change of name from ' + oldName + ' to ' + c.legalName, { code: FORM_CODES.name, heading: 'Change of company name',
     rows: [['Previous name', oldName], ['New name', c.legalName], ['Changed on', longDate(date)]] });
+}
+// A change to the company's status (for example Active to Dissolved) files a change of status automatically.
+function recordStatusChange(c, oldStatus) {
+  const date = now().slice(0, 10);
+  pushGenerated(c, date, 'Change of status', 'Change of company status from ' + (oldStatus || 'not recorded') + ' to ' + (c.status || 'not recorded'), { code: FORM_CODES.status, heading: 'Change of company status',
+    rows: [['Previous status', oldStatus || 'Not recorded'], ['New status', c.status || 'Not recorded'], ...(c.status === 'Dissolved' && c.dissolved ? [['Dissolved on', longDate(c.dissolved)]] : []), ['Changed on', longDate(date)]] });
 }
 // Generated filings keep what their document shows (doc), so it can be drawn again if the design changes.
 function renderFiling(f) {

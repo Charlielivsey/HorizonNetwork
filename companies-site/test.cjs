@@ -273,6 +273,16 @@ test('company register: public records, customers, requests, submissions and sta
     await post('/admin/submissions/' + pendingIds[0], { csrf: staffCsrf, decision: 'accept' }, owner);
     assert.match(await (await post('/admin/submissions/' + pendingIds[1], { csrf: staffCsrf, decision: 'accept' }, owner)).text(), /no longer current/);
 
+    // Changing the company status files a change of status automatically, once per change.
+    await post('/admin/company/hn-group', { csrf: staffCsrf, legalName: 'HN Group Limited', name: 'HN Group', number: '12345678', status: 'Dormant', incorporated: '2026-01-01', registeredOffice: '2 New Road\nCity' }, owner);
+    await post('/admin/company/hn-group', { csrf: staffCsrf, legalName: 'HN Group Limited', name: 'HN Group', number: '12345678', status: 'Dormant', incorporated: '2026-01-01', registeredOffice: '2 New Road\nCity' }, owner);
+    html = await (await get('/company/hn-group/filing-history')).text();
+    assert.equal((html.match(/Change of company status from Active to Dormant/g) || []).length, 1);
+    const stsId = html.match(/Change of company status from Active to Dormant<\/td><td><a href="\/document\/([a-f0-9]{24})/)[1];
+    const sts = Buffer.from(await (await get('/document/' + stsId)).arrayBuffer()).toString('latin1');
+    assert.match(sts, /\(REG-STS\)/); assert.match(sts, /\(Dormant\)/);
+    await post('/admin/company/hn-group', { csrf: staffCsrf, legalName: 'HN Group Limited', name: 'HN Group', number: '12345678', status: 'Active', incorporated: '2026-01-01', registeredOffice: '2 New Road\nCity' }, owner);
+
     // Changing the registered name keeps the old one and files the change automatically.
     await post('/admin/company/hn-group', { csrf: staffCsrf, legalName: 'HN Group Holdings Limited', name: 'HN Group', number: '12345678', status: 'Active', incorporated: '2026-01-01', registeredOffice: '2 New Road\nCity' }, owner);
     html = await (await get('/company/hn-group')).text();
