@@ -1,0 +1,33 @@
+/* Maintenance page for the Company Register (companies.hngroup.org.uk), matching that site's own
+   style and Horizon Holding Co branding rather than the HN Group look. */
+:root { --ink: #0b0c0c; --secondary: #505a5f; --rule: #e5e6e7; --border: #b1b4b6; --brand: #5514b4; --brand-dark: #3d0d82; --focus: #ffdd00; --button: #00703c; --button-dark: #002d18; --button-hover: #005a30; --panel: #f3f2f1; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: #fff; color: var(--ink); }
+body { font: 19px/1.32 Arial, "Helvetica Neue", Helvetica, sans-serif; -webkit-font-smoothing: antialiased; min-height: 100vh; display: flex; flex-direction: column; }
+@media (max-width: 640px) { body { font-size: 16px; line-height: 1.25; } }
+a { color: var(--brand); text-underline-offset: .15em; }
+a:hover { color: var(--brand-dark); text-decoration-thickness: 3px; }
+a:focus-visible { outline: 3px solid transparent; color: var(--ink); background: var(--focus); box-shadow: 0 -2px var(--focus), 0 4px var(--ink); text-decoration: none; }
+.wrap { max-width: 1020px; margin: 0 auto; padding: 0 15px; width: 100%; }
+@media (min-width: 641px) { .wrap { padding: 0 30px; } }
+.header { background: var(--ink); border-bottom: 10px solid var(--brand); }
+.header-inner { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-top: 12px; padding-bottom: 10px; }
+.header img { display: block; height: 42px; width: auto; }
+.service { color: #fff; font-weight: 700; font-size: 1.05em; padding-left: 18px; border-left: 1px solid #505a5f; }
+.notice-bar { display: flex; gap: 10px; align-items: baseline; padding: 10px 0; border-bottom: 1px solid var(--rule); font-size: .84em; color: var(--secondary); }
+.tag { display: inline-block; padding: 2px 8px 3px; background: var(--brand); color: #fff; font-size: .85em; letter-spacing: .03em; text-transform: uppercase; flex: none; font-weight: 700; }
+main { flex: 1; padding-top: 40px; padding-bottom: 60px; animation: page-in .45s ease both; }
+@keyframes page-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+h1 { font-size: 2.6em; line-height: 1.05; margin: 0 0 30px; max-width: 760px; }
+@media (max-width: 640px) { h1 { font-size: 2em; } }
+p { margin: 0 0 20px; max-width: 640px; }
+.message { border-left: 10px solid var(--border); padding: 15px 0 15px 20px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 1.1em; }
+.button { display: inline-block; padding: 8px 12px 7px; margin: 10px 0 10px; background: var(--button); color: #fff !important; text-decoration: none; box-shadow: 0 2px 0 var(--button-dark); transition: background .15s, transform .08s; }
+.button:hover { background: var(--button-hover); text-decoration: none; }
+.button:active { transform: translateY(2px); box-shadow: none; }
+.button:focus-visible { background: var(--focus); color: var(--ink) !important; box-shadow: 0 2px 0 var(--ink); }
+.hint { color: var(--secondary); font-size: .9em; }
+.footer { background: var(--panel); border-top: 1px solid var(--border); padding: 30px 0 40px; font-size: .84em; }
+.footer img { display: block; height: 38px; width: auto; margin-bottom: 15px; }
+.footer p { margin: 0 0 8px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
