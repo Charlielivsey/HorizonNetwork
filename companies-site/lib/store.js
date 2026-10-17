@@ -148,7 +148,8 @@ function saveCompany(slug, input, actor, opts) {
   c.updatedAt = now();
   if (!existing) { c.officers.push({ id: id(), ...firstOfficer }); c.psc.push({ id: id(), ...firstPsc }); db.companies.push(c); }
   if (existing && oldName && oldName !== legalName) recordNameChange(c, oldName);
-  if (existing && oldStatus !== c.status) recordStatusChange(c, oldStatus);
+  // Recording a status for the first time isn't a change, so only a change from one status to another is filed.
+  if (existing && oldStatus && oldStatus !== c.status) recordStatusChange(c, oldStatus);
   generateFilings(c);
   audit(actor, existing ? 'company.update' : 'company.create', c.slug);
   save();

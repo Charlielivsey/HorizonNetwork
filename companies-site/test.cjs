@@ -88,7 +88,7 @@ test('company register: public records, customers, requests, submissions and sta
     assert.match(await (await get('/company/horizon-network/file', sam)).text(), /You don’t manage this company/);
     assert.equal((await upload('/company/horizon-network/file', { csrf: samCsrf, category: 'Address', description: 'Change of address' }, PDF, sam)).status, 403);
     html = await (await get('/company/horizon-network', sam)).text();
-    assert.match(html, /\/company\/horizon-network\/claim/); assert.doesNotMatch(html, /File a change|Register a subsidiary/);
+    assert.match(html, /\/company\/horizon-network\/claim/); assert.doesNotMatch(html, /File for this company|Register a subsidiary/);
     assert.match(await (await upload('/company/horizon-network/claim', { csrf: samCsrf, note: '' }, null, sam)).text(), /Tell us why you should manage this company/);
     assert.match(await (await upload('/company/horizon-network/claim', { csrf: samCsrf, note: 'I am a director of the company.' }, null, sam)).text(), /request S[0-9A-F]{8} to manage Horizon Network Limited has been sent for review/);
     assert.match(await (await upload('/company/horizon-network/claim', { csrf: samCsrf, note: 'Again.' }, null, sam)).text(), /already asked to manage this company/);
@@ -134,7 +134,7 @@ test('company register: public records, customers, requests, submissions and sta
     const claimId = html.match(/\/admin\/submissions\/([a-f0-9]{24})/)[1];
     assert.match(await (await post('/admin/submissions/' + claimId, { csrf: staffCsrf, decision: 'accept' }, owner)).text(), /approved\. They now manage the company/);
     html = await (await get('/company/horizon-network', sam)).text();
-    assert.match(html, /File a change/); assert.match(html, /Register a subsidiary/);
+    assert.match(html, /File for this company/); assert.match(html, /Register a subsidiary/);
     assert.match(await (await get('/account', sam)).text(), /Your companies[\s\S]*Horizon Network Limited/);
     assert.match(await (await get('/admin/customers', owner)).text(), /sam@example\.com<\/td><td><a href="\/admin\/company\/horizon-network">/);
 
@@ -306,7 +306,7 @@ test('company register: public records, customers, requests, submissions and sta
     const appId = html.match(/\/admin\/submissions\/([a-f0-9]{24})"/)[1];
     assert.match(await (await post('/admin/submissions/' + appId, { csrf: staffCsrf, decision: 'accept' }, owner)).text(), /accepted\. The company has been registered/);
     html = await (await get('/company/sam-subsidiary-limited', sam)).text();
-    assert.match(html, /Sam Subsidiary Limited/); assert.match(html, /3 Side Street<br>City/); assert.match(html, /File a change/);
+    assert.match(html, /Sam Subsidiary Limited/); assert.match(html, /3 Side Street<br>City/); assert.match(html, /File for this company/);
     html = await (await get('/company/sam-subsidiary-limited/filing-history')).text();
     assert.match(html, /Incorporation of Sam Subsidiary Limited/);
     assert.match(html, /Appointment of Sam Customer as a director on 1 September 2026/);

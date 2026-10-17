@@ -36,12 +36,13 @@ function layout(o) {
       : '<a href="/account/login">Sign in</a><a href="/account/register">Create an account</a><a href="/staff/login" class="staff-link">Staff sign in</a>';
   return '<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0b0c0c">' +
     '<title>' + esc(o.title) + ' – Company Register – HN Group</title>' + (o.description ? '<meta name="description" content="' + esc(o.description) + '">' : '') + (o.noindex ? '<meta name="robots" content="noindex">' : '') +
-    '<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/assets/companies.css?v=3"><script src="/assets/companies.js?v=3" defer></script></head><body>' +
+    '<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/assets/companies.css?v=4"><script src="/assets/companies.js?v=3" defer></script></head><body>' +
     '<a class="skip" href="#main">Skip to main content</a>' +
     '<header class="header"><div class="wrap header-inner"><a class="logo" href="/"><img src="/assets/brand/hn-group-wordmark-white.svg" alt="HN Group" width="126" height="44"></a>' +
     '<a class="service" href="/">Company Register</a><nav class="header-nav" aria-label="Account">' + nav + '</nav></div></header>' +
-    (o.searchBar === false ? '' : '<div class="wrap"><form class="search compact" action="/search" method="get" role="search"><label for="q" class="sr-only">Search for a company or officer</label><input id="q" name="q" type="search" placeholder="Search for a company or officer" value="' + esc(o.q || '') + '" autocomplete="off"><button type="submit" aria-label="Search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg></button></form></div>') +
-    '<main id="main" class="wrap main">' + (o.flash ? (o.flash.error ? '<div class="error-summary" role="alert" tabindex="-1" data-focus><h2>There is a problem</h2><p>' + esc(o.flash.text) + '</p></div>' : '<div class="flash" role="status">' + esc(o.flash.text) + '</div>') : '') + o.body + '</main>' +
+    (o.back ? '<div class="wrap"><a class="back-link" href="' + esc(o.back) + '">Back</a></div>' : '') +
+    (o.searchBar === false || o.back ? '' : '<div class="wrap"><form class="search compact" action="/search" method="get" role="search"><label for="q" class="sr-only">Search for a company or officer</label><input id="q" name="q" type="search" placeholder="Search for a company or officer" value="' + esc(o.q || '') + '" autocomplete="off"><button type="submit" aria-label="Search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg></button></form></div>') +
+    '<main id="main" class="wrap main' + (o.back ? ' after-back' : '') + '">' + (o.flash ? (o.flash.error ? '<div class="error-summary" role="alert" tabindex="-1" data-focus><h2>There is a problem</h2><p>' + esc(o.flash.text) + '</p></div>' : '<div class="flash" role="status">' + esc(o.flash.text) + '</div>') : '') + o.body + '</main>' +
     '<footer class="footer"><div class="wrap"><ul class="footer-links"><li><a href="/">Search the register</a></li><li><a href="/about">About this register</a></li>' + (signedOut ? '<li><a href="/account/register">Create an account</a></li>' : '') + '<li><a href="/staff/login">Staff sign in</a></li></ul>' +
     '<div class="footer-meta"><img src="/assets/brand/hn-group-wordmark.svg" alt="" width="115" height="40"><p>The Company Register is run by HN Group Limited for the companies in HN Group. It is not the UK government’s Companies House register.</p><p>© ' + new Date().getFullYear() + ' HN Group Limited</p></div></div></footer></body></html>';
 }
@@ -84,7 +85,7 @@ function fileField(label, hint, required) {
     '<div class="upload"><input id="' + id + '" type="file" name="document" accept="application/pdf,.pdf"' + (required ? ' required' : '') + (hint ? ' aria-describedby="' + id + '-hint"' : '') + '><span class="upload-note">PDF only, up to 15 MB</span></div></div>';
 }
 // A titled group of fields; numbered when part of a longer form.
-const fieldset = (title, hint, html, step) => '<fieldset class="fieldset">' + '<legend>' + (step ? '<span class="step">' + step + '</span>' : '') + esc(title) + '</legend>' + (hint ? '<p class="hint">' + esc(hint) + '</p>' : '') + '<div class="fieldset-body">' + html + '</div></fieldset>';
+const fieldset = (title, hint, html, step) => '<fieldset class="fieldset">' + '<legend>' + (step ? '<span class="step">Part ' + step + '</span>' : '') + esc(title) + '</legend>' + (hint ? '<p class="hint">' + esc(hint) + '</p>' : '') + '<div class="fieldset-body">' + html + '</div></fieldset>';
 // The current value of something being changed.
 const inset = (label, html) => '<div class="inset"><span class="inset-label">' + esc(label) + '</span>' + html + '</div>';
 const actions = (button, back, backLabel) => '<div class="form-actions"><button class="button" type="submit">' + esc(button) + '</button>' + (back ? '<a class="cancel" href="' + back + '">' + esc(backLabel || 'Cancel') + '</a>' : '') + '</div>';
@@ -132,19 +133,22 @@ function searchPage(res, ctx, q) {
 
 function companyHeader(c, tab, ctx) {
   const tabs = [['', 'Overview'], ['filing-history', 'Filing history'], ['officers', 'People'], ['charges', 'Charges'], ['related-companies', 'Related companies']];
-  return '<div class="company-head"><h1 class="heading-l">' + esc(c.legalName) + '</h1>' +
+  const acts = companyActions(c, ctx);
+  return '<div class="company-head"><div class="company-title"><h1 class="heading-xl">' + esc(c.legalName) + '</h1>' +
     '<p class="company-number">Company number <strong>' + (c.number ? esc(c.number) : 'not recorded') + '</strong></p>' +
-    (c.name && c.name !== c.legalName ? '<p class="muted">Trading as ' + esc(c.name) + '</p>' : '') + '</div>' +
-    '<nav class="tabs" aria-label="Company record">' + tabs.map(([p, label]) => { const active = tab === p || (p === 'officers' && tab === 'persons-with-significant-control'); return '<a href="/company/' + esc(c.slug) + (p ? '/' + p : '') + '"' + (active ? ' aria-current="page"' : '') + '>' + label + '</a>'; }).join('') + '</nav>' +
-    '<div class="actions-row">' + companyActions(c, ctx).map(([href, label]) => '<a class="button ghost small" href="' + esc(href) + '">' + label + '</a>').join('') + '</div>';
+    (c.name && c.name !== c.legalName ? '<p class="trading">Trading as ' + esc(c.name) + '</p>' : '') + '</div>' +
+    '<div class="company-actions">' + acts.filter((a) => a[2]).map(([href, label]) => '<a class="button" href="' + esc(href) + '">' + label + '</a>').join('') + '</div></div>' +
+    '<ul class="more-actions">' + acts.filter((a) => !a[2]).map(([href, label]) => '<li><a href="' + esc(href) + '">' + label + '</a></li>').join('') + '</ul>' +
+    '<nav class="tabs" aria-label="Company record">' + tabs.map(([p, label]) => { const active = tab === p || (p === 'officers' && tab === 'persons-with-significant-control'); return '<a href="/company/' + esc(c.slug) + (p ? '/' + p : '') + '"' + (active ? ' aria-current="page"' : '') + '>' + label + '</a>'; }).join('') + '</nav>';
 }
 
 // Managers can file changes and register subsidiaries; everyone else can ask to manage the company.
 function companyActions(c, ctx) {
   const base = '/company/' + c.slug;
   const manages = ctx.customer && store.canManage(c, ctx.customer.account.id);
-  return [[base + '/group-report', 'Company report'], [base + '/request', 'Request a document'], [base + '/report', 'Report a mistake'],
-    ...(manages ? [[base + '/file', 'File a change'], ['/account/register-company?parent=' + c.slug, 'Register a subsidiary']] : [[base + '/claim', 'Manage this company']])];
+  // The third value marks the main action, shown as a button; the rest are links.
+  return [...(manages ? [[base + '/file', 'File for this company', true], ['/account/register-company?parent=' + c.slug, 'Register a subsidiary']] : [[base + '/claim', 'Manage this company', true]]),
+    [base + '/group-report', 'Download a company report'], [base + '/request', 'Request a document'], [base + '/report', 'Report a mistake']];
 }
 const companyName = (s) => store.company(s.company)?.legalName || (s.change && s.change.details && s.change.details.legalName) || s.company;
 
@@ -154,7 +158,7 @@ function parentLink(name) {
   return c ? '<a href="/company/' + esc(c.slug) + '">' + esc(c.legalName) + '</a>' : esc(name);
 }
 
-function dl(rows) { return '<dl class="facts">' + rows.map(([k, v]) => '<div><dt>' + esc(k) + '</dt><dd>' + v + '</dd></div>').join('') + '</dl>'; }
+function dl(rows, cls) { return '<dl class="' + (cls || 'facts') + '">' + rows.map(([k, v]) => '<div><dt>' + esc(k) + '</dt><dd>' + v + '</dd></div>').join('') + '</dl>'; }
 const companyLink = (slug) => { const c = store.company(slug); return c && !c.hidden ? '<a href="/company/' + esc(c.slug) + '">' + esc(c.legalName) + '</a>' : ''; };
 
 function overviewPage(res, ctx, c) {
@@ -162,21 +166,14 @@ function overviewPage(res, ctx, c) {
   const managed = store.companies().filter((x) => x.managedBy === c.slug);
   const recent = store.filings(c.slug).slice(0, 3);
   page(res, ctx, { title: c.legalName, description: c.legalName + ': company overview, filing history, officers and persons with significant control.',
-    body: companyHeader(c, '', ctx) +
-      '<div class="two-col"><section class="panel"><h2>Company details</h2>' + dl([
-        ['Registered office address', c.registeredOffice ? esc(c.registeredOffice).replace(/\n/g, '<br>') : val('')],
-        ['Company status', c.status ? '<span class="status ' + (c.status === 'Active' ? 'ok' : 'warn') + '">' + esc(c.status) + '</span>' : val('')],
-        ['Company type', val(c.type)],
-        ['Incorporated on', val(fmt(c.incorporated))],
-        ...(c.dissolved ? [['Dissolved on', esc(fmt(c.dissolved))]] : []),
-        ['Nature of business (SIC)', c.sic.length ? c.sic.map(esc).join('<br>') : val('')],
-        ...(c.previousNames.length ? [['Previous company names', c.previousNames.map((p) => esc(p.name)).join('<br>')]] : []),
-      ]) + '</section>' +
-      '<section class="panel"><h2>Accounts and confirmation statement</h2>' + dl([
-        ['Accounts next due', val(fmt(c.accountsNextDue))], ['Last accounts made up to', val(fmt(c.accountsMadeUpTo))],
-        ['Confirmation statement next due', val(fmt(c.confirmationNextDue))], ['Last statement dated', val(fmt(c.confirmationMadeUpTo))],
-      ]) + '</section></div>' +
-      '<section class="panel"><h2>Group</h2>' + dl([
+    body: companyHeader(c, '', ctx) + '<div class="tab-body">' +
+      dl([['Registered office address', c.registeredOffice ? esc(c.registeredOffice).replace(/\n/g, '<br>') : val('')]], 'data') +
+      dl([['Company status', c.status ? '<strong class="status-text">' + esc(c.status) + '</strong>' : val('')], ['Company type', val(c.type)], ['Incorporated on', val(fmt(c.incorporated))], ...(c.dissolved ? [['Dissolved on', esc(fmt(c.dissolved))]] : [])], 'data cols-3') +
+      '<div class="cols-2"><section><h2 class="heading-m">Accounts</h2>' + dl([['Next accounts due by', val(fmt(c.accountsNextDue))], ['Last accounts made up to', val(fmt(c.accountsMadeUpTo))]], 'data') + '</section>' +
+      '<section><h2 class="heading-m">Confirmation statement</h2>' + dl([['Next statement due by', val(fmt(c.confirmationNextDue))], ['Last statement dated', val(fmt(c.confirmationMadeUpTo))]], 'data') + '</section></div>' +
+      '<h2 class="heading-m">Nature of business (SIC)</h2>' + (c.sic.length ? '<ul class="plain-list">' + c.sic.map((x) => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '<p class="muted">Not recorded</p>') +
+      (c.previousNames.length ? dl([['Previous company names', c.previousNames.map((p) => esc(p.name) + ' <span class="muted">(until ' + esc(fmt(p.until)) + ')</span>').join('<br>')]], 'data') : '') +
+      '<h2 class="heading-m">Group</h2>' + dl([
         ['Parent company', c.parent ? companyLink(c.parent) || val('') : '<span class="muted">None recorded</span>'],
         ...(c.managedBy ? [['Managed by', companyLink(c.managedBy)]] : []),
         ...(kids.length ? [['Subsidiaries', kids.map((k) => companyLink(k.slug)).join('<br>')]] : []),
@@ -184,8 +181,8 @@ function overviewPage(res, ctx, c) {
         ...(c.divisions.length ? [['Divisions', c.divisions.map(esc).join('<br>')]] : []),
         ['Website', c.website ? '<a href="https://' + esc(c.website.replace(/^https?:\/\//, '')) + '" rel="noopener">' + esc(c.website.replace(/^https?:\/\//, '')) + '</a>' : val('')],
         ['Staff email domain', val(c.emailDomain)],
-      ]) + (c.description ? '<p class="about">' + esc(c.description) + '</p>' : '') + '</section>' +
-      '<section class="panel"><h2>Recent filings</h2>' + (recent.length ? filingTable(recent) + '<p><a href="/company/' + esc(c.slug) + '/filing-history">View the full filing history →</a></p>' : '<p class="muted">No filings have been added to the register for this company yet.</p>') + '</section>' });
+      ], 'data cols-3') + (c.description ? '<p class="about">' + esc(c.description) + '</p>' : '') +
+      '<h2 class="heading-m">Recent filings</h2>' + (recent.length ? filingTable(recent) + '<p><a href="/company/' + esc(c.slug) + '/filing-history">View the full filing history</a></p>' : '<p class="muted">No filings have been added to the register for this company yet.</p>') + '</div>' });
 }
 
 function filingTable(list) {
@@ -198,7 +195,7 @@ function filingsPage(res, ctx, c, category) {
   const list = category ? all.filter((f) => f.category === category) : all;
   const used = store.FILING_CATEGORIES.filter((k) => all.some((f) => f.category === k));
   page(res, ctx, { title: 'Filing history · ' + c.legalName,
-    body: companyHeader(c, 'filing-history', ctx) + '<section class="panel"><h2>Filing history</h2>' +
+    body: companyHeader(c, 'filing-history', ctx) + '<section class="panel"><h2 class="heading-m">Filing history for ' + esc(c.legalName) + '</h2>' +
       (used.length > 1 ? '<form class="filter" method="get"><label>Show<select name="category" data-autosubmit><option value="">All filings</option>' + used.map((k) => '<option' + (k === category ? ' selected' : '') + '>' + esc(k) + '</option>').join('') + '</select></label><noscript><button type="submit">Filter</button></noscript></form>' : '') +
       (list.length ? filingTable(list) : '<p class="muted">No filings ' + (category ? 'of this type ' : '') + 'have been added to the register for this company yet.</p>') + '</section>' });
 }
@@ -208,14 +205,14 @@ function peoplePage(res, ctx, c, sub) {
   const officers = [...c.officers].sort((a, b) => (!!a.resigned - !!b.resigned) || a.name.localeCompare(b.name));
   const active = officers.filter((o) => !o.resigned).length;
   const body = psc
-    ? '<p class="muted">' + plural(c.psc.filter((p) => !p.ceased).length, 'active person', 'active persons') + ' with significant control</p>' +
-      (c.psc.length ? c.psc.map((p) => '<article class="person"><h3>' + esc(p.name) + (p.ceased ? ' <span class="status warn">Ceased</span>' : '') + '</h3>' + dl([
+    ? '<h2 class="heading-m">' + plural(c.psc.filter((p) => !p.ceased).length, 'active person', 'active persons') + ' with significant control</h2>' +
+      (c.psc.length ? c.psc.map((p) => '<article class="person"><h2 class="person-name">' + esc(p.name) + (p.ceased ? ' <span class="status warn">Ceased</span>' : '') + '</h2>' + dl([
         ['Type', esc(p.kind)], ...(p.kind === 'Parent company' ? [['Company', parentLink(p.name)]] : []), ['Shareholding', p.share ? esc(p.share) + '%' : val('')], ['Notified on', val(fmt(p.notified))], ...(p.ceased ? [['Ceased on', esc(fmt(p.ceased))]] : []),
-        ['Nature of control', p.control.length ? p.control.map(esc).join('<br>') : val('')]]) + '</article>').join('') : '<p class="muted">No persons with significant control have been recorded.</p>')
-    : '<p class="muted">' + plural(officers.length, 'officer', 'officers') + ' · ' + active + ' current' + (officers.length - active ? ' · ' + (officers.length - active) + ' resigned' : '') + '</p>' +
-      (officers.length ? officers.map((o) => '<article class="person"><h3>' + esc(o.name) + (o.resigned ? ' <span class="status warn">Resigned</span>' : '') + '</h3>' + dl([
+        ['Nature of control', p.control.length ? p.control.map(esc).join('<br>') : val('')]], 'data cols-3') + '</article>').join('') : '<p class="muted">No persons with significant control have been recorded.</p>')
+    : '<h2 class="heading-m">' + plural(officers.length, 'officer', 'officers') + ' / ' + plural(officers.length - active, 'resignation', 'resignations') + '</h2>' +
+      (officers.length ? officers.map((o) => '<article class="person"><h2 class="person-name">' + esc(o.name) + (o.resigned ? ' <span class="status warn">Resigned</span>' : '') + '</h2>' + dl([
         ['Role', esc(o.role)], ['Appointed on', val(fmt(o.appointed))], ...(o.resigned ? [['Resigned on', esc(fmt(o.resigned))]] : []),
-        ...(o.occupation ? [['Occupation', esc(o.occupation)]] : []), ...(o.nationality ? [['Nationality', esc(o.nationality)]] : []), ...(o.countryOfResidence ? [['Country of residence', esc(o.countryOfResidence)]] : [])]) + '</article>').join('') : '<p class="muted">No officers have been recorded.</p>');
+        ...(o.occupation ? [['Occupation', esc(o.occupation)]] : []), ...(o.nationality ? [['Nationality', esc(o.nationality)]] : []), ...(o.countryOfResidence ? [['Country of residence', esc(o.countryOfResidence)]] : [])], 'data cols-3') + '</article>').join('') : '<p class="muted">No officers have been recorded.</p>');
   page(res, ctx, { title: (psc ? 'Persons with significant control' : 'Officers') + ' · ' + c.legalName,
     body: companyHeader(c, psc ? 'persons-with-significant-control' : 'officers', ctx) + '<section class="panel"><nav class="subtabs"><a href="/company/' + esc(c.slug) + '/officers"' + (psc ? '' : ' aria-current="page"') + '>Officers</a><a href="/company/' + esc(c.slug) + '/persons-with-significant-control"' + (psc ? ' aria-current="page"' : '') + '>Persons with significant control</a></nav>' + body + '</section>' });
 }
@@ -253,10 +250,10 @@ function relatedPage(res, ctx, c) {
 function chargesPage(res, ctx, c) {
   const outstanding = c.charges.filter((x) => x.status !== 'Satisfied').length;
   page(res, ctx, { title: 'Charges · ' + c.legalName,
-    body: companyHeader(c, 'charges', ctx) + '<section class="panel"><h2>Charges</h2><p class="muted">' + plural(c.charges.length, 'charge', 'charges') + ' registered · ' + outstanding + ' outstanding</p>' +
-      (c.charges.length ? c.charges.map((x) => '<article class="person"><h3>' + (x.code ? 'Charge code ' + esc(x.code) : 'Charge') + ' <span class="status ' + (x.status === 'Satisfied' ? 'ok' : 'warn') + '">' + esc(x.status) + '</span></h3>' + dl([
+    body: companyHeader(c, 'charges', ctx) + '<section class="panel"><h2 class="heading-m">' + plural(c.charges.length, 'charge', 'charges') + ' registered / ' + outstanding + ' outstanding</h2>' +
+      (c.charges.length ? c.charges.map((x) => '<article class="person"><h2 class="person-name">' + (x.code ? 'Charge code ' + esc(x.code) : 'Charge') + ' <span class="status ' + (x.status === 'Satisfied' ? 'ok' : 'warn') + '">' + esc(x.status) + '</span></h2>' + dl([
         ['Created on', val(fmt(x.created))], ['Delivered on', val(fmt(x.delivered))], ...(x.satisfied ? [['Satisfied on', esc(fmt(x.satisfied))]] : []),
-        ['Persons entitled', esc(x.entitled)], ...(x.description ? [['Brief description', esc(x.description)]] : [])]) + '</article>').join('') : '<p class="muted">No charges have been registered against this company.</p>') + '</section>' });
+        ['Persons entitled', esc(x.entitled)], ...(x.description ? [['Brief description', esc(x.description)]] : [])], 'data cols-3') + '</article>').join('') : '<p class="muted">No charges have been registered against this company.</p>') + '</section>' });
 }
 
 function aboutPage(res, ctx) {
@@ -322,7 +319,7 @@ function requestThread(r, ctx, staffView) {
 function requestForm(res, ctx, c, kind, values, error) {
   const list = store.filings(c.slug);
   const mistake = kind === 'mistake';
-  page(res, ctx, { title: (mistake ? 'Report a mistake' : 'Request a document') + ' · ' + c.legalName, noindex: true, flash: error && { error: true, text: error },
+  page(res, ctx, { title: (mistake ? 'Report a mistake' : 'Request a document') + ' · ' + c.legalName, noindex: true, flash: error && { error: true, text: error }, back: '/company/' + c.slug,
     body: '<section class="panel narrow"><p class="eyebrow">' + esc(c.legalName) + '</p><h1>' + (mistake ? 'Report a mistake' : 'Request a document') + '</h1>' +
       '<p>' + (mistake ? 'Tell us what looks wrong on this company’s record and what it should say. Our team will check it and reply in your account.' : 'Ask for a copy of a filing or a certificate for this company. Our team will reply in your account.') + '</p>' +
       '<form method="post" class="form">' + csrfField(ctx.customer.csrf) + (mistake ? '<input type="hidden" name="kind" value="mistake">' : select('What do you need?', 'kind', [['copy', 'Copy of a filing'], ['certificate', 'Certificate'], ['other', 'Something else']], values.kind || 'copy')) +
@@ -341,7 +338,7 @@ function submitForm(res, ctx, c, values, error, kind) {
   kind = Object.hasOwn(store.CHANGE_TYPES, kind) ? kind : '';
   const base = '/company/' + esc(c.slug) + '/file';
   const flash = error && { error: true, text: error };
-  if (!kind) return page(res, ctx, { title: 'File a change · ' + c.legalName, noindex: true, flash,
+  if (!kind) return page(res, ctx, { title: 'File a change · ' + c.legalName, noindex: true, flash, back: '/company/' + c.slug,
     body: '<section class="panel"><p class="eyebrow">' + esc(c.legalName) + '</p><h1 class="page-title">What do you want to file?</h1><p class="lead-s">Our staff review every filing. When it’s accepted, the company’s record is updated and the filing appears in its filing history.</p>' +
       CHANGE_GROUPS.map(([title, items]) => '<h2 class="choice-heading">' + esc(title) + '</h2><div class="choice-grid">' + items.map(([k, d]) => '<a class="choice-card" href="' + base + '?type=' + k + '"><strong>' + esc(store.CHANGE_TYPES[k].label) + '</strong><span>' + esc(d) + '</span></a>').join('') + '</div>').join('') +
       '<p><a class="cancel" href="/company/' + esc(c.slug) + '">Back to the company</a></p></section>' });
@@ -358,7 +355,7 @@ function submitForm(res, ctx, c, values, error, kind) {
       const now = c.psc.filter((p) => !p.ceased);
       const chosen = now.find((p) => p.id === v.psc);
       if (!now.length) { fields = none('persons with significant control'); blocked = true; break; }
-      if (!chosen) return page(res, ctx, { title: store.CHANGE_TYPES[kind].label + ' · ' + c.legalName, noindex: true, flash,
+      if (!chosen) return page(res, ctx, { title: store.CHANGE_TYPES[kind].label + ' · ' + c.legalName, noindex: true, flash, back: '/company/' + c.slug + '/file',
         body: '<section class="panel narrow"><p class="eyebrow">' + esc(c.legalName) + '</p><h1>Whose details have changed?</h1><div class="choice-grid one">' + now.map((p) => '<a class="choice-card" href="' + base + '?type=psc_change&amp;psc=' + p.id + '"><strong>' + esc(p.name) + '</strong><span>' + esc(p.kind) + (p.share ? ' · ' + esc(p.share) + '%' : '') + '</span></a>').join('') + '</div><p><a class="cancel" href="' + base + '">Back</a></p></section>' });
       const item = v.item || chosen;
       fields = '<input type="hidden" name="psc" value="' + esc(chosen.id) + '">' + inset('Changing the details of', '<strong>' + esc(chosen.name) + '</strong><br>' + esc(chosen.kind) + (chosen.share ? ' · ' + esc(chosen.share) + '%' : '')) +
@@ -379,7 +376,7 @@ function submitForm(res, ctx, c, values, error, kind) {
     case 'document': fields = select('Type of filing', 'category', store.FILING_CATEGORIES, v.category || 'Other') + field('Description', 'description', v.description, { required: true, max: 300, hint: 'This appears in the company’s filing history.' }); break;
   }
   const pdf = kind === 'document' ? fileField('The filing', '', true) : fileField('Supporting document', 'If you attach one, it becomes the filing’s document. Otherwise we create one from these details.', false);
-  page(res, ctx, { title: store.CHANGE_TYPES[kind].label + ' · ' + c.legalName, noindex: true, flash,
+  page(res, ctx, { title: store.CHANGE_TYPES[kind].label + ' · ' + c.legalName, noindex: true, flash, back: '/company/' + c.slug + '/file',
     body: '<section class="panel narrow"><p class="eyebrow">' + esc(c.legalName) + '</p><h1>' + esc(store.CHANGE_TYPES[kind].label) + '</h1>' +
       (blocked ? fields + '<p><a class="cancel" href="' + base + '">Choose something else</a></p>' :
       '<form method="post" action="' + base + '" class="form" enctype="multipart/form-data">' + csrfField(ctx.customer.csrf) + '<input type="hidden" name="kind" value="' + kind + '">' + fields + pdf +
@@ -392,7 +389,7 @@ function registerCompanyPage(res, ctx, values, error) {
   const mine = store.managedCompanies(ctx.customer.account.id);
   const parent = mine.find((c) => c.slug === v.parent);
   const psc = v.psc || (parent ? { name: parent.legalName, kind: 'Parent company', share: '100' } : {});
-  page(res, ctx, { title: parent ? 'Register a subsidiary' : 'Register a company', noindex: true, flash: error && { error: true, text: error },
+  page(res, ctx, { title: parent ? 'Register a subsidiary' : 'Register a company', noindex: true, flash: error && { error: true, text: error }, back: parent ? '/company/' + parent.slug : '/account',
     body: '<section class="panel form-page"><p class="eyebrow">' + (parent ? esc(parent.legalName) : 'Your account') + '</p><h1 class="page-title">' + (parent ? 'Register a subsidiary' : 'Register a company') + '</h1>' +
       '<p class="lead-s">Tell us about the company, its first officer and its first person with significant control. Our staff review every application. When it’s accepted, the company is added to the register with its incorporation filing, and you’ll manage it from your account.</p>' +
       '<form method="post" action="/account/register-company" class="form">' + csrfField(ctx.customer.csrf) +
@@ -412,7 +409,7 @@ function registerCompanyPage(res, ctx, values, error) {
 
 function claimPage(res, ctx, c, values, error) {
   const v = values || {};
-  page(res, ctx, { title: 'Manage this company · ' + c.legalName, noindex: true, flash: error && { error: true, text: error },
+  page(res, ctx, { title: 'Manage this company · ' + c.legalName, noindex: true, flash: error && { error: true, text: error }, back: '/company/' + c.slug,
     body: '<section class="panel narrow"><p class="eyebrow">' + esc(c.legalName) + '</p><h1>Ask to manage this company</h1>' +
       '<p>People who manage a company can file changes for it and register its subsidiaries. Managing a company also covers its subsidiaries.</p>' +
       '<form method="post" class="form" enctype="multipart/form-data">' + csrfField(ctx.customer.csrf) + '<input type="hidden" name="kind" value="claim">' +
@@ -424,7 +421,7 @@ function claimPage(res, ctx, c, values, error) {
 function groupReportPage(res, ctx, c) {
   const group = store.groupOf(c.slug, false);
   const box = (name, label, hint) => { const id = 'r-' + name; return '<div class="check"><input type="checkbox" id="' + id + '" name="' + name + '" value="1" checked><label for="' + id + '">' + esc(label) + (hint ? '<span class="hint">' + esc(hint) + '</span>' : '') + '</label></div>'; };
-  page(res, ctx, { title: 'Company report · ' + c.legalName, noindex: true,
+  page(res, ctx, { title: 'Company report · ' + c.legalName, noindex: true, back: '/company/' + c.slug,
     body: '<section class="panel narrow"><p class="eyebrow">' + esc(c.legalName) + '</p><h1>Download a company report</h1><p>Get a PDF of this company’s record' + (group.length > 1 ? ', and the records of its ' + plural(group.length - 1, 'subsidiary', 'subsidiaries') + ',' : '') + ' as it stands today.</p>' +
       (group.length > 1 ? inset('Companies in this group', group.map((g) => '<span class="tree" data-depth="' + Math.min(g.depth, 5) + '">' + esc(g.company.legalName) + '</span>').join('')) : '') +
       '<form method="get" class="form"><input type="hidden" name="generate" value="1"><fieldset class="field wide checks"><legend>What should it include?</legend>' +
