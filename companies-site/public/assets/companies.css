@@ -211,3 +211,5 @@ details.mini { border: 0; padding: 0 0 6px; }
   .search-row button { padding: 0 14px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+.grid-form .form-section { grid-column: 1 / -1; margin: 10px 0 -10px; }
+h2.form-section { font-size: 1.27em; padding-top: 20px; border-top: 2px solid var(--ink); }

@@ -4,7 +4,7 @@ A register of the group's companies in the style of Companies House, branded as 
 
 ## Public (no account needed)
 - Search by company name, number, previous name, division or officer.
-- Each company has an **Overview**, **Filing history** (PDFs, filter by type), **People** (officers; persons with significant control with type and share percentage) and **Charges**.
+- Each company has an **Overview**, **Filing history** (PDFs, filter by type), **People** (officers; persons with significant control with type and share percentage), **Charges** and **Related companies** (parent, subsidiaries, fellow subsidiaries, management, significant control and shared officers).
 - Unknown details show as "Not recorded". Nothing is invented. The register starts with HN Group and Horizon Network only.
 
 ## Customer accounts (anyone can register)
@@ -16,7 +16,9 @@ Request documents or certificates, report mistakes, and submit filings as PDFs (
 - Administrators also add and remove staff, change roles and set temporary passwords (Administration → Staff). Staff choose their own password at first sign-in.
 
 ## Generated filings
-Recording a company's incorporation date files an **Incorporation** filing, and recording an officer with an appointment date files an **Appointment** filing, each with a generated PDF. Each is created once.
+Recording a company's incorporation date files an **Incorporation** filing, recording an officer with an appointment date files an **Appointment** filing, and recording a person with significant control with a notified date files a **PSC notification** filing, each with a generated PDF. Each is created once.
+
+A new company has to be added with its first officer and first person with significant control; if their dates are left blank, the incorporation date is used.
 
 ## Data
 `/var/lib/hn-companies/register.json` and PDFs in `/var/lib/hn-companies/files/`. Updates never touch them.

@@ -83,10 +83,20 @@ function search(q) {
 
 function slugify(s) { return String(s).toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60); }
 
-function saveCompany(slug, input, actor) {
+// A new company must be added with its first officer and first person with significant control
+// (opts.officer and opts.psc). Both are checked before anything is saved; their appointment and
+// notification dates default to the incorporation date.
+function saveCompany(slug, input, actor, opts) {
   const existing = slug ? company(slug) : null;
   const legalName = String(input.legalName || '').trim().slice(0, 160);
   if (!legalName) throw Object.assign(new Error('Enter the company name.'), { status: 400 });
+  let firstOfficer = null, firstPsc = null;
+  if (!existing) {
+    if (!opts || !opts.officer || !opts.psc) throw Object.assign(new Error('Add the company’s first officer and person with significant control.'), { status: 400 });
+    const incorporated = d(input.incorporated);
+    firstOfficer = LISTS.officers({ ...opts.officer, appointed: opts.officer.appointed || incorporated });
+    firstPsc = LISTS.psc({ ...opts.psc, notified: opts.psc.notified || incorporated });
+  }
   const c = existing || blankCompany({ slug: '', name: legalName, legalName });
   if (!existing) {
     let base = slugify(input.name || legalName) || 'company', s = base, n = 2;
@@ -106,7 +116,7 @@ function saveCompany(slug, input, actor) {
   c.divisions = String(input.divisions || '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 10).map((x) => x.slice(0, 100));
   c.hidden = input.hidden === 'on' || input.hidden === true;
   c.updatedAt = now();
-  if (!existing) db.companies.push(c);
+  if (!existing) { c.officers.push({ id: id(), ...firstOfficer }); c.psc.push({ id: id(), ...firstPsc }); db.companies.push(c); }
   generateFilings(c);
   audit(actor, existing ? 'company.update' : 'company.create', c.slug);
   save();
@@ -162,9 +172,9 @@ function deleteItem(slug, list, itemId, actor) {
 }
 
 // ---------- Generated filings ----------
-// When a company's incorporation date is first recorded, or an officer is recorded with an
-// appointment date, the register files the matching document itself: an incorporation filing and
-// an appointment filing, each with a generated PDF. Each is created once; the link is kept on the
+// When a company's incorporation date is first recorded, an officer is recorded with an appointment
+// date, or a person with significant control with a notified date, the register files the matching
+// document itself (incorporation, appointment or PSC notification), each with a generated PDF. Each is created once; the link is kept on the
 // record so later edits don't duplicate it. Deleting a generated filing doesn't recreate it.
 const FOOTER = 'Generated automatically by the Company Register run by Horizon Holding Co Limited from the details recorded at the time. This is a group register document, not a filing with the UK government\'s Companies House.';
 function generateFilings(c) {
@@ -179,6 +189,11 @@ function generateFilings(c) {
     const doc = pdf.build({ heading: 'Appointment of ' + (/^[aeiou]/.test(role) ? 'an ' : 'a ') + role, subheading: c.legalName + (c.number ? ' (company number ' + c.number + ')' : ''), footer: FOOTER, rows: [
       ['Name', o.name], ['Role', o.role], ['Appointed on', longDate(o.appointed)], ['Occupation', o.occupation], ['Nationality', o.nationality], ['Country of residence', o.countryOfResidence], ['Company', c.legalName]] });
     o.appointmentFiling = pushGenerated(c, o.appointed, 'Officers', 'Appointment of ' + o.name + ' as ' + (/^[aeiou]/.test(role) ? 'an ' : 'a ') + role + ' on ' + longDate(o.appointed), doc);
+  }
+  for (const p of c.psc || []) if (p.notified && !p.notificationFiling) {
+    const doc = pdf.build({ heading: 'Notification of a person with significant control', subheading: c.legalName + (c.number ? ' (company number ' + c.number + ')' : ''), footer: FOOTER, rows: [
+      ['Name', p.name], ['Type', p.kind], ['Shareholding', p.share ? p.share + '%' : ''], ['Nature of control', (p.control || []).join('; ')], ['Notified on', longDate(p.notified)], ['Company', c.legalName]] });
+    p.notificationFiling = pushGenerated(c, p.notified, 'Persons with significant control', 'Notification of ' + p.name + ' as a person with significant control on ' + longDate(p.notified), doc);
   }
 }
 function pushGenerated(c, date, category, description, buffer) {

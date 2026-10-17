@@ -164,6 +164,30 @@ test('company register: public records, customers, requests, submissions and sta
     const genId = html.match(/Incorporation of HN Group Limited<\/td><td><a href="\/document\/([a-f0-9]{24})/)[1];
     const gen = Buffer.from(await (await get('/document/' + genId)).arrayBuffer()).toString('latin1');
     assert.match(gen, /^%PDF-1\.4/); assert.match(gen, /\(HN Group Limited\)/); assert.match(gen, /%%EOF\n$/);
+
+    // A notified person with significant control is filed automatically too.
+    await post('/admin/company/hn-group/psc', { csrf: staffCsrf, name: 'Sky Holder', kind: 'Individual', share: '25', notified: '2026-03-04', control: 'Ownership of shares – more than 25% but not more than 50%' }, owner);
+    assert.match(await (await get('/company/hn-group/filing-history')).text(), /Notification of Sky Holder as a person with significant control on 4 March 2026/);
+
+    // A new company needs its first officer and person with significant control.
+    html = await (await get('/admin/companies/new', owner)).text();
+    assert.match(html, /First officer/); assert.match(html, /name="officer_name"/); assert.match(html, /name="psc_share"/);
+    html = await (await post('/admin/companies/new', { csrf: staffCsrf, legalName: 'Example Trading Limited', incorporated: '2026-05-06', officer_name: '', psc_name: 'Someone' }, owner)).text();
+    assert.match(html, /Enter the officer’s name/); assert.match(html, /value="Example Trading Limited"/);
+    assert.equal((await get('/company/example-trading-limited')).status, 404);
+    r = await post('/admin/companies/new', { csrf: staffCsrf, legalName: 'Example Trading Limited', parent: 'hn-group', incorporated: '2026-05-06', officer_name: 'Pat Founder', officer_role: 'Director', psc_name: 'HN Group Limited', psc_kind: 'Parent company', psc_share: '100', psc_control: 'Ownership of shares – 75% or more' }, owner);
+    assert.equal(r.status, 303); assert.equal(r.headers.get('location'), '/admin/company/example-trading-limited');
+    html = await (await get('/company/example-trading-limited/filing-history')).text();
+    assert.match(html, /Incorporation of Example Trading Limited/);
+    assert.match(html, /Appointment of Pat Founder as a director on 6 May 2026/);
+    assert.match(html, /Notification of HN Group Limited as a person with significant control on 6 May 2026/);
+
+    // Related companies: parent, subsidiaries, significant control and shared officers.
+    html = await (await get('/company/example-trading-limited/related-companies')).text();
+    assert.match(html, /HN Group Limited[\s\S]*Parent company[\s\S]*Has significant control over this company/);
+    assert.match(html, /Horizon Network Limited[\s\S]*Fellow subsidiary of the same parent/);
+    html = await (await get('/company/hn-group/related-companies')).text();
+    assert.match(html, /Example Trading Limited[\s\S]*Subsidiary[\s\S]*This company has significant control over it/);
     assert.match(await (await get('/search?q=12345678')).text(), /HN Group Limited/);
     await post('/admin/company/horizon-network', { csrf: staffCsrf, legalName: 'Horizon Network Limited', parent: 'hn-group', hidden: 'on' }, owner);
     assert.equal((await get('/company/horizon-network')).status, 404);

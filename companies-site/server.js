@@ -96,7 +96,7 @@ function searchPage(res, ctx, q) {
 }
 
 function companyHeader(c, tab, ctx) {
-  const tabs = [['', 'Overview'], ['filing-history', 'Filing history'], ['officers', 'People'], ['charges', 'Charges']];
+  const tabs = [['', 'Overview'], ['filing-history', 'Filing history'], ['officers', 'People'], ['charges', 'Charges'], ['related-companies', 'Related companies']];
   return '<div class="company-head"><h1 class="heading-l">' + esc(c.legalName) + '</h1>' +
     '<p class="company-number">Company number <strong>' + (c.number ? esc(c.number) : 'not recorded') + '</strong></p>' +
     (c.name && c.name !== c.legalName ? '<p class="muted">Known as ' + esc(c.name) + '</p>' : '') + '</div>' +
@@ -174,6 +174,36 @@ function peoplePage(res, ctx, c, sub) {
         ...(o.occupation ? [['Occupation', esc(o.occupation)]] : []), ...(o.nationality ? [['Nationality', esc(o.nationality)]] : []), ...(o.countryOfResidence ? [['Country of residence', esc(o.countryOfResidence)]] : [])]) + '</article>').join('') : '<p class="muted">No officers have been recorded.</p>');
   page(res, ctx, { title: (psc ? 'Persons with significant control' : 'Officers') + ' · ' + c.legalName,
     body: companyHeader(c, psc ? 'persons-with-significant-control' : 'officers', ctx) + '<section class="panel"><nav class="subtabs"><a href="/company/' + esc(c.slug) + '/officers"' + (psc ? '' : ' aria-current="page"') + '>Officers</a><a href="/company/' + esc(c.slug) + '/persons-with-significant-control"' + (psc ? ' aria-current="page"' : '') + '>Persons with significant control</a></nav>' + body + '</section>' });
+}
+
+// Companies connected to this one through ownership, management, significant control or shared officers.
+function relatedCompanies(c) {
+  const all = store.companies().filter((x) => x.slug !== c.slug);
+  const same = (a, b) => String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+  const out = new Map();
+  const add = (x, reason) => { if (!out.has(x.slug)) out.set(x.slug, { company: x, reasons: [] }); if (!out.get(x.slug).reasons.includes(reason)) out.get(x.slug).reasons.push(reason); };
+  for (const x of all) {
+    if (x.slug === c.parent) add(x, 'Parent company');
+    if (x.parent === c.slug) add(x, 'Subsidiary');
+    if (c.parent && x.parent === c.parent) add(x, 'Fellow subsidiary of the same parent');
+    if (x.slug === c.managedBy) add(x, 'Manages this company');
+    if (x.managedBy === c.slug) add(x, 'Managed by this company');
+    if (c.psc.some((p) => !p.ceased && same(p.name, x.legalName))) add(x, 'Has significant control over this company');
+    if (x.psc.some((p) => !p.ceased && same(p.name, c.legalName))) add(x, 'This company has significant control over it');
+    const shared = x.officers.filter((o) => !o.resigned && c.officers.some((m) => !m.resigned && same(m.name, o.name))).map((o) => o.name);
+    if (shared.length) add(x, 'Shares ' + (shared.length === 1 ? 'an officer' : shared.length + ' officers') + ': ' + shared.join(', '));
+  }
+  return [...out.values()];
+}
+
+function relatedPage(res, ctx, c) {
+  const list = relatedCompanies(c);
+  page(res, ctx, { title: 'Related companies · ' + c.legalName,
+    body: companyHeader(c, 'related-companies', ctx) + '<section class="panel"><h2>Related companies</h2><p class="muted">' + plural(list.length, 'related company', 'related companies') + ' on this register, connected through ownership, management, significant control or shared current officers.</p>' +
+      (list.length ? '<div class="results">' + list.map((r) => '<a class="result" href="/company/' + esc(r.company.slug) + '"><span class="result-name">' + esc(r.company.legalName) + '</span>' +
+        '<span class="result-meta">' + (r.company.number ? 'Company number ' + esc(r.company.number) + ' · ' : '') + (r.company.status ? esc(r.company.status) : 'Status not recorded') + '</span>' +
+        r.reasons.map((x) => '<span class="result-address">' + esc(x) + '</span>').join('') + '</a>').join('') + '</div>'
+        : '<p>No related companies are recorded on this register.</p>') + '</section>' });
 }
 
 function chargesPage(res, ctx, c) {
@@ -279,9 +309,14 @@ function adminHome(res, ctx, flash) {
       all.map((c) => '<tr><td>' + esc(c.legalName) + (c.hidden ? ' <span class="status">Hidden</span>' : '') + '</td><td>' + val(c.number) + '</td><td>' + val(c.status) + '</td><td>' + store.filings(c.slug).length + '</td><td><a href="/admin/company/' + esc(c.slug) + '">Edit</a> · <a href="/company/' + esc(c.slug) + '">View</a></td></tr>').join('') + '</tbody></table></div></section>' });
 }
 
-function companyForm(c, ctx) {
+// Renames a form fragment's fields so several record types can share one form.
+const prefixed = (prefix, html) => html.replace(/ name="(?!csrf)/g, ' name="' + prefix);
+const unprefix = (fields, prefix) => Object.fromEntries(Object.entries(fields).filter(([k]) => k.startsWith(prefix)).map(([k, v]) => [k.slice(prefix.length), v]));
+
+function companyForm(c, ctx, values) {
+  values = values || {};
   const others = store.companies(true).filter((x) => !c || x.slug !== c.slug).map((x) => [x.slug, x.legalName]);
-  const v = c || { sic: [], divisions: [] };
+  const v = c || { sic: [], divisions: [], ...(values.company || {}) };
   return '<form method="post" action="' + (c ? '/admin/company/' + esc(c.slug) : '/admin/companies/new') + '" class="form grid-form">' + csrfField(ctx.staffUser.csrf) +
     field('Registered name', 'legalName', v.legalName, { required: true, max: 160 }) + field('Name it’s known by', 'name', v.name, { max: 120 }) +
     field('Company number', 'number', v.number, { max: 20 }) + select('Company status', 'status', store.STATUSES, v.status, 'Not recorded') +
@@ -295,16 +330,19 @@ function companyForm(c, ctx) {
     field('Website', 'website', v.website, { max: 120 }) + field('Staff email domain', 'emailDomain', v.emailDomain, { max: 80 }) +
     field('About the company', 'description', v.description, { textarea: true, rows: 3, max: 1000 }) +
     '<label class="check"><input type="checkbox" name="hidden"' + (v.hidden ? ' checked' : '') + '> Hide this company from the public register</label>' +
+    (c ? '' : prefixed('officer_', '<h2 class="form-section">First officer</h2><p class="hint form-section">Every company needs at least one officer. If you leave the appointment date blank, the incorporation date is used.</p>' + ITEM_FIELDS.officers(values.officer || {})) +
+      prefixed('psc_', '<h2 class="form-section">First person with significant control</h2><p class="hint form-section">Every company needs at least one person with significant control. If you leave the notified date blank, the incorporation date is used.</p>' + ITEM_FIELDS.psc(values.psc || {}))) +
     '<div class="form-actions"><button class="button" type="submit">' + (c ? 'Save company details' : 'Add company') + '</button></div></form>';
 }
 
-function itemForms(c, ctx, list) {
-  const items = c[list];
-  const forms = {
+const ITEM_FIELDS = {
     officers: (o) => field('Name', 'name', o.name, { required: true, max: 120 }) + select('Role', 'role', store.OFFICER_ROLES, o.role || 'Director') + field('Appointed on', 'appointed', o.appointed, { type: 'date' }) + field('Resigned on', 'resigned', o.resigned, { type: 'date' }) + field('Occupation', 'occupation', o.occupation, { max: 80 }) + field('Nationality', 'nationality', o.nationality, { max: 60 }) + field('Country of residence', 'countryOfResidence', o.countryOfResidence, { max: 60 }),
     psc: (p) => field('Name', 'name', p.name, { required: true, max: 160, hint: 'For a parent company, use its registered name exactly as it appears on the register.' }) + select('Type', 'kind', store.PSC_KINDS, p.kind || 'Individual') + field('Share percentage', 'share', p.share, { type: 'number', number: true, max: 6, hint: 'The percentage of shares held, from 0 to 100. Leave blank if not known.' }) + field('Notified on', 'notified', p.notified, { type: 'date' }) + field('Ceased on', 'ceased', p.ceased, { type: 'date' }) + field('Nature of control', 'control', (p.control || []).join('\n'), { textarea: true, rows: 3, max: 1000, hint: 'One per line.' }),
     charges: (x) => field('Charge code', 'code', x.code, { max: 40 }) + select('Status', 'status', ['Outstanding', 'Part satisfied', 'Satisfied'], x.status || 'Outstanding') + field('Created on', 'created', x.created, { type: 'date' }) + field('Delivered on', 'delivered', x.delivered, { type: 'date' }) + field('Satisfied on', 'satisfied', x.satisfied, { type: 'date' }) + field('Persons entitled', 'entitled', x.entitled, { required: true, max: 200 }) + field('Brief description', 'description', x.description, { textarea: true, rows: 2, max: 600 }),
-  };
+};
+function itemForms(c, ctx, list) {
+  const items = c[list];
+  const forms = ITEM_FIELDS;
   const title = { officers: 'Officers', psc: 'Persons with significant control', charges: 'Charges' }[list];
   const label = (x) => list === 'charges' ? (x.code ? 'Charge ' + x.code : 'Charge for ' + x.entitled) : x.name;
   const base = '/admin/company/' + esc(c.slug) + '/' + list;
@@ -431,6 +469,7 @@ async function route(req, res) {
       if (sub === 'filing-history') return filingsPage(res, ctx, c, store.FILING_CATEGORIES.includes(url.searchParams.get('category')) ? url.searchParams.get('category') : '');
       if (sub === 'officers' || sub === 'persons-with-significant-control') return peoplePage(res, ctx, c, sub);
       if (sub === 'charges') return chargesPage(res, ctx, c);
+      if (sub === 'related-companies') return relatedPage(res, ctx, c);
     }
     if (sub === 'request' || sub === 'report' || sub === 'file') {
       if (needCustomer(res, ctx, p)) return;
@@ -538,8 +577,11 @@ async function route(req, res) {
     }
     if (req.method === 'GET' && p === '/admin') return adminHome(res, ctx);
     if (p === '/admin/companies/new') {
-      if (req.method === 'GET') return page(res, ctx, { title: 'Add a company', noindex: true, body: '<p><a href="/admin">← Administration</a></p><section class="panel"><h1>Add a company</h1>' + companyForm(null, ctx) + '</section>' });
-      try { const c = store.saveCompany('', fields, actor); return redirect(res, '/admin/company/' + c.slug); } catch (e) { if (e.status !== 400) throw e; return adminHome(res, ctx, { error: true, text: e.message }); }
+      const addPage = (values, flash) => page(res, ctx, { title: 'Add a company', noindex: true, flash, body: '<p><a href="/admin">← Administration</a></p><section class="panel"><h1>Add a company</h1>' + companyForm(null, ctx, values) + '</section>' });
+      if (req.method === 'GET') return addPage({});
+      const officer = unprefix(fields, 'officer_'), psc = unprefix(fields, 'psc_');
+      try { const c = store.saveCompany('', fields, actor, { officer, psc }); return redirect(res, '/admin/company/' + c.slug); }
+      catch (e) { if (e.status !== 400) throw e; return addPage({ company: { ...fields, sic: String(fields.sic || '').split('\n'), divisions: String(fields.divisions || '').split('\n'), hidden: fields.hidden === 'on' }, officer, psc }, { error: true, text: e.message }); }
     }
     m = /^\/admin\/company\/([a-z0-9-]+)(?:\/(officers|psc|charges|filings|delete))?(?:\/([a-f0-9]{24}))?(\/delete)?$/.exec(p);
     if (m) {
