@@ -187,7 +187,7 @@ function overviewPage(res, ctx, c) {
 
 function filingTable(list) {
   return '<div class="table-wrap"><table><thead><tr><th scope="col">Date</th><th scope="col">Type</th><th scope="col">Description</th><th scope="col">Document</th></tr></thead><tbody>' +
-    list.map((f) => '<tr><td>' + esc(fmt(f.date)) + '</td><td>' + esc(f.category) + '</td><td>' + esc(f.description) + '</td><td>' + (f.file ? '<a href="/document/' + f.id + '" target="_blank" rel="noopener">View PDF' + (f.pages ? ' (' + plural(f.pages, 'page', 'pages') + ')' : '') + '</a>' : '<span class="muted">No document</span>') + '</td></tr>').join('') + '</tbody></table></div>';
+    list.map((f) => '<tr><td>' + esc(fmt(f.date)) + '</td><td>' + esc(f.category) + '</td><td>' + esc(f.description) + '</td><td class="nowrap">' + (f.file ? '<a href="/document/' + f.id + '" target="_blank" rel="noopener">View PDF' + (f.pages ? ' (' + plural(f.pages, 'page', 'pages') + ')' : '') + '</a>' : '<span class="muted">No document</span>') + '</td></tr>').join('') + '</tbody></table></div>';
 }
 
 function filingsPage(res, ctx, c, category) {

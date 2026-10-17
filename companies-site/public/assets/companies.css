@@ -296,3 +296,4 @@ details.mini { border: 0; padding: 0 0 6px; }
 .back-link::before { content: ''; position: absolute; left: 3px; top: 50%; width: 7px; height: 7px; margin-top: -4px; border: solid currentColor; border-width: 1px 0 0 1px; transform: rotate(-45deg); }
 .main.after-back { padding-top: 20px; }
 .footer { border-top: 1px solid var(--border); }
+.nowrap { white-space: nowrap; }
