@@ -1,5 +1,5 @@
 /* Company Register — companies.hngroup.org.uk. A plain, accessible public-register style
-   (black header, white pages, clear type, strong focus states) branded as Horizon Assets Management. */
+   (black header, white pages, clear type, strong focus states) carrying the HN Group logo, without the HN Group website theme. */
 :root {
   --ink: #0b0c0c; --text: #0b0c0c; --secondary: #505a5f; --border: #b1b4b6; --rule: #e5e6e7; --page: #ffffff; --panel: #f3f2f1;
   --brand: #5514b4; --brand-dark: #3d0d82; --link: #5514b4; --link-visited: #4c2c92; --link-hover: #3d0d82;

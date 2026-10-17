@@ -31,12 +31,12 @@ test('company register: public records, customers, requests, submissions and sta
   try {
     await waitUp();
 
-    // The home page is a search page branded Horizon Assets Management, with no company list and no HN Group branding.
+    // The home page is a search page with the HN Group logo but not the HN Group website theme, and no company list.
     let html = await (await get('/')).text();
-    assert.match(html, /horizon-assets-management-logo-white\.svg/); assert.match(html, /Staff sign in/);
-    assert.doesNotMatch(html, /hn-group-wordmark|Plus Jakarta|Horizon Network Limited|Holding Co/);
-    assert.match(html, /run by Horizon Assets Management Limited, a wholly owned subsidiary of HN Group Limited/);
-    assert.equal((await get('/assets/brand/hn-group-wordmark.svg')).status, 404);
+    assert.match(html, /hn-group-wordmark-white\.svg/); assert.match(html, /Staff sign in/);
+    assert.doesNotMatch(html, /Plus Jakarta|site\.css|Horizon Network Limited|Holding Co|Assets Management/);
+    assert.match(html, /run by HN Group Limited for the companies in HN Group/);
+    assert.equal((await get('/assets/brand/hn-group-wordmark.svg')).status, 200);
     // Only HN Group and Horizon Network are on the register, with unknown details left blank.
     html = await (await get('/search?q=limited')).text();
     assert.match(html, /HN Group Limited/); assert.match(html, /Horizon Network Limited/);
@@ -157,7 +157,7 @@ test('company register: public records, customers, requests, submissions and sta
     assert.match(doc.headers.get('content-security-policy'), /sandbox/);
     assert.deepEqual(Buffer.from(await doc.arrayBuffer()), PDF);
     const samAccount = await (await get('/account', sam)).text();
-    assert.match(samAccount, />Accepted</); assert.match(samAccount, /Note from Horizon Assets Management: Thanks/);
+    assert.match(samAccount, />Accepted</); assert.match(samAccount, /Note from HN Group: Thanks/);
 
     // Staff reply to the request; Sam sees it.
     const reqId = requestPath.split('/').pop();

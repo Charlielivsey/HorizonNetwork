@@ -77,6 +77,8 @@ function runMigrations() {
   });
   // The user's request (17 October 2026): every generated document uses the new design, old ones included.
   once('pdf-design-2', redrawGeneratedFilings);
+  // The user's request (17 October 2026): the register carries HN Group branding again, on new and existing documents.
+  once('pdf-design-3-hn-group', redrawGeneratedFilings);
   once('officer-charlie-livsey', () => {
     for (const c of db.companies) for (const o of c.officers) if (/^charlie\s+dean\s+livsey$/i.test(String(o.name).trim())) { o.name = 'Charlie Livsey'; audit('system', 'officer.rename', c.slug + ' Charlie Dean Livsey → Charlie Livsey'); }
   });
@@ -206,7 +208,7 @@ function deleteItem(slug, list, itemId, actor) {
 // date, or a person with significant control with a notified date, the register files the matching
 // document itself (incorporation, appointment or PSC notification), each with a generated PDF. Each is created once; the link is kept on the
 // record so later edits don't duplicate it. Deleting a generated filing doesn't recreate it.
-const FOOTER = 'Generated automatically by the Company Register run by Horizon Assets Management Limited, a wholly owned subsidiary of HN Group Limited, from the details recorded at the time. This is a group register document, not a filing with the UK government\'s Companies House.';
+const FOOTER = 'Generated automatically by the Company Register run by HN Group Limited from the details recorded at the time. This is a group register document, not a filing with the UK government\'s Companies House.';
 // Each kind of generated document has its own form code, shown on the document.
 const FORM_CODES = { Incorporation: 'REG-INC', appoint: 'REG-APP', psc_add: 'REG-PSC1', psc_change: 'REG-PSC2', psc_cease: 'REG-PSC3', terminate: 'REG-TRM', address: 'REG-ADR', name: 'REG-NAM', status: 'REG-STS', sic: 'REG-SIC', confirmation: 'REG-CNF' };
 function generateFilings(c) {

@@ -1,5 +1,5 @@
 'use strict';
-// Company Register — companies.hngroup.org.uk, branded as Horizon Assets Management and separate from the other group websites.
+// Company Register — companies.hngroup.org.uk, branded as HN Group (its logo, not its website theme) and separate from the other group websites.
 // Public search and records for group
 // companies (overview, filing history, officers, persons with significant control and charges),
 // customer accounts that anyone can create (document requests, mistake reports and filing
@@ -35,15 +35,15 @@ function layout(o) {
     : o.customer ? '<a href="/account">Your account</a><form method="post" action="/account/logout"><input type="hidden" name="csrf" value="' + esc(o.customer.csrf) + '"><button class="nav-button" type="submit">Sign out</button></form>'
       : '<a href="/account/login">Sign in</a><a href="/account/register">Create an account</a><a href="/staff/login" class="staff-link">Staff sign in</a>';
   return '<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0b0c0c">' +
-    '<title>' + esc(o.title) + ' – Company Register – Horizon Assets Management</title>' + (o.description ? '<meta name="description" content="' + esc(o.description) + '">' : '') + (o.noindex ? '<meta name="robots" content="noindex">' : '') +
+    '<title>' + esc(o.title) + ' – Company Register – HN Group</title>' + (o.description ? '<meta name="description" content="' + esc(o.description) + '">' : '') + (o.noindex ? '<meta name="robots" content="noindex">' : '') +
     '<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/assets/companies.css?v=3"><script src="/assets/companies.js?v=3" defer></script></head><body>' +
     '<a class="skip" href="#main">Skip to main content</a>' +
-    '<header class="header"><div class="wrap header-inner"><a class="logo" href="/"><img src="/assets/brand/horizon-assets-management-logo-white.svg" alt="Horizon Assets Management" width="129" height="46"></a>' +
+    '<header class="header"><div class="wrap header-inner"><a class="logo" href="/"><img src="/assets/brand/hn-group-wordmark-white.svg" alt="HN Group" width="126" height="44"></a>' +
     '<a class="service" href="/">Company Register</a><nav class="header-nav" aria-label="Account">' + nav + '</nav></div></header>' +
     (o.searchBar === false ? '' : '<div class="wrap"><form class="search compact" action="/search" method="get" role="search"><label for="q" class="sr-only">Search for a company or officer</label><input id="q" name="q" type="search" placeholder="Search for a company or officer" value="' + esc(o.q || '') + '" autocomplete="off"><button type="submit" aria-label="Search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg></button></form></div>') +
     '<main id="main" class="wrap main">' + (o.flash ? (o.flash.error ? '<div class="error-summary" role="alert" tabindex="-1" data-focus><h2>There is a problem</h2><p>' + esc(o.flash.text) + '</p></div>' : '<div class="flash" role="status">' + esc(o.flash.text) + '</div>') : '') + o.body + '</main>' +
     '<footer class="footer"><div class="wrap"><ul class="footer-links"><li><a href="/">Search the register</a></li><li><a href="/about">About this register</a></li>' + (signedOut ? '<li><a href="/account/register">Create an account</a></li>' : '') + '<li><a href="/staff/login">Staff sign in</a></li></ul>' +
-    '<div class="footer-meta"><img src="/assets/brand/horizon-assets-management-logo.svg" alt="" width="112" height="40"><p>The Company Register is run by Horizon Assets Management Limited, a wholly owned subsidiary of HN Group Limited, for the companies in HN Group. It is not the UK government’s Companies House register.</p><p>© ' + new Date().getFullYear() + ' Horizon Assets Management Limited</p></div></div></footer></body></html>';
+    '<div class="footer-meta"><img src="/assets/brand/hn-group-wordmark.svg" alt="" width="115" height="40"><p>The Company Register is run by HN Group Limited for the companies in HN Group. It is not the UK government’s Companies House register.</p><p>© ' + new Date().getFullYear() + ' HN Group Limited</p></div></div></footer></body></html>';
 }
 
 function send(res, status, html, headers) {
@@ -110,7 +110,7 @@ function companyCard(c) {
 }
 
 function homePage(res, ctx) {
-  page(res, ctx, { title: 'Find company information', searchBar: false, description: 'Search the Horizon Assets Management Company Register for company records, filing history, officers and persons with significant control.',
+  page(res, ctx, { title: 'Find company information', searchBar: false, description: 'Search the HN Group Company Register for company records, filing history, officers and persons with significant control.',
     body: '<div class="grid-row"><div class="col-main"><h1 class="heading-xl">Find company information</h1>' +
       '<p class="lead">Search the register for a company’s details, filing history, officers, people with significant control and charges.</p>' +
       '<form class="search big" action="/search" method="get" role="search"><label for="q" class="label-l">Search for a company or officer</label><span class="hint">Enter a company name, company number or officer’s name</span><div class="search-row"><input id="q" name="q" type="search" autocomplete="off" required><button type="submit">Search</button></div></form>' +
@@ -261,7 +261,7 @@ function chargesPage(res, ctx, c) {
 
 function aboutPage(res, ctx) {
   page(res, ctx, { title: 'About this register',
-    body: '<section class="panel narrow"><h1>About the Company Register</h1><p>This register holds information about the companies in HN Group. It is run by Horizon Assets Management Limited, a wholly owned subsidiary of HN Group Limited. Our staff keep it up to date.</p>' +
+    body: '<section class="panel narrow"><h1>About the Company Register</h1><p>This register holds information about the companies in HN Group. It is run by HN Group Limited. Our staff keep it up to date.</p>' +
       '<p>It is a group register, not the UK government’s Companies House register. Some details may not be recorded yet. These show as “Not recorded”.</p>' +
       '<h2>What you can do</h2><ul><li>Search for a company or officer and view its records without an account.</li><li>Create a free account to request copies of filings or certificates, report a mistake, or submit a filing for review.</li></ul>' +
       '<h2>Your account</h2><p>Your account is only used for your requests and submissions. Our team replies on this site; we don’t send emails from the register. Don’t include sensitive personal information in messages or documents unless it’s needed.</p></section>' });
@@ -304,7 +304,7 @@ function accountPage(res, ctx, flash) {
         reqs.map((r) => '<tr><td><a href="/account/requests/' + r.id + '">' + esc(r.ref) + '</a></td><td>' + esc(store.company(r.company)?.legalName || r.company) + '</td><td>' + esc(store.REQUEST_KINDS[r.kind]) + '</td><td><span class="status ' + (r.status === 'Answered' ? 'ok' : r.status === 'Open' ? 'warn' : '') + '">' + esc(r.status) + '</span></td><td>' + esc(fmtTime(r.updatedAt)) + '</td></tr>').join('') + '</tbody></table></div>'
         : '<p class="muted">You haven’t made any requests yet. Find a company, then choose Request a document or Report a mistake.</p>') + '</section>' +
       '<section class="panel"><h2>Your applications and filings</h2>' + (subs.length ? '<div class="table-wrap"><table><thead><tr><th>Reference</th><th>Company</th><th>Filing</th><th>Status</th><th>Submitted</th></tr></thead><tbody>' +
-        subs.map((s) => '<tr><td>' + esc(s.ref) + '</td><td>' + esc(companyName(s)) + '</td><td>' + esc(s.description) + (s.staffNote ? '<br><span class="muted small">Note from Horizon Assets Management: ' + esc(s.staffNote) + '</span>' : '') + '</td><td><span class="status ' + (s.status === 'Accepted' ? 'ok' : s.status === 'Pending' ? 'warn' : 'bad') + '">' + esc(s.status) + '</span></td><td>' + esc(fmtTime(s.createdAt)) + '</td></tr>').join('') + '</tbody></table></div>'
+        subs.map((s) => '<tr><td>' + esc(s.ref) + '</td><td>' + esc(companyName(s)) + '</td><td>' + esc(s.description) + (s.staffNote ? '<br><span class="muted small">Note from HN Group: ' + esc(s.staffNote) + '</span>' : '') + '</td><td><span class="status ' + (s.status === 'Accepted' ? 'ok' : s.status === 'Pending' ? 'warn' : 'bad') + '">' + esc(s.status) + '</span></td><td>' + esc(fmtTime(s.createdAt)) + '</td></tr>').join('') + '</tbody></table></div>'
         : '<p class="muted">You haven’t submitted any filings.</p>') + '</section>' });
 }
 
@@ -313,7 +313,7 @@ function requestThread(r, ctx, staffView) {
   const f = r.filing && store.filing(r.filing);
   return '<section class="panel"><p class="eyebrow">' + esc(store.REQUEST_KINDS[r.kind]) + ' · ' + esc(r.ref) + '</p><h1>' + esc(c ? c.legalName : r.company) + '</h1>' +
     '<p>Status: <span class="status ' + (r.status === 'Answered' ? 'ok' : r.status === 'Open' ? 'warn' : '') + '">' + esc(r.status) + '</span>' + (f ? ' · About the filing “' + esc(f.description) + '” (' + esc(fmt(f.date)) + ')' : '') + '</p>' +
-    '<ol class="thread">' + r.messages.map((m) => '<li class="' + (m.from === 'staff' ? 'staff' : '') + '"><p class="who">' + esc(m.from === 'staff' ? m.name + ' · Horizon Assets Management' : m.name) + ' <span class="muted small">' + esc(fmtTime(m.at)) + '</span></p><p class="text">' + esc(m.text) + '</p></li>').join('') + '</ol>' +
+    '<ol class="thread">' + r.messages.map((m) => '<li class="' + (m.from === 'staff' ? 'staff' : '') + '"><p class="who">' + esc(m.from === 'staff' ? m.name + ' · HN Group' : m.name) + ' <span class="muted small">' + esc(fmtTime(m.at)) + '</span></p><p class="text">' + esc(m.text) + '</p></li>').join('') + '</ol>' +
     (r.status === 'Closed' && !staffView ? '<p class="muted">This request is closed. Start a new request from the company’s page if you need anything else.</p>'
       : '<form method="post" class="form">' + csrfField((staffView ? ctx.staffUser : ctx.customer).csrf) + field('Reply', 'text', '', { textarea: true, required: true }) +
         (staffView ? select('Status after replying', 'status', ['Answered', 'Open', 'Closed'], 'Answered') : '') + '<button class="button" type="submit">Send reply</button></form>') + '</section>';

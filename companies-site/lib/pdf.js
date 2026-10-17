@@ -1,7 +1,9 @@
 'use strict';
+const fs = require('node:fs');
+const path = require('node:path');
 // Builds the register's own PDF documents: filing forms (one A4 page per filing, continuing onto more
 // pages if needed) and company reports. Uses the standard Helvetica fonts, so no font files are needed.
-// Every page has the Horizon Assets Management header, a form code, the company's details and a
+// Every page has the HN Group header, a form code, the company's details and a
 // footer with the document reference and page number.
 
 const W = 595, H = 842, L = 48, R = W - 48;
@@ -11,12 +13,16 @@ const WIDTHS = {
   F1: [278, 278, 355, 556, 556, 889, 667, 191, 333, 333, 389, 584, 278, 333, 278, 278, 556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 278, 278, 584, 584, 584, 556, 1015, 667, 667, 722, 722, 667, 611, 778, 722, 278, 500, 667, 556, 833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 278, 278, 278, 469, 556, 333, 556, 556, 500, 556, 556, 278, 556, 556, 222, 222, 500, 222, 833, 556, 556, 556, 556, 333, 500, 278, 556, 500, 722, 500, 500, 500, 334, 260, 334, 584],
   F2: [278, 333, 474, 556, 556, 889, 722, 238, 333, 333, 389, 584, 278, 333, 278, 278, 556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 333, 333, 584, 584, 584, 611, 975, 722, 722, 722, 722, 667, 611, 778, 722, 278, 556, 722, 611, 833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 333, 278, 333, 584, 556, 333, 556, 611, 556, 611, 556, 333, 611, 611, 278, 278, 556, 278, 889, 611, 611, 611, 611, 389, 556, 333, 611, 556, 778, 556, 556, 500, 389, 280, 389, 584],
 };
-// The Horizon Assets Management roundel (ring and HAM letters) in its 100 x 100 drawing space.
-const ROUNDEL = [
-  [15.45, 36.623, 'M0 0h7.8v13.45h8.40V0h7.8v34.3h-7.8v-13.45h-8.40v13.45H0z'],
-  [36.37, 36.623, 'M0 34.3L9.6 0h8.8L28 34.3h-8.1l-1.6-5.9h-8.6l-1.6 5.9zM11.5 21.7h5L14 11.6z'],
-  [60.41, 36.623, 'M0 0h9.4l6.1 17.6L21.6 0H31v34.3h-7.6V14.2l-5.1 13.6h-5.6L7.6 14.2V34.3H0z'],
-];
+// The HN Group wordmark (white, for the black header), read from the site's copy of the approved logo:
+// its letters as one path and the stepped colour stripe as rectangles, in the logo's own drawing space.
+const WORDMARK = (() => {
+  const svg = fs.readFileSync(path.join(__dirname, '..', 'public', 'assets', 'brand', 'hn-group-wordmark-white.svg'), 'utf8');
+  const box = /viewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(svg);
+  const paths = [...svg.matchAll(/<path(?: transform="translate\(([\d.-]+) ([\d.-]+)\)")? fill="(#[0-9A-Fa-f]{6})" d="([^"]+)"/g)].map((m) => ({ dx: Number(m[1] || 0), dy: Number(m[2] || 0), fill: m[3], d: m[4] }));
+  const rects = [...svg.matchAll(/<rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)" fill="(#[0-9A-Fa-f]{6})"/g)].map((m) => ({ x: +m[1], y: +m[2], w: +m[3], h: +m[4], fill: m[5] }));
+  return { w: Number(box[1]), h: Number(box[2]), paths, rects };
+})();
+const rgb = (hex) => [1, 3, 5].map((i) => (parseInt(hex.slice(i, i + 2), 16) / 255).toFixed(3)).join(' ');
 
 // Plain characters only: curly quotes and dashes become their plain forms; anything outside Latin-1 becomes "?".
 const plain = (s) => String(s == null ? '' : s).replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, '-').replace(/[^\x20-\x7e\xa0-\xff]/g, '?');
@@ -41,7 +47,7 @@ function wrap(text, font, size, max) {
 function svgPath(d, ox, oy, scale) {
   const ops = []; let x = 0, y = 0, sx = 0, sy = 0;
   const pt = (px, py) => (ox + px * scale).toFixed(2) + ' ' + (oy - py * scale).toFixed(2);
-  const tokens = d.match(/[MLHVZmlhvz]|-?\d*\.?\d+/g);
+  const tokens = d.match(/[MLHVQZmlhvz]|-?\d*\.?\d+(?:e-?\d+)?/g);
   let cmd = '';
   for (let i = 0; i < tokens.length;) {
     if (/[A-Za-z]/.test(tokens[i])) { cmd = tokens[i++]; if (cmd === 'z' || cmd === 'Z') { ops.push('h'); x = sx; y = sy; } continue; }
@@ -49,6 +55,11 @@ function svgPath(d, ox, oy, scale) {
     switch (cmd) {
       case 'M': x = n(); y = n(); sx = x; sy = y; ops.push(pt(x, y) + ' m'); cmd = 'L'; break;
       case 'L': x = n(); y = n(); ops.push(pt(x, y) + ' l'); break;
+      case 'Q': { // a quadratic curve, drawn as the equivalent cubic one
+        const qx = n(), qy = n(), ex = n(), ey = n();
+        ops.push(pt(x + 2 / 3 * (qx - x), y + 2 / 3 * (qy - y)) + ' ' + pt(ex + 2 / 3 * (qx - ex), ey + 2 / 3 * (qy - ey)) + ' ' + pt(ex, ey) + ' c');
+        x = ex; y = ey; break;
+      }
       case 'l': x += n(); y += n(); ops.push(pt(x, y) + ' l'); break;
       case 'H': x = n(); ops.push(pt(x, y) + ' l'); break;
       case 'h': x += n(); ops.push(pt(x, y) + ' l'); break;
@@ -72,17 +83,16 @@ function canvas(meta) {
     line(x1, y1, x2, y2, colour, lw) { ops.push(`${lw || 0.8} w ${COLOURS[colour || 'rule']} RG ${x1} ${y1} m ${x2} ${y2} l S`); },
     page() {
       ops = []; pages.push(ops);
-      // Black header with the white roundel, the company and the register's name, and the form code.
+      // Black header with the white HN Group wordmark, the register's name and the form code.
       api.rect(0, H - 78, W, 78, 'ink');
       api.rect(0, H - 84, W, 6, 'brand');
-      const s = 0.44, ox = L, oy = H - 17;
-      ops.push(`${COLOURS.white} RG 2.7 w`);
-      // The ring, drawn as four Bézier quarter circles.
-      const cx = ox + 50 * s, cy = oy - 50 * s, r = 46.9 * s, k = 0.5523 * r;
-      ops.push(`${(cx + r).toFixed(2)} ${cy.toFixed(2)} m ${(cx + r).toFixed(2)} ${(cy + k).toFixed(2)} ${(cx + k).toFixed(2)} ${(cy + r).toFixed(2)} ${cx.toFixed(2)} ${(cy + r).toFixed(2)} c ${(cx - k).toFixed(2)} ${(cy + r).toFixed(2)} ${(cx - r).toFixed(2)} ${(cy + k).toFixed(2)} ${(cx - r).toFixed(2)} ${cy.toFixed(2)} c ${(cx - r).toFixed(2)} ${(cy - k).toFixed(2)} ${(cx - k).toFixed(2)} ${(cy - r).toFixed(2)} ${cx.toFixed(2)} ${(cy - r).toFixed(2)} c ${(cx + k).toFixed(2)} ${(cy - r).toFixed(2)} ${(cx + r).toFixed(2)} ${(cy - k).toFixed(2)} ${(cx + r).toFixed(2)} ${cy.toFixed(2)} c S`);
-      ops.push(`${COLOURS.white} rg ` + ROUNDEL.map(([gx, gy, d]) => svgPath(d, ox + gx * s, oy - gy * s, 0.78 * s)).join(' ') + ' f');
-      api.text(L + 54, H - 36, 13, 'F2', 'Horizon Assets Management', 'white');
-      api.text(L + 54, H - 52, 10, 'F1', 'Company Register', 'white');
+      const ws = 46 / WORDMARK.h, ox = L, oy = H - 15;
+      for (const p of WORDMARK.paths) ops.push(`${rgb(p.fill)} rg ` + svgPath(p.d, ox + p.dx * ws, oy - p.dy * ws, ws) + ' f*');
+      for (const r of WORDMARK.rects) ops.push(`${rgb(r.fill)} rg ${(ox + r.x * ws).toFixed(2)} ${(oy - (r.y + r.h) * ws).toFixed(2)} ${(r.w * ws).toFixed(2)} ${(r.h * ws).toFixed(2)} re f`);
+      const tx = ox + WORDMARK.w * ws + 16;
+      api.line(tx - 8, H - 24, tx - 8, H - 58, 'grey', 0.8);
+      api.text(tx, H - 38, 12, 'F2', 'Company Register', 'white');
+      api.text(tx, H - 53, 8.5, 'F1', 'HN Group Limited', 'white');
       if (meta.code) {
         const label = 'FORM', code = meta.code, bw = Math.max(width(code, 'F2', 16), width(label, 'F1', 7)) + 22;
         api.rect(R - bw, H - 62, bw, 40, null, 'white', 1.2);
@@ -234,7 +244,7 @@ function assemble(pages, meta) {
     objects.push(`<< /Length ${Buffer.byteLength(content, 'latin1')} >>\nstream\n${content}\nendstream`);
   });
   objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>', '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
-  objects.push(`<< /Title (${esc(meta.heading + (meta.company ? ' - ' + meta.company : ''))}) /Author (Horizon Assets Management Limited) /Creator (Company Register) >>`);
+  objects.push(`<< /Title (${esc(meta.heading + (meta.company ? ' - ' + meta.company : ''))}) /Author (HN Group Limited) /Creator (Company Register) >>`);
   let out = '%PDF-1.4\n';
   const offsets = [];
   objects.forEach((o, i) => { offsets.push(Buffer.byteLength(out, 'latin1')); out += `${i + 1} 0 obj\n${o}\nendobj\n`; });
