@@ -309,7 +309,20 @@ function submitForm(res, ctx, c, values, error, kind) {
     case 'address': fields = '<p>Current address: <strong>' + (c.registeredOffice ? esc(c.registeredOffice).replace(/\n/g, ', ') : 'not recorded') + '</strong></p>' + field('New registered office address', 'registeredOffice', v.registeredOffice, { textarea: true, rows: 4, required: true, max: 300 }); break;
     case 'appoint': fields = ITEM_FIELDS.officers(v) + '<p class="hint">The date of appointment is required.</p>'; break;
     case 'terminate': { const list = current(c.officers.filter((o) => !o.resigned)); fields = list ? select('Officer', 'officer', list, v.officer) + field('Date they stopped being an officer', 'resigned', v.resigned, { type: 'date', required: true }) : '<p>There are no current officers recorded for this company.</p>'; break; }
-    case 'psc_add': fields = ITEM_FIELDS.psc(v) + '<p class="hint">The notified date is required.</p>'; break;
+    case 'psc_add': fields = prefixed('psc_', ITEM_FIELDS.psc(v.item || {})) + '<p class="hint">The notified date is required.</p>'; break;
+    case 'psc_change': {
+      const now = c.psc.filter((p) => !p.ceased);
+      const chosen = now.find((p) => p.id === v.psc);
+      if (!now.length) { fields = '<p>There are no current persons with significant control recorded for this company.</p>'; break; }
+      if (!chosen) return page(res, ctx, { title: store.CHANGE_TYPES[kind].label + ' · ' + c.legalName, noindex: true, flash: error && { error: true, text: error },
+        body: '<section class="panel narrow"><p class="eyebrow">' + esc(c.legalName) + '</p><h1>Whose details have changed?</h1><ul class="choice-list">' + now.map((p) => '<li><a href="' + base + '?type=psc_change&amp;psc=' + p.id + '">' + esc(p.name) + ' <span class="muted">(' + esc(p.kind) + (p.share ? ', ' + esc(p.share) + '%' : '') + ')</span></a></li>').join('') + '</ul><a class="button secondary" href="' + base + '">Back</a></section>' });
+      const item = v.item || chosen;
+      fields = '<input type="hidden" name="psc" value="' + esc(chosen.id) + '"><p>Changing the details of <strong>' + esc(chosen.name) + '</strong>. Update what has changed.</p>' +
+        prefixed('psc_', field('Name', 'name', item.name, { required: true, max: 160 }) + select('Type', 'kind', store.PSC_KINDS, item.kind) + field('Share percentage', 'share', item.share, { type: 'number', number: true, max: 6, hint: 'From 0 to 100. Leave blank if not known.' }) +
+          field('Nature of control', 'control', Array.isArray(item.control) ? item.control.join('\n') : item.control, { textarea: true, rows: 3, max: 1000, hint: 'One per line.' })) +
+        field('Date the details changed', 'changed', v.changed, { type: 'date', required: true });
+      break;
+    }
     case 'psc_cease': { const list = current(c.psc.filter((p) => !p.ceased)); fields = list ? select('Person with significant control', 'psc', list, v.psc) + field('Date they ceased', 'ceased', v.ceased, { type: 'date', required: true }) : '<p>There are no current persons with significant control recorded for this company.</p>'; break; }
     case 'name': fields = '<p>Current name: <strong>' + esc(c.legalName) + '</strong></p>' + field('New company name', 'newName', v.newName, { required: true, max: 160 }); break;
     case 'sic': fields = field('Nature of business (SIC)', 'sic', v.sic !== undefined ? v.sic : c.sic.join('\n'), { textarea: true, rows: 4, required: true, max: 700, hint: 'One per line, up to four. For example: 62020 - Information technology consultancy activities.' }); break;
@@ -410,7 +423,7 @@ function companyForm(c, ctx, values) {
 
 const ITEM_FIELDS = {
     officers: (o) => field('Name', 'name', o.name, { required: true, max: 120 }) + select('Role', 'role', store.OFFICER_ROLES, o.role || 'Director') + field('Appointed on', 'appointed', o.appointed, { type: 'date' }) + field('Resigned on', 'resigned', o.resigned, { type: 'date' }) + field('Occupation', 'occupation', o.occupation, { max: 80 }) + field('Nationality', 'nationality', o.nationality, { max: 60 }) + field('Country of residence', 'countryOfResidence', o.countryOfResidence, { max: 60 }),
-    psc: (p) => field('Name', 'name', p.name, { required: true, max: 160, hint: 'For a parent company, use its registered name exactly as it appears on the register.' }) + select('Type', 'kind', store.PSC_KINDS, p.kind || 'Individual') + field('Share percentage', 'share', p.share, { type: 'number', number: true, max: 6, hint: 'The percentage of shares held, from 0 to 100. Leave blank if not known.' }) + field('Notified on', 'notified', p.notified, { type: 'date' }) + field('Ceased on', 'ceased', p.ceased, { type: 'date' }) + field('Nature of control', 'control', (p.control || []).join('\n'), { textarea: true, rows: 3, max: 1000, hint: 'One per line.' }),
+    psc: (p) => field('Name', 'name', p.name, { required: true, max: 160, hint: 'For a parent company, use its registered name exactly as it appears on the register.' }) + select('Type', 'kind', store.PSC_KINDS, p.kind || 'Individual') + field('Share percentage', 'share', p.share, { type: 'number', number: true, max: 6, hint: 'The percentage of shares held, from 0 to 100. Leave blank if not known.' }) + field('Notified on', 'notified', p.notified, { type: 'date' }) + field('Ceased on', 'ceased', p.ceased, { type: 'date' }) + field('Nature of control', 'control', Array.isArray(p.control) ? p.control.join('\n') : p.control, { textarea: true, rows: 3, max: 1000, hint: 'One per line.' }),
     charges: (x) => field('Charge code', 'code', x.code, { max: 40 }) + select('Status', 'status', ['Outstanding', 'Part satisfied', 'Satisfied'], x.status || 'Outstanding') + field('Created on', 'created', x.created, { type: 'date' }) + field('Delivered on', 'delivered', x.delivered, { type: 'date' }) + field('Satisfied on', 'satisfied', x.satisfied, { type: 'date' }) + field('Persons entitled', 'entitled', x.entitled, { required: true, max: 200 }) + field('Brief description', 'description', x.description, { textarea: true, rows: 2, max: 600 }),
 };
 function itemForms(c, ctx, list) {
@@ -452,6 +465,10 @@ function changeDetails(s) {
   const rows = [];
   if (s.kind === 'appoint' && ch.officer) { const o = ch.officer; rows.push(['Name', o.name], ['Role', o.role], ['Appointed on', fmt(o.appointed)], ['Occupation', o.occupation], ['Nationality', o.nationality], ['Country of residence', o.countryOfResidence]); }
   else if (s.kind === 'psc_add' && ch.psc) { const p = ch.psc; rows.push(['Name', p.name], ['Type', p.kind], ['Shareholding', p.share ? p.share + '%' : ''], ['Nature of control', (p.control || []).join('; ')], ['Notified on', fmt(p.notified)]); }
+  else if (s.kind === 'psc_change' && ch.after) {
+    const show = (y) => [y.name, y.kind, y.share ? y.share + '%' : 'Shareholding not recorded', (y.control || []).join('; ')].filter(Boolean).join(' · ');
+    rows.push(['Previous details', show(ch.before)], ['New details', show(ch.after)], ['Changed on', fmt(ch.changed)]);
+  }
   else if (s.kind === 'sic') rows.push(['New nature of business', ch.sic.join('; ')]);
   else if (s.kind === 'incorporate' && ch.details) {
     const x = ch.details, o = ch.officer || {}, p = ch.psc || {};
@@ -589,10 +606,11 @@ async function route(req, res) {
     if (sub === 'request' || sub === 'report' || sub === 'file') {
       if (needCustomer(res, ctx, p)) return;
       if (sub === 'file' && !store.canManage(c, ctx.customer.account.id)) return notManagerPage(res, ctx, c);
-      if (req.method === 'GET') return sub === 'file' ? submitForm(res, ctx, c, {}, null, url.searchParams.get('type')) : requestForm(res, ctx, c, sub === 'report' ? 'mistake' : 'copy', {});
+      if (req.method === 'GET') return sub === 'file' ? submitForm(res, ctx, c, { psc: url.searchParams.get('psc') || '' }, null, url.searchParams.get('type')) : requestForm(res, ctx, c, sub === 'report' ? 'mistake' : 'copy', {});
       if (req.method === 'POST') {
         const { fields, file } = await forms.parse(req);
         if (fields.csrf !== ctx.customer.csrf) throw fail(403, 'Your session has changed. Go back, refresh the page and try again.');
+        if (sub === 'file' && (fields.kind === 'psc_add' || fields.kind === 'psc_change')) fields.item = unprefix(fields, 'psc_');
         try {
           if (sub === 'file') { const s = store.addSubmission(ctx.customer.account, c.slug, { ...fields, kind: fields.kind === 'claim' ? 'document' : fields.kind }, file); return accountPage(res, ctx, { text: 'Thanks. Your filing ' + s.ref + ' has been sent for review.' }); }
           const r = store.addRequest(ctx.customer.account, c.slug, { ...fields, kind: sub === 'report' ? 'mistake' : ['copy', 'certificate', 'other'].includes(fields.kind) ? fields.kind : 'copy' });

@@ -321,6 +321,7 @@ const CHANGE_TYPES = {
   appoint: { label: 'Appoint an officer', category: 'Officers' },
   terminate: { label: 'An officer has resigned or been removed', category: 'Officers' },
   psc_add: { label: 'Notify a person with significant control', category: 'Persons with significant control' },
+  psc_change: { label: 'Change the details of a person with significant control', category: 'Persons with significant control' },
   psc_cease: { label: 'A person with significant control has ceased', category: 'Persons with significant control' },
   name: { label: 'Change of company name', category: 'Change of name' },
   sic: { label: 'Change of nature of business (SIC)', category: 'Other' },
@@ -335,7 +336,16 @@ function checkChange(c, kind, input) {
     case 'address': { const v = req(input.registeredOffice, 'Enter the new registered office address.', 300); if (v === c.registeredOffice) throw bad('That is already the registered office address.'); return { registeredOffice: v }; }
     case 'appoint': { const o = LISTS.officers(input); if (!o.appointed) throw bad('Enter the date of appointment.'); o.resigned = ''; return { officer: o }; }
     case 'terminate': { const o = c.officers.find((x) => x.id === input.officer && !x.resigned); if (!o) throw bad('Choose a current officer.'); const date = d(input.resigned); if (!date) throw bad('Enter the date they stopped being an officer.'); return { officer: o.id, name: o.name, role: o.role, resigned: date }; }
-    case 'psc_add': { const x = LISTS.psc(input); if (!x.notified) throw bad('Enter the date they became a person with significant control.'); x.ceased = ''; return { psc: x }; }
+    case 'psc_add': { const x = LISTS.psc(input.item || input); if (!x.notified) throw bad('Enter the date they became a person with significant control.'); x.ceased = ''; return { psc: x }; }
+    case 'psc_change': {
+      const x = c.psc.find((y) => y.id === input.psc && !y.ceased); if (!x) throw bad('Choose a current person with significant control.');
+      const date = d(input.changed); if (!date) throw bad('Enter the date the details changed.');
+      const next = LISTS.psc({ ...(input.item || {}), notified: x.notified });
+      const pick = (y) => ({ name: y.name, kind: y.kind, share: y.share || '', control: [...(y.control || [])] });
+      const before = pick(x), after = pick(next);
+      if (JSON.stringify(before) === JSON.stringify(after)) throw bad('Nothing has changed. Update at least one detail.');
+      return { psc: x.id, name: x.name, changed: date, before, after };
+    }
     case 'psc_cease': { const x = c.psc.find((y) => y.id === input.psc && !y.ceased); if (!x) throw bad('Choose a current person with significant control.'); const date = d(input.ceased); if (!date) throw bad('Enter the date they ceased.'); return { psc: x.id, name: x.name, ceased: date }; }
     case 'name': { const v = req(input.newName, 'Enter the new company name.', 160); if (v.toLowerCase() === c.legalName.toLowerCase()) throw bad('That is already the company’s name.'); return { newName: v, oldName: c.legalName }; }
     case 'sic': { const v = String(input.sic || '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 4).map((x) => x.slice(0, 160)); if (!v.length) throw bad('Enter at least one nature of business (SIC) line.'); return { sic: v }; }
@@ -349,6 +359,7 @@ function changeDescription(kind, ch) {
     case 'appoint': return 'Appointment of ' + ch.officer.name + ' as ' + article(ch.officer.role) + ' on ' + longDate(ch.officer.appointed);
     case 'terminate': return 'Termination of appointment of ' + ch.name + ' as ' + article(ch.role) + ' on ' + longDate(ch.resigned);
     case 'psc_add': return 'Notification of ' + ch.psc.name + ' as a person with significant control on ' + longDate(ch.psc.notified);
+    case 'psc_change': return 'Change of details of ' + ch.name + ' as a person with significant control on ' + longDate(ch.changed);
     case 'psc_cease': return 'Cessation of ' + ch.name + ' as a person with significant control on ' + longDate(ch.ceased);
     case 'name': return 'Change of name from ' + ch.oldName + ' to ' + ch.newName;
     case 'sic': return 'Change of nature of business';
@@ -489,6 +500,12 @@ function applyChange(s) {
       return fid;
     }
     case 'terminate': { const o = c.officers.find((x) => x.id === ch.officer); if (!o || o.resigned) throw bad('That officer is no longer current, so this change can’t be applied.'); o.resigned = ch.resigned; return filing(ch.resigned, [['Name', o.name], ['Role', o.role], ['Appointed on', longDate(o.appointed)], ['Appointment ended on', longDate(ch.resigned)]]); }
+    case 'psc_change': {
+      const x = c.psc.find((y) => y.id === ch.psc); if (!x || x.ceased) throw bad('That person is no longer a current person with significant control, so this change can’t be applied.');
+      const show = (y) => [y.name, y.kind, y.share ? y.share + '%' : 'Shareholding not recorded', (y.control || []).join('; ')].filter(Boolean).join(' · ');
+      Object.assign(x, ch.after);
+      return filing(ch.changed, [['Person with significant control', ch.name], ['Previous details', show(ch.before)], ['New details', show(ch.after)], ['Changed on', longDate(ch.changed)]]);
+    }
     case 'psc_cease': { const x = c.psc.find((y) => y.id === ch.psc); if (!x || x.ceased) throw bad('That person is no longer a current person with significant control, so this change can’t be applied.'); x.ceased = ch.ceased; return filing(ch.ceased, [['Name', x.name], ['Type', x.kind], ['Ceased on', longDate(ch.ceased)]]); }
     case 'name': { const old = c.legalName; c.previousNames.push({ name: old, until: date }); if (c.name === old) c.name = ch.newName; c.legalName = ch.newName; return filing(date, [['Previous name', old], ['New name', ch.newName], ['Changed on', longDate(date)]]); } // customer-filed: their PDF is used if given
     case 'sic': { const old = c.sic.join('; '); c.sic = ch.sic; return filing(date, [['Previous nature of business', old], ['New nature of business', ch.sic.join('; ')]]); }
@@ -509,7 +526,7 @@ function checkStillValid(s) {
   if (!c) throw bad('The company is no longer on the register.');
   const ch = s.change || {};
   if (s.kind === 'terminate' && !c.officers.some((o) => o.id === ch.officer && !o.resigned)) throw bad('That officer is no longer current, so this change can’t be applied. Reject it instead.');
-  if (s.kind === 'psc_cease' && !c.psc.some((p) => p.id === ch.psc && !p.ceased)) throw bad('That person is no longer a current person with significant control, so this change can’t be applied. Reject it instead.');
+  if ((s.kind === 'psc_cease' || s.kind === 'psc_change') && !c.psc.some((p) => p.id === ch.psc && !p.ceased)) throw bad('That person is no longer a current person with significant control, so this change can’t be applied. Reject it instead.');
 }
 const submission = (sid) => db.submissions.find((s) => s.id === sid) || null;
 function decideSubmission(s, accept, note, actor) {

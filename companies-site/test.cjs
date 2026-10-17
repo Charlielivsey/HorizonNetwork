@@ -244,6 +244,24 @@ test('company register: public records, customers, requests, submissions and sta
     assert.equal((html.match(/Appointment of Casey New as a secretary on 1 July 2026/g) || []).length, 1);
     assert.match(html, /Termination of appointment of Jamie Director as a director on 2 July 2026/);
     assert.match(html, /Confirmation statement made up to 3 July 2026/);
+    // Notifying and changing persons with significant control (their "Type" field must not clash with the change type).
+    html = await (await upload('/company/hn-group/file', { csrf: samCsrf, kind: 'psc_add', psc_name: 'Morgan Holder', psc_kind: 'Individual', psc_share: '10', psc_notified: '2026-07-04', psc_control: 'Right to appoint and remove directors' }, null, sam)).text();
+    assert.match(html, /Notification of Morgan Holder as a person with significant control on 4 July 2026/); assert.doesNotMatch(html, /Attach the filing as a PDF/);
+    assert.match(await (await upload('/company/hn-group/file', { csrf: samCsrf, kind: 'psc_add', psc_name: 'No Date', psc_kind: 'Individual', psc_control: 'One\nTwo' }, null, sam)).text(), /Enter the date they became a person with significant control/);
+    html = await (await get('/company/hn-group/file?type=psc_change', sam)).text();
+    assert.match(html, /Whose details have changed\?/);
+    const skyId = JSON.parse(fs.readFileSync(path.join(dir, 'data', 'register.json'), 'utf8')).companies.find((x) => x.slug === 'hn-group').psc.find((p) => p.name === 'Sky Holder').id;
+    html = await (await get('/company/hn-group/file?type=psc_change&psc=' + skyId, sam)).text();
+    assert.match(html, /name="psc_share" type="number" value="25"/);
+    assert.match(await (await upload('/company/hn-group/file', { csrf: samCsrf, kind: 'psc_change', psc: skyId, psc_name: 'Sky Holder', psc_kind: 'Individual', psc_share: '25', psc_control: 'Ownership of shares – more than 25% but not more than 50%', changed: '2026-07-05' }, null, sam)).text(), /Nothing has changed/);
+    await upload('/company/hn-group/file', { csrf: samCsrf, kind: 'psc_change', psc: skyId, psc_name: 'Sky Holder', psc_kind: 'Individual', psc_share: '60', psc_control: 'Ownership of shares – more than 50% but less than 75%', changed: '2026-07-05' }, null, sam);
+    html = await (await get('/admin/submissions', owner)).text();
+    assert.match(html, /Change of details of Sky Holder as a person with significant control on 5 July 2026/); assert.match(html, /New details<\/dt><dd>Sky Holder · Individual · 60%/);
+    for (const sid of [...html.matchAll(/\/admin\/submissions\/([a-f0-9]{24})"/g)].map((x) => x[1])) await post('/admin/submissions/' + sid, { csrf: staffCsrf, decision: 'accept' }, owner);
+    html = await (await get('/company/hn-group/persons-with-significant-control')).text();
+    assert.match(html, /Morgan Holder[\s\S]*<dd>10%<\/dd>/); assert.match(html, /Sky Holder[\s\S]*<dd>60%<\/dd>[\s\S]*more than 50% but less than 75%/);
+    assert.match(await (await get('/company/hn-group/filing-history')).text(), /Change of details of Sky Holder as a person with significant control on 5 July 2026/);
+
     // A change that no longer fits the record can't be accepted.
     const caseyId = JSON.parse(fs.readFileSync(path.join(dir, 'data', 'register.json'), 'utf8')).companies.find((x) => x.slug === 'hn-group').officers.find((o) => o.name === 'Casey New').id;
     await upload('/company/hn-group/file', { csrf: samCsrf, kind: 'terminate', officer: caseyId, resigned: '2026-08-01' }, null, sam);
