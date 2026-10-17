@@ -1,122 +1,270 @@
 'use strict';
-// Builds simple one-page A4 PDF documents (title plus labelled lines) for filings the register
-// generates itself. Uses the standard Helvetica fonts, so no font files are needed.
+// Builds the register's own PDF documents: filing forms (one A4 page per filing, continuing onto more
+// pages if needed) and company reports. Uses the standard Helvetica fonts, so no font files are needed.
+// Every page has the Horizon Assets Management header, a form code, the company's details and a
+// footer with the document reference and page number.
 
-// PDF strings use Latin-1 with (, ) and \ escaped; anything outside Latin-1 becomes "?".
-function pdfText(s) {
-  return String(s == null ? '' : s).replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, '-')
-    .replace(/[^\x20-\x7e\xa0-\xff]/g, '?').replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
-}
+const W = 595, H = 842, L = 48, R = W - 48;
+const COLOURS = { ink: '0.043 0.047 0.047', grey: '0.314 0.353 0.373', rule: '0.694 0.706 0.714', light: '0.953 0.949 0.945', brand: '0.333 0.078 0.706', green: '0 0.439 0.235', white: '1 1 1' };
+// Character widths (per 1000 units) for printable ASCII, Helvetica and Helvetica-Bold.
+const WIDTHS = {
+  F1: [278, 278, 355, 556, 556, 889, 667, 191, 333, 333, 389, 584, 278, 333, 278, 278, 556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 278, 278, 584, 584, 584, 556, 1015, 667, 667, 722, 722, 667, 611, 778, 722, 278, 500, 667, 556, 833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 278, 278, 278, 469, 556, 333, 556, 556, 500, 556, 556, 278, 556, 556, 222, 222, 500, 222, 833, 556, 556, 556, 556, 333, 500, 278, 556, 500, 722, 500, 500, 500, 334, 260, 334, 584],
+  F2: [278, 333, 474, 556, 556, 889, 722, 238, 333, 333, 389, 584, 278, 333, 278, 278, 556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 333, 333, 584, 584, 584, 611, 975, 722, 722, 722, 722, 667, 611, 778, 722, 278, 556, 722, 611, 833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 333, 278, 333, 584, 556, 333, 556, 611, 556, 611, 556, 333, 611, 611, 278, 278, 556, 278, 889, 611, 611, 611, 611, 389, 556, 333, 611, 556, 778, 556, 556, 500, 389, 280, 389, 584],
+};
+// The Horizon Assets Management roundel (ring and HAM letters) in its 100 x 100 drawing space.
+const ROUNDEL = [
+  [15.45, 36.623, 'M0 0h7.8v13.45h8.40V0h7.8v34.3h-7.8v-13.45h-8.40v13.45H0z'],
+  [36.37, 36.623, 'M0 34.3L9.6 0h8.8L28 34.3h-8.1l-1.6-5.9h-8.6l-1.6 5.9zM11.5 21.7h5L14 11.6z'],
+  [60.41, 36.623, 'M0 0h9.4l6.1 17.6L21.6 0H31v34.3h-7.6V14.2l-5.1 13.6h-5.6L7.6 14.2V34.3H0z'],
+];
 
-// Wraps text to roughly `width` characters per line.
-function wrap(text, width) {
+// Plain characters only: curly quotes and dashes become their plain forms; anything outside Latin-1 becomes "?".
+const plain = (s) => String(s == null ? '' : s).replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, '-').replace(/[^\x20-\x7e\xa0-\xff]/g, '?');
+const esc = (s) => plain(s).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+const width = (s, font, size) => [...plain(s)].reduce((w, ch) => { const c = ch.charCodeAt(0); return w + ((c >= 32 && c <= 126 ? WIDTHS[font][c - 32] : 556)); }, 0) * size / 1000;
+
+// Wraps text to fit `max` points.
+function wrap(text, font, size, max) {
   const out = [];
-  for (const para of String(text || '').split('\n')) {
+  for (const para of String(text == null ? '' : text).split('\n')) {
     let line = '';
     for (const word of para.split(/\s+/).filter(Boolean)) {
-      if ((line + ' ' + word).trim().length > width) { if (line) out.push(line); line = word; } else line = (line + ' ' + word).trim();
+      const next = line ? line + ' ' + word : word;
+      if (width(next, font, size) > max && line) { out.push(line); line = word; } else line = next;
     }
     out.push(line);
   }
   return out;
 }
 
-// Writes pages (arrays of drawing operations) out as a PDF file.
-function assemble(pages) {
-  const fonts = 3 + pages.length * 2; // catalog, pages, then a page and its contents for each page
+// Converts the simple SVG paths used by the roundel (M, L, H, V, h, v, l, z) to PDF path operators.
+function svgPath(d, ox, oy, scale) {
+  const ops = []; let x = 0, y = 0, sx = 0, sy = 0;
+  const pt = (px, py) => (ox + px * scale).toFixed(2) + ' ' + (oy - py * scale).toFixed(2);
+  const tokens = d.match(/[MLHVZmlhvz]|-?\d*\.?\d+/g);
+  let cmd = '';
+  for (let i = 0; i < tokens.length;) {
+    if (/[A-Za-z]/.test(tokens[i])) { cmd = tokens[i++]; if (cmd === 'z' || cmd === 'Z') { ops.push('h'); x = sx; y = sy; } continue; }
+    const n = () => Number(tokens[i++]);
+    switch (cmd) {
+      case 'M': x = n(); y = n(); sx = x; sy = y; ops.push(pt(x, y) + ' m'); cmd = 'L'; break;
+      case 'L': x = n(); y = n(); ops.push(pt(x, y) + ' l'); break;
+      case 'l': x += n(); y += n(); ops.push(pt(x, y) + ' l'); break;
+      case 'H': x = n(); ops.push(pt(x, y) + ' l'); break;
+      case 'h': x += n(); ops.push(pt(x, y) + ' l'); break;
+      case 'V': y = n(); ops.push(pt(x, y) + ' l'); break;
+      case 'v': y += n(); ops.push(pt(x, y) + ' l'); break;
+      default: i++;
+    }
+  }
+  return ops.join(' ');
+}
+
+// A drawing surface for one document: pages, text, boxes and the shared header and footer.
+function canvas(meta) {
+  const pages = [];
+  let ops, y;
+  const api = {
+    get y() { return y; }, set y(v) { y = v; },
+    text(x, yy, size, font, s, colour) { ops.push(`BT ${COLOURS[colour || 'ink']} rg /${font} ${size} Tf ${x.toFixed(2)} ${yy.toFixed(2)} Td (${esc(s)}) Tj ET`); },
+    right(x, yy, size, font, s, colour) { api.text(x - width(s, font, size), yy, size, font, s, colour); },
+    rect(x, yy, w, h, fill, stroke, lw) { ops.push(`${lw || 0.8} w ${fill ? COLOURS[fill] + ' rg ' : ''}${stroke ? COLOURS[stroke] + ' RG ' : ''}${x.toFixed(2)} ${yy.toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)} re ${fill && stroke ? 'B' : fill ? 'f' : 'S'}`); },
+    line(x1, y1, x2, y2, colour, lw) { ops.push(`${lw || 0.8} w ${COLOURS[colour || 'rule']} RG ${x1} ${y1} m ${x2} ${y2} l S`); },
+    page() {
+      ops = []; pages.push(ops);
+      // Black header with the white roundel, the company and the register's name, and the form code.
+      api.rect(0, H - 78, W, 78, 'ink');
+      api.rect(0, H - 84, W, 6, 'brand');
+      const s = 0.44, ox = L, oy = H - 17;
+      ops.push(`${COLOURS.white} RG 2.7 w`);
+      // The ring, drawn as four Bézier quarter circles.
+      const cx = ox + 50 * s, cy = oy - 50 * s, r = 46.9 * s, k = 0.5523 * r;
+      ops.push(`${(cx + r).toFixed(2)} ${cy.toFixed(2)} m ${(cx + r).toFixed(2)} ${(cy + k).toFixed(2)} ${(cx + k).toFixed(2)} ${(cy + r).toFixed(2)} ${cx.toFixed(2)} ${(cy + r).toFixed(2)} c ${(cx - k).toFixed(2)} ${(cy + r).toFixed(2)} ${(cx - r).toFixed(2)} ${(cy + k).toFixed(2)} ${(cx - r).toFixed(2)} ${cy.toFixed(2)} c ${(cx - r).toFixed(2)} ${(cy - k).toFixed(2)} ${(cx - k).toFixed(2)} ${(cy - r).toFixed(2)} ${cx.toFixed(2)} ${(cy - r).toFixed(2)} c ${(cx + k).toFixed(2)} ${(cy - r).toFixed(2)} ${(cx + r).toFixed(2)} ${(cy - k).toFixed(2)} ${(cx + r).toFixed(2)} ${cy.toFixed(2)} c S`);
+      ops.push(`${COLOURS.white} rg ` + ROUNDEL.map(([gx, gy, d]) => svgPath(d, ox + gx * s, oy - gy * s, 0.78 * s)).join(' ') + ' f');
+      api.text(L + 54, H - 36, 13, 'F2', 'Horizon Assets Management', 'white');
+      api.text(L + 54, H - 52, 10, 'F1', 'Company Register', 'white');
+      if (meta.code) {
+        const label = 'FORM', code = meta.code, bw = Math.max(width(code, 'F2', 16), width(label, 'F1', 7)) + 22;
+        api.rect(R - bw, H - 62, bw, 40, null, 'white', 1.2);
+        api.text(R - bw + 11, H - 35, 7, 'F1', label, 'white');
+        api.text(R - bw + 11, H - 54, 16, 'F2', code, 'white');
+      }
+      y = H - 116;
+      if (pages.length > 1) { api.text(L, y, 10, 'F2', meta.heading + (meta.company ? ' - ' + meta.company : ''), 'grey'); y -= 24; }
+    },
+    room(h) { if (y - h < 96) api.page(); },
+    finish() {
+      pages.forEach((p, i) => {
+        ops = p;
+        api.line(L, 78, R, 78, 'rule', 0.8);
+        let fy = 64;
+        for (const l of wrap(meta.footer || '', 'F1', 7.5, R - L - 175)) { api.text(L, fy, 7.5, 'F1', l, 'grey'); fy -= 10; }
+        api.right(R, 64, 7.5, 'F2', 'Page ' + (i + 1) + ' of ' + pages.length, 'grey');
+        if (meta.reference) api.right(R, 54, 7.5, 'F1', 'Ref ' + meta.reference, 'grey');
+      });
+      return assemble(pages, meta);
+    },
+  };
+  api.page();
+  return api;
+}
+
+// The title and the company's name and number, as at the top of each form.
+function titleBlock(c, meta) {
+  for (const l of wrap(meta.heading, 'F2', 22, R - L)) { c.text(L, c.y, 22, 'F2', l); c.y -= 26; }
+  if (meta.subtitle) { c.y += 4; for (const l of wrap(meta.subtitle, 'F1', 11, R - L)) { c.text(L, c.y, 11, 'F1', l, 'grey'); c.y -= 15; } }
+  c.y -= 8;
+  if (meta.company !== undefined) {
+    const nameW = (R - L) * 0.68, gap = 10, numW = R - L - nameW - gap;
+    const lines = wrap(meta.company || 'Not recorded', 'F2', 12, nameW - 20);
+    const h = 30 + lines.length * 15;
+    c.rect(L, c.y - h, nameW, h, 'light', null);
+    c.rect(L + nameW + gap, c.y - h, numW, h, 'light', null);
+    c.text(L + 10, c.y - 15, 7.5, 'F2', 'COMPANY NAME', 'grey');
+    c.text(L + nameW + gap + 10, c.y - 15, 7.5, 'F2', 'COMPANY NUMBER', 'grey');
+    lines.forEach((l, i) => c.text(L + 10, c.y - 31 - i * 15, 12, 'F2', l));
+    c.text(L + nameW + gap + 10, c.y - 31, 12, 'F2', meta.number || 'Not recorded', meta.number ? 'ink' : 'grey');
+    c.y -= h + 26;
+  }
+}
+
+function sectionHeading(c, title, number) {
+  c.room(60);
+  c.rect(L, c.y - 4, 4, 18, 'brand');
+  c.text(L + 12, c.y, 13, 'F2', (number ? number + '. ' : '') + title);
+  c.y -= 24;
+}
+
+// Labelled answers, each in a form-style box, as a filled-in form would show them.
+function fields(c, rows) {
+  const labelW = 150, boxX = L + labelW + 12, boxW = R - boxX;
+  rows.forEach(([label, value], i) => {
+    const empty = value == null || value === '';
+    const lines = wrap(empty ? 'Not recorded' : value, 'F1', 10.5, boxW - 16);
+    const labelLines = wrap(label, 'F2', 9.5, labelW);
+    const h = Math.max(lines.length * 14 + 12, labelLines.length * 12 + 8, 26);
+    c.room(h + 8);
+    labelLines.forEach((l, k) => c.text(L, c.y - 14 - k * 12, 9.5, 'F2', l));
+    c.rect(boxX, c.y - h, boxW, h, 'white', 'rule', 0.9);
+    lines.forEach((l, k) => c.text(boxX + 8, c.y - 16 - k * 14, 10.5, 'F1', l, empty ? 'grey' : 'ink'));
+    c.y -= h + 8;
+  });
+}
+
+// Compact label and value rows, for reports.
+function table(c, rows) {
+  const labelW = 160, vx = L + labelW + 10, vw = R - vx;
+  for (const [label, value] of rows) {
+    const empty = value == null || value === '';
+    const lines = wrap(empty ? 'Not recorded' : value, 'F1', 10, vw);
+    const h = lines.length * 13 + 9;
+    c.room(h + 2);
+    c.text(L, c.y - 12, 9.5, 'F2', label, 'grey');
+    lines.forEach((l, k) => c.text(vx, c.y - 12 - k * 13, 10, 'F1', l, empty ? 'grey' : 'ink'));
+    c.y -= h;
+    c.line(L, c.y, R, c.y, 'light', 0.8);
+  }
+  c.y -= 6;
+}
+
+// The register's stamp showing the filing was recorded, and when.
+function stamp(c, date, reference) {
+  c.room(80);
+  c.y -= 10;
+  const w = 190, h = 58, x = R - w;
+  c.rect(x, c.y - h, w, h, null, 'green', 1.6);
+  c.rect(x + 3, c.y - h + 3, w - 6, h - 6, null, 'green', 0.6);
+  c.text(x + 14, c.y - 18, 8, 'F2', 'FILED ON THE COMPANY REGISTER', 'green');
+  c.text(x + 14, c.y - 36, 13, 'F2', date || 'Date not recorded', 'green');
+  if (reference) c.text(x + 14, c.y - 49, 7, 'F1', 'Document ' + reference, 'green');
+  c.text(L, c.y - 22, 9, 'F1', 'Generated by the Company Register from the details recorded', 'grey');
+  c.text(L, c.y - 34, 9, 'F1', 'when this filing was made.', 'grey');
+  c.y -= h + 10;
+}
+
+// doc: { code, heading, company, number, rows: [[label, value]], date, reference, footer }
+function build(doc) {
+  const c = canvas(doc);
+  titleBlock(c, doc);
+  sectionHeading(c, 'Details of this filing');
+  fields(c, doc.rows || []);
+  stamp(c, doc.date, doc.reference);
+  return c.finish();
+}
+
+// doc: { code, heading, subtitle, footer, reference, sections: [{ title, subtitle, rows, lines, newPage, level }] }
+function report(doc) {
+  const c = canvas(doc);
+  titleBlock(c, { heading: doc.heading, subtitle: doc.subtitle || doc.subheading });
+  doc.sections.forEach((sec, i) => {
+    if (sec.newPage && i) c.page();
+    if (sec.level === 2) {
+      c.room(50);
+      c.text(L, c.y, 11, 'F2', sec.title); c.y -= 6; c.line(L, c.y, R, c.y, 'rule', 0.8); c.y -= 14;
+    } else {
+      c.room(70);
+      c.rect(L, c.y - 30, R - L, 36, 'light');
+      c.rect(L, c.y - 30, 4, 36, 'brand');
+      c.text(L + 14, c.y - 12, 14, 'F2', sec.title);
+      if (sec.subtitle) c.text(L + 14, c.y - 25, 8.5, 'F1', sec.subtitle, 'grey');
+      c.y -= 48;
+    }
+    if (sec.rows) table(c, sec.rows);
+    if (sec.lines) for (const line of sec.lines) {
+      const indent = (/^ */.exec(line)[0].length / 2) * 14;
+      const body = line.trim();
+      const lines = wrap(body, 'F1', 10, R - L - 14 - indent);
+      c.room(13 * lines.length + 4);
+      c.rect(L + indent, c.y + 2.5, 3, 3, 'brand');
+      lines.forEach((l, k) => { c.text(L + 10 + indent, c.y, 10, 'F1', l); c.y -= 13; });
+      c.y -= 3;
+    }
+    c.y -= 12;
+  });
+  return c.finish();
+}
+
+// Writes pages (lists of drawing operators) out as a PDF file.
+function assemble(pages, meta) {
+  const fonts = 3 + pages.length * 2;
   const objects = ['<< /Type /Catalog /Pages 2 0 R >>', `<< /Type /Pages /Kids [${pages.map((_, i) => (3 + i * 2) + ' 0 R').join(' ')}] /Count ${pages.length} >>`];
   pages.forEach((ops, i) => {
     const content = ops.join('\n');
-    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 ${fonts} 0 R /F2 ${fonts + 1} 0 R >> >> /Contents ${4 + i * 2} 0 R >>`);
+    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /F1 ${fonts} 0 R /F2 ${fonts + 1} 0 R >> >> /Contents ${4 + i * 2} 0 R >>`);
     objects.push(`<< /Length ${Buffer.byteLength(content, 'latin1')} >>\nstream\n${content}\nendstream`);
   });
   objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>', '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
+  objects.push(`<< /Title (${esc(meta.heading + (meta.company ? ' - ' + meta.company : ''))}) /Author (Horizon Assets Management Limited) /Creator (Company Register) >>`);
   let out = '%PDF-1.4\n';
   const offsets = [];
   objects.forEach((o, i) => { offsets.push(Buffer.byteLength(out, 'latin1')); out += `${i + 1} 0 obj\n${o}\nendobj\n`; });
   const xref = Buffer.byteLength(out, 'latin1');
   out += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n` + offsets.map((o) => String(o).padStart(10, '0') + ' 00000 n \n').join('');
-  out += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  out += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R /Info ${objects.length} 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
   return Buffer.from(out, 'latin1');
 }
 
-// A page writer: text at a moving position, with new pages added as needed.
-function writer(heading, subheading) {
-  const pages = [];
-  let ops, y;
-  const text = (x, size, font, s) => ops.push(`BT /${font} ${size} Tf ${x} ${y} Td (${pdfText(s)}) Tj ET`);
-  const rule = (at, grey) => ops.push(`${grey || 0.8} ${grey || 0.8} ${grey || 0.8} RG 56 ${at} m 539 ${at} l S 0 0 0 RG`);
-  function newPage() {
-    ops = []; pages.push(ops); y = 790;
-    ops.push('0.333 0.078 0.706 rg 0 822 595 20 re f 0 0 0 rg'); // purple band across the top
-    text(56, 11, 'F2', 'COMPANY REGISTER');
-    if (pages.length === 1) {
-      y -= 34; text(56, 20, 'F2', heading);
-      if (subheading) { y -= 22; text(56, 12, 'F1', subheading); }
-    } else { y -= 22; text(56, 9, 'F1', heading); }
-    y -= 14; rule(y); y -= 26;
+// Reads back the heading, company line and rows from a filing made with the register's first, plain
+// design, so it can be drawn again in this one. Returns null for anything else (such as uploaded PDFs).
+function readLegacy(buffer) {
+  const s = buffer.toString('latin1');
+  if (!s.includes('(COMPANY REGISTER) Tj') || s.includes('/Creator (Company Register)')) return null;
+  const unesc = (t) => t.replace(/\\([\\()])/g, '$1');
+  const items = [...s.matchAll(/BT \/(F[12]) ([\d.]+) Tf ([\d.]+) ([\d.]+) Td \(((?:\\.|[^\\)])*)\) Tj ET/g)].map((m) => ({ font: m[1], size: Number(m[2]), x: Number(m[3]), y: Number(m[4]), text: unesc(m[5]) }));
+  const heading = items.find((t) => t.size === 20);
+  if (!heading) return null;
+  const sub = items.find((t) => t.size === 12 && t.font === 'F1');
+  const rows = [];
+  for (const t of items) {
+    if (t.size !== 10) continue;
+    if (t.font === 'F2' && t.x === 56) rows.push([t.text, '']);
+    else if (t.font === 'F1' && t.x === 220 && rows.length) { const r = rows[rows.length - 1]; r[1] = r[1] ? r[1] + ' ' + t.text : t.text; }
   }
-  newPage();
-  return {
-    text, rule,
-    get y() { return y; }, set y(v) { y = v; },
-    room(h) { if (y - h < 100) newPage(); },
-    pages, newPage,
-  };
-}
-function footers(pages, footer) {
-  pages.forEach((ops, i) => {
-    let y = 70;
-    ops.push(`0.8 0.8 0.8 RG 56 ${y + 16} m 539 ${y + 16} l S 0 0 0 RG`);
-    for (const l of wrap(footer || '', 95)) { ops.push(`BT /F1 8 Tf 56 ${y} Td (${pdfText(l)}) Tj ET`); y -= 11; }
-    if (pages.length > 1) ops.push(`BT /F1 8 Tf 490 40 Td (${pdfText('Page ' + (i + 1) + ' of ' + pages.length)}) Tj ET`);
-  });
+  for (const r of rows) if (r[1] === 'Not recorded') r[1] = '';
+  let company = sub ? sub.text : '', number = '';
+  const m = /^(.*) \(company number (.+)\)$/.exec(company);
+  if (m) { company = m[1]; number = m[2]; }
+  return { heading: heading.text, company, number, rows };
 }
 
-function rowsOut(w, rows) {
-  for (const [label, value] of rows) {
-    const lines = wrap(value || 'Not recorded', 58);
-    w.room(15 * lines.length + 7);
-    w.text(56, 10, 'F2', label);
-    for (const l of lines) { w.text(220, 10, 'F1', l); w.y -= 15; }
-    w.y -= 7;
-  }
-}
-
-// doc: { heading, subheading, rows: [[label, value]], footer }: a one-page filing document.
-function build(doc) {
-  const w = writer(doc.heading, doc.subheading);
-  for (const [label, value] of doc.rows) {
-    if (w.y < 120) break;
-    w.text(56, 10, 'F2', label);
-    for (const l of wrap(value || 'Not recorded', 58)) { w.text(220, 10, 'F1', l); w.y -= 15; }
-    w.y -= 7;
-  }
-  footers(w.pages, doc.footer);
-  return assemble(w.pages);
-}
-
-// doc: { heading, subheading, footer, sections: [{ title, subtitle, rows, list: { title, items } }] }:
-// a report over as many pages as it needs.
-function report(doc) {
-  const w = writer(doc.heading, doc.subheading);
-  doc.sections.forEach((sec, i) => {
-    if (sec.newPage && i) w.newPage();
-    w.room(60);
-    w.text(56, sec.level === 2 ? 11 : 14, 'F2', sec.title); w.y -= sec.level === 2 ? 16 : 18;
-    if (sec.subtitle) { for (const l of wrap(sec.subtitle, 90)) { w.text(56, 9, 'F1', l); w.y -= 13; } }
-    w.y -= 6;
-    if (sec.rows) rowsOut(w, sec.rows);
-    if (sec.lines) for (const line of sec.lines) {
-      const lines = wrap(line, 92);
-      w.room(13 * lines.length);
-      lines.forEach((l, k) => { w.text(k ? 66 : 56, 10, 'F1', l); w.y -= 13; });
-      w.y -= 3;
-    }
-    w.y -= 8;
-  });
-  footers(w.pages, doc.footer);
-  return assemble(w.pages);
-}
-
-module.exports = { build, report };
+module.exports = { build, report, readLegacy };

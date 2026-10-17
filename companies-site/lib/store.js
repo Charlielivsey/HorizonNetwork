@@ -75,6 +75,8 @@ function runMigrations() {
       for (const x of c.charges) x.entitled = fix(x.entitled);
     }
   });
+  // The user's request (17 October 2026): every generated document uses the new design, old ones included.
+  once('pdf-design-2', redrawGeneratedFilings);
   once('officer-charlie-livsey', () => {
     for (const c of db.companies) for (const o of c.officers) if (/^charlie\s+dean\s+livsey$/i.test(String(o.name).trim())) { o.name = 'Charlie Livsey'; audit('system', 'officer.rename', c.slug + ' Charlie Dean Livsey → Charlie Livsey'); }
   });
@@ -204,38 +206,68 @@ function deleteItem(slug, list, itemId, actor) {
 // document itself (incorporation, appointment or PSC notification), each with a generated PDF. Each is created once; the link is kept on the
 // record so later edits don't duplicate it. Deleting a generated filing doesn't recreate it.
 const FOOTER = 'Generated automatically by the Company Register run by Horizon Assets Management Limited, a wholly owned subsidiary of HN Group Limited, from the details recorded at the time. This is a group register document, not a filing with the UK government\'s Companies House.';
+// Each kind of generated document has its own form code, shown on the document.
+const FORM_CODES = { Incorporation: 'REG-INC', appoint: 'REG-APP', psc_add: 'REG-PSC1', psc_change: 'REG-PSC2', psc_cease: 'REG-PSC3', terminate: 'REG-TRM', address: 'REG-ADR', name: 'REG-NAM', sic: 'REG-SIC', confirmation: 'REG-CNF' };
 function generateFilings(c) {
   if (c.incorporated && !c.incorporationFiling) {
-    const doc = pdf.build({ heading: 'Incorporation of a company', subheading: c.legalName, footer: FOOTER, rows: [
+    c.incorporationFiling = pushGenerated(c, c.incorporated, 'Incorporation', 'Incorporation of ' + c.legalName, { code: FORM_CODES.Incorporation, heading: 'Incorporation of a company', rows: [
       ['Company name', c.legalName], ['Company number', c.number], ['Company type', c.type], ['Incorporated on', longDate(c.incorporated)],
       ['Registered office', c.registeredOffice.replace(/\n/g, ', ')], ['Nature of business', c.sic.join('; ')], ['Parent company', c.parent ? (company(c.parent) || {}).legalName : 'None recorded']] });
-    c.incorporationFiling = pushGenerated(c, c.incorporated, 'Incorporation', 'Incorporation of ' + c.legalName, doc);
   }
   for (const o of c.officers) if (o.appointed && !o.appointmentFiling) {
     const role = o.role.toLowerCase();
-    const doc = pdf.build({ heading: 'Appointment of ' + (/^[aeiou]/.test(role) ? 'an ' : 'a ') + role, subheading: c.legalName + (c.number ? ' (company number ' + c.number + ')' : ''), footer: FOOTER, rows: [
+    o.appointmentFiling = pushGenerated(c, o.appointed, 'Officers', 'Appointment of ' + o.name + ' as ' + (/^[aeiou]/.test(role) ? 'an ' : 'a ') + role + ' on ' + longDate(o.appointed), { code: FORM_CODES.appoint, heading: 'Appointment of ' + (/^[aeiou]/.test(role) ? 'an ' : 'a ') + role, rows: [
       ['Name', o.name], ['Role', o.role], ['Appointed on', longDate(o.appointed)], ['Occupation', o.occupation], ['Nationality', o.nationality], ['Country of residence', o.countryOfResidence], ['Company', c.legalName]] });
-    o.appointmentFiling = pushGenerated(c, o.appointed, 'Officers', 'Appointment of ' + o.name + ' as ' + (/^[aeiou]/.test(role) ? 'an ' : 'a ') + role + ' on ' + longDate(o.appointed), doc);
   }
   for (const p of c.psc || []) if (p.notified && !p.notificationFiling) {
-    const doc = pdf.build({ heading: 'Notification of a person with significant control', subheading: c.legalName + (c.number ? ' (company number ' + c.number + ')' : ''), footer: FOOTER, rows: [
+    p.notificationFiling = pushGenerated(c, p.notified, 'Persons with significant control', 'Notification of ' + p.name + ' as a person with significant control on ' + longDate(p.notified), { code: FORM_CODES.psc_add, heading: 'Notification of a person with significant control', rows: [
       ['Name', p.name], ['Type', p.kind], ['Shareholding', p.share ? p.share + '%' : ''], ['Nature of control', (p.control || []).join('; ')], ['Notified on', longDate(p.notified)], ['Company', c.legalName]] });
-    p.notificationFiling = pushGenerated(c, p.notified, 'Persons with significant control', 'Notification of ' + p.name + ' as a person with significant control on ' + longDate(p.notified), doc);
   }
 }
 // A change to the registered name keeps the old name and files a change of name automatically.
 function recordNameChange(c, oldName) {
   const date = now().slice(0, 10);
   c.previousNames.push({ name: oldName, until: date });
-  const doc = pdf.build({ heading: 'Change of company name', subheading: c.legalName + (c.number ? ' (company number ' + c.number + ')' : ''), footer: FOOTER,
+  pushGenerated(c, date, 'Change of name', 'Change of name from ' + oldName + ' to ' + c.legalName, { code: FORM_CODES.name, heading: 'Change of company name',
     rows: [['Previous name', oldName], ['New name', c.legalName], ['Changed on', longDate(date)]] });
-  pushGenerated(c, date, 'Change of name', 'Change of name from ' + oldName + ' to ' + c.legalName, doc);
 }
-function pushGenerated(c, date, category, description, buffer) {
-  const f = { id: id(), company: c.slug, date, category, description, file: storeFile(buffer), pages: 1, createdAt: now(), source: 'generated' };
+// Generated filings keep what their document shows (doc), so it can be drawn again if the design changes.
+function renderFiling(f) {
+  return pdf.build({ ...f.doc, date: longDate(f.date), reference: f.id.toUpperCase(), footer: FOOTER });
+}
+function newGeneratedFiling(c, date, category, description, spec) {
+  const f = { id: id(), company: c.slug, date, category, description, file: '', pages: 1, createdAt: now(), source: 'generated', doc: { ...spec, company: c.legalName, number: c.number || '' } };
+  f.file = storeFile(renderFiling(f));
   db.filings.push(f);
+  return f;
+}
+function pushGenerated(c, date, category, description, spec) {
+  const f = newGeneratedFiling(c, date, category, description, spec);
   audit('system', 'filing.generated', c.slug + ' ' + description);
   return f.id;
+}
+// Draws every generated filing again in the current design. Older filings that didn't keep their
+// details have them read back from their PDF. Uploaded PDFs are left exactly as they were.
+function redrawGeneratedFilings() {
+  let n = 0;
+  for (const f of db.filings) {
+    if (f.source !== 'generated' || !f.file) continue;
+    const at = filePath(f.file);
+    if (!f.doc) {
+      let old; try { old = pdf.readLegacy(fs.readFileSync(at)); } catch { old = null; }
+      if (!old) continue;
+      const c = company(f.company);
+      const code = f.category === 'Incorporation' ? FORM_CODES.Incorporation : f.category === 'Change of name' ? FORM_CODES.name : f.category === 'Officers' ? (/^Termination/.test(f.description) ? FORM_CODES.terminate : FORM_CODES.appoint)
+        : f.category === 'Persons with significant control' ? (/^Cessation/.test(f.description) ? FORM_CODES.psc_cease : /^Change of details/.test(f.description) ? FORM_CODES.psc_change : FORM_CODES.psc_add)
+        : f.category === 'Address' ? FORM_CODES.address : f.category === 'Confirmation statement' ? FORM_CODES.confirmation : /nature of business/i.test(f.description) ? FORM_CODES.sic : '';
+      f.doc = { code, heading: old.heading, company: old.company || (c && c.legalName) || '', number: old.number || (c && c.number) || '', rows: old.rows };
+    }
+    const tmp = at + '.tmp';
+    fs.writeFileSync(tmp, renderFiling(f), { mode: 0o600 });
+    fs.renameSync(tmp, at);
+    n++;
+  }
+  if (n) audit('system', 'filing.redrawn', n + ' generated documents redrawn in the current design');
 }
 function longDate(iso) {
   const d = new Date(String(iso) + 'T12:00:00Z');
@@ -445,7 +477,7 @@ function groupReport(slug, opts) {
   const today = now().slice(0, 10);
   const nameOf = (s2) => (company(s2) || {}).legalName || '';
   const sections = [{ title: 'Summary', rows: [['Report date', longDate(today)], ['Company', root.legalName + (root.number ? ' (' + root.number + ')' : '')], ['Companies included', String(group.length)], ['Includes', [o.officers && 'officers', o.psc && 'persons with significant control', o.charges && 'charges', o.filings && 'recent filings'].filter(Boolean).join(', ') || 'company details only']] }];
-  if (group.length > 1) sections.push({ title: 'Group structure', level: 2, lines: group.map((g) => '  '.repeat(g.depth) + (g.depth ? '- ' : '') + g.company.legalName + (g.company.number ? ' (' + g.company.number + ')' : '') + (g.company.status ? ', ' + g.company.status : '')) });
+  if (group.length > 1) sections.push({ title: 'Group structure', level: 2, lines: group.map((g) => '  '.repeat(g.depth) + g.company.legalName + (g.company.number ? ' (' + g.company.number + ')' : '') + (g.company.status ? ', ' + g.company.status : '')) });
   group.forEach(({ company: c, depth }, i) => {
     sections.push({ title: c.legalName, subtitle: (depth ? 'Subsidiary of ' + nameOf(c.parent) + '. ' : '') + 'Company number ' + (c.number || 'not recorded') + '.', newPage: i > 0, rows: [
       ['Trading name', c.name && c.name !== c.legalName ? c.name : 'Same as registered name'], ['Status', c.status], ['Company type', c.type], ['Incorporated on', longDate(c.incorporated)],
@@ -464,7 +496,7 @@ function groupReport(slug, opts) {
     if (o.filings) { const list = filings(c.slug).slice(0, 10);
       sections.push({ title: 'Recent filings', level: 2, lines: list.length ? list.map((f) => longDate(f.date) + ' - ' + f.category + ': ' + f.description) : ['No filings on the register.'] }); }
   });
-  return { buffer: pdf.report({ heading: o.subsidiaries && group.length > 1 ? 'Group report' : 'Company report', subheading: root.legalName + (o.subsidiaries && group.length > 1 ? ' and its subsidiaries' : ''), footer: REPORT_FOOTER, sections }), count: group.length };
+  return { buffer: pdf.report({ code: 'REG-RPT', heading: o.subsidiaries && group.length > 1 ? 'Group report' : 'Company report', subtitle: root.legalName + (o.subsidiaries && group.length > 1 ? ' and its subsidiaries' : '') + ' · produced ' + longDate(today), footer: REPORT_FOOTER, reference: id().slice(0, 12).toUpperCase(), sections }), count: group.length };
 }
 const REPORT_FOOTER = 'Produced by the Company Register from the public record on the date shown. Unknown details show as "Not recorded". This is a group register document, not a document from the UK government\'s Companies House.';
 
@@ -560,10 +592,8 @@ function applyChange(s) {
   const date = now().slice(0, 10);
   // A customer's PDF becomes the filing's document; otherwise the register generates one.
   const filing = (when, rows) => {
-    const file = s.file || storeFile(pdf.build({ heading: CHANGE_TYPES[kind].label, subheading: c.legalName + (c.number ? ' (company number ' + c.number + ')' : ''), footer: FOOTER, rows }));
-    const f = { id: id(), company: c.slug, date: when || date, category: s.category, description: s.description, file, pages: s.file ? s.pages : 1, createdAt: now(), source: s.file ? 'customer' : 'generated' };
-    db.filings.push(f);
-    return f.id;
+    if (s.file) { const f = { id: id(), company: c.slug, date: when || date, category: s.category, description: s.description, file: s.file, pages: s.pages, createdAt: now(), source: 'customer' }; db.filings.push(f); return f.id; }
+    return newGeneratedFiling(c, when || date, s.category, s.description, { code: FORM_CODES[kind] || '', heading: CHANGE_TYPES[kind].label, rows }).id;
   };
   switch (kind) {
     case 'address': { const old = c.registeredOffice; c.registeredOffice = ch.registeredOffice; return filing(date, [['Company', c.legalName], ['Old address', old.replace(/\n/g, ', ')], ['New address', ch.registeredOffice.replace(/\n/g, ', ')]]); }
