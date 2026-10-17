@@ -183,7 +183,7 @@ test('company register: public records, customers, requests, submissions and sta
     html = await (await get('/company/hn-group/filing-history')).text();
     assert.equal((html.match(/Incorporation of HN Group Limited/g) || []).length, 1);
     assert.equal((html.match(/Appointment of Jamie Director as a director on 2 January 2026/g) || []).length, 1);
-    const genId = html.match(/Incorporation of HN Group Limited<\/td><td><a href="\/document\/([a-f0-9]{24})/)[1];
+    const genId = html.match(/Incorporation of HN Group Limited<\/td><td class="nowrap"><a href="\/document\/([a-f0-9]{24})/)[1];
     const gen = Buffer.from(await (await get('/document/' + genId)).arrayBuffer()).toString('latin1');
     assert.match(gen, /^%PDF-1\.4/); assert.match(gen, /\(HN Group Limited\)/); assert.match(gen, /%%EOF\n$/);
 
@@ -278,7 +278,7 @@ test('company register: public records, customers, requests, submissions and sta
     await post('/admin/company/hn-group', { csrf: staffCsrf, legalName: 'HN Group Limited', name: 'HN Group', number: '12345678', status: 'Dormant', incorporated: '2026-01-01', registeredOffice: '2 New Road\nCity' }, owner);
     html = await (await get('/company/hn-group/filing-history')).text();
     assert.equal((html.match(/Change of company status from Active to Dormant/g) || []).length, 1);
-    const stsId = html.match(/Change of company status from Active to Dormant<\/td><td><a href="\/document\/([a-f0-9]{24})/)[1];
+    const stsId = html.match(/Change of company status from Active to Dormant<\/td><td class="nowrap"><a href="\/document\/([a-f0-9]{24})/)[1];
     const sts = Buffer.from(await (await get('/document/' + stsId)).arrayBuffer()).toString('latin1');
     assert.match(sts, /\(REG-STS\)/); assert.match(sts, /\(Dormant\)/);
     await post('/admin/company/hn-group', { csrf: staffCsrf, legalName: 'HN Group Limited', name: 'HN Group', number: '12345678', status: 'Active', incorporated: '2026-01-01', registeredOffice: '2 New Road\nCity' }, owner);
