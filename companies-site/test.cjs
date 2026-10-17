@@ -67,6 +67,8 @@ test('company register: public records, customers, requests, submissions and sta
     assert.match(html, /href="\/company\/hn-group">HN Group Limited</);
     assert.match(html, /Horizon Development/);
     assert.match(await (await get('/company/horizon-network/persons-with-significant-control')).text(), /HN Group Limited[\s\S]*Ownership of shares – 75% or more/);
+    const pscHtml = await (await get('/company/horizon-network/persons-with-significant-control')).text();
+    assert.match(pscHtml, /<dd>Parent company<\/dd>/); assert.match(pscHtml, /<dd>100%<\/dd>/); assert.match(pscHtml, /<dd><a href="\/company\/hn-group">HN Group Limited<\/a><\/dd>/);
     assert.match(await (await get('/search?q=network')).text(), /1 result/);
     assert.equal((await get('/company/nope')).status, 404);
     assert.doesNotMatch(html, /style="/);
@@ -152,6 +154,10 @@ test('company register: public records, customers, requests, submissions and sta
     // Staff edit a company, add an officer and a filing, and can hide a company.
     await post('/admin/company/hn-group', { csrf: staffCsrf, legalName: 'HN Group Limited', name: 'HN Group', number: '12345678', status: 'Active', registeredOffice: '1 Example Street\nTown' }, owner);
     await post('/admin/company/hn-group/officers', { csrf: staffCsrf, name: 'Jamie Director', role: 'Director', appointed: '2026-01-02' }, owner);
+    await post('/admin/company/hn-group/psc', { csrf: staffCsrf, name: 'Jamie Director', kind: 'Individual', share: '50.5', control: 'Ownership of shares – more than 50% but less than 75%' }, owner);
+    assert.match(await (await post('/admin/company/hn-group/psc', { csrf: staffCsrf, name: 'Too Much', kind: 'Individual', share: '150' }, owner)).text(), /between 0 and 100/);
+    const hnPsc = await (await get('/company/hn-group/persons-with-significant-control')).text();
+    assert.match(hnPsc, /Jamie Director[\s\S]*<dd>Individual<\/dd>[\s\S]*<dd>50.5%<\/dd>/); assert.doesNotMatch(hnPsc, /Too Much/);
     await upload('/admin/company/hn-group/filings', { csrf: staffCsrf, date: '2026-02-03', category: 'Accounts', description: 'Annual accounts' }, PDF, owner);
     html = await (await get('/company/hn-group')).text();
     assert.match(html, /Company number 12345678/); assert.match(html, /1 Example Street<br>Town/); assert.match(html, /Annual accounts/);

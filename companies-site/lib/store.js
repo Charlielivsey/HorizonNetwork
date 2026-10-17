@@ -10,6 +10,7 @@ let dir, file, filesDir, db;
 const STATUSES = ['Active', 'Dormant', 'Liquidation', 'In administration', 'Dissolved'];
 const FILING_CATEGORIES = ['Accounts', 'Confirmation statement', 'Officers', 'Persons with significant control', 'Address', 'Incorporation', 'Capital', 'Change of name', 'Mortgage and charges', 'Resolution', 'Other'];
 const OFFICER_ROLES = ['Director', 'Secretary', 'Managing director', 'Chair'];
+const PSC_KINDS = ['Individual', 'Parent company', 'Relevant legal entity'];
 
 // Only facts the group has confirmed. Everything else (numbers, dates, addresses, officers) is
 // left blank for staff to fill in: the register must not invent details.
@@ -19,7 +20,7 @@ const SEED = [
   { slug: 'horizon-network', name: 'Horizon Network', legalName: 'Horizon Network Limited', website: 'horizon-network.co.uk', emailDomain: 'horizon-network.co.uk', parent: 'hn-group',
     description: 'A wholly owned subsidiary of HN Group Limited. Horizon Development is part of Horizon Network Limited.',
     divisions: ['Horizon Development'],
-    psc: [{ name: 'HN Group Limited', kind: 'Relevant legal entity', control: ['Ownership of shares – 75% or more'] }] },
+    psc: [{ name: 'HN Group Limited', kind: 'Parent company', share: '100', control: ['Ownership of shares – 75% or more'] }] },
 ];
 
 const id = () => crypto.randomBytes(12).toString('hex');
@@ -31,7 +32,7 @@ function blankCompany(o) {
     registeredOffice: '', sic: [], description: o.description || '', website: o.website || '', emailDomain: o.emailDomain || '',
     parent: o.parent || '', managedBy: o.managedBy || '', divisions: o.divisions || [], previousNames: [],
     accountsMadeUpTo: '', accountsNextDue: '', confirmationMadeUpTo: '', confirmationNextDue: '',
-    officers: [], psc: (o.psc || []).map((p) => ({ id: id(), name: p.name, kind: p.kind, control: p.control, notified: '', ceased: '' })), charges: [],
+    officers: [], psc: (o.psc || []).map((p) => ({ id: id(), name: p.name, kind: p.kind, share: p.share || '', control: p.control, notified: '', ceased: '' })), charges: [],
     hidden: false, createdAt: now(), updatedAt: now(),
   };
 }
@@ -43,6 +44,11 @@ function init(dataDir) {
   else db = { version: 1, companies: [], filings: [], customers: [], requests: [], submissions: [], audit: [], seeded: [] };
   for (const key of ['companies', 'filings', 'customers', 'requests', 'submissions', 'audit', 'seeded']) db[key] = db[key] || [];
   // Seed companies are added once; after that staff edits and deletions are kept.
+  // Entries saved before share percentages existed have no share field. The original seed entry
+  // for HN Group Limited (Horizon Network's wholly owning parent) becomes a 100% parent company.
+  for (const c of db.companies) for (const p of c.psc) if (p.share === undefined) {
+    if (c.slug === 'horizon-network' && p.name === 'HN Group Limited' && p.kind === 'Relevant legal entity') { p.kind = 'Parent company'; p.share = '100'; } else p.share = '';
+  }
   for (const s of SEED) if (!db.seeded.includes(s.slug)) { if (!db.companies.some((c) => c.slug === s.slug)) db.companies.push(blankCompany(s)); db.seeded.push(s.slug); }
   save();
 }
@@ -118,9 +124,17 @@ function deleteCompany(slug, actor) {
 // Officers, PSCs and charges are lists on the company record.
 const LISTS = {
   officers: (i) => ({ name: req(i.name, 'Enter the officer’s name.', 120), role: OFFICER_ROLES.includes(i.role) ? i.role : 'Director', appointed: d(i.appointed), resigned: d(i.resigned), occupation: t(i.occupation, 80), nationality: t(i.nationality, 60), countryOfResidence: t(i.countryOfResidence, 60) }),
-  psc: (i) => ({ name: req(i.name, 'Enter the name.', 160), kind: ['Individual', 'Relevant legal entity'].includes(i.kind) ? i.kind : 'Individual', control: String(i.control || '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 6).map((x) => x.slice(0, 160)), notified: d(i.notified), ceased: d(i.ceased) }),
+  psc: (i) => ({ name: req(i.name, 'Enter the name.', 160), kind: PSC_KINDS.includes(i.kind) ? i.kind : 'Individual', share: percent(i.share), control: String(i.control || '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 6).map((x) => x.slice(0, 160)), notified: d(i.notified), ceased: d(i.ceased) }),
   charges: (i) => ({ code: t(i.code, 40), created: d(i.created), delivered: d(i.delivered), status: ['Outstanding', 'Satisfied', 'Part satisfied'].includes(i.status) ? i.status : 'Outstanding', entitled: req(i.entitled, 'Enter who is entitled to the charge.', 200), description: t(i.description, 600), satisfied: d(i.satisfied) }),
 };
+// A shareholding between 0 and 100, to at most two decimal places, or blank when not given.
+function percent(v) {
+  const s = String(v == null ? '' : v).trim().replace(/%$/, '');
+  if (!s) return '';
+  const n = Number(s);
+  if (!Number.isFinite(n) || n < 0 || n > 100) throw Object.assign(new Error('Enter a share percentage between 0 and 100.'), { status: 400 });
+  return String(Math.round(n * 100) / 100);
+}
 function t(v, max) { return String(v == null ? '' : v).trim().slice(0, max); }
 function d(v) { const s = t(v, 10); return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : ''; }
 function req(v, message, max) { const s = t(v, max); if (!s) throw Object.assign(new Error(message), { status: 400 }); return s; }
@@ -272,7 +286,7 @@ function decideSubmission(s, accept, note, actor) {
 }
 
 module.exports = {
-  init, STATUSES, FILING_CATEGORIES, OFFICER_ROLES, REQUEST_KINDS,
+  init, STATUSES, FILING_CATEGORIES, OFFICER_ROLES, PSC_KINDS, REQUEST_KINDS,
   companies, company, children, search, saveCompany, deleteCompany, saveItem, deleteItem,
   filings, filing, addFiling, deleteFiling, filePath,
   customer, customerByEmail, createCustomer, checkPassword, changePassword, touchLogin, setCustomerDisabled,

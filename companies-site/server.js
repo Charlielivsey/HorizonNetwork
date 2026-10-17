@@ -59,7 +59,7 @@ function messagePage(res, ctx, status, title, text) {
 }
 const field = (label, name, value, extra) => '<label>' + esc(label) + (extra && extra.hint ? '<span class="hint">' + esc(extra.hint) + '</span>' : '') +
   (extra && extra.textarea ? '<textarea name="' + name + '" rows="' + (extra.rows || 4) + '"' + (extra.required ? ' required' : '') + ' maxlength="' + (extra.max || 3000) + '">' + esc(value) + '</textarea>'
-    : '<input name="' + name + '" type="' + ((extra && extra.type) || 'text') + '" value="' + esc(value) + '"' + (extra && extra.required ? ' required' : '') + (extra && extra.auto ? ' autocomplete="' + extra.auto + '"' : '') + ' maxlength="' + ((extra && extra.max) || 200) + '">') + '</label>';
+    : '<input name="' + name + '" type="' + ((extra && extra.type) || 'text') + '" value="' + esc(value) + '"' + (extra && extra.required ? ' required' : '') + (extra && extra.auto ? ' autocomplete="' + extra.auto + '"' : '') + ' maxlength="' + ((extra && extra.max) || 200) + '"' + (extra && extra.number ? ' min="0" max="100" step="0.01" inputmode="decimal"' : '') + '>') + '</label>';
 const select = (label, name, options, value, blank) => '<label>' + esc(label) + '<select name="' + name + '">' + (blank !== undefined ? '<option value="">' + esc(blank) + '</option>' : '') +
   options.map((o) => { const [v, t] = Array.isArray(o) ? o : [o, o]; return '<option value="' + esc(v) + '"' + (v === value ? ' selected' : '') + '>' + esc(t) + '</option>'; }).join('') + '</select></label>';
 const csrfField = (token) => '<input type="hidden" name="csrf" value="' + esc(token) + '">';
@@ -100,6 +100,12 @@ function companyHeader(c, tab, ctx) {
     (c.name && c.name !== c.legalName ? '<p class="muted">Known as ' + esc(c.name) + '</p>' : '') + '</div></div>' +
     '<nav class="tabs" aria-label="Company record">' + tabs.map(([p, label]) => { const active = tab === p || (p === 'officers' && tab === 'persons-with-significant-control'); return '<a href="/company/' + esc(c.slug) + (p ? '/' + p : '') + '"' + (active ? ' aria-current="page"' : '') + '>' + label + '</a>'; }).join('') + '</nav>' +
     '<div class="actions-row">' + ['request', 'report', 'file'].map((a) => '<a class="button ghost small" href="/company/' + esc(c.slug) + '/' + a + '">' + { request: 'Request a document', report: 'Report a mistake', file: 'Submit a filing' }[a] + '</a>').join('') + '</div>';
+}
+
+// A parent company is linked to its own record when it's on the register.
+function parentLink(name) {
+  const c = store.companies().find((x) => x.legalName.toLowerCase() === String(name).toLowerCase());
+  return c ? '<a href="/company/' + esc(c.slug) + '">' + esc(c.legalName) + '</a>' : esc(name);
 }
 
 function dl(rows) { return '<dl class="facts">' + rows.map(([k, v]) => '<div><dt>' + esc(k) + '</dt><dd>' + v + '</dd></div>').join('') + '</dl>'; }
@@ -158,7 +164,7 @@ function peoplePage(res, ctx, c, sub) {
   const body = psc
     ? '<p class="muted">' + plural(c.psc.filter((p) => !p.ceased).length, 'active person', 'active persons') + ' with significant control</p>' +
       (c.psc.length ? c.psc.map((p) => '<article class="person"><h3>' + esc(p.name) + (p.ceased ? ' <span class="status warn">Ceased</span>' : '') + '</h3>' + dl([
-        ['Type', esc(p.kind)], ['Notified on', val(fmt(p.notified))], ...(p.ceased ? [['Ceased on', esc(fmt(p.ceased))]] : []),
+        ['Type', esc(p.kind)], ...(p.kind === 'Parent company' ? [['Company', parentLink(p.name)]] : []), ['Shareholding', p.share ? esc(p.share) + '%' : val('')], ['Notified on', val(fmt(p.notified))], ...(p.ceased ? [['Ceased on', esc(fmt(p.ceased))]] : []),
         ['Nature of control', p.control.length ? p.control.map(esc).join('<br>') : val('')]]) + '</article>').join('') : '<p class="muted">No persons with significant control have been recorded.</p>')
     : '<p class="muted">' + plural(officers.length, 'officer', 'officers') + ' · ' + active + ' current' + (officers.length - active ? ' · ' + (officers.length - active) + ' resigned' : '') + '</p>' +
       (officers.length ? officers.map((o) => '<article class="person"><h3>' + esc(o.name) + (o.resigned ? ' <span class="status warn">Resigned</span>' : '') + '</h3>' + dl([
@@ -294,7 +300,7 @@ function itemForms(c, ctx, list) {
   const items = c[list];
   const forms = {
     officers: (o) => field('Name', 'name', o.name, { required: true, max: 120 }) + select('Role', 'role', store.OFFICER_ROLES, o.role || 'Director') + field('Appointed on', 'appointed', o.appointed, { type: 'date' }) + field('Resigned on', 'resigned', o.resigned, { type: 'date' }) + field('Occupation', 'occupation', o.occupation, { max: 80 }) + field('Nationality', 'nationality', o.nationality, { max: 60 }) + field('Country of residence', 'countryOfResidence', o.countryOfResidence, { max: 60 }),
-    psc: (p) => field('Name', 'name', p.name, { required: true, max: 160 }) + select('Type', 'kind', ['Individual', 'Relevant legal entity'], p.kind || 'Individual') + field('Notified on', 'notified', p.notified, { type: 'date' }) + field('Ceased on', 'ceased', p.ceased, { type: 'date' }) + field('Nature of control', 'control', (p.control || []).join('\n'), { textarea: true, rows: 3, max: 1000, hint: 'One per line.' }),
+    psc: (p) => field('Name', 'name', p.name, { required: true, max: 160, hint: 'For a parent company, use its registered name, for example HN Group Limited.' }) + select('Type', 'kind', store.PSC_KINDS, p.kind || 'Individual') + field('Share percentage', 'share', p.share, { type: 'number', number: true, max: 6, hint: 'The percentage of shares held, from 0 to 100. Leave blank if not known.' }) + field('Notified on', 'notified', p.notified, { type: 'date' }) + field('Ceased on', 'ceased', p.ceased, { type: 'date' }) + field('Nature of control', 'control', (p.control || []).join('\n'), { textarea: true, rows: 3, max: 1000, hint: 'One per line.' }),
     charges: (x) => field('Charge code', 'code', x.code, { max: 40 }) + select('Status', 'status', ['Outstanding', 'Part satisfied', 'Satisfied'], x.status || 'Outstanding') + field('Created on', 'created', x.created, { type: 'date' }) + field('Delivered on', 'delivered', x.delivered, { type: 'date' }) + field('Satisfied on', 'satisfied', x.satisfied, { type: 'date' }) + field('Persons entitled', 'entitled', x.entitled, { required: true, max: 200 }) + field('Brief description', 'description', x.description, { textarea: true, rows: 2, max: 600 }),
   };
   const title = { officers: 'Officers', psc: 'Persons with significant control', charges: 'Charges' }[list];
