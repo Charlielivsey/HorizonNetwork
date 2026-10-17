@@ -213,3 +213,7 @@ details.mini { border: 0; padding: 0 0 6px; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 .grid-form .form-section { grid-column: 1 / -1; margin: 10px 0 -10px; }
 h2.form-section { font-size: 1.27em; padding-top: 20px; border-top: 2px solid var(--ink); }
+.choice-list { list-style: none; padding: 0; margin: 0 0 30px; }
+.choice-list li { border-bottom: 1px solid var(--rule); }
+.choice-list a { display: block; padding: 14px 0; font-weight: 700; transition: padding-left .15s; }
+.choice-list a:hover { padding-left: 8px; }

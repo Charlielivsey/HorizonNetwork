@@ -21,7 +21,8 @@ async function parse(req) {
   const type = String(req.headers['content-type'] || '');
   if (type.startsWith('application/x-www-form-urlencoded')) {
     const body = await readBody(req, MAX_FORM);
-    return { fields: Object.fromEntries(new URLSearchParams(body.toString('utf8'))), file: null };
+    // Browsers send line breaks as CRLF; store plain newlines.
+    return { fields: Object.fromEntries([...new URLSearchParams(body.toString('utf8'))].map(([k, v]) => [k, v.replace(/\r\n?/g, '\n')])), file: null };
   }
   const m = /^multipart\/form-data;\s*boundary=(?:"([^"]+)"|([^\s;]+))/i.exec(type);
   if (!m) throw Object.assign(new Error('Unsupported form.'), { status: 415 });
@@ -46,7 +47,7 @@ async function parse(req) {
         file = content;
       }
     } else if (name && Object.keys(fields).length < 50) {
-      fields[name] = content.toString('utf8').slice(0, 10000);
+      fields[name] = content.toString('utf8').replace(/\r\n?/g, '\n').slice(0, 10000);
     }
     pos = next;
   }

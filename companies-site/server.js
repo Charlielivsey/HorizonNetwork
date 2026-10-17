@@ -40,7 +40,6 @@ function layout(o) {
     '<a class="skip" href="#main">Skip to main content</a>' +
     '<header class="header"><div class="wrap header-inner"><a class="logo" href="/"><img src="/assets/brand/horizon-holding-co-logo-white.svg" alt="Horizon Holding Co" width="129" height="46"></a>' +
     '<a class="service" href="/">Company Register</a><nav class="header-nav" aria-label="Account">' + nav + '</nav></div></header>' +
-    '<div class="wrap"><div class="notice-bar"><strong class="tag">Group register</strong><span>This is Horizon Holding Co’s register of its group companies. It is not the UK government’s Companies House register.</span></div></div>' +
     (o.searchBar === false ? '' : '<div class="wrap"><form class="search compact" action="/search" method="get" role="search"><label for="q" class="sr-only">Search for a company or officer</label><input id="q" name="q" type="search" placeholder="Search for a company or officer" value="' + esc(o.q || '') + '" autocomplete="off"><button type="submit" aria-label="Search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg></button></form></div>') +
     '<main id="main" class="wrap main">' + (o.flash ? '<div class="flash ' + (o.flash.error ? 'error' : '') + '" role="status">' + esc(o.flash.text) + '</div>' : '') + o.body + '</main>' +
     '<footer class="footer"><div class="wrap"><ul class="footer-links"><li><a href="/">Search the register</a></li><li><a href="/about">About this register</a></li>' + (signedOut ? '<li><a href="/account/register">Create an account</a></li>' : '') + '<li><a href="/staff/login">Staff sign in</a></li></ul>' +
@@ -80,7 +79,7 @@ function homePage(res, ctx) {
       '<p class="lead">Search the register for a company’s details, filing history, officers, people with significant control and charges.</p>' +
       '<form class="search big" action="/search" method="get" role="search"><label for="q" class="label-l">Search for a company or officer</label><span class="hint">Enter a company name, company number or officer’s name</span><div class="search-row"><input id="q" name="q" type="search" autocomplete="off" required><button type="submit">Search</button></div></form>' +
       '<h2 class="heading-m">Other things you can do</h2><ul class="link-list">' +
-      '<li>Request a copy of a filing or a certificate for a company</li><li>Report a mistake on a company record</li><li>Submit a filing for a company</li></ul>' +
+      '<li>Request a copy of a filing or a certificate for a company</li><li>Report a mistake on a company record</li><li>File a change for a company, such as a new address, officer or person with significant control</li></ul>' +
       '<p class="body">Find the company first, then choose what you need from its page. ' + (ctx.customer ? 'You’re signed in, so you’re ready to go.' : 'You’ll need a free account: <a href="/account/register">create an account</a> or <a href="/account/login">sign in</a>.') + '</p></div>' +
       '<aside class="col-side"><div class="side-box"><h2 class="heading-s">Using this register</h2><ul><li><a href="/about">About this register</a></li>' + (ctx.customer ? '<li><a href="/account">Your requests and filings</a></li>' : '<li><a href="/account/login">Sign in to your account</a></li><li><a href="/account/register">Create an account</a></li>') + '<li><a href="/staff/login">Staff sign in</a></li></ul></div></aside></div>' });
 }
@@ -101,7 +100,7 @@ function companyHeader(c, tab, ctx) {
     '<p class="company-number">Company number <strong>' + (c.number ? esc(c.number) : 'not recorded') + '</strong></p>' +
     (c.name && c.name !== c.legalName ? '<p class="muted">Known as ' + esc(c.name) + '</p>' : '') + '</div>' +
     '<nav class="tabs" aria-label="Company record">' + tabs.map(([p, label]) => { const active = tab === p || (p === 'officers' && tab === 'persons-with-significant-control'); return '<a href="/company/' + esc(c.slug) + (p ? '/' + p : '') + '"' + (active ? ' aria-current="page"' : '') + '>' + label + '</a>'; }).join('') + '</nav>' +
-    '<div class="actions-row">' + ['request', 'report', 'file'].map((a) => '<a class="button ghost small" href="/company/' + esc(c.slug) + '/' + a + '">' + { request: 'Request a document', report: 'Report a mistake', file: 'Submit a filing' }[a] + '</a>').join('') + '</div>';
+    '<div class="actions-row">' + ['request', 'report', 'file'].map((a) => '<a class="button ghost small" href="/company/' + esc(c.slug) + '/' + a + '">' + { request: 'Request a document', report: 'Report a mistake', file: 'File a change' }[a] + '</a>').join('') + '</div>';
 }
 
 // A parent company is linked to its own record when it's on the register.
@@ -282,13 +281,35 @@ function requestForm(res, ctx, c, kind, values, error) {
       field(mistake ? 'What’s wrong?' : 'Details', 'message', values.message, { textarea: true, required: true, rows: 6 }) + '<button class="button" type="submit">Send</button> <a class="button ghost" href="/company/' + esc(c.slug) + '">Cancel</a></form></section>' });
 }
 
-function submitForm(res, ctx, c, values, error) {
-  page(res, ctx, { title: 'Submit a filing · ' + c.legalName, noindex: true, flash: error && { error: true, text: error },
-    body: '<section class="panel narrow"><p class="eyebrow">' + esc(c.legalName) + '</p><h1>Submit a filing</h1><p class="muted">Upload the document as a PDF (up to 15 MB). Our staff review every submission. Accepted filings appear in the company’s public filing history; rejected ones are deleted.</p>' +
-      '<form method="post" class="form" enctype="multipart/form-data">' + csrfField(ctx.customer.csrf) + select('Type of filing', 'category', store.FILING_CATEGORIES, values.category || 'Other') +
-      field('Description', 'description', values.description, { required: true, max: 300, hint: 'For example: Change of registered office address.' }) +
-      '<label>Document (PDF)<input type="file" name="document" accept="application/pdf,.pdf" required></label>' + field('Note for our team (optional)', 'note', values.note, { textarea: true, max: 2000 }) +
-      '<button class="button" type="submit">Submit for review</button> <a class="button ghost" href="/company/' + esc(c.slug) + '">Cancel</a></form></section>' });
+// Filing a change: first choose what to file, then fill in that change's form.
+function submitForm(res, ctx, c, values, error, kind) {
+  kind = Object.hasOwn(store.CHANGE_TYPES, kind) ? kind : '';
+  const base = '/company/' + esc(c.slug) + '/file';
+  if (!kind) return page(res, ctx, { title: 'File a change · ' + c.legalName, noindex: true, flash: error && { error: true, text: error },
+    body: '<section class="panel narrow"><p class="eyebrow">' + esc(c.legalName) + '</p><h1>What do you want to file?</h1><p class="muted">Our staff review every filing. When it’s accepted, the company’s record is updated and the filing appears in its filing history.</p>' +
+      '<ul class="choice-list">' + Object.entries(store.CHANGE_TYPES).map(([k, t]) => '<li><a href="' + base + '?type=' + k + '">' + esc(t.label) + '</a></li>').join('') + '</ul>' +
+      '<a class="button secondary" href="/company/' + esc(c.slug) + '">Cancel</a></section>' });
+  const v = values || {};
+  const current = (list, label) => list.length ? list.map((x) => [x.id, x.name + (x.role ? ' (' + x.role + ')' : '')]) : null;
+  let fields = '';
+  switch (kind) {
+    case 'address': fields = '<p>Current address: <strong>' + (c.registeredOffice ? esc(c.registeredOffice).replace(/\n/g, ', ') : 'not recorded') + '</strong></p>' + field('New registered office address', 'registeredOffice', v.registeredOffice, { textarea: true, rows: 4, required: true, max: 300 }); break;
+    case 'appoint': fields = ITEM_FIELDS.officers(v) + '<p class="hint">The date of appointment is required.</p>'; break;
+    case 'terminate': { const list = current(c.officers.filter((o) => !o.resigned)); fields = list ? select('Officer', 'officer', list, v.officer) + field('Date they stopped being an officer', 'resigned', v.resigned, { type: 'date', required: true }) : '<p>There are no current officers recorded for this company.</p>'; break; }
+    case 'psc_add': fields = ITEM_FIELDS.psc(v) + '<p class="hint">The notified date is required.</p>'; break;
+    case 'psc_cease': { const list = current(c.psc.filter((p) => !p.ceased)); fields = list ? select('Person with significant control', 'psc', list, v.psc) + field('Date they ceased', 'ceased', v.ceased, { type: 'date', required: true }) : '<p>There are no current persons with significant control recorded for this company.</p>'; break; }
+    case 'name': fields = '<p>Current name: <strong>' + esc(c.legalName) + '</strong></p>' + field('New company name', 'newName', v.newName, { required: true, max: 160 }); break;
+    case 'sic': fields = field('Nature of business (SIC)', 'sic', v.sic !== undefined ? v.sic : c.sic.join('\n'), { textarea: true, rows: 4, required: true, max: 700, hint: 'One per line, up to four. For example: 62020 - Information technology consultancy activities.' }); break;
+    case 'confirmation': fields = '<p>The statement confirms the company’s current details on this register are correct. Report a mistake first if anything needs changing.</p>' + field('Date the statement is made up to', 'madeUpTo', v.madeUpTo, { type: 'date', required: true }); break;
+    case 'document': fields = select('Type of filing', 'category', store.FILING_CATEGORIES, v.category || 'Other') + field('Description', 'description', v.description, { required: true, max: 300 }); break;
+  }
+  const pdfField = kind === 'document' ? '<label>Document (PDF)<input type="file" name="document" accept="application/pdf,.pdf" required></label>'
+    : '<label>Supporting document (PDF, optional)<span class="hint">If you attach one, it becomes the filing’s document. Otherwise we create one from these details.</span><input type="file" name="document" accept="application/pdf,.pdf"></label>';
+  page(res, ctx, { title: store.CHANGE_TYPES[kind].label + ' · ' + c.legalName, noindex: true, flash: error && { error: true, text: error },
+    body: '<section class="panel narrow"><p class="eyebrow">' + esc(c.legalName) + '</p><h1>' + esc(store.CHANGE_TYPES[kind].label) + '</h1>' +
+      '<form method="post" action="' + base + '" class="form" enctype="multipart/form-data">' + csrfField(ctx.customer.csrf) + '<input type="hidden" name="kind" value="' + kind + '">' + fields + pdfField +
+      field('Note for our team (optional)', 'note', v.note, { textarea: true, max: 2000 }) +
+      '<div class="form-actions"><button class="button" type="submit">Submit for review</button><a class="button secondary" href="' + base + '">Back</a></div></form></section>' });
 }
 
 // ---------- Staff administration ----------
@@ -361,14 +382,25 @@ function adminCompany(res, ctx, c, flash) {
       '<section class="panel danger-zone"><h2>Delete company</h2><p class="muted">This removes the company, its people, charges and all its filings from the register. It can’t be undone.</p><form method="post" action="/admin/company/' + esc(c.slug) + '/delete">' + csrfField(ctx.staffUser.csrf) + '<button class="button danger" type="submit" data-confirm="Delete ' + esc(c.legalName) + ' and all its records?">Delete company</button></form></section>' });
 }
 
+// The details of a filed change, as staff need to review it.
+function changeDetails(s) {
+  const ch = s.change || {};
+  const rows = [];
+  if (s.kind === 'appoint' && ch.officer) { const o = ch.officer; rows.push(['Name', o.name], ['Role', o.role], ['Appointed on', fmt(o.appointed)], ['Occupation', o.occupation], ['Nationality', o.nationality], ['Country of residence', o.countryOfResidence]); }
+  else if (s.kind === 'psc_add' && ch.psc) { const p = ch.psc; rows.push(['Name', p.name], ['Type', p.kind], ['Shareholding', p.share ? p.share + '%' : ''], ['Nature of control', (p.control || []).join('; ')], ['Notified on', fmt(p.notified)]); }
+  else if (s.kind === 'sic') rows.push(['New nature of business', ch.sic.join('; ')]);
+  if (!rows.length) return '';
+  return dl(rows.filter((r) => r[1]).map(([k, x]) => [k, esc(x)]));
+}
+
 function adminSubmissions(res, ctx, flash) {
   const list = [...store.db.submissions].sort((a, b) => (a.status === 'Pending' ? 0 : 1) - (b.status === 'Pending' ? 0 : 1) || b.createdAt.localeCompare(a.createdAt)).slice(0, 300);
   page(res, ctx, { title: 'Submissions', noindex: true, flash,
     body: '<h1 class="page-title">Filing submissions</h1>' + adminNav('/admin/submissions', ctx.staffUser) + '<section class="panel">' + (list.length ? list.map((s) => {
       const cust = store.customer(s.customer);
       return '<article class="item-card"><h3>' + esc(s.ref) + ' · ' + esc(store.company(s.company)?.legalName || s.company) + ' <span class="status ' + (s.status === 'Accepted' ? 'ok' : s.status === 'Pending' ? 'warn' : 'bad') + '">' + esc(s.status) + '</span></h3>' +
-        '<p><strong>' + esc(s.category) + ':</strong> ' + esc(s.description) + '</p><p class="muted small">From ' + esc(cust ? cust.name + ' (' + cust.email + ')' : 'a deleted account') + ' · ' + esc(fmtTime(s.createdAt)) + '</p>' + (s.note ? '<p class="note">' + esc(s.note) + '</p>' : '') +
-        (s.status === 'Pending' ? '<p><a href="/admin/submission-file/' + s.id + '" target="_blank" rel="noopener">Open the PDF' + (s.pages ? ' (' + plural(s.pages, 'page', 'pages') + ')' : '') + '</a></p><form method="post" action="/admin/submissions/' + s.id + '" class="form">' + csrfField(ctx.staffUser.csrf) + field('Note to the customer (optional)', 'note', '', { max: 1000 }) +
+        '<p><strong>' + esc((store.CHANGE_TYPES[s.kind || 'document'] || {}).label || s.category) + ':</strong> ' + esc(s.description) + '</p>' + changeDetails(s) + '<p class="muted small">From ' + esc(cust ? cust.name + ' (' + cust.email + ')' : 'a deleted account') + ' · ' + esc(fmtTime(s.createdAt)) + '</p>' + (s.note ? '<p class="note">' + esc(s.note) + '</p>' : '') +
+        (s.status === 'Pending' ? (s.file ? '<p><a href="/admin/submission-file/' + s.id + '" target="_blank" rel="noopener">Open the PDF' + (s.pages ? ' (' + plural(s.pages, 'page', 'pages') + ')' : '') + '</a></p>' : '<p class="muted small">No PDF attached; one will be created from these details.</p>') + '<form method="post" action="/admin/submissions/' + s.id + '" class="form">' + csrfField(ctx.staffUser.csrf) + field('Note to the customer (optional)', 'note', '', { max: 1000 }) +
           '<div class="form-actions"><button class="button small" type="submit" name="decision" value="accept">Accept and publish</button><button class="button small danger" type="submit" name="decision" value="reject">Reject</button></div></form>' : (s.staffNote ? '<p class="muted small">Note: ' + esc(s.staffNote) + '</p>' : '')) + '</article>';
     }).join('') : '<p class="muted">No filings have been submitted.</p>') + '</section>' });
 }
@@ -473,7 +505,7 @@ async function route(req, res) {
     }
     if (sub === 'request' || sub === 'report' || sub === 'file') {
       if (needCustomer(res, ctx, p)) return;
-      if (req.method === 'GET') return sub === 'file' ? submitForm(res, ctx, c, {}) : requestForm(res, ctx, c, sub === 'report' ? 'mistake' : 'copy', {});
+      if (req.method === 'GET') return sub === 'file' ? submitForm(res, ctx, c, {}, null, url.searchParams.get('type')) : requestForm(res, ctx, c, sub === 'report' ? 'mistake' : 'copy', {});
       if (req.method === 'POST') {
         const { fields, file } = await forms.parse(req);
         if (fields.csrf !== ctx.customer.csrf) throw fail(403, 'Your session has changed. Go back, refresh the page and try again.');
@@ -483,7 +515,7 @@ async function route(req, res) {
           return redirect(res, '/account/requests/' + r.id);
         } catch (e) {
           if (e.status !== 400 && e.status !== 429) throw e;
-          return sub === 'file' ? submitForm(res, ctx, c, fields, e.message) : requestForm(res, ctx, c, sub === 'report' ? 'mistake' : fields.kind, fields, e.message);
+          return sub === 'file' ? submitForm(res, ctx, c, fields, e.message, fields.kind) : requestForm(res, ctx, c, sub === 'report' ? 'mistake' : fields.kind, fields, e.message);
         }
       }
     }
@@ -605,8 +637,8 @@ async function route(req, res) {
     if (m && req.method === 'POST') {
       const s = store.submission(m[1]);
       if (!s) return messagePage(res, ctx, 404, 'Not found', 'That submission doesn’t exist.');
-      try { store.decideSubmission(s, fields.decision === 'accept', fields.note, actor); } catch (e) { if (e.status !== 409) throw e; }
-      return adminSubmissions(res, ctx, { text: s.ref + (s.status === 'Accepted' ? ' accepted and published.' : ' rejected.') });
+      try { store.decideSubmission(s, fields.decision === 'accept', fields.note, actor); } catch (e) { if (e.status !== 409 && e.status !== 400) throw e; return adminSubmissions(res, ctx, { error: true, text: s.ref + ': ' + e.message }); }
+      return adminSubmissions(res, ctx, { text: s.ref + (s.status === 'Accepted' ? ' accepted. The company record has been updated and the filing published.' : ' rejected.') });
     }
     m = /^\/admin\/submission-file\/([a-f0-9]{24})$/.exec(p);
     if (m && req.method === 'GET') { const s = store.submission(m[1]); if (s && servePdf(res, s.file)) return; return messagePage(res, ctx, 404, 'Not found', 'That document is no longer stored.'); }

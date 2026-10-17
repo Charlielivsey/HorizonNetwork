@@ -104,6 +104,7 @@ function saveCompany(slug, input, actor, opts) {
     c.slug = s;
   }
   const text = (k, max) => { c[k] = String(input[k] == null ? '' : input[k]).trim().slice(0, max); };
+  const oldName = existing ? c.legalName : '';
   c.legalName = legalName;
   text('name', 120); if (!c.name) c.name = legalName;
   text('number', 20); text('type', 80); text('incorporated', 10); text('dissolved', 10); text('registeredOffice', 300);
@@ -117,6 +118,7 @@ function saveCompany(slug, input, actor, opts) {
   c.hidden = input.hidden === 'on' || input.hidden === true;
   c.updatedAt = now();
   if (!existing) { c.officers.push({ id: id(), ...firstOfficer }); c.psc.push({ id: id(), ...firstPsc }); db.companies.push(c); }
+  if (existing && oldName && oldName !== legalName) recordNameChange(c, oldName);
   generateFilings(c);
   audit(actor, existing ? 'company.update' : 'company.create', c.slug);
   save();
@@ -195,6 +197,14 @@ function generateFilings(c) {
       ['Name', p.name], ['Type', p.kind], ['Shareholding', p.share ? p.share + '%' : ''], ['Nature of control', (p.control || []).join('; ')], ['Notified on', longDate(p.notified)], ['Company', c.legalName]] });
     p.notificationFiling = pushGenerated(c, p.notified, 'Persons with significant control', 'Notification of ' + p.name + ' as a person with significant control on ' + longDate(p.notified), doc);
   }
+}
+// A change to the registered name keeps the old name and files a change of name automatically.
+function recordNameChange(c, oldName) {
+  const date = now().slice(0, 10);
+  c.previousNames.push({ name: oldName, until: date });
+  const doc = pdf.build({ heading: 'Change of company name', subheading: c.legalName + (c.number ? ' (company number ' + c.number + ')' : ''), footer: FOOTER,
+    rows: [['Previous name', oldName], ['New name', c.legalName], ['Changed on', longDate(date)]] });
+  pushGenerated(c, date, 'Change of name', 'Change of name from ' + oldName + ' to ' + c.legalName, doc);
 }
 function pushGenerated(c, date, category, description, buffer) {
   const f = { id: id(), company: c.slug, date, category, description, file: storeFile(buffer), pages: 1, createdAt: now(), source: 'generated' };
@@ -304,30 +314,121 @@ function replyRequest(r, from, name, text, status) {
   save();
 }
 
+// Changes customers can file for a company. Each is checked when it's filed and again when staff
+// accept it; accepting applies the change to the record and adds the matching filing.
+const CHANGE_TYPES = {
+  address: { label: 'Change of registered office address', category: 'Address' },
+  appoint: { label: 'Appoint an officer', category: 'Officers' },
+  terminate: { label: 'An officer has resigned or been removed', category: 'Officers' },
+  psc_add: { label: 'Notify a person with significant control', category: 'Persons with significant control' },
+  psc_cease: { label: 'A person with significant control has ceased', category: 'Persons with significant control' },
+  name: { label: 'Change of company name', category: 'Change of name' },
+  sic: { label: 'Change of nature of business (SIC)', category: 'Other' },
+  confirmation: { label: 'Confirmation statement', category: 'Confirmation statement' },
+  document: { label: 'Another filing (upload a PDF)', category: 'Other' },
+};
+const bad = (message) => Object.assign(new Error(message), { status: 400 });
+
+// Checks a change against the company as it is now and returns the details to store.
+function checkChange(c, kind, input) {
+  switch (kind) {
+    case 'address': { const v = req(input.registeredOffice, 'Enter the new registered office address.', 300); if (v === c.registeredOffice) throw bad('That is already the registered office address.'); return { registeredOffice: v }; }
+    case 'appoint': { const o = LISTS.officers(input); if (!o.appointed) throw bad('Enter the date of appointment.'); o.resigned = ''; return { officer: o }; }
+    case 'terminate': { const o = c.officers.find((x) => x.id === input.officer && !x.resigned); if (!o) throw bad('Choose a current officer.'); const date = d(input.resigned); if (!date) throw bad('Enter the date they stopped being an officer.'); return { officer: o.id, name: o.name, role: o.role, resigned: date }; }
+    case 'psc_add': { const x = LISTS.psc(input); if (!x.notified) throw bad('Enter the date they became a person with significant control.'); x.ceased = ''; return { psc: x }; }
+    case 'psc_cease': { const x = c.psc.find((y) => y.id === input.psc && !y.ceased); if (!x) throw bad('Choose a current person with significant control.'); const date = d(input.ceased); if (!date) throw bad('Enter the date they ceased.'); return { psc: x.id, name: x.name, ceased: date }; }
+    case 'name': { const v = req(input.newName, 'Enter the new company name.', 160); if (v.toLowerCase() === c.legalName.toLowerCase()) throw bad('That is already the company’s name.'); return { newName: v, oldName: c.legalName }; }
+    case 'sic': { const v = String(input.sic || '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 4).map((x) => x.slice(0, 160)); if (!v.length) throw bad('Enter at least one nature of business (SIC) line.'); return { sic: v }; }
+    case 'confirmation': { const date = d(input.madeUpTo); if (!date) throw bad('Enter the date the statement is made up to.'); return { madeUpTo: date }; }
+    default: return {};
+  }
+}
+function changeDescription(kind, ch) {
+  switch (kind) {
+    case 'address': return 'Change of registered office address to ' + ch.registeredOffice.replace(/\n/g, ', ');
+    case 'appoint': return 'Appointment of ' + ch.officer.name + ' as ' + article(ch.officer.role) + ' on ' + longDate(ch.officer.appointed);
+    case 'terminate': return 'Termination of appointment of ' + ch.name + ' as ' + article(ch.role) + ' on ' + longDate(ch.resigned);
+    case 'psc_add': return 'Notification of ' + ch.psc.name + ' as a person with significant control on ' + longDate(ch.psc.notified);
+    case 'psc_cease': return 'Cessation of ' + ch.name + ' as a person with significant control on ' + longDate(ch.ceased);
+    case 'name': return 'Change of name from ' + ch.oldName + ' to ' + ch.newName;
+    case 'sic': return 'Change of nature of business';
+    case 'confirmation': return 'Confirmation statement made up to ' + longDate(ch.madeUpTo);
+    default: return '';
+  }
+}
+const article = (role) => { const r = String(role || 'officer').toLowerCase(); return (/^[aeiou]/.test(r) ? 'an ' : 'a ') + r; };
+
 function addSubmission(cust, slug, input, pdf) {
-  if (!company(slug)) throw Object.assign(new Error('Company not found.'), { status: 404 });
-  if (!pdf) throw Object.assign(new Error('Attach the filing as a PDF.'), { status: 400 });
+  const c = company(slug);
+  if (!c) throw Object.assign(new Error('Company not found.'), { status: 404 });
+  const kind = Object.hasOwn(CHANGE_TYPES, input.kind) ? input.kind : 'document';
+  if (kind === 'document' && !pdf) throw bad('Attach the filing as a PDF.');
   const pending = db.submissions.filter((s) => s.customer === cust.id && s.status === 'Pending').length;
   if (pending >= 10) throw Object.assign(new Error('You have 10 filings waiting for review. Please wait before submitting more.'), { status: 429 });
-  const s = { id: id(), ref: 'S' + crypto.randomBytes(4).toString('hex').toUpperCase(), customer: cust.id, company: slug,
-    category: FILING_CATEGORIES.includes(input.category) ? input.category : 'Other', description: req(input.description, 'Describe the filing.', 300),
-    note: t(input.note, 2000), file: storeFile(pdf), pages: countPages(pdf), status: 'Pending', staffNote: '', createdAt: now(), decidedAt: null, filing: '' };
+  const change = checkChange(c, kind, input);
+  const description = kind === 'document' ? req(input.description, 'Describe the filing.', 300) : changeDescription(kind, change);
+  const s = { id: id(), ref: 'S' + crypto.randomBytes(4).toString('hex').toUpperCase(), customer: cust.id, company: slug, kind, change,
+    category: kind === 'document' ? (FILING_CATEGORIES.includes(input.category) ? input.category : 'Other') : CHANGE_TYPES[kind].category, description,
+    note: t(input.note, 2000), file: pdf ? storeFile(pdf) : '', pages: pdf ? countPages(pdf) : 0, status: 'Pending', staffNote: '', createdAt: now(), decidedAt: null, filing: '' };
   db.submissions.push(s);
-  audit('customer:' + cust.email, 'submission.add', s.ref);
+  audit('customer:' + cust.email, 'submission.add', s.ref + ' ' + description);
   save();
   return s;
+}
+
+// Applies an accepted change to the company and returns the filing that records it.
+function applyChange(s) {
+  const c = company(s.company);
+  if (!c) throw bad('The company is no longer on the register.');
+  const kind = s.kind || 'document';
+  const ch = s.change || {};
+  const date = now().slice(0, 10);
+  // A customer's PDF becomes the filing's document; otherwise the register generates one.
+  const filing = (when, rows) => {
+    const file = s.file || storeFile(pdf.build({ heading: CHANGE_TYPES[kind].label, subheading: c.legalName + (c.number ? ' (company number ' + c.number + ')' : ''), footer: FOOTER, rows }));
+    const f = { id: id(), company: c.slug, date: when || date, category: s.category, description: s.description, file, pages: s.file ? s.pages : 1, createdAt: now(), source: s.file ? 'customer' : 'generated' };
+    db.filings.push(f);
+    return f.id;
+  };
+  switch (kind) {
+    case 'address': { const old = c.registeredOffice; c.registeredOffice = ch.registeredOffice; return filing(date, [['Company', c.legalName], ['Old address', old.replace(/\n/g, ', ')], ['New address', ch.registeredOffice.replace(/\n/g, ', ')]]); }
+    case 'appoint': case 'psc_add': {
+      const list = kind === 'appoint' ? c.officers : c.psc;
+      const item = { id: id(), ...(kind === 'appoint' ? ch.officer : ch.psc) };
+      const fid = filing(kind === 'appoint' ? item.appointed : item.notified, kind === 'appoint'
+        ? [['Name', item.name], ['Role', item.role], ['Appointed on', longDate(item.appointed)], ['Occupation', item.occupation], ['Nationality', item.nationality], ['Country of residence', item.countryOfResidence]]
+        : [['Name', item.name], ['Type', item.kind], ['Shareholding', item.share ? item.share + '%' : ''], ['Nature of control', (item.control || []).join('; ')], ['Notified on', longDate(item.notified)]]);
+      item[kind === 'appoint' ? 'appointmentFiling' : 'notificationFiling'] = fid;
+      list.push(item);
+      return fid;
+    }
+    case 'terminate': { const o = c.officers.find((x) => x.id === ch.officer); if (!o || o.resigned) throw bad('That officer is no longer current, so this change can’t be applied.'); o.resigned = ch.resigned; return filing(ch.resigned, [['Name', o.name], ['Role', o.role], ['Appointed on', longDate(o.appointed)], ['Appointment ended on', longDate(ch.resigned)]]); }
+    case 'psc_cease': { const x = c.psc.find((y) => y.id === ch.psc); if (!x || x.ceased) throw bad('That person is no longer a current person with significant control, so this change can’t be applied.'); x.ceased = ch.ceased; return filing(ch.ceased, [['Name', x.name], ['Type', x.kind], ['Ceased on', longDate(ch.ceased)]]); }
+    case 'name': { const old = c.legalName; c.previousNames.push({ name: old, until: date }); if (c.name === old) c.name = ch.newName; c.legalName = ch.newName; return filing(date, [['Previous name', old], ['New name', ch.newName], ['Changed on', longDate(date)]]); } // customer-filed: their PDF is used if given
+    case 'sic': { const old = c.sic.join('; '); c.sic = ch.sic; return filing(date, [['Previous nature of business', old], ['New nature of business', ch.sic.join('; ')]]); }
+    case 'confirmation': { c.confirmationMadeUpTo = ch.madeUpTo; return filing(ch.madeUpTo, [['Company', c.legalName], ['Statement made up to', longDate(ch.madeUpTo)], ['Registered office', c.registeredOffice.replace(/\n/g, ', ')], ['Current officers', c.officers.filter((o) => !o.resigned).map((o) => o.name + ' (' + o.role + ')').join('; ')], ['Persons with significant control', c.psc.filter((p) => !p.ceased).map((p) => p.name).join('; ')]]); }
+    default: { const f = { id: id(), company: s.company, date, category: s.category, description: s.description, file: s.file, pages: s.pages, createdAt: now(), source: 'customer' }; db.filings.push(f); return f.id; }
+  }
+}
+// A change filed earlier may no longer fit the record (for example the officer has since resigned).
+function checkStillValid(s) {
+  const c = company(s.company);
+  if (!c) throw bad('The company is no longer on the register.');
+  const ch = s.change || {};
+  if (s.kind === 'terminate' && !c.officers.some((o) => o.id === ch.officer && !o.resigned)) throw bad('That officer is no longer current, so this change can’t be applied. Reject it instead.');
+  if (s.kind === 'psc_cease' && !c.psc.some((p) => p.id === ch.psc && !p.ceased)) throw bad('That person is no longer a current person with significant control, so this change can’t be applied. Reject it instead.');
 }
 const submission = (sid) => db.submissions.find((s) => s.id === sid) || null;
 function decideSubmission(s, accept, note, actor) {
   if (s.status !== 'Pending') throw Object.assign(new Error('This filing has already been reviewed.'), { status: 409 });
+  if (accept && s.kind && s.kind !== 'document') checkStillValid(s);
   s.status = accept ? 'Accepted' : 'Rejected';
   s.staffNote = t(note, 1000);
   s.decidedAt = now();
   if (accept) {
-    // The accepted document becomes a public filing; the customer's copy is moved, not duplicated.
-    const f = { id: id(), company: s.company, date: now().slice(0, 10), category: s.category, description: s.description, file: s.file, pages: s.pages, createdAt: now(), source: 'customer' };
-    db.filings.push(f);
-    s.filing = f.id;
+    // Applying the change updates the record and adds its filing (the customer's PDF is moved, not copied).
+    s.filing = applyChange(s);
+    const c = company(s.company); if (c) c.updatedAt = now();
   } else {
     removeFile(s.file); s.file = '';
   }
@@ -336,7 +437,7 @@ function decideSubmission(s, accept, note, actor) {
 }
 
 module.exports = {
-  init, STATUSES, FILING_CATEGORIES, OFFICER_ROLES, PSC_KINDS, REQUEST_KINDS,
+  init, STATUSES, FILING_CATEGORIES, OFFICER_ROLES, PSC_KINDS, REQUEST_KINDS, CHANGE_TYPES,
   companies, company, children, search, saveCompany, deleteCompany, saveItem, deleteItem,
   filings, filing, addFiling, deleteFiling, filePath,
   customer, customerByEmail, createCustomer, checkPassword, changePassword, touchLogin, setCustomerDisabled,

@@ -17,17 +17,19 @@ test('company register: public records, customers, requests, submissions and sta
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-companies-test-'));
   const sitePort = await freePort();
   const SITE = 'http://127.0.0.1:' + sitePort;
-  const child = spawn(process.execPath, [path.join(__dirname, 'server.js')], {
+  const startServer = () => spawn(process.execPath, [path.join(__dirname, 'server.js')], {
     env: { ...process.env, PORT: String(sitePort), HOST: '127.0.0.1', COMPANIES_ORIGIN: SITE, COMPANIES_DATA_DIR: path.join(dir, 'data') },
     stdio: ['ignore', 'ignore', 'inherit'],
   });
+  let child = startServer();
+  const waitUp = async () => { for (let i = 0; i < 50; i++) { try { if ((await fetch(SITE + '/healthz')).ok) return; } catch {} await new Promise((r) => setTimeout(r, 100)); } };
   const get = (p, cookie) => fetch(SITE + p, { redirect: 'manual', headers: cookie ? { cookie } : {} });
   const post = (p, fields, cookie, extra) => fetch(SITE + p, { method: 'POST', redirect: 'manual', headers: { 'content-type': 'application/x-www-form-urlencoded', ...(cookie ? { cookie } : {}), ...(extra || {}) }, body: new URLSearchParams(fields).toString() });
   const upload = (p, fields, file, cookie) => { const fd = new FormData(); for (const [k, v] of Object.entries(fields)) fd.append(k, v); if (file) fd.append('document', new Blob([file], { type: 'application/pdf' }), 'doc.pdf'); return fetch(SITE + p, { method: 'POST', redirect: 'manual', headers: { cookie }, body: fd }); };
   const cookieOf = (r, name) => (r.headers.getSetCookie ? r.headers.getSetCookie() : [r.headers.get('set-cookie')]).map((c) => c.split(';')[0]).find((c) => c.startsWith(name + '='));
   const csrfIn = (html) => html.match(/name="csrf" value="([a-f0-9]+)"/)[1];
   try {
-    for (let i = 0; i < 50; i++) { try { if ((await fetch(SITE + '/healthz')).ok) break; } catch {} await new Promise((r) => setTimeout(r, 100)); }
+    await waitUp();
 
     // The home page is a search page branded Horizon Holding Co, with no company list and no HN Group branding.
     let html = await (await get('/')).text();
@@ -193,6 +195,54 @@ test('company register: public records, customers, requests, submissions and sta
     assert.equal((await get('/company/horizon-network')).status, 404);
     assert.equal((await get('/company/horizon-network', owner)).status, 200);
     assert.equal((await get('/document/' + docId)).status, 404);
+
+    // Customers file changes; accepting them updates the record and files them.
+    html = await (await get('/company/hn-group/file', sam)).text();
+    assert.match(html, /What do you want to file\?/); assert.match(html, /\?type=address/); assert.match(html, /\?type=terminate/);
+    assert.match(await (await get('/company/hn-group/file?type=address', sam)).text(), /New registered office address/);
+    assert.match(await (await upload('/company/hn-group/file', { csrf: samCsrf, kind: 'appoint', name: 'Casey New', role: 'Secretary' }, null, sam)).text(), /Enter the date of appointment/);
+    await upload('/company/hn-group/file', { csrf: samCsrf, kind: 'address', registeredOffice: '2 New Road\nCity' }, null, sam);
+    await upload('/company/hn-group/file', { csrf: samCsrf, kind: 'appoint', name: 'Casey New', role: 'Secretary', appointed: '2026-07-01' }, null, sam);
+    const jamieId = JSON.parse(fs.readFileSync(path.join(dir, 'data', 'register.json'), 'utf8')).companies.find((x) => x.slug === 'hn-group').officers.find((o) => o.name === 'Jamie Director').id;
+    await upload('/company/hn-group/file', { csrf: samCsrf, kind: 'terminate', officer: jamieId, resigned: '2026-07-02' }, null, sam);
+    await upload('/company/hn-group/file', { csrf: samCsrf, kind: 'confirmation', madeUpTo: '2026-07-03' }, PDF, sam);
+    html = await (await get('/admin/submissions', owner)).text();
+    assert.match(html, /Change of registered office address to 2 New Road, City/);
+    assert.match(html, /Appointment of Casey New as a secretary on 1 July 2026/);
+    assert.match(html, /<dd>Secretary<\/dd>/);
+    for (const sid of [...html.matchAll(/\/admin\/submissions\/([a-f0-9]{24})"/g)].map((x) => x[1])) await post('/admin/submissions/' + sid, { csrf: staffCsrf, decision: 'accept' }, owner);
+    html = await (await get('/company/hn-group')).text();
+    assert.match(html, /2 New Road<br>City/);
+    assert.match(html, /<dt>Last statement dated<\/dt><dd>3 July 2026/);
+    html = await (await get('/company/hn-group/officers')).text();
+    assert.match(html, /Casey New[\s\S]*Secretary/); assert.match(html, /Jamie Director <span class="status warn">Resigned<\/span>/);
+    html = await (await get('/company/hn-group/filing-history')).text();
+    assert.match(html, /Change of registered office address to 2 New Road, City/);
+    assert.equal((html.match(/Appointment of Casey New as a secretary on 1 July 2026/g) || []).length, 1);
+    assert.match(html, /Termination of appointment of Jamie Director as a director on 2 July 2026/);
+    assert.match(html, /Confirmation statement made up to 3 July 2026/);
+    // A change that no longer fits the record can't be accepted.
+    const caseyId = JSON.parse(fs.readFileSync(path.join(dir, 'data', 'register.json'), 'utf8')).companies.find((x) => x.slug === 'hn-group').officers.find((o) => o.name === 'Casey New').id;
+    await upload('/company/hn-group/file', { csrf: samCsrf, kind: 'terminate', officer: caseyId, resigned: '2026-08-01' }, null, sam);
+    await upload('/company/hn-group/file', { csrf: samCsrf, kind: 'terminate', officer: caseyId, resigned: '2026-08-02' }, null, sam);
+    html = await (await get('/admin/submissions', owner)).text();
+    const pendingIds = [...html.matchAll(/\/admin\/submissions\/([a-f0-9]{24})"/g)].map((x) => x[1]);
+    assert.equal(pendingIds.length, 2);
+    await post('/admin/submissions/' + pendingIds[0], { csrf: staffCsrf, decision: 'accept' }, owner);
+    assert.match(await (await post('/admin/submissions/' + pendingIds[1], { csrf: staffCsrf, decision: 'accept' }, owner)).text(), /no longer current/);
+
+    // Changing the registered name keeps the old one and files the change automatically.
+    await post('/admin/company/hn-group', { csrf: staffCsrf, legalName: 'HN Group Holdings Limited', name: 'HN Group', number: '12345678', status: 'Active', incorporated: '2026-01-01', registeredOffice: '2 New Road\nCity' }, owner);
+    html = await (await get('/company/hn-group')).text();
+    assert.match(html, /HN Group Holdings Limited/); assert.match(html, /Previous company names<\/dt><dd>HN Group Limited/);
+    assert.match(await (await get('/company/hn-group/filing-history')).text(), /Change of name from HN Group Limited to HN Group Holdings Limited/);
+    await post('/admin/company/hn-group', { csrf: staffCsrf, legalName: 'HN Group Holdings Limited', name: 'HN Group', number: '12345678', status: 'Active', incorporated: '2026-01-01', registeredOffice: '2 New Road\nCity' }, owner);
+    assert.equal(((await (await get('/company/hn-group/filing-history')).text()).match(/Change of name from/g) || []).length, 1);
+
+    // Signed-in customers and staff stay signed in across a restart.
+    child.kill(); await new Promise((r) => setTimeout(r, 300)); child = startServer(); await waitUp();
+    assert.equal((await get('/account', sam)).status, 200);
+    assert.equal((await get('/admin', owner)).status, 200);
 
     // Disabling a customer signs them out.
     html = await (await get('/admin/customers', owner)).text();

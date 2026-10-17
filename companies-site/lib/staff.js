@@ -5,12 +5,11 @@
 // first sign-in. Administrators can add and remove staff; staff can manage the register.
 const crypto = require('node:crypto');
 const store = require('./store');
+const saved = require('./sessions');
 
 const SECURE = (process.env.COMPANIES_ORIGIN || 'https://companies.hngroup.org.uk').startsWith('https://');
 const COOKIE = (SECURE ? '__Host-' : '') + 'hn_companies_staff';
-const LIFETIME = 12 * 3600 * 1000;
 const ROLES = { admin: 'Administrator', staff: 'Staff' };
-const sessions = new Map(); // sha256(token) -> { staff, csrf, expires }
 const failures = new Map();
 const hash = (s) => crypto.createHash('sha256').update(s).digest('hex');
 const fail = (status, message) => Object.assign(new Error(message), { status });
@@ -107,24 +106,20 @@ const setCookie = (value, maxAge) => `${COOKIE}=${value}; Path=/; HttpOnly;${SEC
 
 function current(req) {
   const raw = cookie(req);
-  if (!/^[a-f0-9]{64}$/.test(raw)) return null;
-  const entry = sessions.get(hash(raw));
-  if (!entry || entry.expires <= Date.now()) { sessions.delete(hash(raw)); return null; }
-  const s = byId(entry.staff);
-  if (!s) { sessions.delete(hash(raw)); return null; }
+  const entry = saved.get('staff', raw);
+  if (!entry) return null;
+  const s = byId(entry.user);
+  if (!s) { saved.remove(raw); return null; }
   return { account: s, id: s.id, name: s.name, email: s.email, admin: s.role === 'admin', mustChange: !!s.mustChange, csrf: entry.csrf };
 }
 function start(s) {
-  for (const [k, v] of sessions) if (v.expires <= Date.now()) sessions.delete(k);
-  const raw = crypto.randomBytes(32).toString('hex');
-  sessions.set(hash(raw), { staff: s.id, csrf: crypto.randomBytes(24).toString('hex'), expires: Date.now() + LIFETIME });
   s.lastLoginAt = new Date().toISOString();
   store.audit('staff:' + s.email, 'staff.sign-in');
-  store.save();
-  return setCookie(raw, LIFETIME / 1000);
+  const raw = saved.create('staff', s.id);
+  return setCookie(raw, saved.COOKIE_AGE);
 }
-function end(req) { sessions.delete(hash(cookie(req))); return setCookie('', 0); }
-function endAllFor(id) { for (const [k, v] of sessions) if (v.staff === id) sessions.delete(k); }
+function end(req) { saved.remove(cookie(req)); return setCookie('', 0); }
+function endAllFor(id) { saved.removeUser('staff', id); }
 
 // Ten wrong passwords for an email address or from one IP address in 15 minutes pause sign-in.
 function limited(key) { const f = failures.get(key); if (!f) return false; if (Date.now() - f.first > 15 * 60000) { failures.delete(key); return false; } return f.count >= 10; }

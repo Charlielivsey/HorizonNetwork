@@ -8,7 +8,9 @@ A register of the group's companies in the style of Companies House, branded as 
 - Unknown details show as "Not recorded". Nothing is invented. The register starts with HN Group and Horizon Network only.
 
 ## Customer accounts (anyone can register)
-Request documents or certificates, report mistakes, and submit filings as PDFs (up to 15 MB) for staff review. Staff reply on the site; no emails are sent.
+Request documents or certificates, report mistakes, and **file changes** for a company: a new registered office address, appointing or removing an officer, notifying or ceasing a person with significant control, a change of name or nature of business, a confirmation statement, or any other filing as a PDF (up to 15 MB). Staff review each one; accepting it updates the company's record and adds the filing (the customer's PDF, or one generated from the details). Staff reply on the site; no emails are sent.
+
+Customers and staff stay signed in (across refreshes, restarts and updates) until they sign out, their cookies are cleared, or 30 days pass without a visit.
 
 ## Staff
 - Sign in at **/staff/login** (the "Staff sign in" link). A new register starts with **admin@hngroup.org.uk / admin**; you must choose a new password the first time you sign in.
@@ -16,7 +18,7 @@ Request documents or certificates, report mistakes, and submit filings as PDFs (
 - Administrators also add and remove staff, change roles and set temporary passwords (Administration → Staff). Staff choose their own password at first sign-in.
 
 ## Generated filings
-Recording a company's incorporation date files an **Incorporation** filing, recording an officer with an appointment date files an **Appointment** filing, and recording a person with significant control with a notified date files a **PSC notification** filing, each with a generated PDF. Each is created once.
+Recording a company's incorporation date files an **Incorporation** filing, recording an officer with an appointment date files an **Appointment** filing, and recording a person with significant control with a notified date files a **PSC notification** filing, each with a generated PDF. Changing a company's registered name also keeps the old name and files a **Change of name**. Each is created once.
 
 A new company has to be added with its first officer and first person with significant control; if their dates are left blank, the incorporation date is used.
 
