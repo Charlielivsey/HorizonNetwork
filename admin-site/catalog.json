@@ -1,5 +1,14 @@
 [
   {
+    "id": "auth",
+    "name": "HN Group Auth",
+    "process": "hn-auth",
+    "port": 3400,
+    "hosts": [
+      "auth.hngroup.org.uk"
+    ]
+  },
+  {
     "id": "website",
     "name": "HN Group",
     "process": "hn-website",

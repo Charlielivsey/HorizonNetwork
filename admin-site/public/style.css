@@ -3,3 +3,5 @@ header>a{display:flex;align-items:center;gap:22px;text-decoration:none;color:var
 
 .site-card{display:flex;flex-direction:column}.site-message{flex:1}.site-card>button{margin-top:auto}
 .site-actions{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:auto}.site-actions button{padding:10px 14px;font-size:.78rem}
+
+.account-profile{display:flex;align-items:center;gap:10px}.account-profile img{width:38px;height:38px;object-fit:cover;border-radius:50%}.account-profile small{display:block;font-size:.67rem}@media(max-width:600px){.account-profile small{display:none}}

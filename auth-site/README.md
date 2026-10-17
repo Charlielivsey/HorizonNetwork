@@ -36,3 +36,7 @@ Auth checks the staff account’s actual `passwordTemporary` and missing-PIN fla
 The protected staff bridge delegates changes to the portal’s existing password/PIN handlers, retaining its password policy, weak-PIN validation, audit events and session revocation. Auth blocks application continuations and session exchanges until required setup is complete. First PIN setup also remembers that browser for future PIN resume. Remembered-account tiles and the PIN screen both display the staff profile picture with initials as fallback.
 
 Checks: `node --test auth-site/setup.test.cjs` verifies new/temporary accounts, existing-PIN accounts, normal sign-ins, policy enforcement and server-side application gating. `PLAYWRIGHT_MODULE=/path/to/playwright node auth-site/setup-browser-smoke.cjs` checks the direct Auth setup and subsequent PIN resume with isolated fixture accounts.
+
+## Independent website control
+
+With the latest central-control installation, the one private staff backend runs as `hn-accounts` on loopback 3250 and Auth runs only the broker on 3400. `admin.hngroup.org.uk` has its own staff-backed sign-in and can manage Auth maintenance and power. The legacy `control` and `maintenance` SSO clients are retired. Auth shutdown does not shut down the account service or control-panel login; other applications still need Auth for their SSO flow. `/var/lib/hn-control/accounts-independent` selects this topology. Auth installers preserve its saved stopped state and nginx gate includes.

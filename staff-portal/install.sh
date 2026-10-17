@@ -70,7 +70,7 @@ ok "Portal deployed to $APP_DIR (user data kept in $DATA_DIR)"
 pm2 delete "$PM2_NAME" 2>/dev/null || true
 if [ -f /var/lib/hn-control/accounts-enabled ]; then
     PORT=$PORT HOST=127.0.0.1 DATA_DIR="$DATA_DIR" pm2 start "$APP_DIR/public-proxy.js" --name "$PM2_NAME" --update-env
-    pm2 restart hn-auth
+    if [ -f /var/lib/hn-control/accounts-independent ]; then pm2 restart hn-accounts; else pm2 restart hn-auth; fi
 else
     PORT=$PORT HOST=127.0.0.1 DATA_DIR="$DATA_DIR" pm2 start "$APP_DIR/server.js" --name "$PM2_NAME" --update-env
 fi

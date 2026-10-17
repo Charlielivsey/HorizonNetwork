@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Add the central gate to known website hosts, never Auth, admin or unrelated hosts.
+"""Add the central gate to known website hosts, never admin or unrelated hosts.
 Wildcard includes survive future site installations and are harmless before control is installed.
 """
 import argparse,json,re
@@ -43,7 +43,7 @@ def patch(text):
     return text
 paths=[]
 if args.source:
-    for folder in ['hngroup-site/nginx','horizon-network-site','staff-portal','status-site','links-site','wiki-site','branding-site','companies-site','horizon-advertising']+[s+'-site' for s in ['media','holding','development','support','clients','careers','docs','news']]:
+    for folder in ['auth-site','hngroup-site/nginx','horizon-network-site','staff-portal','status-site','links-site','wiki-site','branding-site','companies-site','horizon-advertising']+[s+'-site' for s in ['media','holding','development','support','clients','careers','docs','news']]:
         paths.extend((repo/folder).glob('*.conf'))
 else:
     root=Path(args.root)

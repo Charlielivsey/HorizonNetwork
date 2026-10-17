@@ -7,8 +7,6 @@ const crypto = require('node:crypto');
 const ORIGIN = 'https://auth.hngroup.org.uk';
 // Registered applications: fixed callbacks and who may use them.
 const CLIENTS = {
-  control: { name: 'HN Group website control', callback: 'https://admin.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'Panel access is granted separately.' },
-  maintenance: { name: 'Website maintenance bypass', callback: 'https://admin.hngroup.org.uk/bypass/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can bypass maintenance.' },
   media: { name: 'Horizon Media Group administration', callback: 'https://media.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage this website.' },
   holding: { name: 'Horizon Holding Co administration', callback: 'https://holding.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage this website.' },
   development: { name: 'Horizon Development administration', callback: 'https://development.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage this website.' },
@@ -142,7 +140,7 @@ const server = http.createServer(async (req, res) => {
       if (!applicationToken) {
         if (applicationSessions.size >= 10000) throw fail(503, 'Please try signing in again shortly.');
         applicationToken = random();
-        applicationSessions.set(hash(applicationToken), {session:token,client:clientId,expires:entry.expires,...(['control','maintenance'].includes(clientId)?{entry:{...entry}}:{})});
+        applicationSessions.set(hash(applicationToken), {session:token,client:clientId,expires:entry.expires});
       }
       return send(res, 200, { session: applicationToken, expires: entry.expires, user });
     }

@@ -11,8 +11,16 @@ function file(res,name){res.writeHead(200,{'Content-Type':mime[path.extname(name
 async function body(req){if(!(req.headers['content-type']||'').startsWith('application/json'))throw fail(415,'JSON required.');let size=0,chunks=[];for await(const c of req){size+=c.length;if(size>16384)throw fail(413,'Request too large.');chunks.push(c);}try{return JSON.parse(Buffer.concat(chunks));}catch{throw fail(400,'Invalid request.');}}
 function edge(req){const supplied=req.headers['x-hn-control-key']||'';return /^[a-f0-9]{64}$/.test(supplied)&&crypto.timingSafeEqual(Buffer.from(supplied),Buffer.from(edgeSecret));}
 function siteFor(req){const site=sites.find(s=>s.id===req.headers['x-hn-control-site']),host=String(req.headers['x-hn-control-host']||'').toLowerCase();if(!site||!site.hosts.includes(host))throw fail(400,'Invalid website.');return{site,host};}
+function authOffline(res,uri='/'){
+const message='The authentication portal is currently offline. Please try again later.';
+res.setHeader('Retry-After','300');res.setHeader('X-Robots-Tag','noindex');
+if(uri.startsWith('/api/'))return json(res,503,{error:message,authenticationOffline:true});
+const retry=uri.startsWith('/')&&!uri.startsWith('//')&&!uri.includes(String.fromCharCode(92))&&!/[\r\n]/.test(uri)?uri:'/';
+res.writeHead(503,{'Content-Type':'text/html; charset=utf-8'});
+res.end(`<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Authentication portal offline · HN Group</title><link rel="icon" href="/__hn_control/assets/favicon.svg"><link rel="stylesheet" href="/__hn_control/style.css"></head><body class="maintenance-body"><main class="maintenance-card"><img class="on-light" src="/__hn_control/assets/brand/hn-group-wordmark.svg" alt="HN Group"><img class="on-dark" src="/__hn_control/assets/brand/hn-group-wordmark-white.svg" alt="HN Group"><div class="orbit" aria-hidden="true">◇</div><p class="eyebrow">HN Group Auth</p><h1>Authentication portal<br>currently offline.</h1><p class="maintenance-message">${message}</p><a class="button primary" href="${esc(retry)}">Try again →</a></main><div class="brand-stripe" aria-hidden="true"></div></body></html>`);
+}
 function maintenance(res,site,host,state,uri='/'){
-if(state.power==='off'){res.writeHead(444);return res.end();}
+if(state.power==='off'){if(site.id==='auth')return authOffline(res,uri);res.writeHead(444);return res.end();}
 res.setHeader('Retry-After','300');res.setHeader('X-Robots-Tag','noindex');if(uri.startsWith('/api/'))return json(res,503,{error:state.message,maintenance:true});
 const login=new URL('/bypass/start',ORIGIN);login.searchParams.set('site',site.id);login.searchParams.set('host',host);if(uri.startsWith('/')&&!uri.startsWith('//')&&uri.length<1500)login.searchParams.set('back',uri);
 res.writeHead(503,{'Content-Type':'text/html; charset=utf-8'});res.end(`<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Maintenance · ${esc(site.name)}</title><link rel="icon" href="/__hn_control/assets/favicon.svg"><link rel="stylesheet" href="/__hn_control/style.css"></head><body class="maintenance-body"><main class="maintenance-card"><img class="on-light" src="/__hn_control/assets/brand/hn-group-wordmark.svg" alt="HN Group"><img class="on-dark" src="/__hn_control/assets/brand/hn-group-wordmark-white.svg" alt="HN Group"><div class="orbit" aria-hidden="true">◇</div><p class="eyebrow">${esc(site.name)}</p><h1>A little time<br>behind the scenes.</h1><p class="maintenance-message">${esc(state.message)}</p><p class="muted">Please check back shortly.</p>${state.mode==='admins'?`<a class="button primary" href="${esc(login.href)}">Administrator sign in →</a><p class="hint">System owner and Super Admin members only.</p>`:''}<a class="quiet" href="${ORIGIN}">Website control panel ↗</a></main><div class="brand-stripe" aria-hidden="true"></div></body></html>`);}
@@ -22,7 +30,7 @@ try{const url=new URL(req.url,ORIGIN),route=url.pathname;
 if(edge(req)){
 const{site,host}=siteFor(req),state=store.state.sites[site.id];
 if(route==='/_edge/gate'){
-let allowed=state.power==='on'&&(state.mode==='off'||state.mode==='admins'&&await identity.canBypass(req,site.id,host));res.setHeader('X-HN-Control-Action',state.power==='off'?'shutdown':'maintenance');res.writeHead(allowed?204:403);return res.end();}
+let allowed=state.power==='on'&&(state.mode==='off'||state.mode==='admins'&&await identity.canBypass(req,site.id,host));res.setHeader('X-HN-Control-Action',state.power==='off'?(site.id==='auth'?'auth-offline':'shutdown'):'maintenance');res.writeHead(allowed?204:403);return res.end();}
 if(route==='/__hn_control/accept'&&req.method==='GET')return await identity.accept(req,res,site.id,host,url);
 if(route.startsWith('/__hn_control/')&&req.method==='GET'){
 const relative=route.slice('/__hn_control'.length),target=path.resolve(PUBLIC,'.'+relative);if(target.startsWith(PUBLIC+path.sep)&&mime[path.extname(target)]&&fs.existsSync(target)&&fs.statSync(target).isFile())return file(res,target);throw fail(404,'Not found.');}
@@ -30,14 +38,19 @@ if(req.headers['x-hn-control-render']==='1')return maintenance(res,site,host,sta
 throw fail(404,'Not found.');}
 if(route==='/healthz'&&req.method==='GET')return json(res,200,{ok:true});
 if(route==='/auth/login'&&req.method==='GET')return await identity.begin(res);
-if(route==='/auth/callback'&&req.method==='GET')return await identity.callback(req,res,url,false);
+if(route==='/auth/callback'||route==='/bypass/callback')throw fail(410,'Use the control panel’s own sign-in page.');
 if(route==='/bypass/start'&&req.method==='GET'){const site=sites.find(s=>s.id===url.searchParams.get('site')),host=url.searchParams.get('host'),back=url.searchParams.get('back')||'/';if(!site||!site.hosts.includes(host)||!back.startsWith('/')||back.startsWith('//')||back.includes(String.fromCharCode(92))||new URL(back,'https://'+host).origin!=='https://'+host||/[\r\n]/.test(back)||back.length>1500)throw fail(400,'Invalid maintenance sign-in request.');const state=store.state.sites[site.id];if(state.power!=='on'||state.mode!=='admins')throw fail(403,'This website does not currently allow a maintenance bypass.');return await identity.begin(res,{site:site.id,host,back});}
-if(route==='/bypass/callback'&&req.method==='GET')return await identity.callback(req,res,url,true);
+
 if(route==='/auth/logout'&&req.method==='POST'){if(req.headers.origin!==ORIGIN)throw fail(403,'Request origin not allowed.');return await identity.logout(req,res);}
+if(route.startsWith('/api/sign-in/')){
+ const name=route.slice('/api/sign-in/'.length);if(req.method==='POST'&&req.headers.origin!==ORIGIN)throw fail(403,'Request origin not allowed.');
+ if(name==='continue'&&req.method==='POST'){await body(req);return await identity.complete(req,res);}
+ return await identity.login.handle(req,res,name,req.method==='POST'?await body(req):undefined);
+}
 if(route.startsWith('/api/')){
 let permission=route==='/api/audit'?'audit':route==='/api/access'?'access':route==='/api/maintenance'?'maintenance':route==='/api/power'||route.startsWith('/api/jobs/')?'power':null;
 let user;try{user=await identity.current(req,permission);}catch(e){if(e.status===403)store.audit('authenticated-account','permission.denied',{route});throw e;}
-if(route==='/api/state'&&req.method==='GET'){let statuses,error;try{statuses=await processes();}catch{statuses={};error='Process status is temporarily unavailable.';}const state=store.state;return json(res,200,{user:{displayName:user.displayName,email:user.email,permissions:user.permissions},sites:sites.map(s=>({...s,...state.sites[s.id],status:statuses[s.id]||'unknown'})),exempt:['HN Group Auth (including its private account backend)','Website control panel'],access:user.permissions.includes('access')?{[ROOT_ACCOUNT]:{permissions:PERMISSIONS,locked:true},...state.access}:undefined,job:power.active,error});}
+if(route==='/api/state'&&req.method==='GET'){let statuses,error;try{statuses=await processes();}catch{statuses={};error='Process status is temporarily unavailable.';}const state=store.state;return json(res,200,{user:{displayName:user.displayName,email:user.email,jobTitle:user.jobTitle,company:user.company,avatarUrl:user.avatarUrl?'/api/sign-in/avatar':null,permissions:user.permissions},sites:sites.map(s=>({...s,...state.sites[s.id],status:statuses[s.id]||'unknown'})),exempt:['Website control panel','Private staff account service'],access:user.permissions.includes('access')?{[ROOT_ACCOUNT]:{permissions:PERMISSIONS,locked:true},...state.access}:undefined,job:power.active,error});}
 if(route==='/api/audit'&&req.method==='GET'){const before=Number(url.searchParams.get('before'))||Infinity;return json(res,200,{entries:store.entries(before)});}
 if(route.startsWith('/api/jobs/')&&req.method==='GET'){const job=power.job(route.slice('/api/jobs/'.length));if(!job)throw fail(404,'Operation not found.');return json(res,200,job);}
 if(req.method!=='POST')throw fail(404,'Not found.');if(req.headers.origin!==ORIGIN)throw fail(403,'Request origin not allowed.');const data=await body(req);
@@ -45,8 +58,9 @@ if(route==='/api/maintenance'){if(!['off','admins','all'].includes(data.mode)||t
 if(route==='/api/access'){const email=String(data.email||'').trim().toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>160)throw fail(400,'Enter the staff account email address.');if(email===ROOT_ACCOUNT)throw fail(400,'Charlie’s permanent access cannot be removed or changed.');if(data.remove!==true&&(!Array.isArray(data.permissions)||!data.permissions.length||data.permissions.some(p=>!PERMISSIONS.includes(p))))throw fail(400,'Choose at least one valid permission.');const permissions=[...new Set(data.permissions||[])];store.change(user.email,data.remove?'access.remove':'access.grant',d=>{if(data.remove)delete d.access[email];else d.access[email]={permissions,by:user.email,at:new Date().toISOString()};},{email,permissions:data.remove?[]:permissions});return json(res,200,{ok:true});}
 if(route==='/api/power'){const site=data.site?String(data.site):null;if(!['shutdown','startup'].includes(data.action))throw fail(400,'Invalid power operation.');if(site){if(!sites.some(s=>s.id===site))throw fail(400,'Unknown website.');}else if(data.confirmation!==(data.action==='shutdown'?'SHUT DOWN ALL SITES':'POWER UP ALL SITES'))throw fail(400,'Confirm the power operation.');return json(res,202,power.start(data.action,user.email,site));}
 throw fail(404,'Not found.');}
-if(!['GET','HEAD'].includes(req.method))throw fail(405,'Method not allowed.');if(['/', '/denied'].includes(route))return file(res,path.join(PUBLIC,'index.html'));
+if(!['GET','HEAD'].includes(req.method))throw fail(405,'Method not allowed.');if(route==='/login'&&req.method==='GET'){res.setHeader('Set-Cookie',identity.login.clear(req));return file(res,path.join(PUBLIC,'login.html'));}
+if(['/', '/denied'].includes(route))return file(res,path.join(PUBLIC,'index.html'));
 const target=path.resolve(PUBLIC,'.'+decodeURIComponent(route));if(!target.startsWith(PUBLIC+path.sep)||route.split('/').some(p=>p.startsWith('.'))||!mime[path.extname(target)]||!fs.existsSync(target)||!fs.statSync(target).isFile())throw fail(404,'Not found.');return file(res,target);
-}catch(e){if(!res.headersSent)json(res,e.status||500,{error:e.status?e.message:'The request could not be completed. Check the control service logs.'});else res.destroy();}});
+}catch(e){if(!res.headersSent)json(res,e.status||500,{error:e.status?e.message:'The request could not be completed. Check the control service logs.',...(e.restart?{restart:true}:{})});else res.destroy();}});
 server.requestTimeout=30000;server.headersTimeout=15000;
 if(require.main===module)server.listen(Number(process.env.PORT||4700),'127.0.0.1');module.exports={server,store,power};
