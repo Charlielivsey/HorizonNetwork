@@ -5897,6 +5897,16 @@
         renderChrome();
     }
 
+    function gifDataUrl(file) {
+        if (file.size > 1.4 * 1024 * 1024) return Promise.reject(new Error("That GIF is too large (max 1.4 MB)."));
+        return new Promise(function (resolve, reject) {
+            const reader = new FileReader();
+            reader.onload = function () { resolve(reader.result); };
+            reader.onerror = function () { reject(new Error("That GIF couldn't be read.")); };
+            reader.readAsDataURL(file);
+        });
+    }
+
     async function resizeImage(file) {
         const url = URL.createObjectURL(file);
         try {
@@ -5956,8 +5966,8 @@
             '<div class="avatar-edit">' + avatar(me, "xl") + "<div>" +
             '<div class="btn-row"><label class="btn btn-primary" for="avatar-file">' + icon("camera") + "Upload photo</label>" +
             (me.avatarUrl ? '<button type="button" class="btn btn-ghost" id="avatar-remove">Remove</button>' : "") + "</div>" +
-            '<input type="file" id="avatar-file" accept="image/png,image/jpeg,image/webp" hidden>' +
-            '<p class="hint">JPG, PNG or WebP. Your photo will be cropped to a square.</p></div></div></section>' +
+            '<input type="file" id="avatar-file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>' +
+            '<p class="hint">JPG, PNG, WebP or an animated GIF (up to 1.4 MB). Your picture is shown as a circle, so square images work best.</p></div></div></section>' +
 
             '<section class="panel span-2"><h2 class="panel-title">Profile banner</h2>' +
             '<p class="muted small">Shown at the top of your profile and on your card in the Staff Directory.</p>' +
@@ -6153,7 +6163,8 @@
             const file = e.target.files[0];
             if (!file) return;
             try {
-                const image = await resizeImage(file);
+                // GIFs are sent unchanged so the animation is kept; other photos are cropped and resized.
+                const image = file.type === "image/gif" ? await gifDataUrl(file) : await resizeImage(file);
                 state.me = (await api("/api/me/avatar", { image: image })).user;
                 renderChrome();
                 viewSettings(root);

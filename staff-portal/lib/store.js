@@ -911,14 +911,17 @@ const IMAGE_TYPES = {
   jpeg: { ext: "jpg", mime: "image/jpeg", magic: (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
   png: { ext: "png", mime: "image/png", magic: (b) => b.slice(0, 4).toString("hex") === "89504e47" },
   webp: { ext: "webp", mime: "image/webp", magic: (b) => b.slice(0, 4).toString() === "RIFF" && b.slice(8, 12).toString() === "WEBP" },
+  gif: { ext: "gif", mime: "image/gif", magic: (b) => /^GIF8[79]a$/.test(b.slice(0, 6).toString("latin1")) },
 };
 
 function saveAvatar(person, dataUrl) {
-  const match = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl || ""));
-  if (!match) throw new ValidationError("Upload a JPG, PNG or WebP image.");
+  // Animated GIFs are stored as uploaded so they keep moving; other images arrive already cropped.
+  const match = /^data:image\/(jpeg|png|webp|gif);base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl || ""));
+  if (!match) throw new ValidationError("Upload a JPG, PNG, WebP or GIF image.");
   const type = IMAGE_TYPES[match[1]];
   const buffer = Buffer.from(match[2], "base64");
-  if (buffer.length > 1024 * 1024) throw new ValidationError("That image is too large (max 1 MB).");
+  const limit = type.ext === "gif" ? 1.4 * 1024 * 1024 : 1024 * 1024;
+  if (buffer.length > limit) throw new ValidationError(type.ext === "gif" ? "That GIF is too large (max 1.4 MB)." : "That image is too large (max 1 MB).");
   if (!type.magic(buffer)) throw new ValidationError("That file doesn't look like a valid image.");
 
   removeAvatar(person, false);
