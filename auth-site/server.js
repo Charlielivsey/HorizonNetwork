@@ -8,7 +8,7 @@ const ORIGIN = 'https://auth.hngroup.org.uk';
 // Registered applications: fixed callbacks and who may use them.
 const CLIENTS = {
   media: { name: 'Horizon Media Group administration', callback: 'https://media.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage this website.' },
-  holding: { name: 'Horizon Holding Co administration', callback: 'https://holding.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage this website.' },
+  holding: { name: 'Horizon Assets Management administration', callback: 'https://holding.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage this website.' },
   development: { name: 'Horizon Development administration', callback: 'https://development.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage this website.' },
   support: { name: 'HN Group Support administration', callback: 'https://support.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage this website.' },
   clients: { name: 'HN Group Clients administration', callback: 'https://clients.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage this website.' },

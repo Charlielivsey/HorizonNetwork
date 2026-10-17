@@ -1,7 +1,7 @@
 title: List of HN Group companies
 ---
 {{Short description|List of the companies in HN Group}}
-This is a list of the companies in '''[[HN Group]]'''. HN Group has three direct, wholly owned subsidiaries: [[Horizon Network]], [[Horizon Media Group]] and [[Horizon Holding Co]]. [[Horizon Development]] is part of Horizon Network; [[Horizon Advertising]] is a subsidiary of Horizon Media Group and is managed by Horizon Network.<ref>[https://hngroup.org.uk/companies Our companies], hngroup.org.uk.</ref>
+This is a list of the companies in '''[[HN Group]]'''. HN Group has three direct, wholly owned subsidiaries: [[Horizon Network]], [[Horizon Media Group]] and [[Horizon Assets Management]]. [[Horizon Development]] is part of Horizon Network; [[Horizon Advertising]] is a subsidiary of Horizon Media Group and is managed by Horizon Network.<ref>[https://hngroup.org.uk/companies Our companies], hngroup.org.uk.</ref>
 
 {| class="wikitable"
 ! Company !! Part of !! Focus !! Website
@@ -16,7 +16,7 @@ This is a list of the companies in '''[[HN Group]]'''. HN Group has three direct
 |-
 | '''[[Horizon Media Group]]''' || HN Group (wholly owned) || Media and content, press enquiries || Through HN Group
 |-
-| '''[[Horizon Holding Co]]''' || HN Group (wholly owned) || Owns the group's assets, domains, Discord servers and technical assets; manages email services || —
+| '''[[Horizon Assets Management]]''' || HN Group (wholly owned) || Owns the group's assets, domains, Discord servers and technical assets; manages email services || —
 |}
 
 == Group structure ==
@@ -25,7 +25,7 @@ This is a list of the companies in '''[[HN Group]]'''. HN Group has three direct
 *** [[Horizon Development]]
 ** [[Horizon Media Group]]
 *** [[Horizon Advertising]] (managed by Horizon Network)
-** [[Horizon Holding Co]]
+** [[Horizon Assets Management]]
 
 == References ==
 {{Reflist}}

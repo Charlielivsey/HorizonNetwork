@@ -104,7 +104,7 @@
   },
   {
     "id": "holding",
-    "name": "Horizon Holding Co",
+    "name": "Horizon Assets Management",
     "process": "hn-holding",
     "port": 4000,
     "hosts": [

@@ -23,7 +23,7 @@ const COMPANIES = [
   { id: 'horizon-media-group', name: 'Horizon Media Group', note: 'A subsidiary of HN Group.', variants: roundelSet('horizon-media-group') },
   { id: 'horizon-advertising', name: 'Horizon Advertising', note: 'A subsidiary of Horizon Media Group, managed by Horizon Network.', variants: roundelSet('horizon-advertising') },
   { id: 'horizon-development', name: 'Horizon Development', note: 'Part of Horizon Network.', variants: roundelSet('horizon-development') },
-  { id: 'horizon-holding-co', name: 'Horizon Holding Co', note: 'A subsidiary of HN Group that holds the group’s assets and domains. Use its own logo, never in place of HN Group’s.', variants: roundelSet('horizon-holding-co') },
+  { id: 'horizon-assets-management', name: 'Horizon Assets Management', note: 'A subsidiary of HN Group that holds the group’s assets and domains. Use its own logo, never in place of HN Group’s.', variants: roundelSet('horizon-assets-management') },
 ];
 function roundelSet(id) {
   return [[id + '-logo', 'Logo', false], [id + '-logo-white', 'Logo, white', true], [id + '-roundel', 'Roundel', false], [id + '-roundel-white', 'Roundel, white', true], [id + '-app-icon', 'App icon', false]];
@@ -78,7 +78,7 @@ function homePage(user) {
 
     '<section class="block" id="rules"><h2>Using the logos</h2><div class="rules">' +
     '<div class="rule do"><h3>Do</h3><ul><li>Use the original files from this page.</li><li>Use the regular logo on light backgrounds and the white logo on dark ones.</li><li>Keep the original proportions; resize by width or height only.</li><li>Leave clear space around the logo.</li><li>Use the logo of the company you’re representing.</li></ul></div>' +
-    '<div class="rule dont"><h3>Don’t</h3><ul><li>Crop, stretch, squash or rotate a logo.</li><li>Recolour a logo or change its lettering.</li><li>Redraw a logo or type the name in its place.</li><li>Put a logo on a busy or low-contrast background.</li><li>Use Horizon Holding Co’s logo in place of HN Group’s, or swap any company’s logo for another’s.</li></ul></div></div></section>' +
+    '<div class="rule dont"><h3>Don’t</h3><ul><li>Crop, stretch, squash or rotate a logo.</li><li>Recolour a logo or change its lettering.</li><li>Redraw a logo or type the name in its place.</li><li>Put a logo on a busy or low-contrast background.</li><li>Use Horizon Assets Management’s logo in place of HN Group’s, or swap any company’s logo for another’s.</li></ul></div></div></section>' +
 
     '<section class="block" id="email"><h2>Email signatures</h2><p class="intro">Make your own branded signature in the staff portal. It fills in your details from your staff profile and works in Gmail, Outlook and Apple Mail.</p>' +
     '<p><a class="button" href="https://staff.hngroup.org.uk/signature">Open the signature maker →</a></p><h3 class="sub">Signature logos</h3><div class="tiles">' + emailLogos + '</div></section>' +

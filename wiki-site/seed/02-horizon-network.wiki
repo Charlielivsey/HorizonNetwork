@@ -34,14 +34,14 @@ Horizon Network describes itself as a growing network of digital services and so
 Horizon Hosting is Horizon Network's planned hosting service, offering VPS, dedicated servers and managed cloud. It is listed as "coming soon".
 
 == Structure ==
-Horizon Network is a direct, wholly owned subsidiary of [[HN Group]], alongside [[Horizon Media Group]] and [[Horizon Holding Co]]. [[Horizon Development]] is part of Horizon Network. Horizon Network also manages [[Horizon Advertising]], which is a subsidiary of Horizon Media Group. Together they combine specialist skills with the shared people and systems of HN Group.
+Horizon Network is a direct, wholly owned subsidiary of [[HN Group]], alongside [[Horizon Media Group]] and [[Horizon Assets Management]]. [[Horizon Development]] is part of Horizon Network. Horizon Network also manages [[Horizon Advertising]], which is a subsidiary of Horizon Media Group. Together they combine specialist skills with the shared people and systems of HN Group.
 
 * [[HN Group]]
 ** '''Horizon Network'''
 *** [[Horizon Development]]
 ** [[Horizon Media Group]]
 *** [[Horizon Advertising]] (managed by Horizon Network)
-** [[Horizon Holding Co]]
+** [[Horizon Assets Management]]
 
 == Leadership ==
 The "About us" page of the Horizon Network website introduces the people guiding the network. It is published live from HN Group's staff records and shows staff whose role at Horizon Network is in the '''Network Leadership''' department, with their job title, photo and the introduction they choose to share.<ref>[https://horizon-network.co.uk/about About us], horizon-network.co.uk.</ref>

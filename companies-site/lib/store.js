@@ -61,6 +61,20 @@ function runMigrations() {
   if (!Array.isArray(db.migrations)) db.migrations = [];
   const once = (name, fn) => { if (db.migrations.includes(name)) return; fn(); db.migrations.push(name); };
   // The user's request (17 October 2026): the officer is recorded as Charlie Livsey on every company. Nothing else changes.
+  // The user's request (17 October 2026): Horizon Holding Co Limited is now Horizon Assets Management Limited. A company
+  // recorded under the old name keeps it as a previous name and gets a Change of name filing; references elsewhere follow.
+  once('rename-horizon-holding-co', () => {
+    const OLD = /^horizon holding co limited$/i, NEW = 'Horizon Assets Management Limited';
+    const fix = (v) => String(v || '').replace(/Horizon Holding Co Limited/g, NEW).replace(/Horizon Holding Co/g, 'Horizon Assets Management');
+    for (const c of db.companies) {
+      if (OLD.test(String(c.legalName).trim())) { const old = c.legalName; c.legalName = NEW; c.name = 'Horizon Assets Management'; recordNameChange(c, old); audit('system', 'company.rename', c.slug + ' ' + old + ' → ' + NEW); }
+      else if (/Horizon Holding Co/.test(c.name)) c.name = fix(c.name);
+      c.description = fix(c.description);
+      for (const p of c.psc) p.name = fix(p.name);
+      for (const o of c.officers) o.name = fix(o.name);
+      for (const x of c.charges) x.entitled = fix(x.entitled);
+    }
+  });
   once('officer-charlie-livsey', () => {
     for (const c of db.companies) for (const o of c.officers) if (/^charlie\s+dean\s+livsey$/i.test(String(o.name).trim())) { o.name = 'Charlie Livsey'; audit('system', 'officer.rename', c.slug + ' Charlie Dean Livsey → Charlie Livsey'); }
   });
@@ -189,7 +203,7 @@ function deleteItem(slug, list, itemId, actor) {
 // date, or a person with significant control with a notified date, the register files the matching
 // document itself (incorporation, appointment or PSC notification), each with a generated PDF. Each is created once; the link is kept on the
 // record so later edits don't duplicate it. Deleting a generated filing doesn't recreate it.
-const FOOTER = 'Generated automatically by the Company Register run by Horizon Holding Co Limited from the details recorded at the time. This is a group register document, not a filing with the UK government\'s Companies House.';
+const FOOTER = 'Generated automatically by the Company Register run by Horizon Assets Management Limited, a wholly owned subsidiary of HN Group Limited, from the details recorded at the time. This is a group register document, not a filing with the UK government\'s Companies House.';
 function generateFilings(c) {
   if (c.incorporated && !c.incorporationFiling) {
     const doc = pdf.build({ heading: 'Incorporation of a company', subheading: c.legalName, footer: FOOTER, rows: [

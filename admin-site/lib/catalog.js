@@ -11,6 +11,6 @@ const sites=[
 ['advertising','Horizon Advertising','ha-website',3100,['horizonadvertising.co.uk']],
 ['branding','Brand centre','hn-branding',4800,['branding.hngroup.org.uk']],
 ['companies','Company register','hn-companies',4900,['companies.hngroup.org.uk']],
-...['media','holding','development','support','clients','careers','docs','news'].map((id,i)=>[id,{media:'Horizon Media Group',holding:'Horizon Holding Co',development:'Horizon Development',support:'Support',clients:'Client portal',careers:'Careers',docs:'Documentation',news:'News'}[id],'hn-'+id,3900+i*100,[id+'.hngroup.org.uk']])
+...['media','holding','development','support','clients','careers','docs','news'].map((id,i)=>[id,{media:'Horizon Media Group',holding:'Horizon Assets Management',development:'Horizon Development',support:'Support',clients:'Client portal',careers:'Careers',docs:'Documentation',news:'News'}[id],'hn-'+id,3900+i*100,[id+'.hngroup.org.uk']])
 ].map(([id,name,process,port,hosts])=>({id,name,process,port,hosts}));
 module.exports={sites,ROOT_ACCOUNT:'charlie.livsey@hngroup.org.uk',PERMISSIONS:['maintenance','power','audit','access']};

@@ -1,5 +1,5 @@
 /* Maintenance page for the Company Register (companies.hngroup.org.uk), matching that site's own
-   style and Horizon Holding Co branding rather than the HN Group look. */
+   style and Horizon Assets Management branding rather than the HN Group look. */
 :root { --ink: #0b0c0c; --secondary: #505a5f; --rule: #e5e6e7; --border: #b1b4b6; --brand: #5514b4; --brand-dark: #3d0d82; --focus: #ffdd00; --button: #00703c; --button-dark: #002d18; --button-hover: #005a30; --panel: #f3f2f1; }
 * { box-sizing: border-box; }
 html, body { margin: 0; background: #fff; color: var(--ink); }

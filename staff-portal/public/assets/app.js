@@ -3623,10 +3623,10 @@
             files: roundelSet("horizon-media-group").concat([["horizon-media-group-email-logo", "Email signature logo", false, true]]),
         },
         {
-            name: "Horizon Holding Co", legal: "Horizon Holding Co Limited", logo: "horizon-holding-co-logo", domain: "holding.hngroup.org.uk",
+            name: "Horizon Assets Management", legal: "Horizon Assets Management Limited", logo: "horizon-assets-management-logo", domain: "holding.hngroup.org.uk",
             about: "Owns HN Group's assets and manages email services for the whole group. It has no staff of its own and is managed directly by HN Group staff.",
             points: ["Domains", "Discord servers", "Technical assets", "Email services"],
-            files: roundelSet("horizon-holding-co").concat([["horizon-holding-co-email-logo", "Email signature logo", false, true]]),
+            files: roundelSet("horizon-assets-management").concat([["horizon-assets-management-email-logo", "Email signature logo", false, true]]),
         },
     ];
 
@@ -3664,7 +3664,7 @@
             '<section class="about-hero">' +
             '<div class="about-hero-text"><p class="eyebrow">One group, ' + companies.length + " companies</p>" +
             "<h2>Building the digital infrastructure, products and media for tomorrow’s businesses.</h2>" +
-            '<p class="muted">HN Group Limited wholly owns Horizon Network, Horizon Media Group and Horizon Holding Co. Horizon Development is part of Horizon Network, and Horizon Advertising is a Horizon Media Group subsidiary managed by Horizon Network. Each company has its own focus, and they share people, systems and standards across the group.</p></div>' +
+            '<p class="muted">HN Group Limited wholly owns Horizon Network, Horizon Media Group and Horizon Assets Management. Horizon Development is part of Horizon Network, and Horizon Advertising is a Horizon Media Group subsidiary managed by Horizon Network. Each company has its own focus, and they share people, systems and standards across the group.</p></div>' +
             '<div class="about-hero-logo">' + brandImg(["hn-group-wordmark"], "logo-light-theme", "HN Group") + brandImg(["hn-group-wordmark-white"], "logo-dark-theme", "HN Group") + "</div>" +
             "</section>" +
 

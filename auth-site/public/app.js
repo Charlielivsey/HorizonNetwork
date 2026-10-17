@@ -5,7 +5,7 @@ const client = query.get('client_id'), state = query.get('state');
 // Must match the applications registered in server.js.
 const APPS = {
   media: { name: 'Horizon Media Group administration', short: 'Horizon Media Group', allowed: user => user.statusAdminAllowed, granted: 'You can manage this website.', restricted: 'Only the system owner and Super Admin members can manage this website.' },
-  holding: { name: 'Horizon Holding Co administration', short: 'Horizon Holding Co', allowed: user => user.statusAdminAllowed, granted: 'You can manage this website.', restricted: 'Only the system owner and Super Admin members can manage this website.' },
+  holding: { name: 'Horizon Assets Management administration', short: 'Horizon Assets Management', allowed: user => user.statusAdminAllowed, granted: 'You can manage this website.', restricted: 'Only the system owner and Super Admin members can manage this website.' },
   development: { name: 'Horizon Development administration', short: 'Horizon Development', allowed: user => user.statusAdminAllowed, granted: 'You can manage this website.', restricted: 'Only the system owner and Super Admin members can manage this website.' },
   support: { name: 'HN Group Support administration', short: 'HN Group Support', allowed: user => user.statusAdminAllowed, granted: 'You can manage this website.', restricted: 'Only the system owner and Super Admin members can manage this website.' },
   clients: { name: 'HN Group Clients administration', short: 'HN Group Clients', allowed: user => user.statusAdminAllowed, granted: 'You can manage this website.', restricted: 'Only the system owner and Super Admin members can manage this website.' },

@@ -1,6 +1,6 @@
 # Company Register — companies.hngroup.org.uk
 
-A register of the group's companies in the style of Companies House, branded as **Horizon Holding Co** and kept entirely separate from the other HN Group websites (its own look, staff accounts and customer accounts; no HN Group Auth). It says clearly that it isn't the UK government's Companies House register.
+A register of the group's companies in the style of Companies House, branded as **Horizon Assets Management** and kept entirely separate from the other HN Group websites (its own look, staff accounts and customer accounts; no HN Group Auth). It says clearly that it isn't the UK government's Companies House register.
 
 ## Public (no account needed)
 - Search by company name, number, previous name, division or officer.

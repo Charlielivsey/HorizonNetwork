@@ -5,7 +5,7 @@ Each website has its own configuration, original logo assets, Auth client, PM2 p
 | Site | Domain | PM2 | Port |
 | --- | --- | --- | --- |
 | Horizon Media Group | media.hngroup.org.uk | hn-media | 3900 |
-| Horizon Holding Co | holding.hngroup.org.uk | hn-holding | 4000 |
+| Horizon Assets Management | holding.hngroup.org.uk | hn-holding | 4000 |
 | Horizon Development | development.hngroup.org.uk | hn-development | 4100 |
 | Support | support.hngroup.org.uk | hn-support | 4200 |
 | Clients | clients.hngroup.org.uk | hn-clients | 4300 |
