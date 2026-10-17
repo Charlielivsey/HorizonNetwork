@@ -302,6 +302,42 @@ test('company register: public records, customers, requests, submissions and sta
     assert.match(html, /Notification of HN Group Holdings Limited as a person with significant control on 1 September 2026/);
     assert.match(await (await get('/company/sam-subsidiary-limited/persons-with-significant-control')).text(), /Ownership of shares – 75% or more<br>Right to appoint and remove directors/);
     assert.match(await (await get('/company/hn-group/related-companies')).text(), /Sam Subsidiary Limited[\s\S]*Subsidiary/);
+    // Company reports cover the company and, optionally, all its subsidiaries (hidden companies are left out).
+    assert.equal((await get('/company/hn-group/group-report')).headers.get('location'), '/account/login?return=%2Fcompany%2Fhn-group%2Fgroup-report');
+    html = await (await get('/company/hn-group/group-report', alex)).text();
+    assert.match(html, /Download a company report/); assert.match(html, /Sam Subsidiary Limited/); assert.match(html, /name="subsidiaries"/);
+    r = await get('/company/hn-group/group-report?generate=1&subsidiaries=1&officers=1&psc=1&charges=1&filings=1', alex);
+    assert.equal(r.headers.get('content-type'), 'application/pdf'); assert.match(r.headers.get('content-disposition'), /attachment; filename="hn-group-group-report-/);
+    let report = Buffer.from(await r.arrayBuffer()).toString('latin1');
+    assert.match(report, /^%PDF-1\.4/); assert.match(report, /\(Group report\)/); assert.match(report, /\(Sam Subsidiary Limited\)/); assert.match(report, /\(Example Trading Limited\)/);
+    assert.doesNotMatch(report, /Horizon Network Limited \(/); assert.match(report, /\/Count [2-9]/);
+    report = Buffer.from(await (await get('/company/hn-group/group-report?generate=1&officers=1', alex)).arrayBuffer()).toString('latin1');
+    assert.match(report, /\(Company report\)/); assert.doesNotMatch(report, /\(Sam Subsidiary Limited\)/);
+
+    // Changing the trading name, the registered name, or both.
+    html = await (await get('/company/sam-subsidiary-limited/file?type=name', sam)).text();
+    assert.match(html, /name="newName" type="text" value="Sam Subsidiary Limited"/); assert.match(html, /name="tradingName"/);
+    assert.match(await (await upload('/company/sam-subsidiary-limited/file', { csrf: samCsrf, kind: 'name', newName: 'Sam Subsidiary Limited', tradingName: '' }, null, sam)).text(), /Nothing has changed/);
+    assert.match(await (await upload('/company/sam-subsidiary-limited/file', { csrf: samCsrf, kind: 'name', newName: 'HN Group Holdings Limited', tradingName: '' }, null, sam)).text(), /already uses that name/);
+    assert.match(await (await upload('/company/sam-subsidiary-limited/file', { csrf: samCsrf, kind: 'name', newName: 'Sam Subsidiary Limited', tradingName: 'Sam Trading' }, null, sam)).text(), /has been sent for review/);
+    html = await (await get('/admin/submissions', owner)).text();
+    assert.match(html, /Change of trading name to Sam Trading/);
+    await post('/admin/submissions/' + html.match(/\/admin\/submissions\/([a-f0-9]{24})"/)[1], { csrf: staffCsrf, decision: 'accept' }, owner);
+    html = await (await get('/company/sam-subsidiary-limited')).text();
+    assert.match(html, /Trading as Sam Trading/); assert.doesNotMatch(html, /Previous company names/);
+    await upload('/company/sam-subsidiary-limited/file', { csrf: samCsrf, kind: 'name', newName: 'Sam Renamed Limited', tradingName: 'Sam Trading' }, null, sam);
+    html = await (await get('/admin/submissions', owner)).text();
+    assert.match(html, /Change of name from Sam Subsidiary Limited to Sam Renamed Limited/);
+    await post('/admin/submissions/' + html.match(/\/admin\/submissions\/([a-f0-9]{24})"/)[1], { csrf: staffCsrf, decision: 'accept' }, owner);
+    html = await (await get('/company/sam-subsidiary-limited')).text();
+    assert.match(html, /Sam Renamed Limited/); assert.match(html, /Trading as Sam Trading/); assert.match(html, /Previous company names<\/dt><dd>Sam Subsidiary Limited/);
+
+    // Several ticked natures of control are kept, one per line.
+    html = await (await post('/admin/company/hn-group/psc', { csrf: staffCsrf, name: 'Tick Boxes', kind: 'Individual', control: 'Right to appoint and remove directors' }, owner, {})).text();
+    const fd = new URLSearchParams([['csrf', staffCsrf], ['name', 'Many Ticks'], ['kind', 'Individual'], ['control', 'Right to appoint and remove directors'], ['control', 'Has significant influence or control'], ['control', '']]);
+    await fetch(SITE + '/admin/company/hn-group/psc', { method: 'POST', redirect: 'manual', headers: { 'content-type': 'application/x-www-form-urlencoded', cookie: owner }, body: fd.toString() });
+    assert.match(await (await get('/company/hn-group/persons-with-significant-control')).text(), /Many Ticks[\s\S]*Right to appoint and remove directors<br>Has significant influence or control/);
+
     // Managing a parent company covers its subsidiaries.
     const samCustomerId = JSON.parse(fs.readFileSync(path.join(dir, 'data', 'register.json'), 'utf8')).customers.find((x) => x.email === 'sam@example.com').id;
     await post('/admin/company/sam-subsidiary-limited/managers/' + samCustomerId + '/delete', { csrf: staffCsrf }, owner);

@@ -21,35 +21,16 @@ function wrap(text, width) {
   return out;
 }
 
-// doc: { heading, subheading, rows: [[label, value]], footer }
-function build(doc) {
-  const ops = [];
-  let y = 790;
-  const text = (x, size, font, s) => ops.push(`BT /${font} ${size} Tf ${x} ${y} Td (${pdfText(s)}) Tj ET`);
-  ops.push('0.333 0.078 0.706 rg 0 822 595 20 re f 0 0 0 rg'); // purple band across the top
-  text(56, 11, 'F2', 'COMPANY REGISTER');
-  y -= 34; text(56, 20, 'F2', doc.heading);
-  if (doc.subheading) { y -= 22; text(56, 12, 'F1', doc.subheading); }
-  y -= 14; ops.push(`0.8 0.8 0.8 RG 56 ${y} m 539 ${y} l S 0 0 0 RG`);
-  y -= 26;
-  for (const [label, value] of doc.rows) {
-    if (y < 120) break;
-    text(56, 10, 'F2', label);
-    const lines = wrap(value || 'Not recorded', 58);
-    for (const l of lines) { text(220, 10, 'F1', l); y -= 15; }
-    y -= 7;
-  }
-  y = 70; ops.push(`0.8 0.8 0.8 RG 56 ${y + 16} m 539 ${y + 16} l S 0 0 0 RG`);
-  for (const l of wrap(doc.footer || '', 95)) { text(56, 8, 'F1', l); y -= 11; }
-  const content = ops.join('\n');
-  const objects = [
-    '<< /Type /Catalog /Pages 2 0 R >>',
-    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>',
-    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
-    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>',
-    `<< /Length ${Buffer.byteLength(content, 'latin1')} >>\nstream\n${content}\nendstream`,
-  ];
+// Writes pages (arrays of drawing operations) out as a PDF file.
+function assemble(pages) {
+  const fonts = 3 + pages.length * 2; // catalog, pages, then a page and its contents for each page
+  const objects = ['<< /Type /Catalog /Pages 2 0 R >>', `<< /Type /Pages /Kids [${pages.map((_, i) => (3 + i * 2) + ' 0 R').join(' ')}] /Count ${pages.length} >>`];
+  pages.forEach((ops, i) => {
+    const content = ops.join('\n');
+    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 ${fonts} 0 R /F2 ${fonts + 1} 0 R >> >> /Contents ${4 + i * 2} 0 R >>`);
+    objects.push(`<< /Length ${Buffer.byteLength(content, 'latin1')} >>\nstream\n${content}\nendstream`);
+  });
+  objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>', '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
   let out = '%PDF-1.4\n';
   const offsets = [];
   objects.forEach((o, i) => { offsets.push(Buffer.byteLength(out, 'latin1')); out += `${i + 1} 0 obj\n${o}\nendobj\n`; });
@@ -59,4 +40,83 @@ function build(doc) {
   return Buffer.from(out, 'latin1');
 }
 
-module.exports = { build };
+// A page writer: text at a moving position, with new pages added as needed.
+function writer(heading, subheading) {
+  const pages = [];
+  let ops, y;
+  const text = (x, size, font, s) => ops.push(`BT /${font} ${size} Tf ${x} ${y} Td (${pdfText(s)}) Tj ET`);
+  const rule = (at, grey) => ops.push(`${grey || 0.8} ${grey || 0.8} ${grey || 0.8} RG 56 ${at} m 539 ${at} l S 0 0 0 RG`);
+  function newPage() {
+    ops = []; pages.push(ops); y = 790;
+    ops.push('0.333 0.078 0.706 rg 0 822 595 20 re f 0 0 0 rg'); // purple band across the top
+    text(56, 11, 'F2', 'COMPANY REGISTER');
+    if (pages.length === 1) {
+      y -= 34; text(56, 20, 'F2', heading);
+      if (subheading) { y -= 22; text(56, 12, 'F1', subheading); }
+    } else { y -= 22; text(56, 9, 'F1', heading); }
+    y -= 14; rule(y); y -= 26;
+  }
+  newPage();
+  return {
+    text, rule,
+    get y() { return y; }, set y(v) { y = v; },
+    room(h) { if (y - h < 100) newPage(); },
+    pages, newPage,
+  };
+}
+function footers(pages, footer) {
+  pages.forEach((ops, i) => {
+    let y = 70;
+    ops.push(`0.8 0.8 0.8 RG 56 ${y + 16} m 539 ${y + 16} l S 0 0 0 RG`);
+    for (const l of wrap(footer || '', 95)) { ops.push(`BT /F1 8 Tf 56 ${y} Td (${pdfText(l)}) Tj ET`); y -= 11; }
+    if (pages.length > 1) ops.push(`BT /F1 8 Tf 490 40 Td (${pdfText('Page ' + (i + 1) + ' of ' + pages.length)}) Tj ET`);
+  });
+}
+
+function rowsOut(w, rows) {
+  for (const [label, value] of rows) {
+    const lines = wrap(value || 'Not recorded', 58);
+    w.room(15 * lines.length + 7);
+    w.text(56, 10, 'F2', label);
+    for (const l of lines) { w.text(220, 10, 'F1', l); w.y -= 15; }
+    w.y -= 7;
+  }
+}
+
+// doc: { heading, subheading, rows: [[label, value]], footer }: a one-page filing document.
+function build(doc) {
+  const w = writer(doc.heading, doc.subheading);
+  for (const [label, value] of doc.rows) {
+    if (w.y < 120) break;
+    w.text(56, 10, 'F2', label);
+    for (const l of wrap(value || 'Not recorded', 58)) { w.text(220, 10, 'F1', l); w.y -= 15; }
+    w.y -= 7;
+  }
+  footers(w.pages, doc.footer);
+  return assemble(w.pages);
+}
+
+// doc: { heading, subheading, footer, sections: [{ title, subtitle, rows, list: { title, items } }] }:
+// a report over as many pages as it needs.
+function report(doc) {
+  const w = writer(doc.heading, doc.subheading);
+  doc.sections.forEach((sec, i) => {
+    if (sec.newPage && i) w.newPage();
+    w.room(60);
+    w.text(56, sec.level === 2 ? 11 : 14, 'F2', sec.title); w.y -= sec.level === 2 ? 16 : 18;
+    if (sec.subtitle) { for (const l of wrap(sec.subtitle, 90)) { w.text(56, 9, 'F1', l); w.y -= 13; } }
+    w.y -= 6;
+    if (sec.rows) rowsOut(w, sec.rows);
+    if (sec.lines) for (const line of sec.lines) {
+      const lines = wrap(line, 92);
+      w.room(13 * lines.length);
+      lines.forEach((l, k) => { w.text(k ? 66 : 56, 10, 'F1', l); w.y -= 13; });
+      w.y -= 3;
+    }
+    w.y -= 8;
+  });
+  footers(w.pages, doc.footer);
+  return assemble(w.pages);
+}
+
+module.exports = { build, report };

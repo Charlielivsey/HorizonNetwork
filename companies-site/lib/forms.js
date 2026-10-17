@@ -22,7 +22,10 @@ async function parse(req) {
   if (type.startsWith('application/x-www-form-urlencoded')) {
     const body = await readBody(req, MAX_FORM);
     // Browsers send line breaks as CRLF; store plain newlines.
-    return { fields: Object.fromEntries([...new URLSearchParams(body.toString('utf8'))].map(([k, v]) => [k, v.replace(/\r\n?/g, '\n')])), file: null };
+    // A field sent more than once (for example several ticked checkboxes) is kept as one value per line.
+    const fields = {};
+    for (const [k, v] of new URLSearchParams(body.toString('utf8'))) { const value = v.replace(/\r\n?/g, '\n'); fields[k] = Object.hasOwn(fields, k) ? (value ? (fields[k] ? fields[k] + '\n' : '') + value : fields[k]) : value; }
+    return { fields, file: null };
   }
   const m = /^multipart\/form-data;\s*boundary=(?:"([^"]+)"|([^\s;]+))/i.exec(type);
   if (!m) throw Object.assign(new Error('Unsupported form.'), { status: 415 });
@@ -47,7 +50,8 @@ async function parse(req) {
         file = content;
       }
     } else if (name && Object.keys(fields).length < 50) {
-      fields[name] = content.toString('utf8').replace(/\r\n?/g, '\n').slice(0, 10000);
+      const value = content.toString('utf8').replace(/\r\n?/g, '\n').slice(0, 10000);
+      fields[name] = Object.hasOwn(fields, name) ? (value ? (fields[name] ? fields[name] + '\n' : '') + value : fields[name]) : value;
     }
     pos = next;
   }

@@ -50,9 +50,20 @@ function init(dataDir) {
   for (const c of db.companies) for (const p of c.psc) if (p.share === undefined) {
     if (c.slug === 'horizon-network' && p.name === 'HN Group Limited' && p.kind === 'Relevant legal entity') { p.kind = 'Parent company'; p.share = '100'; } else p.share = '';
   }
+  runMigrations();
   for (const c of db.companies) { if (!Array.isArray(c.managers)) c.managers = []; generateFilings(c); }
   for (const s of SEED) if (!db.seeded.includes(s.slug)) { if (!db.companies.some((c) => c.slug === s.slug)) db.companies.push(blankCompany(s)); db.seeded.push(s.slug); }
   save();
+}
+
+// One-off corrections to saved data, each applied once.
+function runMigrations() {
+  if (!Array.isArray(db.migrations)) db.migrations = [];
+  const once = (name, fn) => { if (db.migrations.includes(name)) return; fn(); db.migrations.push(name); };
+  // The user's request (17 October 2026): the officer is recorded as Charlie Livsey on every company. Nothing else changes.
+  once('officer-charlie-livsey', () => {
+    for (const c of db.companies) for (const o of c.officers) if (/^charlie\s+dean\s+livsey$/i.test(String(o.name).trim())) { o.name = 'Charlie Livsey'; audit('system', 'officer.rename', c.slug + ' Charlie Dean Livsey → Charlie Livsey'); }
+  });
 }
 
 function save() {
@@ -347,7 +358,17 @@ function checkChange(c, kind, input) {
       return { psc: x.id, name: x.name, changed: date, before, after };
     }
     case 'psc_cease': { const x = c.psc.find((y) => y.id === input.psc && !y.ceased); if (!x) throw bad('Choose a current person with significant control.'); const date = d(input.ceased); if (!date) throw bad('Enter the date they ceased.'); return { psc: x.id, name: x.name, ceased: date }; }
-    case 'name': { const v = req(input.newName, 'Enter the new company name.', 160); if (v.toLowerCase() === c.legalName.toLowerCase()) throw bad('That is already the company’s name.'); return { newName: v, oldName: c.legalName }; }
+    case 'name': {
+      // The registered (legal) name, the trading name it's known by, or both. A blank trading name means it trades under its registered name.
+      const newName = req(input.newName, 'Enter the registered name.', 160);
+      const oldTrading = c.name && c.name !== c.legalName ? c.name : '';
+      const trading = t(input.tradingName, 120);
+      const newTrading = trading && trading.toLowerCase() !== newName.toLowerCase() ? trading : '';
+      const legalChanged = newName !== c.legalName, tradingChanged = newTrading !== oldTrading;
+      if (!legalChanged && !tradingChanged) throw bad('Nothing has changed. Enter a new registered name or trading name.');
+      if (legalChanged && newName.toLowerCase() !== c.legalName.toLowerCase() && companies(true).some((x) => x.slug !== c.slug && x.legalName.toLowerCase() === newName.toLowerCase())) throw bad('Another company on the register already uses that name.');
+      return { newName, oldName: c.legalName, legalChanged, tradingName: newTrading, oldTradingName: oldTrading, tradingChanged };
+    }
     case 'sic': { const v = String(input.sic || '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 4).map((x) => x.slice(0, 160)); if (!v.length) throw bad('Enter at least one nature of business (SIC) line.'); return { sic: v }; }
     case 'confirmation': { const date = d(input.madeUpTo); if (!date) throw bad('Enter the date the statement is made up to.'); return { madeUpTo: date }; }
     default: return {};
@@ -361,7 +382,11 @@ function changeDescription(kind, ch) {
     case 'psc_add': return 'Notification of ' + ch.psc.name + ' as a person with significant control on ' + longDate(ch.psc.notified);
     case 'psc_change': return 'Change of details of ' + ch.name + ' as a person with significant control on ' + longDate(ch.changed);
     case 'psc_cease': return 'Cessation of ' + ch.name + ' as a person with significant control on ' + longDate(ch.ceased);
-    case 'name': return 'Change of name from ' + ch.oldName + ' to ' + ch.newName;
+    case 'name': {
+      const trading = (ch.tradingName ? 'trading name to ' + ch.tradingName : 'no separate trading name');
+      if (ch.legalChanged === false) return ch.oldTradingName ? 'Change of trading name from ' + ch.oldTradingName + ' to ' + (ch.tradingName || ch.newName) : 'Change of trading name to ' + ch.tradingName;
+      return 'Change of name from ' + ch.oldName + ' to ' + ch.newName + (ch.tradingChanged ? ', with ' + trading : '');
+    }
     case 'sic': return 'Change of nature of business';
     case 'confirmation': return 'Confirmation statement made up to ' + longDate(ch.madeUpTo);
     default: return '';
@@ -389,6 +414,45 @@ function addSubmission(cust, slug, input, pdf) {
   save();
   return s;
 }
+
+// ---------- Group reports ----------
+// A company and every company below it, in order, with each one's depth (0 for the company itself).
+function groupOf(slug, all) {
+  const out = [], seen = new Set();
+  const walk = (c, depth) => { if (!c || seen.has(c.slug) || depth > 20) return; seen.add(c.slug); out.push({ company: c, depth }); for (const k of companies(all).filter((x) => x.parent === c.slug)) walk(k, depth + 1); };
+  walk(company(slug), 0);
+  return out;
+}
+// A PDF report on a company and (optionally) all its subsidiaries, from the public record.
+function groupReport(slug, opts) {
+  const o = { subsidiaries: true, officers: true, psc: true, charges: true, filings: true, ...(opts || {}) };
+  const root = company(slug);
+  const group = o.subsidiaries ? groupOf(slug, false) : [{ company: root, depth: 0 }];
+  const today = now().slice(0, 10);
+  const nameOf = (s2) => (company(s2) || {}).legalName || '';
+  const sections = [{ title: 'Summary', rows: [['Report date', longDate(today)], ['Company', root.legalName + (root.number ? ' (' + root.number + ')' : '')], ['Companies included', String(group.length)], ['Includes', [o.officers && 'officers', o.psc && 'persons with significant control', o.charges && 'charges', o.filings && 'recent filings'].filter(Boolean).join(', ') || 'company details only']] }];
+  if (group.length > 1) sections.push({ title: 'Group structure', level: 2, lines: group.map((g) => '  '.repeat(g.depth) + (g.depth ? '- ' : '') + g.company.legalName + (g.company.number ? ' (' + g.company.number + ')' : '') + (g.company.status ? ', ' + g.company.status : '')) });
+  group.forEach(({ company: c, depth }, i) => {
+    sections.push({ title: c.legalName, subtitle: (depth ? 'Subsidiary of ' + nameOf(c.parent) + '. ' : '') + 'Company number ' + (c.number || 'not recorded') + '.', newPage: i > 0, rows: [
+      ['Trading name', c.name && c.name !== c.legalName ? c.name : 'Same as registered name'], ['Status', c.status], ['Company type', c.type], ['Incorporated on', longDate(c.incorporated)],
+      ...(c.dissolved ? [['Dissolved on', longDate(c.dissolved)]] : []), ['Registered office', (c.registeredOffice || '').replace(/\n/g, ', ')], ['Nature of business', c.sic.join('; ')],
+      ['Parent company', c.parent ? nameOf(c.parent) : 'None recorded'], ...(c.managedBy ? [['Managed by', nameOf(c.managedBy)]] : []),
+      ['Subsidiaries', companies().filter((x) => x.parent === c.slug).map((x) => x.legalName).join('; ') || 'None recorded'],
+      ['Previous names', c.previousNames.map((p) => p.name).join('; ') || 'None'],
+      ['Accounts next due', longDate(c.accountsNextDue)], ['Last accounts made up to', longDate(c.accountsMadeUpTo)], ['Confirmation next due', longDate(c.confirmationNextDue)], ['Last statement dated', longDate(c.confirmationMadeUpTo)],
+    ] });
+    if (o.officers) { const cur = c.officers.filter((x) => !x.resigned); const past = c.officers.filter((x) => x.resigned);
+      sections.push({ title: 'Officers', level: 2, lines: cur.length ? cur.map((x) => x.name + ' - ' + x.role + (x.appointed ? ', appointed ' + longDate(x.appointed) : '')).concat(past.length ? [past.length + ' former officer' + (past.length === 1 ? '' : 's') + ': ' + past.map((x) => x.name + ' (' + x.role + ', to ' + longDate(x.resigned) + ')').join('; ')] : []) : ['No current officers recorded.'] }); }
+    if (o.psc) { const cur = c.psc.filter((x) => !x.ceased);
+      sections.push({ title: 'Persons with significant control', level: 2, lines: cur.length ? cur.map((x) => x.name + ' - ' + x.kind + (x.share ? ', ' + x.share + '%' : '') + (x.control.length ? '. ' + x.control.join('; ') : '') + (x.notified ? '. Notified ' + longDate(x.notified) : '')) : ['None recorded.'] }); }
+    if (o.charges) { const out = c.charges.filter((x) => x.status !== 'Satisfied');
+      sections.push({ title: 'Charges', level: 2, lines: c.charges.length ? [c.charges.length + ' registered, ' + out.length + ' outstanding.'].concat(out.map((x) => (x.code ? x.code + ': ' : '') + x.status + ', in favour of ' + x.entitled + (x.created ? ', created ' + longDate(x.created) : ''))) : ['No charges registered.'] }); }
+    if (o.filings) { const list = filings(c.slug).slice(0, 10);
+      sections.push({ title: 'Recent filings', level: 2, lines: list.length ? list.map((f) => longDate(f.date) + ' - ' + f.category + ': ' + f.description) : ['No filings on the register.'] }); }
+  });
+  return { buffer: pdf.report({ heading: o.subsidiaries && group.length > 1 ? 'Group report' : 'Company report', subheading: root.legalName + (o.subsidiaries && group.length > 1 ? ' and its subsidiaries' : ''), footer: REPORT_FOOTER, sections }), count: group.length };
+}
+const REPORT_FOOTER = 'Produced by the Company Register from the public record on the date shown. Unknown details show as "Not recorded". This is a group register document, not a document from the UK government\'s Companies House.';
 
 // ---------- Company ownership ----------
 // A customer manages a company if they're one of its managers, or manage any company above it
@@ -507,7 +571,14 @@ function applyChange(s) {
       return filing(ch.changed, [['Person with significant control', ch.name], ['Previous details', show(ch.before)], ['New details', show(ch.after)], ['Changed on', longDate(ch.changed)]]);
     }
     case 'psc_cease': { const x = c.psc.find((y) => y.id === ch.psc); if (!x || x.ceased) throw bad('That person is no longer a current person with significant control, so this change can’t be applied.'); x.ceased = ch.ceased; return filing(ch.ceased, [['Name', x.name], ['Type', x.kind], ['Ceased on', longDate(ch.ceased)]]); }
-    case 'name': { const old = c.legalName; c.previousNames.push({ name: old, until: date }); if (c.name === old) c.name = ch.newName; c.legalName = ch.newName; return filing(date, [['Previous name', old], ['New name', ch.newName], ['Changed on', longDate(date)]]); } // customer-filed: their PDF is used if given
+    case 'name': {
+      const old = c.legalName, oldTrading = c.name && c.name !== c.legalName ? c.name : '';
+      // Older submissions only changed the registered name and kept any separate trading name.
+      const legalChanged = ch.legalChanged !== false, tradingChanged = !!ch.tradingChanged;
+      if (legalChanged) { c.previousNames.push({ name: old, until: date }); c.legalName = ch.newName; }
+      c.name = tradingChanged ? (ch.tradingName || c.legalName) : (oldTrading || c.legalName);
+      return filing(date, [['Previous registered name', old], ['New registered name', legalChanged ? ch.newName : 'Unchanged'], ['Previous trading name', oldTrading || 'Same as registered name'], ['New trading name', c.name === c.legalName ? 'Same as registered name' : c.name], ['Changed on', longDate(date)]]);
+    } // a customer's PDF is used if given
     case 'sic': { const old = c.sic.join('; '); c.sic = ch.sic; return filing(date, [['Previous nature of business', old], ['New nature of business', ch.sic.join('; ')]]); }
     case 'confirmation': { c.confirmationMadeUpTo = ch.madeUpTo; return filing(ch.madeUpTo, [['Company', c.legalName], ['Statement made up to', longDate(ch.madeUpTo)], ['Registered office', c.registeredOffice.replace(/\n/g, ', ')], ['Current officers', c.officers.filter((o) => !o.resigned).map((o) => o.name + ' (' + o.role + ')').join('; ')], ['Persons with significant control', c.psc.filter((p) => !p.ceased).map((p) => p.name).join('; ')]]); }
     default: { const f = { id: id(), company: s.company, date, category: s.category, description: s.description, file: s.file, pages: s.pages, createdAt: now(), source: 'customer' }; db.filings.push(f); return f.id; }
@@ -548,7 +619,7 @@ function decideSubmission(s, accept, note, actor) {
 
 module.exports = {
   init, STATUSES, FILING_CATEGORIES, OFFICER_ROLES, PSC_KINDS, REQUEST_KINDS, CHANGE_TYPES,
-  canManage, managedCompanies, addApplication, addManager, removeManager,
+  canManage, managedCompanies, groupOf, groupReport, addApplication, addManager, removeManager,
   companies, company, children, search, saveCompany, deleteCompany, saveItem, deleteItem,
   filings, filing, addFiling, deleteFiling, filePath,
   customer, customerByEmail, createCustomer, checkPassword, changePassword, touchLogin, setCustomerDisabled,

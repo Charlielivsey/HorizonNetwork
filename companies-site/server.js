@@ -36,12 +36,12 @@ function layout(o) {
       : '<a href="/account/login">Sign in</a><a href="/account/register">Create an account</a><a href="/staff/login" class="staff-link">Staff sign in</a>';
   return '<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0b0c0c">' +
     '<title>' + esc(o.title) + ' – Company Register – Horizon Holding Co</title>' + (o.description ? '<meta name="description" content="' + esc(o.description) + '">' : '') + (o.noindex ? '<meta name="robots" content="noindex">' : '') +
-    '<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/assets/companies.css?v=2"><script src="/assets/companies.js?v=2" defer></script></head><body>' +
+    '<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/assets/companies.css?v=3"><script src="/assets/companies.js?v=3" defer></script></head><body>' +
     '<a class="skip" href="#main">Skip to main content</a>' +
     '<header class="header"><div class="wrap header-inner"><a class="logo" href="/"><img src="/assets/brand/horizon-holding-co-logo-white.svg" alt="Horizon Holding Co" width="129" height="46"></a>' +
     '<a class="service" href="/">Company Register</a><nav class="header-nav" aria-label="Account">' + nav + '</nav></div></header>' +
     (o.searchBar === false ? '' : '<div class="wrap"><form class="search compact" action="/search" method="get" role="search"><label for="q" class="sr-only">Search for a company or officer</label><input id="q" name="q" type="search" placeholder="Search for a company or officer" value="' + esc(o.q || '') + '" autocomplete="off"><button type="submit" aria-label="Search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg></button></form></div>') +
-    '<main id="main" class="wrap main">' + (o.flash ? '<div class="flash ' + (o.flash.error ? 'error' : '') + '" role="status">' + esc(o.flash.text) + '</div>' : '') + o.body + '</main>' +
+    '<main id="main" class="wrap main">' + (o.flash ? (o.flash.error ? '<div class="error-summary" role="alert" tabindex="-1" data-focus><h2>There is a problem</h2><p>' + esc(o.flash.text) + '</p></div>' : '<div class="flash" role="status">' + esc(o.flash.text) + '</div>') : '') + o.body + '</main>' +
     '<footer class="footer"><div class="wrap"><ul class="footer-links"><li><a href="/">Search the register</a></li><li><a href="/about">About this register</a></li>' + (signedOut ? '<li><a href="/account/register">Create an account</a></li>' : '') + '<li><a href="/staff/login">Staff sign in</a></li></ul>' +
     '<div class="footer-meta"><img src="/assets/brand/horizon-holding-co-logo.svg" alt="" width="112" height="40"><p>The Company Register is run by Horizon Holding Co Limited for the companies in its group. It is not the UK government’s Companies House register.</p><p>© ' + new Date().getFullYear() + ' Horizon Holding Co Limited</p></div></div></footer></body></html>';
 }
@@ -58,11 +58,47 @@ function page(res, ctx, o, status) { send(res, status || 200, layout({ ...o, cus
 function messagePage(res, ctx, status, title, text) {
   page(res, ctx, { title, noindex: true, body: '<section class="panel narrow"><h1>' + esc(title) + '</h1><p>' + esc(text) + '</p><p><a class="button" href="/">Go to the register</a></p></section>' }, status);
 }
-const field = (label, name, value, extra) => '<label>' + esc(label) + (extra && extra.hint ? '<span class="hint">' + esc(extra.hint) + '</span>' : '') +
-  (extra && extra.textarea ? '<textarea name="' + name + '" rows="' + (extra.rows || 4) + '"' + (extra.required ? ' required' : '') + ' maxlength="' + (extra.max || 3000) + '">' + esc(value) + '</textarea>'
-    : '<input name="' + name + '" type="' + ((extra && extra.type) || 'text') + '" value="' + esc(value) + '"' + (extra && extra.required ? ' required' : '') + (extra && extra.auto ? ' autocomplete="' + extra.auto + '"' : '') + ' maxlength="' + ((extra && extra.max) || 200) + '"' + (extra && extra.number ? ' min="0" max="100" step="0.01" inputmode="decimal"' : '') + '>') + '</label>';
-const select = (label, name, options, value, blank) => '<label>' + esc(label) + '<select name="' + name + '">' + (blank !== undefined ? '<option value="">' + esc(blank) + '</option>' : '') +
-  options.map((o) => { const [v, t] = Array.isArray(o) ? o : [o, o]; return '<option value="' + esc(v) + '"' + (v === value ? ' selected' : '') + '>' + esc(t) + '</option>'; }).join('') + '</select></label>';
+let uid = 0;
+const nextId = () => 'f' + (++uid);
+// A labelled input or textarea. extra: { type, required, hint, max, rows, textarea, auto, number, optional: false, width }
+function field(label, name, value, extra) {
+  const x = extra || {}, id = nextId(), type = x.type || 'text';
+  const width = x.width || (type === 'date' ? 'date' : x.number ? 'num' : (type === 'email' || type === 'password') ? 'm' : x.max && x.max <= 20 ? 's' : '');
+  const optional = !x.required && x.optional !== false ? ' <span class="optional">(optional)</span>' : '';
+  const described = x.hint ? ' aria-describedby="' + id + '-hint"' : '';
+  const control = x.textarea
+    ? '<textarea id="' + id + '" name="' + name + '" rows="' + (x.rows || 4) + '"' + (x.required ? ' required' : '') + ' maxlength="' + (x.max || 3000) + '"' + described + ((x.max || 3000) >= 300 ? ' data-count' : '') + '>' + esc(value) + '</textarea>'
+    : '<input id="' + id + '" name="' + name + '" type="' + type + '" value="' + esc(value) + '"' + (x.required ? ' required' : '') + (x.auto ? ' autocomplete="' + x.auto + '"' : '') + ' maxlength="' + (x.max || 200) + '"' + (x.number ? ' min="0" max="100" step="0.01" inputmode="decimal"' : '') + described + (width ? ' class="w-' + width + '"' : '') + '>';
+  return '<div class="field' + (x.textarea ? ' wide' : '') + '"><label for="' + id + '">' + esc(label) + optional + '</label>' + (x.hint ? '<span class="hint" id="' + id + '-hint">' + esc(x.hint) + '</span>' : '') +
+    (x.number ? '<span class="suffix-wrap">' + control + '<span class="suffix" aria-hidden="true">%</span></span>' : control) + '</div>';
+}
+function select(label, name, options, value, blank, hint) {
+  const id = nextId();
+  return '<div class="field"><label for="' + id + '">' + esc(label) + '</label>' + (hint ? '<span class="hint" id="' + id + '-hint">' + esc(hint) + '</span>' : '') + '<select id="' + id + '" name="' + name + '"' + (hint ? ' aria-describedby="' + id + '-hint"' : '') + '>' + (blank !== undefined ? '<option value="">' + esc(blank) + '</option>' : '') +
+    options.map((o) => { const [v, t] = Array.isArray(o) ? o : [o, o]; return '<option value="' + esc(v) + '"' + (v === value ? ' selected' : '') + '>' + esc(t) + '</option>'; }).join('') + '</select></div>';
+}
+// A PDF upload. Required for plain filings; optional supporting evidence elsewhere.
+function fileField(label, hint, required) {
+  const id = nextId();
+  return '<div class="field wide"><label for="' + id + '">' + esc(label) + (required ? '' : ' <span class="optional">(optional)</span>') + '</label>' + (hint ? '<span class="hint" id="' + id + '-hint">' + esc(hint) + '</span>' : '') +
+    '<div class="upload"><input id="' + id + '" type="file" name="document" accept="application/pdf,.pdf"' + (required ? ' required' : '') + (hint ? ' aria-describedby="' + id + '-hint"' : '') + '><span class="upload-note">PDF only, up to 15 MB</span></div></div>';
+}
+// A titled group of fields; numbered when part of a longer form.
+const fieldset = (title, hint, html, step) => '<fieldset class="fieldset">' + '<legend>' + (step ? '<span class="step">' + step + '</span>' : '') + esc(title) + '</legend>' + (hint ? '<p class="hint">' + esc(hint) + '</p>' : '') + '<div class="fieldset-body">' + html + '</div></fieldset>';
+// The current value of something being changed.
+const inset = (label, html) => '<div class="inset"><span class="inset-label">' + esc(label) + '</span>' + html + '</div>';
+const actions = (button, back, backLabel) => '<div class="form-actions"><button class="button" type="submit">' + esc(button) + '</button>' + (back ? '<a class="cancel" href="' + back + '">' + esc(backLabel || 'Cancel') + '</a>' : '') + '</div>';
+// The standard natures of control, as checkboxes, plus any others one per line.
+const NATURES = ['Ownership of shares – more than 25% but not more than 50%', 'Ownership of shares – more than 50% but less than 75%', 'Ownership of shares – 75% or more',
+  'Ownership of voting rights – more than 25% but not more than 50%', 'Ownership of voting rights – more than 50% but less than 75%', 'Ownership of voting rights – 75% or more',
+  'Right to appoint and remove directors', 'Has significant influence or control'];
+function controlField(value) {
+  const list = (Array.isArray(value) ? value : String(value || '').split('\n')).map((x) => x.trim()).filter(Boolean);
+  const other = list.filter((x) => !NATURES.includes(x));
+  return '<fieldset class="field wide checks"><legend>Nature of control <span class="optional">(optional)</span></legend><span class="hint">Choose all that apply.</span>' +
+    NATURES.map((n) => { const id = nextId(); return '<div class="check"><input type="checkbox" id="' + id + '" name="control" value="' + esc(n) + '"' + (list.includes(n) ? ' checked' : '') + '><label for="' + id + '">' + esc(n) + '</label></div>'; }).join('') +
+    '</fieldset>' + field('Other nature of control', 'control', other.join('\n'), { textarea: true, rows: 2, max: 1000, hint: 'Only if none of the above describe it. One per line.' });
+}
 const csrfField = (token) => '<input type="hidden" name="csrf" value="' + esc(token) + '">';
 
 // ---------- Public pages ----------
@@ -98,7 +134,7 @@ function companyHeader(c, tab, ctx) {
   const tabs = [['', 'Overview'], ['filing-history', 'Filing history'], ['officers', 'People'], ['charges', 'Charges'], ['related-companies', 'Related companies']];
   return '<div class="company-head"><h1 class="heading-l">' + esc(c.legalName) + '</h1>' +
     '<p class="company-number">Company number <strong>' + (c.number ? esc(c.number) : 'not recorded') + '</strong></p>' +
-    (c.name && c.name !== c.legalName ? '<p class="muted">Known as ' + esc(c.name) + '</p>' : '') + '</div>' +
+    (c.name && c.name !== c.legalName ? '<p class="muted">Trading as ' + esc(c.name) + '</p>' : '') + '</div>' +
     '<nav class="tabs" aria-label="Company record">' + tabs.map(([p, label]) => { const active = tab === p || (p === 'officers' && tab === 'persons-with-significant-control'); return '<a href="/company/' + esc(c.slug) + (p ? '/' + p : '') + '"' + (active ? ' aria-current="page"' : '') + '>' + label + '</a>'; }).join('') + '</nav>' +
     '<div class="actions-row">' + companyActions(c, ctx).map(([href, label]) => '<a class="button ghost small" href="' + esc(href) + '">' + label + '</a>').join('') + '</div>';
 }
@@ -107,7 +143,7 @@ function companyHeader(c, tab, ctx) {
 function companyActions(c, ctx) {
   const base = '/company/' + c.slug;
   const manages = ctx.customer && store.canManage(c, ctx.customer.account.id);
-  return [[base + '/request', 'Request a document'], [base + '/report', 'Report a mistake'],
+  return [[base + '/group-report', 'Company report'], [base + '/request', 'Request a document'], [base + '/report', 'Report a mistake'],
     ...(manages ? [[base + '/file', 'File a change'], ['/account/register-company?parent=' + c.slug, 'Register a subsidiary']] : [[base + '/claim', 'Manage this company']])];
 }
 const companyName = (s) => store.company(s.company)?.legalName || (s.change && s.change.details && s.change.details.legalName) || s.company;
@@ -288,54 +324,66 @@ function requestForm(res, ctx, c, kind, values, error) {
   const mistake = kind === 'mistake';
   page(res, ctx, { title: (mistake ? 'Report a mistake' : 'Request a document') + ' · ' + c.legalName, noindex: true, flash: error && { error: true, text: error },
     body: '<section class="panel narrow"><p class="eyebrow">' + esc(c.legalName) + '</p><h1>' + (mistake ? 'Report a mistake' : 'Request a document') + '</h1>' +
-      '<p class="muted">' + (mistake ? 'Tell us what looks wrong on this company’s record and what it should say. Our team will check it and reply here.' : 'Ask for a copy of a filing or a certificate for this company. Our team will reply here.') + '</p>' +
+      '<p>' + (mistake ? 'Tell us what looks wrong on this company’s record and what it should say. Our team will check it and reply in your account.' : 'Ask for a copy of a filing or a certificate for this company. Our team will reply in your account.') + '</p>' +
       '<form method="post" class="form">' + csrfField(ctx.customer.csrf) + (mistake ? '<input type="hidden" name="kind" value="mistake">' : select('What do you need?', 'kind', [['copy', 'Copy of a filing'], ['certificate', 'Certificate'], ['other', 'Something else']], values.kind || 'copy')) +
-      (list.length ? select(mistake ? 'Is it about a particular filing? (optional)' : 'Which filing? (optional)', 'filing', list.map((f) => [f.id, fmt(f.date) + ' · ' + f.description]), values.filing, 'Not a particular filing') : '') +
-      field(mistake ? 'What’s wrong?' : 'Details', 'message', values.message, { textarea: true, required: true, rows: 6 }) + '<button class="button" type="submit">Send</button> <a class="button ghost" href="/company/' + esc(c.slug) + '">Cancel</a></form></section>' });
+      (list.length ? select(mistake ? 'Is it about a particular filing?' : 'Which filing?', 'filing', list.map((f) => [f.id, fmt(f.date) + ' · ' + f.description]), values.filing, 'Not a particular filing') : '') +
+      field(mistake ? 'What’s wrong?' : 'Details', 'message', values.message, { textarea: true, required: true, rows: 6, max: 3000, hint: mistake ? 'Include what it should say instead, if you know.' : 'For example, which certificate you need and what it’s for.' }) + actions('Send', '/company/' + esc(c.slug)) + '</form></section>' });
 }
 
 // Filing a change: first choose what to file, then fill in that change's form.
+const CHANGE_GROUPS = [
+  ['Company details', [['address', 'Move the company’s registered office.'], ['name', 'Change the registered name, the trading name, or both.'], ['sic', 'Update what the company does.'], ['confirmation', 'Confirm the company’s details are up to date.']]],
+  ['Officers', [['appoint', 'Add a director, secretary or other officer.'], ['terminate', 'Record that an officer has stepped down.']]],
+  ['Persons with significant control', [['psc_add', 'Record a new person or company with significant control.'], ['psc_change', 'Update a shareholding, type or nature of control.'], ['psc_cease', 'Record that someone no longer has significant control.']]],
+  ['Something else', [['document', 'Upload any other filing as a PDF.']]],
+];
 function submitForm(res, ctx, c, values, error, kind) {
   kind = Object.hasOwn(store.CHANGE_TYPES, kind) ? kind : '';
   const base = '/company/' + esc(c.slug) + '/file';
-  if (!kind) return page(res, ctx, { title: 'File a change · ' + c.legalName, noindex: true, flash: error && { error: true, text: error },
-    body: '<section class="panel narrow"><p class="eyebrow">' + esc(c.legalName) + '</p><h1>What do you want to file?</h1><p class="muted">Our staff review every filing. When it’s accepted, the company’s record is updated and the filing appears in its filing history.</p>' +
-      '<ul class="choice-list">' + Object.entries(store.CHANGE_TYPES).map(([k, t]) => '<li><a href="' + base + '?type=' + k + '">' + esc(t.label) + '</a></li>').join('') + '</ul>' +
-      '<a class="button secondary" href="/company/' + esc(c.slug) + '">Cancel</a></section>' });
+  const flash = error && { error: true, text: error };
+  if (!kind) return page(res, ctx, { title: 'File a change · ' + c.legalName, noindex: true, flash,
+    body: '<section class="panel"><p class="eyebrow">' + esc(c.legalName) + '</p><h1 class="page-title">What do you want to file?</h1><p class="lead-s">Our staff review every filing. When it’s accepted, the company’s record is updated and the filing appears in its filing history.</p>' +
+      CHANGE_GROUPS.map(([title, items]) => '<h2 class="choice-heading">' + esc(title) + '</h2><div class="choice-grid">' + items.map(([k, d]) => '<a class="choice-card" href="' + base + '?type=' + k + '"><strong>' + esc(store.CHANGE_TYPES[k].label) + '</strong><span>' + esc(d) + '</span></a>').join('') + '</div>').join('') +
+      '<p><a class="cancel" href="/company/' + esc(c.slug) + '">Back to the company</a></p></section>' });
   const v = values || {};
-  const current = (list, label) => list.length ? list.map((x) => [x.id, x.name + (x.role ? ' (' + x.role + ')' : '')]) : null;
-  let fields = '';
+  const current = (list) => list.length ? list.map((x) => [x.id, x.name + (x.role ? ' (' + x.role + ')' : '')]) : null;
+  const none = (what) => '<div class="inset">There are no current ' + what + ' recorded for this company.</div>';
+  let fields = '', blocked = false;
   switch (kind) {
-    case 'address': fields = '<p>Current address: <strong>' + (c.registeredOffice ? esc(c.registeredOffice).replace(/\n/g, ', ') : 'not recorded') + '</strong></p>' + field('New registered office address', 'registeredOffice', v.registeredOffice, { textarea: true, rows: 4, required: true, max: 300 }); break;
-    case 'appoint': fields = ITEM_FIELDS.officers(v) + '<p class="hint">The date of appointment is required.</p>'; break;
-    case 'terminate': { const list = current(c.officers.filter((o) => !o.resigned)); fields = list ? select('Officer', 'officer', list, v.officer) + field('Date they stopped being an officer', 'resigned', v.resigned, { type: 'date', required: true }) : '<p>There are no current officers recorded for this company.</p>'; break; }
-    case 'psc_add': fields = prefixed('psc_', ITEM_FIELDS.psc(v.item || {})) + '<p class="hint">The notified date is required.</p>'; break;
+    case 'address': fields = inset('Current registered office', c.registeredOffice ? esc(c.registeredOffice).replace(/\n/g, '<br>') : '<span class="muted">Not recorded</span>') + field('New registered office address', 'registeredOffice', v.registeredOffice, { textarea: true, rows: 4, required: true, max: 300, hint: 'Include the postcode. Put each line of the address on a new line.' }); break;
+    case 'appoint': fields = fieldset('The new officer', '', ITEM_FIELDS.officers(v, { appointedRequired: true, noResigned: true })); break;
+    case 'terminate': { const list = current(c.officers.filter((o) => !o.resigned)); blocked = !list; fields = list ? select('Which officer?', 'officer', list, v.officer) + field('Date they stopped being an officer', 'resigned', v.resigned, { type: 'date', required: true }) : none('officers'); break; }
+    case 'psc_add': fields = fieldset('The person with significant control', 'This can be a person or a company (for example, a parent company).', prefixed('psc_', ITEM_FIELDS.psc(v.item || {}, { notifiedRequired: true, noCeased: true }))); break;
     case 'psc_change': {
       const now = c.psc.filter((p) => !p.ceased);
       const chosen = now.find((p) => p.id === v.psc);
-      if (!now.length) { fields = '<p>There are no current persons with significant control recorded for this company.</p>'; break; }
-      if (!chosen) return page(res, ctx, { title: store.CHANGE_TYPES[kind].label + ' · ' + c.legalName, noindex: true, flash: error && { error: true, text: error },
-        body: '<section class="panel narrow"><p class="eyebrow">' + esc(c.legalName) + '</p><h1>Whose details have changed?</h1><ul class="choice-list">' + now.map((p) => '<li><a href="' + base + '?type=psc_change&amp;psc=' + p.id + '">' + esc(p.name) + ' <span class="muted">(' + esc(p.kind) + (p.share ? ', ' + esc(p.share) + '%' : '') + ')</span></a></li>').join('') + '</ul><a class="button secondary" href="' + base + '">Back</a></section>' });
+      if (!now.length) { fields = none('persons with significant control'); blocked = true; break; }
+      if (!chosen) return page(res, ctx, { title: store.CHANGE_TYPES[kind].label + ' · ' + c.legalName, noindex: true, flash,
+        body: '<section class="panel narrow"><p class="eyebrow">' + esc(c.legalName) + '</p><h1>Whose details have changed?</h1><div class="choice-grid one">' + now.map((p) => '<a class="choice-card" href="' + base + '?type=psc_change&amp;psc=' + p.id + '"><strong>' + esc(p.name) + '</strong><span>' + esc(p.kind) + (p.share ? ' · ' + esc(p.share) + '%' : '') + '</span></a>').join('') + '</div><p><a class="cancel" href="' + base + '">Back</a></p></section>' });
       const item = v.item || chosen;
-      fields = '<input type="hidden" name="psc" value="' + esc(chosen.id) + '"><p>Changing the details of <strong>' + esc(chosen.name) + '</strong>. Update what has changed.</p>' +
-        prefixed('psc_', field('Name', 'name', item.name, { required: true, max: 160 }) + select('Type', 'kind', store.PSC_KINDS, item.kind) + field('Share percentage', 'share', item.share, { type: 'number', number: true, max: 6, hint: 'From 0 to 100. Leave blank if not known.' }) +
-          field('Nature of control', 'control', Array.isArray(item.control) ? item.control.join('\n') : item.control, { textarea: true, rows: 3, max: 1000, hint: 'One per line.' })) +
+      fields = '<input type="hidden" name="psc" value="' + esc(chosen.id) + '">' + inset('Changing the details of', '<strong>' + esc(chosen.name) + '</strong><br>' + esc(chosen.kind) + (chosen.share ? ' · ' + esc(chosen.share) + '%' : '')) +
+        prefixed('psc_', field('Name', 'name', item.name, { required: true, max: 160 }) + select('Type', 'kind', store.PSC_KINDS, item.kind) + field('Share percentage', 'share', item.share, { type: 'number', number: true, max: 6, hint: 'From 0 to 100. Leave blank if not known.' }) + controlField(item.control)) +
         field('Date the details changed', 'changed', v.changed, { type: 'date', required: true });
       break;
     }
-    case 'psc_cease': { const list = current(c.psc.filter((p) => !p.ceased)); fields = list ? select('Person with significant control', 'psc', list, v.psc) + field('Date they ceased', 'ceased', v.ceased, { type: 'date', required: true }) : '<p>There are no current persons with significant control recorded for this company.</p>'; break; }
-    case 'name': fields = '<p>Current name: <strong>' + esc(c.legalName) + '</strong></p>' + field('New company name', 'newName', v.newName, { required: true, max: 160 }); break;
+    case 'psc_cease': { const list = current(c.psc.filter((p) => !p.ceased)); blocked = !list; fields = list ? select('Who has ceased?', 'psc', list, v.psc) + field('Date they ceased', 'ceased', v.ceased, { type: 'date', required: true }) : none('persons with significant control'); break; }
+    case 'name': {
+      const trading = c.name && c.name !== c.legalName ? c.name : '';
+      fields = inset('Current names', '<strong>' + esc(c.legalName) + '</strong><br>' + (trading ? 'Trading as ' + esc(trading) : '<span class="muted">Trades under its registered name</span>')) +
+        field('Registered name', 'newName', v.newName !== undefined ? v.newName : c.legalName, { required: true, max: 160, hint: 'The company’s legal name. Leave it as it is if only the trading name is changing.' }) +
+        field('Trading name', 'tradingName', v.tradingName !== undefined ? v.tradingName : trading, { max: 120, hint: 'The name the company is known by, if different. Leave blank if it trades under its registered name.' });
+      break;
+    }
     case 'sic': fields = field('Nature of business (SIC)', 'sic', v.sic !== undefined ? v.sic : c.sic.join('\n'), { textarea: true, rows: 4, required: true, max: 700, hint: 'One per line, up to four. For example: 62020 - Information technology consultancy activities.' }); break;
-    case 'confirmation': fields = '<p>The statement confirms the company’s current details on this register are correct. Report a mistake first if anything needs changing.</p>' + field('Date the statement is made up to', 'madeUpTo', v.madeUpTo, { type: 'date', required: true }); break;
-    case 'document': fields = select('Type of filing', 'category', store.FILING_CATEGORIES, v.category || 'Other') + field('Description', 'description', v.description, { required: true, max: 300 }); break;
+    case 'confirmation': fields = inset('Before you confirm', 'The statement confirms the company’s current details on this register are correct. If anything is wrong, <a href="/company/' + esc(c.slug) + '/report">report a mistake</a> or file the change first.') + field('Date the statement is made up to', 'madeUpTo', v.madeUpTo, { type: 'date', required: true }); break;
+    case 'document': fields = select('Type of filing', 'category', store.FILING_CATEGORIES, v.category || 'Other') + field('Description', 'description', v.description, { required: true, max: 300, hint: 'This appears in the company’s filing history.' }); break;
   }
-  const pdfField = kind === 'document' ? '<label>Document (PDF)<input type="file" name="document" accept="application/pdf,.pdf" required></label>'
-    : '<label>Supporting document (PDF, optional)<span class="hint">If you attach one, it becomes the filing’s document. Otherwise we create one from these details.</span><input type="file" name="document" accept="application/pdf,.pdf"></label>';
-  page(res, ctx, { title: store.CHANGE_TYPES[kind].label + ' · ' + c.legalName, noindex: true, flash: error && { error: true, text: error },
+  const pdf = kind === 'document' ? fileField('The filing', '', true) : fileField('Supporting document', 'If you attach one, it becomes the filing’s document. Otherwise we create one from these details.', false);
+  page(res, ctx, { title: store.CHANGE_TYPES[kind].label + ' · ' + c.legalName, noindex: true, flash,
     body: '<section class="panel narrow"><p class="eyebrow">' + esc(c.legalName) + '</p><h1>' + esc(store.CHANGE_TYPES[kind].label) + '</h1>' +
-      '<form method="post" action="' + base + '" class="form" enctype="multipart/form-data">' + csrfField(ctx.customer.csrf) + '<input type="hidden" name="kind" value="' + kind + '">' + fields + pdfField +
-      field('Note for our team (optional)', 'note', v.note, { textarea: true, max: 2000 }) +
-      '<div class="form-actions"><button class="button" type="submit">Submit for review</button><a class="button secondary" href="' + base + '">Back</a></div></form></section>' });
+      (blocked ? fields + '<p><a class="cancel" href="' + base + '">Choose something else</a></p>' :
+      '<form method="post" action="' + base + '" class="form" enctype="multipart/form-data">' + csrfField(ctx.customer.csrf) + '<input type="hidden" name="kind" value="' + kind + '">' + fields + pdf +
+      field('Note for our team', 'note', v.note, { textarea: true, rows: 3, max: 2000 }) + actions('Submit for review', base, 'Back') + '</form>') + '</section>' });
 }
 
 // Applying to register a new company, or a subsidiary of a company the customer manages.
@@ -345,30 +393,44 @@ function registerCompanyPage(res, ctx, values, error) {
   const parent = mine.find((c) => c.slug === v.parent);
   const psc = v.psc || (parent ? { name: parent.legalName, kind: 'Parent company', share: '100' } : {});
   page(res, ctx, { title: parent ? 'Register a subsidiary' : 'Register a company', noindex: true, flash: error && { error: true, text: error },
-    body: '<section class="panel"><p class="eyebrow">' + (parent ? esc(parent.legalName) : 'Your account') + '</p><h1>' + (parent ? 'Register a subsidiary' : 'Register a company') + '</h1>' +
-      '<p class="muted">Tell us about the company, its first officer and its first person with significant control. Our staff review every application. When it’s accepted, the company is added to the register with an incorporation filing, and you’ll manage it from your account.</p>' +
-      '<form method="post" action="/account/register-company" class="form grid-form">' + csrfField(ctx.customer.csrf) +
-      field('Registered name', 'legalName', v.legalName, { required: true, max: 160 }) + field('Name it’s known by (optional)', 'name', v.name, { max: 120 }) +
-      field('Company type', 'type', v.type, { max: 80, hint: 'For example: Private limited company.' }) + field('Incorporated on', 'incorporated', v.incorporated, { type: 'date', hint: 'Leave blank to use the date it’s accepted.' }) +
-      field('Registered office address', 'registeredOffice', v.registeredOffice, { textarea: true, rows: 3, required: true, max: 300 }) +
-      field('Nature of business (SIC)', 'sic', v.sic, { textarea: true, rows: 3, max: 700, hint: 'One per line, up to four.' }) +
-      (mine.length ? select('Parent company', 'parent', mine.map((c) => [c.slug, c.legalName]), v.parent, 'None: this isn’t a subsidiary') : '') +
-      field('Website (optional)', 'website', v.website, { max: 120 }) + field('About the company (optional)', 'description', v.description, { textarea: true, rows: 3, max: 1000 }) +
-      prefixed('officer_', '<h2 class="form-section">First officer</h2><p class="hint form-section">If you leave the appointment date blank, the incorporation date is used.</p>' + ITEM_FIELDS.officers(v.officer || {})) +
-      prefixed('psc_', '<h2 class="form-section">First person with significant control</h2><p class="hint form-section">' + (parent ? 'We’ve filled in the parent company. Change it if someone else controls this company.' : 'If you leave the notified date blank, the incorporation date is used.') + '</p>' + ITEM_FIELDS.psc(psc)) +
-      field('Note for our team (optional)', 'note', v.note, { textarea: true, max: 2000 }) +
-      '<div class="form-actions"><button class="button" type="submit">Submit application</button><a class="button secondary" href="' + (parent ? '/company/' + esc(parent.slug) : '/account') + '">Cancel</a></div></form></section>' });
+    body: '<section class="panel form-page"><p class="eyebrow">' + (parent ? esc(parent.legalName) : 'Your account') + '</p><h1 class="page-title">' + (parent ? 'Register a subsidiary' : 'Register a company') + '</h1>' +
+      '<p class="lead-s">Tell us about the company, its first officer and its first person with significant control. Our staff review every application. When it’s accepted, the company is added to the register with its incorporation filing, and you’ll manage it from your account.</p>' +
+      '<form method="post" action="/account/register-company" class="form">' + csrfField(ctx.customer.csrf) +
+      fieldset('Company details', '', '<div class="grid-form">' +
+        field('Registered name', 'legalName', v.legalName, { required: true, max: 160, hint: 'The company’s full legal name, for example Example Trading Limited.' }) + field('Trading name', 'name', v.name, { max: 120, hint: 'Only if it trades under a different name.' }) +
+        field('Company type', 'type', v.type, { max: 80, hint: 'For example: Private limited company.' }) + field('Incorporated on', 'incorporated', v.incorporated, { type: 'date', hint: 'Leave blank to use the date it’s accepted.' }) +
+        (mine.length ? select('Parent company', 'parent', mine.map((c) => [c.slug, c.legalName]), v.parent, 'None: this isn’t a subsidiary', 'Only companies you manage are listed.') : '') +
+        field('Website', 'website', v.website, { max: 120 }) +
+        field('Registered office address', 'registeredOffice', v.registeredOffice, { textarea: true, rows: 3, required: true, max: 300, hint: 'Include the postcode. Put each line on a new line.' }) +
+        field('Nature of business (SIC)', 'sic', v.sic, { textarea: true, rows: 3, max: 700, hint: 'One per line, up to four.' }) +
+        field('About the company', 'description', v.description, { textarea: true, rows: 3, max: 1000 }) + '</div>', 1) +
+      fieldset('First officer', 'Every company needs at least one officer. If you leave the appointment date blank, the incorporation date is used.', '<div class="grid-form">' + prefixed('officer_', ITEM_FIELDS.officers(v.officer || {}, { noResigned: true })) + '</div>', 2) +
+      fieldset('First person with significant control', parent ? 'We’ve filled in the parent company. Change it if someone else controls this company.' : 'Every company needs at least one. If you leave the notified date blank, the incorporation date is used.', '<div class="grid-form">' + prefixed('psc_', ITEM_FIELDS.psc(psc, { noCeased: true })) + '</div>', 3) +
+      fieldset('Anything else', '', field('Note for our team', 'note', v.note, { textarea: true, rows: 3, max: 2000 }), 4) +
+      actions('Submit application', parent ? '/company/' + esc(parent.slug) : '/account') + '</form></section>' });
 }
 
 function claimPage(res, ctx, c, values, error) {
   const v = values || {};
   page(res, ctx, { title: 'Manage this company · ' + c.legalName, noindex: true, flash: error && { error: true, text: error },
     body: '<section class="panel narrow"><p class="eyebrow">' + esc(c.legalName) + '</p><h1>Ask to manage this company</h1>' +
-      '<p class="muted">People who manage a company can file changes for it and register its subsidiaries. Managing a company also covers its subsidiaries. Tell us your connection to the company; our staff will check it and reply in your account.</p>' +
+      '<p>People who manage a company can file changes for it and register its subsidiaries. Managing a company also covers its subsidiaries.</p>' +
       '<form method="post" class="form" enctype="multipart/form-data">' + csrfField(ctx.customer.csrf) + '<input type="hidden" name="kind" value="claim">' +
-      field('Your connection to the company', 'note', v.note, { textarea: true, rows: 5, required: true, max: 2000, hint: 'For example, you’re a director or you act for the company.' }) +
-      '<label>Supporting document (PDF, optional)<input type="file" name="document" accept="application/pdf,.pdf"></label>' +
-      '<div class="form-actions"><button class="button" type="submit">Send request</button><a class="button secondary" href="/company/' + esc(c.slug) + '">Cancel</a></div></form></section>' });
+      field('Your connection to the company', 'note', v.note, { textarea: true, rows: 5, required: true, max: 2000, hint: 'For example, you’re a director or you act for the company. Our staff will check it and reply in your account.' }) +
+      fileField('Supporting document', 'For example, a letter of authority.', false) + actions('Send request', '/company/' + esc(c.slug)) + '</form></section>' });
+}
+
+// Customers can download a report on a company, and on all its subsidiaries too.
+function groupReportPage(res, ctx, c) {
+  const group = store.groupOf(c.slug, false);
+  const box = (name, label, hint) => { const id = 'r-' + name; return '<div class="check"><input type="checkbox" id="' + id + '" name="' + name + '" value="1" checked><label for="' + id + '">' + esc(label) + (hint ? '<span class="hint">' + esc(hint) + '</span>' : '') + '</label></div>'; };
+  page(res, ctx, { title: 'Company report · ' + c.legalName, noindex: true,
+    body: '<section class="panel narrow"><p class="eyebrow">' + esc(c.legalName) + '</p><h1>Download a company report</h1><p>Get a PDF of this company’s record' + (group.length > 1 ? ', and the records of its ' + plural(group.length - 1, 'subsidiary', 'subsidiaries') + ',' : '') + ' as it stands today.</p>' +
+      (group.length > 1 ? inset('Companies in this group', group.map((g) => '<span class="tree" data-depth="' + Math.min(g.depth, 5) + '">' + esc(g.company.legalName) + '</span>').join('')) : '') +
+      '<form method="get" class="form"><input type="hidden" name="generate" value="1"><fieldset class="field wide checks"><legend>What should it include?</legend>' +
+      (group.length > 1 ? box('subsidiaries', 'All subsidiaries', 'Every company below this one, including subsidiaries of subsidiaries.') : '') +
+      box('officers', 'Officers') + box('psc', 'Persons with significant control') + box('charges', 'Charges') + box('filings', 'Recent filings', 'The latest 10 for each company.') + '</fieldset>' +
+      actions('Download PDF', '/company/' + esc(c.slug)) + '</form></section>' });
 }
 
 function notManagerPage(res, ctx, c) {
@@ -404,7 +466,7 @@ function companyForm(c, ctx, values) {
   const others = store.companies(true).filter((x) => !c || x.slug !== c.slug).map((x) => [x.slug, x.legalName]);
   const v = c || { sic: [], divisions: [], ...(values.company || {}) };
   return '<form method="post" action="' + (c ? '/admin/company/' + esc(c.slug) : '/admin/companies/new') + '" class="form grid-form">' + csrfField(ctx.staffUser.csrf) +
-    field('Registered name', 'legalName', v.legalName, { required: true, max: 160 }) + field('Name it’s known by', 'name', v.name, { max: 120 }) +
+    field('Registered name', 'legalName', v.legalName, { required: true, max: 160 }) + field('Trading name', 'name', v.name, { max: 120, hint: 'Leave blank if it trades under its registered name.' }) +
     field('Company number', 'number', v.number, { max: 20 }) + select('Company status', 'status', store.STATUSES, v.status, 'Not recorded') +
     field('Company type', 'type', v.type, { max: 80, hint: 'For example: Private limited company.' }) + field('Incorporated on', 'incorporated', v.incorporated, { type: 'date' }) +
     field('Dissolved on', 'dissolved', v.dissolved, { type: 'date' }) + field('Registered office address', 'registeredOffice', v.registeredOffice, { textarea: true, rows: 3, max: 300 }) +
@@ -415,15 +477,15 @@ function companyForm(c, ctx, values) {
     field('Divisions', 'divisions', (v.divisions || []).join('\n'), { textarea: true, rows: 2, max: 1000, hint: 'One per line.' }) +
     field('Website', 'website', v.website, { max: 120 }) + field('Staff email domain', 'emailDomain', v.emailDomain, { max: 80 }) +
     field('About the company', 'description', v.description, { textarea: true, rows: 3, max: 1000 }) +
-    '<label class="check"><input type="checkbox" name="hidden"' + (v.hidden ? ' checked' : '') + '> Hide this company from the public register</label>' +
-    (c ? '' : prefixed('officer_', '<h2 class="form-section">First officer</h2><p class="hint form-section">Every company needs at least one officer. If you leave the appointment date blank, the incorporation date is used.</p>' + ITEM_FIELDS.officers(values.officer || {})) +
-      prefixed('psc_', '<h2 class="form-section">First person with significant control</h2><p class="hint form-section">Every company needs at least one person with significant control. If you leave the notified date blank, the incorporation date is used.</p>' + ITEM_FIELDS.psc(values.psc || {}))) +
+    '<div class="check wide"><input type="checkbox" id="hide-company" name="hidden"' + (v.hidden ? ' checked' : '') + '><label for="hide-company">Hide this company from the public register</label></div>' +
+    (c ? '' : '<div class="wide">' + fieldset('First officer', 'Every company needs at least one officer. If you leave the appointment date blank, the incorporation date is used.', '<div class="grid-form">' + prefixed('officer_', ITEM_FIELDS.officers(values.officer || {}, { noResigned: true })) + '</div>') +
+      fieldset('First person with significant control', 'Every company needs at least one. If you leave the notified date blank, the incorporation date is used.', '<div class="grid-form">' + prefixed('psc_', ITEM_FIELDS.psc(values.psc || {}, { noCeased: true })) + '</div>') + '</div>') +
     '<div class="form-actions"><button class="button" type="submit">' + (c ? 'Save company details' : 'Add company') + '</button></div></form>';
 }
 
 const ITEM_FIELDS = {
-    officers: (o) => field('Name', 'name', o.name, { required: true, max: 120 }) + select('Role', 'role', store.OFFICER_ROLES, o.role || 'Director') + field('Appointed on', 'appointed', o.appointed, { type: 'date' }) + field('Resigned on', 'resigned', o.resigned, { type: 'date' }) + field('Occupation', 'occupation', o.occupation, { max: 80 }) + field('Nationality', 'nationality', o.nationality, { max: 60 }) + field('Country of residence', 'countryOfResidence', o.countryOfResidence, { max: 60 }),
-    psc: (p) => field('Name', 'name', p.name, { required: true, max: 160, hint: 'For a parent company, use its registered name exactly as it appears on the register.' }) + select('Type', 'kind', store.PSC_KINDS, p.kind || 'Individual') + field('Share percentage', 'share', p.share, { type: 'number', number: true, max: 6, hint: 'The percentage of shares held, from 0 to 100. Leave blank if not known.' }) + field('Notified on', 'notified', p.notified, { type: 'date' }) + field('Ceased on', 'ceased', p.ceased, { type: 'date' }) + field('Nature of control', 'control', Array.isArray(p.control) ? p.control.join('\n') : p.control, { textarea: true, rows: 3, max: 1000, hint: 'One per line.' }),
+    officers: (o, opt) => { opt = opt || {}; return field('Full name', 'name', o.name, { required: true, max: 120 }) + select('Role', 'role', store.OFFICER_ROLES, o.role || 'Director') + field('Appointed on', 'appointed', o.appointed, { type: 'date', required: !!opt.appointedRequired }) + (opt.noResigned ? '' : field('Resigned on', 'resigned', o.resigned, { type: 'date' })) + field('Occupation', 'occupation', o.occupation, { max: 80 }) + field('Nationality', 'nationality', o.nationality, { max: 60 }) + field('Country of residence', 'countryOfResidence', o.countryOfResidence, { max: 60 }); },
+    psc: (p, opt) => { opt = opt || {}; return field('Name', 'name', p.name, { required: true, max: 160, hint: 'A person’s full name, or a company’s registered name exactly as it appears on the register.' }) + select('Type', 'kind', store.PSC_KINDS, p.kind || 'Individual') + field('Share percentage', 'share', p.share, { type: 'number', number: true, max: 6, hint: 'From 0 to 100. Leave blank if not known.' }) + field('Notified on', 'notified', p.notified, { type: 'date', required: !!opt.notifiedRequired }) + (opt.noCeased ? '' : field('Ceased on', 'ceased', p.ceased, { type: 'date' })) + controlField(p.control); },
     charges: (x) => field('Charge code', 'code', x.code, { max: 40 }) + select('Status', 'status', ['Outstanding', 'Part satisfied', 'Satisfied'], x.status || 'Outstanding') + field('Created on', 'created', x.created, { type: 'date' }) + field('Delivered on', 'delivered', x.delivered, { type: 'date' }) + field('Satisfied on', 'satisfied', x.satisfied, { type: 'date' }) + field('Persons entitled', 'entitled', x.entitled, { required: true, max: 200 }) + field('Brief description', 'description', x.description, { textarea: true, rows: 2, max: 600 }),
 };
 function itemForms(c, ctx, list) {
@@ -443,7 +505,7 @@ function adminCompany(res, ctx, c, flash) {
     body: '<p><a href="/admin">← Administration</a></p><h1 class="page-title">' + esc(c.legalName) + '</h1><p><a href="/company/' + esc(c.slug) + '">View the public record →</a></p>' +
       '<section class="panel"><h2>Company details</h2>' + companyForm(c, ctx) + '</section>' + managersPanel(c, ctx) + itemForms(c, ctx, 'officers') + itemForms(c, ctx, 'psc') + itemForms(c, ctx, 'charges') +
       '<section class="panel"><h2>Filing history</h2>' + (list.length ? '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Description</th><th>Document</th><th></th></tr></thead><tbody>' + list.map((f) => '<tr><td>' + esc(fmt(f.date)) + '</td><td>' + esc(f.category) + '</td><td>' + esc(f.description) + (f.source === 'customer' ? ' <span class="muted small">(customer submission)</span>' : '') + '</td><td>' + (f.file ? '<a href="/document/' + f.id + '" target="_blank" rel="noopener">PDF</a>' : '—') + '</td><td><form method="post" action="/admin/filing/' + f.id + '/delete">' + csrfField(ctx.staffUser.csrf) + '<button class="link danger-text" type="submit" data-confirm="Delete this filing and its document?">Delete</button></form></td></tr>').join('') + '</tbody></table></div>' : '<p class="muted">No filings yet.</p>') +
-      '<details class="item add"><summary>Add a filing</summary><form method="post" action="/admin/company/' + esc(c.slug) + '/filings" class="form grid-form" enctype="multipart/form-data">' + csrfField(ctx.staffUser.csrf) + field('Date', 'date', new Date().toISOString().slice(0, 10), { type: 'date' }) + select('Type', 'category', store.FILING_CATEGORIES, 'Other') + field('Description', 'description', '', { required: true, max: 300 }) + '<label>Document (PDF, optional)<input type="file" name="document" accept="application/pdf,.pdf"></label><div class="form-actions"><button class="button small" type="submit">Add filing</button></div></form></details></section>' +
+      '<details class="item add"><summary>Add a filing</summary><form method="post" action="/admin/company/' + esc(c.slug) + '/filings" class="form grid-form" enctype="multipart/form-data">' + csrfField(ctx.staffUser.csrf) + field('Date', 'date', new Date().toISOString().slice(0, 10), { type: 'date' }) + select('Type', 'category', store.FILING_CATEGORIES, 'Other') + field('Description', 'description', '', { required: true, max: 300 }) + fileField('Document', '', false) + '<div class="form-actions"><button class="button small" type="submit">Add filing</button></div></form></details></section>' +
       '<section class="panel danger-zone"><h2>Delete company</h2><p class="muted">This removes the company, its people, charges and all its filings from the register. It can’t be undone.</p><form method="post" action="/admin/company/' + esc(c.slug) + '/delete">' + csrfField(ctx.staffUser.csrf) + '<button class="button danger" type="submit" data-confirm="Delete ' + esc(c.legalName) + ' and all its records?">Delete company</button></form></section>' });
 }
 
@@ -472,7 +534,7 @@ function changeDetails(s) {
   else if (s.kind === 'sic') rows.push(['New nature of business', ch.sic.join('; ')]);
   else if (s.kind === 'incorporate' && ch.details) {
     const x = ch.details, o = ch.officer || {}, p = ch.psc || {};
-    rows.push(['Registered name', x.legalName], ['Known as', x.name], ['Company type', x.type], ['Incorporated on', x.incorporated ? fmt(x.incorporated) : 'The date it’s accepted'], ['Registered office', x.registeredOffice.replace(/\n/g, ', ')],
+    rows.push(['Registered name', x.legalName], ['Trading name', x.name], ['Company type', x.type], ['Incorporated on', x.incorporated ? fmt(x.incorporated) : 'The date it’s accepted'], ['Registered office', x.registeredOffice.replace(/\n/g, ', ')],
       ['Nature of business', x.sic.replace(/\n/g, '; ')], ['Parent company', x.parent ? (store.company(x.parent)?.legalName || 'No longer on the register') : ''], ['Website', x.website], ['About', x.description],
       ['First officer', o.name + ' (' + o.role + ')' + (o.appointed ? ', appointed ' + fmt(o.appointed) : '')],
       ['First person with significant control', p.name + ' (' + p.kind + (p.share ? ', ' + p.share + '%' : '') + ')' + ((p.control || []).length ? ': ' + p.control.join('; ') : '')]);
@@ -591,6 +653,16 @@ async function route(req, res) {
       if (sub === 'officers' || sub === 'persons-with-significant-control') return peoplePage(res, ctx, c, sub);
       if (sub === 'charges') return chargesPage(res, ctx, c);
       if (sub === 'related-companies') return relatedPage(res, ctx, c);
+    }
+    if (sub === 'group-report' && req.method === 'GET') {
+      if (needCustomer(res, ctx, p)) return;
+      if (!url.searchParams.has('generate')) return groupReportPage(res, ctx, c);
+      const on = (k) => url.searchParams.get(k) === '1';
+      const { buffer, count } = store.groupReport(c.slug, { subsidiaries: on('subsidiaries'), officers: on('officers'), psc: on('psc'), charges: on('charges'), filings: on('filings') });
+      store.audit('customer:' + ctx.customer.account.email, 'report.generate', c.slug + ' (' + count + ' compan' + (count === 1 ? 'y' : 'ies') + ')'); store.save();
+      const name = c.slug + '-' + (count > 1 ? 'group-' : '') + 'report-' + new Date().toISOString().slice(0, 10) + '.pdf';
+      res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Length': buffer.length, 'Content-Disposition': 'attachment; filename="' + name + '"', 'Content-Security-Policy': "sandbox; default-src 'none'", 'Cache-Control': 'no-store' });
+      return res.end(buffer);
     }
     if (sub === 'claim') {
       if (needCustomer(res, ctx, p)) return;
