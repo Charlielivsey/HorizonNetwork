@@ -4,6 +4,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const pdf = require('./pdf');
 
 let dir, file, filesDir, db;
 
@@ -49,6 +50,7 @@ function init(dataDir) {
   for (const c of db.companies) for (const p of c.psc) if (p.share === undefined) {
     if (c.slug === 'horizon-network' && p.name === 'HN Group Limited' && p.kind === 'Relevant legal entity') { p.kind = 'Parent company'; p.share = '100'; } else p.share = '';
   }
+  for (const c of db.companies) generateFilings(c);
   for (const s of SEED) if (!db.seeded.includes(s.slug)) { if (!db.companies.some((c) => c.slug === s.slug)) db.companies.push(blankCompany(s)); db.seeded.push(s.slug); }
   save();
 }
@@ -105,6 +107,7 @@ function saveCompany(slug, input, actor) {
   c.hidden = input.hidden === 'on' || input.hidden === true;
   c.updatedAt = now();
   if (!existing) db.companies.push(c);
+  generateFilings(c);
   audit(actor, existing ? 'company.update' : 'company.create', c.slug);
   save();
   return c;
@@ -146,6 +149,7 @@ function saveItem(slug, list, itemId, input, actor) {
   const existing = itemId && c[list].find((x) => x.id === itemId);
   if (existing) Object.assign(existing, value); else c[list].push({ id: id(), ...value });
   c.updatedAt = now();
+  generateFilings(c);
   audit(actor, list + (existing ? '.update' : '.add'), slug);
   save();
 }
@@ -155,6 +159,37 @@ function deleteItem(slug, list, itemId, actor) {
   c[list] = c[list].filter((x) => x.id !== itemId);
   audit(actor, list + '.delete', slug);
   save();
+}
+
+// ---------- Generated filings ----------
+// When a company's incorporation date is first recorded, or an officer is recorded with an
+// appointment date, the register files the matching document itself: an incorporation filing and
+// an appointment filing, each with a generated PDF. Each is created once; the link is kept on the
+// record so later edits don't duplicate it. Deleting a generated filing doesn't recreate it.
+const FOOTER = 'Generated automatically by the Company Register run by Horizon Holding Co Limited from the details recorded at the time. This is a group register document, not a filing with the UK government\'s Companies House.';
+function generateFilings(c) {
+  if (c.incorporated && !c.incorporationFiling) {
+    const doc = pdf.build({ heading: 'Incorporation of a company', subheading: c.legalName, footer: FOOTER, rows: [
+      ['Company name', c.legalName], ['Company number', c.number], ['Company type', c.type], ['Incorporated on', longDate(c.incorporated)],
+      ['Registered office', c.registeredOffice.replace(/\n/g, ', ')], ['Nature of business', c.sic.join('; ')], ['Parent company', c.parent ? (company(c.parent) || {}).legalName : 'None recorded']] });
+    c.incorporationFiling = pushGenerated(c, c.incorporated, 'Incorporation', 'Incorporation of ' + c.legalName, doc);
+  }
+  for (const o of c.officers) if (o.appointed && !o.appointmentFiling) {
+    const role = o.role.toLowerCase();
+    const doc = pdf.build({ heading: 'Appointment of ' + (/^[aeiou]/.test(role) ? 'an ' : 'a ') + role, subheading: c.legalName + (c.number ? ' (company number ' + c.number + ')' : ''), footer: FOOTER, rows: [
+      ['Name', o.name], ['Role', o.role], ['Appointed on', longDate(o.appointed)], ['Occupation', o.occupation], ['Nationality', o.nationality], ['Country of residence', o.countryOfResidence], ['Company', c.legalName]] });
+    o.appointmentFiling = pushGenerated(c, o.appointed, 'Officers', 'Appointment of ' + o.name + ' as ' + (/^[aeiou]/.test(role) ? 'an ' : 'a ') + role + ' on ' + longDate(o.appointed), doc);
+  }
+}
+function pushGenerated(c, date, category, description, buffer) {
+  const f = { id: id(), company: c.slug, date, category, description, file: storeFile(buffer), pages: 1, createdAt: now(), source: 'generated' };
+  db.filings.push(f);
+  audit('system', 'filing.generated', c.slug + ' ' + description);
+  return f.id;
+}
+function longDate(iso) {
+  const d = new Date(String(iso) + 'T12:00:00Z');
+  return isNaN(d) ? String(iso || '') : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 }
 
 // ---------- Filings ----------

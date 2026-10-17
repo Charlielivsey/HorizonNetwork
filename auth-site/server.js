@@ -20,7 +20,6 @@ const CLIENTS = {
   website: { name: 'HN Group website configuration', callback: 'https://hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can configure the website.' },
   portal: { name: 'Staff portal', callback: 'https://staff.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use the staff portal.' },
   wiki: { name: 'HN Group Wiki', callback: 'https://wiki.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot edit the HN Group Wiki.' },
-  companies: { name: 'HN Group Company Register', callback: 'https://companies.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed || user.ownerAccess, denied: 'Only the system owner and Super Admin members can manage the company register.' },
   branding: { name: 'HN Group brand centre', callback: 'https://branding.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use the HN Group brand centre.' },
 };
 const HEX = /^[a-f0-9]{64}$/;

@@ -1,8 +1,9 @@
 'use strict';
-// HN Group company register — companies.hngroup.org.uk. Public search and records for HN Group
+// Company Register — companies.hngroup.org.uk, branded as Horizon Holding Co and separate from the other group websites.
+// Public search and records for group
 // companies (overview, filing history, officers, persons with significant control and charges),
 // customer accounts that anyone can create (document requests, mistake reports and filing
-// submissions), and a staff administration area signed in through HN Group Auth.
+// submissions), and a staff administration area with its own staff accounts (lib/staff.js).
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -13,10 +14,10 @@ const forms = require('./lib/forms');
 
 const PUBLIC = process.env.COMPANIES_PUBLIC_DIR || path.join(__dirname, 'public');
 const DATA_DIR = process.env.COMPANIES_DATA_DIR || '/var/lib/hn-companies';
-const ORIGIN = staff.SITE_ORIGIN;
-const MIME = { '.css': 'text/css; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8' };
-const LOGOS = { 'hn-group': 'hn-group-wordmark', 'horizon-network': 'horizon-network-wordmark', 'horizon-advertising': 'horizon-advertising-roundel', 'horizon-media-group': 'horizon-media-group-roundel', 'horizon-holding-co': 'horizon-holding-co-roundel', 'horizon-development': 'horizon-development-roundel' };
+const ORIGIN = process.env.COMPANIES_ORIGIN || 'https://companies.hngroup.org.uk';
+const MIME = { '.css': 'text/css; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.txt': 'text/plain; charset=utf-8' };
 store.init(DATA_DIR);
+staff.ensureDefault();
 
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = (iso) => { if (!iso) return ''; const d = new Date(iso.length === 10 ? iso + 'T12:00:00Z' : iso); return isNaN(d) ? '' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/London' }); };
@@ -28,21 +29,22 @@ const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
 // ---------- Layout ----------
 
 function layout(o) {
-  const nav = o.customer
-    ? '<a href="/account">Your account</a><form method="post" action="/account/logout"><input type="hidden" name="csrf" value="' + esc(o.customer.csrf) + '"><button class="link" type="submit">Sign out</button></form>'
-    : o.staffUser ? '<a href="/admin">Administration</a><form method="post" action="/auth/logout"><input type="hidden" name="csrf" value="' + esc(o.staffUser.csrf) + '"><button class="link" type="submit">Sign out</button></form>'
-      : '<a href="/account/login">Sign in</a><a class="button small" href="/account/register">Create an account</a>';
-  return '<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#5514B4">' +
-    '<title>' + esc(o.title) + ' · HN Group Company Register</title>' + (o.description ? '<meta name="description" content="' + esc(o.description) + '">' : '') + (o.noindex ? '<meta name="robots" content="noindex">' : '') +
-    '<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="preload" href="/assets/fonts/plus-jakarta-sans.woff2" as="font" type="font/woff2" crossorigin>' +
-    '<link rel="stylesheet" href="/assets/companies.css?v=1"><script src="/assets/companies.js?v=1" defer></script></head><body>' +
-    '<a class="skip" href="#main">Skip to main content</a><div class="stripe" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>' +
-    '<header class="top"><div class="wrap top-inner"><a class="brand" href="/"><img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="92" height="32"><img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="92" height="32"><span>Company Register</span></a>' +
-    '<nav class="top-nav" aria-label="Account">' + nav + '</nav></div></header>' +
-    (o.searchBar === false ? '' : '<div class="search-band"><div class="wrap"><form class="search" action="/search" method="get" role="search"><label for="q" class="sr-only">Search for a company or officer</label><input id="q" name="q" type="search" placeholder="Search for a company or officer" value="' + esc(o.q || '') + '" autocomplete="off"><button type="submit">Search</button></form></div></div>') +
-    '<main id="main" class="wrap">' + (o.flash ? '<div class="flash ' + (o.flash.error ? 'error' : '') + '" role="status">' + esc(o.flash.text) + '</div>' : '') + o.body + '</main>' +
-    '<footer class="foot"><div class="wrap"><p>The HN Group Company Register is run by HN Group Limited for the companies in its group. It is not the UK government’s Companies House register.</p>' +
-    '<p><a href="/">Search the register</a> · <a href="/about">About this register</a> · <a href="https://hngroup.org.uk/privacy">Privacy</a> · <a href="https://hngroup.org.uk/contact">Contact</a> · <a href="/admin">Staff</a></p><p>© ' + new Date().getFullYear() + ' HN Group Limited</p></div></footer></body></html>';
+  const signedOut = !o.customer && !o.staffUser;
+  const nav = o.staffUser
+    ? '<a href="/admin">Administration</a><form method="post" action="/staff/logout"><input type="hidden" name="csrf" value="' + esc(o.staffUser.csrf) + '"><button class="nav-button" type="submit">Sign out</button></form>'
+    : o.customer ? '<a href="/account">Your account</a><form method="post" action="/account/logout"><input type="hidden" name="csrf" value="' + esc(o.customer.csrf) + '"><button class="nav-button" type="submit">Sign out</button></form>'
+      : '<a href="/account/login">Sign in</a><a href="/account/register">Create an account</a><a href="/staff/login" class="staff-link">Staff sign in</a>';
+  return '<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0b0c0c">' +
+    '<title>' + esc(o.title) + ' – Company Register – Horizon Holding Co</title>' + (o.description ? '<meta name="description" content="' + esc(o.description) + '">' : '') + (o.noindex ? '<meta name="robots" content="noindex">' : '') +
+    '<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/assets/companies.css?v=2"><script src="/assets/companies.js?v=2" defer></script></head><body>' +
+    '<a class="skip" href="#main">Skip to main content</a>' +
+    '<header class="header"><div class="wrap header-inner"><a class="logo" href="/"><img src="/assets/brand/horizon-holding-co-logo-white.svg" alt="Horizon Holding Co" width="129" height="46"></a>' +
+    '<a class="service" href="/">Company Register</a><nav class="header-nav" aria-label="Account">' + nav + '</nav></div></header>' +
+    '<div class="wrap"><div class="notice-bar"><strong class="tag">Group register</strong><span>This is Horizon Holding Co’s register of its group companies. It is not the UK government’s Companies House register.</span></div></div>' +
+    (o.searchBar === false ? '' : '<div class="wrap"><form class="search compact" action="/search" method="get" role="search"><label for="q" class="sr-only">Search for a company or officer</label><input id="q" name="q" type="search" placeholder="Search for a company or officer" value="' + esc(o.q || '') + '" autocomplete="off"><button type="submit" aria-label="Search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg></button></form></div>') +
+    '<main id="main" class="wrap main">' + (o.flash ? '<div class="flash ' + (o.flash.error ? 'error' : '') + '" role="status">' + esc(o.flash.text) + '</div>' : '') + o.body + '</main>' +
+    '<footer class="footer"><div class="wrap"><ul class="footer-links"><li><a href="/">Search the register</a></li><li><a href="/about">About this register</a></li>' + (signedOut ? '<li><a href="/account/register">Create an account</a></li>' : '') + '<li><a href="/staff/login">Staff sign in</a></li></ul>' +
+    '<div class="footer-meta"><img src="/assets/brand/horizon-holding-co-logo.svg" alt="" width="112" height="40"><p>The Company Register is run by Horizon Holding Co Limited for the companies in its group. It is not the UK government’s Companies House register.</p><p>© ' + new Date().getFullYear() + ' Horizon Holding Co Limited</p></div></div></footer></body></html>';
 }
 
 function send(res, status, html, headers) {
@@ -73,13 +75,14 @@ function companyCard(c) {
 }
 
 function homePage(res, ctx) {
-  const list = store.companies();
-  page(res, ctx, { title: 'Find company information', searchBar: false, description: 'Search the HN Group Company Register for company records, filing history, officers and persons with significant control.',
-    body: '<section class="hero"><p class="eyebrow">HN Group Company Register</p><h1>Find company information.</h1><p class="lede">Search the companies in HN Group. See their details, filing history, officers, people with significant control and charges.</p>' +
-      '<form class="search big" action="/search" method="get" role="search"><label for="q" class="sr-only">Company name, number or officer</label><input id="q" name="q" type="search" placeholder="Company name, number or officer" autocomplete="off" required><button type="submit">Search</button></form></section>' +
-      '<section class="block"><h2>Companies on the register</h2><div class="results">' + (list.length ? list.map(companyCard).join('') : '<p class="muted">There are no companies on the register yet.</p>') + '</div></section>' +
-      '<section class="block grid-3"><div class="tile"><h3>Request documents</h3><p>Ask for a copy of a filing or a certificate for a company.</p></div><div class="tile"><h3>Report a mistake</h3><p>Tell us if something on a company record looks wrong.</p></div><div class="tile"><h3>Submit a filing</h3><p>Send a document for a company. Our team reviews it before it appears.</p></div></section>' +
-      (ctx.customer ? '' : '<p class="center"><a class="button" href="/account/register">Create a free account</a> <a class="button ghost" href="/account/login">Sign in</a></p>') });
+  page(res, ctx, { title: 'Find company information', searchBar: false, description: 'Search the Horizon Holding Co Company Register for company records, filing history, officers and persons with significant control.',
+    body: '<div class="grid-row"><div class="col-main"><h1 class="heading-xl">Find company information</h1>' +
+      '<p class="lead">Search the register for a company’s details, filing history, officers, people with significant control and charges.</p>' +
+      '<form class="search big" action="/search" method="get" role="search"><label for="q" class="label-l">Search for a company or officer</label><span class="hint">Enter a company name, company number or officer’s name</span><div class="search-row"><input id="q" name="q" type="search" autocomplete="off" required><button type="submit">Search</button></div></form>' +
+      '<h2 class="heading-m">Other things you can do</h2><ul class="link-list">' +
+      '<li>Request a copy of a filing or a certificate for a company</li><li>Report a mistake on a company record</li><li>Submit a filing for a company</li></ul>' +
+      '<p class="body">Find the company first, then choose what you need from its page. ' + (ctx.customer ? 'You’re signed in, so you’re ready to go.' : 'You’ll need a free account: <a href="/account/register">create an account</a> or <a href="/account/login">sign in</a>.') + '</p></div>' +
+      '<aside class="col-side"><div class="side-box"><h2 class="heading-s">Using this register</h2><ul><li><a href="/about">About this register</a></li>' + (ctx.customer ? '<li><a href="/account">Your requests and filings</a></li>' : '<li><a href="/account/login">Sign in to your account</a></li><li><a href="/account/register">Create an account</a></li>') + '<li><a href="/staff/login">Staff sign in</a></li></ul></div></aside></div>' });
 }
 
 function searchPage(res, ctx, q) {
@@ -94,10 +97,9 @@ function searchPage(res, ctx, q) {
 
 function companyHeader(c, tab, ctx) {
   const tabs = [['', 'Overview'], ['filing-history', 'Filing history'], ['officers', 'People'], ['charges', 'Charges']];
-  const logo = LOGOS[c.slug];
-  return '<div class="company-head">' + (logo ? '<div class="company-logo"><img class="on-light" src="/assets/brand/' + logo + '.svg" alt=""><img class="on-dark" src="/assets/brand/' + (logo.endsWith('wordmark') ? logo + '-white' : logo) + '.svg" alt=""></div>' : '') +
-    '<div><p class="eyebrow">' + (c.number ? 'Company number ' + esc(c.number) : 'Company number not recorded') + '</p><h1>' + esc(c.legalName) + '</h1>' +
-    (c.name && c.name !== c.legalName ? '<p class="muted">Known as ' + esc(c.name) + '</p>' : '') + '</div></div>' +
+  return '<div class="company-head"><h1 class="heading-l">' + esc(c.legalName) + '</h1>' +
+    '<p class="company-number">Company number <strong>' + (c.number ? esc(c.number) : 'not recorded') + '</strong></p>' +
+    (c.name && c.name !== c.legalName ? '<p class="muted">Known as ' + esc(c.name) + '</p>' : '') + '</div>' +
     '<nav class="tabs" aria-label="Company record">' + tabs.map(([p, label]) => { const active = tab === p || (p === 'officers' && tab === 'persons-with-significant-control'); return '<a href="/company/' + esc(c.slug) + (p ? '/' + p : '') + '"' + (active ? ' aria-current="page"' : '') + '>' + label + '</a>'; }).join('') + '</nav>' +
     '<div class="actions-row">' + ['request', 'report', 'file'].map((a) => '<a class="button ghost small" href="/company/' + esc(c.slug) + '/' + a + '">' + { request: 'Request a document', report: 'Report a mistake', file: 'Submit a filing' }[a] + '</a>').join('') + '</div>';
 }
@@ -185,7 +187,7 @@ function chargesPage(res, ctx, c) {
 
 function aboutPage(res, ctx) {
   page(res, ctx, { title: 'About this register',
-    body: '<section class="panel narrow"><h1>About the HN Group Company Register</h1><p>This register holds information about the companies in HN Group. HN Group staff keep it up to date.</p>' +
+    body: '<section class="panel narrow"><h1>About the Company Register</h1><p>This register holds information about the companies in Horizon Holding Co’s group. Our staff keep it up to date.</p>' +
       '<p>It is a group register, not the UK government’s Companies House register. Some details may not be recorded yet. These show as “Not recorded”.</p>' +
       '<h2>What you can do</h2><ul><li>Search for a company or officer and view its records without an account.</li><li>Create a free account to request copies of filings or certificates, report a mistake, or submit a filing for review.</li></ul>' +
       '<h2>Your account</h2><p>Your account is only used for your requests and submissions. Our team replies on this site; we don’t send emails from the register. Don’t include sensitive personal information in messages or documents unless it’s needed.</p></section>' });
@@ -211,7 +213,7 @@ function loginPage(res, ctx, values, error) {
   page(res, ctx, { title: 'Sign in', noindex: true, flash: error && { error: true, text: error },
     body: '<section class="panel narrow"><h1>Sign in</h1><form method="post" action="/account/login" class="form">' + field('Email address', 'email', values.email, { type: 'email', required: true, max: 160, auto: 'email' }) +
       field('Password', 'password', '', { type: 'password', required: true, auto: 'current-password' }) + '<input type="hidden" name="return" value="' + esc(values.return || '') + '"><button class="button" type="submit">Sign in</button></form>' +
-      '<p>New here? <a href="/account/register' + (values.return ? '?return=' + encodeURIComponent(values.return) : '') + '">Create an account</a></p><p class="muted small">HN Group staff managing the register should use <a href="/admin">staff sign-in</a>.</p></section>' });
+      '<p>New here? <a href="/account/register' + (values.return ? '?return=' + encodeURIComponent(values.return) : '') + '">Create an account</a></p><p class="muted small">Staff managing the register should use <a href="/staff/login">staff sign in</a>.</p></section>' });
 }
 
 function accountPage(res, ctx, flash) {
@@ -224,7 +226,7 @@ function accountPage(res, ctx, flash) {
         reqs.map((r) => '<tr><td><a href="/account/requests/' + r.id + '">' + esc(r.ref) + '</a></td><td>' + esc(store.company(r.company)?.legalName || r.company) + '</td><td>' + esc(store.REQUEST_KINDS[r.kind]) + '</td><td><span class="status ' + (r.status === 'Answered' ? 'ok' : r.status === 'Open' ? 'warn' : '') + '">' + esc(r.status) + '</span></td><td>' + esc(fmtTime(r.updatedAt)) + '</td></tr>').join('') + '</tbody></table></div>'
         : '<p class="muted">You haven’t made any requests yet. Find a company, then choose Request a document or Report a mistake.</p>') + '</section>' +
       '<section class="panel"><h2>Your filing submissions</h2>' + (subs.length ? '<div class="table-wrap"><table><thead><tr><th>Reference</th><th>Company</th><th>Filing</th><th>Status</th><th>Submitted</th></tr></thead><tbody>' +
-        subs.map((s) => '<tr><td>' + esc(s.ref) + '</td><td>' + esc(store.company(s.company)?.legalName || s.company) + '</td><td>' + esc(s.description) + (s.staffNote ? '<br><span class="muted small">Note from HN Group: ' + esc(s.staffNote) + '</span>' : '') + '</td><td><span class="status ' + (s.status === 'Accepted' ? 'ok' : s.status === 'Pending' ? 'warn' : 'bad') + '">' + esc(s.status) + '</span></td><td>' + esc(fmtTime(s.createdAt)) + '</td></tr>').join('') + '</tbody></table></div>'
+        subs.map((s) => '<tr><td>' + esc(s.ref) + '</td><td>' + esc(store.company(s.company)?.legalName || s.company) + '</td><td>' + esc(s.description) + (s.staffNote ? '<br><span class="muted small">Note from Horizon Holding Co: ' + esc(s.staffNote) + '</span>' : '') + '</td><td><span class="status ' + (s.status === 'Accepted' ? 'ok' : s.status === 'Pending' ? 'warn' : 'bad') + '">' + esc(s.status) + '</span></td><td>' + esc(fmtTime(s.createdAt)) + '</td></tr>').join('') + '</tbody></table></div>'
         : '<p class="muted">You haven’t submitted any filings.</p>') + '</section>' });
 }
 
@@ -233,7 +235,7 @@ function requestThread(r, ctx, staffView) {
   const f = r.filing && store.filing(r.filing);
   return '<section class="panel"><p class="eyebrow">' + esc(store.REQUEST_KINDS[r.kind]) + ' · ' + esc(r.ref) + '</p><h1>' + esc(c ? c.legalName : r.company) + '</h1>' +
     '<p>Status: <span class="status ' + (r.status === 'Answered' ? 'ok' : r.status === 'Open' ? 'warn' : '') + '">' + esc(r.status) + '</span>' + (f ? ' · About the filing “' + esc(f.description) + '” (' + esc(fmt(f.date)) + ')' : '') + '</p>' +
-    '<ol class="thread">' + r.messages.map((m) => '<li class="' + (m.from === 'staff' ? 'staff' : '') + '"><p class="who">' + esc(m.from === 'staff' ? m.name + ' · HN Group' : m.name) + ' <span class="muted small">' + esc(fmtTime(m.at)) + '</span></p><p class="text">' + esc(m.text) + '</p></li>').join('') + '</ol>' +
+    '<ol class="thread">' + r.messages.map((m) => '<li class="' + (m.from === 'staff' ? 'staff' : '') + '"><p class="who">' + esc(m.from === 'staff' ? m.name + ' · Horizon Holding Co' : m.name) + ' <span class="muted small">' + esc(fmtTime(m.at)) + '</span></p><p class="text">' + esc(m.text) + '</p></li>').join('') + '</ol>' +
     (r.status === 'Closed' && !staffView ? '<p class="muted">This request is closed. Start a new request from the company’s page if you need anything else.</p>'
       : '<form method="post" class="form">' + csrfField((staffView ? ctx.staffUser : ctx.customer).csrf) + field('Reply', 'text', '', { textarea: true, required: true }) +
         (staffView ? select('Status after replying', 'status', ['Answered', 'Open', 'Closed'], 'Answered') : '') + '<button class="button" type="submit">Send reply</button></form>') + '</section>';
@@ -252,7 +254,7 @@ function requestForm(res, ctx, c, kind, values, error) {
 
 function submitForm(res, ctx, c, values, error) {
   page(res, ctx, { title: 'Submit a filing · ' + c.legalName, noindex: true, flash: error && { error: true, text: error },
-    body: '<section class="panel narrow"><p class="eyebrow">' + esc(c.legalName) + '</p><h1>Submit a filing</h1><p class="muted">Upload the document as a PDF (up to 15 MB). HN Group staff review every submission. Accepted filings appear in the company’s public filing history; rejected ones are deleted.</p>' +
+    body: '<section class="panel narrow"><p class="eyebrow">' + esc(c.legalName) + '</p><h1>Submit a filing</h1><p class="muted">Upload the document as a PDF (up to 15 MB). Our staff review every submission. Accepted filings appear in the company’s public filing history; rejected ones are deleted.</p>' +
       '<form method="post" class="form" enctype="multipart/form-data">' + csrfField(ctx.customer.csrf) + select('Type of filing', 'category', store.FILING_CATEGORIES, values.category || 'Other') +
       field('Description', 'description', values.description, { required: true, max: 300, hint: 'For example: Change of registered office address.' }) +
       '<label>Document (PDF)<input type="file" name="document" accept="application/pdf,.pdf" required></label>' + field('Note for our team (optional)', 'note', values.note, { textarea: true, max: 2000 }) +
@@ -261,8 +263,8 @@ function submitForm(res, ctx, c, values, error) {
 
 // ---------- Staff administration ----------
 
-function adminNav(active) {
-  const items = [['/admin', 'Overview'], ['/admin/submissions', 'Submissions'], ['/admin/requests', 'Requests'], ['/admin/customers', 'Customers'], ['/admin/audit', 'Activity']];
+function adminNav(active, me) {
+  const items = [['/admin', 'Overview'], ['/admin/submissions', 'Submissions'], ['/admin/requests', 'Requests'], ['/admin/customers', 'Customers'], ...(me && me.admin ? [['/admin/staff', 'Staff']] : []), ['/admin/audit', 'Activity'], ['/admin/password', 'Your password']];
   return '<nav class="tabs admin-tabs" aria-label="Administration">' + items.map(([h, l]) => '<a href="' + h + '"' + (h === active ? ' aria-current="page"' : '') + '>' + l + '</a>').join('') + '</nav>';
 }
 
@@ -271,7 +273,7 @@ function adminHome(res, ctx, flash) {
   const open = store.db.requests.filter((r) => r.status === 'Open').length;
   const all = store.companies(true);
   page(res, ctx, { title: 'Administration', noindex: true, flash,
-    body: '<h1 class="page-title">Register administration</h1>' + adminNav('/admin') +
+    body: '<h1 class="page-title">Register administration</h1>' + adminNav('/admin', ctx.staffUser) +
       '<div class="grid-3"><a class="tile stat" href="/admin/submissions"><strong>' + pending + '</strong><span>filings to review</span></a><a class="tile stat" href="/admin/requests"><strong>' + open + '</strong><span>open requests</span></a><a class="tile stat" href="/admin/customers"><strong>' + store.db.customers.length + '</strong><span>customer accounts</span></a></div>' +
       '<section class="panel"><div class="panel-head"><h2>Companies</h2><a class="button small" href="/admin/companies/new">Add a company</a></div><div class="table-wrap"><table><thead><tr><th>Company</th><th>Number</th><th>Status</th><th>Filings</th><th></th></tr></thead><tbody>' +
       all.map((c) => '<tr><td>' + esc(c.legalName) + (c.hidden ? ' <span class="status">Hidden</span>' : '') + '</td><td>' + val(c.number) + '</td><td>' + val(c.status) + '</td><td>' + store.filings(c.slug).length + '</td><td><a href="/admin/company/' + esc(c.slug) + '">Edit</a> · <a href="/company/' + esc(c.slug) + '">View</a></td></tr>').join('') + '</tbody></table></div></section>' });
@@ -300,7 +302,7 @@ function itemForms(c, ctx, list) {
   const items = c[list];
   const forms = {
     officers: (o) => field('Name', 'name', o.name, { required: true, max: 120 }) + select('Role', 'role', store.OFFICER_ROLES, o.role || 'Director') + field('Appointed on', 'appointed', o.appointed, { type: 'date' }) + field('Resigned on', 'resigned', o.resigned, { type: 'date' }) + field('Occupation', 'occupation', o.occupation, { max: 80 }) + field('Nationality', 'nationality', o.nationality, { max: 60 }) + field('Country of residence', 'countryOfResidence', o.countryOfResidence, { max: 60 }),
-    psc: (p) => field('Name', 'name', p.name, { required: true, max: 160, hint: 'For a parent company, use its registered name, for example HN Group Limited.' }) + select('Type', 'kind', store.PSC_KINDS, p.kind || 'Individual') + field('Share percentage', 'share', p.share, { type: 'number', number: true, max: 6, hint: 'The percentage of shares held, from 0 to 100. Leave blank if not known.' }) + field('Notified on', 'notified', p.notified, { type: 'date' }) + field('Ceased on', 'ceased', p.ceased, { type: 'date' }) + field('Nature of control', 'control', (p.control || []).join('\n'), { textarea: true, rows: 3, max: 1000, hint: 'One per line.' }),
+    psc: (p) => field('Name', 'name', p.name, { required: true, max: 160, hint: 'For a parent company, use its registered name exactly as it appears on the register.' }) + select('Type', 'kind', store.PSC_KINDS, p.kind || 'Individual') + field('Share percentage', 'share', p.share, { type: 'number', number: true, max: 6, hint: 'The percentage of shares held, from 0 to 100. Leave blank if not known.' }) + field('Notified on', 'notified', p.notified, { type: 'date' }) + field('Ceased on', 'ceased', p.ceased, { type: 'date' }) + field('Nature of control', 'control', (p.control || []).join('\n'), { textarea: true, rows: 3, max: 1000, hint: 'One per line.' }),
     charges: (x) => field('Charge code', 'code', x.code, { max: 40 }) + select('Status', 'status', ['Outstanding', 'Part satisfied', 'Satisfied'], x.status || 'Outstanding') + field('Created on', 'created', x.created, { type: 'date' }) + field('Delivered on', 'delivered', x.delivered, { type: 'date' }) + field('Satisfied on', 'satisfied', x.satisfied, { type: 'date' }) + field('Persons entitled', 'entitled', x.entitled, { required: true, max: 200 }) + field('Brief description', 'description', x.description, { textarea: true, rows: 2, max: 600 }),
   };
   const title = { officers: 'Officers', psc: 'Persons with significant control', charges: 'Charges' }[list];
@@ -324,7 +326,7 @@ function adminCompany(res, ctx, c, flash) {
 function adminSubmissions(res, ctx, flash) {
   const list = [...store.db.submissions].sort((a, b) => (a.status === 'Pending' ? 0 : 1) - (b.status === 'Pending' ? 0 : 1) || b.createdAt.localeCompare(a.createdAt)).slice(0, 300);
   page(res, ctx, { title: 'Submissions', noindex: true, flash,
-    body: '<h1 class="page-title">Filing submissions</h1>' + adminNav('/admin/submissions') + '<section class="panel">' + (list.length ? list.map((s) => {
+    body: '<h1 class="page-title">Filing submissions</h1>' + adminNav('/admin/submissions', ctx.staffUser) + '<section class="panel">' + (list.length ? list.map((s) => {
       const cust = store.customer(s.customer);
       return '<article class="item-card"><h3>' + esc(s.ref) + ' · ' + esc(store.company(s.company)?.legalName || s.company) + ' <span class="status ' + (s.status === 'Accepted' ? 'ok' : s.status === 'Pending' ? 'warn' : 'bad') + '">' + esc(s.status) + '</span></h3>' +
         '<p><strong>' + esc(s.category) + ':</strong> ' + esc(s.description) + '</p><p class="muted small">From ' + esc(cust ? cust.name + ' (' + cust.email + ')' : 'a deleted account') + ' · ' + esc(fmtTime(s.createdAt)) + '</p>' + (s.note ? '<p class="note">' + esc(s.note) + '</p>' : '') +
@@ -336,21 +338,21 @@ function adminSubmissions(res, ctx, flash) {
 function adminRequests(res, ctx) {
   const list = [...store.db.requests].sort((a, b) => (a.status === 'Open' ? 0 : 1) - (b.status === 'Open' ? 0 : 1) || b.updatedAt.localeCompare(a.updatedAt)).slice(0, 300);
   page(res, ctx, { title: 'Requests', noindex: true,
-    body: '<h1 class="page-title">Requests and reports</h1>' + adminNav('/admin/requests') + '<section class="panel">' + (list.length ? '<div class="table-wrap"><table><thead><tr><th>Reference</th><th>Company</th><th>Type</th><th>From</th><th>Status</th><th>Updated</th></tr></thead><tbody>' +
+    body: '<h1 class="page-title">Requests and reports</h1>' + adminNav('/admin/requests', ctx.staffUser) + '<section class="panel">' + (list.length ? '<div class="table-wrap"><table><thead><tr><th>Reference</th><th>Company</th><th>Type</th><th>From</th><th>Status</th><th>Updated</th></tr></thead><tbody>' +
       list.map((r) => '<tr><td><a href="/admin/requests/' + r.id + '">' + esc(r.ref) + '</a></td><td>' + esc(store.company(r.company)?.legalName || r.company) + '</td><td>' + esc(store.REQUEST_KINDS[r.kind]) + '</td><td>' + esc(store.customer(r.customer)?.name || 'Deleted account') + '</td><td><span class="status ' + (r.status === 'Open' ? 'warn' : r.status === 'Answered' ? 'ok' : '') + '">' + esc(r.status) + '</span></td><td>' + esc(fmtTime(r.updatedAt)) + '</td></tr>').join('') + '</tbody></table></div>' : '<p class="muted">No requests yet.</p>') + '</section>' });
 }
 
 function adminCustomers(res, ctx, flash) {
   const list = [...store.db.customers].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 500);
   page(res, ctx, { title: 'Customers', noindex: true, flash,
-    body: '<h1 class="page-title">Customer accounts</h1>' + adminNav('/admin/customers') + '<section class="panel"><p class="muted">' + plural(store.db.customers.length, 'account', 'accounts') + '. Customers can only see their own requests and submissions.</p>' + (list.length ? '<div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Created</th><th>Last sign-in</th><th></th></tr></thead><tbody>' +
+    body: '<h1 class="page-title">Customer accounts</h1>' + adminNav('/admin/customers', ctx.staffUser) + '<section class="panel"><p class="muted">' + plural(store.db.customers.length, 'account', 'accounts') + '. Customers can only see their own requests and submissions.</p>' + (list.length ? '<div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Created</th><th>Last sign-in</th><th></th></tr></thead><tbody>' +
       list.map((c) => '<tr><td>' + esc(c.name) + (c.disabled ? ' <span class="status bad">Disabled</span>' : '') + '</td><td>' + esc(c.email) + '</td><td>' + esc(fmtTime(c.createdAt)) + '</td><td>' + (c.lastLoginAt ? esc(fmtTime(c.lastLoginAt)) : '—') + '</td><td><form method="post" action="/admin/customers/' + c.id + '">' + csrfField(ctx.staffUser.csrf) + '<button class="link" type="submit" name="disabled" value="' + (c.disabled ? '0' : '1') + '">' + (c.disabled ? 'Enable' : 'Disable') + '</button></form></td></tr>').join('') + '</tbody></table></div>' : '<p class="muted">Nobody has created an account yet.</p>') + '</section>' });
 }
 
 function adminAudit(res, ctx) {
   const list = store.db.audit.slice(-300).reverse();
   page(res, ctx, { title: 'Activity', noindex: true,
-    body: '<h1 class="page-title">Activity</h1>' + adminNav('/admin/audit') + '<section class="panel"><div class="table-wrap"><table><thead><tr><th>When</th><th>Who</th><th>What</th><th>Detail</th></tr></thead><tbody>' +
+    body: '<h1 class="page-title">Activity</h1>' + adminNav('/admin/audit', ctx.staffUser) + '<section class="panel"><div class="table-wrap"><table><thead><tr><th>When</th><th>Who</th><th>What</th><th>Detail</th></tr></thead><tbody>' +
       list.map((a) => '<tr><td>' + esc(fmtTime(a.at)) + '</td><td>' + esc(a.actor) + '</td><td>' + esc(a.action) + '</td><td>' + esc(a.detail) + '</td></tr>').join('') + '</tbody></table></div></section>' });
 }
 
@@ -392,8 +394,20 @@ async function route(req, res) {
   if (req.method === 'POST' && !sameOrigin(req)) throw fail(403, 'That request came from another website.');
 
   const ctx = { customer: customers.current(req), staffUser: null };
-  if (p === '/auth/login' || p === '/auth/callback' || p === '/auth/logout') {
-    if (await staff.handle(req, res, url, (r, status, title, text, cookies) => send(r, status, layout({ title, body: '<section class="panel narrow"><h1>' + esc(title) + '</h1><p>' + esc(text) + '</p><p><a class="button" href="/admin">Try again</a></p></section>' }), { 'Set-Cookie': cookies || [] }))) return;
+  if (p === '/staff/login') {
+    const back = safeAdmin(url.searchParams.get('return'));
+    if (req.method === 'GET') return staff.current(req) ? redirect(res, back) : staffLoginPage(res, ctx, { return: back });
+    if (req.method === 'POST') {
+      const { fields } = await forms.parse(req);
+      try { const s = staff.login(fields.email, fields.password, clientIp(req)); return redirect(res, s.mustChange ? '/admin/password' : safeAdmin(fields.return), [staff.start(s)]); }
+      catch (e) { if (e.status !== 400 && e.status !== 429) throw e; return staffLoginPage(res, ctx, fields, e.message); }
+    }
+  }
+  if (p === '/staff/logout' && req.method === 'POST') {
+    const { fields } = await forms.parse(req);
+    const me = staff.current(req);
+    if (me && fields.csrf !== me.csrf) throw fail(403, 'Your session has changed. Refresh the page and try again.');
+    return redirect(res, '/', [staff.end(req)]);
   }
 
   // Public register.
@@ -488,15 +502,39 @@ async function route(req, res) {
 
   // Staff administration.
   if (p === '/admin' || p.startsWith('/admin/')) {
-    const user = await staff.current(req);
-    if (!user) { if (req.method === 'GET') return redirect(res, staff.loginUrl(p + url.search)); throw fail(401, 'Your staff sign-in has expired. Sign in again.'); }
-    if (!user.admin) return messagePage(res, ctx, 403, 'Administrators only', 'Only the system owner and Super Admin members can manage the register.');
+    const user = staff.current(req);
+    if (!user) { if (req.method === 'GET') return redirect(res, '/staff/login?return=' + encodeURIComponent(p + url.search)); throw fail(401, 'Your staff sign-in has expired. Sign in again.'); }
     ctx.staffUser = user; ctx.customer = null;
     const actor = 'staff:' + (user.email || user.name);
     let fields = {}, file = null;
     if (req.method === 'POST') {
       ({ fields, file } = await forms.parse(req));
       if (fields.csrf !== user.csrf) throw fail(403, 'Your session has changed. Refresh the page and try again.');
+    }
+    // Your own password: required first when it's the default or a temporary one.
+    if (p === '/admin/password') {
+      let flash = user.mustChange ? { error: true, text: 'Choose a new password before you continue.' } : null;
+      if (req.method === 'POST') {
+        if (fields.password !== fields.confirm) flash = { error: true, text: 'The new passwords don’t match.' };
+        else try { staff.changeOwnPassword(user.account, fields.current, fields.password); return adminHome(res, { ...ctx, staffUser: staff.current(req) }, { text: 'Your password has been changed.' }); } catch (e) { if (e.status !== 400) throw e; flash = { error: true, text: e.message }; }
+      }
+      return page(res, ctx, { title: 'Change your password', noindex: true, flash, body: '<section class="panel narrow"><h1>Change your password</h1>' + (user.mustChange ? '<p>You’re using a default or temporary password. Choose your own to continue.</p>' : '') + '<form method="post" class="form">' + csrfField(user.csrf) + field('Current password', 'current', '', { type: 'password', required: true, auto: 'current-password' }) + field('New password', 'password', '', { type: 'password', required: true, hint: 'At least 10 characters.', auto: 'new-password' }) + field('Confirm new password', 'confirm', '', { type: 'password', required: true, auto: 'new-password' }) + '<button class="button" type="submit">Change password</button>' + (user.mustChange ? '' : ' <a class="button secondary" href="/admin">Cancel</a>') + '</form></section>' });
+    }
+    if (user.mustChange) return redirect(res, '/admin/password');
+    // Staff accounts: administrators only.
+    if (p === '/admin/staff' || p.startsWith('/admin/staff/')) {
+      if (!user.admin) return messagePage(res, ctx, 403, 'Administrators only', 'Only administrators can manage staff accounts.');
+      let flash;
+      const sm = /^\/admin\/staff\/([a-f0-9]{24})\/(remove|role|reset)$/.exec(p);
+      if (req.method === 'POST') {
+        try {
+          if (p === '/admin/staff') { const s = staff.add(fields, actor); flash = { text: s.name + ' has been added. Give them their temporary password; they’ll choose their own when they first sign in.' }; }
+          else if (sm && sm[2] === 'remove') { staff.remove(sm[1], user, actor); flash = { text: 'Staff account removed.' }; }
+          else if (sm && sm[2] === 'role') { staff.setRole(sm[1], fields.role, user, actor); flash = { text: 'Role updated.' }; }
+          else if (sm && sm[2] === 'reset') { staff.resetPassword(sm[1], fields.password, actor); flash = { text: 'Temporary password set. They’ll choose their own when they next sign in.' }; }
+        } catch (e) { if (e.status !== 400) throw e; flash = { error: true, text: e.message }; }
+      }
+      return adminStaff(res, ctx, flash);
     }
     if (req.method === 'GET' && p === '/admin') return adminHome(res, ctx);
     if (p === '/admin/companies/new') {
@@ -548,17 +586,41 @@ async function route(req, res) {
   return messagePage(res, ctx, 404, 'Page not found', 'That page isn’t on the register.');
 }
 
-// Hidden companies are visible to signed-in administrators only.
+// Hidden companies are visible to signed-in staff only.
 async function staffAdmin(req, ctx) {
-  try { const u = await staff.current(req); if (u && u.admin) { ctx.staffUser = ctx.staffUser || u; return true; } } catch {}
+  const u = staff.current(req);
+  if (u && !u.mustChange) { ctx.staffUser = ctx.staffUser || u; return true; }
   return false;
+}
+const safeAdmin = (p) => (typeof p === 'string' && /^\/admin(\/[^\s\\]*)?(\?[^\s\\]*)?$/.test(p) ? p : '/admin');
+
+function staffLoginPage(res, ctx, values, error) {
+  page(res, ctx, { title: 'Staff sign in', noindex: true, flash: error && { error: true, text: error },
+    body: '<section class="panel narrow"><h1>Staff sign in</h1><p class="muted">For staff who manage the Company Register. Customers should use <a href="/account/login">customer sign in</a>.</p><form method="post" action="/staff/login" class="form">' +
+      field('Email address', 'email', values.email, { type: 'email', required: true, max: 160, auto: 'username' }) + field('Password', 'password', '', { type: 'password', required: true, auto: 'current-password' }) +
+      '<input type="hidden" name="return" value="' + esc(values.return || '/admin') + '"><button class="button" type="submit">Sign in</button></form></section>' });
+}
+
+function adminStaff(res, ctx, flash) {
+  const me = ctx.staffUser;
+  const list = [...staff.list()].sort((a, b) => a.name.localeCompare(b.name));
+  page(res, ctx, { title: 'Staff accounts', noindex: true, flash,
+    body: '<h1 class="page-title">Staff accounts</h1>' + adminNav('/admin/staff', me) + '<section class="panel"><p class="muted">Staff can manage companies, filings, requests and customers. Administrators can also add and remove staff.</p><div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Last sign-in</th><th>Actions</th></tr></thead><tbody>' +
+      list.map((s) => '<tr><td>' + esc(s.name) + (s.id === me.id ? ' <span class="status">You</span>' : '') + (s.mustChange ? ' <span class="status warn">Password to change</span>' : '') + '</td><td>' + esc(s.email) + '</td>' +
+        '<td><form method="post" action="/admin/staff/' + s.id + '/role" class="inline">' + csrfField(me.csrf) + '<select name="role" data-autosubmit aria-label="Role for ' + esc(s.name) + '"' + (s.id === me.id ? ' disabled' : '') + '>' + Object.entries(staff.ROLES).map(([k, v]) => '<option value="' + k + '"' + (s.role === k ? ' selected' : '') + '>' + v + '</option>').join('') + '</select><noscript><button type="submit">Save</button></noscript></form></td>' +
+        '<td>' + (s.lastLoginAt ? esc(fmtTime(s.lastLoginAt)) : 'Never') + '</td><td>' + (s.id === me.id ? '<a href="/admin/password">Change your password</a>' :
+          '<details class="mini"><summary>Reset password</summary><form method="post" action="/admin/staff/' + s.id + '/reset" class="form">' + csrfField(me.csrf) + field('Temporary password', 'password', '', { type: 'password', required: true, hint: 'At least 10 characters.', auto: 'new-password' }) + '<button class="button small" type="submit">Set password</button></form></details>' +
+          '<form method="post" action="/admin/staff/' + s.id + '/remove" class="inline">' + csrfField(me.csrf) + '<button class="link danger-text" type="submit" data-confirm="Remove ' + esc(s.name) + '’s staff account?">Remove</button></form>') + '</td></tr>').join('') + '</tbody></table></div></section>' +
+      '<section class="panel"><h2>Add a staff member</h2><form method="post" action="/admin/staff" class="form grid-form">' + csrfField(me.csrf) + field('Name', 'name', '', { required: true, max: 80 }) + field('Email address', 'email', '', { type: 'email', required: true, max: 160 }) +
+      field('Temporary password', 'password', '', { type: 'password', required: true, hint: 'At least 10 characters. They’ll choose their own when they first sign in.', auto: 'new-password' }) + select('Role', 'role', Object.entries(staff.ROLES), 'staff') +
+      '<div class="form-actions"><button class="button" type="submit">Add staff member</button></div></form></section>' });
 }
 
 const server = http.createServer(async (req, res) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'same-origin');
   res.setHeader('X-Frame-Options', 'DENY');
-  if (!res.hasHeader('Content-Security-Policy')) res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; font-src 'self'; connect-src 'self'; form-action 'self' " + (process.env.AUTH_ORIGIN || 'https://auth.hngroup.org.uk') + "; frame-ancestors 'none'; base-uri 'self'; object-src 'none'");
+  if (!res.hasHeader('Content-Security-Policy')) res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; font-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'");
   try { await route(req, res); } catch (err) {
     if (!err.status) console.error(err);
     if (!res.headersSent) messagePage(res, { customer: null, staffUser: null }, err.status || 500, err.status ? 'Something needs attention' : 'Something went wrong', err.status ? err.message : 'The register couldn’t complete that request. Please try again.');
@@ -568,6 +630,6 @@ const server = http.createServer(async (req, res) => {
 
 if (require.main === module) {
   const PORT = Number(process.env.PORT) || 4900;
-  server.listen(PORT, process.env.HOST || '127.0.0.1', () => console.log('HN Group company register on ' + PORT));
+  server.listen(PORT, process.env.HOST || '127.0.0.1', () => console.log('Company register on ' + PORT));
 }
 module.exports = { server };

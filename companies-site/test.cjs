@@ -1,6 +1,6 @@
 'use strict';
-// HN Group company register tests: public records, customer accounts, requests, filing
-// submissions and staff review, using temporary data and a stand-in for HN Group Auth.
+// Company Register tests: public records, customer accounts, requests, filing submissions,
+// staff accounts and review, and generated filings, using temporary data.
 //   node --test companies-site/test.cjs
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -8,7 +8,6 @@ const http = require('node:http');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
 
 const freePort = () => new Promise((r) => { const s = http.createServer(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => r(p)); }); });
@@ -16,38 +15,10 @@ const PDF = Buffer.from('%PDF-1.4\n1 0 obj << /Type /Page >> endobj\ntrailer << 
 
 test('company register: public records, customers, requests, submissions and staff review', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-companies-test-'));
-  const secret = 'c'.repeat(64);
-  fs.writeFileSync(path.join(dir, 'secret'), secret);
-  const [sitePort, authPort] = [await freePort(), await freePort()];
-  const SITE = 'http://127.0.0.1:' + sitePort, AUTH = 'http://127.0.0.1:' + authPort;
-
-  // Stand-in for HN Group Auth: the next sign-in is for `nextUser`.
-  let nextUser = { id: 's1', displayName: 'Owner Person', email: 'owner@hngroup.org.uk', statusAdminAllowed: true, ownerAccess: true };
-  const codes = new Map(), sessions = new Map();
-  const auth = http.createServer(async (req, res) => {
-    const url = new URL(req.url, AUTH);
-    if (url.pathname === '/authorize') {
-      assert.equal(url.searchParams.get('client_id'), 'companies');
-      const code = crypto.randomBytes(32).toString('hex'); codes.set(code, { ...nextUser });
-      res.writeHead(302, { Location: SITE + '/auth/callback?code=' + code + '&state=' + url.searchParams.get('state') }); return res.end();
-    }
-    let body = ''; for await (const c of req) body += c;
-    const data = JSON.parse(body || '{}');
-    res.setHeader('Content-Type', 'application/json');
-    if (req.headers.authorization !== 'Bearer ' + secret || data.client_id !== 'companies') { res.writeHead(401); return res.end('{"error":"no"}'); }
-    if (url.pathname === '/api/sso/exchange') {
-      const user = codes.get(data.code); codes.delete(data.code);
-      if (!user) { res.writeHead(401); return res.end('{}'); }
-      const session = crypto.randomBytes(32).toString('hex'); sessions.set(session, user);
-      return res.end(JSON.stringify({ session, user, expires: Date.now() + 3600000 }));
-    }
-    const user = sessions.get(data.session);
-    if (!user) { res.writeHead(401); return res.end('{}'); }
-    return res.end(JSON.stringify({ session: data.session, user, expires: Date.now() + 3600000 }));
-  });
-  await new Promise((r) => auth.listen(authPort, '127.0.0.1', r));
+  const sitePort = await freePort();
+  const SITE = 'http://127.0.0.1:' + sitePort;
   const child = spawn(process.execPath, [path.join(__dirname, 'server.js')], {
-    env: { ...process.env, PORT: String(sitePort), HOST: '127.0.0.1', AUTH_ORIGIN: AUTH, AUTH_BACKEND: AUTH, COMPANIES_ORIGIN: SITE, COMPANIES_DATA_DIR: path.join(dir, 'data'), STATUS_SSO_SECRET_FILE: path.join(dir, 'secret') },
+    env: { ...process.env, PORT: String(sitePort), HOST: '127.0.0.1', COMPANIES_ORIGIN: SITE, COMPANIES_DATA_DIR: path.join(dir, 'data') },
     stdio: ['ignore', 'ignore', 'inherit'],
   });
   const get = (p, cookie) => fetch(SITE + p, { redirect: 'manual', headers: cookie ? { cookie } : {} });
@@ -58,12 +29,17 @@ test('company register: public records, customers, requests, submissions and sta
   try {
     for (let i = 0; i < 50; i++) { try { if ((await fetch(SITE + '/healthz')).ok) break; } catch {} await new Promise((r) => setTimeout(r, 100)); }
 
-    // Only HN Group and Horizon Network are on the register, with unknown details left blank.
+    // The home page is a search page branded Horizon Holding Co, with no company list and no HN Group branding.
     let html = await (await get('/')).text();
+    assert.match(html, /horizon-holding-co-logo-white\.svg/); assert.match(html, /Staff sign in/);
+    assert.doesNotMatch(html, /hn-group-wordmark|Plus Jakarta|HN Group Limited|Horizon Network Limited/);
+    assert.equal((await get('/assets/brand/hn-group-wordmark.svg')).status, 404);
+    // Only HN Group and Horizon Network are on the register, with unknown details left blank.
+    html = await (await get('/search?q=limited')).text();
     assert.match(html, /HN Group Limited/); assert.match(html, /Horizon Network Limited/);
-    assert.doesNotMatch(html, /Horizon Advertising Limited|Horizon Media Group Limited|Horizon Holding Co Limited/);
+    assert.match(html, /2 results for “limited”/);
     html = await (await get('/company/horizon-network')).text();
-    assert.match(html, /Company number not recorded/);
+    assert.match(html, /Company number <strong>not recorded<\/strong>/);
     assert.match(html, /href="\/company\/hn-group">HN Group Limited</);
     assert.match(html, /Horizon Development/);
     assert.match(await (await get('/company/horizon-network/persons-with-significant-control')).text(), /HN Group Limited[\s\S]*Ownership of shares – 75% or more/);
@@ -111,24 +87,40 @@ test('company register: public records, customers, requests, submissions and sta
     assert.match(html, /has been sent for review/);
     assert.doesNotMatch(await (await get('/company/horizon-network/filing-history')).text(), /Change of registered office address/);
 
-    // Customers never get into administration; staff sign in through Auth.
+    // Customers never get into administration. Staff use the register's own accounts, starting
+    // with admin@hngroup.org.uk / admin, which must be changed at first sign-in.
     r = await get('/admin', sam);
-    assert.equal(r.status, 303); assert.match(r.headers.get('location'), /^\/auth\/login\?return=%2Fadmin/);
-    const staffLogin = async (user) => {
-      nextUser = user;
-      let s = await get('/auth/login?return=%2Fadmin');
-      const state = cookieOf(s, 'hn_companies_staff_state');
-      const a = await fetch(s.headers.get('location'), { redirect: 'manual' });
-      const cb = new URL(a.headers.get('location'));
-      s = await get(cb.pathname + cb.search, state);
-      return cookieOf(s, 'hn_companies_staff');
-    };
-    const nonAdmin = await staffLogin({ id: 's2', displayName: 'Regular Staff', email: 'staff@hngroup.org.uk', statusAdminAllowed: false });
-    assert.equal((await get('/admin', nonAdmin)).status, 403);
-    const owner = await staffLogin({ id: 's1', displayName: 'Owner Person', email: 'owner@hngroup.org.uk', statusAdminAllowed: true, ownerAccess: true });
+    assert.equal(r.status, 303); assert.equal(r.headers.get('location'), '/staff/login?return=%2Fadmin');
+    assert.match(await (await post('/staff/login', { email: 'admin@hngroup.org.uk', password: 'wrong' })).text(), /email address or password is wrong/);
+    assert.match(await (await post('/staff/login', { email: 'sam@example.com', password: 'correct horse battery' })).text(), /email address or password is wrong/);
+    r = await post('/staff/login', { email: 'Admin@HNGroup.org.uk', password: 'admin', return: '/admin' });
+    assert.equal(r.headers.get('location'), '/admin/password');
+    const owner = cookieOf(r, 'hn_companies_staff');
+    assert.equal((await get('/admin', owner)).headers.get('location'), '/admin/password');
+    html = await (await get('/admin/password', owner)).text();
+    let staffCsrf = csrfIn(html);
+    assert.match(await (await post('/admin/password', { csrf: staffCsrf, current: 'admin', password: 'admin', confirm: 'admin' }, owner)).text(), /at least 10 characters/);
+    assert.match(await (await post('/admin/password', { csrf: staffCsrf, current: 'admin', password: 'a much better password', confirm: 'a much better password' }, owner)).text(), /Your password has been changed/);
     html = await (await get('/admin', owner)).text();
     assert.match(html, /<strong>1<\/strong><span>filings to review/);
-    const staffCsrf = csrfIn(html);
+    staffCsrf = csrfIn(html);
+
+    // Administrators add and remove staff; staff can't manage staff accounts.
+    assert.match(await (await post('/admin/staff', { csrf: staffCsrf, name: 'Robin Staff', email: 'robin@example.com', password: 'temporary password 1', role: 'staff' }, owner)).text(), /Robin Staff has been added/);
+    assert.match(await (await post('/admin/staff', { csrf: staffCsrf, name: 'Dup', email: 'robin@example.com', password: 'temporary password 1', role: 'staff' }, owner)).text(), /already uses that email/);
+    r = await post('/staff/login', { email: 'robin@example.com', password: 'temporary password 1' });
+    const robin = cookieOf(r, 'hn_companies_staff');
+    assert.equal(r.headers.get('location'), '/admin/password');
+    const robinCsrf = csrfIn(await (await get('/admin/password', robin)).text());
+    await post('/admin/password', { csrf: robinCsrf, current: 'temporary password 1', password: 'robin own password', confirm: 'robin own password' }, robin);
+    assert.equal((await get('/admin', robin)).status, 200);
+    assert.equal((await get('/admin/staff', robin)).status, 403);
+    html = await (await get('/admin/staff', owner)).text();
+    const robinId = html.match(/\/admin\/staff\/([a-f0-9]{24})\/remove/)[1];
+    const ownerId = JSON.parse(fs.readFileSync(path.join(dir, 'data', 'register.json'), 'utf8')).staff.find((x) => x.email === 'admin@hngroup.org.uk').id;
+    assert.match(await (await post('/admin/staff/' + ownerId + '/remove', { csrf: staffCsrf }, owner)).text(), /can’t remove your own account/);
+    assert.match(await (await post('/admin/staff/' + robinId + '/remove', { csrf: staffCsrf }, owner)).text(), /Staff account removed/);
+    assert.equal((await get('/admin', robin)).status, 303);
 
     // Accept the submission: it becomes a public filing with its PDF.
     html = await (await get('/admin/submissions', owner)).text();
@@ -143,7 +135,7 @@ test('company register: public records, customers, requests, submissions and sta
     assert.match(doc.headers.get('content-security-policy'), /sandbox/);
     assert.deepEqual(Buffer.from(await doc.arrayBuffer()), PDF);
     const samAccount = await (await get('/account', sam)).text();
-    assert.match(samAccount, />Accepted</); assert.match(samAccount, /Note from HN Group: Thanks/);
+    assert.match(samAccount, />Accepted</); assert.match(samAccount, /Note from Horizon Holding Co: Thanks/);
 
     // Staff reply to the request; Sam sees it.
     const reqId = requestPath.split('/').pop();
@@ -160,8 +152,18 @@ test('company register: public records, customers, requests, submissions and sta
     assert.match(hnPsc, /Jamie Director[\s\S]*<dd>Individual<\/dd>[\s\S]*<dd>50.5%<\/dd>/); assert.doesNotMatch(hnPsc, /Too Much/);
     await upload('/admin/company/hn-group/filings', { csrf: staffCsrf, date: '2026-02-03', category: 'Accounts', description: 'Annual accounts' }, PDF, owner);
     html = await (await get('/company/hn-group')).text();
-    assert.match(html, /Company number 12345678/); assert.match(html, /1 Example Street<br>Town/); assert.match(html, /Annual accounts/);
+    assert.match(html, /Company number <strong>12345678<\/strong>/); assert.match(html, /1 Example Street<br>Town/); assert.match(html, /Annual accounts/);
     assert.match(await (await get('/search?q=jamie')).text(), /Director of HN Group Limited/);
+
+    // Appointing a director and recording incorporation file their documents automatically, once.
+    await post('/admin/company/hn-group', { csrf: staffCsrf, legalName: 'HN Group Limited', name: 'HN Group', number: '12345678', status: 'Active', incorporated: '2026-01-01', registeredOffice: '1 Example Street\nTown' }, owner);
+    await post('/admin/company/hn-group', { csrf: staffCsrf, legalName: 'HN Group Limited', name: 'HN Group', number: '12345678', status: 'Active', incorporated: '2026-01-01', registeredOffice: '1 Example Street\nTown' }, owner);
+    html = await (await get('/company/hn-group/filing-history')).text();
+    assert.equal((html.match(/Incorporation of HN Group Limited/g) || []).length, 1);
+    assert.equal((html.match(/Appointment of Jamie Director as a director on 2 January 2026/g) || []).length, 1);
+    const genId = html.match(/Incorporation of HN Group Limited<\/td><td><a href="\/document\/([a-f0-9]{24})/)[1];
+    const gen = Buffer.from(await (await get('/document/' + genId)).arrayBuffer()).toString('latin1');
+    assert.match(gen, /^%PDF-1\.4/); assert.match(gen, /\(HN Group Limited\)/); assert.match(gen, /%%EOF\n$/);
     assert.match(await (await get('/search?q=12345678')).text(), /HN Group Limited/);
     await post('/admin/company/horizon-network', { csrf: staffCsrf, legalName: 'Horizon Network Limited', parent: 'hn-group', hidden: 'on' }, owner);
     assert.equal((await get('/company/horizon-network')).status, 404);
@@ -180,7 +182,6 @@ test('company register: public records, customers, requests, submissions and sta
     assert.ok(saved.customers.every((c) => c.hash && c.salt && !('password' in c)));
   } finally {
     child.kill();
-    auth.close();
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });

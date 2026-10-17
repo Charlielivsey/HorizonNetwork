@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install or update only companies.hngroup.org.uk (HN Group Company Register). Existing websites,
 # Auth and staff services are untouched. Register data and uploaded PDFs live in /var/lib/hn-companies
-# and are kept. Staff administration signs in through HN Group Auth as the "companies" application.
+# and are kept. It has its own staff and customer accounts and doesn't use HN Group Auth.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOMAIN=companies.hngroup.org.uk
@@ -12,7 +12,7 @@ CHALLENGE_DIR=/var/www/hn-companies-acme
 LE_DIR="/etc/letsencrypt/live/$DOMAIN"
 [ "$(id -u)" = 0 ] || { echo 'Run with sudo.'; exit 1; }
 for tool in node pm2 nginx certbot curl python3 openssl; do command -v "$tool" >/dev/null || { echo "Required tool missing: $tool"; exit 1; }; done
-for file in server.js lib/store.js lib/staff.js lib/customers.js lib/forms.js public/assets/companies.js; do node --check "$SCRIPT_DIR/$file"; done
+for file in server.js lib/store.js lib/staff.js lib/customers.js lib/forms.js lib/pdf.js public/assets/companies.js; do node --check "$SCRIPT_DIR/$file"; done
 if python3 -c 'import socket;s=socket.socket();s.settimeout(2);exit(s.connect_ex(("127.0.0.1",4900)))'; then
     pm2 describe hn-companies >/dev/null 2>&1 || { echo 'Port 4900 belongs to another service. No changes made.'; exit 1; }
 fi
@@ -28,11 +28,6 @@ install -d -m 700 /var/lib/hn-companies
 rm -rf /opt/hn-companies/lib /opt/hn-companies/public
 cp "$SCRIPT_DIR/server.js" /opt/hn-companies/server.js
 cp -r "$SCRIPT_DIR/lib" "$SCRIPT_DIR/public" /opt/hn-companies/
-if ! grep -q "companies: { name: 'HN Group Company Register'" /opt/hn-auth/server.js 2>/dev/null; then
-    echo 'Note: HN Group Auth does not know the company register yet, so staff cannot sign in to manage it.'
-    echo '      Run: sudo bash auth-site/install.sh'
-fi
-[ -f /var/lib/hn-status-sso/secret ] || echo 'Note: the HN Group Auth integration secret is missing; sign-in needs auth-site/install.sh.'
 pm2 startOrRestart "$SCRIPT_DIR/ecosystem.config.cjs" --update-env
 healthy=0
 for attempt in {1..15}; do
