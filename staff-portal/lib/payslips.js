@@ -828,7 +828,7 @@ function yearCsv(start) {
     const p = store.getPerson(s.personId);
     const t = totals(s);
     const other = sum(s.deductions.filter((l) => !AUTO_KINDS.includes(l.kind)));
-    rows.push([p ? p.displayName : "Former staff", s.employeeNumber, s.niNumber, s.taxCode, periodLabel(s.period), s.payDate, t.gross, taxablePayOf(s), t.tax, t.ni, t.pension,
+    rows.push([p ? `${p.firstName || ""} ${p.lastName || ""}`.trim() || p.displayName : "Former staff", s.employeeNumber, s.niNumber, s.taxCode, periodLabel(s.period), s.payDate, t.gross, taxablePayOf(s), t.tax, t.ni, t.pension,
       sum(s.deductions.filter((l) => l.kind === "studentLoan")), other, t.reimbursed, t.net,
       sum(s.employerItems.filter((l) => /National Insurance/i.test(l.label))), sum(s.employerItems.filter((l) => /pension/i.test(l.label))), t.cost]);
   }

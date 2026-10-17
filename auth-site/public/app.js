@@ -213,7 +213,7 @@ function clearRemembered() {
 async function startResume() {
   if (!remembered) return;
   resumeMode = true; resetPin(); $('resume-portrait').hidden = false; $('forget').hidden = false;
-  $('card-title').textContent = 'Welcome back, ' + remembered.firstName;
+  $('card-title').textContent = 'Welcome back, ' + (remembered.displayName || remembered.firstName);
   $('subtitle').textContent = 'Enter your six-digit PIN to resume your session.';
   $('pin-identity').textContent = remembered.username;
   $('pin').querySelector('[type=submit]').innerHTML = 'Resume session <span aria-hidden="true">→</span>';

@@ -816,7 +816,8 @@
         const UK_TZ = "Europe/London";
         const hour = Number(fmt(profileTz, { hour: "2-digit", hourCycle: "h23" }));
         const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-        const firstName = me.firstName || me.displayName.split(" ")[0];
+        // Greetings use the name people chose to be known by.
+        const firstName = me.displayName || me.firstName;
 
 
         root.innerHTML =
@@ -1356,7 +1357,7 @@
             "</div>" +
 
             '<div class="profile-actions">' + (p.id !== state.me.id && !p.system ? '<button type="button" class="btn btn-ghost" data-message-person="' + esc(p.id) + '">' + icon("message") + "Message</button>" : "") +
-            (email ? '<a class="btn btn-primary" href="mailto:' + esc(email) + '">' + icon("mail") + "Email " + esc(p.firstName || p.displayName) + "</a>" : "") + "</div>",
+            (email ? '<a class="btn btn-primary" href="mailto:' + esc(email) + '">' + icon("mail") + "Email " + esc(p.displayName || p.firstName) + "</a>" : "") + "</div>",
             { cls: "modal-profile" }
         );
         m.el.addEventListener("click", async function (ev) {
@@ -6007,7 +6008,7 @@
 
             '<section class="panel span-2"><h2 class="panel-title">Employment details</h2>' +
             '<dl class="facts">' +
-            (me.system ? "" : "<dt>Name</dt><dd>" + esc(me.firstName + " " + me.lastName) + "</dd>") +
+            (me.system ? "" : "<dt>Full name</dt><dd>" + esc(me.firstName + " " + me.lastName) + "</dd><dt>Display name</dt><dd>" + esc(me.displayName) + "</dd>") +
             "<dt>Roles</dt><dd>" + rolesHtml(me) + "</dd>" +
             "<dt>Sign-in</dt><dd>" + esc(me.username) + "</dd>" +
             (me.emails.length ? "<dt>Email</dt><dd>" + me.emails.map(function (e) {
@@ -6740,7 +6741,7 @@
             '<div class="force-wrap"><div class="force-card code-setup">' +
             '<div class="success-mark">' + icon("shield") + "</div>" +
             '<h1 class="center">Set your sign-in code</h1>' +
-            '<p class="muted center">' + esc(me.firstName || me.displayName) + ", the portal now asks for a personal 6-digit code as well as your password each time you sign in. Choose one you\u2019ll remember.</p>" +
+            '<p class="muted center">' + esc(me.displayName || me.firstName) + ", the portal now asks for a personal 6-digit code as well as your password each time you sign in. Choose one you\u2019ll remember.</p>" +
             '<form id="setcode-form" novalidate>' +
             '<div class="code-label">Choose a 6-digit code</div>' + codeBoxesHtml("sc-new", "New code") +
             '<div class="code-label">Type it again</div>' + codeBoxesHtml("sc-confirm", "Confirm code") +
@@ -6785,7 +6786,7 @@
         root.innerHTML =
             '<div class="force-wrap"><div class="force-card">' +
             '<div class="success-mark">' + icon("lock") + "</div>" +
-            '<h1 class="center">Welcome, ' + esc(me.firstName || me.displayName) + "</h1>" +
+            '<h1 class="center">Welcome, ' + esc(me.displayName || me.firstName) + "</h1>" +
             '<p class="muted center">' + (me.passwordTemporary ? "You signed in with a temporary password. Create your own password to continue." : "Your password has expired. Choose a new one to continue.") + "</p>" +
             '<form id="force-form" novalidate>' +
             '<label for="fp-new">New password</label><input type="password" id="fp-new" autocomplete="new-password" autofocus>' +

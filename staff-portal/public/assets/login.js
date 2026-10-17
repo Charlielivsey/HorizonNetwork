@@ -206,7 +206,7 @@
         document.getElementById("code-mark").hidden = !!resumeMode;
         document.getElementById("resume-avatar").hidden = !resumeMode;
         document.getElementById("code-forget").hidden = !resumeMode;
-        document.getElementById("code-title").textContent = resumeMode ? "Welcome back, " + remembered.firstName : "Enter your code";
+        document.getElementById("code-title").textContent = resumeMode ? "Welcome back, " + (remembered.displayName || remembered.firstName) : "Enter your code";
         document.getElementById("code-sub").innerHTML = "";
         const sub = document.getElementById("code-sub");
         sub.appendChild(document.createTextNode(resumeMode ? "Enter your 6-digit sign-in code to carry on as " : "Enter your 6-digit sign-in code for "));
