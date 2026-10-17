@@ -1,0 +1,1 @@
+module.exports={apps:[{name:'hn-companies',script:'/opt/hn-companies/server.js',cwd:'/opt/hn-companies',instances:1,exec_mode:'fork',autorestart:true,max_memory_restart:'256M',env:{NODE_ENV:'production',HOST:'127.0.0.1',PORT:4900,COMPANIES_DATA_DIR:'/var/lib/hn-companies',COMPANIES_PUBLIC_DIR:'/opt/hn-companies/public'}}]};

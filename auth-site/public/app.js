@@ -22,6 +22,7 @@ const APPS = {
   portal: { name: 'Staff portal', short: 'the staff portal', allowed: () => true,
     granted: 'Your staff portal account is ready.', restricted: '' },
   wiki: { name: 'HN Group Wiki', short: 'the wiki', allowed: () => true, granted: 'You can edit HN Group Wiki articles.', restricted: '' },
+  companies: { name: 'HN Group Company Register administration', short: 'the company register', allowed: user => user.statusAdminAllowed || user.ownerAccess, granted: 'You can manage the HN Group Company Register.', restricted: 'Only the system owner and Super Admin members can manage the company register.' },
   branding: { name: 'HN Group brand centre', short: 'the brand centre', allowed: () => true, granted: 'You can use the HN Group brand centre.', restricted: '' },
 };
 const app = Object.prototype.hasOwnProperty.call(APPS, client) ? APPS[client] : null;

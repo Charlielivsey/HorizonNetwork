@@ -76,6 +76,15 @@
     ]
   },
   {
+    "id": "companies",
+    "name": "Company register",
+    "process": "hn-companies",
+    "port": 4900,
+    "hosts": [
+      "companies.hngroup.org.uk"
+    ]
+  },
+  {
     "id": "media",
     "name": "Horizon Media Group",
     "process": "hn-media",
