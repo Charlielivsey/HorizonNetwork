@@ -1,4 +1,9 @@
-# HN Group VPN for Mac
+# HN Group Secure Terminal (macOS)
+
+The HN Group VPN app for Mac, renamed Secure Terminal: it connects this Mac to HN Group's server over
+the VPN (only traffic to the server, 10.88.0.1, uses it) and opens SSH sessions to the server from its
+SSH page, with the address and username filled in and only the password asked for.
+
 
 A menu bar app for HN Group staff. It signs in with your HN Group staff account through HN Group
 Auth in your browser, registers this Mac on the HN Group VPN with a key made on the Mac (the private key

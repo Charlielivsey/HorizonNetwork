@@ -8,7 +8,12 @@ import Security
 @MainActor
 final class VPNModel: ObservableObject {
     enum Stage { case signIn, waiting, ready }
-    enum Section: Hashable { case connection, profile, settings }
+    enum Section: Hashable { case connection, ssh, profile, settings }
+    /// The VPS's address inside the VPN. Only traffic to it goes through the tunnel (split tunnel).
+    static let serverAddress = "10.88.0.1"
+    /// Bumped when this Mac's WireGuard configuration must be fetched and installed again
+    /// (2: split tunnel, only the server's traffic goes through the VPN).
+    static let configVersion = "2"
     enum UpdateState: Equatable { case idle, checking, upToDate, downloading, installing, failed(String) }
 
     /// One model for the app, so links back from the browser reach it.
@@ -30,6 +35,11 @@ final class VPNModel: ObservableObject {
     @Published var update: AppRelease?
     @Published var updateState: UpdateState = .idle
     @Published var helperOutdated = Paths.helperOutdated
+    @Published var needsReconfigure = false
+    /// Whether the server's SSH port answers through the VPN (nil while unknown).
+    @Published var serverReachable: Bool?
+    @Published var sshUser: String = UserDefaults.standard.string(forKey: "sshUser") ?? "root"
+    @Published var sshBusy = false
     private var avatarTag: String?
     private var lastUpdateCheck = Date.distantPast
 
@@ -110,7 +120,7 @@ final class VPNModel: ObservableObject {
             _ = try? await api.send("api/devices/" + device, method: "DELETE", as: OKResponse.self)
         }
         _ = try? await api.send("api/sign-out", method: "POST", body: [:], as: OKResponse.self)
-        for key in ["token", "deviceId", "privateKey"] { Keychain.set(key, nil) }
+        for key in ["token", "deviceId", "privateKey", "configVersion"] { Keychain.set(key, nil) }
         api.token = nil; user = nil; isSetUp = false; deviceName = nil; connected = false; ip = nil
         avatar = nil; avatarTag = nil; profile = nil; devices = []; update = nil; updateState = .idle; section = .connection
         stage = .signIn
@@ -135,6 +145,7 @@ final class VPNModel: ObservableObject {
             }
             isSetUp = device != nil && Paths.helperInstalled && FileManager.default.fileExists(atPath: "/usr/local/etc/hn-vpn")
             helperOutdated = Paths.helperOutdated
+            needsReconfigure = isSetUp && Keychain.get("configVersion") != VPNModel.configVersion
             if section == .profile { await loadProfile() }
             await checkStatus()
             if Date().timeIntervalSince(lastUpdateCheck) > 6 * 3600 { await checkForUpdate(quietly: true) }
@@ -149,6 +160,31 @@ final class VPNModel: ObservableObject {
         let result = await Shell.run("/usr/bin/sudo", ["-n", Paths.helper, "status"])
         let now = result.output.trimmingCharacters(in: .whitespacesAndNewlines) == "up"
         if now != connected || ip == nil { connected = now; await checkIP() }
+        if connected { await checkServer() } else { serverReachable = nil }
+    }
+
+    /// Checks the server's SSH port answers through the VPN.
+    func checkServer() async {
+        let result = await Shell.run("/usr/bin/nc", ["-z", "-G", "3", "-w", "3", VPNModel.serverAddress, "22"])
+        serverReachable = result.status == 0
+    }
+
+    /// Fetches this Mac's current VPN configuration and installs it (one password prompt), for
+    /// example when the VPN moved to a split tunnel.
+    func reconfigure() async {
+        guard !busy, let deviceId = Keychain.get("deviceId"), let key = Keychain.get("privateKey") else { return }
+        error = nil; busy = true; defer { busy = false }
+        do {
+            struct Wrapped: Decodable { let connection: Connection }
+            let fresh = try await api.send("api/devices/" + deviceId + "/connection", as: Wrapped.self)
+            let wasConnected = connected
+            if wasConnected { _ = await Shell.run("/usr/bin/sudo", ["-n", Paths.helper, "down"]) }
+            try await install(config: fresh.connection.config.replacingOccurrences(of: "<this device’s private key>", with: key))
+            Keychain.set("configVersion", VPNModel.configVersion)
+            needsReconfigure = false
+            if wasConnected { _ = await Shell.run("/usr/bin/sudo", ["-n", Paths.helper, "up"]) }
+            await checkStatus()
+        } catch { self.error = error.localizedDescription }
     }
 
     func checkIP() async {
@@ -173,6 +209,8 @@ final class VPNModel: ObservableObject {
             try await install(config: config)
             Keychain.set("privateKey", key.privateBase64)
             Keychain.set("deviceId", created.device.id)
+            Keychain.set("configVersion", VPNModel.configVersion)
+            needsReconfigure = false
             deviceName = created.device.name
             isSetUp = true
         } catch { self.error = error.localizedDescription }
@@ -200,7 +238,7 @@ final class VPNModel: ObservableObject {
             "install -m 600 -o root -g wheel \(q(conf.path)) \(Paths.config)",
             "install -m 440 -o root -g wheel \(q(rule.path)) \(Paths.sudoers)",
         ].joined(separator: "; ")
-        let result = await Shell.runAsAdmin(command, prompt: "HN Group VPN needs to set up this Mac. This is only needed once.")
+        let result = await Shell.runAsAdmin(command, prompt: "HN Group Secure Terminal needs to set up this Mac’s VPN connection.")
         if result.status != 0 {
             throw APIError(message: result.output.contains("User canceled") || result.output.contains("-128") ? "Setup was cancelled." : "Setup didn’t finish: " + result.output.trimmingCharacters(in: .whitespacesAndNewlines), status: 0)
         }
@@ -301,36 +339,46 @@ final class VPNModel: ObservableObject {
                   let app = try FileManager.default.contentsOfDirectory(at: work, includingPropertiesForKeys: nil).first(where: { $0.pathExtension == "app" }),
                   let bundle = Bundle(url: app), bundle.bundleIdentifier == Bundle.main.bundleIdentifier,
                   Int(bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "") ?? 0 > AppInfo.build
-            else { throw APIError(message: "The update isn’t a newer HN Group VPN app.", status: 0) }
+            else { throw APIError(message: "The update isn’t a newer Secure Terminal app.", status: 0) }
             guard await Shell.run("/usr/bin/codesign", ["--verify", "--deep", app.path]).status == 0 else { throw APIError(message: "The update’s signature didn’t check out, so it wasn’t installed.", status: 0) }
             _ = await Shell.run("/usr/bin/xattr", ["-dr", "com.apple.quarantine", app.path])
-            try await replaceApp(with: app)
-            relaunch()
+            let installed = try await replaceApp(with: app)
+            relaunch(installed)
         } catch {
             try? FileManager.default.removeItem(at: work)
             updateState = .failed(error.localizedDescription)
         }
     }
 
-    /// Swaps this app's bundle for the new one. The running copy keeps going until it relaunches.
-    private func replaceApp(with app: URL) async throws {
-        let target = Bundle.main.bundleURL
+    /// Swaps this app's bundle for the new one (taking the new one's name, if the app was renamed).
+    /// The running copy keeps going until it relaunches. Returns where the new app now is.
+    private func replaceApp(with app: URL) async throws -> URL {
+        let current = Bundle.main.bundleURL
+        let target = current.deletingLastPathComponent().appendingPathComponent(app.lastPathComponent)
         do {
-            _ = try FileManager.default.replaceItemAt(target, withItemAt: app)
+            if target.path == current.path {
+                _ = try FileManager.default.replaceItemAt(target, withItemAt: app)
+            } else {
+                if FileManager.default.fileExists(atPath: target.path) { _ = try FileManager.default.replaceItemAt(target, withItemAt: app) }
+                else { try FileManager.default.moveItem(at: app, to: target) }
+                try? FileManager.default.removeItem(at: current)
+            }
+            return target
         } catch {
             // In a folder this Mac user can't change (such as /Applications on a shared Mac): ask once.
             let q = Shell.quote
-            let command = "set -e; rm -rf \(q(target.path + ".old")); mv \(q(target.path)) \(q(target.path + ".old")); /usr/bin/ditto \(q(app.path)) \(q(target.path)); rm -rf \(q(target.path + ".old"))"
-            let result = await Shell.runAsAdmin(command, prompt: "HN Group VPN needs your password to install its update.")
+            let command = "set -e; rm -rf \(q(target.path + ".new")); /usr/bin/ditto \(q(app.path)) \(q(target.path + ".new")); rm -rf \(q(current.path)) \(q(target.path)); mv \(q(target.path + ".new")) \(q(target.path))"
+            let result = await Shell.runAsAdmin(command, prompt: "HN Group Secure Terminal needs your password to install its update.")
             if result.status != 0 { throw APIError(message: result.output.contains("-128") ? "The update was cancelled." : "The update couldn’t be installed.", status: 0) }
+            return target
         }
     }
 
-    private func relaunch() {
+    private func relaunch(_ app: URL) {
         let pid = ProcessInfo.processInfo.processIdentifier
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
-        process.arguments = ["-c", "while /bin/kill -0 \(pid) 2>/dev/null; do sleep 0.2; done; /usr/bin/open \(Shell.quote(Bundle.main.bundleURL.path))"]
+        process.arguments = ["-c", "while /bin/kill -0 \(pid) 2>/dev/null; do sleep 0.2; done; /usr/bin/open \(Shell.quote(app.path))"]
         try? process.run()
         NSApp.terminate(nil)
     }
@@ -339,9 +387,50 @@ final class VPNModel: ObservableObject {
     func updateHelper() async {
         guard let bundled = Bundle.main.url(forResource: "hn-vpn-ctl", withExtension: nil) else { return }
         busy = true; defer { busy = false }
-        let result = await Shell.runAsAdmin("install -m 755 -o root -g wheel \(Shell.quote(bundled.path)) \(Paths.helper)", prompt: "HN Group VPN needs to finish its update.")
+        let result = await Shell.runAsAdmin("install -m 755 -o root -g wheel \(Shell.quote(bundled.path)) \(Paths.helper)", prompt: "HN Group Secure Terminal needs to finish its update.")
         if result.status != 0 && !result.output.contains("-128") { error = "The update couldn’t finish: " + lastLine(result.output) }
         helperOutdated = Paths.helperOutdated
+    }
+
+    // MARK: SSH
+
+    /// Opens an SSH session to the server in Terminal, signed in with the password typed in the app.
+    /// The password is handed to ssh once through a private, self-deleting askpass helper; it's never
+    /// saved, put on a command line or shown.
+    func openSSH(password: String) async {
+        let user = sshUser.trimmingCharacters(in: .whitespaces)
+        guard user.range(of: "^[a-z_][a-z0-9_.-]{0,31}$", options: .regularExpression) != nil else { error = "Enter a valid username."; return }
+        guard !password.isEmpty else { error = "Enter your password."; return }
+        UserDefaults.standard.set(user, forKey: "sshUser")
+        error = nil; sshBusy = true; defer { sshBusy = false }
+        if !connected { await connect() }
+        guard connected else { error = error ?? "Connect to the VPN first."; return }
+        do {
+            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hn-ssh-" + UUID().uuidString)
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            let secret = dir.appendingPathComponent("p"), askpass = dir.appendingPathComponent("askpass"), command = dir.appendingPathComponent("HN Group server.command")
+            FileManager.default.createFile(atPath: secret.path, contents: Data(password.utf8), attributes: [.posixPermissions: 0o600])
+            let q = Shell.quote
+            // Gives the password once, then deletes it.
+            try "#!/bin/sh\nif [ -f \(q(secret.path)) ]; then cat \(q(secret.path)); rm -f \(q(secret.path)); else exit 1; fi\n"
+                .write(to: askpass, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: askpass.path)
+            let script = [
+                "#!/bin/bash",
+                "rm -f \"$0\"",
+                "clear",
+                "printf '\\033]0;HN Group server\\007'",
+                "echo 'HN Group Secure Terminal · connecting to \(user)@\(VPNModel.serverAddress) through the VPN…'",
+                "SSH_ASKPASS=\(q(askpass.path)) SSH_ASKPASS_REQUIRE=force DISPLAY=hn /usr/bin/ssh -o StrictHostKeyChecking=accept-new -o NumberOfPasswordPrompts=1 -o ServerAliveInterval=30 \(q(user))@\(VPNModel.serverAddress)",
+                "rm -rf \(q(dir.path))",
+            ].joined(separator: "\n") + "\n"
+            try script.write(to: command, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: command.path)
+            let terminal = URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app")
+            _ = try await NSWorkspace.shared.open([command], withApplicationAt: terminal, configuration: NSWorkspace.OpenConfiguration())
+            // If the session never asks for the password, don't leave it behind.
+            Task { try? await Task.sleep(nanoseconds: 60_000_000_000); try? FileManager.default.removeItem(at: secret) }
+        } catch { self.error = "Terminal couldn’t be opened: " + error.localizedDescription }
     }
 
     // MARK: Other

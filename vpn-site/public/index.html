@@ -7,8 +7,8 @@
 <meta name="theme-color" content="#5514B4">
 <title>HN Group VPN</title>
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/assets/vpn.css?v=5">
-<script src="/assets/vpn.js?v=5" defer></script>
+<link rel="stylesheet" href="/assets/vpn.css?v=6">
+<script src="/assets/vpn.js?v=6" defer></script>
 </head>
 <body>
 <header class="top">
@@ -27,8 +27,8 @@
   <section class="landing wrap" id="view-sign-in" hidden>
     <div class="landing-copy">
       <p class="eyebrow">Staff only</p>
-      <h1>Private internet, wherever you work.</h1>
-      <p class="lead">The HN Group VPN sends all of your device’s internet traffic privately through HN Group’s own server in the UK, so you can work safely on any Wi‑Fi.</p>
+      <h1>Secure access to HN Group’s server.</h1>
+      <p class="lead">The HN Group VPN gives your devices a private, encrypted link to HN Group’s server in the UK. Only traffic to the server goes through it; everything else uses your normal internet.</p>
       <p><a class="btn btn-primary btn-large" href="/auth/login">Sign in with HN Group Auth</a></p>
       <p class="muted small">Use your HN Group staff account. You’ll need your password and six-digit PIN.</p>
     </div>
@@ -37,8 +37,8 @@
       <div class="orbit o1"></div><div class="orbit o2"></div>
     </div>
     <ul class="features">
-      <li><strong>Everything encrypted</strong><span>WireGuard, a fast modern VPN, protects all of your traffic.</span></li>
-      <li><strong>One click on a Mac</strong><span>The HN Group VPN app sets up your Mac and connects with one button.</span></li>
+      <li><strong>Private link to the server</strong><span>WireGuard, a fast modern VPN, encrypts everything between your device and HN Group’s server.</span></li>
+      <li><strong>Secure Terminal for Mac</strong><span>Connect with one button, then open an SSH session to the server with just your password.</span></li>
       <li><strong>Phones and PCs too</strong><span>Add an iPhone, iPad, Android or Windows device with the free WireGuard app.</span></li>
     </ul>
   </section>
@@ -49,7 +49,7 @@
       <div>
         <p class="eyebrow">HN Group VPN</p>
         <h1 id="greeting">Your VPN</h1>
-        <p class="muted">When it’s on, all of a device’s internet traffic goes privately through HN Group’s server.</p>
+        <p class="muted">When it’s on, a device can reach HN Group’s server privately at 10.88.0.1. Everything else uses its normal internet.</p>
       </div>
       <div class="stats">
         <div class="stat"><strong id="stat-devices">0</strong><span>devices</span></div>
@@ -59,10 +59,10 @@
 
     <div class="grid">
       <section class="card feature-card">
-        <img class="app-icon" src="/assets/vpn-app.png?v=2" alt="" width="72" height="72">
-        <h2>HN Group VPN for Mac</h2>
-        <p>Sign in with HN Group Auth and the app sets up your Mac and connects with one button.</p>
-        <p><button class="btn btn-primary" id="get-mac-app" type="button">Download the Mac app</button></p>
+        <img class="app-icon" src="/assets/vpn-app.png?v=3" alt="" width="72" height="72">
+        <h2>HN Group Secure Terminal for Mac</h2>
+        <p>Sign in with HN Group Auth, connect with one button and open an SSH session to the server from the app.</p>
+        <p><button class="btn btn-primary" id="get-mac-app" type="button">Download Secure Terminal</button></p>
         <p class="version" id="mac-app-version" hidden></p>
         <p class="muted small" id="mac-app-note"></p>
       </section>
@@ -99,7 +99,7 @@
       <div class="card-head"><h2>All devices</h2><span class="pill pill-accent">Administrators</span></div>
       <div id="all-devices"></div>
       <details class="admin-app">
-        <summary>Publish a Mac app build by hand</summary>
+        <summary>Publish a Secure Terminal build by hand</summary>
         <p class="muted small">Each new build from GitHub is published automatically when the VPS updates. Upload a zip here only to publish a different build.</p>
         <form id="app-form" class="form inline"><input id="app-file" type="file" accept=".zip,application/zip" required aria-label="Mac app zip"><button class="btn btn-ghost" type="submit">Publish</button></form>
         <p class="error" id="app-error" role="alert" hidden></p>

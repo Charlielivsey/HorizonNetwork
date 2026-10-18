@@ -15,7 +15,6 @@ const macApp = require('./lib/macapp');
 const PUBLIC = process.env.VPN_PUBLIC_DIR || path.join(__dirname, 'public');
 const DATA_DIR = process.env.VPN_DATA_DIR || '/var/lib/hn-vpn';
 const ENDPOINT = process.env.VPN_ENDPOINT || 'vpn.hngroup.org.uk:51820';
-const DNS = process.env.VPN_DNS || '1.1.1.1, 1.0.0.1';
 const APP_FILE = path.join(DATA_DIR, 'HN-Group-VPN-macOS.zip');
 const MAX_APP = 80 * 1024 * 1024;
 const fail = staff.fail;
@@ -57,26 +56,27 @@ const escHtml = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ 
 function showPage(res, status, title, text, cookies, appUrl) {
   res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Set-Cookie': cookies || [] });
   res.end('<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">' +
-    (appUrl ? '<meta http-equiv="refresh" content="0;url=' + escHtml(appUrl) + '">' : '') + '<title>' + escHtml(title) + ' · HN Group VPN</title><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/assets/vpn.css?v=5"></head><body>' +
+    (appUrl ? '<meta http-equiv="refresh" content="0;url=' + escHtml(appUrl) + '">' : '') + '<title>' + escHtml(title) + ' · HN Group VPN</title><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/assets/vpn.css?v=6"></head><body>' +
     '<header class="top"><div class="wrap top-inner"><a class="brand" href="/"><img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="118" height="41"><img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="118" height="41"><span class="brand-name">VPN</span></a></div><div class="stripe" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></header>' +
     '<main class="wrap"><section class="card narrow"><h1>' + escHtml(title) + '</h1><p class="muted">' + escHtml(text) + '</p><p>' + (appUrl ? '<a class="btn btn-primary" href="' + escHtml(appUrl) + '">Open HN Group VPN</a>' : '<a class="btn btn-primary" href="/">Back to the VPN</a>') + '</p></section></main></body></html>');
 }
 
 // What a device needs to connect. The private key is only included when the server made it.
+// Split tunnel: only traffic to the server itself (10.88.0.1 / fd88:88::1) goes through the VPN.
+const SERVER_ADDRESSES = ['10.88.0.1/32', 'fd88:88::1/128'];
 async function connection(d, privateKey) {
   const serverKey = await wg.serverPublicKey();
   const config = '[Interface]\n' +
-    '# HN Group VPN · ' + d.name.replace(/[\r\n]/g, ' ') + '\n' +
+    '# HN Group VPN · ' + d.name.replace(/[\r\n]/g, ' ') + ' · only traffic to the HN Group server (10.88.0.1) uses the VPN\n' +
     'PrivateKey = ' + (privateKey || '<this device’s private key>') + '\n' +
-    'Address = ' + d.ipv4 + '/32, ' + d.ipv6 + '/128\n' +
-    'DNS = ' + DNS + '\n\n' +
+    'Address = ' + d.ipv4 + '/32, ' + d.ipv6 + '/128\n\n' +
     '[Peer]\n' +
     'PublicKey = ' + serverKey + '\n' +
     'PresharedKey = ' + d.presharedKey + '\n' +
     'Endpoint = ' + ENDPOINT + '\n' +
-    'AllowedIPs = 0.0.0.0/0, ::/0\n' +
+    'AllowedIPs = ' + SERVER_ADDRESSES.join(', ') + '\n' +
     'PersistentKeepalive = 25\n';
-  return { address: [d.ipv4 + '/32', d.ipv6 + '/128'], dns: DNS.split(',').map((x) => x.trim()), serverPublicKey: serverKey, presharedKey: d.presharedKey, endpoint: ENDPOINT, allowedIPs: ['0.0.0.0/0', '::/0'], config };
+  return { address: [d.ipv4 + '/32', d.ipv6 + '/128'], serverAddress: '10.88.0.1', serverPublicKey: serverKey, presharedKey: d.presharedKey, endpoint: ENDPOINT, allowedIPs: SERVER_ADDRESSES, configVersion: 2, config };
 }
 
 async function deviceView(list) {
@@ -176,7 +176,7 @@ async function api(req, res, route) {
     const body = await readBody(req, MAX_APP);
     if (body.slice(0, 4).toString('binary') !== 'PK\x03\x04') throw fail(400, 'Upload the app as a .zip file.');
     let plist = null; try { plist = macApp.infoPlist(body); } catch { plist = null; }
-    if (!plist || !/CFBundleShortVersionString/.test(plist) || !/<key>CFBundleIdentifier<\/key>\s*<string>uk\.org\.hngroup\.vpn<\/string>/.test(plist)) throw fail(400, 'That zip doesn’t contain the HN Group VPN app.');
+    if (!plist || !/CFBundleShortVersionString/.test(plist) || !/<key>CFBundleIdentifier<\/key>\s*<string>uk\.org\.hngroup\.vpn<\/string>/.test(plist)) throw fail(400, 'That zip doesn’t contain the HN Group Secure Terminal app.');
     const tmp = APP_FILE + '.tmp';
     fs.writeFileSync(tmp, body, { mode: 0o600 }); fs.renameSync(tmp, APP_FILE);
     const a = appView();
@@ -186,7 +186,7 @@ async function api(req, res, route) {
   if (route === '/api/mac-app' && method === 'GET') {
     let stat; try { stat = fs.statSync(APP_FILE); } catch { throw fail(404, 'The Mac app hasn’t been published yet.'); }
     const a = appView();
-    const name = 'HN-Group-VPN-macOS' + (a && a.version ? '-' + a.version : '') + '.zip';
+    const name = 'HN-Group-Secure-Terminal-macOS' + (a && a.version ? '-' + a.version : '') + '.zip';
     res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Length': stat.size, 'Content-Disposition': 'attachment; filename="' + name + '"', 'Cache-Control': 'no-store', ...(a ? { 'X-Content-SHA256': a.sha256 } : {}) });
     fs.createReadStream(APP_FILE).pipe(res);
     return;
