@@ -4,73 +4,111 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex">
+<meta name="theme-color" content="#5514B4">
 <title>HN Group VPN</title>
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/assets/vpn.css?v=2">
-<script src="/assets/vpn.js?v=2" defer></script>
+<link rel="stylesheet" href="/assets/vpn.css?v=3">
+<script src="/assets/vpn.js?v=3" defer></script>
 </head>
 <body>
 <header class="top">
   <div class="wrap top-inner">
     <a class="brand" href="/"><img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="118" height="41"><img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="118" height="41"><span class="brand-name">VPN</span></a>
-    <div class="top-actions" id="top-actions" hidden><span id="who" class="who"></span><button class="btn btn-ghost" id="sign-out" type="button">Sign out</button></div>
+    <div class="top-actions" id="top-actions" hidden>
+      <span class="avatar" id="avatar" aria-hidden="true"></span><span id="who" class="who"></span>
+      <button class="btn btn-ghost btn-small" id="sign-out" type="button">Sign out</button>
+    </div>
   </div>
   <div class="stripe" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
 </header>
-<main class="wrap" id="main">
+<main id="main">
 
-  <section class="card narrow" id="view-sign-in" hidden>
-    <p class="eyebrow">Staff only</p>
-    <h1>Sign in to the HN Group VPN</h1>
-    <p class="muted">Sign in with your HN Group staff account through HN Group Auth.</p>
-    <p><a class="btn btn-primary btn-wide" href="/auth/login">Sign in with HN Group Auth</a></p>
+  <!-- Signed out -->
+  <section class="landing wrap" id="view-sign-in" hidden>
+    <div class="landing-copy">
+      <p class="eyebrow">Staff only</p>
+      <h1>Private internet, wherever you work.</h1>
+      <p class="lead">The HN Group VPN sends all of your device’s internet traffic privately through HN Group’s own server in the UK, so you can work safely on any Wi‑Fi.</p>
+      <p><a class="btn btn-primary btn-large" href="/auth/login">Sign in with HN Group Auth</a></p>
+      <p class="muted small">Use your HN Group staff account. You’ll need your password and six-digit PIN.</p>
+    </div>
+    <div class="landing-art" aria-hidden="true">
+      <div class="shield"><svg viewBox="0 0 120 140"><path d="M60 6 106 23v40c0 32-20 56-46 70C34 119 14 95 14 63V23Z"/></svg><span>HN</span></div>
+      <div class="orbit o1"></div><div class="orbit o2"></div>
+    </div>
+    <ul class="features">
+      <li><strong>Everything encrypted</strong><span>WireGuard, a fast modern VPN, protects all of your traffic.</span></li>
+      <li><strong>One click on a Mac</strong><span>The HN Group VPN app sets up your Mac and connects with one button.</span></li>
+      <li><strong>Phones and PCs too</strong><span>Add an iPhone, iPad, Android or Windows device with the free WireGuard app.</span></li>
+    </ul>
   </section>
 
-  <section id="view-home" hidden>
+  <!-- Signed in -->
+  <section class="wrap" id="view-home" hidden>
     <div class="hero">
-      <h1>Your VPN</h1>
-      <p class="muted">When it’s on, all of your device’s internet traffic goes privately through HN Group’s server.</p>
+      <div>
+        <p class="eyebrow">HN Group VPN</p>
+        <h1 id="greeting">Your VPN</h1>
+        <p class="muted">When it’s on, all of a device’s internet traffic goes privately through HN Group’s server.</p>
+      </div>
+      <div class="stats">
+        <div class="stat"><strong id="stat-devices">0</strong><span>devices</span></div>
+        <div class="stat"><strong id="stat-online">0</strong><span>connected now</span></div>
+      </div>
     </div>
+
     <div class="grid">
-      <section class="card">
-        <h2>On a Mac</h2>
-        <p>Use the HN Group VPN app. Sign in with your staff account and it sets up your Mac and connects with one click.</p>
+      <section class="card feature-card">
+        <img class="app-icon" src="/assets/vpn-app.png" alt="" width="72" height="72">
+        <h2>HN Group VPN for Mac</h2>
+        <p>Sign in with HN Group Auth and the app sets up your Mac and connects with one button.</p>
         <p><button class="btn btn-primary" id="get-mac-app" type="button">Download the Mac app</button></p>
         <p class="muted small" id="mac-app-note"></p>
       </section>
-      <section class="card">
-        <h2>On another device</h2>
-        <p>For an iPhone, iPad, Android phone or Windows PC, install the free <strong>WireGuard</strong> app, then add a device here and import the file it gives you.</p>
+      <section class="card feature-card">
+        <div class="icon-tile" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M10 18h4"/></svg></div>
+        <h2>Phone, tablet or PC</h2>
+        <ol class="steps">
+          <li>Install the free <strong>WireGuard</strong> app (<a href="https://apps.apple.com/app/wireguard/id1441195209" rel="noopener">iPhone and iPad</a>, <a href="https://play.google.com/store/apps/details?id=com.wireguard.android" rel="noopener">Android</a>, <a href="https://www.wireguard.com/install/" rel="noopener">Windows</a>).</li>
+          <li>Name the device here and add it.</li>
+          <li>Import the file you get into WireGuard and switch it on.</li>
+        </ol>
         <form id="add-form" class="form inline">
-          <label>Device name<input id="device-name" maxlength="60" placeholder="For example, Charlie’s iPhone" required></label>
+          <label class="sr-only" for="device-name">Device name</label>
+          <input id="device-name" maxlength="60" placeholder="For example, Charlie’s iPhone" required>
           <button class="btn btn-primary" type="submit">Add device</button>
         </form>
         <p class="error" id="add-error" role="alert" hidden></p>
       </section>
     </div>
-    <section class="card" id="new-config" hidden>
-      <h2>Your new device is ready</h2>
-      <p>Download the file and open it in the WireGuard app, or copy the text into it. <strong>This is the only time it’s shown</strong>, because it contains the device’s private key.</p>
-      <p><a class="btn btn-primary" id="config-download" download="hn-group-vpn.conf">Download the configuration</a> <button class="btn btn-ghost" id="config-hide" type="button">Done</button></p>
-      <pre class="config" id="config-text"></pre>
+
+    <section class="card highlight" id="new-config" hidden>
+      <div class="card-head"><h2>Your new device is ready</h2><button class="btn btn-ghost btn-small" id="config-hide" type="button">Done</button></div>
+      <p>Download the file and open it in the WireGuard app. <strong>It’s only shown this once</strong>, because it contains the device’s private key.</p>
+      <p><a class="btn btn-primary" id="config-download" download="hn-group-vpn.conf">Download the configuration</a></p>
+      <details><summary>Show the configuration text</summary><pre class="config" id="config-text"></pre></details>
     </section>
+
     <section class="card">
-      <div class="card-head"><h2>Your devices</h2><span class="muted small" id="device-count"></span></div>
+      <div class="card-head"><h2>Your devices</h2><span class="pill" id="device-count"></span></div>
       <div id="devices"></div>
     </section>
+
     <section class="card" id="admin" hidden>
-      <div class="card-head"><h2>All devices</h2><span class="muted small">Administrators only</span></div>
+      <div class="card-head"><h2>All devices</h2><span class="pill pill-accent">Administrators</span></div>
       <div id="all-devices"></div>
-      <h3>Publish the Mac app</h3>
-      <p class="muted small">Upload the HN-Group-VPN-macOS.zip built from the repository (mac-vpn-app) so staff can download it here.</p>
-      <form id="app-form" class="form inline"><label>App (.zip)<input id="app-file" type="file" accept=".zip,application/zip" required></label><button class="btn btn-ghost" type="submit">Publish</button></form>
-      <p class="error" id="app-error" role="alert" hidden></p>
+      <details class="admin-app">
+        <summary>Publish a Mac app build by hand</summary>
+        <p class="muted small">Each new build from GitHub is published automatically when the VPS updates. Upload a zip here only to publish a different build.</p>
+        <form id="app-form" class="form inline"><input id="app-file" type="file" accept=".zip,application/zip" required aria-label="Mac app zip"><button class="btn btn-ghost" type="submit">Publish</button></form>
+        <p class="error" id="app-error" role="alert" hidden></p>
+      </details>
     </section>
   </section>
 
-  <p class="loading" id="view-loading">Loading…</p>
+  <p class="loading" id="view-loading"><span class="spinner" aria-hidden="true"></span>Loading…</p>
 </main>
-<footer class="foot wrap"><p>HN Group VPN · for HN Group staff only · © HN Group Limited</p></footer>
+<footer class="foot"><div class="wrap foot-inner"><span>HN Group VPN · for HN Group staff only</span><span>© HN Group Limited</span></div></footer>
 <div class="toast" id="toast" role="status" hidden></div>
 </body>
 </html>

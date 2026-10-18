@@ -27,17 +27,20 @@
   const ago = (iso) => {
     if (!iso) return 'Never connected';
     const s = Math.round((Date.now() - Date.parse(iso)) / 1000);
-    if (s < 90) return 'Connected now';
-    if (s < 3600) return 'Last connected ' + Math.round(s / 60) + ' min ago';
-    if (s < 86400) return 'Last connected ' + Math.round(s / 3600) + ' h ago';
-    return 'Last connected ' + new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    if (s < 180) return 'Connected';
+    if (s < 3600) return Math.round(s / 60) + ' min ago';
+    if (s < 86400) return Math.round(s / 3600) + ' h ago';
+    return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
   };
   const size = (n) => n > 1e9 ? (n / 1e9).toFixed(1) + ' GB' : n > 1e6 ? (n / 1e6).toFixed(1) + ' MB' : Math.round(n / 1e3) + ' kB';
   function list(devices, withOwner) {
-    if (!devices.length) return '<p class="muted">' + (withOwner ? 'No devices are registered yet.' : 'You haven’t added any devices yet.') + '</p>';
-    return '<ul class="devices">' + devices.map((d) => '<li class="device"><span class="dot ' + (d.connected ? 'on' : '') + '" aria-hidden="true"></span><div class="device-main"><strong>' + esc(d.name) + '</strong>' +
+    if (!devices.length) return '<div class="empty"><strong>' + (withOwner ? 'No devices are registered yet.' : 'No devices yet') + '</strong>' + (withOwner ? '' : '<span>Download the Mac app or add a phone or PC above.</span>') + '</div>';
+    return '<ul class="devices">' + devices.map((d) => '<li class="device' + (d.connected ? ' is-on' : '') + '">' +
+      '<span class="device-icon" aria-hidden="true"><svg viewBox="0 0 24 24">' + (/mac|book|laptop|imac/i.test(d.name) ? '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M1 20h22"/>' : '<rect x="6" y="2" width="12" height="20" rx="3"/><path d="M10 18h4"/>') + '</svg></span>' +
+      '<div class="device-main"><strong>' + esc(d.name) + '</strong>' +
       (withOwner ? '<span class="muted small">' + esc(d.owner.displayName) + ' · ' + esc(d.owner.email) + '</span>' : '') +
-      '<span class="muted small">' + esc(ago(d.lastHandshake)) + ' · ' + esc(d.address) + (d.received || d.sent ? ' · ↓ ' + size(d.received) + ' ↑ ' + size(d.sent) : '') + '</span></div>' +
+      '<span class="muted small">' + esc(d.address) + (d.received || d.sent ? ' · ↓ ' + size(d.received) + ' · ↑ ' + size(d.sent) : '') + '</span></div>' +
+      '<span class="status' + (d.connected ? ' on' : '') + '">' + esc(ago(d.lastHandshake)) + '</span>' +
       '<button class="btn btn-ghost btn-small" type="button" data-remove="' + esc(d.id) + '" data-name="' + esc(d.name) + '">Remove</button></li>').join('') + '</ul>';
   }
   async function load() {
@@ -45,6 +48,10 @@
     try {
       me = await api('/api/me');
       $('#who').textContent = me.user.displayName;
+      $('#avatar').textContent = me.user.displayName.split(/\s+/).slice(0, 2).map((w) => w[0] || '').join('').toUpperCase();
+      $('#greeting').textContent = 'Hi, ' + me.user.displayName.split(/\s+/)[0];
+      $('#stat-devices').textContent = me.devices.length;
+      $('#stat-online').textContent = me.devices.filter((d) => d.connected).length;
       $('#devices').innerHTML = list(me.devices, false);
       $('#device-count').textContent = me.devices.length + ' of ' + me.limit;
       $('#mac-app-note').textContent = me.macApp ? 'Open the downloaded app, then sign in. The first time, macOS may ask you to confirm opening it.' : 'The Mac app hasn’t been published here yet. Ask an administrator.';
