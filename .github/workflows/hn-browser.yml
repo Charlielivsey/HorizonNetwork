@@ -42,6 +42,7 @@ jobs:
       - run: npm run icons
         working-directory: browser-app
       - name: Build installer
+        shell: bash
         run: npx electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --publish never -c.buildVersion=${{ github.run_number }}
         working-directory: browser-app
         env:
