@@ -53,7 +53,103 @@ function init(dataDir) {
   runMigrations();
   for (const c of db.companies) { if (!Array.isArray(c.managers)) c.managers = []; generateFilings(c); }
   for (const s of SEED) if (!db.seeded.includes(s.slug)) { if (!db.companies.some((c) => c.slug === s.slug)) db.companies.push(blankCompany(s)); db.seeded.push(s.slug); }
+  runGroupMigrations();
   save();
+}
+
+// One-off changes to the group's own records (run after the starting companies exist). Each change
+// goes through the register's normal record-keeping, so it files its documents like any other change.
+function runGroupMigrations() {
+  if (!Array.isArray(db.migrations)) db.migrations = [];
+  // The tests' fixtures use the starting structure, so they can switch these updates off.
+  if (process.env.COMPANIES_GROUP_UPDATES === 'off') return;
+  if (!db.migrations.includes('group-structure-2026-10-18')) { groupStructure20261018(); db.migrations.push('group-structure-2026-10-18'); }
+}
+
+// The user's request (18 October 2026):
+// - HN Group Limited: Charlie Livsey is its person with significant control, with 100%.
+// - HN Group Investments Limited: a new subsidiary of HN Group Limited, managed by it, with HN Group
+//   Limited as its person with significant control (shares, voting rights, appointing directors and
+//   significant influence or control).
+// - Horizon Media Group Limited and Horizon Network Limited: now subsidiaries of HN Group Investments
+//   Limited, which replaces HN Group Limited as their person with significant control. Everything
+//   else (including Jack at Horizon Network) stays the same. Horizon Advertising is unchanged.
+// - Horizon Assets Management Limited: a direct subsidiary of HN Group Limited, with Charlie Livsey as an
+//   officer and HN Group Limited as its person with significant control.
+function groupStructure20261018() {
+  const today = now().slice(0, 10);
+  const named = (legal) => db.companies.find((c) => c.legalName.trim().toLowerCase() === legal.toLowerCase()) || null;
+  const same = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+  const FULL = ['Ownership of shares – 75% or more', 'Ownership of voting rights – 75% or more', 'Right to appoint and remove directors', 'Has significant influence or control'];
+  const actor = 'system:group-structure';
+  const touch = (c) => { c.updatedAt = now(); generateFilings(c); };
+  // Ends a person with significant control's entry today, with its cessation filing.
+  const cease = (c, p) => {
+    p.ceased = today;
+    newGeneratedFiling(c, today, 'Persons with significant control', 'Cessation of ' + p.name + ' as a person with significant control on ' + longDate(today), { code: FORM_CODES.psc_cease, heading: CHANGE_TYPES.psc_cease.label,
+      rows: [['Name', p.name], ['Type', p.kind], ['Ceased on', longDate(today)]] });
+    audit(actor, 'psc.cease', c.slug + ' ' + p.name);
+  };
+  // Adds a person with significant control from today (its notification filing follows automatically).
+  const notifyPsc = (c, item) => { c.psc.push({ id: id(), ceased: '', notified: today, ...item }); audit(actor, 'psc.add', c.slug + ' ' + item.name); };
+  const setParent = (c, parent) => { if (c.parent !== parent.slug) { audit(actor, 'company.parent', c.slug + ' → ' + parent.slug); c.parent = parent.slug; } };
+
+  const hn = named('HN Group Limited') || company('hn-group');
+  if (!hn) return;
+  const charlieAt = (c) => c && c.officers.find((o) => same(o.name, 'Charlie Livsey') && !o.resigned);
+  const charlie = charlieAt(hn) || db.companies.map(charlieAt).find(Boolean) || null;
+  const charlieDetails = { name: 'Charlie Livsey', role: 'Director', occupation: charlie ? charlie.occupation || '' : '', nationality: charlie ? charlie.nationality || '' : '', countryOfResidence: charlie ? charlie.countryOfResidence || '' : '' };
+
+  // HN Group Limited: Charlie Livsey, 100%.
+  for (const p of hn.psc) if (!p.ceased && !same(p.name, 'Charlie Livsey')) cease(hn, p);
+  const hnCharlie = hn.psc.find((p) => !p.ceased && same(p.name, 'Charlie Livsey'));
+  if (hnCharlie) { hnCharlie.kind = 'Individual'; hnCharlie.share = '100'; }
+  else notifyPsc(hn, { name: 'Charlie Livsey', kind: 'Individual', share: '100', control: ['Ownership of shares – 75% or more', 'Ownership of voting rights – 75% or more'] });
+  touch(hn);
+
+  // HN Group Investments Limited, owned and managed by HN Group Limited.
+  let inv = named('HN Group Investments Limited');
+  if (!inv) {
+    inv = saveCompany('', { legalName: 'HN Group Investments Limited', name: 'HN Group Investments', status: 'Active', incorporated: today, parent: hn.slug, managedBy: hn.slug,
+      description: 'A wholly owned subsidiary of HN Group Limited, managed by HN Group Limited.' }, actor,
+      { officer: { ...charlieDetails, appointed: today }, psc: { name: hn.legalName, kind: 'Parent company', share: '100', notified: today, control: FULL.join('\n') } });
+  } else {
+    setParent(inv, hn); inv.managedBy = hn.slug;
+    for (const p of inv.psc) if (!p.ceased && !same(p.name, hn.legalName)) cease(inv, p);
+    const own = inv.psc.find((p) => !p.ceased && same(p.name, hn.legalName));
+    if (own) Object.assign(own, { kind: 'Parent company', share: '100', control: FULL.slice() }); else notifyPsc(inv, { name: hn.legalName, kind: 'Parent company', share: '100', control: FULL.slice() });
+    touch(inv);
+  }
+
+  // Horizon Media Group Limited and Horizon Network Limited move under HN Group Investments Limited.
+  for (const legal of ['Horizon Media Group Limited', 'Horizon Network Limited']) {
+    const c = named(legal);
+    if (!c) continue;
+    setParent(c, inv);
+    const old = c.psc.filter((p) => !p.ceased && same(p.name, hn.legalName));
+    for (const p of old) cease(c, p);
+    if (!c.psc.some((p) => !p.ceased && same(p.name, inv.legalName))) {
+      const was = old[0] || {};
+      notifyPsc(c, { name: inv.legalName, kind: 'Parent company', share: was.share || '100', control: was.control && was.control.length ? was.control.slice() : ['Ownership of shares – 75% or more'] });
+    }
+    c.description = String(c.description || '').replace('A wholly owned subsidiary of HN Group Limited.', 'A wholly owned subsidiary of HN Group Investments Limited.');
+    touch(c);
+  }
+
+  // Horizon Assets Management Limited: a direct subsidiary of HN Group Limited.
+  let ham = named('Horizon Assets Management Limited');
+  if (!ham) {
+    ham = saveCompany('', { legalName: 'Horizon Assets Management Limited', name: 'Horizon Assets Management', status: 'Active', parent: hn.slug }, actor,
+      { officer: { ...charlieDetails, appointed: today }, psc: { name: hn.legalName, kind: 'Parent company', share: '100', notified: today, control: FULL.join('\n') } });
+  } else {
+    setParent(ham, hn);
+    if (!charlieAt(ham)) { ham.officers.push({ id: id(), ...charlieDetails, appointed: today, resigned: '' }); audit(actor, 'officers.add', ham.slug + ' Charlie Livsey'); }
+    for (const p of ham.psc) if (!p.ceased && !same(p.name, hn.legalName)) cease(ham, p);
+    const own = ham.psc.find((p) => !p.ceased && same(p.name, hn.legalName));
+    if (own) Object.assign(own, { kind: 'Parent company', share: own.share || '100', control: own.control && own.control.length ? own.control : FULL.slice() });
+    else notifyPsc(ham, { name: hn.legalName, kind: 'Parent company', share: '100', control: FULL.slice() });
+    touch(ham);
+  }
 }
 
 // One-off corrections to saved data, each applied once.

@@ -18,7 +18,7 @@ test('company register: public records, customers, requests, submissions and sta
   const sitePort = await freePort();
   const SITE = 'http://127.0.0.1:' + sitePort;
   const startServer = () => spawn(process.execPath, [path.join(__dirname, 'server.js')], {
-    env: { ...process.env, PORT: String(sitePort), HOST: '127.0.0.1', COMPANIES_ORIGIN: SITE, COMPANIES_DATA_DIR: path.join(dir, 'data') },
+    env: { ...process.env, PORT: String(sitePort), HOST: '127.0.0.1', COMPANIES_ORIGIN: SITE, COMPANIES_DATA_DIR: path.join(dir, 'data'), COMPANIES_GROUP_UPDATES: 'off' },
     stdio: ['ignore', 'ignore', 'inherit'],
   });
   let child = startServer();
@@ -386,6 +386,55 @@ test('company register: public records, customers, requests, submissions and sta
     assert.ok(saved.customers.every((c) => c.hash && c.salt && !('password' in c)));
   } finally {
     child.kill();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// The group structure update of 18 October 2026, applied to a register like the live one, with its filings.
+test('company register: group structure update', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-companies-group-'));
+  const store = path.join(__dirname, 'lib', 'store.js');
+  const fresh = () => { delete require.cache[require.resolve(store)]; return require(store); };
+  try {
+    // The register before the update.
+    process.env.COMPANIES_GROUP_UPDATES = 'off';
+    let s = fresh(); s.init(dir);
+    s.saveCompany('hn-group', { legalName: 'HN Group Limited', name: 'HN Group', status: 'Active', incorporated: '2025-01-01' }, 't');
+    s.saveItem('hn-group', 'officers', '', { name: 'Charlie Livsey', role: 'Director', appointed: '2025-01-01', nationality: 'British' }, 't');
+    s.saveItem('horizon-network', 'officers', '', { name: 'Jack Example', role: 'Director', appointed: '2025-03-01' }, 't');
+    s.saveCompany('', { legalName: 'Horizon Media Group Limited', parent: 'hn-group', incorporated: '2025-02-01' }, 't', { officer: { name: 'Media Director', role: 'Director' }, psc: { name: 'HN Group Limited', kind: 'Parent company', share: '100', control: 'Ownership of shares – 75% or more' } });
+    s.saveCompany('', { legalName: 'Horizon Advertising Limited', parent: 'horizon-media-group-limited' }, 't', { officer: { name: 'Ad Director', role: 'Director' }, psc: { name: 'Horizon Media Group Limited', kind: 'Parent company', share: '100' } });
+    s.saveCompany('', { legalName: 'Horizon Assets Management Limited', parent: 'hn-group' }, 't', { officer: { name: 'Someone Else', role: 'Secretary' }, psc: { name: 'Old Holder', kind: 'Individual', share: '100' } });
+    const adBefore = JSON.stringify(s.db.companies.find((c) => c.legalName === 'Horizon Advertising Limited'));
+    // The update runs once, on the next start.
+    delete process.env.COMPANIES_GROUP_UPDATES;
+    s = fresh(); s.init(dir); s = fresh(); s.init(dir);
+    const by = (n) => s.db.companies.find((c) => c.legalName === n);
+    const current = (c) => c.psc.filter((p) => !p.ceased);
+    const hn = by('HN Group Limited'), inv = by('HN Group Investments Limited'), media = by('Horizon Media Group Limited'), net = by('Horizon Network Limited'), ham = by('Horizon Assets Management Limited');
+    assert.deepEqual(current(hn).map((p) => [p.name, p.kind, p.share]), [['Charlie Livsey', 'Individual', '100']]);
+    assert.ok(inv && inv.parent === hn.slug && inv.managedBy === hn.slug && inv.officers.some((o) => o.name === 'Charlie Livsey'));
+    assert.deepEqual(current(inv).map((p) => [p.name, p.share, p.control.length]), [['HN Group Limited', '100', 4]]);
+    for (const c of [media, net]) {
+      assert.equal(c.parent, inv.slug);
+      assert.deepEqual(current(c).map((p) => p.name), ['HN Group Investments Limited']);
+      assert.ok(c.psc.some((p) => p.name === 'HN Group Limited' && p.ceased));
+    }
+    assert.ok(net.officers.some((o) => o.name === 'Jack Example' && !o.resigned));
+    assert.equal(JSON.stringify(by('Horizon Advertising Limited')), adBefore);
+    assert.equal(ham.parent, hn.slug);
+    assert.ok(ham.officers.some((o) => o.name === 'Charlie Livsey' && !o.resigned) && ham.officers.some((o) => o.name === 'Someone Else'));
+    assert.deepEqual(current(ham).map((p) => p.name), ['HN Group Limited']);
+    const filed = (c) => s.filings(c.slug).map((f) => f.description).join('\n');
+    assert.match(filed(hn), /Notification of Charlie Livsey as a person with significant control/);
+    assert.match(filed(inv), /Incorporation of HN Group Investments Limited/); assert.match(filed(inv), /Appointment of Charlie Livsey as a director/); assert.match(filed(inv), /Notification of HN Group Limited/);
+    for (const c of [media, net]) { assert.match(filed(c), /Cessation of HN Group Limited/); assert.match(filed(c), /Notification of HN Group Investments Limited/); }
+    assert.match(filed(ham), /Cessation of Old Holder/); assert.match(filed(ham), /Appointment of Charlie Livsey/); assert.match(filed(ham), /Notification of HN Group Limited/);
+    // Running again changes nothing, and every filing has its PDF.
+    assert.equal(s.db.filings.filter((f) => /Cessation of HN Group Limited/.test(f.description)).length, 2);
+    for (const f of s.db.filings) assert.ok(fs.existsSync(s.filePath(f.file)));
+  } finally {
+    delete process.env.COMPANIES_GROUP_UPDATES;
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
