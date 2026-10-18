@@ -4,9 +4,11 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const {nativeDestination,createNative}=require('./native');
 const ORIGIN = 'https://auth.hngroup.org.uk';
 // Registered applications: fixed callbacks and who may use them.
 const CLIENTS = {
+  browser: { name: 'HN Browser', native: true, allowed: () => true, denied: 'This account cannot use HN Browser.' },
   media: { name: 'Horizon Media Group administration', callback: 'https://media.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage this website.' },
   holding: { name: 'Horizon Assets Management administration', callback: 'https://holding.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage this website.' },
   development: { name: 'Horizon Development administration', callback: 'https://development.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage this website.' },
@@ -99,9 +101,11 @@ async function serveAvatar(entry, res) {
   return res.end(image);
 }
 function destination(url) {
-  const id = url.searchParams.get('client_id'), state = url.searchParams.get('state');
-  return Object.hasOwn(CLIENTS, id || '') && HEX.test(state || '') ? { id, state, ...CLIENTS[id] } : null;
+ const id=url.searchParams.get('client_id'),state=url.searchParams.get('state');
+ if(!Object.hasOwn(CLIENTS,id||'')||!HEX.test(state||''))return null;
+ const client={id,state,...CLIENTS[id]};if(client.native){const native=nativeDestination(url);return native?{...client,...native}:null;}return client;
 }
+const native=createNative({codes,applications:applicationSessions,profile,requireReady,send,body,serveAvatar});
 const staticFiles = { '/': 'index.html', '/authorize': 'index.html', '/style.css': 'style.css', '/app.js': 'app.js', '/assets/favicon.svg': 'assets/favicon.svg', '/assets/brand/hn-group-wordmark-white.svg': 'assets/brand/hn-group-wordmark-white.svg', '/assets/brand/hn-group-wordmark.svg': 'assets/brand/hn-group-wordmark.svg', '/assets/fonts/plus-jakarta-sans.woff2': 'assets/fonts/plus-jakarta-sans.woff2' };
 const mime = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'application/javascript', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' };
 const server = http.createServer(async (req, res) => {
@@ -111,13 +115,14 @@ const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, ORIGIN), route = url.pathname;
     if (route === '/healthz') return send(res, 200, { ok: true });
+    if(await native(req,res,route))return;
     if (route.startsWith('/api/sso/')) {
       if (req.method !== 'POST') return send(res, 405, { error: 'POST required.' });
       if (!service(req)) return send(res, 401, { error: 'Client not authenticated.' });
       const data = await body(req); let token, applicationToken, detachedEntry;
       // Status and website keep live Auth sessions; the portal starts its own staff session.
       const clientId = data.client_id || 'status';
-      if (!Object.hasOwn(CLIENTS, clientId)) return send(res, 400, { error: 'Unknown application.' });
+      if (!Object.hasOwn(CLIENTS, clientId)||CLIENTS[clientId].native) return send(res, 400, { error: 'Unknown application.' });
       if (route === '/api/sso/exchange') {
         const grant = codes.get(data.code); codes.delete(data.code);
         if (!grant || grant.expires <= Date.now() || grant.state !== data.state || grant.client !== clientId) throw fail(401, 'Sign-in link expired or already used.');
@@ -191,13 +196,14 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, { ok: true }, [setCookie(COOKIE, '', 0), setCookie(FLOW, '', 0)]);
       }
       if (route === '/api/continue') {
-        const client = destination(new URL('/authorize?client_id=' + encodeURIComponent(data.client_id) + '&state=' + encodeURIComponent(data.state), ORIGIN));
+        const requestURL=new URL('/authorize',ORIGIN);for(const key of ['client_id','state','redirect_uri','code_challenge','code_challenge_method'])if(typeof data[key]==='string')requestURL.searchParams.set(key,data[key]);
+        const client=destination(requestURL);
         if (!client) throw fail(400, 'Invalid application. Start from the application’s sign-in button.');
         const entry = entryFor(req), user = await profile(entry);
         requireReady(user);
         if (!client.allowed(user)) return send(res, 200, { redirect: client.callback + '?error=access_denied&state=' + client.state });
         if (codes.size >= 10000) throw fail(503, 'Please try again shortly.');
-        const code = random(); codes.set(code, { session: hash(cookie(req, COOKIE)), state: client.state, client: client.id, expires: Date.now() + 60000 });
+        const code = random(); codes.set(code, { session: hash(cookie(req, COOKIE)), state: client.state, client: client.id, expires: Date.now() + 60000, ...(client.native?{native:true,redirect:client.callback,challenge:client.challenge,entry:{...entry}}:{}) });
         return send(res, 200, { redirect: client.callback + '?code=' + code + '&state=' + client.state });
       }
       return send(res, 404, { error: 'Not found.' });

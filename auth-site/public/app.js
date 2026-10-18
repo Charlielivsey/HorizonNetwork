@@ -4,6 +4,7 @@ const query = new URLSearchParams(location.search);
 const client = query.get('client_id'), state = query.get('state');
 // Must match the applications registered in server.js.
 const APPS = {
+  browser: {name:'HN Browser',short:'HN Browser',allowed:()=>true,granted:'Your HN account is ready for the browser.',restricted:''},
   media: { name: 'Horizon Media Group administration', short: 'Horizon Media Group', allowed: user => user.statusAdminAllowed, granted: 'You can manage this website.', restricted: 'Only the system owner and Super Admin members can manage this website.' },
   holding: { name: 'Horizon Assets Management administration', short: 'Horizon Assets Management', allowed: user => user.statusAdminAllowed, granted: 'You can manage this website.', restricted: 'Only the system owner and Super Admin members can manage this website.' },
   development: { name: 'Horizon Development administration', short: 'Horizon Development', allowed: user => user.statusAdminAllowed, granted: 'You can manage this website.', restricted: 'Only the system owner and Super Admin members can manage this website.' },
@@ -172,7 +173,7 @@ $('code-cancel').onclick = () => busy($('code-cancel'), logout);
 $('password-cancel').onclick = () => busy($('password-cancel'), logout);
 $('show-password').onclick = () => { const show = $('password').type === 'password'; $('password').type = show ? 'text' : 'password'; $('show-password').textContent = show ? 'Hide' : 'Show'; $('show-password').setAttribute('aria-pressed',String(show)); };
 async function connectToStatus() {
-  const result = await api('continue', { client_id: client, state });
+  const result = await api('continue', { client_id: client, state,...(client==='browser'?Object.fromEntries(['redirect_uri','code_challenge','code_challenge_method'].map(k=>[k,query.get(k)])): {}) });
   location.replace(result.redirect);
 }
 $('continue').onclick = () => busy($('continue'), connectToStatus, 'Connecting…');

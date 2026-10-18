@@ -1,0 +1,74 @@
+name: Build and publish HN Browser
+on:
+  push:
+    branches: [claude/confident-volta-gxjboo]
+    paths: ['browser-app/**', '.github/workflows/hn-browser.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: hn-browser-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '24', cache: npm, cache-dependency-path: browser-app/package-lock.json}
+      - run: npm ci
+        working-directory: browser-app
+      - run: npm test
+        working-directory: browser-app
+      - run: node --test auth-site/native.test.cjs auth-site/test.cjs auth-site/setup.test.cjs downloads-site/test.cjs
+      - run: xvfb-run -a npm run test:desktop
+        working-directory: browser-app
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: macos-14, platform: mac, arch: arm64}
+          - {os: macos-15-intel, platform: mac, arch: x64}
+          - {os: windows-latest, platform: win, arch: x64}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '24', cache: npm, cache-dependency-path: browser-app/package-lock.json}
+      - run: npm ci
+        working-directory: browser-app
+      - run: npm run icons
+        working-directory: browser-app
+      - name: Build installer
+        run: npx electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --publish never -c.buildVersion=${{ github.run_number }}
+        working-directory: browser-app
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: browser-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            browser-app/dist/*.dmg
+            browser-app/dist/*.zip
+            browser-app/dist/*.exe
+          if-no-files-found: error
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: {pattern: 'browser-*', path: installers, merge-multiple: true}
+      - name: Publish preview installers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(node -p "require('./browser-app/package.json').version")
+          TAG="browser-v$VERSION-${{ github.run_number }}"
+          cd installers
+          sha256sum HN-Browser-* > SHA256SUMS.txt
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "HN Browser $VERSION · preview build ${{ github.run_number }}" --prerelease --notes 'First preview for macOS (Apple silicon and Intel) and Windows x64. Default theme: Midnight Lavender. HN account sign-in uses HN Group Auth. Preview installers are not yet developer-signed or notarised. No extensions, account sync or automatic updates in this version.' HN-Browser-* SHA256SUMS.txt

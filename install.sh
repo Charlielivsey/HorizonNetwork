@@ -99,6 +99,7 @@ changed links-site/ && run 'Links' bash "$ROOT/links-site/install.sh" "$EMAIL"
 changed branding-site/ && run 'Brand centre (branding.hngroup.org.uk)' bash "$ROOT/branding-site/install.sh" "$EMAIL"
 changed companies-site/ && run 'Company register (companies.hngroup.org.uk)' bash "$ROOT/companies-site/install.sh" "$EMAIL"
 changed vpn-site/ && run 'VPN (vpn.hngroup.org.uk + WireGuard)' bash "$ROOT/vpn-site/install.sh" "$EMAIL"
+changed downloads-site/ && run 'Downloads (downloads.hngroup.org.uk)' bash "$ROOT/downloads-site/install.sh" "$EMAIL"
 # Central control goes last so it adds maintenance gates for every site installed above.
 changed admin-site/ && run 'Website control (admin.hngroup.org.uk)' bash "$ROOT/admin-site/install.sh" "$EMAIL"
 [ "$RAN" = 0 ] && echo "The changes don't affect any website (for example documentation only). No sites restarted."

@@ -67,7 +67,7 @@ cp "$ROOT/staff-portal/public/assets/app.js" /opt/hn-staff-portal/public/assets/
 cp "$ROOT/staff-portal/public-proxy.js" /opt/hn-staff-portal/public-proxy.js
 if ! pm2 describe hn-auth >/dev/null 2>&1; then bash "$ROOT/auth-site/install.sh" "$EMAIL"; fi
 mkdir -p /opt/hn-auth
-cp "$ROOT/auth-site/server.js" "$ROOT/auth-site/supervisor.js" /opt/hn-auth/
+cp "$ROOT/auth-site/server.js" "$ROOT/auth-site/native.js" "$ROOT/auth-site/supervisor.js" /opt/hn-auth/
 python3 "$SCRIPT_DIR/install-accounts.py"
 bash "$ROOT/auth-site/install.sh" "$EMAIL"
 printf '1\n' > /var/lib/hn-control/enabled

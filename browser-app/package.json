@@ -1,0 +1,66 @@
+{
+  "name": "hn-group-browser",
+  "version": "0.1.0",
+  "private": true,
+  "description": "HN Browser \u2014 a Chromium-powered browser with HN Group account sign-in",
+  "author": "HN Group",
+  "license": "UNLICENSED",
+  "main": "src/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.cjs",
+    "test:desktop": "node test/desktop.cjs",
+    "icons": "node scripts/icons.cjs",
+    "pack": "electron-builder --dir --publish never",
+    "build:mac": "electron-builder --mac --publish never",
+    "build:win": "electron-builder --win --publish never"
+  },
+  "devDependencies": {
+    "electron": "43.8.0",
+    "electron-builder": "26.15.3",
+    "@resvg/resvg-js": "2.6.2",
+    "png-to-ico": "3.0.1",
+    "playwright": "1.61.1"
+  },
+  "build": {
+    "appId": "uk.org.hngroup.browser",
+    "productName": "HN Browser",
+    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**",
+      "ui/**",
+      "package.json"
+    ],
+    "artifactName": "HN-Browser-${version}-${os}-${arch}.${ext}",
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.png",
+      "identity": null
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "deleteAppDataOnUninstall": false
+    },
+    "npmRebuild": false,
+    "afterPack": "scripts/after-pack.cjs"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

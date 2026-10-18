@@ -1,5 +1,14 @@
 [
   {
+    "id": "downloads",
+    "name": "Downloads",
+    "process": "hn-downloads",
+    "port": 5100,
+    "hosts": [
+      "downloads.hngroup.org.uk"
+    ]
+  },
+  {
     "id": "auth",
     "name": "HN Group Auth",
     "process": "hn-auth",
