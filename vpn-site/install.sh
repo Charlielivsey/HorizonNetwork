@@ -64,6 +64,38 @@ if command -v firewall-cmd >/dev/null && firewall-cmd --state >/dev/null 2>&1; t
 systemctl enable wg-quick@wg-hn >/dev/null 2>&1
 if [ "$WG_CHANGED" = 1 ] && systemctl is-active --quiet wg-quick@wg-hn; then systemctl restart wg-quick@wg-hn; else systemctl start wg-quick@wg-hn; fi
 systemctl is-active --quiet wg-quick@wg-hn || { echo 'The WireGuard interface did not start (see: journalctl -u wg-quick@wg-hn).'; exit 1; }
+# The service gives wg each device's preshared key as a short-lived root-only file in this folder.
+install -d -m 700 /etc/wireguard/hn-vpn-peers
+find /etc/wireguard/hn-vpn-peers -type f -name '*.psk' -delete
+# Some systems (such as newer Ubuntu releases) confine wg with AppArmor, which then can't read key
+# files outside its allowed paths ("fopen: Permission denied"). Allow just this folder.
+if command -v apparmor_parser >/dev/null && [ -d /etc/apparmor.d ]; then
+    for profile in $(grep -lE '^[[:space:]]*profile[[:space:]]+wg[[:space:]]|^[[:space:]]*profile[[:space:]]+[^[:space:]]*/wg[[:space:]]|^/usr/bin/wg[[:space:]]' /etc/apparmor.d/* 2>/dev/null || true); do
+        [ -f "$profile" ] || continue
+        local_rule="/etc/apparmor.d/local/$(basename "$profile")"
+        mkdir -p /etc/apparmor.d/local
+        if ! grep -q 'hn-vpn-peers' "$local_rule" 2>/dev/null; then
+            printf '# HN Group VPN (vpn-site/install.sh): device preshared keys.\n/etc/wireguard/hn-vpn-peers/ r,\n/etc/wireguard/hn-vpn-peers/*.psk r,\n' >> "$local_rule"
+        fi
+        if ! grep -qE "include( if exists)? <local/$(basename "$profile")>" "$profile"; then
+            echo "Note: AppArmor profile $profile has no local include; wg may not be able to read device keys."
+        fi
+        apparmor_parser -r "$profile" 2>/dev/null || echo "Note: could not reload AppArmor profile $profile."
+    done
+fi
+# Check that the service will be able to add devices: add and remove a throwaway peer.
+TEST_PSK="/etc/wireguard/hn-vpn-peers/install-check.psk"
+(umask 077; wg genpsk > "$TEST_PSK")
+TEST_PEER="$(wg genkey | wg pubkey)"
+if WG_ERROR="$(wg set wg-hn peer "$TEST_PEER" preshared-key "$TEST_PSK" allowed-ips 10.88.0.255/32 2>&1)"; then
+    wg set wg-hn peer "$TEST_PEER" remove
+    rm -f "$TEST_PSK"
+else
+    rm -f "$TEST_PSK"
+    echo "WireGuard could not add a device: $WG_ERROR"
+    if command -v journalctl >/dev/null; then journalctl -k --since '-2 min' --no-pager 2>/dev/null | grep -i 'apparmor.*denied' | tail -3 || true; fi
+    exit 1
+fi
 
 # ---------- vpn.hngroup.org.uk ----------
 mkdir -p /opt/hn-vpn "$CHALLENGE_DIR" /etc/nginx/sites-available /etc/nginx/sites-enabled

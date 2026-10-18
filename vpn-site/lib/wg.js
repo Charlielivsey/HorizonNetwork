@@ -3,9 +3,16 @@
 // VPN service's own data and applied to the interface with `wg set`, so the interface always matches
 // the registered devices, including after a reboot. VPN_WG_FAKE=1 keeps peers in memory for tests.
 const { execFile } = require('node:child_process');
+const fs = require('node:fs');
+const path = require('node:path');
+const crypto = require('node:crypto');
 
 const IFACE = process.env.VPN_INTERFACE || 'wg-hn';
 const FAKE = process.env.VPN_WG_FAKE === '1';
+// Preshared keys are handed to `wg` as a short-lived root-only file in /etc/wireguard: security
+// profiles (such as Ubuntu's AppArmor profile for wg) only let wg read key files from there, which is
+// why files in /tmp and /dev/stdin failed with "fopen: Permission denied".
+const KEY_DIR = process.env.VPN_WG_KEY_DIR || '/etc/wireguard/hn-vpn-peers';
 const KEY = /^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw480]=$/;
 const fake = { peers: new Map(), publicKey: 'c2VydmVyLXB1YmxpYy1rZXktZm9yLXRlc3RzLW9ubHk=' };
 
@@ -43,8 +50,12 @@ async function addPeer(d) {
   if (!KEY.test(d.publicKey) || !KEY.test(d.presharedKey)) throw Object.assign(new Error('Invalid device key.'), { status: 400 });
   const allowed = d.ipv4 + '/32,' + d.ipv6 + '/128';
   if (FAKE) { fake.peers.set(d.publicKey, { allowed, handshake: 0, rx: 0, tx: 0 }); return; }
-  // The preshared key goes in through standard input, never the command line or a file on disk.
-  await run(['set', IFACE, 'peer', d.publicKey, 'preshared-key', '/dev/stdin', 'allowed-ips', allowed], d.presharedKey + '\n');
+  fs.mkdirSync(KEY_DIR, { recursive: true, mode: 0o700 });
+  const pskFile = path.join(KEY_DIR, crypto.randomBytes(12).toString('hex') + '.psk');
+  try {
+    fs.writeFileSync(pskFile, d.presharedKey + '\n', { mode: 0o600, flag: 'wx' });
+    await run(['set', IFACE, 'peer', d.publicKey, 'preshared-key', pskFile, 'allowed-ips', allowed]);
+  } finally { fs.rmSync(pskFile, { force: true }); }
 }
 
 async function removePeer(publicKey) {
