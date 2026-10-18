@@ -1,16 +1,18 @@
 import Foundation
 import SwiftUI
 import ServiceManagement
+import CryptoKit
+import Security
 
 /// Everything the menu shows: signing in, setting up this Mac, and connecting.
 @MainActor
 final class VPNModel: ObservableObject {
-    enum Stage { case signIn, pin, ready }
+    enum Stage { case signIn, waiting, ready }
+
+    /// One model for the app, so links back from the browser reach it.
+    static let shared = VPNModel()
 
     @Published var stage: Stage = .signIn
-    @Published var email = UserDefaults.standard.string(forKey: "email") ?? ""
-    @Published var password = ""
-    @Published var pin = ""
     @Published var busy = false
     @Published var error: String?
     @Published var user: User?
@@ -21,7 +23,6 @@ final class VPNModel: ObservableObject {
     @Published var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     private let api = API()
-    private var flow = ""
     private var timer: Timer?
 
     init() {
@@ -41,31 +42,41 @@ final class VPNModel: ObservableObject {
 
     // MARK: Signing in
 
-    func signIn() async {
-        guard !busy else { return }
-        error = nil; busy = true; defer { busy = false }
-        do {
-            let result = try await api.send("api/sign-in", method: "POST", body: ["email": email, "password": password], as: SignInResult.self)
-            password = ""
-            UserDefaults.standard.set(email, forKey: "email")
-            if result.codeRequired == true, let flow = result.flow { self.flow = flow; pin = ""; stage = .pin; return }
-            try await finishSignIn(result)
-        } catch { self.error = error.localizedDescription }
+    /// Signing in happens on HN Group Auth in the browser. The app sends a challenge (a hash of a secret
+    /// only it knows); after Auth, the browser opens hngroupvpn://signed-in?code=… and the app swaps
+    /// the code and its secret for its own sign-in.
+    func signIn() {
+        error = nil
+        var bytes = [UInt8](repeating: 0, count: 32)
+        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        let verifier = bytes.map { String(format: "%02x", $0) }.joined()
+        let challenge = SHA256.hash(data: Data(verifier.utf8)).map { String(format: "%02x", $0) }.joined()
+        Keychain.set("signInVerifier", verifier)
+        var url = URLComponents(url: API.base.appendingPathComponent("auth/login"), resolvingAgainstBaseURL: false)!
+        url.queryItems = [URLQueryItem(name: "app", value: challenge)]
+        if let address = url.url { NSWorkspace.shared.open(address) }
+        stage = .waiting
     }
 
-    func submitPin() async {
-        guard !busy, pin.count == 6 else { return }
+    func cancelSignIn() { Keychain.set("signInVerifier", nil); error = nil; stage = .signIn }
+
+    /// Called with hngroupvpn://signed-in?code=… when Auth hands the sign-in back to the app.
+    func completeSignIn(_ url: URL) async {
+        guard url.scheme == "hngroupvpn", url.host == "signed-in",
+              let code = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "code" })?.value else { return }
+        guard let verifier = Keychain.get("signInVerifier") else { error = "That sign-in wasn’t started from this Mac. Please sign in again."; stage = .signIn; return }
         error = nil; busy = true; defer { busy = false }
         do {
-            let result = try await api.send("api/sign-in/code", method: "POST", body: ["flow": flow, "code": pin], as: SignInResult.self)
+            let result = try await api.send("api/app/exchange", method: "POST", body: ["code": code, "verifier": verifier], as: SignInResult.self)
+            Keychain.set("signInVerifier", nil)
             try await finishSignIn(result)
-        } catch let e as APIError {
-            pin = ""; error = e.message
-            if e.restart { stage = .signIn }
-        } catch { pin = ""; self.error = error.localizedDescription }
+            NSApp.activate(ignoringOtherApps: true)
+        } catch {
+            Keychain.set("signInVerifier", nil)
+            self.error = error.localizedDescription
+            stage = .signIn
+        }
     }
-
-    func startAgain() { flow = ""; pin = ""; error = nil; stage = .signIn }
 
     private func finishSignIn(_ result: SignInResult) async throws {
         guard let token = result.token else { throw APIError(message: "Sign-in didn’t complete. Please try again.", status: 0) }

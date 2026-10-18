@@ -31,11 +31,15 @@ function audit(who, action, detail) {
 function prune() { for (const [k, v] of Object.entries(db.sessions)) if (!v || v.expires <= Date.now()) delete db.sessions[k]; }
 
 // ---------- Sign-ins ----------
-function createSession(user) {
+// The Mac app's sign-in lasts 30 days; the website's lasts as long as its HN Group Auth sign-in
+// (at most 12 hours) and is rechecked with Auth while it's used.
+function createSession(user, opts) {
+  const o = opts || {};
   prune();
   const token = crypto.randomBytes(32).toString('hex');
-  db.sessions[hash(token)] = { user, expires: Date.now() + SESSION_DAYS * 86400000, createdAt: now() };
-  audit(user.email, 'sign-in');
+  const expires = o.app ? Date.now() + SESSION_DAYS * 86400000 : Math.min(o.expires || Infinity, Date.now() + 12 * 3600000);
+  db.sessions[hash(token)] = { user, expires, createdAt: now(), kind: o.app ? 'app' : 'web', ...(o.authSession ? { authSession: o.authSession, checked: Date.now() } : {}) };
+  audit(user.email, o.app ? 'sign-in.app' : 'sign-in.web');
   save();
   return token;
 }

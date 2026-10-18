@@ -1,6 +1,6 @@
 'use strict';
-// Staff sign-in for the VPN. Passwords and PINs are checked by the single private staff-account
-// backend (hn-accounts), exactly as website control does; the VPN never sees stored credentials.
+// Checks with the single private staff-account backend (hn-accounts) that the staff accounts using
+// the VPN are still enabled. Signing in itself goes through HN Group Auth (lib/auth.js).
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 
@@ -28,34 +28,10 @@ async function call(endpoint, data, client) {
   return { response, value };
 }
 
-// The signed-in staff member, once the backend has created their staff session.
-async function profileFrom(response) {
-  const raw = (response.headers.get('set-cookie') || '').match(/(?:^|,\s*)hn_staff_session=([a-f0-9]{64})(?:;|$)/)?.[1];
-  if (!raw) throw fail(503, 'The staff account service did not complete the sign-in.');
-  const { value } = await call('/api/auth/profile', { session: hash(raw) });
-  const u = value.user || {};
-  if (u.passwordChangeRequired || u.codeSetupRequired) throw fail(403, 'Finish setting up your staff account first (a new password and a six-digit PIN) at staff.hngroup.org.uk, then sign in here.');
-  return { id: u.id, email: String(u.email || '').toLowerCase(), displayName: u.displayName || u.email, admin: u.ownerAccess === true || u.statusAdminAllowed === true };
-}
-
-// Step one: email address and password. Returns { challenge } when a PIN is needed, else { user }.
-async function signIn(email, password, client) {
-  if (!email || !password) throw fail(400, 'Enter your email address and password.');
-  const { value, response } = await call('/api/login', { username: String(email).trim(), password: String(password) }, client);
-  if (value.codeRequired) return { challenge: value.challenge };
-  return { user: await profileFrom(response) };
-}
-// Step two: the six-digit PIN.
-async function signInCode(challenge, code, client) {
-  if (!/^\d{6}$/.test(String(code || ''))) throw fail(400, 'Enter your six-digit PIN.');
-  const { response } = await call('/api/login/code', { challenge, code: String(code) }, client);
-  return { user: await profileFrom(response) };
-}
-
 // Which of these staff accounts are still enabled ({ id: true|false }), or null if it can't be checked now.
 async function accountStatus(ids) {
   if (!ids.length) return {};
   try { const { value } = await call('/api/auth/account-status', { ids }); return value.accounts || null; } catch { return null; }
 }
 
-module.exports = { signIn, signInCode, accountStatus, hash, fail };
+module.exports = { accountStatus, hash, fail };

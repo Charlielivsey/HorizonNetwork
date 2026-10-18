@@ -6,8 +6,8 @@
 <meta name="robots" content="noindex">
 <title>HN Group VPN</title>
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/assets/vpn.css?v=1">
-<script src="/assets/vpn.js?v=1" defer></script>
+<link rel="stylesheet" href="/assets/vpn.css?v=2">
+<script src="/assets/vpn.js?v=2" defer></script>
 </head>
 <body>
 <header class="top">
@@ -22,26 +22,8 @@
   <section class="card narrow" id="view-sign-in" hidden>
     <p class="eyebrow">Staff only</p>
     <h1>Sign in to the HN Group VPN</h1>
-    <p class="muted">Use your HN Group staff account. You’ll need your password and your six-digit PIN.</p>
-    <form id="sign-in-form" class="form" autocomplete="on">
-      <label>Email address<input id="email" type="email" autocomplete="username" required></label>
-      <label>Password<input id="password" type="password" autocomplete="current-password" required></label>
-      <p class="error" id="sign-in-error" role="alert" hidden></p>
-      <button class="btn btn-primary" type="submit">Continue</button>
-    </form>
-  </section>
-
-  <section class="card narrow" id="view-pin" hidden>
-    <p class="eyebrow">Staff only</p>
-    <h1>Enter your PIN</h1>
-    <p class="muted">Your six-digit staff PIN.</p>
-    <form id="pin-form" class="form">
-      <div class="pin" id="pin" role="group" aria-label="Six-digit PIN">
-        <input type="password" inputmode="numeric" maxlength="1" aria-label="Digit 1" autocomplete="one-time-code"><input type="password" inputmode="numeric" maxlength="1" aria-label="Digit 2"><input type="password" inputmode="numeric" maxlength="1" aria-label="Digit 3"><input type="password" inputmode="numeric" maxlength="1" aria-label="Digit 4"><input type="password" inputmode="numeric" maxlength="1" aria-label="Digit 5"><input type="password" inputmode="numeric" maxlength="1" aria-label="Digit 6">
-      </div>
-      <p class="error" id="pin-error" role="alert" hidden></p>
-      <button class="btn btn-ghost" type="button" id="pin-back">Start again</button>
-    </form>
+    <p class="muted">Sign in with your HN Group staff account through HN Group Auth.</p>
+    <p><a class="btn btn-primary btn-wide" href="/auth/login">Sign in with HN Group Auth</a></p>
   </section>
 
   <section id="view-home" hidden>

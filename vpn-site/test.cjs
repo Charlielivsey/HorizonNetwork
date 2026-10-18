@@ -15,114 +15,154 @@ const { spawn } = require('node:child_process');
 const freePort = () => new Promise((r) => { const s = http.createServer(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => r(p)); }); });
 const hash = (s) => crypto.createHash('sha256').update(s).digest('hex');
 
-test('HN Group VPN: sign-in, devices, admin and account checks', async () => {
+test('HN Group VPN: Auth sign-in (website and Mac app), devices, admin and account checks', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-vpn-'));
   const secret = crypto.randomBytes(32).toString('hex');
   fs.writeFileSync(path.join(dir, 'secret'), secret);
-  // Stand-in for the private staff backend.
   const people = {
-    'sam@hngroup.org.uk': { id: 'p-sam', password: 'sam password', pin: '123456', user: { id: 'p-sam', email: 'sam@hngroup.org.uk', displayName: 'Sam', statusAdminAllowed: false, ownerAccess: false } },
-    'owner@hngroup.org.uk': { id: 'p-owner', password: 'owner password', pin: '654321', user: { id: 'p-owner', email: 'owner@hngroup.org.uk', displayName: 'Owner', ownerAccess: true } },
-    'new@hngroup.org.uk': { id: 'p-new', password: 'temporary', pin: '111111', user: { id: 'p-new', email: 'new@hngroup.org.uk', displayName: 'New', codeSetupRequired: true } },
+    sam: { id: 'p-sam', email: 'sam@hngroup.org.uk', displayName: 'Sam', statusAdminAllowed: false, ownerAccess: false },
+    owner: { id: 'p-owner', email: 'owner@hngroup.org.uk', displayName: 'Owner', ownerAccess: true },
   };
-  const enabled = { 'p-sam': true, 'p-owner': true, 'p-new': true };
-  const sessions = new Map(), challenges = new Map();
-  const backend = http.createServer((req, res) => {
+  const enabled = { 'p-sam': true, 'p-owner': true };
+  // Stand-in for HN Group Auth: an approved sign-in becomes a code for the "vpn" application.
+  const codes = new Map(), appSessions = new Map();
+  const authServer = http.createServer((req, res) => {
     let body = ''; req.on('data', (c) => { body += c; }); req.on('end', () => {
       const data = JSON.parse(body || '{}');
-      const send = (status, value, cookie) => { res.writeHead(status, { 'Content-Type': 'application/json', ...(cookie ? { 'Set-Cookie': 'hn_staff_session=' + cookie + '; Path=/' } : {}) }); res.end(JSON.stringify(value)); };
-      if (req.headers.authorization !== 'Bearer ' + secret) return send(401, { error: 'No.' });
-      const startSession = (p) => { const raw = crypto.randomBytes(32).toString('hex'); sessions.set(hash(raw), p); return raw; };
-      if (req.url === '/api/login') { const p = people[data.username]; if (!p || p.password !== data.password) return send(401, { error: 'The email or password is wrong.' }); const c = crypto.randomBytes(16).toString('hex'); challenges.set(c, p); return send(200, { codeRequired: true, challenge: c }); }
-      if (req.url === '/api/login/code') { const p = challenges.get(data.challenge); if (!p) return send(401, { error: 'Expired.', restart: true }); if (p.pin !== data.code) return send(401, { error: 'That PIN is wrong.' }); challenges.delete(data.challenge); return send(200, { ok: true }, startSession(p)); }
-      if (req.url === '/api/auth/profile') { const p = sessions.get(data.session); return p ? send(200, { user: p.user, expires: Date.now() + 3600000 }) : send(401, { error: 'Expired.' }); }
-      if (req.url === '/api/auth/account-status') return send(200, { accounts: Object.fromEntries(data.ids.map((id) => [id, !!enabled[id]])) });
+      const send = (status, value) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(value)); };
+      if (req.headers.authorization !== 'Bearer ' + secret || data.client_id !== 'vpn') return send(401, { error: 'No.' });
+      if (req.url === '/api/sso/exchange') {
+        const g = codes.get(data.code); codes.delete(data.code);
+        if (!g || g.state !== data.state) return send(401, { error: 'Sign-in link expired or already used.' });
+        const session = crypto.randomBytes(32).toString('hex'); appSessions.set(session, g.who);
+        return send(200, { session, expires: Date.now() + 3600000, user: people[g.who] });
+      }
+      if (req.url === '/api/sso/session') { const who = appSessions.get(data.session); return who && enabled[people[who].id] ? send(200, { session: data.session, user: people[who] }) : send(401, { error: 'Expired.' }); }
       send(404, { error: 'Not found.' });
     });
   });
+  // Stand-in for the private staff backend (account checks).
+  const backend = http.createServer((req, res) => {
+    let body = ''; req.on('data', (c) => { body += c; }); req.on('end', () => {
+      const data = JSON.parse(body || '{}');
+      res.writeHead(req.headers.authorization === 'Bearer ' + secret && req.url === '/api/auth/account-status' ? 200 : 401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ accounts: Object.fromEntries((data.ids || []).map((id) => [id, !!enabled[id]])) }));
+    });
+  });
+  await new Promise((r) => authServer.listen(0, '127.0.0.1', r));
   await new Promise((r) => backend.listen(0, '127.0.0.1', r));
   const port = await freePort();
   const SITE = 'http://127.0.0.1:' + port;
   const child = spawn(process.execPath, [path.join(__dirname, 'server.js')], {
-    env: { ...process.env, PORT: String(port), HOST: '127.0.0.1', VPN_DATA_DIR: path.join(dir, 'data'), VPN_WG_FAKE: '1', VPN_ACCOUNTS_BACKEND: 'http://127.0.0.1:' + backend.address().port, STATUS_SSO_SECRET_FILE: path.join(dir, 'secret'), VPN_UPKEEP_MS: '400' },
+    env: { ...process.env, PORT: String(port), HOST: '127.0.0.1', VPN_DATA_DIR: path.join(dir, 'data'), VPN_WG_FAKE: '1', VPN_ORIGIN: SITE, AUTH_ORIGIN: 'https://auth.example', AUTH_BACKEND: 'http://127.0.0.1:' + authServer.address().port,
+      VPN_ACCOUNTS_BACKEND: 'http://127.0.0.1:' + backend.address().port, STATUS_SSO_SECRET_FILE: path.join(dir, 'secret'), VPN_UPKEEP_MS: '400' },
     stdio: ['ignore', 'ignore', 'inherit'],
   });
-  const call = async (p, o) => { const r = await fetch(SITE + p, { method: o && o.method || (o && o.json ? 'POST' : 'GET'), headers: { ...(o && o.json ? { 'Content-Type': 'application/json' } : {}), ...(o && o.token ? { Authorization: 'Bearer ' + o.token } : {}) }, body: o && o.json ? JSON.stringify(o.json) : o && o.body }); return { status: r.status, body: r.headers.get('content-type') === 'application/json' ? await r.json() : await r.text(), headers: r.headers }; };
-  const signIn = async (email, password, pin) => { const a = await call('/api/sign-in', { json: { email, password } }); assert.equal(a.body.codeRequired, true); const b = await call('/api/sign-in/code', { json: { flow: a.body.flow, code: pin } }); return b; };
+  const call = async (p, o) => {
+    o = o || {};
+    const headers = { ...(o.json ? { 'Content-Type': 'application/json' } : {}), ...(o.token ? { Authorization: 'Bearer ' + o.token } : {}), ...(o.cookie ? { cookie: o.cookie } : {}), ...(o.origin ? { origin: o.origin } : {}) };
+    const r = await fetch(SITE + p, { method: o.method || (o.json ? 'POST' : 'GET'), headers, body: o.json ? JSON.stringify(o.json) : o.body, redirect: 'manual' });
+    const type = r.headers.get('content-type') || '';
+    return { status: r.status, body: type.startsWith('application/json') ? await r.json() : await r.text(), headers: r.headers };
+  };
+  const cookieOf = (r, name) => (r.headers.getSetCookie ? r.headers.getSetCookie() : []).map((c) => c.split(';')[0]).find((c) => c.startsWith(name + '='));
+  // Signs in through the stand-in Auth; for the Mac app, `app` is its challenge.
+  const authSignIn = async (who, app) => {
+    const start = await call('/auth/login' + (app ? '?app=' + app : ''));
+    assert.equal(start.status, 302);
+    const location = new URL(start.headers.get('location'));
+    assert.equal(location.origin, 'https://auth.example'); assert.equal(location.searchParams.get('client_id'), 'vpn');
+    const state = location.searchParams.get('state');
+    const code = crypto.randomBytes(32).toString('hex'); codes.set(code, { state, who });
+    return call('/auth/callback?code=' + code + '&state=' + state, { cookie: cookieOf(start, 'hn_vpn_state') });
+  };
   try {
     for (let i = 0; i < 50; i++) { try { if ((await fetch(SITE + '/healthz')).ok) break; } catch { /* starting */ } await new Promise((r) => setTimeout(r, 100)); }
-    // The website loads in the HN design.
+    // The website offers HN Group Auth sign-in only, in the HN design.
     const home = await call('/');
-    assert.match(home.body, /HN Group VPN/); assert.match(home.body, /hn-group-wordmark\.svg/);
+    assert.match(home.body, /Sign in with HN Group Auth/); assert.match(home.body, /hn-group-wordmark\.svg/); assert.doesNotMatch(home.body, /type="password"/);
     assert.equal((await call('/api/me')).status, 401);
+    assert.equal((await call('/api/sign-in', { json: { email: 'x', password: 'y' } })).status, 401);
 
-    // Password, then PIN.
-    assert.match((await call('/api/sign-in', { json: { email: 'sam@hngroup.org.uk', password: 'wrong' } })).body.error, /wrong/);
-    const a = await call('/api/sign-in', { json: { email: 'sam@hngroup.org.uk', password: 'sam password' } });
-    assert.match((await call('/api/sign-in/code', { json: { flow: a.body.flow, code: '000000' } })).body.error, /PIN is wrong/);
-    const signed = await call('/api/sign-in/code', { json: { flow: a.body.flow, code: '123456' } });
-    assert.equal(signed.status, 200); assert.match(signed.body.token, /^[a-f0-9]{64}$/); assert.equal(signed.body.user.admin, false);
-    const sam = signed.body.token;
-    // Accounts that haven't finished setup can't use the VPN yet.
-    assert.match((await signIn('new@hngroup.org.uk', 'temporary', '111111')).body.error, /Finish setting up your staff account/);
+    // Website sign-in: Auth, then a browser-session cookie.
+    let r = await authSignIn('sam');
+    assert.equal(r.status, 302); assert.equal(r.headers.get('location'), '/');
+    const samCookie = cookieOf(r, 'hn_vpn_session');
+    assert.ok(samCookie); assert.doesNotMatch(r.headers.getSetCookie().join(';'), /hn_vpn_session=[a-f0-9]+;[^,]*Max-Age/);
+    let me = await call('/api/me', { cookie: samCookie });
+    assert.equal(me.status, 200); assert.equal(me.body.user.displayName, 'Sam'); assert.equal(me.body.user.admin, false);
+    // Changes need the website's own origin.
+    assert.equal((await call('/api/devices', { cookie: samCookie, json: { name: 'Phone' } })).status, 403);
+    r = await call('/api/devices', { cookie: samCookie, origin: SITE, json: { name: 'Sam’s iPhone' } });
+    assert.equal(r.status, 201);
+    assert.match(r.body.connection.config, /PrivateKey = [A-Za-z0-9+/]{43}=/);
+    assert.match(r.body.connection.config, /AllowedIPs = 0\.0\.0\.0\/0, ::\/0/);
+    assert.match(r.body.connection.config, /Endpoint = vpn\.hngroup\.org\.uk:51820/);
+    const phone = r.body.device.id;
+    // A stale or forged callback is refused.
+    assert.equal((await call('/auth/callback?code=' + 'a'.repeat(64) + '&state=' + 'b'.repeat(64))).status, 400);
+
+    // Mac app sign-in: Auth in the browser, a one-time code for the app, swapped with its secret.
+    const verifier = crypto.randomBytes(32).toString('hex'), challenge = hash(verifier);
+    assert.equal((await call('/auth/login?app=nothex')).status, 400);
+    r = await authSignIn('sam', challenge);
+    assert.equal(r.status, 200);
+    const appCode = r.body.match(/hngroupvpn:\/\/signed-in\?code=([a-f0-9]{64})/)[1];
+    assert.match(r.body, /http-equiv="refresh"/);
+    assert.equal(cookieOf(r, 'hn_vpn_session'), undefined);
+    assert.equal((await call('/api/app/exchange', { json: { code: appCode, verifier: 'f'.repeat(64) } })).status, 401);
+    r = await authSignIn('sam', challenge);
+    const appCode2 = r.body.match(/code=([a-f0-9]{64})/)[1];
+    r = await call('/api/app/exchange', { json: { code: appCode2, verifier } });
+    assert.equal(r.status, 200); assert.equal(r.body.user.displayName, 'Sam');
+    const sam = r.body.token;
+    assert.equal((await call('/api/app/exchange', { json: { code: appCode2, verifier } })).status, 401);
 
     // The Mac app registers with its own key; the server never sees the private key.
     const macKey = crypto.randomBytes(32).toString('base64');
-    let r = await call('/api/devices', { token: sam, json: { name: 'Sam’s MacBook', publicKey: macKey } });
+    r = await call('/api/devices', { token: sam, json: { name: 'Sam’s MacBook', publicKey: macKey } });
     assert.equal(r.status, 201);
-    assert.equal(r.body.device.address, '10.88.0.2');
     assert.match(r.body.connection.config, /PrivateKey = <this device’s private key>/);
-    assert.match(r.body.connection.config, /AllowedIPs = 0\.0\.0\.0\/0, ::\/0/);
-    assert.match(r.body.connection.config, /Endpoint = vpn\.hngroup\.org\.uk:51820/);
-    assert.deepEqual(r.body.connection.address, ['10.88.0.2/32', 'fd88:88::2/128']);
+    assert.deepEqual(r.body.connection.address, [r.body.device.address + '/32', 'fd88:88::' + Number(r.body.device.address.split('.')[3]).toString(16) + '/128']);
     assert.match((await call('/api/devices', { token: sam, json: { name: 'Again', publicKey: macKey } })).body.error, /already registered/);
     assert.match((await call('/api/devices', { token: sam, json: { name: 'Bad', publicKey: 'not-a-key' } })).body.error, /isn’t valid/);
-    // A phone added from the website gets a key made by the server, shown once.
-    r = await call('/api/devices', { token: sam, json: { name: 'Sam’s iPhone' } });
-    assert.match(r.body.connection.config, /PrivateKey = [A-Za-z0-9+/]{43}=/);
-    const phone = r.body.device.id;
-    assert.doesNotMatch(JSON.stringify((await call('/api/me', { token: sam })).body), /PrivateKey/);
-    // Up to five devices each.
     for (let i = 0; i < 3; i++) assert.equal((await call('/api/devices', { token: sam, json: { name: 'Extra ' + i } })).status, 201);
     assert.match((await call('/api/devices', { token: sam, json: { name: 'Too many' } })).body.error, /up to 5 devices/);
-    let me = (await call('/api/me', { token: sam })).body;
-    assert.equal(me.devices.length, 5); assert.equal(me.user.displayName, 'Sam');
+    assert.doesNotMatch(JSON.stringify((await call('/api/me', { token: sam })).body), /PrivateKey/);
     assert.equal((await call('/api/devices/' + phone, { token: sam, method: 'DELETE' })).status, 200);
     assert.equal((await call('/api/me', { token: sam })).body.devices.length, 4);
 
-    // Staff only see their own devices; administrators see everyone's and can remove any.
+    // Administrators see everyone's devices and can remove any; staff only their own.
     assert.equal((await call('/api/admin/devices', { token: sam })).status, 403);
-    const owner = (await signIn('owner@hngroup.org.uk', 'owner password', '654321')).body.token;
-    const all = (await call('/api/admin/devices', { token: owner })).body.devices;
+    const ownerCookie = cookieOf(await authSignIn('owner'), 'hn_vpn_session');
+    const all = (await call('/api/admin/devices', { cookie: ownerCookie })).body.devices;
     assert.equal(all.length, 4); assert.equal(all[0].owner.email, 'sam@hngroup.org.uk');
-    assert.equal((await call('/api/devices/' + all[0].id, { token: owner, method: 'DELETE' })).status, 200);
-    const ownerDevice = (await call('/api/devices', { token: owner, json: { name: 'Owner laptop' } })).body.device.id;
+    assert.equal((await call('/api/devices/' + all[0].id, { cookie: ownerCookie, origin: SITE, method: 'DELETE' })).status, 200);
+    const ownerDevice = (await call('/api/devices', { cookie: ownerCookie, origin: SITE, json: { name: 'Owner laptop' } })).body.device.id;
     assert.equal((await call('/api/devices/' + ownerDevice, { token: sam, method: 'DELETE' })).status, 404);
 
     // The Mac app: administrators publish it, signed-in staff download it.
     assert.equal((await call('/api/mac-app', { token: sam })).status, 404);
-    assert.equal((await call('/api/admin/mac-app', { token: sam, body: Buffer.from('PK\x03\x04zip') , method: 'POST' })).status, 403);
-    assert.equal((await call('/api/admin/mac-app', { token: owner, body: Buffer.from('not a zip'), method: 'POST' })).status, 400);
-    assert.equal((await call('/api/admin/mac-app', { token: owner, body: Buffer.from('PK\x03\x04zip contents'), method: 'POST' })).status, 200);
-    r = await call('/api/mac-app', { token: sam });
+    assert.equal((await call('/api/admin/mac-app', { token: sam, body: Buffer.from('PK\x03\x04zip'), method: 'POST' })).status, 403);
+    assert.equal((await call('/api/admin/mac-app', { cookie: ownerCookie, origin: SITE, body: Buffer.from('not a zip'), method: 'POST' })).status, 400);
+    assert.equal((await call('/api/admin/mac-app', { cookie: ownerCookie, origin: SITE, body: Buffer.from('PK\x03\x04zip contents'), method: 'POST' })).status, 200);
+    r = await call('/api/mac-app', { cookie: samCookie });
     assert.equal(r.status, 200); assert.equal(r.headers.get('content-type'), 'application/zip');
     assert.equal((await call('/api/mac-app')).status, 401);
-
-    // Signing in survives a restart of the service (sign-ins are saved, hashed).
     assert.ok(!fs.readFileSync(path.join(dir, 'data', 'vpn.json'), 'utf8').includes(sam));
 
-    // A disabled staff account loses its devices and sign-ins at the next check.
+    // A disabled staff account loses its devices, its app sign-in and its website sign-in.
     enabled['p-sam'] = false;
     await new Promise((r2) => setTimeout(r2, 1200));
     assert.equal((await call('/api/me', { token: sam })).status, 401);
-    me = (await call('/api/admin/devices', { token: owner })).body;
-    assert.ok(me.devices.every((d) => d.owner.email !== 'sam@hngroup.org.uk'));
+    assert.equal((await call('/api/me', { cookie: samCookie })).status, 401);
+    assert.ok((await call('/api/admin/devices', { cookie: ownerCookie })).body.devices.every((d) => d.owner.email !== 'sam@hngroup.org.uk'));
 
-    // Signing out ends the token.
-    assert.equal((await call('/api/sign-out', { token: owner, json: {} })).status, 200);
-    assert.equal((await call('/api/me', { token: owner })).status, 401);
+    // Signing out ends the website sign-in.
+    assert.equal((await call('/api/sign-out', { cookie: ownerCookie, origin: SITE, json: {} })).status, 200);
+    assert.equal((await call('/api/me', { cookie: ownerCookie })).status, 401);
   } finally {
-    child.kill(); backend.close();
+    child.kill(); backend.close(); authServer.close();
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });

@@ -21,6 +21,7 @@ const APPS = {
     granted: 'Your staff portal account is ready.', restricted: '' },
   wiki: { name: 'HN Group Wiki', short: 'the wiki', allowed: () => true, granted: 'You can edit HN Group Wiki articles.', restricted: '' },
   branding: { name: 'HN Group brand centre', short: 'the brand centre', allowed: () => true, granted: 'You can use the HN Group brand centre.', restricted: '' },
+  vpn: { name: 'HN Group VPN', short: 'the VPN', allowed: () => true, granted: 'You can use the HN Group VPN.', restricted: '' },
 };
 const app = Object.prototype.hasOwnProperty.call(APPS, client) ? APPS[client] : null;
 const connecting = !!app && /^[a-f0-9]{64}$/.test(state || '');

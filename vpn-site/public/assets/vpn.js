@@ -1,10 +1,10 @@
 'use strict';
-// HN Group VPN website. Like the staff portal, the sign-in lasts only while the page is open:
-// refreshing signs you out. The token is kept in memory, never in browser storage.
+// HN Group VPN website. Signing in goes through HN Group Auth (/auth/login); the site then keeps a
+// browser-session cookie, so the API needs no token here.
 (function () {
   const $ = (s, el) => (el || document).querySelector(s);
-  let token = '', flow = '', me = null;
-  const views = ['view-sign-in', 'view-pin', 'view-home', 'view-loading'];
+  let me = null;
+  const views = ['view-sign-in', 'view-home', 'view-loading'];
   const show = (id) => { for (const v of views) $('#' + v).hidden = v !== id; $('#top-actions').hidden = id !== 'view-home'; };
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const toast = (text) => { const t = $('#toast'); t.textContent = text; t.hidden = false; clearTimeout(toast.timer); toast.timer = setTimeout(() => { t.hidden = true; }, 3500); };
@@ -13,58 +13,15 @@
   async function api(path, options) {
     const o = options || {};
     const headers = { Accept: 'application/json' };
-    if (token) headers.Authorization = 'Bearer ' + token;
     if (o.json !== undefined) headers['Content-Type'] = 'application/json';
-    const res = await fetch(path, { method: o.method || (o.json !== undefined || o.body ? 'POST' : 'GET'), headers, body: o.json !== undefined ? JSON.stringify(o.json) : o.body });
-    if (o.raw && res.ok) return res;
+    const res = await fetch(path, { method: o.method || (o.json !== undefined || o.body ? 'POST' : 'GET'), headers, body: o.json !== undefined ? JSON.stringify(o.json) : o.body, credentials: 'same-origin' });
     const data = await res.json().catch(() => ({}));
-    if (res.status === 401 && token) { token = ''; show('view-sign-in'); }
-    if (!res.ok) throw Object.assign(new Error(data.error || 'Something went wrong. Please try again.'), { restart: data.restart });
+    if (res.status === 401) { show('view-sign-in'); throw Object.assign(new Error(data.error || 'Sign in again.'), { signedOut: true }); }
+    if (!res.ok) throw new Error(data.error || 'Something went wrong. Please try again.');
     return data;
   }
 
-  // ---------- Signing in ----------
-  $('#sign-in-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    error('#sign-in-error');
-    const button = $('button[type=submit]', e.target);
-    if (button.disabled) return;
-    button.disabled = true;
-    try {
-      const r = await api('/api/sign-in', { json: { email: $('#email').value, password: $('#password').value } });
-      $('#password').value = '';
-      if (r.codeRequired) { flow = r.flow; show('view-pin'); clearPin(); return; }
-      signedIn(r);
-    } catch (err) { error('#sign-in-error', err.message); }
-    finally { button.disabled = false; }
-  });
-
-  const boxes = () => [...document.querySelectorAll('#pin input')];
-  function clearPin() { boxes().forEach((b) => { b.value = ''; b.disabled = false; }); setTimeout(() => boxes()[0].focus(), 30); }
-  let sending = false;
-  async function sendPin() {
-    const code = boxes().map((b) => b.value).join('');
-    if (!/^\d{6}$/.test(code) || sending) return;
-    sending = true; error('#pin-error'); boxes().forEach((b) => { b.disabled = true; });
-    try { signedIn(await api('/api/sign-in/code', { json: { flow, code } })); }
-    catch (err) { error('#pin-error', err.message); if (err.restart) { show('view-sign-in'); error('#sign-in-error', err.message); } else clearPin(); }
-    finally { sending = false; }
-  }
-  $('#pin').addEventListener('input', (e) => {
-    const box = e.target, list = boxes(), i = list.indexOf(box);
-    const digits = box.value.replace(/\D/g, '');
-    if (digits.length > 1) { digits.slice(0, 6 - i).split('').forEach((d, k) => { list[i + k].value = d; }); } else box.value = digits;
-    const next = list.find((b) => !b.value);
-    if (next) { if (box.value) next.focus(); } else sendPin();
-  });
-  $('#pin').addEventListener('keydown', (e) => {
-    const list = boxes(), i = list.indexOf(e.target);
-    if (e.key === 'Backspace' && !e.target.value && i > 0) { list[i - 1].value = ''; list[i - 1].focus(); e.preventDefault(); }
-  });
-  $('#pin-back').addEventListener('click', () => { flow = ''; show('view-sign-in'); $('#email').focus(); });
-  $('#sign-out').addEventListener('click', async () => { try { await api('/api/sign-out', { json: {} }); } catch { /* signed out anyway */ } token = ''; me = null; show('view-sign-in'); });
-
-  function signedIn(r) { token = r.token; flow = ''; load(); }
+  $('#sign-out').addEventListener('click', async () => { try { await api('/api/sign-out', { json: {} }); } catch { /* signed out anyway */ } me = null; show('view-sign-in'); });
 
   // ---------- Devices ----------
   const ago = (iso) => {
@@ -95,7 +52,7 @@
       $('#admin').hidden = !me.user.admin;
       if (me.user.admin) $('#all-devices').innerHTML = list((await api('/api/admin/devices')).devices, true);
       show('view-home');
-    } catch (err) { if (token) { show('view-home'); toast(err.message); } }
+    } catch (err) { if (!err.signedOut) { show('view-home'); toast(err.message); } }
   }
   document.addEventListener('click', async (e) => {
     const b = e.target.closest('[data-remove]');
@@ -122,14 +79,7 @@
     finally { button.disabled = false; }
   });
   $('#config-hide').addEventListener('click', () => { $('#new-config').hidden = true; $('#config-text').textContent = ''; URL.revokeObjectURL($('#config-download').href); });
-  $('#get-mac-app').addEventListener('click', async () => {
-    try {
-      const res = await api('/api/mac-app', { raw: true });
-      const url = URL.createObjectURL(await res.blob());
-      const a = document.createElement('a'); a.href = url; a.download = 'HN-Group-VPN-macOS.zip'; document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
-    } catch (err) { toast(err.message); }
-  });
+  $('#get-mac-app').addEventListener('click', () => { window.location.href = '/api/mac-app'; });
   $('#app-form').addEventListener('submit', async (e) => {
     e.preventDefault(); error('#app-error');
     const file = $('#app-file').files[0];
@@ -137,5 +87,5 @@
     try { await api('/api/admin/mac-app', { method: 'POST', body: file }); toast('Mac app published.'); $('#app-file').value = ''; load(); } catch (err) { error('#app-error', err.message); }
   });
 
-  show('view-sign-in');
+  load();
 })();

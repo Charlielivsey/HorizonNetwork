@@ -52,7 +52,7 @@ struct APIError: LocalizedError {
     var errorDescription: String? { message }
 }
 
-struct SignInResult: Decodable { let codeRequired: Bool?; let flow: String?; let token: String?; let user: User? }
+struct SignInResult: Decodable { let token: String?; let user: User? }
 struct User: Decodable { let displayName: String; let email: String; let admin: Bool? }
 struct Device: Decodable { let id: String; let name: String; let address: String; let connected: Bool? }
 struct Me: Decodable { let user: User; let devices: [Device] }

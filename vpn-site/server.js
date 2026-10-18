@@ -1,7 +1,7 @@
 'use strict';
-// HN Group VPN — vpn.hngroup.org.uk. Staff sign in with their HN Group staff account (password and
-// six-digit PIN) to register devices on the group's WireGuard VPN. The Mac app and the website use
-// the same JSON API with a bearer token; the website keeps its token only for the browser tab.
+// HN Group VPN — vpn.hngroup.org.uk. Staff sign in through HN Group Auth to register devices on the
+// group's WireGuard VPN. The website uses a browser-session cookie tied to the Auth sign-in; the Mac
+// app signs in through Auth in the browser and then uses its own bearer token (see lib/auth.js).
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -9,6 +9,7 @@ const crypto = require('node:crypto');
 const store = require('./lib/store');
 const staff = require('./lib/staff');
 const wg = require('./lib/wg');
+const { createAuth } = require('./lib/auth');
 
 const PUBLIC = process.env.VPN_PUBLIC_DIR || path.join(__dirname, 'public');
 const DATA_DIR = process.env.VPN_DATA_DIR || '/var/lib/hn-vpn';
@@ -17,10 +18,9 @@ const DNS = process.env.VPN_DNS || '1.1.1.1, 1.0.0.1';
 const APP_FILE = path.join(DATA_DIR, 'HN-Group-VPN-macOS.zip');
 const MAX_APP = 80 * 1024 * 1024;
 const fail = staff.fail;
-const flows = new Map(); // PIN step: hash(flow token) -> { challenge, expires }
-const failures = new Map(); // sign-in attempts per IP
 
 store.init(DATA_DIR);
+const auth = createAuth(store);
 
 function send(res, status, value, headers) {
   res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...(headers || {}) });
@@ -39,23 +39,20 @@ async function json(req) {
   try { return JSON.parse((await readBody(req, 32 * 1024)).toString('utf8') || '{}'); } catch (e) { if (e.status) throw e; throw fail(400, 'That request isn’t valid.'); }
 }
 const clientIp = (req) => String(req.headers['x-real-ip'] || req.socket.remoteAddress || '');
-const client = (req) => ({ ip: clientIp(req), agent: req.headers['user-agent'] });
-const tokenOf = (req) => (String(req.headers.authorization || '').match(/^Bearer ([a-f0-9]{64})$/) || [])[1] || '';
-function who(req) {
-  const s = store.session(tokenOf(req));
-  if (!s) throw fail(401, 'Sign in again to manage your VPN devices.');
-  return s.user;
+async function who(req) {
+  const current = await auth.current(req);
+  if (!current) throw fail(401, 'Sign in again to manage your VPN devices.');
+  return current;
 }
-function limited(ip) {
-  const f = failures.get(ip);
-  if (!f) return false;
-  if (Date.now() - f.first > 15 * 60000) { failures.delete(ip); return false; }
-  return f.count >= 20;
-}
-function noteFailure(ip) {
-  const f = failures.get(ip);
-  if (!f || Date.now() - f.first > 15 * 60000) failures.set(ip, { count: 1, first: Date.now() }); else f.count++;
-  if (failures.size > 50000) failures.clear();
+
+// A small page in the site's design, for sign-in results.
+const escHtml = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function showPage(res, status, title, text, cookies, appUrl) {
+  res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Set-Cookie': cookies || [] });
+  res.end('<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">' +
+    (appUrl ? '<meta http-equiv="refresh" content="0;url=' + escHtml(appUrl) + '">' : '') + '<title>' + escHtml(title) + ' · HN Group VPN</title><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/assets/vpn.css?v=2"></head><body>' +
+    '<header class="top"><div class="wrap top-inner"><a class="brand" href="/"><img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="118" height="41"><img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="118" height="41"><span class="brand-name">VPN</span></a></div><div class="stripe" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></header>' +
+    '<main class="wrap"><section class="card narrow"><h1>' + escHtml(title) + '</h1><p class="muted">' + escHtml(text) + '</p><p>' + (appUrl ? '<a class="btn btn-primary" href="' + escHtml(appUrl) + '">Open HN Group VPN</a>' : '<a class="btn btn-primary" href="/">Back to the VPN</a>') + '</p></section></main></body></html>');
 }
 
 // What a device needs to connect. The private key is only included when the server made it.
@@ -94,34 +91,19 @@ async function api(req, res, route) {
   const method = req.method;
   if (route === '/api/ip' && method === 'GET') return send(res, 200, { ip: clientIp(req), viaVpn: clientIp(req) === (process.env.VPN_PUBLIC_IP || '217.154.34.205') });
 
-  // Sign in: password, then PIN.
-  if (route === '/api/sign-in' && method === 'POST') {
-    const ip = clientIp(req);
-    if (limited(ip)) throw fail(429, 'Too many sign-in attempts. Please wait 15 minutes and try again.');
+  // The Mac app's sign-in finishes here (see lib/auth.js).
+  if (route === '/api/app/exchange' && method === 'POST') {
     const body = await json(req);
-    let result;
-    try { result = await staff.signIn(body.email, body.password, client(req)); } catch (e) { if (e.status === 400 || e.status === 401) noteFailure(ip); throw e; }
-    if (result.challenge) {
-      for (const [k, v] of flows) if (v.expires <= Date.now()) flows.delete(k);
-      if (flows.size > 10000) throw fail(503, 'Please try again shortly.');
-      const flow = crypto.randomBytes(32).toString('hex');
-      flows.set(staff.hash(flow), { challenge: result.challenge, expires: Date.now() + 5 * 60000 });
-      return send(res, 200, { codeRequired: true, flow });
-    }
-    return finishSignIn(res, result.user);
+    const r = auth.exchangeAppCode(body.code, body.verifier);
+    return send(res, 200, { token: r.token, user: { displayName: r.user.displayName, email: r.user.email, admin: r.user.admin } });
   }
-  if (route === '/api/sign-in/code' && method === 'POST') {
-    const ip = clientIp(req);
-    if (limited(ip)) throw fail(429, 'Too many sign-in attempts. Please wait 15 minutes and try again.');
-    const body = await json(req);
-    const key = staff.hash(String(body.flow || '')), flow = flows.get(key);
-    if (!flow || flow.expires <= Date.now()) { flows.delete(key); throw fail(401, 'Sign-in expired. Start again.', { restart: true }); }
-    try { const { user } = await staff.signInCode(flow.challenge, body.code, client(req)); flows.delete(key); return finishSignIn(res, user); }
-    catch (e) { if (e.restart) flows.delete(key); if (e.status === 400 || e.status === 401) noteFailure(ip); throw e; }
+  if (route === '/api/sign-out' && method === 'POST') {
+    const current = await auth.current(req).catch(() => null);
+    if (current) store.endSession(current.token);
+    return send(res, 200, { ok: true }, { 'Set-Cookie': auth.SESSION_COOKIE + '=; Path=/; HttpOnly;' + (auth.VPN_ORIGIN.startsWith('https://') ? ' Secure;' : '') + ' SameSite=Lax; Max-Age=0' });
   }
-  if (route === '/api/sign-out' && method === 'POST') { store.endSession(tokenOf(req)); return send(res, 200, { ok: true }); }
 
-  const user = who(req);
+  const { user } = await who(req);
   if (route === '/api/me' && method === 'GET') {
     return send(res, 200, { user: { displayName: user.displayName, email: user.email, admin: user.admin }, devices: await deviceView(store.devicesFor(user.id)), limit: store.MAX_DEVICES, macApp: fs.existsSync(APP_FILE) });
   }
@@ -188,12 +170,13 @@ const server = http.createServer(async (req, res) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; font-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'");
+  res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; font-src 'self'; connect-src 'self'; form-action 'self' " + auth.AUTH_ORIGIN + "; frame-ancestors 'none'; base-uri 'none'; object-src 'none'");
   let route;
   try { route = decodeURIComponent(new URL(req.url, 'http://localhost').pathname); } catch { return send(res, 400, { error: 'Invalid address.' }); }
   try {
     if (route === '/healthz') return send(res, 200, { ok: true });
     if (route.startsWith('/api/')) return await api(req, res, route);
+    if (route.startsWith('/auth/') && await auth.handle(req, res, new URL(req.url, 'http://localhost'), showPage)) return;
     if (req.method === 'GET' && serveStatic(res, route)) return;
     if (req.method === 'GET' && serveStatic(res, '/')) return;
     send(res, 404, { error: 'Not found.' });

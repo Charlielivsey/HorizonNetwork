@@ -4,7 +4,8 @@ import AppKit
 /// HN Group VPN: a menu bar app for HN Group staff.
 @main
 struct HNGroupVPNApp: App {
-    @StateObject private var model = VPNModel()
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+    @StateObject private var model = VPNModel.shared
 
     var body: some Scene {
         MenuBarExtra {
@@ -14,6 +15,15 @@ struct HNGroupVPNApp: App {
                 .accessibilityLabel(model.connected ? "HN Group VPN: connected" : "HN Group VPN: not connected")
         }
         .menuBarExtraStyle(.window)
+    }
+}
+
+/// Receives hngroupvpn:// links, which bring the sign-in back from the browser.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls {
+            Task { @MainActor in await VPNModel.shared.completeSignIn(url) }
+        }
     }
 }
 
@@ -36,7 +46,7 @@ struct MenuView: View {
             VStack(alignment: .leading, spacing: 14) {
                 switch model.stage {
                 case .signIn: SignInView()
-                case .pin: PinView()
+                case .waiting: WaitingView()
                 case .ready: ReadyView()
                 }
                 if let error = model.error {
@@ -99,65 +109,35 @@ struct SignInView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Sign in").font(.title3.bold())
-            Text("Use your HN Group staff account.").font(.callout).foregroundStyle(.secondary)
-            TextField("Email address", text: $model.email).textContentType(.username)
-            SecureField("Password", text: $model.password).textContentType(.password)
-                .onSubmit { Task { await model.signIn() } }
+            Text("Sign in with your HN Group staff account through HN Group Auth. Your browser will open.")
+                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             HStack {
                 Spacer()
-                Button {
-                    Task { await model.signIn() }
-                } label: {
-                    if model.busy { ProgressView().controlSize(.small) } else { Text("Continue") }
-                }
-                .buttonStyle(.borderedProminent).tint(purple)
-                .disabled(model.busy || model.email.isEmpty || model.password.isEmpty)
-                .keyboardShortcut(.defaultAction)
+                Button("Sign in with HN Group Auth") { model.signIn() }
+                    .buttonStyle(.borderedProminent).tint(purple)
+                    .keyboardShortcut(.defaultAction)
             }
         }
-        .textFieldStyle(.roundedBorder)
     }
 }
 
-struct PinView: View {
+struct WaitingView: View {
     @EnvironmentObject var model: VPNModel
-    @FocusState private var focused: Bool
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Enter your PIN").font(.title3.bold())
-            Text("Your six-digit staff PIN.").font(.callout).foregroundStyle(.secondary)
-            ZStack {
-                // A hidden field takes the typing; six boxes show how many digits have been entered.
-                SecureField("", text: $model.pin)
-                    .focused($focused)
-                    .opacity(0.02)
-                    .onChange(of: model.pin) { value in
-                        let digits = String(value.filter(\.isNumber).prefix(6))
-                        if digits != value { model.pin = digits }
-                        if digits.count == 6 { Task { await model.submitPin() } }
-                    }
-                HStack(spacing: 8) {
-                    ForEach(0..<6, id: \.self) { i in
-                        RoundedRectangle(cornerRadius: 9)
-                            .strokeBorder(i == model.pin.count && focused ? purple : Color.secondary.opacity(0.35), lineWidth: i == model.pin.count && focused ? 2 : 1)
-                            .background(RoundedRectangle(cornerRadius: 9).fill(Color(nsColor: .textBackgroundColor)))
-                            .overlay(Circle().fill(Color.primary).frame(width: 9, height: 9).opacity(i < model.pin.count ? 1 : 0))
-                            .frame(width: 38, height: 44)
-                            .scaleEffect(i < model.pin.count ? 1.03 : 1)
-                            .animation(.easeOut(duration: 0.12), value: model.pin.count)
-                    }
-                }
-                .allowsHitTesting(false)
+            HStack(spacing: 10) {
+                ProgressView().controlSize(.small)
+                Text("Finish signing in in your browser").font(.headline)
             }
-            .contentShape(Rectangle())
-            .onTapGesture { focused = true }
+            Text("When HN Group Auth asks, allow your browser to open HN Group VPN.")
+                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             HStack {
-                Button("Start again") { model.startAgain() }.buttonStyle(.link)
+                Button("Open the sign-in page again") { model.signIn() }.buttonStyle(.link)
                 Spacer()
-                if model.busy { ProgressView().controlSize(.small) }
+                Button("Cancel") { model.cancelSignIn() }.buttonStyle(.link)
             }
+            .font(.callout)
         }
-        .onAppear { DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { focused = true } }
     }
 }
 

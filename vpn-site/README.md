@@ -8,9 +8,10 @@ A staff VPN on the VPS. All of a connected device's internet traffic goes throug
   (`/etc/wireguard/wg-hn.conf`, key `/etc/wireguard/hn-vpn.key`, IPv4 forwarding and NAT through
   the server's internet interface, systemd `wg-quick@wg-hn`).
 - **vpn.hngroup.org.uk** (PM2 `hn-vpn`, loopback port 5000, data `/var/lib/hn-vpn/vpn.json`):
-  staff sign in with their HN Group staff account (password, then six-digit PIN, checked by the
-  private staff-account backend). Each person can register up to 5 devices.
-  - The **Mac app** (`mac-vpn-app/`) makes its own key and registers itself.
+  staff sign in through **HN Group Auth** (auth.hngroup.org.uk, registered application `vpn`, callback
+  https://vpn.hngroup.org.uk/auth/callback). Each person can register up to 5 devices.
+  - The **Mac app** (`mac-vpn-app/`) signs in through Auth in the browser (the browser hands the
+    sign-in back with a one-time code via `hngroupvpn://`), makes its own key and registers itself.
   - Phones and PCs: **Add device** on the website gives a WireGuard configuration file (shown once)
     for the official WireGuard app.
   - Administrators (system owner, owner-level accounts, Super Admin) see and remove every device

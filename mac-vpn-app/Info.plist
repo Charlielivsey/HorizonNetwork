@@ -12,6 +12,13 @@
   <key>CFBundleVersion</key><string>1</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
   <key>LSUIElement</key><true/>
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key><string>uk.org.hngroup.vpn.sign-in</string>
+      <key>CFBundleURLSchemes</key><array><string>hngroupvpn</string></array>
+    </dict>
+  </array>
   <key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
   <key>NSAppleEventsUsageDescription</key><string>HN Group VPN uses Terminal to install the WireGuard tools when you ask it to.</string>
   <key>NSHumanReadableCopyright</key><string>© HN Group Limited. For HN Group staff only.</string>

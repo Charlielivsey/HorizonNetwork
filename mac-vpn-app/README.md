@@ -1,7 +1,7 @@
 # HN Group VPN for Mac
 
-A menu bar app for HN Group staff. It signs in with your HN Group staff account (password, then
-six-digit PIN), registers this Mac on the HN Group VPN with a key made on the Mac (the private key
+A menu bar app for HN Group staff. It signs in with your HN Group staff account through HN Group
+Auth in your browser, registers this Mac on the HN Group VPN with a key made on the Mac (the private key
 never leaves it), and connects with one switch. All internet traffic then goes through HN Group's
 server (217.154.34.205).
 
@@ -18,7 +18,7 @@ The app isn't notarised by Apple, so the first time you open it, right-click it 
 ## Using it
 
 1. Open **HN Group VPN**; a shield appears in the menu bar.
-2. Sign in with your staff email, password and PIN.
+2. Choose **Sign in with HN Group Auth**, sign in in your browser, and allow it to open HN Group VPN.
 3. If asked, choose **Install WireGuard tools** (uses Homebrew: `brew install wireguard-tools`).
 4. Choose **Set up this Mac** and enter your Mac password once. This installs a small helper
    (`/usr/local/libexec/hn-vpn/hn-vpn-ctl`), this Mac's VPN configuration (root-only, in
