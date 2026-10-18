@@ -1,4 +1,4 @@
-# HN Browser · first preview
+# HN Browser · preview
 
 A Chromium browser built with Electron, for macOS (Apple silicon and Intel) and Windows x64. The browser and installers are separate from the VPS websites. Downloads: https://downloads.hngroup.org.uk.
 
@@ -6,10 +6,19 @@ A Chromium browser built with Electron, for macOS (Apple silicon and Intel) and 
 
 - Real Chromium tabs, back/forward, reload/stop, address/search bar, new-tab page, per-device browsing cookies and a native save dialog for downloads.
 - **Midnight Lavender** by default. Daylight, Deep Ocean, Forest and Rose Quartz can be chosen in the toolbar; the theme is remembered on this device.
-- HN account sign-in using the existing Auth password/PIN/setup/remembered-account screens. The browser account panel shows the person's display name, email, role and company. Browser identity does not grant website permissions or automatically sign into other sites.
+- Integrated title bar with native macOS/Windows window controls, draggable tab strip, animated menus and new-tab page, keyboard navigation and reduced-motion support.
+- HN account sign-in using the existing Auth password/PIN/setup/remembered-account screens. The browser account panel shows the person's display name, staff profile picture, email, role and company. The toolbar also shows their profile picture; missing/unavailable pictures fall back to initials. Browser identity does not grant website permissions or automatically sign into other sites.
 - Ctrl/Command+T, W, L and R, plus the standard Edit menu and full-screen controls.
 
-This first preview does not include Chrome extensions, a password manager, browser-data/account sync, default-browser registration or automatic application updates. Native identity is held in memory and rechecked each minute; the app asks for sign-in after restart. Auth can remember the browser's account but still requires its existing PIN. Normal website cookies remain in the browsing partition.
+This preview does not include Chrome extensions, a password manager, browser-data/account sync, default-browser registration or silent application replacement. Native identity is held in memory and rechecked each minute; the app asks for sign-in after restart. Auth can remember the browser's account but still requires its existing PIN. Normal website cookies remain in the browsing partition.
+
+## Updates and version
+
+The footer and **Browser menu → About & updates** show the app version; About also shows the GitHub Actions build number. The app checks downloads.hngroup.org.uk at startup (after 15 seconds) and every six hours. Staff can check manually, download the correct Mac/Windows installer, and open it from that screen. A badge appears when an update is available.
+
+Downloads are restricted to the fixed downloads-site routes, version/build comparisons prevent downgrades, and the expected byte count and SHA-256 are checked before the installer becomes available and again before opening. Downloads stay in the private app-data updates folder, and incomplete or invalid downloads are removed. Opening requires confirmation and quits the browser. On Mac, drag the app from the disk image to Applications and replace it; on Windows, complete the installer. This is an installer-assisted update, not a silent bundle swap. Browser data is preserved.
+
+The original 0.1.0 app predates this feature, so download 0.2.0 once from the downloads site to receive it.
 
 ## Run and build
 

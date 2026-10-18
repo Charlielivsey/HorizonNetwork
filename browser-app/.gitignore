@@ -3,3 +3,5 @@ dist/
 build/
 .test-results/
 .devtools/
+
+src/build.json

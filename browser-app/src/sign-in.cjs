@@ -2,7 +2,7 @@
 const http=require('node:http'),crypto=require('node:crypto');
 const AUTH='https://auth.hngroup.org.uk';
 class Account {
- constructor({open,changed,fetcher=fetch,origin=AUTH}){this.open=open;this.changed=changed;this.fetch=fetcher;this.origin=origin;this.token=null;this.user=null;this.pending=null;this.generation=0;}
+ constructor({open,changed,fetcher=fetch,origin=AUTH}){this.open=open;this.changed=changed;this.fetch=fetcher;this.origin=origin;this.token=null;this.user=null;this.pending=null;this.generation=0;this.avatar=null;this.avatarAt=0;}
  async call(route,data={},token=this.token){let response;try{response=await this.fetch(this.origin+'/api/native/'+route,{method:'POST',headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify(data),signal:AbortSignal.timeout(15000),redirect:'error'});}catch{throw Error('The authentication portal is unavailable. Please try again later.');}const value=await response.json().catch(()=>({}));if(!response.ok)throw Object.assign(Error(value.error||'HN sign-in is unavailable. Please try again later.'),{status:response.status});return value;}
  cancel(){this.generation++;if(this.pending){clearTimeout(this.pending.timer);this.pending.server.close();this.pending=null;}}
  async start(){
@@ -14,7 +14,7 @@ class Account {
    if(url.pathname!=='/callback'||url.searchParams.get('state')!==state){res.writeHead(400);return res.end('This sign-in request has expired.');}
    if(!this.pending||this.pending.used||generation!==this.generation){res.writeHead(400);return res.end('Sign-in already completed or cancelled.');}this.pending.used=true;
    let text='You are signed in. Return to HN Browser.',status=200;
-   try{if(url.searchParams.has('error'))throw Error('HN account sign-in was cancelled.');const result=await this.call('exchange',{code:url.searchParams.get('code'),state,code_verifier:verifier,redirect_uri:this.pending.redirect});if(generation!==this.generation){await this.call('logout',{},result.token).catch(()=>{});throw Error('Sign-in cancelled.');}this.token=result.token;this.user=result.user;await this.refresh();}
+   try{if(url.searchParams.has('error'))throw Error('HN account sign-in was cancelled.');const result=await this.call('exchange',{code:url.searchParams.get('code'),state,code_verifier:verifier,redirect_uri:this.pending.redirect});if(generation!==this.generation){await this.call('logout',{},result.token).catch(()=>{});throw Error('Sign-in cancelled.');}this.token=result.token;this.user=result.user;this.avatar=null;this.avatarAt=0;await this.refresh();}
    catch(e){text='Sign-in could not be completed. Return to HN Browser and try again.';status=400;this.changed({error:e.message});}
    res.writeHead(status,{'Content-Type':'text/plain; charset=utf-8'});res.end(text);if(generation===this.generation)this.cancel();
   });
@@ -23,7 +23,10 @@ class Account {
   const url=new URL('/authorize',this.origin);for(const[k,v]of Object.entries({client_id:'browser',state,redirect_uri:redirect,code_challenge:challenge,code_challenge_method:'S256'}))url.searchParams.set(k,v);
   try{await this.open(url.href);}catch(e){this.cancel();throw e;}
  }
- async refresh(){if(!this.token)return;const token=this.token;try{const result=await this.call('session',{},token);if(this.token!==token)return;this.user=result.user;this.changed({user:this.user});}catch(e){if(this.token!==token)return;if([401,403].includes(e.status)){this.token=null;this.user=null;this.changed({user:null,error:'Your HN session ended. Sign in again.'});}else this.changed({error:e.message});}}
- async signOut(){this.cancel();const token=this.token;this.token=null;this.user=null;this.changed({user:null});if(token)await this.call('logout',{},token).catch(()=>{});}
+ async picture(token){
+  try{const response=await this.fetch(this.origin+'/api/native/avatar',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:'{}',signal:AbortSignal.timeout(10000),redirect:'error'});const type=response.headers.get('content-type')?.split(';')[0];if(!response.ok||!['image/png','image/jpeg','image/webp','image/gif'].includes(type))return null;let size=0;const parts=[];for await(const chunk of response.body){size+=chunk.length;if(size>2*1024*1024)throw Error('Image too large');parts.push(chunk);}return size?'data:'+type+';base64,'+Buffer.concat(parts).toString('base64'):null;}catch{return null;}
+ }
+ async refresh(){if(!this.token)return;const token=this.token;try{const result=await this.call('session',{},token);if(this.token!==token)return;this.user=result.user;if(!this.avatarAt||Date.now()-this.avatarAt>300000){const avatar=await this.picture(token);if(this.token!==token)return;this.avatar=avatar;this.avatarAt=Date.now();}this.changed({user:this.user});}catch(e){if(this.token!==token)return;if([401,403].includes(e.status)){this.token=null;this.user=null;this.avatar=null;this.avatarAt=0;this.changed({user:null,error:'Your HN session ended. Sign in again.'});}else this.changed({error:e.message});}}
+ async signOut(){this.cancel();const token=this.token;this.token=null;this.user=null;this.avatar=null;this.avatarAt=0;this.changed({user:null});if(token)await this.call('logout',{},token).catch(()=>{});}
 }
 module.exports={Account,AUTH};
