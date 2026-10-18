@@ -14,8 +14,10 @@ A staff VPN on the VPS. All of a connected device's internet traffic goes throug
     sign-in back with a one-time code via `hngroupvpn://`), makes its own key and registers itself.
   - Phones and PCs: **Add device** on the website gives a WireGuard configuration file (shown once)
     for the official WireGuard app.
-  - Administrators (system owner, owner-level accounts, Super Admin) see and remove every device
-    and publish the Mac app zip for staff to download.
+  - Administrators (system owner, owner-level accounts, Super Admin) see and remove every device.
+  - The Mac app is published automatically: GitHub Actions builds `mac-vpn-app/` and commits the
+    zip to `vpn-site/mac-app/`, and this installer puts it on the site. Administrators can also
+    upload a zip on the site.
 - The service keeps the interface's peers matching the registered devices (on start and every 5
   minutes) and removes devices and sign-ins of staff accounts that are no longer enabled.
 

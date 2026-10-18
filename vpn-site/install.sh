@@ -71,6 +71,8 @@ install -d -m 700 /var/lib/hn-vpn
 rm -rf /opt/hn-vpn/lib /opt/hn-vpn/public
 cp "$SCRIPT_DIR/server.js" /opt/hn-vpn/server.js
 cp -r "$SCRIPT_DIR/lib" "$SCRIPT_DIR/public" /opt/hn-vpn/
+# The Mac app built by GitHub Actions (mac-vpn-app/) is published for staff to download.
+if [ -f "$SCRIPT_DIR/mac-app/HN-Group-VPN-macOS.zip" ]; then install -m 600 "$SCRIPT_DIR/mac-app/HN-Group-VPN-macOS.zip" /var/lib/hn-vpn/HN-Group-VPN-macOS.zip; fi
 # The service re-adds every registered device to the interface when it starts.
 pm2 startOrRestart "$SCRIPT_DIR/ecosystem.config.cjs" --update-env
 healthy=0
