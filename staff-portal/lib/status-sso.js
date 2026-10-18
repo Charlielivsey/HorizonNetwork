@@ -51,10 +51,17 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       logEvent(req, session, 'status-admin-sign-in');
       redirect(res, `${STATUS_ORIGIN}/auth/callback?code=${code}&state=${state}`); return true;
     }
-    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/password', '/api/auth/code', '/api/auth/network-leadership', '/api/auth/network-avatar'].includes(pathname)) return false;
+    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/password', '/api/auth/code', '/api/auth/network-leadership', '/api/auth/network-avatar', '/api/auth/account-status'].includes(pathname)) return false;
     if (req.method !== 'POST') { sendJson(res, 405, { error: 'Method not allowed.' }); return true; }
     if (!credentials(req)) { sendJson(res, 401, { error: 'Status integration not authenticated.' }); return true; }
     const body = await readJsonBody(req);
+    // Lets HN Group services (such as the VPN) check that staff accounts they serve are still enabled.
+    if (pathname === '/api/auth/account-status') {
+      const ids = Array.isArray(body.ids) ? body.ids.filter((x) => typeof x === 'string').slice(0, 5000) : [];
+      const accounts = {};
+      for (const id of ids) { const p = store.getPerson(id); accounts[id] = !!(p && p.account && p.account.enabled); }
+      sendJson(res, 200, { accounts }); return true;
+    }
     if (pathname === '/api/auth/network-leadership') {
       sendJson(res, 200, { leaders: network.publicMembers(store) }); return true;
     }

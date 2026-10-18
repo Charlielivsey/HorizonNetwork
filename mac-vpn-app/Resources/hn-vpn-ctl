@@ -1,0 +1,33 @@
+#!/bin/bash
+# HN Group VPN helper, installed by the HN Group VPN app as /usr/local/libexec/hn-vpn/hn-vpn-ctl
+# (owned by root). It only ever starts or stops the VPN's own fixed, root-owned configuration, so
+# the app can connect without asking for a password each time.
+set -euo pipefail
+export PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+CONF=/usr/local/etc/hn-vpn/hn-vpn.conf
+WG_QUICK="$(command -v wg-quick || true)"
+case "${1:-}" in
+  up)
+    [ -f "$CONF" ] || { echo 'This Mac is not set up for the HN Group VPN.' >&2; exit 3; }
+    [ -n "$WG_QUICK" ] || { echo 'WireGuard tools are not installed.' >&2; exit 4; }
+    [ -f /var/run/wireguard/hn-vpn.name ] && { echo 'Already connected.'; exit 0; }
+    # wg-quick needs a modern bash; Homebrew's comes first in PATH.
+    exec bash "$WG_QUICK" up "$CONF"
+    ;;
+  down)
+    [ -f /var/run/wireguard/hn-vpn.name ] || { echo 'Already disconnected.'; exit 0; }
+    exec bash "$WG_QUICK" down "$CONF"
+    ;;
+  status)
+    if [ -f /var/run/wireguard/hn-vpn.name ]; then echo up; else echo down; fi
+    ;;
+  remove)
+    if [ -f /var/run/wireguard/hn-vpn.name ] && [ -n "$WG_QUICK" ]; then bash "$WG_QUICK" down "$CONF" || true; fi
+    rm -f "$CONF"
+    echo removed
+    ;;
+  *)
+    echo 'usage: hn-vpn-ctl up|down|status|remove' >&2
+    exit 2
+    ;;
+esac

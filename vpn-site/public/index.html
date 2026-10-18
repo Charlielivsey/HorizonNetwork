@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>HN Group VPN</title>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/vpn.css?v=1">
+<script src="/assets/vpn.js?v=1" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="wrap top-inner">
+    <a class="brand" href="/"><img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="118" height="41"><img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="118" height="41"><span class="brand-name">VPN</span></a>
+    <div class="top-actions" id="top-actions" hidden><span id="who" class="who"></span><button class="btn btn-ghost" id="sign-out" type="button">Sign out</button></div>
+  </div>
+  <div class="stripe" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+</header>
+<main class="wrap" id="main">
+
+  <section class="card narrow" id="view-sign-in" hidden>
+    <p class="eyebrow">Staff only</p>
+    <h1>Sign in to the HN Group VPN</h1>
+    <p class="muted">Use your HN Group staff account. You’ll need your password and your six-digit PIN.</p>
+    <form id="sign-in-form" class="form" autocomplete="on">
+      <label>Email address<input id="email" type="email" autocomplete="username" required></label>
+      <label>Password<input id="password" type="password" autocomplete="current-password" required></label>
+      <p class="error" id="sign-in-error" role="alert" hidden></p>
+      <button class="btn btn-primary" type="submit">Continue</button>
+    </form>
+  </section>
+
+  <section class="card narrow" id="view-pin" hidden>
+    <p class="eyebrow">Staff only</p>
+    <h1>Enter your PIN</h1>
+    <p class="muted">Your six-digit staff PIN.</p>
+    <form id="pin-form" class="form">
+      <div class="pin" id="pin" role="group" aria-label="Six-digit PIN">
+        <input type="password" inputmode="numeric" maxlength="1" aria-label="Digit 1" autocomplete="one-time-code"><input type="password" inputmode="numeric" maxlength="1" aria-label="Digit 2"><input type="password" inputmode="numeric" maxlength="1" aria-label="Digit 3"><input type="password" inputmode="numeric" maxlength="1" aria-label="Digit 4"><input type="password" inputmode="numeric" maxlength="1" aria-label="Digit 5"><input type="password" inputmode="numeric" maxlength="1" aria-label="Digit 6">
+      </div>
+      <p class="error" id="pin-error" role="alert" hidden></p>
+      <button class="btn btn-ghost" type="button" id="pin-back">Start again</button>
+    </form>
+  </section>
+
+  <section id="view-home" hidden>
+    <div class="hero">
+      <h1>Your VPN</h1>
+      <p class="muted">When it’s on, all of your device’s internet traffic goes privately through HN Group’s server.</p>
+    </div>
+    <div class="grid">
+      <section class="card">
+        <h2>On a Mac</h2>
+        <p>Use the HN Group VPN app. Sign in with your staff account and it sets up your Mac and connects with one click.</p>
+        <p><button class="btn btn-primary" id="get-mac-app" type="button">Download the Mac app</button></p>
+        <p class="muted small" id="mac-app-note"></p>
+      </section>
+      <section class="card">
+        <h2>On another device</h2>
+        <p>For an iPhone, iPad, Android phone or Windows PC, install the free <strong>WireGuard</strong> app, then add a device here and import the file it gives you.</p>
+        <form id="add-form" class="form inline">
+          <label>Device name<input id="device-name" maxlength="60" placeholder="For example, Charlie’s iPhone" required></label>
+          <button class="btn btn-primary" type="submit">Add device</button>
+        </form>
+        <p class="error" id="add-error" role="alert" hidden></p>
+      </section>
+    </div>
+    <section class="card" id="new-config" hidden>
+      <h2>Your new device is ready</h2>
+      <p>Download the file and open it in the WireGuard app, or copy the text into it. <strong>This is the only time it’s shown</strong>, because it contains the device’s private key.</p>
+      <p><a class="btn btn-primary" id="config-download" download="hn-group-vpn.conf">Download the configuration</a> <button class="btn btn-ghost" id="config-hide" type="button">Done</button></p>
+      <pre class="config" id="config-text"></pre>
+    </section>
+    <section class="card">
+      <div class="card-head"><h2>Your devices</h2><span class="muted small" id="device-count"></span></div>
+      <div id="devices"></div>
+    </section>
+    <section class="card" id="admin" hidden>
+      <div class="card-head"><h2>All devices</h2><span class="muted small">Administrators only</span></div>
+      <div id="all-devices"></div>
+      <h3>Publish the Mac app</h3>
+      <p class="muted small">Upload the HN-Group-VPN-macOS.zip built from the repository (mac-vpn-app) so staff can download it here.</p>
+      <form id="app-form" class="form inline"><label>App (.zip)<input id="app-file" type="file" accept=".zip,application/zip" required></label><button class="btn btn-ghost" type="submit">Publish</button></form>
+      <p class="error" id="app-error" role="alert" hidden></p>
+    </section>
+  </section>
+
+  <p class="loading" id="view-loading">Loading…</p>
+</main>
+<footer class="foot wrap"><p>HN Group VPN · for HN Group staff only · © HN Group Limited</p></footer>
+<div class="toast" id="toast" role="status" hidden></div>
+</body>
+</html>

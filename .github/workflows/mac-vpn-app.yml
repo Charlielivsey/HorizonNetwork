@@ -1,0 +1,25 @@
+name: Build HN Group VPN for Mac
+on:
+  push:
+    paths: ['mac-vpn-app/**', '.github/workflows/mac-vpn-app.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the app
+        run: bash mac-vpn-app/build.sh
+      - name: Check the app
+        run: |
+          APP="mac-vpn-app/build/HN Group VPN.app"
+          lipo -archs "$APP/Contents/MacOS/HNGroupVPN"
+          codesign --verify --deep "$APP"
+          plutil -lint "$APP/Contents/Info.plist"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HN-Group-VPN-macOS
+          path: mac-vpn-app/build/HN-Group-VPN-macOS.zip
+          retention-days: 90

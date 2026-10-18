@@ -1,0 +1,1 @@
+module.exports={apps:[{name:'hn-vpn',script:'/opt/hn-vpn/server.js',cwd:'/opt/hn-vpn',instances:1,exec_mode:'fork',autorestart:true,max_memory_restart:'256M',env:{NODE_ENV:'production',HOST:'127.0.0.1',PORT:5000,VPN_DATA_DIR:'/var/lib/hn-vpn',VPN_PUBLIC_DIR:'/opt/hn-vpn/public',VPN_INTERFACE:'wg-hn',VPN_ENDPOINT:'vpn.hngroup.org.uk:51820',VPN_PUBLIC_IP:'217.154.34.205'}}]};

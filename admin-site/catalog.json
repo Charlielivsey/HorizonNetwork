@@ -94,6 +94,15 @@
     ]
   },
   {
+    "id": "vpn",
+    "name": "HN Group VPN",
+    "process": "hn-vpn",
+    "port": 5000,
+    "hosts": [
+      "vpn.hngroup.org.uk"
+    ]
+  },
+  {
     "id": "media",
     "name": "Horizon Media Group",
     "process": "hn-media",
