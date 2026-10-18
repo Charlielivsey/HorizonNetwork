@@ -4,7 +4,7 @@ A staff VPN on the VPS. All of a connected device's internet traffic goes throug
 (217.154.34.205).
 
 - **WireGuard server:** interface `wg-hn`, UDP port **51820**, addresses 10.88.0.0/24 (and
-  fd88:88::/64, so IPv6 stays inside the tunnel and can't leak). Set up by `vpn-site/install.sh`
+  fd88:88::/64; IPv6 is passed on with NAT when the server has IPv6, otherwise refused at once so devices use IPv4 — either way it never leaks around the VPN). Set up by `vpn-site/install.sh`
   (`/etc/wireguard/wg-hn.conf`, key `/etc/wireguard/hn-vpn.key`, IPv4 forwarding and NAT through
   the server's internet interface, systemd `wg-quick@wg-hn`).
 - **vpn.hngroup.org.uk** (PM2 `hn-vpn`, loopback port 5000, data `/var/lib/hn-vpn/vpn.json`):

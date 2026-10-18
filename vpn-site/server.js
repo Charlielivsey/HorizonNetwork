@@ -39,6 +39,12 @@ async function json(req) {
   if (!String(req.headers['content-type'] || '').startsWith('application/json')) throw fail(415, 'Send JSON.');
   try { return JSON.parse((await readBody(req, 32 * 1024)).toString('utf8') || '{}'); } catch (e) { if (e.status) throw e; throw fail(400, 'That request isn’t valid.'); }
 }
+// The addresses traffic leaves this server from (IPv4 and, when the VPN passes it on, IPv6).
+function serverAddresses() {
+  const all = new Set([process.env.VPN_PUBLIC_IP || '217.154.34.205']);
+  for (const list of Object.values(require('node:os').networkInterfaces())) for (const a of list || []) if (!a.internal) all.add(a.address);
+  return all;
+}
 const clientIp = (req) => String(req.headers['x-real-ip'] || req.socket.remoteAddress || '');
 async function who(req) {
   const current = await auth.current(req);
@@ -92,7 +98,7 @@ function appView() {
 
 async function api(req, res, route) {
   const method = req.method;
-  if (route === '/api/ip' && method === 'GET') return send(res, 200, { ip: clientIp(req), viaVpn: clientIp(req) === (process.env.VPN_PUBLIC_IP || '217.154.34.205') });
+  if (route === '/api/ip' && method === 'GET') return send(res, 200, { ip: clientIp(req), viaVpn: serverAddresses().has(clientIp(req).replace(/^::ffff:/, '')) });
 
   // The Mac app's sign-in finishes here (see lib/auth.js).
   if (route === '/api/app/exchange' && method === 'POST') {
