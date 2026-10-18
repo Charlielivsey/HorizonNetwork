@@ -25,7 +25,9 @@ test('company register: public records, customers, requests, submissions and sta
   const waitUp = async () => { for (let i = 0; i < 50; i++) { try { if ((await fetch(SITE + '/healthz')).ok) return; } catch {} await new Promise((r) => setTimeout(r, 100)); } };
   const get = (p, cookie) => fetch(SITE + p, { redirect: 'manual', headers: cookie ? { cookie } : {} });
   const post = (p, fields, cookie, extra) => fetch(SITE + p, { method: 'POST', redirect: 'manual', headers: { 'content-type': 'application/x-www-form-urlencoded', ...(cookie ? { cookie } : {}), ...(extra || {}) }, body: new URLSearchParams(fields).toString() });
-  const upload = (p, fields, file, cookie) => { const fd = new FormData(); for (const [k, v] of Object.entries(fields)) fd.append(k, v); if (file) fd.append('document', new Blob([file], { type: 'application/pdf' }), 'doc.pdf'); return fetch(SITE + p, { method: 'POST', redirect: 'manual', headers: { cookie }, body: fd }); };
+  const follow = async (r, cookie) => (r.status === 303 ? fetch(SITE + r.headers.get('location'), { headers: { cookie } }) : r);
+  // Uploads follow the redirect back to the account page that a successful submission sends the browser to.
+  const upload = async (p, fields, file, cookie) => { const fd = new FormData(); for (const [k, v] of Object.entries(fields)) fd.append(k, v); if (file) fd.append('document', new Blob([file], { type: 'application/pdf' }), 'doc.pdf'); const r = await fetch(SITE + p, { method: 'POST', redirect: 'manual', headers: { cookie }, body: fd }); return r.status === 303 && r.headers.get('location').startsWith('/account?sent=') ? fetch(SITE + r.headers.get('location'), { headers: { cookie } }) : r; };
   const cookieOf = (r, name) => (r.headers.getSetCookie ? r.headers.getSetCookie() : [r.headers.get('set-cookie')]).map((c) => c.split(';')[0]).find((c) => c.startsWith(name + '='));
   const csrfIn = (html) => html.match(/name="csrf" value="([a-f0-9]+)"/)[1];
   try {
@@ -143,6 +145,17 @@ test('company register: public records, customers, requests, submissions and sta
     html = await (await upload('/company/horizon-network/file', { csrf: samCsrf, category: 'Address', description: 'Change of registered office address', note: 'New office' }, PDF, sam)).text();
     assert.match(html, /has been sent for review/);
     assert.doesNotMatch(await (await get('/company/horizon-network/filing-history')).text(), /Change of registered office address/);
+
+    // Sending the same filing twice (a double click or a refresh) only records it once, and a
+    // successful submission sends the browser to the account page so refreshing can't resend it.
+    r = await fetch(SITE + '/company/horizon-network/file', { method: 'POST', redirect: 'manual', headers: { cookie: sam, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ csrf: samCsrf, kind: 'sic', sic: '62020 - Consultancy' }).toString() });
+    assert.equal(r.status, 303); assert.match(r.headers.get('location'), /^\/account\?sent=S[0-9A-F]{8}$/);
+    const r2 = await fetch(SITE + '/company/horizon-network/file', { method: 'POST', redirect: 'manual', headers: { cookie: sam, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ csrf: samCsrf, kind: 'sic', sic: '62020 - Consultancy' }).toString() });
+    assert.equal(r2.headers.get('location'), r.headers.get('location'));
+    assert.match(await (await get(r.headers.get('location'), sam)).text(), /Your filing S[0-9A-F]{8} has been sent for review/);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'data', 'register.json'), 'utf8')).submissions.filter((x) => x.kind === 'sic' && x.status === 'Pending').length, 1);
+    html = await (await get('/admin/submissions', owner)).text();
+    await post('/admin/submissions/' + html.match(/Change of nature of business[\s\S]*?\/admin\/submissions\/([a-f0-9]{24})"/)?.[1], { csrf: staffCsrf, decision: 'reject' }, owner);
 
     // Accept the submission: it becomes a public filing with its PDF.
     html = await (await get('/admin/submissions', owner)).text();
@@ -297,8 +310,8 @@ test('company register: public records, customers, requests, submissions and sta
     html = await (await get('/account/register-company?parent=hn-group', sam)).text();
     assert.match(html, /Register a subsidiary/); assert.match(html, /name="psc_name" type="text" value="HN Group Holdings Limited"/); assert.match(html, /<option value="hn-group" selected>/);
     assert.match(await (await post('/account/register-company', { csrf: samCsrf, legalName: 'HN Group Holdings Limited', registeredOffice: '1 Road', officer_name: 'A', psc_name: 'B' }, sam)).text(), /already on the register/);
-    html = await (await post('/account/register-company', { csrf: samCsrf, legalName: 'Sam Subsidiary Limited', type: 'Private limited company', registeredOffice: '3 Side Street\nCity', parent: 'hn-group', incorporated: '2026-09-01',
-      officer_name: 'Sam Customer', officer_role: 'Director', psc_name: 'HN Group Holdings Limited', psc_kind: 'Parent company', psc_share: '100', psc_control: 'Ownership of shares – 75% or more\nRight to appoint and remove directors' }, sam)).text();
+    html = await (await follow(await post('/account/register-company', { csrf: samCsrf, legalName: 'Sam Subsidiary Limited', type: 'Private limited company', registeredOffice: '3 Side Street\nCity', parent: 'hn-group', incorporated: '2026-09-01',
+      officer_name: 'Sam Customer', officer_role: 'Director', psc_name: 'HN Group Holdings Limited', psc_kind: 'Parent company', psc_share: '100', psc_control: 'Ownership of shares – 75% or more\nRight to appoint and remove directors' }, sam), sam)).text();
     assert.match(html, /application S[0-9A-F]{8} has been sent for review/); assert.match(html, /Application to register Sam Subsidiary Limited as a subsidiary of HN Group Holdings Limited/);
     assert.equal((await get('/company/sam-subsidiary-limited')).status, 404);
     html = await (await get('/admin/submissions', owner)).text();

@@ -462,6 +462,9 @@ function addSubmission(cust, slug, input, pdf) {
   if (pending >= 10) throw Object.assign(new Error('You have 10 filings waiting for review. Please wait before submitting more.'), { status: 429 });
   const change = checkChange(c, kind, input);
   const description = kind === 'document' ? req(input.description, 'Describe the filing.', 300) : changeDescription(kind, change);
+  // The same filing sent again while the first is still waiting (a double click, or a refreshed page) isn't added twice.
+  const same = db.submissions.find((s) => s.customer === cust.id && s.company === slug && s.status === 'Pending' && s.kind === kind && s.description === description && JSON.stringify(s.change) === JSON.stringify(change) && Date.now() - Date.parse(s.createdAt) < 30 * 60000);
+  if (same) return same;
   const s = { id: id(), ref: 'S' + crypto.randomBytes(4).toString('hex').toUpperCase(), customer: cust.id, company: slug, kind, change,
     category: kind === 'document' ? (FILING_CATEGORIES.includes(input.category) ? input.category : 'Other') : CHANGE_TYPES[kind].category, description,
     note: t(input.note, 2000), file: pdf ? storeFile(pdf) : '', pages: pdf ? countPages(pdf) : 0, status: 'Pending', staffNote: '', createdAt: now(), decidedAt: null, filing: '' };
@@ -544,6 +547,9 @@ function addApplication(cust, input, officerInput, pscInput) {
   pendingLimit(cust);
   const legalName = req(input.legalName, 'Enter the company name.', 160);
   if (companies(true).some((c) => c.legalName.toLowerCase() === legalName.toLowerCase())) throw bad('A company with that name is already on the register.');
+  // Sending the same application again while it's waiting returns the one already sent.
+  const waiting = db.submissions.find((s) => s.kind === 'incorporate' && s.customer === cust.id && s.status === 'Pending' && s.change.details.legalName.toLowerCase() === legalName.toLowerCase());
+  if (waiting) return waiting;
   let parent = '';
   if (input.parent) {
     const pc = company(input.parent);

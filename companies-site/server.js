@@ -36,7 +36,7 @@ function layout(o) {
       : '<a href="/account/login">Sign in</a><a href="/account/register">Create an account</a><a href="/staff/login" class="staff-link">Staff sign in</a>';
   return '<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0b0c0c">' +
     '<title>' + esc(o.title) + ' – Company Register – HN Group</title>' + (o.description ? '<meta name="description" content="' + esc(o.description) + '">' : '') + (o.noindex ? '<meta name="robots" content="noindex">' : '') +
-    '<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/assets/companies.css?v=4"><script src="/assets/companies.js?v=3" defer></script></head><body>' +
+    '<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/assets/companies.css?v=4"><script src="/assets/companies.js?v=4" defer></script></head><body>' +
     '<a class="skip" href="#main">Skip to main content</a>' +
     '<header class="header"><div class="wrap header-inner"><a class="logo" href="/"><img src="/assets/brand/hn-group-wordmark-white.svg" alt="HN Group" width="126" height="44"></a>' +
     '<a class="service" href="/">Company Register</a><nav class="header-nav" aria-label="Account">' + nav + '</nav></div></header>' +
@@ -322,7 +322,7 @@ function requestForm(res, ctx, c, kind, values, error) {
   page(res, ctx, { title: (mistake ? 'Report a mistake' : 'Request a document') + ' · ' + c.legalName, noindex: true, flash: error && { error: true, text: error }, back: '/company/' + c.slug,
     body: '<section class="panel narrow"><p class="eyebrow">' + esc(c.legalName) + '</p><h1>' + (mistake ? 'Report a mistake' : 'Request a document') + '</h1>' +
       '<p>' + (mistake ? 'Tell us what looks wrong on this company’s record and what it should say. Our team will check it and reply in your account.' : 'Ask for a copy of a filing or a certificate for this company. Our team will reply in your account.') + '</p>' +
-      '<form method="post" class="form">' + csrfField(ctx.customer.csrf) + (mistake ? '<input type="hidden" name="kind" value="mistake">' : select('What do you need?', 'kind', [['copy', 'Copy of a filing'], ['certificate', 'Certificate'], ['other', 'Something else']], values.kind || 'copy')) +
+      '<form method="post" class="form" data-once>' + csrfField(ctx.customer.csrf) + (mistake ? '<input type="hidden" name="kind" value="mistake">' : select('What do you need?', 'kind', [['copy', 'Copy of a filing'], ['certificate', 'Certificate'], ['other', 'Something else']], values.kind || 'copy')) +
       (list.length ? select(mistake ? 'Is it about a particular filing?' : 'Which filing?', 'filing', list.map((f) => [f.id, fmt(f.date) + ' · ' + f.description]), values.filing, 'Not a particular filing') : '') +
       field(mistake ? 'What’s wrong?' : 'Details', 'message', values.message, { textarea: true, required: true, rows: 6, max: 3000, hint: mistake ? 'Include what it should say instead, if you know.' : 'For example, which certificate you need and what it’s for.' }) + actions('Send', '/company/' + esc(c.slug)) + '</form></section>' });
 }
@@ -379,7 +379,7 @@ function submitForm(res, ctx, c, values, error, kind) {
   page(res, ctx, { title: store.CHANGE_TYPES[kind].label + ' · ' + c.legalName, noindex: true, flash, back: '/company/' + c.slug + '/file',
     body: '<section class="panel narrow"><p class="eyebrow">' + esc(c.legalName) + '</p><h1>' + esc(store.CHANGE_TYPES[kind].label) + '</h1>' +
       (blocked ? fields + '<p><a class="cancel" href="' + base + '">Choose something else</a></p>' :
-      '<form method="post" action="' + base + '" class="form" enctype="multipart/form-data">' + csrfField(ctx.customer.csrf) + '<input type="hidden" name="kind" value="' + kind + '">' + fields + pdf +
+      '<form method="post" action="' + base + '" class="form" enctype="multipart/form-data" data-once>' + csrfField(ctx.customer.csrf) + '<input type="hidden" name="kind" value="' + kind + '">' + fields + pdf +
       field('Note for our team', 'note', v.note, { textarea: true, rows: 3, max: 2000 }) + actions('Submit for review', base, 'Back') + '</form>') + '</section>' });
 }
 
@@ -392,7 +392,7 @@ function registerCompanyPage(res, ctx, values, error) {
   page(res, ctx, { title: parent ? 'Register a subsidiary' : 'Register a company', noindex: true, flash: error && { error: true, text: error }, back: parent ? '/company/' + parent.slug : '/account',
     body: '<section class="panel form-page"><p class="eyebrow">' + (parent ? esc(parent.legalName) : 'Your account') + '</p><h1 class="page-title">' + (parent ? 'Register a subsidiary' : 'Register a company') + '</h1>' +
       '<p class="lead-s">Tell us about the company, its first officer and its first person with significant control. Our staff review every application. When it’s accepted, the company is added to the register with its incorporation filing, and you’ll manage it from your account.</p>' +
-      '<form method="post" action="/account/register-company" class="form">' + csrfField(ctx.customer.csrf) +
+      '<form method="post" action="/account/register-company" class="form" data-once>' + csrfField(ctx.customer.csrf) +
       fieldset('Company details', '', '<div class="grid-form">' +
         field('Registered name', 'legalName', v.legalName, { required: true, max: 160, hint: 'The company’s full legal name, for example Example Trading Limited.' }) + field('Trading name', 'name', v.name, { max: 120, hint: 'Only if it trades under a different name.' }) +
         field('Company type', 'type', v.type, { max: 80, hint: 'For example: Private limited company.' }) + field('Incorporated on', 'incorporated', v.incorporated, { type: 'date', hint: 'Leave blank to use the date it’s accepted.' }) +
@@ -412,7 +412,7 @@ function claimPage(res, ctx, c, values, error) {
   page(res, ctx, { title: 'Manage this company · ' + c.legalName, noindex: true, flash: error && { error: true, text: error }, back: '/company/' + c.slug,
     body: '<section class="panel narrow"><p class="eyebrow">' + esc(c.legalName) + '</p><h1>Ask to manage this company</h1>' +
       '<p>People who manage a company can file changes for it and register its subsidiaries. Managing a company also covers its subsidiaries.</p>' +
-      '<form method="post" class="form" enctype="multipart/form-data">' + csrfField(ctx.customer.csrf) + '<input type="hidden" name="kind" value="claim">' +
+      '<form method="post" class="form" enctype="multipart/form-data" data-once>' + csrfField(ctx.customer.csrf) + '<input type="hidden" name="kind" value="claim">' +
       field('Your connection to the company', 'note', v.note, { textarea: true, rows: 5, required: true, max: 2000, hint: 'For example, you’re a director or you act for the company. Our staff will check it and reply in your account.' }) +
       fileField('Supporting document', 'For example, a letter of authority.', false) + actions('Send request', '/company/' + esc(c.slug)) + '</form></section>' });
 }
@@ -668,7 +668,7 @@ async function route(req, res) {
       if (req.method === 'POST') {
         const { fields, file } = await forms.parse(req);
         if (fields.csrf !== ctx.customer.csrf) throw fail(403, 'Your session has changed. Go back, refresh the page and try again.');
-        try { const s = store.addSubmission(ctx.customer.account, c.slug, { note: fields.note, kind: 'claim' }, file); return accountPage(res, ctx, { text: 'Thanks. Your request ' + s.ref + ' to manage ' + c.legalName + ' has been sent for review.' }); }
+        try { const s = store.addSubmission(ctx.customer.account, c.slug, { note: fields.note, kind: 'claim' }, file); return redirect(res, '/account?sent=' + s.ref); }
         catch (e) { if (e.status !== 400 && e.status !== 429) throw e; return claimPage(res, ctx, c, fields, e.message); }
       }
     }
@@ -681,7 +681,7 @@ async function route(req, res) {
         if (fields.csrf !== ctx.customer.csrf) throw fail(403, 'Your session has changed. Go back, refresh the page and try again.');
         if (sub === 'file' && (fields.kind === 'psc_add' || fields.kind === 'psc_change')) fields.item = unprefix(fields, 'psc_');
         try {
-          if (sub === 'file') { const s = store.addSubmission(ctx.customer.account, c.slug, { ...fields, kind: fields.kind === 'claim' ? 'document' : fields.kind }, file); return accountPage(res, ctx, { text: 'Thanks. Your filing ' + s.ref + ' has been sent for review.' }); }
+          if (sub === 'file') { const s = store.addSubmission(ctx.customer.account, c.slug, { ...fields, kind: fields.kind === 'claim' ? 'document' : fields.kind }, file); return redirect(res, '/account?sent=' + s.ref); }
           const r = store.addRequest(ctx.customer.account, c.slug, { ...fields, kind: sub === 'report' ? 'mistake' : ['copy', 'certificate', 'other'].includes(fields.kind) ? fields.kind : 'copy' });
           return redirect(res, '/account/requests/' + r.id);
         } catch (e) {
@@ -715,14 +715,18 @@ async function route(req, res) {
   }
   if (p.startsWith('/account')) {
     if (needCustomer(res, ctx, p + url.search)) return;
-    if (p === '/account' && req.method === 'GET') return accountPage(res, ctx);
+    if (p === '/account' && req.method === 'GET') {
+      // After sending something for review, the browser is sent here so a refresh can't send it again.
+      const sent = store.db.submissions.find((x) => x.ref === url.searchParams.get('sent') && x.customer === ctx.customer.account.id);
+      return accountPage(res, ctx, sent ? { text: 'Thanks. Your ' + (sent.kind === 'claim' ? 'request ' + sent.ref + ' to manage ' + companyName(sent) : sent.kind === 'incorporate' ? 'application ' + sent.ref : 'filing ' + sent.ref) + ' has been sent for review.' } : undefined);
+    }
     if (p === '/account/register-company') {
       if (req.method === 'GET') return registerCompanyPage(res, ctx, { parent: url.searchParams.get('parent') || '' });
       if (req.method === 'POST') {
         const { fields } = await forms.parse(req);
         if (fields.csrf !== ctx.customer.csrf) throw fail(403, 'Your session has changed. Refresh the page and try again.');
         const officer = unprefix(fields, 'officer_'), psc = unprefix(fields, 'psc_');
-        try { const s = store.addApplication(ctx.customer.account, fields, officer, psc); return accountPage(res, ctx, { text: 'Thanks. Your application ' + s.ref + ' has been sent for review.' }); }
+        try { const s = store.addApplication(ctx.customer.account, fields, officer, psc); return redirect(res, '/account?sent=' + s.ref); }
         catch (e) { if (e.status !== 400 && e.status !== 403 && e.status !== 429) throw e; return registerCompanyPage(res, ctx, { ...fields, officer, psc }, e.message); }
       }
     }

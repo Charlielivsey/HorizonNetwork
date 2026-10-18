@@ -28,3 +28,20 @@ document.addEventListener('DOMContentLoaded', function () {
     update();
   });
 });
+
+// Forms that send something for review are sent once: a second click or Enter while the first is
+// on its way is ignored, and the button shows that it's sending.
+document.addEventListener('submit', function (e) {
+  const form = e.target;
+  if (!form.matches('form[data-once]')) return;
+  if (form.dataset.sending) { e.preventDefault(); return; }
+  form.dataset.sending = '1';
+  form.querySelectorAll('button[type=submit]').forEach(function (b) { b.setAttribute('aria-disabled', 'true'); b.classList.add('is-sending'); if (!b.dataset.label) b.dataset.label = b.textContent; b.textContent = 'Sending…'; });
+});
+// Coming back to the page with the browser's back button shows the form ready to use again.
+window.addEventListener('pageshow', function () {
+  document.querySelectorAll('form[data-sending]').forEach(function (form) {
+    delete form.dataset.sending;
+    form.querySelectorAll('button.is-sending').forEach(function (b) { b.removeAttribute('aria-disabled'); b.classList.remove('is-sending'); b.textContent = b.dataset.label; });
+  });
+});

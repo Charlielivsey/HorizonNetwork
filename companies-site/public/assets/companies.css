@@ -297,3 +297,4 @@ details.mini { border: 0; padding: 0 0 6px; }
 .main.after-back { padding-top: 20px; }
 .footer { border-top: 1px solid var(--border); }
 .nowrap { white-space: nowrap; }
+.button.is-sending { opacity: .7; cursor: progress; }
