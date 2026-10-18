@@ -31,7 +31,8 @@ final class VPNModel: ObservableObject {
             Task { await refresh() }
         }
         timer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
-            Task { @MainActor in await self?.checkStatus() }
+            guard let model = self else { return }
+            Task { @MainActor in await model.checkStatus() }
         }
         Task { await checkStatus() }
     }
