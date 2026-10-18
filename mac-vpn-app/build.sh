@@ -13,6 +13,12 @@ for arch in arm64 x86_64; do
 done
 lipo -create "$OUT/obj/HNGroupVPN-arm64" "$OUT/obj/HNGroupVPN-x86_64" -output "$APP/Contents/MacOS/HNGroupVPN"
 cp Info.plist "$APP/Contents/Info.plist"
+# Version numbers: the version comes from VERSION; the build number goes up with every build
+# (the GitHub Actions run number), which is how the app knows an update is newer.
+VERSION=$(tr -d '[:space:]' < VERSION)
+BUILD=${BUILD_NUMBER:-${GITHUB_RUN_NUMBER:-$(git rev-list --count HEAD 2>/dev/null || echo 1)}}
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" -c "Set :CFBundleVersion $BUILD" "$APP/Contents/Info.plist"
+echo "Version $VERSION (build $BUILD)"
 cp Resources/wordmark.png Resources/wordmark-white.png Resources/PlusJakartaSans.ttf "$APP/Contents/Resources/"
 install -m 755 Resources/hn-vpn-ctl "$APP/Contents/Resources/hn-vpn-ctl"
 # App icon from the 1024px artwork.

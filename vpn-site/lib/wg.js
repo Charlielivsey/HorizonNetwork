@@ -3,9 +3,6 @@
 // VPN service's own data and applied to the interface with `wg set`, so the interface always matches
 // the registered devices, including after a reboot. VPN_WG_FAKE=1 keeps peers in memory for tests.
 const { execFile } = require('node:child_process');
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
 
 const IFACE = process.env.VPN_INTERFACE || 'wg-hn';
 const FAKE = process.env.VPN_WG_FAKE === '1';
@@ -15,8 +12,11 @@ const fake = { peers: new Map(), publicKey: 'c2VydmVyLXB1YmxpYy1rZXktZm9yLXRlc3R
 function run(args, input) {
   return new Promise((resolve, reject) => {
     const child = execFile('wg', args, { timeout: 10000, maxBuffer: 4 * 1024 * 1024 }, (err, stdout, stderr) => {
-      if (err) reject(Object.assign(new Error(String(stderr || err.message).trim() || 'WireGuard command failed.'), { status: 503 }));
-      else resolve(String(stdout));
+      if (err) {
+        // The details go to the server log; people see a plain message.
+        console.error('wg ' + args.slice(0, 3).join(' ') + ':', String(stderr || err.message).trim());
+        reject(Object.assign(new Error('The VPN server couldn’t update its connections just now. Please try again shortly.'), { status: 503 }));
+      } else resolve(String(stdout));
     });
     if (input !== undefined) child.stdin.end(input);
   });
@@ -43,13 +43,8 @@ async function addPeer(d) {
   if (!KEY.test(d.publicKey) || !KEY.test(d.presharedKey)) throw Object.assign(new Error('Invalid device key.'), { status: 400 });
   const allowed = d.ipv4 + '/32,' + d.ipv6 + '/128';
   if (FAKE) { fake.peers.set(d.publicKey, { allowed, handshake: 0, rx: 0, tx: 0 }); return; }
-  // The preshared key goes through a private temporary file, never the command line.
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-vpn-'));
-  const pskFile = path.join(tmp, 'psk');
-  try {
-    fs.writeFileSync(pskFile, d.presharedKey + '\n', { mode: 0o600 });
-    await run(['set', IFACE, 'peer', d.publicKey, 'preshared-key', pskFile, 'allowed-ips', allowed]);
-  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+  // The preshared key goes in through standard input, never the command line or a file on disk.
+  await run(['set', IFACE, 'peer', d.publicKey, 'preshared-key', '/dev/stdin', 'allowed-ips', allowed], d.presharedKey + '\n');
 }
 
 async function removePeer(publicKey) {

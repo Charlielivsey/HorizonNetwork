@@ -10,6 +10,7 @@ const store = require('./lib/store');
 const staff = require('./lib/staff');
 const wg = require('./lib/wg');
 const { createAuth } = require('./lib/auth');
+const macApp = require('./lib/macapp');
 
 const PUBLIC = process.env.VPN_PUBLIC_DIR || path.join(__dirname, 'public');
 const DATA_DIR = process.env.VPN_DATA_DIR || '/var/lib/hn-vpn';
@@ -50,7 +51,7 @@ const escHtml = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ 
 function showPage(res, status, title, text, cookies, appUrl) {
   res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Set-Cookie': cookies || [] });
   res.end('<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">' +
-    (appUrl ? '<meta http-equiv="refresh" content="0;url=' + escHtml(appUrl) + '">' : '') + '<title>' + escHtml(title) + ' · HN Group VPN</title><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/assets/vpn.css?v=3"></head><body>' +
+    (appUrl ? '<meta http-equiv="refresh" content="0;url=' + escHtml(appUrl) + '">' : '') + '<title>' + escHtml(title) + ' · HN Group VPN</title><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/assets/vpn.css?v=4"></head><body>' +
     '<header class="top"><div class="wrap top-inner"><a class="brand" href="/"><img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="118" height="41"><img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="118" height="41"><span class="brand-name">VPN</span></a></div><div class="stripe" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></header>' +
     '<main class="wrap"><section class="card narrow"><h1>' + escHtml(title) + '</h1><p class="muted">' + escHtml(text) + '</p><p>' + (appUrl ? '<a class="btn btn-primary" href="' + escHtml(appUrl) + '">Open HN Group VPN</a>' : '<a class="btn btn-primary" href="/">Back to the VPN</a>') + '</p></section></main></body></html>');
 }
@@ -82,9 +83,11 @@ async function deviceView(list) {
   });
 }
 
-async function finishSignIn(res, user) {
-  const token = store.createSession(user);
-  send(res, 200, { token, user: { displayName: user.displayName, email: user.email, admin: user.admin } });
+const userView = (user) => ({ displayName: user.displayName, email: user.email, admin: user.admin, avatar: store.avatarTag(user.id) });
+// The published Mac app's version, for the website and for the app's update check.
+function appView() {
+  const a = macApp.info(APP_FILE);
+  return a && { version: a.version, build: a.build, size: a.size, sha256: a.sha256, publishedAt: a.publishedAt };
 }
 
 async function api(req, res, route) {
@@ -95,7 +98,7 @@ async function api(req, res, route) {
   if (route === '/api/app/exchange' && method === 'POST') {
     const body = await json(req);
     const r = auth.exchangeAppCode(body.code, body.verifier);
-    return send(res, 200, { token: r.token, user: { displayName: r.user.displayName, email: r.user.email, admin: r.user.admin } });
+    return send(res, 200, { token: r.token, user: userView(r.user) });
   }
   if (route === '/api/sign-out' && method === 'POST') {
     const current = await auth.current(req).catch(() => null);
@@ -103,9 +106,35 @@ async function api(req, res, route) {
     return send(res, 200, { ok: true }, { 'Set-Cookie': auth.SESSION_COOKIE + '=; Path=/; HttpOnly;' + (auth.VPN_ORIGIN.startsWith('https://') ? ' Secure;' : '') + ' SameSite=Lax; Max-Age=0' });
   }
 
-  const { user } = await who(req);
+  const current = await who(req), { user } = current;
+  let m;
+  // The Mac app says which version it is, so the profile can show it.
+  const appVersion = String(req.headers['x-hn-vpn-app'] || '');
+  if (!current.cookie && /^[0-9][0-9A-Za-z.\- ()]{0,30}$/.test(appVersion)) { const s = store.session(current.token); if (s) s.appVersion = appVersion; }
   if (route === '/api/me' && method === 'GET') {
-    return send(res, 200, { user: { displayName: user.displayName, email: user.email, admin: user.admin }, devices: await deviceView(store.devicesFor(user.id)), limit: store.MAX_DEVICES, macApp: fs.existsSync(APP_FILE) });
+    return send(res, 200, { user: userView(user), devices: await deviceView(store.devicesFor(user.id)), limit: store.MAX_DEVICES, macApp: appView() });
+  }
+  if (route === '/api/profile' && method === 'GET') {
+    const devices = await deviceView(store.devicesFor(user.id));
+    return send(res, 200, { user: userView(user), devices, limit: store.MAX_DEVICES, sessions: store.sessionsFor(user.id, current.token), activity: store.activityFor(user.email, 15).map((a) => ({ at: a.at, action: a.action, detail: a.detail })) });
+  }
+  m = /^\/api\/sessions\/([a-f0-9]{16})$/.exec(route);
+  if (m && method === 'DELETE') {
+    if (!store.endSessionById(user.id, m[1])) throw fail(404, 'That sign-in has already ended.');
+    return send(res, 200, { ok: true });
+  }
+  if (route === '/api/avatar' && method === 'GET') {
+    const a = store.avatar(user.id);
+    if (!a) throw fail(404, 'No profile picture.');
+    res.writeHead(200, { 'Content-Type': a.mime, 'Content-Length': a.image.length, 'Cache-Control': 'private, no-cache', ETag: '"' + a.tag + '"' });
+    res.end(a.image);
+    return;
+  }
+  // The Mac app checks here for a newer build, then downloads /api/mac-app and checks its SHA-256.
+  if (route === '/api/mac-app/latest' && method === 'GET') {
+    const a = appView();
+    if (!a) throw fail(404, 'The Mac app hasn’t been published yet.');
+    return send(res, 200, a);
   }
   if (route === '/api/devices' && method === 'POST') {
     const body = await json(req);
@@ -116,7 +145,7 @@ async function api(req, res, route) {
     try { await wg.addPeer(d); } catch (e) { store.removeDevice(d.id, 'system'); throw e; }
     return send(res, 201, { device: (await deviceView([d]))[0], connection: await connection(d, privateKey) });
   }
-  let m = /^\/api\/devices\/([a-f0-9]{24})$/.exec(route);
+  m = /^\/api\/devices\/([a-f0-9]{24})$/.exec(route);
   if (m && method === 'DELETE') {
     const d = store.device(m[1]);
     if (!d || (d.personId !== user.id && !user.admin)) throw fail(404, 'That device isn’t registered to you.');
@@ -140,14 +169,19 @@ async function api(req, res, route) {
     if (!user.admin) throw fail(403, 'Only administrators can publish the Mac app.');
     const body = await readBody(req, MAX_APP);
     if (body.slice(0, 4).toString('binary') !== 'PK\x03\x04') throw fail(400, 'Upload the app as a .zip file.');
+    let plist = null; try { plist = macApp.infoPlist(body); } catch { plist = null; }
+    if (!plist || !/CFBundleShortVersionString/.test(plist) || !/<key>CFBundleIdentifier<\/key>\s*<string>uk\.org\.hngroup\.vpn<\/string>/.test(plist)) throw fail(400, 'That zip doesn’t contain the HN Group VPN app.');
     const tmp = APP_FILE + '.tmp';
     fs.writeFileSync(tmp, body, { mode: 0o600 }); fs.renameSync(tmp, APP_FILE);
-    store.audit(user.email, 'mac-app.publish', body.length + ' bytes'); store.save();
-    return send(res, 200, { ok: true });
+    const a = appView();
+    store.audit(user.email, 'mac-app.publish', 'version ' + a.version + ' (build ' + a.build + '), ' + body.length + ' bytes'); store.save();
+    return send(res, 200, { ok: true, macApp: a });
   }
   if (route === '/api/mac-app' && method === 'GET') {
     let stat; try { stat = fs.statSync(APP_FILE); } catch { throw fail(404, 'The Mac app hasn’t been published yet.'); }
-    res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Length': stat.size, 'Content-Disposition': 'attachment; filename="HN-Group-VPN-macOS.zip"', 'Cache-Control': 'no-store' });
+    const a = appView();
+    const name = 'HN-Group-VPN-macOS' + (a && a.version ? '-' + a.version : '') + '.zip';
+    res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Length': stat.size, 'Content-Disposition': 'attachment; filename="' + name + '"', 'Cache-Control': 'no-store', ...(a ? { 'X-Content-SHA256': a.sha256 } : {}) });
     fs.createReadStream(APP_FILE).pipe(res);
     return;
   }

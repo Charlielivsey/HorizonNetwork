@@ -53,30 +53,69 @@ struct APIError: LocalizedError {
 }
 
 struct SignInResult: Decodable { let token: String?; let user: User? }
-struct User: Decodable { let displayName: String; let email: String; let admin: Bool? }
-struct Device: Decodable { let id: String; let name: String; let address: String; let connected: Bool? }
-struct Me: Decodable { let user: User; let devices: [Device] }
+/// `avatar` changes whenever the staff profile picture does (nil when there isn't one).
+struct User: Decodable, Equatable { let displayName: String; let email: String; let admin: Bool?; let avatar: String? }
+struct Device: Decodable, Identifiable { let id: String; let name: String; let address: String; let connected: Bool?; let lastHandshake: String? }
+struct Me: Decodable { let user: User; let devices: [Device]; let limit: Int?; let macApp: AppRelease? }
+/// A published build of this app (from /api/mac-app/latest).
+struct AppRelease: Decodable, Equatable { let version: String; let build: Int; let size: Int; let sha256: String; let publishedAt: String }
+struct SignInEntry: Decodable, Identifiable { let id: String; let kind: String; let createdAt: String; let lastUsedAt: String; let appVersion: String?; let current: Bool }
+struct Activity: Decodable { let at: String; let action: String; let detail: String? }
+struct Profile: Decodable { let user: User; let devices: [Device]; let limit: Int; let sessions: [SignInEntry]; let activity: [Activity] }
 struct Connection: Decodable { let config: String }
 struct NewDevice: Decodable { let device: Device; let connection: Connection }
 struct IPInfo: Decodable { let ip: String; let viaVpn: Bool }
 struct OKResponse: Decodable { let ok: Bool? }
 
+/// This app's own version, from its Info.plist.
+enum AppInfo {
+    static var version: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0" }
+    static var build: Int { Int(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "") ?? 0 }
+    static var label: String { "Version \(version) (\(build))" }
+}
+
 final class API {
     static let base = URL(string: "https://vpn.hngroup.org.uk")!
     var token: String?
 
-    func send<T: Decodable>(_ path: String, method: String = "GET", body: [String: Any]? = nil, as type: T.Type) async throws -> T {
+    private func request(_ path: String) -> URLRequest {
         var request = URLRequest(url: API.base.appendingPathComponent(path))
-        request.httpMethod = method
         request.timeoutInterval = 20
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
         if let token = token { request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization") }
+        request.setValue("\(AppInfo.version) (\(AppInfo.build))", forHTTPHeaderField: "X-HN-VPN-App")
+        return request
+    }
+
+    /// Raw bytes (such as the profile picture); nil when there's nothing there.
+    func data(_ path: String) async -> Data? {
+        guard let (data, response) = try? await URLSession.shared.data(for: request(path)),
+              (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return data
+    }
+
+    /// Downloads a file (the app update) to a temporary location.
+    func download(_ path: String) async throws -> URL {
+        var r = request(path)
+        r.timeoutInterval = 300
+        let (file, response): (URL, URLResponse)
+        do { (file, response) = try await URLSession.shared.download(for: r) }
+        catch { throw APIError(message: "The update couldn’t be downloaded. Check your internet connection.", status: 0) }
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw APIError(message: "The update couldn’t be downloaded. Please try again.", status: (response as? HTTPURLResponse)?.statusCode ?? 0) }
+        let kept = FileManager.default.temporaryDirectory.appendingPathComponent("hn-vpn-update-" + UUID().uuidString + ".zip")
+        try FileManager.default.moveItem(at: file, to: kept)
+        return kept
+    }
+
+    func send<T: Decodable>(_ path: String, method: String = "GET", body: [String: Any]? = nil, as type: T.Type) async throws -> T {
+        var req = request(path)
+        req.httpMethod = method
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
         if let body = body {
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = try JSONSerialization.data(withJSONObject: body)
         }
         let data: Data, response: URLResponse
-        do { (data, response) = try await URLSession.shared.data(for: request) }
+        do { (data, response) = try await URLSession.shared.data(for: req) }
         catch { throw APIError(message: "Can’t reach vpn.hngroup.org.uk. Check your internet connection.", status: 0) }
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
@@ -137,4 +176,10 @@ enum Paths {
         ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"].first { FileManager.default.isExecutableFile(atPath: $0) }
     }
     static var helperInstalled: Bool { FileManager.default.isExecutableFile(atPath: helper) }
+    /// True when an update brought a newer helper than the one installed on this Mac.
+    static var helperOutdated: Bool {
+        guard helperInstalled, let bundled = Bundle.main.url(forResource: "hn-vpn-ctl", withExtension: nil),
+              let new = try? Data(contentsOf: bundled), let old = FileManager.default.contents(atPath: helper) else { return false }
+        return new != old
+    }
 }

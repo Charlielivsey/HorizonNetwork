@@ -7,7 +7,7 @@ const crypto = require('node:crypto');
 
 const MAX_DEVICES = 5;
 const SESSION_DAYS = 30;
-let file, db;
+let file, db, avatarDir;
 const id = () => crypto.randomBytes(12).toString('hex');
 const now = () => new Date().toISOString();
 const hash = (s) => crypto.createHash('sha256').update(s).digest('hex');
@@ -15,8 +15,10 @@ const hash = (s) => crypto.createHash('sha256').update(s).digest('hex');
 function init(dir) {
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   file = path.join(dir, 'vpn.json');
+  avatarDir = path.join(dir, 'avatars');
+  fs.mkdirSync(avatarDir, { recursive: true, mode: 0o700 });
   db = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
-  db.devices = db.devices || []; db.sessions = db.sessions || {}; db.audit = db.audit || [];
+  db.devices = db.devices || []; db.sessions = db.sessions || {}; db.audit = db.audit || []; db.avatars = db.avatars || {};
   prune();
 }
 function save() {
@@ -38,7 +40,7 @@ function createSession(user, opts) {
   prune();
   const token = crypto.randomBytes(32).toString('hex');
   const expires = o.app ? Date.now() + SESSION_DAYS * 86400000 : Math.min(o.expires || Infinity, Date.now() + 12 * 3600000);
-  db.sessions[hash(token)] = { user, expires, createdAt: now(), kind: o.app ? 'app' : 'web', ...(o.authSession ? { authSession: o.authSession, checked: Date.now() } : {}) };
+  db.sessions[hash(token)] = { user, expires, createdAt: now(), kind: o.app ? 'app' : 'web', ...(o.authSession ? { authSession: o.authSession, checked: Date.now(), avatarChecked: Date.now() } : {}) };
   audit(user.email, o.app ? 'sign-in.app' : 'sign-in.web');
   save();
   return token;
@@ -47,12 +49,56 @@ function session(token) {
   if (!/^[a-f0-9]{64}$/.test(token || '')) return null;
   const s = db.sessions[hash(token)];
   if (!s || s.expires <= Date.now()) return null;
+  s.lastUsedAt = now();
   return s;
 }
+// A person's current sign-ins, for their profile. Each is identified by part of its stored hash.
+function sessionsFor(personId, currentToken) {
+  prune();
+  const mine = currentToken && /^[a-f0-9]{64}$/.test(currentToken) ? hash(currentToken) : '';
+  return Object.entries(db.sessions).filter(([, v]) => v.user.id === personId)
+    .map(([k, v]) => ({ id: k.slice(0, 16), kind: v.kind || 'web', createdAt: v.createdAt, lastUsedAt: v.lastUsedAt || v.createdAt, appVersion: v.appVersion || null, current: k === mine }))
+    .sort((a, b) => String(b.lastUsedAt).localeCompare(String(a.lastUsedAt)));
+}
+function endSessionById(personId, id) {
+  const key = /^[a-f0-9]{16}$/.test(id || '') && Object.keys(db.sessions).find((k) => k.startsWith(id) && db.sessions[k].user.id === personId);
+  if (!key) return false;
+  audit(db.sessions[key].user.email, 'sign-out.other', db.sessions[key].kind);
+  delete db.sessions[key]; save();
+  return true;
+}
+// Recent VPN activity for one person (newest first).
+const activityFor = (email, limit) => db.audit.filter((a) => a.who === email).slice(-(limit || 20)).reverse();
 function endSession(token) { if (/^[a-f0-9]{64}$/.test(token || '') && db.sessions[hash(token)]) { delete db.sessions[hash(token)]; save(); } }
 function endSessionsFor(personId) {
   for (const [k, v] of Object.entries(db.sessions)) if (v.user.id === personId) delete db.sessions[k];
 }
+
+// ---------- Profile pictures ----------
+// A copy of each person's staff profile picture, taken from HN Group Auth when they sign in (and
+// refreshed while the website is used), so the website and the Mac app can show it.
+const AVATAR_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+const avatarPath = (personId) => path.join(avatarDir, hash('avatar:' + personId));
+function setAvatar(personId, image, type) {
+  if (!personId) return;
+  const mime = String(type || '').split(';')[0].trim().toLowerCase();
+  if (!image || !image.length || image.length > 3 * 1024 * 1024 || !AVATAR_TYPES.includes(mime)) {
+    if (db.avatars[personId]) { delete db.avatars[personId]; fs.rmSync(avatarPath(personId), { force: true }); save(); }
+    return;
+  }
+  const tag = hash(image).slice(0, 16);
+  if (db.avatars[personId] && db.avatars[personId].tag === tag) return;
+  const tmp = avatarPath(personId) + '.tmp';
+  fs.writeFileSync(tmp, image, { mode: 0o600 }); fs.renameSync(tmp, avatarPath(personId));
+  db.avatars[personId] = { mime, tag, updatedAt: now() };
+  save();
+}
+function avatar(personId) {
+  const a = db.avatars[personId];
+  if (!a) return null;
+  try { return { ...a, image: fs.readFileSync(avatarPath(personId)) }; } catch { return null; }
+}
+const avatarTag = (personId) => (db.avatars[personId] || {}).tag || null;
 
 // ---------- Devices ----------
 const devices = () => db.devices;
@@ -88,12 +134,12 @@ function removeDevice(deviceId, who) {
 // Staff accounts that have been disabled or deleted lose their devices and sign-ins.
 function removePeople(personIds, who) {
   const gone = db.devices.filter((d) => personIds.includes(d.personId));
-  if (!gone.length && !Object.values(db.sessions).some((s) => personIds.includes(s.user.id))) return [];
+  if (!gone.length && !Object.values(db.sessions).some((s) => personIds.includes(s.user.id)) && !personIds.some((p) => db.avatars[p])) return [];
   db.devices = db.devices.filter((d) => !personIds.includes(d.personId));
-  for (const p of personIds) endSessionsFor(p);
+  for (const p of personIds) { endSessionsFor(p); if (db.avatars[p]) { delete db.avatars[p]; fs.rmSync(avatarPath(p), { force: true }); } }
   for (const d of gone) audit(who, 'device.remove', d.email + ' ' + d.name + ' (account no longer enabled)');
   save();
   return gone;
 }
 
-module.exports = { init, save, audit, MAX_DEVICES, createSession, session, endSession, devices, devicesFor, device, addDevice, removeDevice, removePeople, get db() { return db; } };
+module.exports = { init, sessionsFor, endSessionById, activityFor, setAvatar, avatar, avatarTag, save, audit, MAX_DEVICES, createSession, session, endSession, devices, devicesFor, device, addDevice, removeDevice, removePeople, get db() { return db; } };

@@ -14,13 +14,28 @@ const { spawn } = require('node:child_process');
 
 const freePort = () => new Promise((r) => { const s = http.createServer(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => r(p)); }); });
 const hash = (s) => crypto.createHash('sha256').update(s).digest('hex');
+const zlib = require('node:zlib');
+// A minimal zip (as ditto makes) holding one deflated file.
+function zipOf(name, text) {
+  const data = Buffer.from(text), packed = zlib.deflateRawSync(data), n = Buffer.from(name);
+  const local = Buffer.alloc(30); local.writeUInt32LE(0x04034b50, 0); local.writeUInt16LE(20, 4); local.writeUInt16LE(8, 8);
+  local.writeUInt32LE(packed.length, 18); local.writeUInt32LE(data.length, 22); local.writeUInt16LE(n.length, 26);
+  const central = Buffer.alloc(46); central.writeUInt32LE(0x02014b50, 0); central.writeUInt16LE(8, 10);
+  central.writeUInt32LE(packed.length, 20); central.writeUInt32LE(data.length, 24); central.writeUInt16LE(n.length, 28); central.writeUInt32LE(0, 42);
+  const start = 30 + n.length + packed.length;
+  const end = Buffer.alloc(22); end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(1, 8); end.writeUInt16LE(1, 10);
+  end.writeUInt32LE(46 + n.length, 12); end.writeUInt32LE(start, 16);
+  return Buffer.concat([local, n, packed, central, n, end]);
+}
+const plist = (id, version, build) => '<plist><dict><key>CFBundleIdentifier</key><string>' + id + '</string><key>CFBundleShortVersionString</key><string>' + version + '</string><key>CFBundleVersion</key><string>' + build + '</string></dict></plist>';
+const PICTURE = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
 
 test('HN Group VPN: Auth sign-in (website and Mac app), devices, admin and account checks', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-vpn-'));
   const secret = crypto.randomBytes(32).toString('hex');
   fs.writeFileSync(path.join(dir, 'secret'), secret);
   const people = {
-    sam: { id: 'p-sam', email: 'sam@hngroup.org.uk', displayName: 'Sam', statusAdminAllowed: false, ownerAccess: false },
+    sam: { id: 'p-sam', email: 'sam@hngroup.org.uk', displayName: 'Sam', statusAdminAllowed: false, ownerAccess: false, avatarUrl: '/api/avatar' },
     owner: { id: 'p-owner', email: 'owner@hngroup.org.uk', displayName: 'Owner', ownerAccess: true },
   };
   const enabled = { 'p-sam': true, 'p-owner': true };
@@ -36,6 +51,11 @@ test('HN Group VPN: Auth sign-in (website and Mac app), devices, admin and accou
         if (!g || g.state !== data.state) return send(401, { error: 'Sign-in link expired or already used.' });
         const session = crypto.randomBytes(32).toString('hex'); appSessions.set(session, g.who);
         return send(200, { session, expires: Date.now() + 3600000, user: people[g.who] });
+      }
+      if (req.url === '/api/sso/avatar') {
+        const who = appSessions.get(data.session);
+        if (!who || !people[who].avatarUrl) return send(404, { error: 'No profile picture.' });
+        res.writeHead(200, { 'Content-Type': 'image/png' }); return res.end(PICTURE);
       }
       if (req.url === '/api/sso/session') { const who = appSessions.get(data.session); return who && enabled[people[who].id] ? send(200, { session: data.session, user: people[who] }) : send(401, { error: 'Expired.' }); }
       send(404, { error: 'Not found.' });
@@ -60,7 +80,7 @@ test('HN Group VPN: Auth sign-in (website and Mac app), devices, admin and accou
   });
   const call = async (p, o) => {
     o = o || {};
-    const headers = { ...(o.json ? { 'Content-Type': 'application/json' } : {}), ...(o.token ? { Authorization: 'Bearer ' + o.token } : {}), ...(o.cookie ? { cookie: o.cookie } : {}), ...(o.origin ? { origin: o.origin } : {}) };
+    const headers = { ...(o.json ? { 'Content-Type': 'application/json' } : {}), ...(o.token ? { Authorization: 'Bearer ' + o.token } : {}), ...(o.cookie ? { cookie: o.cookie } : {}), ...(o.origin ? { origin: o.origin } : {}), ...(o.headers || {}) };
     const r = await fetch(SITE + p, { method: o.method || (o.json ? 'POST' : 'GET'), headers, body: o.json ? JSON.stringify(o.json) : o.body, redirect: 'manual' });
     const type = r.headers.get('content-type') || '';
     return { status: r.status, body: type.startsWith('application/json') ? await r.json() : await r.text(), headers: r.headers };
@@ -117,6 +137,24 @@ test('HN Group VPN: Auth sign-in (website and Mac app), devices, admin and accou
     assert.equal(r.status, 200); assert.equal(r.body.user.displayName, 'Sam');
     const sam = r.body.token;
     assert.equal((await call('/api/app/exchange', { json: { code: appCode2, verifier } })).status, 401);
+    // The staff profile picture comes from Auth, for the website and the app.
+    assert.ok(r.body.user.avatar);
+    r = await call('/api/avatar', { token: sam });
+    assert.equal(r.status, 200); assert.equal(r.headers.get('content-type'), 'image/png');
+    assert.equal((await call('/api/avatar', { cookie: samCookie })).status, 200);
+    assert.equal((await call('/api/avatar')).status, 401);
+    // The profile lists the person's sign-ins (with the app's version) and can end another one.
+    await call('/api/me', { token: sam, headers: { 'X-HN-VPN-App': '1.2.0 (7)' } });
+    let profile = (await call('/api/profile', { cookie: samCookie })).body;
+    assert.equal(profile.user.email, 'sam@hngroup.org.uk');
+    const appSignIn = profile.sessions.find((x) => x.kind === 'app' && x.appVersion === '1.2.0 (7)');
+    assert.ok(appSignIn); assert.ok(profile.sessions.find((x) => x.current && x.kind === 'web'));
+    assert.ok(profile.activity.some((a) => a.action === 'sign-in.app'));
+    const spare = (await call('/api/app/exchange', { json: { code: (await authSignIn('sam', challenge)).body.match(/code=([a-f0-9]{64})/)[1], verifier } })).body.token;
+    const spareId = (await call('/api/profile', { token: spare })).body.sessions.find((x) => x.current).id;
+    assert.equal((await call('/api/sessions/' + spareId, { cookie: samCookie, origin: SITE, method: 'DELETE' })).status, 200);
+    assert.equal((await call('/api/me', { token: spare })).status, 401);
+    assert.equal((await call('/api/sessions/' + spareId, { cookie: samCookie, origin: SITE, method: 'DELETE' })).status, 404);
 
     // The Mac app registers with its own key; the server never sees the private key.
     const macKey = crypto.randomBytes(32).toString('base64');
@@ -145,9 +183,16 @@ test('HN Group VPN: Auth sign-in (website and Mac app), devices, admin and accou
     assert.equal((await call('/api/mac-app', { token: sam })).status, 404);
     assert.equal((await call('/api/admin/mac-app', { token: sam, body: Buffer.from('PK\x03\x04zip'), method: 'POST' })).status, 403);
     assert.equal((await call('/api/admin/mac-app', { cookie: ownerCookie, origin: SITE, body: Buffer.from('not a zip'), method: 'POST' })).status, 400);
-    assert.equal((await call('/api/admin/mac-app', { cookie: ownerCookie, origin: SITE, body: Buffer.from('PK\x03\x04zip contents'), method: 'POST' })).status, 200);
+    assert.equal((await call('/api/admin/mac-app', { cookie: ownerCookie, origin: SITE, body: Buffer.from('PK\x03\x04zip contents'), method: 'POST' })).status, 400);
+    assert.equal((await call('/api/admin/mac-app', { cookie: ownerCookie, origin: SITE, body: zipOf('Other.app/Contents/Info.plist', plist('com.example.other', '1.0', '1')), method: 'POST' })).status, 400);
+    const appZip = zipOf('HN Group VPN.app/Contents/Info.plist', plist('uk.org.hngroup.vpn', '1.2.0', '7'));
+    assert.equal((await call('/api/admin/mac-app', { cookie: ownerCookie, origin: SITE, body: appZip, method: 'POST' })).status, 200);
+    r = await call('/api/mac-app/latest', { token: sam });
+    assert.equal(r.body.version, '1.2.0'); assert.equal(r.body.build, 7); assert.equal(r.body.sha256, hash(appZip));
+    assert.equal((await call('/api/me', { cookie: samCookie })).body.macApp.version, '1.2.0');
     r = await call('/api/mac-app', { cookie: samCookie });
     assert.equal(r.status, 200); assert.equal(r.headers.get('content-type'), 'application/zip');
+    assert.match(r.headers.get('content-disposition'), /HN-Group-VPN-macOS-1\.2\.0\.zip/);
     assert.equal((await call('/api/mac-app')).status, 401);
     assert.ok(!fs.readFileSync(path.join(dir, 'data', 'vpn.json'), 'utf8').includes(sam));
 

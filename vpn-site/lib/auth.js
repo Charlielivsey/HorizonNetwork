@@ -47,6 +47,21 @@ async function authApi(endpoint, data) {
   return value;
 }
 
+// Keeps the VPN's copy of the person's staff profile picture up to date (see store.setAvatar).
+async function refreshAvatar(store, user, session, hasPicture) {
+  if (!hasPicture) { store.setAvatar(user.id, null); return; }
+  try {
+    const secret = fs.readFileSync(SECRET_FILE, 'utf8').trim();
+    const response = await fetch(AUTH_BACKEND + '/api/sso/avatar', {
+      method: 'POST', headers: { Authorization: 'Bearer ' + secret, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session, client_id: 'vpn' }), signal: AbortSignal.timeout(5000), redirect: 'error',
+    });
+    if (response.status === 404) { store.setAvatar(user.id, null); return; }
+    if (!response.ok) return;
+    store.setAvatar(user.id, Buffer.from(await response.arrayBuffer()), response.headers.get('content-type'));
+  } catch { /* keep the copy we have */ }
+}
+
 const userOf = (u) => ({ id: String(u.id || ''), email: String(u.email || '').toLowerCase(), displayName: String(u.displayName || u.email || 'Staff member'), admin: u.ownerAccess === true || u.statusAdminAllowed === true });
 
 function createAuth(store) {
@@ -60,7 +75,10 @@ function createAuth(store) {
     // Changes from the website must come from the website itself.
     if (req.method !== 'GET' && req.headers.origin !== VPN_ORIGIN) throw fail(403, 'That request didn’t come from the VPN website.');
     if (s.authSession && Date.now() - (s.checked || 0) > 60000) {
-      try { const r = await authApi('session', { session: s.authSession }); s.user = userOf(r.user); s.checked = Date.now(); }
+      try {
+        const r = await authApi('session', { session: s.authSession }); s.user = userOf(r.user); s.checked = Date.now();
+        if (Date.now() - (s.avatarChecked || 0) > 10 * 60000) { s.avatarChecked = Date.now(); await refreshAvatar(store, s.user, s.authSession, !!r.user.avatarUrl); }
+      }
       catch (e) { if ([401, 403].includes(e.status)) { store.endSession(token); return null; } throw e; }
     }
     return { user: s.user, token, cookie: true };
@@ -93,6 +111,7 @@ function createAuth(store) {
       try { result = await authApi('exchange', { code: url.searchParams.get('code'), state }); }
       catch (e) { showPage(res, e.status === 403 ? 403 : 503, 'Sign-in failed', e.message, [clear]); return true; }
       const user = userOf(result.user);
+      await refreshAvatar(store, user, result.session, !!result.user.avatarUrl);
       if (app && HEX.test(app)) {
         // The Mac app gets its own long-lived token; the browser only carries a short one-time code.
         const token = store.createSession(user, { app: true });

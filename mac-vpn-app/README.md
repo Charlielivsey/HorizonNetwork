@@ -26,3 +26,12 @@ The app isn't notarised by Apple, so the first time you open it, right-click it 
 5. Use the switch to connect or disconnect. **Sign out** disconnects and removes this Mac from the VPN.
 
 Requires macOS 13 (Ventura) or later, on Apple silicon or Intel.
+
+## Versions and updates
+
+The version is in `VERSION` (for example 1.1.0); each GitHub Actions build gets the run number as its
+build number. The app checks vpn.hngroup.org.uk for a newer build when it starts and every six hours
+(or from **Settings → Check for updates**). **Update now** downloads the new build, checks its SHA-256
+and signature, swaps it in place and reopens the app: there's no need to download it again from the
+website. To release a new version, bump `VERSION` and push; CI builds and publishes it, and the VPS
+update command makes it available.

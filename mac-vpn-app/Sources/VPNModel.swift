@@ -8,6 +8,8 @@ import Security
 @MainActor
 final class VPNModel: ObservableObject {
     enum Stage { case signIn, waiting, ready }
+    enum Section: Hashable { case connection, profile, settings }
+    enum UpdateState: Equatable { case idle, checking, upToDate, downloading, installing, failed(String) }
 
     /// One model for the app, so links back from the browser reach it.
     static let shared = VPNModel()
@@ -21,6 +23,15 @@ final class VPNModel: ObservableObject {
     @Published var connected = false
     @Published var ip: IPInfo?
     @Published var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @Published var section: Section = .connection
+    @Published var avatar: NSImage?
+    @Published var devices: [Device] = []
+    @Published var profile: Profile?
+    @Published var update: AppRelease?
+    @Published var updateState: UpdateState = .idle
+    @Published var helperOutdated = Paths.helperOutdated
+    private var avatarTag: String?
+    private var lastUpdateCheck = Date.distantPast
 
     private let api = API()
     private var timer: Timer?
@@ -33,7 +44,10 @@ final class VPNModel: ObservableObject {
         }
         timer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
             guard let model = self else { return }
-            Task { @MainActor in await model.checkStatus() }
+            Task { @MainActor in
+                await model.checkStatus()
+                if Date().timeIntervalSince(model.lastUpdateCheck) > 6 * 3600 { await model.checkForUpdate(quietly: true) }
+            }
         }
         Task { await checkStatus() }
     }
@@ -83,6 +97,7 @@ final class VPNModel: ObservableObject {
         api.token = token
         Keychain.set("token", token)
         user = result.user
+        await loadAvatar(result.user)
         stage = .ready
         await refresh()
     }
@@ -97,6 +112,7 @@ final class VPNModel: ObservableObject {
         _ = try? await api.send("api/sign-out", method: "POST", body: [:], as: OKResponse.self)
         for key in ["token", "deviceId", "privateKey"] { Keychain.set(key, nil) }
         api.token = nil; user = nil; isSetUp = false; deviceName = nil; connected = false; ip = nil
+        avatar = nil; avatarTag = nil; profile = nil; devices = []; update = nil; updateState = .idle; section = .connection
         stage = .signIn
     }
 
@@ -106,6 +122,9 @@ final class VPNModel: ObservableObject {
         do {
             let me = try await api.send("api/me", as: Me.self)
             user = me.user
+            devices = me.devices
+            await loadAvatar(me.user)
+            if let release = me.macApp { noteRelease(release) }
             let deviceId = Keychain.get("deviceId")
             let device = me.devices.first { $0.id == deviceId }
             deviceName = device?.name
@@ -115,7 +134,10 @@ final class VPNModel: ObservableObject {
                 if Paths.helperInstalled { _ = await Shell.run("/usr/bin/sudo", ["-n", Paths.helper, "remove"]) }
             }
             isSetUp = device != nil && Paths.helperInstalled && FileManager.default.fileExists(atPath: "/usr/local/etc/hn-vpn")
+            helperOutdated = Paths.helperOutdated
+            if section == .profile { await loadProfile() }
             await checkStatus()
+            if Date().timeIntervalSince(lastUpdateCheck) > 6 * 3600 { await checkForUpdate(quietly: true) }
         } catch let e as APIError where e.status == 401 {
             Keychain.set("token", nil); api.token = nil; stage = .signIn
             error = "Your sign-in has expired. Please sign in again."
@@ -209,6 +231,117 @@ final class VPNModel: ObservableObject {
 
     private func lastLine(_ text: String) -> String {
         text.split(separator: "\n").last.map(String.init) ?? ""
+    }
+
+    // MARK: Profile
+
+    /// The staff profile picture from HN Group Auth, fetched again only when it changes.
+    private func loadAvatar(_ user: User?) async {
+        guard let user = user else { return }
+        guard let tag = user.avatar else { avatar = nil; avatarTag = nil; return }
+        if tag == avatarTag, avatar != nil { return }
+        if let data = await api.data("api/avatar"), let image = NSImage(data: data) { avatar = image; avatarTag = tag }
+    }
+
+    func loadProfile() async {
+        do {
+            let p = try await api.send("api/profile", as: Profile.self)
+            profile = p; user = p.user; devices = p.devices
+            await loadAvatar(p.user)
+        } catch let e as APIError where e.status == 401 {
+            Keychain.set("token", nil); api.token = nil; stage = .signIn
+            error = "Your sign-in has expired. Please sign in again."
+        } catch { self.error = error.localizedDescription }
+    }
+
+    func endSignIn(_ entry: SignInEntry) async {
+        do {
+            _ = try await api.send("api/sessions/" + entry.id, method: "DELETE", as: OKResponse.self)
+            await loadProfile()
+        } catch { self.error = error.localizedDescription }
+    }
+
+    func show(_ section: Section) {
+        self.section = section
+        if section == .profile { Task { await loadProfile() } }
+    }
+
+    // MARK: Updates
+
+    /// Updates install in place: no need to download the app again from the website.
+    func checkForUpdate(quietly: Bool = false) async {
+        guard api.token != nil else { return }
+        if !quietly { updateState = .checking }
+        lastUpdateCheck = Date()
+        do {
+            noteRelease(try await api.send("api/mac-app/latest", as: AppRelease.self))
+            if !quietly && update == nil { updateState = .upToDate }
+        } catch {
+            if !quietly { updateState = .failed(error.localizedDescription) }
+        }
+    }
+
+    private func noteRelease(_ release: AppRelease) {
+        update = release.build > AppInfo.build ? release : nil
+        if update == nil, case .checking = updateState { updateState = .upToDate }
+    }
+
+    func installUpdate() async {
+        guard let release = update, updateState != .downloading, updateState != .installing else { return }
+        updateState = .downloading
+        let work = FileManager.default.temporaryDirectory.appendingPathComponent("hn-vpn-update-" + UUID().uuidString)
+        do {
+            let zip = try await api.download("api/mac-app")
+            defer { try? FileManager.default.removeItem(at: zip) }
+            let digest = SHA256.hash(data: try Data(contentsOf: zip, options: .mappedIfSafe)).map { String(format: "%02x", $0) }.joined()
+            guard digest == release.sha256 else { throw APIError(message: "The update didn’t download correctly. Please try again.", status: 0) }
+            updateState = .installing
+            try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
+            guard await Shell.run("/usr/bin/ditto", ["-x", "-k", zip.path, work.path]).status == 0,
+                  let app = try FileManager.default.contentsOfDirectory(at: work, includingPropertiesForKeys: nil).first(where: { $0.pathExtension == "app" }),
+                  let bundle = Bundle(url: app), bundle.bundleIdentifier == Bundle.main.bundleIdentifier,
+                  Int(bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "") ?? 0 > AppInfo.build
+            else { throw APIError(message: "The update isn’t a newer HN Group VPN app.", status: 0) }
+            guard await Shell.run("/usr/bin/codesign", ["--verify", "--deep", app.path]).status == 0 else { throw APIError(message: "The update’s signature didn’t check out, so it wasn’t installed.", status: 0) }
+            _ = await Shell.run("/usr/bin/xattr", ["-dr", "com.apple.quarantine", app.path])
+            try await replaceApp(with: app)
+            relaunch()
+        } catch {
+            try? FileManager.default.removeItem(at: work)
+            updateState = .failed(error.localizedDescription)
+        }
+    }
+
+    /// Swaps this app's bundle for the new one. The running copy keeps going until it relaunches.
+    private func replaceApp(with app: URL) async throws {
+        let target = Bundle.main.bundleURL
+        do {
+            _ = try FileManager.default.replaceItemAt(target, withItemAt: app)
+        } catch {
+            // In a folder this Mac user can't change (such as /Applications on a shared Mac): ask once.
+            let q = Shell.quote
+            let command = "set -e; rm -rf \(q(target.path + ".old")); mv \(q(target.path)) \(q(target.path + ".old")); /usr/bin/ditto \(q(app.path)) \(q(target.path)); rm -rf \(q(target.path + ".old"))"
+            let result = await Shell.runAsAdmin(command, prompt: "HN Group VPN needs your password to install its update.")
+            if result.status != 0 { throw APIError(message: result.output.contains("-128") ? "The update was cancelled." : "The update couldn’t be installed.", status: 0) }
+        }
+    }
+
+    private func relaunch() {
+        let pid = ProcessInfo.processInfo.processIdentifier
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["-c", "while /bin/kill -0 \(pid) 2>/dev/null; do sleep 0.2; done; /usr/bin/open \(Shell.quote(Bundle.main.bundleURL.path))"]
+        try? process.run()
+        NSApp.terminate(nil)
+    }
+
+    /// After an update that changed the helper, reinstall just the helper (one password prompt).
+    func updateHelper() async {
+        guard let bundled = Bundle.main.url(forResource: "hn-vpn-ctl", withExtension: nil) else { return }
+        busy = true; defer { busy = false }
+        let result = await Shell.runAsAdmin("install -m 755 -o root -g wheel \(Shell.quote(bundled.path)) \(Paths.helper)", prompt: "HN Group VPN needs to finish its update.")
+        if result.status != 0 && !result.output.contains("-128") { error = "The update couldn’t finish: " + lastLine(result.output) }
+        helperOutdated = Paths.helperOutdated
     }
 
     // MARK: Other

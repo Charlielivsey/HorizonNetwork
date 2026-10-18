@@ -7,15 +7,15 @@
 <meta name="theme-color" content="#5514B4">
 <title>HN Group VPN</title>
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/assets/vpn.css?v=3">
-<script src="/assets/vpn.js?v=3" defer></script>
+<link rel="stylesheet" href="/assets/vpn.css?v=4">
+<script src="/assets/vpn.js?v=4" defer></script>
 </head>
 <body>
 <header class="top">
   <div class="wrap top-inner">
     <a class="brand" href="/"><img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="118" height="41"><img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="118" height="41"><span class="brand-name">VPN</span></a>
     <div class="top-actions" id="top-actions" hidden>
-      <span class="avatar" id="avatar" aria-hidden="true"></span><span id="who" class="who"></span>
+      <a class="me-link" href="#profile" id="me-link" title="Your VPN profile"><span class="avatar" id="avatar" aria-hidden="true"></span><span id="who" class="who"></span></a>
       <button class="btn btn-ghost btn-small" id="sign-out" type="button">Sign out</button>
     </div>
   </div>
@@ -63,6 +63,7 @@
         <h2>HN Group VPN for Mac</h2>
         <p>Sign in with HN Group Auth and the app sets up your Mac and connects with one button.</p>
         <p><button class="btn btn-primary" id="get-mac-app" type="button">Download the Mac app</button></p>
+        <p class="version" id="mac-app-version" hidden></p>
         <p class="muted small" id="mac-app-note"></p>
       </section>
       <section class="card feature-card">
@@ -103,6 +104,36 @@
         <form id="app-form" class="form inline"><input id="app-file" type="file" accept=".zip,application/zip" required aria-label="Mac app zip"><button class="btn btn-ghost" type="submit">Publish</button></form>
         <p class="error" id="app-error" role="alert" hidden></p>
       </details>
+    </section>
+  </section>
+
+  <!-- Profile -->
+  <section class="wrap" id="view-profile" hidden>
+    <p class="back"><a href="#">← Back to your VPN</a></p>
+    <div class="profile-hero">
+      <span class="avatar avatar-large" id="profile-avatar" aria-hidden="true"></span>
+      <div>
+        <p class="eyebrow">Your VPN profile</p>
+        <h1 id="profile-name"></h1>
+        <p class="muted" id="profile-email"></p>
+        <p class="pills" id="profile-pills"></p>
+      </div>
+    </div>
+    <p class="muted small">Your name and photo come from your HN Group staff profile. To change them, update your profile in the <a href="https://staff.hngroup.org.uk" rel="noopener">staff portal</a>.</p>
+    <div class="grid">
+      <section class="card">
+        <div class="card-head"><h2>Where you’re signed in</h2></div>
+        <div id="profile-sessions"></div>
+      </section>
+      <section class="card">
+        <div class="card-head"><h2>Your devices</h2><span class="pill" id="profile-device-count"></span></div>
+        <div id="profile-devices"></div>
+        <p><a class="btn btn-ghost btn-small" href="#">Manage devices</a></p>
+      </section>
+    </div>
+    <section class="card">
+      <div class="card-head"><h2>Recent activity</h2></div>
+      <div id="profile-activity"></div>
     </section>
   </section>
 

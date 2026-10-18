@@ -18,6 +18,7 @@ jobs:
           lipo -archs "$APP/Contents/MacOS/HNGroupVPN"
           codesign --verify --deep "$APP"
           plutil -lint "$APP/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" -c "Print :CFBundleVersion" "$APP/Contents/Info.plist"
       - uses: actions/upload-artifact@v4
         with:
           name: HN-Group-VPN-macOS
@@ -31,7 +32,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add vpn-site/mac-app/HN-Group-VPN-macOS.zip
-          git commit -m "Publish the HN Group VPN Mac app (build ${GITHUB_SHA::7})"
+          git commit -m "Publish HN Group VPN for Mac $(tr -d '[:space:]' < mac-vpn-app/VERSION) (build $GITHUB_RUN_NUMBER, ${GITHUB_SHA::7})"
           for attempt in 1 2 3; do
             git pull --rebase origin "$GITHUB_REF_NAME" && git push origin "HEAD:$GITHUB_REF_NAME" && break
             sleep 5
