@@ -13,7 +13,7 @@ for arch in arm64 x86_64; do
 done
 lipo -create "$OUT/obj/HNGroupVPN-arm64" "$OUT/obj/HNGroupVPN-x86_64" -output "$APP/Contents/MacOS/HNGroupVPN"
 cp Info.plist "$APP/Contents/Info.plist"
-cp Resources/wordmark.png Resources/wordmark-white.png "$APP/Contents/Resources/"
+cp Resources/wordmark.png Resources/wordmark-white.png Resources/PlusJakartaSans.ttf "$APP/Contents/Resources/"
 install -m 755 Resources/hn-vpn-ctl "$APP/Contents/Resources/hn-vpn-ctl"
 # App icon from the 1024px artwork.
 ICONSET="$OUT/AppIcon.iconset"; mkdir -p "$ICONSET"
