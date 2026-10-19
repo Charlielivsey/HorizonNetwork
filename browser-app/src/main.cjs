@@ -177,7 +177,7 @@ async function setup(){
  case'find':{const{text,forward=true,next=false}=data||{};if(typeof text!=='string'||text.length>500)throw Error('Enter something to find.');const wc=t?.view.webContents;if(!wc)break;find.open=true;find.text=text;if(!text){wc.stopFindInPage('clearSelection');find.active=0;find.matches=0;changed();break;}const request=wc.findInPage(text,{forward:!!forward,findNext:!next});find.request=request;
   // findNext:true starts a new search (Electron’s meaning); Chromium can still drop the first search in a
   // page, so keep asking (briefly) until an answer arrives.
-  let tries=0;const retry=()=>{if(!find.open||find.text!==text||wc.isDestroyed()||(find.answered||0)>=find.request||++tries>8)return;find.request=wc.findInPage(text,{forward:!!forward,findNext:!next});setTimeout(retry,250);};setTimeout(retry,250);break;}
+  let tries=0;const retry=()=>{if(!find.open||find.text!==text||wc.isDestroyed()||(find.answered||0)>=find.request||++tries>40)return;find.request=wc.findInPage(text,{forward:!!forward,findNext:!next});setTimeout(retry,250);};setTimeout(retry,250);break;}
  case'key':{const k=data||{};if(typeof k.key!=='string'||k.key.length>12)throw Error('Unknown shortcut.');keys({type:'keyDown',key:k.key,control:!!k.control,meta:!!k.meta,shift:!!k.shift,alt:!!k.alt});break;}
  case'find-open':await setPanel(null);shortcut('f');break;
  case'find-close':stopFind();changed();if(t)t.view.webContents.focus();break;
