@@ -61,7 +61,8 @@ struct AvatarView: View {
     var body: some View {
         Group {
             if let image = image {
-                Image(nsImage: image).resizable().interpolation(.high).aspectRatio(contentMode: .fill)
+                // An AppKit image view, so animated profile pictures (GIFs) play as they do in the staff portal.
+                AnimatedImage(image: image)
             } else {
                 let letters = name.split(separator: " ").prefix(2).compactMap { $0.first }.map(String.init).joined().uppercased()
                 Text(letters.isEmpty ? "?" : letters)
@@ -73,6 +74,41 @@ struct AvatarView: View {
         .frame(width: size, height: size)
         .clipShape(Circle())
         .accessibilityHidden(true)
+    }
+}
+
+/// Shows an image filling its frame (cropped to fit), playing it if it's animated.
+struct AnimatedImage: NSViewRepresentable {
+    let image: NSImage
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    final class FillView: NSView {
+        let imageView = NSImageView()
+        override init(frame: NSRect) {
+            super.init(frame: frame)
+            wantsLayer = true
+            layer?.masksToBounds = true
+            imageView.imageScaling = .scaleProportionallyUpOrDown
+            imageView.imageFrameStyle = .none
+            imageView.isEditable = false
+            addSubview(imageView)
+        }
+        required init?(coder: NSCoder) { fatalError() }
+        override func layout() {
+            super.layout()
+            // Grow the image view past the edges so the picture fills the circle without stretching.
+            let size = imageView.image?.size ?? bounds.size
+            guard size.width > 0, size.height > 0 else { imageView.frame = bounds; return }
+            let scale = max(bounds.width / size.width, bounds.height / size.height)
+            let w = size.width * scale, h = size.height * scale
+            imageView.frame = NSRect(x: (bounds.width - w) / 2, y: (bounds.height - h) / 2, width: w, height: h)
+        }
+    }
+
+    func makeNSView(context: Context) -> FillView { FillView() }
+    func updateNSView(_ view: FillView, context: Context) {
+        if view.imageView.image !== image { view.imageView.image = image; view.needsLayout = true }
+        view.imageView.animates = !reduceMotion
     }
 }
 
@@ -136,7 +172,6 @@ struct MainView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.3), value: model.stage)
-            HNStripe().frame(height: 3)
         }
         .frame(minWidth: 900, minHeight: 620)
         .background(Theme.background)
@@ -208,13 +243,7 @@ struct WelcomeView: View {
 
             VStack(alignment: .leading, spacing: 20) {
                 Spacer()
-                HStack(spacing: 12) {
-                    AppMark(size: 40)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("HN GROUP").font(Theme.font(10, .heavy)).tracking(1.6).foregroundStyle(Theme.accent)
-                        Text("Secure Network").font(Theme.font(20, .heavy))
-                    }
-                }
+                HNWordmark(height: 44)
                 if model.stage == .waiting {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack(spacing: 10) {
@@ -340,14 +369,8 @@ struct Sidebar: View {
     @Namespace private var selection
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 10) {
-                AppMark(size: 32)
-                VStack(alignment: .leading, spacing: 0) {
-                    Text("HN GROUP").font(Theme.font(9, .heavy)).tracking(1.4).foregroundStyle(Theme.accent)
-                    Text("Secure Network").font(Theme.font(15, .heavy)).lineLimit(1).minimumScaleFactor(0.8)
-                }
-            }
-            .padding(.horizontal, 8).padding(.top, 46).padding(.bottom, 24)
+            HNWordmark(height: 38)
+                .padding(.horizontal, 10).padding(.top, 48).padding(.bottom, 26)
 
             Text("MENU").font(Theme.font(10, .heavy)).tracking(1.2).foregroundStyle(Theme.muted.opacity(0.8)).padding(.horizontal, 12).padding(.bottom, 4)
             NavItem(icon: "power", title: "Connection", section: .connection, selection: selection)
@@ -549,8 +572,8 @@ struct ConnectCard: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        HStack(spacing: 34) {
-            Button { Task { await model.toggle() } } label: { Orb(on: model.connected, busy: model.busy, size: 210) }
+        HStack(spacing: 28) {
+            Button { Task { await model.toggle() } } label: { Orb(on: model.connected, busy: model.busy, size: 184) }
                 .buttonStyle(.plain)
                 .disabled(model.busy)
                 .accessibilityLabel(model.connected ? "Disconnect" : "Connect")
@@ -564,7 +587,8 @@ struct ConnectCard: View {
                 .foregroundStyle(Color.white.opacity(0.75))
                 .padding(.horizontal, 10).padding(.vertical, 5)
                 .background(Capsule().fill(Color.white.opacity(0.08)))
-                Text(model.connected ? "You’re protected" : "You’re not protected").font(Theme.font(32, .heavy)).tracking(-0.8).foregroundStyle(.white)
+                Text(model.connected ? "You’re protected" : "You’re not protected").font(Theme.font(30, .heavy)).tracking(-0.8).foregroundStyle(.white)
+                    .lineLimit(1).minimumScaleFactor(0.75)
                 Text(model.connected ? "All of this Mac’s internet traffic is encrypted and going through HN Group’s UK server." : "Turn on the VPN to encrypt all of this Mac’s traffic through HN Group’s UK server.")
                     .foregroundStyle(Color.white.opacity(0.7)).fixedSize(horizontal: false, vertical: true).lineSpacing(2)
                 if model.connected, let since = model.connectedSince {
@@ -578,7 +602,7 @@ struct ConnectCard: View {
                         .buttonStyle(HeroButtonStyle(filled: !model.connected))
                         .disabled(model.busy)
                     if model.connected {
-                        Button { model.show(.ssh) } label: { Label("Open SSH", systemImage: "terminal") }
+                        Button { model.show(.ssh) } label: { HStack(spacing: 7) { Image(systemName: "terminal"); Text("Open SSH") } }
                             .buttonStyle(HeroButtonStyle(filled: false))
                     }
                 }
@@ -614,7 +638,8 @@ struct HeroButtonStyle: ButtonStyle {
         configuration.label
             .font(Theme.font(13.5, .bold))
             .foregroundStyle(filled ? Theme.purple : Color.white)
-            .padding(.horizontal, 20).padding(.vertical, 10)
+            .lineLimit(1).fixedSize()
+            .padding(.horizontal, 20).padding(.vertical, 11)
             .background(Capsule().fill(filled ? Color.white : Color.white.opacity(configuration.isPressed ? 0.2 : 0.1)))
             .overlay(Capsule().strokeBorder(Color.white.opacity(filled ? 0 : 0.2)))
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
@@ -826,26 +851,30 @@ struct ProfilePage: View {
             VStack(alignment: .leading, spacing: 0) {
                 ZStack {
                     Theme.heroOn
-                    Glow(color: Theme.pink.opacity(0.25), size: 200).offset(x: 220, y: -20)
-                    HNStripe().frame(height: 3).frame(maxHeight: .infinity, alignment: .bottom)
+                    Glow(color: Theme.pink.opacity(0.28), size: 240).offset(x: 240, y: -30)
+                    Glow(color: Theme.teal.opacity(0.22), size: 200).offset(x: -60, y: 50)
                 }
-                .frame(height: 96)
-                HStack(alignment: .bottom, spacing: 18) {
-                    AvatarView(image: model.avatar, name: model.user?.displayName ?? "", size: 92)
-                        .overlay(Circle().strokeBorder(Theme.surface, lineWidth: 5))
-                        .shadow(color: Theme.purple.opacity(0.3), radius: 12, y: 6)
-                        .offset(y: -34).padding(.bottom, -34)
+                .frame(height: 104)
+                HStack(alignment: .top, spacing: 20) {
+                    AvatarView(image: model.avatar, name: model.user?.displayName ?? "", size: 104)
+                        .padding(5)
+                        .background(Circle().fill(Theme.surface))
+                        .shadow(color: Theme.purple.opacity(0.28), radius: 14, y: 6)
+                        .offset(y: -52).padding(.bottom, -52)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(model.user?.displayName ?? "").font(Theme.font(26, .heavy)).tracking(-0.5)
-                        Text(model.user?.email ?? "").foregroundStyle(Theme.muted)
+                        Text(model.user?.displayName ?? "").font(Theme.font(26, .heavy)).tracking(-0.5).lineLimit(1).minimumScaleFactor(0.7)
+                        Text(model.user?.email ?? "").font(Theme.font(14)).foregroundStyle(Theme.muted).lineLimit(1).truncationMode(.middle)
+                        HStack(spacing: 8) {
+                            Pill(icon: model.user?.admin == true ? "checkmark.shield.fill" : "person.fill",
+                                 text: model.user?.admin == true ? "VPN administrator" : "HN Group staff", colour: Theme.accent)
+                            if let p = model.profile { Pill(icon: "laptopcomputer", text: "\(p.devices.count) of \(p.limit) devices", colour: Theme.success) }
+                        }
+                        .padding(.top, 8)
                     }
-                    Spacer()
-                    HStack(spacing: 8) {
-                        Badge(text: model.user?.admin == true ? "VPN administrator" : "HN Group staff")
-                        if let p = model.profile { Badge(text: "\(p.devices.count) of \(p.limit) devices", colour: Theme.teal) }
-                    }
+                    .padding(.top, 14)
+                    Spacer(minLength: 0)
                 }
-                .padding(.horizontal, 22).padding(.top, 12).padding(.bottom, 20)
+                .padding(.horizontal, 24).padding(.bottom, 22)
             }
             .background(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous).fill(Theme.surface))
             .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
@@ -906,6 +935,24 @@ struct ProfilePage: View {
                 HStack { Spacer(); ProgressView(); Spacer() }.padding(40)
             }
         }
+    }
+}
+
+/// A readable labelled pill: an icon and sentence-case text on a soft tint, never wrapping.
+struct Pill: View {
+    let icon: String
+    let text: String
+    var colour: Color = Theme.accent
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon).font(.system(size: 11, weight: .bold))
+            Text(text).font(Theme.font(12.5, .bold))
+        }
+        .foregroundStyle(colour)
+        .lineLimit(1).fixedSize()
+        .padding(.horizontal, 11).padding(.vertical, 6)
+        .background(Capsule().fill(colour.opacity(0.14)))
+        .overlay(Capsule().strokeBorder(colour.opacity(0.3)))
     }
 }
 
@@ -1096,6 +1143,12 @@ enum Snapshots {
         m.stage = stage
         m.user = User(displayName: "Charlie Livsey", email: "charlie.livsey@hngroup.org.uk", admin: true, avatar: nil)
         m.isSetUp = setUp; m.connected = connected; m.section = section
+        // A wide sample picture, to check pictures fill the circle without stretching.
+        m.avatar = NSImage(size: NSSize(width: 240, height: 160), flipped: false) { r in
+            NSGradient(colors: [NSColor(Theme.teal), NSColor(Theme.purple)])?.draw(in: r, angle: 45)
+            NSColor.white.withAlphaComponent(0.85).setFill(); NSBezierPath(ovalIn: NSRect(x: 85, y: 40, width: 70, height: 70)).fill()
+            return true
+        }
         m.connectedSince = connected ? Date().addingTimeInterval(-754) : nil
         m.serverReachable = connected ? true : nil
         m.ip = IPInfo(ip: connected ? "217.154.34.205" : "86.12.40.118", viaVpn: connected)

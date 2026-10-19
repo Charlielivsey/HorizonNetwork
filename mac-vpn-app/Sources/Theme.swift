@@ -179,7 +179,9 @@ struct Badge: View {
     var body: some View {
         Text(text).font(Theme.font(11, .bold)).textCase(.uppercase).tracking(0.6)
             .foregroundStyle(colour)
-            .padding(.horizontal, 9).padding(.vertical, 4)
-            .background(Capsule().fill(colour.opacity(0.12)))
+            .lineLimit(1).fixedSize()
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background(Capsule().fill(colour.opacity(0.16)))
+            .overlay(Capsule().strokeBorder(colour.opacity(0.28)))
     }
 }
