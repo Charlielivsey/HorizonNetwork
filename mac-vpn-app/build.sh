@@ -1,17 +1,17 @@
 #!/bin/bash
-# Builds "HN Group Secure Terminal.app" (Apple Silicon and Intel) and HN-Group-Secure-Terminal-macOS.zip.
+# Builds "HN Secure Network.app" (Apple Silicon and Intel) and HN-Secure-Network-macOS.zip.
 # Needs a Mac with Xcode or the Command Line Tools (xcode-select --install). Run: bash mac-vpn-app/build.sh
 set -euo pipefail
 cd "$(dirname "$0")"
 OUT=build
-APP="$OUT/HN Group Secure Terminal.app"
+APP="$OUT/HN Secure Network.app"
 rm -rf "$OUT"; mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$OUT/obj"
 for arch in arm64 x86_64; do
   swiftc -O -parse-as-library -swift-version 5 -target "$arch-apple-macos13.0" \
     -framework SwiftUI -framework AppKit -framework Security -framework CryptoKit -framework ServiceManagement \
     Sources/*.swift -o "$OUT/obj/HNGroupVPN-$arch"
 done
-lipo -create "$OUT/obj/HNGroupVPN-arm64" "$OUT/obj/HNGroupVPN-x86_64" -output "$APP/Contents/MacOS/HNGroupVPN"
+lipo -create "$OUT/obj/HNGroupVPN-arm64" "$OUT/obj/HNGroupVPN-x86_64" -output "$APP/Contents/MacOS/HN Secure Network"
 cp Info.plist "$APP/Contents/Info.plist"
 # Version numbers: the version comes from VERSION; the build number goes up with every build
 # (the GitHub Actions run number), which is how the app knows an update is newer.
@@ -30,5 +30,5 @@ done
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
 # Ad-hoc signature: enough to run on Macs that open it with right-click > Open the first time.
 codesign --force --deep --sign - "$APP"
-ditto -c -k --sequesterRsrc --keepParent "$APP" "$OUT/HN-Group-Secure-Terminal-macOS.zip"
-echo "Built: mac-vpn-app/$OUT/HN Group Secure Terminal.app and mac-vpn-app/$OUT/HN-Group-Secure-Terminal-macOS.zip"
+ditto -c -k --sequesterRsrc --keepParent "$APP" "$OUT/HN-Secure-Network-macOS.zip"
+echo "Built: mac-vpn-app/$OUT/HN Secure Network.app and mac-vpn-app/$OUT/HN-Secure-Network-macOS.zip"

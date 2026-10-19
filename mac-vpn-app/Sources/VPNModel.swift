@@ -238,7 +238,7 @@ final class VPNModel: ObservableObject {
             "install -m 600 -o root -g wheel \(q(conf.path)) \(Paths.config)",
             "install -m 440 -o root -g wheel \(q(rule.path)) \(Paths.sudoers)",
         ].joined(separator: "; ")
-        let result = await Shell.runAsAdmin(command, prompt: "HN Group Secure Terminal needs to set up this Mac’s VPN connection.")
+        let result = await Shell.runAsAdmin(command, prompt: "HN Secure Network needs to set up this Mac’s VPN connection.")
         if result.status != 0 {
             throw APIError(message: result.output.contains("User canceled") || result.output.contains("-128") ? "Setup was cancelled." : "Setup didn’t finish: " + result.output.trimmingCharacters(in: .whitespacesAndNewlines), status: 0)
         }
@@ -339,7 +339,7 @@ final class VPNModel: ObservableObject {
                   let app = try FileManager.default.contentsOfDirectory(at: work, includingPropertiesForKeys: nil).first(where: { $0.pathExtension == "app" }),
                   let bundle = Bundle(url: app), bundle.bundleIdentifier == Bundle.main.bundleIdentifier,
                   Int(bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "") ?? 0 > AppInfo.build
-            else { throw APIError(message: "The update isn’t a newer Secure Terminal app.", status: 0) }
+            else { throw APIError(message: "The update isn’t a newer Secure Network app.", status: 0) }
             guard await Shell.run("/usr/bin/codesign", ["--verify", "--deep", app.path]).status == 0 else { throw APIError(message: "The update’s signature didn’t check out, so it wasn’t installed.", status: 0) }
             _ = await Shell.run("/usr/bin/xattr", ["-dr", "com.apple.quarantine", app.path])
             let installed = try await replaceApp(with: app)
@@ -368,7 +368,7 @@ final class VPNModel: ObservableObject {
             // In a folder this Mac user can't change (such as /Applications on a shared Mac): ask once.
             let q = Shell.quote
             let command = "set -e; rm -rf \(q(target.path + ".new")); /usr/bin/ditto \(q(app.path)) \(q(target.path + ".new")); rm -rf \(q(current.path)) \(q(target.path)); mv \(q(target.path + ".new")) \(q(target.path))"
-            let result = await Shell.runAsAdmin(command, prompt: "HN Group Secure Terminal needs your password to install its update.")
+            let result = await Shell.runAsAdmin(command, prompt: "HN Secure Network needs your password to install its update.")
             if result.status != 0 { throw APIError(message: result.output.contains("-128") ? "The update was cancelled." : "The update couldn’t be installed.", status: 0) }
             return target
         }
@@ -387,7 +387,7 @@ final class VPNModel: ObservableObject {
     func updateHelper() async {
         guard let bundled = Bundle.main.url(forResource: "hn-vpn-ctl", withExtension: nil) else { return }
         busy = true; defer { busy = false }
-        let result = await Shell.runAsAdmin("install -m 755 -o root -g wheel \(Shell.quote(bundled.path)) \(Paths.helper)", prompt: "HN Group Secure Terminal needs to finish its update.")
+        let result = await Shell.runAsAdmin("install -m 755 -o root -g wheel \(Shell.quote(bundled.path)) \(Paths.helper)", prompt: "HN Secure Network needs to finish its update.")
         if result.status != 0 && !result.output.contains("-128") { error = "The update couldn’t finish: " + lastLine(result.output) }
         helperOutdated = Paths.helperOutdated
     }
@@ -405,6 +405,16 @@ final class VPNModel: ObservableObject {
         error = nil; sshBusy = true; defer { sshBusy = false }
         if !connected { await connect() }
         guard connected else { error = error ?? "Connect to the VPN first."; return }
+        // Make sure the server answers through the VPN before opening Terminal, so a session never
+        // sits waiting on a connection that can't work.
+        await checkServer()
+        if serverReachable != true {
+            try? await Task.sleep(nanoseconds: 2_000_000_000); await checkServer()
+        }
+        guard serverReachable == true else {
+            error = "The VPN is on, but the HN Group server isn’t answering through it yet. Try disconnecting and connecting again. If it keeps happening, the server’s VPN port (UDP 51820) may be blocked, or the server needs its latest update."
+            return
+        }
         do {
             let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hn-ssh-" + UUID().uuidString)
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
@@ -420,8 +430,11 @@ final class VPNModel: ObservableObject {
                 "rm -f \"$0\"",
                 "clear",
                 "printf '\\033]0;HN Group server\\007'",
-                "echo 'HN Group Secure Terminal · connecting to \(user)@\(VPNModel.serverAddress) through the VPN…'",
-                "SSH_ASKPASS=\(q(askpass.path)) SSH_ASKPASS_REQUIRE=force DISPLAY=hn /usr/bin/ssh -o StrictHostKeyChecking=accept-new -o NumberOfPasswordPrompts=1 -o ServerAliveInterval=30 \(q(user))@\(VPNModel.serverAddress)",
+                "echo 'HN Secure Network · connecting to \(user)@\(VPNModel.serverAddress) through the VPN…'",
+                "SSH_ASKPASS=\(q(askpass.path)) SSH_ASKPASS_REQUIRE=force DISPLAY=hn /usr/bin/ssh -o StrictHostKeyChecking=accept-new -o NumberOfPasswordPrompts=1 -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=4 \(q(user))@\(VPNModel.serverAddress)",
+                "status=$?",
+                "rm -f \(q(secret.path))",
+                "if [ $status -eq 255 ]; then echo; echo 'HN Secure Network couldn’t open the session: the server didn’t answer, or the password wasn’t accepted.'; echo 'Check the VPN is connected in HN Secure Network, then try again.'; echo; read -r -p 'Press Return to close this window.' _; fi",
                 "rm -rf \(q(dir.path))",
             ].joined(separator: "\n") + "\n"
             try script.write(to: command, atomically: true, encoding: .utf8)

@@ -47,6 +47,13 @@ PostUp = iptables -I FORWARD 1 -i %i -j REJECT --reject-with icmp-admin-prohibit
 PostDown = iptables -D FORWARD -i %i -j REJECT --reject-with icmp-admin-prohibited
 PostUp = ip6tables -I FORWARD 1 -i %i -j REJECT --reject-with icmp6-adm-prohibited || true
 PostDown = ip6tables -D FORWARD -i %i -j REJECT --reject-with icmp6-adm-prohibited || true
+# SSH and ping to this server from VPN devices are let in even when a firewall's default is to drop.
+PostUp = iptables -I INPUT 1 -i %i -p tcp --dport 22 -j ACCEPT
+PostDown = iptables -D INPUT -i %i -p tcp --dport 22 -j ACCEPT
+PostUp = iptables -I INPUT 1 -i %i -p icmp -j ACCEPT
+PostDown = iptables -D INPUT -i %i -p icmp -j ACCEPT
+PostUp = ip6tables -I INPUT 1 -i %i -p tcp --dport 22 -j ACCEPT || true
+PostDown = ip6tables -D INPUT -i %i -p tcp --dport 22 -j ACCEPT || true
 WGCONF
 WG_CHANGED=0
 if ! cmp -s "$NEW_CONF" "$WG_CONF"; then
@@ -58,7 +65,7 @@ rm -f "$NEW_CONF"
 # Devices only reach this server, so the VPN no longer needs forwarding (the old full-tunnel setting
 # file is removed; forwarding isn't switched off here in case anything else on the server uses it).
 rm -f /etc/sysctl.d/99-hn-vpn.conf
-if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q 'Status: active'; then ufw allow 51820/udp >/dev/null; fi
+if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q 'Status: active'; then ufw allow 51820/udp >/dev/null; ufw allow in on wg-hn to any port 22 proto tcp >/dev/null; fi
 if command -v firewall-cmd >/dev/null && firewall-cmd --state >/dev/null 2>&1; then firewall-cmd -q --permanent --add-port=51820/udp && firewall-cmd -q --reload; fi
 systemctl enable wg-quick@wg-hn >/dev/null 2>&1
 systemctl start wg-quick@wg-hn
@@ -191,5 +198,10 @@ certbot certonly --webroot -w "$CHALLENGE_DIR" -d "$DOMAIN" --cert-name "$DOMAIN
     --deploy-hook 'nginx -t && systemctl reload nginx' || { echo 'SSL issuance failed. Check DNS and rerun: sudo bash vpn-site/install.sh'; exit 1; }
 write_config
 if systemctl list-unit-files certbot.timer --no-legend 2>/dev/null | grep -q certbot.timer; then systemctl enable --now certbot.timer; fi
+# Is anything reaching the VPN? Devices that never complete a handshake usually mean UDP 51820 is
+# blocked before it reaches this server (often the hosting provider's own firewall).
+PEERS=$(wg show wg-hn peers 2>/dev/null | wc -l); SEEN=$(wg show wg-hn latest-handshakes 2>/dev/null | awk '$2>0' | wc -l)
+if ! ss -ltn 2>/dev/null | grep -qE '(0\.0\.0\.0|\*|10\.88\.0\.1|\[::\]):22 '; then echo 'Warning: SSH (sshd) is not listening on port 22 for the VPN address, so Secure Network can’t open a session.'; fi
+if [ "$PEERS" -gt 0 ] && [ "$SEEN" -eq 0 ]; then echo "Warning: none of the $PEERS VPN devices has connected yet. Check that UDP port 51820 is allowed in your hosting provider's firewall (for example the IONOS Cloud Panel)."; else echo "VPN devices connected at least once: $SEEN of $PEERS."; fi
 echo 'HN Group VPN installed: https://vpn.hngroup.org.uk · PM2 hn-vpn · port 5000 · WireGuard wg-hn on UDP 51820.'
 echo 'If your hosting provider has its own firewall (for example the IONOS Cloud Panel), allow incoming UDP port 51820 there too.'

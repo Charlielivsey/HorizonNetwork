@@ -2,10 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleName</key><string>Secure Terminal</string>
-  <key>CFBundleDisplayName</key><string>HN Group Secure Terminal</string>
+  <key>CFBundleName</key><string>HN Secure Network</string>
+  <key>CFBundleDisplayName</key><string>HN Secure Network</string>
   <key>CFBundleIdentifier</key><string>uk.org.hngroup.vpn</string>
-  <key>CFBundleExecutable</key><string>HNGroupVPN</string>
+  <key>CFBundleExecutable</key><string>HN Secure Network</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>2.0.0</string>
@@ -20,7 +20,7 @@
     </dict>
   </array>
   <key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
-  <key>NSAppleEventsUsageDescription</key><string>HN Group Secure Terminal uses Terminal to install the WireGuard tools when you ask it to.</string>
+  <key>NSAppleEventsUsageDescription</key><string>HN Secure Network uses Terminal to install the WireGuard tools when you ask it to.</string>
   <key>NSHumanReadableCopyright</key><string>© HN Group Limited. For HN Group staff only.</string>
 </dict>
 </plist>

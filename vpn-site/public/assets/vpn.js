@@ -69,7 +69,7 @@
       $('#stat-online').textContent = me.devices.filter((d) => d.connected).length;
       $('#devices').innerHTML = list(me.devices, false);
       $('#device-count').textContent = me.devices.length + ' of ' + me.limit;
-      $('#mac-app-note').textContent = me.macApp ? 'Open the downloaded app, then sign in. The first time, macOS may ask you to confirm opening it. It keeps itself up to date.' : 'Secure Terminal hasn’t been published here yet. Ask an administrator.';
+      $('#mac-app-note').textContent = me.macApp ? 'Open the downloaded app, then sign in. The first time, macOS may ask you to confirm opening it. It keeps itself up to date.' : 'Secure Network hasn’t been published here yet. Ask an administrator.';
       $('#get-mac-app').disabled = !me.macApp;
       const v = me.macApp;
       $('#mac-app-version').hidden = !v;
@@ -82,8 +82,8 @@
 
   // ---------- Profile ----------
   const when = (iso) => new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-  const ACTIONS = { 'sign-in.web': 'Signed in on the website', 'sign-in.app': 'Signed in to Secure Terminal', 'sign-out.other': 'Signed out another sign-in',
-    'device.add': 'Added a device', 'device.remove': 'Removed a device', 'mac-app.publish': 'Published a Secure Terminal build' };
+  const ACTIONS = { 'sign-in.web': 'Signed in on the website', 'sign-in.app': 'Signed in to Secure Network', 'sign-out.other': 'Signed out another sign-in',
+    'device.add': 'Added a device', 'device.remove': 'Removed a device', 'mac-app.publish': 'Published a Secure Network build' };
   const ICONS = { app: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M1 20h22"/>', web: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>' };
   async function profile() {
     const p = await api('/api/profile');
@@ -95,7 +95,7 @@
     $('#profile-pills').innerHTML = '<span class="pill pill-accent">' + (p.user.admin ? 'VPN administrator' : 'HN Group staff') + '</span>' +
       '<span class="pill">' + p.devices.length + ' of ' + p.limit + ' devices</span>' + (online ? '<span class="pill pill-success">' + online + ' connected now</span>' : '');
     $('#profile-sessions').innerHTML = '<ul class="rows">' + p.sessions.map((x) => '<li class="row"><span class="device-icon" aria-hidden="true"><svg viewBox="0 0 24 24">' + ICONS[x.kind === 'app' ? 'app' : 'web'] + '</svg></span>' +
-      '<div class="row-main"><strong>' + (x.kind === 'app' ? esc(x.client || 'Secure Terminal') + (x.appVersion ? ' ' + esc(x.appVersion) : '') : 'Website') + (x.current ? ' · this one' : '') + '</strong>' +
+      '<div class="row-main"><strong>' + (x.kind === 'app' ? esc(x.client || 'Secure Network') + (x.appVersion ? ' ' + esc(x.appVersion) : '') : 'Website') + (x.current ? ' · this one' : '') + '</strong>' +
       '<span class="muted small">Signed in ' + esc(when(x.createdAt)) + ' · last used ' + esc(when(x.lastUsedAt)) + '</span></div>' +
       (x.current ? '<span class="pill pill-success">Current</span>' : '<button class="btn btn-ghost btn-small" type="button" data-end-session="' + esc(x.id) + '">Sign out</button>') + '</li>').join('') + '</ul>';
     $('#profile-device-count').textContent = p.devices.length + ' of ' + p.limit;
@@ -148,7 +148,7 @@
     e.preventDefault(); error('#app-error');
     const file = $('#app-file').files[0];
     if (!file) return;
-    try { await api('/api/admin/mac-app', { method: 'POST', body: file }); toast('Secure Terminal published.'); $('#app-file').value = ''; load(); } catch (err) { error('#app-error', err.message); }
+    try { await api('/api/admin/mac-app', { method: 'POST', body: file }); toast('Secure Network published.'); $('#app-file').value = ''; load(); } catch (err) { error('#app-error', err.message); }
   });
 
   load();

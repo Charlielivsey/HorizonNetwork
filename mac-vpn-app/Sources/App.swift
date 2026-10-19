@@ -1,7 +1,7 @@
 import SwiftUI
 import AppKit
 
-/// HN Group Secure Terminal for HN Group staff: the HN Group VPN (a private link to the server) and
+/// HN Secure Network for HN Group staff: the HN Group VPN (a private link to the server) and
 /// SSH to the server, in a full app window with a shield in the menu bar for quick access.
 @main
 struct HNGroupVPNApp: App {
@@ -11,7 +11,7 @@ struct HNGroupVPNApp: App {
     init() { Theme.registerFont() }
 
     var body: some Scene {
-        Window("HN Group Secure Terminal", id: "main") {
+        Window("HN Secure Network", id: "main") {
             MainView().environmentObject(model)
         }
         .windowStyle(.hiddenTitleBar)
@@ -28,7 +28,7 @@ struct HNGroupVPNApp: App {
             MenuView().environmentObject(model)
         } label: {
             Image(systemName: model.connected ? "lock.shield.fill" : "lock.shield")
-                .accessibilityLabel(model.connected ? "HN Group Secure Terminal: connected" : "HN Group Secure Terminal: not connected")
+                .accessibilityLabel(model.connected ? "HN Secure Network: connected" : "HN Secure Network: not connected")
         }
         .menuBarExtraStyle(.window)
     }
@@ -172,21 +172,21 @@ struct WelcomeView: View {
                 HStack(spacing: 12) {
                     HNWordmark(height: 34)
                     Rectangle().fill(Theme.border).frame(width: 1, height: 28)
-                    Text("Secure Terminal").font(Theme.font(20, .heavy))
+                    Text("Secure Network").font(Theme.font(20, .heavy))
                 }
                 if model.stage == .waiting {
                     HStack(spacing: 10) {
                         ProgressView().controlSize(.small)
                         Text("Finish signing in in your browser").font(Theme.font(24, .heavy))
                     }
-                    Text("When HN Group Auth asks, allow your browser to open HN Group Secure Terminal. You’ll come straight back here.")
+                    Text("When HN Group Auth asks, allow your browser to open HN Secure Network. You’ll come straight back here.")
                         .foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true).lineSpacing(3)
                     HStack(spacing: 10) {
                         Button("Open the sign-in page again") { model.signIn() }.buttonStyle(HNButtonStyle(primary: false))
                         Button("Cancel") { model.cancelSignIn() }.buttonStyle(HNButtonStyle(primary: false))
                     }
                 } else {
-                    Text("Welcome to Secure Terminal").font(Theme.font(28, .heavy)).fixedSize(horizontal: false, vertical: true)
+                    Text("Welcome to Secure Network").font(Theme.font(28, .heavy)).fixedSize(horizontal: false, vertical: true)
                     Text("A private, encrypted link from this Mac to HN Group’s server, and SSH to the server with just your password. Only traffic to the server uses the VPN.")
                         .foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true).lineSpacing(3)
                     VStack(alignment: .leading, spacing: 10) {
@@ -253,7 +253,7 @@ struct SignedInView: View {
     @ViewBuilder private var notices: some View {
         if let release = model.update {
             Banner(kind: .info, icon: "arrow.down.circle.fill",
-                   title: "Secure Terminal \(release.version) is ready",
+                   title: "Secure Network \(release.version) is ready",
                    text: model.updateState == .downloading ? "Downloading…" : model.updateState == .installing ? "Installing… the app will reopen by itself." : "You have \(AppInfo.version). The update installs here, with no need to download the app again.",
                    action: ("Update now", { Task { await model.installUpdate() } }),
                    busy: model.updateState == .downloading || model.updateState == .installing)
@@ -283,7 +283,7 @@ struct Sidebar: View {
             HStack(spacing: 10) {
                 HNWordmark(height: 26)
                 Rectangle().fill(Theme.border).frame(width: 1, height: 22)
-                Text("Secure Terminal").font(Theme.font(14, .heavy)).lineLimit(1).minimumScaleFactor(0.8)
+                Text("Secure Network").font(Theme.font(14, .heavy)).lineLimit(1).minimumScaleFactor(0.8)
             }
             .padding(.horizontal, 10).padding(.top, 40).padding(.bottom, 22)
 
@@ -375,7 +375,7 @@ struct ConnectionPage: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            PageTitle(eyebrow: "HN Group Secure Terminal", title: greeting)
+            PageTitle(eyebrow: "HN Secure Network", title: greeting)
             if !model.wireGuardInstalled || !model.isSetUp {
                 SetupCard()
             } else {
@@ -402,7 +402,7 @@ struct SetupCard: View {
                 Badge(text: "Set up · step \(toolsDone ? 2 : 1) of 2")
                 Text("Let’s get this Mac ready").font(Theme.font(22, .heavy))
                 StepRow(number: 1, done: toolsDone, active: !toolsDone, title: "Install the WireGuard tools",
-                        text: "The fast, secure open-source VPN behind Secure Terminal. This opens Terminal and installs it with Homebrew; come back here when it finishes.") {
+                        text: "The fast, secure open-source VPN behind Secure Network. This opens Terminal and installs it with Homebrew; come back here when it finishes.") {
                     Button("Install WireGuard tools") { model.installWireGuard() }.buttonStyle(HNButtonStyle())
                 }
                 Divider()
@@ -622,8 +622,8 @@ struct HNFieldStyle: TextFieldStyle {
 
 struct ProfilePage: View {
     @EnvironmentObject var model: VPNModel
-    private let labels = ["sign-in.web": "Signed in on the website", "sign-in.app": "Signed in to Secure Terminal", "sign-out.other": "Signed out another sign-in",
-                          "device.add": "Added a device", "device.remove": "Removed a device", "mac-app.publish": "Published a Secure Terminal build"]
+    private let labels = ["sign-in.web": "Signed in on the website", "sign-in.app": "Signed in to Secure Network", "sign-out.other": "Signed out another sign-in",
+                          "device.add": "Added a device", "device.remove": "Removed a device", "mac-app.publish": "Published a Secure Network build"]
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 22) {
@@ -650,7 +650,7 @@ struct ProfilePage: View {
                         Text("Where you’re signed in").font(Theme.font(16, .bold)).padding(.bottom, 4)
                         ForEach(p.sessions) { s in
                             ListRow(icon: s.kind == "app" ? "laptopcomputer" : "globe",
-                                    title: (s.kind == "app" ? "Secure Terminal" + (s.appVersion.map { " " + $0 } ?? "") : "Website") + (s.current ? " · this Mac" : ""),
+                                    title: (s.kind == "app" ? "Secure Network" + (s.appVersion.map { " " + $0 } ?? "") : "Website") + (s.current ? " · this Mac" : ""),
                                     subtitle: "Signed in \(When.short(s.createdAt)) · last used \(When.short(s.lastUsedAt))") {
                                 if s.current { Badge(text: "Current", colour: Theme.success) }
                                 else { Button("Sign out") { Task { await model.endSignIn(s) } }.buttonStyle(HNButtonStyle(primary: false)) }
@@ -732,7 +732,7 @@ struct SettingsPage: View {
                     HStack(spacing: 14) {
                         Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 56, height: 56)
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("HN Group Secure Terminal").font(Theme.font(16, .bold))
+                            Text("HN Secure Network").font(Theme.font(16, .bold))
                             Text(AppInfo.label).font(Theme.font(13)).foregroundStyle(Theme.muted)
                         }
                         Spacer()
@@ -746,7 +746,7 @@ struct SettingsPage: View {
                     Text("General").font(Theme.font(16, .bold))
                     Toggle(isOn: Binding(get: { model.launchAtLogin }, set: { model.setLaunchAtLogin($0) })) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Open Secure Terminal when I log in").font(Theme.font(14, .semibold))
+                            Text("Open Secure Network when I log in").font(Theme.font(14, .semibold))
                             Text("The shield stays in the menu bar for quick access.").font(Theme.font(12)).foregroundStyle(Theme.muted)
                         }
                     }
@@ -803,7 +803,7 @@ struct MenuView: View {
             HStack(spacing: 10) {
                 HNWordmark(height: 22)
                 Rectangle().fill(Theme.border).frame(width: 1, height: 18)
-                Text("Secure Terminal").font(Theme.font(13, .heavy))
+                Text("Secure Network").font(Theme.font(13, .heavy))
                 Spacer()
                 if model.stage == .ready, let user = model.user { AvatarView(image: model.avatar, name: user.displayName, size: 24) }
             }
@@ -832,7 +832,7 @@ struct MenuView: View {
                 if model.stage == .ready && model.isSetUp {
                     Button { open(.ssh) } label: { Label("SSH to the server", systemImage: "terminal") }.buttonStyle(HNButtonStyle(primary: false, wide: true))
                 }
-                Button("Open Secure Terminal") { open(nil) }.buttonStyle(HNButtonStyle(wide: true))
+                Button("Open Secure Network") { open(nil) }.buttonStyle(HNButtonStyle(wide: true))
             }
             .padding(14)
             Divider()

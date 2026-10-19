@@ -61,7 +61,7 @@ test('Windows set-up keeps the configuration Administrators-only and lets users 
  assert.match(script,/sdset 'WireGuardTunnel\$hn-vpn' ".*\(A;;CCLCSWRPWPDTLOCRRC;;;IU\)"/);
 });
 
-test('the bundled Mac helper matches Secure Terminal’s, so both apps share one connection',()=>{
+test('the bundled Mac helper matches Secure Network’s, so both apps share one connection',()=>{
  const theirs=path.join(__dirname,'../../mac-vpn-app/Resources/hn-vpn-ctl');if(!fs.existsSync(theirs))return;
  assert.equal(fs.readFileSync(path.join(__dirname,'../src/hn-vpn-ctl'),'utf8'),fs.readFileSync(theirs,'utf8'));
 });

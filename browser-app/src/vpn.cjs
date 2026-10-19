@@ -13,7 +13,7 @@ function keyPair(){const{publicKey,privateKey}=crypto.generateKeyPairSync('x2551
 const quote=value=>"'"+String(value).replace(/'/g,"'\\''")+"'";
 const psQuote=value=>"'"+String(value).replace(/'/g,"''")+"'";
 
-// macOS: shares the helper, configuration and sudo rule with HN Group Secure Terminal, so either app
+// macOS: shares the helper, configuration and sudo rule with HN Secure Network, so either app
 // can turn the same connection on and off. Setting up asks for the Mac password once.
 class MacController{
  constructor({helperSource,user=os.userInfo().username}={}){this.helper='/usr/local/libexec/hn-vpn/hn-vpn-ctl';this.helperSource=helperSource;this.user=user;this.supported=true;this.toolsName='WireGuard tools (Homebrew)';}

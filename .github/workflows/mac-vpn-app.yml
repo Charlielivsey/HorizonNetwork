@@ -1,4 +1,4 @@
-name: Build HN Group Secure Terminal for Mac
+name: Build HN Secure Network for Mac
 on:
   push:
     paths: ['mac-vpn-app/**', '.github/workflows/mac-vpn-app.yml']
@@ -14,25 +14,33 @@ jobs:
         run: bash mac-vpn-app/build.sh
       - name: Check the app
         run: |
-          APP="mac-vpn-app/build/HN Group Secure Terminal.app"
-          lipo -archs "$APP/Contents/MacOS/HNGroupVPN"
+          APP="mac-vpn-app/build/HN Secure Network.app"
+          lipo -archs "$APP/Contents/MacOS/HN Secure Network"
           codesign --verify --deep "$APP"
           plutil -lint "$APP/Contents/Info.plist"
           /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" -c "Print :CFBundleVersion" "$APP/Contents/Info.plist"
       - uses: actions/upload-artifact@v4
         with:
-          name: HN-Group-Secure-Terminal-macOS
-          path: mac-vpn-app/build/HN-Group-Secure-Terminal-macOS.zip
+          name: HN-Secure-Network-macOS
+          path: mac-vpn-app/build/HN-Secure-Network-macOS.zip
           retention-days: 90
       # The VPN website serves the latest build: vpn-site/install.sh publishes this copy.
-      - name: Publish the build for the VPN website
+      - name: Publish the build for the VPN website and downloads site
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p vpn-site/mac-app
-          cp mac-vpn-app/build/HN-Group-Secure-Terminal-macOS.zip vpn-site/mac-app/HN-Group-VPN-macOS.zip
+          cp mac-vpn-app/build/HN-Secure-Network-macOS.zip vpn-site/mac-app/HN-Group-VPN-macOS.zip
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add vpn-site/mac-app/HN-Group-VPN-macOS.zip
-          git commit -m "Publish HN Group Secure Terminal for Mac $(tr -d '[:space:]' < mac-vpn-app/VERSION) (build $GITHUB_RUN_NUMBER, ${GITHUB_SHA::7})"
+          # downloads.hngroup.org.uk offers the same build from a GitHub preview release, using this record.
+          VERSION=$(tr -d '[:space:]' < mac-vpn-app/VERSION); TAG="secure-network-v$VERSION-$GITHUB_RUN_NUMBER"; NAME="HN-Secure-Network-$VERSION-macOS.zip"
+          cp mac-vpn-app/build/HN-Secure-Network-macOS.zip "/tmp/$NAME"
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "HN Secure Network $VERSION for Mac · build $GITHUB_RUN_NUMBER" --notes 'HN Secure Network for Mac (Apple silicon and Intel, macOS 13 or later): the HN Group VPN and SSH sessions to the HN Group server. For HN Group staff; sign in with your HN Group account. It keeps itself up to date.' "/tmp/$NAME"
+          TAG="$TAG" NAME="$NAME" VERSION="$VERSION" node -e "const fs=require('fs'),crypto=require('crypto');const data=fs.readFileSync('/tmp/'+process.env.NAME);fs.writeFileSync('downloads-site/secure-network.json',JSON.stringify({tag:process.env.TAG,version:process.env.VERSION,build:Number(process.env.GITHUB_RUN_NUMBER),publishedAt:new Date().toISOString(),asset:{name:process.env.NAME,size:data.length,sha256:crypto.createHash('sha256').update(data).digest('hex')}},null,1));"
+          git add downloads-site/secure-network.json
+          git commit -m "Publish HN Secure Network for Mac $(tr -d '[:space:]' < mac-vpn-app/VERSION) (build $GITHUB_RUN_NUMBER, ${GITHUB_SHA::7})"
           for attempt in 1 2 3; do
             git pull --rebase origin "$GITHUB_REF_NAME" && git push origin "HEAD:$GITHUB_REF_NAME" && break
             sleep 5

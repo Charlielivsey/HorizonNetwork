@@ -1,6 +1,6 @@
-# HN Group Secure Terminal (macOS)
+# HN Secure Network (macOS)
 
-The HN Group VPN app for Mac, renamed Secure Terminal: it connects this Mac to HN Group's server over
+The HN Group VPN app for Mac, renamed Secure Network: it connects this Mac to HN Group's server over
 the VPN (only traffic to the server, 10.88.0.1, uses it) and opens SSH sessions to the server from its
 SSH page, with the address and username filled in and only the password asked for.
 
@@ -13,7 +13,7 @@ server (217.154.34.205).
 ## Getting the app
 
 - **Built for you:** every push that changes `mac-vpn-app/` builds the app on GitHub's Mac runners
-  (Actions → "Build HN Group VPN for Mac" → artifact `HN-Group-VPN-macOS`). An administrator then
+  (Actions → "Build HN Secure Network for Mac" → artifact `HN-Secure-Network-macOS`). An administrator then
   publishes the zip on https://vpn.hngroup.org.uk (All devices → Publish the Mac app), and staff
   download it from there.
 - **Build it yourself** on a Mac with Xcode or the Command Line Tools: `bash mac-vpn-app/build.sh`.
@@ -22,8 +22,8 @@ The app isn't notarised by Apple, so the first time you open it, right-click it 
 
 ## Using it
 
-1. Open **HN Group VPN**; a shield appears in the menu bar.
-2. Choose **Sign in with HN Group Auth**, sign in in your browser, and allow it to open HN Group VPN.
+1. Open **HN Secure Network**; a shield appears in the menu bar.
+2. Choose **Sign in with HN Group Auth**, sign in in your browser, and allow it to open HN Secure Network.
 3. If asked, choose **Install WireGuard tools** (uses Homebrew: `brew install wireguard-tools`).
 4. Choose **Set up this Mac** and enter your Mac password once. This installs a small helper
    (`/usr/local/libexec/hn-vpn/hn-vpn-ctl`), this Mac's VPN configuration (root-only, in

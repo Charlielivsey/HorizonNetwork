@@ -19,3 +19,12 @@ test('the newest release wins: an older GitHub answer never replaces a newer ins
   assert.equal(r.current.version,'0.7.0-17');assert.equal(r.status.source,'installed copy');assert.deepEqual(r.status.problems,['release.json: HTTP 404']);
   const offline=createReleases(path.join(dir,'data'),{bundled:path.join(dir,'missing.json'),fetcher:async()=>{throw Error('Offline');}});await offline.refresh();assert.equal(offline.current.version,'0.7.0-17');
  }finally{fs.rmSync(dir,{recursive:true,force:true});}});
+
+test('HN Secure Network is offered only from a genuine record, newest first',async()=>{const{readApp,createApp}=require('./lib/apps');const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-download-app-'));
+ const record=(v,n)=>({tag:'secure-network-v'+v+'-'+n,asset:{name:'HN-Secure-Network-'+v+'-macOS.zip',size:1000,sha256:'a'.repeat(64)}});
+ try{assert.equal(readApp({...record('2.1.0',30),tag:'browser-v2.1.0-30'}),null);assert.equal(readApp({...record('2.1.0',30),asset:{name:'evil.zip',size:1,sha256:'a'.repeat(64)}}),null);
+  assert.equal(readApp(record('2.1.0',30)).asset.url,'https://github.com/Charlielivsey/HorizonNetwork/releases/download/secure-network-v2.1.0-30/HN-Secure-Network-2.1.0-macOS.zip');
+  const bundled=path.join(dir,'b.json');fs.writeFileSync(bundled,JSON.stringify(record('2.1.0',31)));
+  const a=createApp(path.join(dir,'data'),{bundled,fetcher:async()=>Response.json(record('2.0.0',9))});await a.refresh();assert.equal(a.current.version,'2.1.0-31');
+  const b=createApp(path.join(dir,'data2'),{bundled:path.join(dir,'none'),fetcher:async()=>Response.json(record('2.1.0',32))});await b.refresh();assert.equal(b.current.version,'2.1.0-32');
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}});
