@@ -4,6 +4,7 @@ A Chromium browser built with Electron, for macOS (Apple silicon and Intel) and 
 
 ## Included
 
+- A grouped new-tab shortcut directory links to every HN company and service plus Gmail, using original company artwork.
 - HN site shortcuts in both search boxes: names such as “staff portal”, “wiki” and “Horizon Development” open the canonical site. Case, spaces, common one-character typos/transpositions (including “staff portak”) and phrases such as “go to staff portal” are recognised. Ambiguous/unrelated text still searches the web; explicit URLs are preserved. The fixed public-site list lives in `src/sites.cjs` and is tested against website control’s catalog.
 - Downloads manager in the toolbar and browser menu: live progress, speed/size, pause/resume, cancel, retry, reveal saved files and clear finished history. Save dialogs remain native. History is private to this device; clearing it keeps the files. Interrupted transfers after an app restart can be retried. Resume support depends on the source server; Electron may restart non-resumable transfers.
 - Real Chromium tabs, back/forward, reload/stop, address/search bar, new-tab page, per-device browsing cookies and a native save dialog for downloads.

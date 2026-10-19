@@ -1,6 +1,7 @@
 'use strict';
 const{app,BrowserWindow,WebContentsView,ipcMain,session,Menu,dialog,protocol,net,shell,safeStorage}=require('electron');
 const path=require('node:path'),fs=require('node:fs'),{pathToFileURL}=require('node:url'),crypto=require('node:crypto');
+const{ASSETS,directory}=require('./homepage.cjs');
 const{websiteHeaders}=require('./auth-headers.cjs');
 const{Vault}=require('./vault.cjs');
 const{homeSearch}=require('./sites.cjs');
@@ -49,7 +50,7 @@ async function setup(){
  updates=new Updates({dir:path.join(app.getPath('userData'),'updates'),current:app.getVersion()+'-'+build,changed:()=>changed()});
  const settings=path.join(app.getPath('userData'),'preferences.json');try{const saved=JSON.parse(fs.readFileSync(settings));preferences.theme=theme(saved.theme);}catch{}
  const pages=session.fromPartition('persist:hn-browser-pages');
- pages.protocol.handle('hn-browser',request=>{const url=new URL(request.url),files={'/':'newtab.html','/newtab.css':'newtab.css','/assets/hn-group-wordmark.svg':'assets/hn-group-wordmark.svg','/assets/hn-group-wordmark-white.svg':'assets/hn-group-wordmark-white.svg','/assets/plus-jakarta-sans.woff2':'assets/plus-jakarta-sans.woff2'};const file=url.hostname==='start'&&files[url.pathname];if(file==='newtab.html')return new Response(fs.readFileSync(path.join(UI,file),'utf8').replace('<body>','<body data-theme="'+preferences.theme+'">'),{headers:{'Content-Type':'text/html; charset=utf-8'}});return file?net.fetch(pathToFileURL(path.join(UI,file)).href):new Response('Not found',{status:404});});
+ pages.protocol.handle('hn-browser',request=>{const url=new URL(request.url),files={'/':'newtab.html','/newtab.css':'newtab.css','/icons.svg':'icons.svg',...Object.fromEntries(ASSETS.map(name=>['/assets/'+name,'assets/'+name])),'/assets/hn-group-wordmark.svg':'assets/hn-group-wordmark.svg','/assets/hn-group-wordmark-white.svg':'assets/hn-group-wordmark-white.svg','/assets/plus-jakarta-sans.woff2':'assets/plus-jakarta-sans.woff2'};const file=url.hostname==='start'&&files[url.pathname];if(file==='newtab.html')return new Response(fs.readFileSync(path.join(UI,file),'utf8').replace('<!--SHORTCUTS-->',directory()).replace('<body>','<body data-theme="'+preferences.theme+'">'),{headers:{'Content-Type':'text/html; charset=utf-8'}});return file?net.fetch(pathToFileURL(path.join(UI,file)).href):new Response('Not found',{status:404});});
  pages.setPermissionRequestHandler(permission);pages.setPermissionCheckHandler(()=>false);
  pages.on('will-download',(event,item)=>{if(!webURL(item.getURL())){event.preventDefault();return;}item.setSaveDialogOptions({title:'Save download',defaultPath:path.join(app.getPath('downloads'),path.basename(item.getFilename()))});downloads.track(item);});
  win=new BrowserWindow({width:1320,height:900,minWidth:760,minHeight:520,title:'HN Browser',titleBarStyle:'hidden',...(process.platform==='darwin'?{trafficLightPosition:{x:16,y:16}}:{titleBarOverlay:{color:'#161126',symbolColor:'#f4efff',height:46}}),backgroundColor:'#161126',autoHideMenuBar:true,webPreferences:{...remotePreferences,preload:path.join(__dirname,'preload.cjs')}});

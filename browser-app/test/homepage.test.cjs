@@ -1,0 +1,3 @@
+'use strict';
+const{test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');const{GROUPS,ASSETS,directory}=require('../src/homepage.cjs'),{SITES}=require('../src/sites.cjs');
+test('the new-tab page includes every shortcut destination and the original company artwork',()=>{const links=GROUPS.flatMap(g=>g.sites.map(s=>s[1]));assert.equal(links.length,new Set(links).size);for(const[url]of SITES)assert.ok(links.includes(url),url);for(const asset of ASSETS)assert.ok(fs.existsSync(path.resolve(__dirname,'../ui/assets',asset)),asset);const html=directory();assert.equal((html.match(/class="site-shortcut"/g)||[]).length,SITES.length);assert.ok(html.includes('https://mail.google.com/'));});
