@@ -4,7 +4,7 @@ A Chromium browser built with Electron, for macOS (Apple silicon) and Windows x6
 
 ## Included
 
-Version 0.7.2 uses Electron 44.9.0 / Chromium 152.0.7977.167. Settings → About shows the running engine versions. Google can restrict sign-in from embedded browsers regardless of engine version.
+Version 0.8.0 uses Electron 44.9.0 / Chromium 152.0.7977.167. Settings → About shows the running engine versions. Google can restrict sign-in from embedded browsers regardless of engine version.
 
 - Right-click tabs to create, duplicate, reload, pin/unpin, mute/unmute, close other tabs, close tabs to the right or reopen a closed tab. Pinned tabs are preserved by bulk close actions; middle-click closes a tab.
 - Full-page local settings with searchable sections for the account, appearance, Google/Bing/DuckDuckGo search, default zoom, bookmarks bar, HN website theme integration, download folder/save prompts, browsing-data controls and version/updates. Changes persist locally.

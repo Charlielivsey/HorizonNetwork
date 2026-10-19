@@ -5,7 +5,7 @@ const{_electron:electron}=require('playwright'),assert=require('node:assert/stri
 (async()=>{const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-library-desktop-')),profile=path.join(dir,'profile'),fixture=path.join(dir,'fixture'),log=path.join(dir,'auth-log.json'),key=crypto.randomBytes(32).toString('hex'),token='a'.repeat(64);let app,server;
  const storageCode=`const crypto=require('node:crypto'),key=Buffer.from('${key}','hex');const storage={isEncryptionAvailable:()=>true,getSelectedStorageBackend:()=> 'gnome_libsecret',encryptString:value=>{const iv=crypto.randomBytes(16),c=crypto.createCipheriv('aes-256-cbc',key,iv);return Buffer.concat([iv,c.update(value),c.final()]);},decryptString:value=>{const c=crypto.createDecipheriv('aes-256-cbc',key,value.subarray(0,16));return Buffer.concat([c.update(value.subarray(16)),c.final()]).toString();}};`;
  new Vault(path.join(profile,'account.enc'),Function('require',storageCode+'return storage;')(require)).save(token);
- fs.mkdirSync(fixture);fs.writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'hn-browser-library-fixture',version:'0.7.2',main:'main.cjs'}));
+ fs.mkdirSync(fixture);fs.writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'hn-browser-library-fixture',version:'0.8.0',main:'main.cjs'}));
  // Stand-in HN Auth: the profile can only be read or changed with the unlock key given for the PIN.
  fs.writeFileSync(path.join(fixture,'main.cjs'),storageCode+`Object.assign(require('electron').safeStorage,storage);const fs=require('node:fs'),originalFetch=global.fetch,UNLOCK='${'u'.repeat(0)}'+'f'.repeat(64);let unlocked=null;
  const person={displayName:'Sam Fixture',firstName:'Samantha',lastName:'Fixture',email:'sam@hngroup.org.uk',jobTitle:'Designer',company:'HN Group',department:'Design',phone:'',location:'',timezone:'Europe/London',skills:[],languages:[],bio:'',bioPublic:true,birthday:null,status:null,photo:false,supervisor:'Alex Manager',roles:['Staff'],lastLogin:null};
@@ -56,11 +56,18 @@ const{_electron:electron}=require('playwright'),assert=require('node:assert/stri
   await page.locator('#history-search').fill('alpha');await page.waitForFunction(()=>document.querySelectorAll('#history-list .library-row').length===1);
   await page.locator('#history-list .library-row').hover();await page.locator('#history-list .row-tools button[title="Remove from history"]').click();await page.waitForFunction(()=>!document.querySelector('#history-empty').hidden);
   await page.keyboard.press('Escape');await page.locator('#overlay').waitFor({state:'hidden'});
-  await page.locator('#address').click();await page.keyboard.type('fixture be');await page.locator('#suggestions').waitFor({state:'visible'});await page.waitForFunction(()=>[...document.querySelectorAll('.suggestion')].some(s=>s.classList.contains('bookmark')&&s.textContent.includes('Fixture beta page')));
-  assert.ok(await page.locator('.suggestion.search').count());await page.screenshot({path:path.join(shots,'suggestions.png')});
-  await page.keyboard.press('Escape');await page.waitForFunction(()=>document.querySelector('#suggestions').hidden);await page.locator('#overlay').waitFor({state:'hidden'});
-  await go(page,site+'gamma');await page.locator('#address').click();await page.keyboard.type('fixture be');await page.waitForFunction(()=>document.querySelectorAll('.suggestion').length>0&&!document.querySelector('#suggestions').hidden);
-  const index=await page.evaluate(()=>[...document.querySelectorAll('.suggestion')].findIndex(s=>s.classList.contains('bookmark')));for(let i=0;i<=index;i++)await page.keyboard.press('ArrowDown');await page.keyboard.press('Enter');
+  // Suggestions are a separate layer above the page (popup.html); the page itself is never swapped out.
+  const popupItems=()=>app.evaluate(({webContents})=>{const w=webContents.getAllWebContents().find(x=>x.getURL().endsWith('popup.html'));return w?w.executeJavaScript('[...document.querySelectorAll("li")].map(li=>({cls:li.className,text:li.textContent,sel:li.getAttribute("aria-selected")}))'):[];});
+  const popupShown=()=>app.evaluate(({BrowserWindow,webContents})=>{const w=webContents.getAllWebContents().find(x=>x.getURL().endsWith('popup.html'));return !!w&&BrowserWindow.getAllWindows()[0].contentView.children.some(v=>v.webContents===w);});
+  await page.locator('#address').click();await page.keyboard.type('fixture be');
+  for(let i=0;i<50&&!(await popupItems()).some(x=>x.cls.includes('bookmark')&&x.text.includes('Fixture beta page'));i++)await page.waitForTimeout(100);
+  assert.ok((await popupItems()).some(x=>x.cls.includes('search')));assert.ok(await popupShown());assert.ok(await page.locator('#overlay').isHidden(),'the page stays live while typing');
+  await page.keyboard.press('Escape');for(let i=0;i<30&&await popupShown();i++)await page.waitForTimeout(100);assert.equal(await popupShown(),false);
+  // An HN Group destination is marked in the address bar while typing.
+  await page.locator('#address').fill('');await page.keyboard.type('staff portak');await page.waitForFunction(()=>!document.querySelector('#hn-badge').hidden&&document.querySelector('#hn-badge').textContent.includes('Staff portal'));await page.keyboard.press('Escape');
+  await go(page,site+'gamma');await page.locator('#address').click();await page.keyboard.type('fixture be');
+  for(let i=0;i<50&&!((await popupShown())&&(await popupItems()).some(x=>x.cls.includes('bookmark')));i++)await page.waitForTimeout(100);
+  const index=(await popupItems()).findIndex(x=>x.cls.includes('bookmark'));assert.ok(index>=0);for(let i=0;i<=index;i++)await page.keyboard.press('ArrowDown');await page.keyboard.press('Enter');
   await page.waitForFunction(u=>window.browser.state().then(s=>s.tabs.find(t=>t.id===s.active).url===u),site+'beta');await page.locator('#overlay').waitFor({state:'hidden'});
   await page.keyboard.press(mod+'+t');await page.waitForFunction(()=>document.querySelectorAll('.tab').length===2);
   await page.locator('#browser-menu').click();await page.locator('#menu-panel [data-panel=bookmarks]').click();await page.locator('#bookmarks-panel').waitFor({state:'visible'});

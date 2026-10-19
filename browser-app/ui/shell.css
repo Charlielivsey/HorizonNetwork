@@ -209,3 +209,44 @@ textarea{font:inherit}
 body[data-motion=reduced] *,body[data-motion=reduced] *::before,body[data-motion=reduced] *::after{animation:none!important;transition:none!important}
 .settings-nav{position:sticky;top:0;align-self:start;max-height:calc(100vh - 170px);overflow:auto;scrollbar-width:none}
 .library-page .library-row,.library-page .library-day,.library-page .inline-note{max-width:none}.library-page .library-row{margin:0 -12px}
+
+/* ================= 0.8: refreshed interface ================= */
+.window-label{display:none}
+.tabs-row{gap:4px;padding-top:7px}
+.tab{height:32px;align-self:end;margin-bottom:0;border-radius:10px 10px 0 0;padding:0 6px 0 11px;border:1px solid transparent;border-bottom:0;color:var(--muted)}
+.tab:not(.active):hover{background:color-mix(in srgb,var(--panel) 60%,transparent);color:var(--ink)}
+.tab.active{height:35px;background:var(--panel);color:var(--ink);border-color:color-mix(in srgb,var(--line) 75%,transparent);box-shadow:0 -4px 16px #0000002a}
+.tab:not(.active)+.tab:not(.active)::before{content:'';position:absolute;left:-3px;top:9px;bottom:9px;width:1px;background:color-mix(in srgb,var(--line) 80%,transparent)}
+.tab-title{font-size:11.5px;font-weight:500}.tab.active .tab-title{font-weight:600}
+#new-tab{width:30px;height:30px;border-radius:9px;margin-left:2px}
+.toolbar{box-shadow:inset 0 -1px 0 color-mix(in srgb,var(--line) 55%,transparent);gap:6px}
+.icon-button{border-radius:10px;color:color-mix(in srgb,var(--muted) 90%,var(--ink))}
+.navigation{gap:1px;margin-right:4px}
+#address-form{height:38px;border-radius:19px;padding:0 6px 0 14px;background:var(--bg);border:0;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--line) 85%,transparent)}
+#address-form:hover{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 35%,var(--line))}
+#address-form:focus-within{box-shadow:inset 0 0 0 1.5px var(--accent),0 0 0 4px color-mix(in srgb,var(--accent) 13%,transparent),0 10px 28px #0000003a}
+#address{font-size:12.5px}
+.address-hint{border-radius:6px}
+.star{border-radius:50%;width:28px;height:28px}
+.account-button{border:0;border-radius:19px;background:color-mix(in srgb,var(--raised) 55%,transparent);padding:3px 12px 3px 4px}
+.account-button:hover{background:var(--raised)}.account-button[aria-expanded=true]{background:var(--raised);box-shadow:inset 0 0 0 1px var(--accent)}
+.bookmark-bar{gap:3px;padding:0 12px}
+.bookmark-bar button{border-radius:8px;padding:4px 9px;color:color-mix(in srgb,var(--muted) 85%,var(--ink))}
+.bookmark-bar button:hover{color:var(--ink)}
+.stripe{height:2px;opacity:.95}
+/* The HN Group badge in the address bar */
+.hn-badge{display:inline-flex;align-items:center;gap:6px;flex-shrink:0;padding:3px 10px 3px 3px;border-radius:13px;background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent);font-size:10px;font-weight:700;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 30%,transparent)}
+.hn-badge img{width:18px;height:18px;border-radius:6px;background:#fff;padding:1px;flex-shrink:0}
+.hn-badge span{overflow:hidden;text-overflow:ellipsis}
+.hn-badge.typed::before{content:'→';margin-left:3px;opacity:.8}
+.hn-badge:not(.typed) span::before{content:'HN Group · '}
+.hn-badge.typed span::before{content:'HN Group · '}
+body.on-hn #connection{display:none}
+/* Menus: frosted glass over the page */
+.panel{background:color-mix(in srgb,var(--panel) 88%,transparent);backdrop-filter:blur(22px) saturate(1.4);border-color:color-mix(in srgb,var(--line) 80%,var(--accent) 20%);box-shadow:0 30px 80px #0006,0 0 0 1px #ffffff08 inset}
+.menu-item{border-radius:10px}.menu-item:hover{background:color-mix(in srgb,var(--raised) 85%,transparent)}
+@media(prefers-reduced-motion:no-preference){
+ .hn-badge:not([hidden]){animation:badge-in .32s var(--spring)}
+ @keyframes badge-in{from{opacity:0;transform:translateX(-6px) scale(.9)}to{opacity:1;transform:none}}
+ .tab{transition:background .18s,color .18s,height .2s var(--out),box-shadow .2s}
+}
