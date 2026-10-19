@@ -31,7 +31,7 @@ function createNative({codes,applications,profile,requireReady,send,body,serveAv
    if(route==='/api/native/session'||route==='/api/native/unlock'){send(res,200,{...value,user:{...value.user,avatarUrl:null}});return true;}
    if(route==='/api/native/avatar'){await persistentAvatar(token,res);return true;}
    if(route==='/api/native/offer'){
-    let url;try{url=new URL(data.authorize_url);}catch{}const client=url&&url.origin==='https://auth.hngroup.org.uk'&&url.pathname==='/authorize'&&destination(url);
+    let url;try{url=new URL(data.authorize_url);}catch{}const client=url&&url.origin==='https://auth.hngroup.org.uk'&&(url.pathname==='/'?{native:false}:url.pathname==='/authorize'&&destination(url));
     if(!client||client.native||url.searchParams.get('switch')==='1'||url.searchParams.get('account')==='other')throw fail(400,'Invalid website sign-in request.');
     for(const[k,v]of offers)if(v.expires<=Date.now())offers.delete(k);if(offers.size>=10000)throw fail(503,'Please try again shortly.');
     const offer=crypto.randomBytes(32).toString('hex');offers.set(offer,{token,url:url.href,expires:Date.now()+60000});send(res,200,{offer});return true;

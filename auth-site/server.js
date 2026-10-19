@@ -234,6 +234,7 @@ const server = http.createServer(async (req, res) => {
       return await serveAvatar(entry, res);
     }
     let browserRemembered=null;
+    if(route==='/')browserRemembered=await native.consumeOffer(req,url);
     if (route === '/authorize') {
       if (!destination(url)) throw fail(400, 'Invalid application. Start from the application’s sign-in button.');
       browserRemembered=await native.consumeOffer(req,url);
