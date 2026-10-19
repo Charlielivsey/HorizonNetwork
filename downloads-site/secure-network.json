@@ -1,11 +1,11 @@
 {
- "tag": "secure-network-v2.3.0-11",
- "version": "2.3.0",
- "build": 11,
- "publishedAt": "2026-10-19T20:46:30.315Z",
+ "tag": "secure-network-v2.3.1-12",
+ "version": "2.3.1",
+ "build": 12,
+ "publishedAt": "2026-10-19T20:49:23.132Z",
  "asset": {
-  "name": "HN-Secure-Network-2.3.0-macOS.zip",
-  "size": 1885434,
-  "sha256": "bca331651db8b6ae579f62c003c2862e79954d4320b83606406b12bfdab4c7a0"
+  "name": "HN-Secure-Network-2.3.1-macOS.zip",
+  "size": 1914412,
+  "sha256": "baaf178485e7c34ed762c45f3a64d805fada60f1c0c01a6e086ea3caec8bf9aa"
  }
 }
