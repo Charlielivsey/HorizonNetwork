@@ -855,6 +855,8 @@ struct ProfilePage: View {
                     Glow(color: Theme.teal.opacity(0.22), size: 200).offset(x: -60, y: 50)
                 }
                 .frame(height: 104)
+                .frame(maxWidth: .infinity)
+                .clipped()
                 HStack(alignment: .top, spacing: 20) {
                     AvatarView(image: model.avatar, name: model.user?.displayName ?? "", size: 104)
                         .padding(5)
