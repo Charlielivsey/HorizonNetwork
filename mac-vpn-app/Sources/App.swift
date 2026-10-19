@@ -466,7 +466,7 @@ struct ConnectionPage: View {
                     InfoTile(icon: "network", label: "Your traffic appears as", value: model.ip?.ip ?? "Checking…",
                              note: model.ip.map { $0.viaVpn ? "HN Group VPN address" : "Your own connection" } ?? "", good: model.ip?.viaVpn == true)
                     InfoTile(icon: "mappin.and.ellipse", label: "Location", value: model.connected ? "United Kingdom" : "Where you are",
-                             note: model.connected ? "HN Group server, London" : "Connect to go through the UK", good: model.connected)
+                             note: model.connected ? "HN Group's UK server" : "Connect to go through the UK", good: model.connected)
                     InfoTile(icon: "server.rack", label: "HN Group server", value: VPNModel.serverAddress,
                              note: !model.connected ? "Connect to reach it" : model.serverReachable == nil ? "Checking…" : model.serverReachable == true ? "Reachable for SSH" : "Not answering yet",
                              good: model.serverReachable == true)
