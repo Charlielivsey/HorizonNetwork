@@ -8,10 +8,10 @@ function readRelease(release){
  const assets={};for(const[id,pattern]of Object.entries(platforms)){const a=(release.assets||[]).find(a=>pattern.test(a.name)&&/^HN-Browser-[0-9A-Za-z.\-]+$/.test(a.name)&&a.browser_download_url?.startsWith(BASE+release.tag_name+'/'));if(a)assets[id]={name:a.name,url:a.browser_download_url,size:a.size,sha256:/^sha256:[a-f0-9]{64}$/.test(a.digest||'')?a.digest.slice(7):null};}
  return Object.keys(assets).length?{version:release.tag_name.replace(/^browser-v/,''),publishedAt:release.published_at,assets}:null;
 }
-// CI attaches release.json (version, file names, sizes, SHA-256) to each browser release and marks it the
-// latest release, so the newest browser is found at a fixed address without GitHub's API (which allows
-// only 60 unauthenticated requests an hour and then hides new releases). The API stays as a fallback.
-const MANIFEST='https://github.com/'+REPO+'/releases/latest/download/release.json';
+// CI records each browser release in downloads-site/release.json (version, file names, sizes, SHA-256),
+// so the newest browser is found at a fixed address without GitHub's API (which allows only 60
+// unauthenticated requests an hour and then hides new releases). The API stays as a fallback.
+const MANIFEST='https://raw.githubusercontent.com/'+REPO+'/claude/confident-volta-gxjboo/downloads-site/release.json';
 function fromManifest(m){if(!m||!/^browser-v\d+\.\d+\.\d+-\d+$/.test(m.tag||'')||typeof m.assets!=='object')return null;return{tag_name:m.tag,draft:false,published_at:m.publishedAt||null,assets:Object.values(m.assets).filter(a=>a&&typeof a.name==='string'&&/^[a-f0-9]{64}$/.test(a.sha256||'')).map(a=>({name:a.name,size:a.size,digest:'sha256:'+a.sha256,browser_download_url:BASE+m.tag+'/'+a.name}))};}
 function createReleases(dir,{fetcher=fetch}={}){
  fs.mkdirSync(dir,{recursive:true,mode:0o700});const file=path.join(dir,'release.json');let value=null,at=0,pending;
