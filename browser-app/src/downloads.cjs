@@ -16,6 +16,7 @@ class Downloads{
  cancel(id){const item=this.live.get(id);if(!item)throw Error('This download has already finished.');item.cancel();}
  retry(id){const r=this.entry(id);if(this.live.has(id)||!['failed','cancelled'].includes(r.status)||!webURL(r.url))throw Error('This download cannot be retried.');return r.url;}
  reveal(id){const r=this.entry(id);if(r.status!=='completed'||!r.path||!fs.existsSync(r.path))throw Error('This file has moved or is no longer available.');return r.path;}
+ remove(id){this.entry(id);if(this.live.has(id))throw Error('Cancel the download before removing it.');this.items.delete(id);this.persist();this.emit(true);}
  clear(){for(const[id]of this.items)if(!this.live.has(id))this.items.delete(id);this.persist();this.emit(true);}
 }
 module.exports={Downloads,ACTIVE};

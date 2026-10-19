@@ -4,6 +4,14 @@ A Chromium browser built with Electron, for macOS (Apple silicon and Intel) and 
 
 ## Included
 
+Version 0.5.0 uses Electron 44.9.0 / Chromium 152.0.7977.167. Settings → About shows the running engine versions. Google can restrict sign-in from embedded browsers regardless of engine version.
+
+- Right-click tabs to create, duplicate, reload, pin/unpin, mute/unmute, close other tabs, close tabs to the right or reopen a closed tab. Pinned tabs are preserved by bulk close actions; middle-click closes a tab.
+- Full-page local settings with searchable sections for the account, appearance, Google/Bing/DuckDuckGo search, default zoom, bookmarks bar, HN website theme integration, download folder/save prompts, browsing-data controls and version/updates. Changes persist locally.
+- Themes update open new-tab pages and HTTPS HN sites immediately, without reloading or losing form input. Only the fixed HN destination allowlist receives a CSS theme; external pages have no browser bridge. The menu’s blurred page preview refreshes after a theme change.
+- Startup focuses the masked PIN field, then transfers focus to the address bar after unlock.
+- Downloads opens a dedicated internal manager, including the bookmarks-bar Downloads button. Search, filter, pause/resume, cancel/retry, open with confirmation, show in folder, remove individual records and clear finished history. Removing records never deletes files.
+
 - A grouped new-tab shortcut directory links to every HN company and service plus Gmail, using original company artwork.
 - HN site shortcuts in both search boxes: names such as “staff portal”, “wiki” and “Horizon Development” open the canonical site. Case, spaces, common one-character typos/transpositions (including “staff portak”) and phrases such as “go to staff portal” are recognised. Ambiguous/unrelated text still searches the web; explicit URLs are preserved. The fixed public-site list lives in `src/sites.cjs` and is tested against website control’s catalog.
 - Downloads manager in the toolbar and browser menu: live progress, speed/size, pause/resume, cancel, retry, reveal saved files and clear finished history. Save dialogs remain native. History is private to this device; clearing it keeps the files. Interrupted transfers after an app restart can be retried. Resume support depends on the source server; Electron may restart non-resumable transfers.
@@ -39,7 +47,7 @@ The GitHub Actions workflow uses native macOS and Windows runners. All tests and
 
 The current preview uses ad-hoc macOS signing for local bundle integrity, not an Apple Developer identity or notarisation, and Windows installers have no publisher certificate. OS security warnings are expected. Trusted public distribution needs Apple Developer signing/notarisation and Windows code signing configured separately. No credentials are assumed or invented. macOS may ask for Keychain access again after updating an ad-hoc-signed preview build.
 
-Electron is pinned to the latest checked 43.x patch so both Intel and Apple-silicon Mac builds are available. Keep its security patches current and review platform support before moving to a new major version. Official references: https://www.electronjs.org/docs/latest/tutorial/security and https://www.electronjs.org/docs/latest/api/web-contents-view.
+Electron is pinned to the latest checked stable release, 44.9.0 (19 October 2026), including native Intel and Apple-silicon Mac builds. Keep its security patches current and review platform support before moving to a new major version. Official references: https://www.electronjs.org/docs/latest/tutorial/security and https://www.electronjs.org/docs/latest/api/web-contents-view.
 
 ## Boundaries
 
