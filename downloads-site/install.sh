@@ -26,6 +26,8 @@ chmod 700 /var/lib/hn-downloads
 rm -rf /opt/hn-downloads/lib /opt/hn-downloads/public
 cp "$SCRIPT_DIR/server.js" /opt/hn-downloads/server.js
 cp -r "$SCRIPT_DIR/lib" "$SCRIPT_DIR/public" /opt/hn-downloads/
+# The latest browser release CI recorded, so the site is current even before it reaches GitHub.
+[ ! -f "$SCRIPT_DIR/release.json" ] || cp "$SCRIPT_DIR/release.json" /opt/hn-downloads/release.json
 pm2 startOrRestart "$SCRIPT_DIR/ecosystem.config.cjs" --update-env
 healthy=0
 for attempt in {1..15}; do
@@ -33,6 +35,9 @@ for attempt in {1..15}; do
     sleep 1
 done
 [ "$healthy" = 1 ] || { echo 'Downloads did not start (see: pm2 logs hn-downloads). Nginx was left unchanged.'; exit 1; }
+SERVING="$(curl -fsS --max-time 30 http://127.0.0.1:5100/api/releases | python3 -c 'import sys,json;r=json.load(sys.stdin).get("release");print(r["version"] if r else "none")' 2>/dev/null || echo unknown)"
+echo "Downloads is offering HN Browser $SERVING."
+curl -fsS --max-time 5 http://127.0.0.1:5100/healthz | python3 -c 'import sys,json;s=json.load(sys.stdin).get("release",{});print("  Source: "+str(s.get("source"))+("; problems: "+"; ".join(s["problems"]) if s.get("problems") else ""))' 2>/dev/null || true
 BACKUP="$(mktemp -d)"
 trap 'rm -rf "$BACKUP"' EXIT
 [ ! -f "$SITE" ] || cp "$SITE" "$BACKUP/site"
