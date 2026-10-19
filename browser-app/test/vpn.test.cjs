@@ -10,6 +10,7 @@ function fakeService(){const s={codes:new Map(),devices:[],tokens:new Set(),head
   if(u.pathname==='/api/me')return Response.json({user:{displayName:'Sam',email:'sam@hngroup.org.uk'},devices:s.devices,limit:5});
   if(u.pathname==='/api/sign-out'){s.tokens.delete(auth);return Response.json({ok:true});}
   if(u.pathname==='/api/devices'&&options.method==='POST'){const d={id:crypto.randomBytes(12).toString('hex'),name:body.name,address:'10.88.0.'+(2+s.devices.length),publicKey:body.publicKey};s.devices.push(d);return Response.json({device:d,connection:{config:'[Interface]\nPrivateKey = <this device’s private key>\n[Peer]\nAllowedIPs = 10.88.0.1/32, fd88:88::1/128\n'}},{status:201});}
+  const connection=/^\/api\/devices\/([a-f0-9]{24})\/connection$/.exec(u.pathname);if(connection&&options.method!=='DELETE'){const d=s.devices.find(d=>d.id===connection[1]);return d?Response.json({connection:{config:'[Interface]\nPrivateKey = <this device’s private key>\n[Peer]\nAllowedIPs = 0.0.0.0/0, ::/0\nDNS = 1.1.1.1, 1.0.0.1\n',configVersion:3}}):Response.json({error:'Not found.'},{status:404});}
   const m=/^\/api\/devices\/([a-f0-9]{24})$/.exec(u.pathname);if(m&&options.method==='DELETE'){s.devices=s.devices.filter(d=>d.id!==m[1]);return Response.json({ok:true});}
   return Response.json({error:'Not found.'},{status:404});};
  return s;}
@@ -68,8 +69,10 @@ test('the bundled Mac helper matches Secure Network’s, so both apps share one 
 
 test('a computer set up for the earlier split tunnel is offered an update to the full tunnel',async()=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-vpn-test-')),service=fakeService(),vault=memoryVault(),controller=new FakeController(),token=crypto.randomBytes(32).toString('hex');service.tokens.add(token);vault.save(token);
- service.devices.push({id:'d'.repeat(24),name:'HN Browser on Old-PC',address:'10.88.0.9'});controller.installed='[Interface]\nAllowedIPs = 10.88.0.1/32\n';fs.writeFileSync(path.join(dir,'vpn.json'),JSON.stringify({deviceId:'d'.repeat(24)}));
+ service.devices.push({id:'d'.repeat(24),name:'HN Browser on Old-PC',address:'10.88.0.9'});controller.installed='[Interface]\nPrivateKey = '+keyPair().privateKey+'\nAllowedIPs = 10.88.0.1/32\n';fs.writeFileSync(path.join(dir,'vpn.json'),JSON.stringify({deviceId:'d'.repeat(24)}));
  const vpn=new VPN({vault,controller,stateFile:path.join(dir,'vpn.json'),fetcher:service.fetch,origin:'https://vpn.example.test',reach:async()=>true,openTab:async()=>null});
  try{await vpn.restore();assert.equal(vpn.snapshot().outdated,true);await vpn.setUp();assert.equal(vpn.snapshot().outdated,false);assert.equal(JSON.parse(fs.readFileSync(path.join(dir,'vpn.json'))).configVersion,3);assert.equal(service.devices.length,1);
  }finally{vpn.cancel();fs.rmSync(dir,{recursive:true,force:true});}
 });
+
+test('Windows configuration updates reuse the protected private key without exposing it or using another device slot',()=>{const w=new WindowsController(),script=w.setupScript('C:\\Temp\\template.conf',{reuseKey:true});assert.ok(script.includes("(?m)^PrivateKey\\s*=\\s*(\\S+)"));assert.match(script,/Get-Content -Raw -LiteralPath 'C:\\ProgramData\\HN Group\\VPN\\hn-vpn\.conf'/);assert.match(script,/\$template\.Replace/);assert.ok(!script.includes('Write-Host'));});

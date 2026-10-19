@@ -19,7 +19,17 @@ case "${1:-}" in
     exec bash "$WG_QUICK" down "$CONF"
     ;;
   status)
-    if [ -f /var/run/wireguard/hn-vpn.name ]; then echo up; else echo down; fi
+    [ -f "$CONF" ] || { echo 'Not set up.' >&2; exit 3; }
+    if [ -f /var/run/wireguard/hn-vpn.name ]; then
+      iface=$(cat /var/run/wireguard/hn-vpn.name)
+      if [[ "$iface" =~ ^utun[0-9]+$ ]] && wg show "$iface" >/dev/null 2>&1; then echo up; else echo down; fi
+    else echo down; fi
+    ;;
+  handshake)
+    [ -f /var/run/wireguard/hn-vpn.name ] || { echo 0; exit 0; }
+    iface=$(cat /var/run/wireguard/hn-vpn.name)
+    [[ "$iface" =~ ^utun[0-9]+$ ]] || exit 2
+    wg show "$iface" latest-handshakes | awk 'BEGIN { latest=0 } $2>latest { latest=$2 } END { print latest }'
     ;;
   remove)
     if [ -f /var/run/wireguard/hn-vpn.name ] && [ -n "$WG_QUICK" ]; then bash "$WG_QUICK" down "$CONF" || true; fi

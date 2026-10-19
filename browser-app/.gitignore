@@ -5,3 +5,5 @@ build/
 .devtools/
 
 src/build.json
+
+ui/vendor/

@@ -1,6 +1,6 @@
 {
   "name": "hn-group-browser",
-  "version": "0.8.1",
+  "version": "1.0.0",
   "private": true,
   "description": "HN Browser \u2014 a Chromium-powered browser with HN Group account sign-in",
   "author": "HN Group",
@@ -9,14 +9,19 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test test/*.test.cjs",
-    "test:desktop": "node test/desktop.cjs && node test/downloads-desktop.cjs && node test/account-desktop.cjs && node test/features-desktop.cjs && node test/vpn-desktop.cjs && node test/library-desktop.cjs",
+    "test:desktop": "node test/desktop.cjs && node test/downloads-desktop.cjs && node test/account-desktop.cjs && node test/features-desktop.cjs && node test/vpn-desktop.cjs && node test/library-desktop.cjs && node test/rebuild-desktop.cjs",
     "icons": "node scripts/icons.cjs",
     "pack": "electron-builder --dir --publish never",
     "build:mac": "electron-builder --mac --publish never",
-    "build:win": "electron-builder --win --publish never"
+    "build:win": "electron-builder --win --publish never",
+    "postinstall": "node scripts/vendor.cjs",
+    "test:visual": "HN_BROWSER_VISUAL_MATRIX=1 node test/rebuild-desktop.cjs"
   },
   "devDependencies": {
     "@resvg/resvg-js": "2.6.2",
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/addon-web-links": "0.12.0",
+    "@xterm/xterm": "6.0.0",
     "electron": "44.9.0",
     "electron-builder": "26.15.3",
     "playwright": "1.61.1",
@@ -62,5 +67,8 @@
   },
   "engines": {
     "node": ">=22.12.0"
+  },
+  "dependencies": {
+    "ssh2": "1.17.0"
   }
 }

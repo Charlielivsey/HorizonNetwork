@@ -1,4 +1,27 @@
-# HN Browser · preview
+# HN Browser 1.0
+
+HN Browser for macOS Apple silicon and Windows x64, rebuilt around a compact chrome renderer and a live workspace overlay. Intel Macs remain unsupported.
+
+## What changed in 1.0
+
+- New tab rail, address bar, workspace navigation, settings, collections, downloads, VPN and start page. The HN stripe stays; no bookmarks bar.
+- Shared theme tokens and timestamped commits across chrome, workspace and suggestions. No screenshot transitions. HN pages receive replacement CSS before old CSS is removed, preserving forms. Unchanged state no longer repaints terminals.
+- Separate screen controllers, frame-batched state, image caching, asynchronous atomic settings writes, full shared keyboard handling and draggable tabs with transform-only movement.
+- Built-in fixed-server SSH terminal at 10.88.0.1:22, using ssh2 and xterm with fit/web-links addons. Requires an unlocked HN account and a configured, connected VPN. Up to four sessions; resize, scrollback, copy/paste and themes. Username is remembered; passwords/passphrases and selected private keys are never saved or returned in state. First connection asks for SHA-256 host-key verification; a changed key is refused. Lock, account change, sign-out or VPN disconnect closes sessions.
+- VPN uses actual OS state, server reachability, public-IP route verification and handshake information. Removed devices and revoked sessions disconnect locally. Reconfiguration reuses this computer's root/Administrator-protected private key and existing registration, including when all five device slots are used. The bundled Mac helper remains identical to HN Secure Network's.
+- All prior account/PIN/profile editing, browsing, history/bookmarks/session restore, site-name shortcuts, downloads and in-place verified updates remain.
+
+## Validation and platform limits
+
+`npm test` includes real local SSH-server tests for authentication, host-key pinning/refusal, streaming, resize and timeout, plus VPN-generated PowerShell/ACL checks. `npm run test:desktop` exercises the real Electron UI. `HN_BROWSER_VISUAL_MATRIX=1 node test/rebuild-desktop.cjs` additionally exercises the terminal, records a Chromium trace and renderer long tasks, and captures all screens/settings sections in all five themes at 1320×900 and 760×520 into `.test-results/rebuild/`.
+
+The software-rendered Linux host records long tasks above the 50 ms target under tracing; native GPU frame-rate validation remains outstanding. Set `HN_BROWSER_ENFORCE_PERFORMANCE=1` to make that target a hard test assertion on an appropriate host. No real Mac or Windows WireGuard service, public VPS SSH credentials, or installed application bundle swap is available in the Linux test environment. Those device-specific paths require checking on real hardware; simulated controllers and generated-script tests are not substitutes for those checks.
+
+`npm ci` generates pinned xterm assets and copies their licenses into `ui/vendor/` using `scripts/vendor.cjs`; generated files are included in packaged apps. SSH's main-process dependency is included by electron-builder. Runtime: Electron 44.9.0 / Chromium 152.
+
+## Existing integration and distribution notes
+
+
 
 A Chromium browser built with Electron, for macOS (Apple silicon) and Windows x64. Intel Macs are no longer supported (the user's decision, 19 October 2026). The browser and installers are separate from the VPS websites. Downloads: https://downloads.hngroup.org.uk.
 

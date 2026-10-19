@@ -75,7 +75,7 @@ const{_electron:electron}=require('playwright'),assert=require('node:assert/stri
   await top.keyboard.press('Escape');await top.locator('#overlay').waitFor({state:'hidden'});
   // ---- New tab page: greeting and most visited ----
   const home=await app.evaluate(async({webContents})=>{const tab=webContents.getAllWebContents().find(w=>w.getURL()==='hn-browser://start/');return tab.executeJavaScript('({greeting:document.querySelector(".greeting").textContent,recent:[...document.querySelectorAll(".recent a")].map(a=>a.href)})');});
-  assert.match(home.greeting,/^GOOD (MORNING|AFTERNOON|EVENING), SAM$/);assert.ok(home.recent.includes(site+'beta'));
+  assert.match(home.greeting,/^Good (morning|afternoon|evening), Sam$/);assert.ok(home.recent.includes(site+'beta'));
   // ---- Locking ----
   await page.locator('#browser-menu').click();await top.locator('#menu-lock').click();await top.locator('#account-pin').waitFor({state:'visible'});
   const locked=await top.evaluate(()=>window.browser.state());assert.ok(locked.locked);assert.equal(locked.user,null);assert.equal(locked.profileEditable,false);assert.ok(authLog().some(x=>x.route==='lock'));await page.locator('#toolbar-lock').waitFor({state:'visible'});

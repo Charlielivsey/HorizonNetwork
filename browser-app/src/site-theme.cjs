@@ -3,8 +3,8 @@ const {SITES}=require('./sites.cjs');
 const HOSTS=new Set(SITES.map(([url])=>new URL(url).hostname).filter(host=>host!=='mail.google.com'));
 HOSTS.add('horizonetwork.com');
 const PALETTES={
- 'midnight-lavender':['#161126','#20192f','#2b213d','#f4efff','#b7a9cc','#bd9cff','#3d2f51'],
- daylight:['#f5f2fa','#ffffff','#eae2f6','#251b37','#756781','#5514b4','#d9cce9'],
+ 'midnight-lavender':['#151222','#201b31','#302740','#f2edfc','#b2a6c5','#c3a2ff','#3c3150'],
+ daylight:['#f5f3f9','#ffffff','#eae4f4','#251c35','#736781','#6731ad','#dcd3e8'],
  'deep-ocean':['#0c1c2b','#102738','#18394c','#e5f5fc','#8db6cc','#6acddd','#274657'],
  forest:['#111f1b','#1a2d26','#243e32','#eaf7ed','#a4c7b0','#98d5a5','#355444'],
  rose:['#291b27','#352332','#473042','#fff1f8','#d5acc5','#efaace','#604057']

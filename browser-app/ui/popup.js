@@ -4,7 +4,7 @@ const list=document.getElementById('list'),ICONS={search:'M10.5 4a6.5 6.5 0 1 0 
 let shown=0;
 function svg(kind){const s=document.createElementNS('http://www.w3.org/2000/svg','svg'),p=document.createElementNS(s.namespaceURI,'path');s.setAttribute('viewBox','0 0 24 24');p.setAttribute('d',ICONS[kind]||ICONS.go);s.append(p);return s;}
 window.popup.onItems(({items,index,theme,reduceMotion})=>{
- document.body.dataset.theme=theme;document.body.dataset.motion=reduceMotion?'reduced':'';
+ window.HNTheme.schedule({theme,revision:0});document.body.dataset.motion=reduceMotion?'reduced':'';
  const fresh=!shown;shown=items.length;list.classList.toggle('fresh',fresh);list.replaceChildren();
  items.forEach((item,i)=>{const li=document.createElement('li');li.setAttribute('role','option');li.setAttribute('aria-selected',String(i===index));li.className=(item.hn?'hn ':'')+item.kind;
   const icon=document.createElement('span');icon.className='icon';if(item.hn){const img=document.createElement('img');img.src='assets/favicon.svg';img.alt='';icon.append(img);}else icon.append(svg(item.kind));
