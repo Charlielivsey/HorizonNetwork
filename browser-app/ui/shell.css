@@ -9,11 +9,11 @@
 
 #unlock-form{padding:0 0 18px;text-align:center}#unlock-form>label{font-size:10px;color:var(--muted);display:block;margin-bottom:14px}.account-pin-entry{position:relative;height:48px;max-width:292px;margin:0 auto}#account-pin{position:absolute;inset:0;width:100%;height:100%;background:transparent;color:transparent;caret-color:transparent;-webkit-text-fill-color:transparent;border:0;z-index:1;font-size:22px;letter-spacing:24px;outline:none}.account-pin-boxes{position:absolute;inset:0;display:grid;grid-template-columns:repeat(6,1fr);gap:7px;pointer-events:none}.account-pin-boxes span{background:var(--bg);border:1px solid var(--line);border-radius:10px;display:grid;place-items:center}.account-pin-boxes .filled::after{content:'';width:8px;height:8px;border-radius:50%;background:var(--accent)}.account-pin-entry:focus-within .account-pin-boxes span{border-color:var(--accent)}#unlock-error{font-size:10px;min-height:18px;margin:12px 0;color:var(--accent)}#forget-account{display:block;margin:10px auto 0}.account-pin-entry input:focus-visible{outline:none}@media(prefers-reduced-motion:no-preference){.account-pin-boxes span{transition:border-color .2s,background .2s}.account-pin-boxes .filled::after{animation:content-in .15s ease-out}}
 /* Dedicated browser pages retain the trusted shell and never expose controls to websites. */
-.panel[data-panel=settings],.panel[data-panel=downloads]{position:fixed;inset:132px 0 0;width:100%;max-width:none;max-height:none;border-radius:0;border:0;background:var(--bg);overflow:auto;animation:none;transform:none}
-.panel[data-panel=settings] .panel-heading,.panel[data-panel=downloads] .panel-heading{max-width:1200px;margin:auto;padding:24px 32px 0}
-.panel[data-panel=settings] .panel-content,.panel[data-panel=downloads] .panel-content{max-width:1200px;margin:auto;padding:24px 32px 48px}
+.panel[data-panel=settings],.panel[data-panel=downloads],.panel[data-panel=history],.panel[data-panel=bookmarks]{position:fixed;inset:132px 0 0;width:100%;max-width:none;max-height:none;border-radius:0;border:0;background:var(--bg);overflow:auto;animation:none;transform:none}
+.panel[data-panel=settings] .panel-heading,.panel[data-panel=downloads] .panel-heading,.panel[data-panel=history] .panel-heading,.panel[data-panel=bookmarks] .panel-heading{max-width:1200px;margin:auto;padding:24px 32px 0}
+.panel[data-panel=settings] .panel-content,.panel[data-panel=downloads] .panel-content,.panel[data-panel=history] .panel-content,.panel[data-panel=bookmarks] .panel-content{max-width:1200px;margin:auto;padding:24px 32px 48px}
 .settings-layout{display:grid;grid-template-columns:210px 1fr;gap:48px}.settings-nav{display:flex;flex-direction:column;gap:8px;align-items:stretch}.settings-nav h1{font-size:28px;margin:0 0 20px}.settings-nav button{text-align:left;padding:13px 16px;color:var(--muted)}.settings-nav button[aria-current=true]{background:var(--raised);color:var(--accent)}.settings-body{max-width:760px}.settings-body h2{font-size:23px;margin:28px 0 20px}.setting-card{border:1px solid var(--line);background:var(--panel);border-radius:18px;padding:24px;margin:16px 0}.setting-card p{line-height:1.8;color:var(--muted);overflow-wrap:anywhere}.setting-card h3{margin:14px 0}.setting-card label{display:flex;justify-content:space-between;align-items:center;gap:20px;padding:18px 0;border-bottom:1px solid var(--line)}.setting-card button{margin:8px 8px 8px 0}.setting-card input[type=checkbox]{width:20px;height:20px;accent-color:var(--accent)}select,input[type=search]{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:10px;padding:12px;font:inherit}#settings-search{width:100%}.downloads-tools{display:flex;gap:12px;margin:12px 0 28px;flex-wrap:wrap}.downloads-tools input{flex:1;min-width:150px}.download-item{max-width:900px;margin:12px auto}.downloads-heading{margin-bottom:20px}.hide-bookmarks .bookmark-bar>:not(#find-bar){visibility:hidden}.tab.pinned{max-width:130px}.panel[data-panel=settings]~#page-preview{display:none}
-@media(max-width:850px){.settings-layout{grid-template-columns:160px 1fr;gap:20px}.panel[data-panel=settings] .panel-content,.panel[data-panel=downloads] .panel-content{padding:20px}.setting-card{padding:16px}}
+@media(max-width:850px){.settings-layout{grid-template-columns:160px 1fr;gap:20px}.panel[data-panel=settings] .panel-content,.panel[data-panel=downloads] .panel-content,.panel[data-panel=history] .panel-content,.panel[data-panel=bookmarks] .panel-content{padding:20px}.setting-card{padding:16px}}
 
 /* Tab icons */
 .tab-icon{width:14px;height:14px;border-radius:3px;object-fit:contain;flex-shrink:0}
@@ -59,3 +59,153 @@
  .tab-icon{animation:fade-in .2s}
  @keyframes vpn-pulse{0%{box-shadow:0 0 0 0 #5fae7b88}70%{box-shadow:0 0 0 6px #5fae7b00}100%{box-shadow:0 0 0 0 #5fae7b00}}
 }
+
+/* ================= 0.7: new screens and controls ================= */
+:root{--out:cubic-bezier(.16,1,.3,1);--spring:cubic-bezier(.34,1.56,.64,1);--in:cubic-bezier(.5,0,.75,0)}
+body{--good:#5fae7b;--warn:#e3a33b}
+textarea{font:inherit}
+/* Address bar extras */
+.star,.zoom-pill{flex-shrink:0;color:var(--muted);padding:4px;border-radius:8px;display:grid;place-items:center}
+.star svg{width:16px;height:16px}.star.starred{color:var(--accent)}.star.starred svg{fill:currentColor}
+.zoom-pill{font-size:9px;font-weight:700;padding:3px 7px;background:var(--raised);color:var(--ink)}
+#address-form:focus-within .address-hint{opacity:0}
+/* Page loading bar on the brand stripe */
+.stripe{position:relative;overflow:hidden}.load-bar{position:absolute;inset:0;opacity:0;background:linear-gradient(90deg,transparent,color-mix(in srgb,white 75%,var(--accent)),transparent);background-size:40% 100%;background-repeat:no-repeat}
+.page-loading .load-bar{opacity:1}
+/* Account button lock badge */
+.account-button{position:relative}.lock-badge{position:absolute;left:21px;bottom:2px;width:15px;height:15px;border-radius:50%;background:var(--accent);color:var(--bg);display:grid;place-items:center;box-shadow:0 0 0 2px var(--panel)}.lock-badge svg{width:9px;height:9px;stroke-width:2.4}
+.account-actions{display:grid;grid-template-columns:1fr auto;gap:8px;margin:0 0 18px}.account-actions button,.button-row button{display:flex;align-items:center;justify-content:center;gap:7px}
+.link-button{color:var(--accent);padding:0;font-size:inherit;text-decoration:underline;text-underline-offset:3px}.link-button:hover{background:none}
+/* User bookmarks in the bookmarks bar */
+.user-bookmarks{display:flex;gap:4px;min-width:0;overflow:hidden;flex:0 1 auto;padding-left:6px;margin-left:2px;border-left:1px solid var(--line)}.user-bookmarks:empty{display:none}
+.bookmark-bar .user-bookmark{max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}.user-bookmark b{display:inline-grid;place-items:center;width:13px;height:13px;border-radius:4px;background:var(--raised);color:var(--accent);font-size:8px;margin-right:6px;vertical-align:-2px}
+/* Suggestions under the address bar */
+#overlay.suggesting #backdrop{background:transparent;backdrop-filter:none;animation:none}
+#suggestions{position:fixed;z-index:3;margin:0;padding:6px;list-style:none;background:color-mix(in srgb,var(--panel) 97%,white);border:1px solid color-mix(in srgb,var(--line) 85%,var(--accent));border-radius:16px;box-shadow:0 24px 60px #0006,0 3px 12px #0003;transform-origin:top center}
+.suggestion{display:flex;align-items:center;gap:12px;padding:9px 12px;border-radius:10px;cursor:pointer;min-width:0}.suggestion>svg{width:15px;height:15px;color:var(--muted)}.suggestion.bookmark>svg{color:var(--accent);fill:currentColor}.suggestion.search>svg,.suggestion.site>svg{color:var(--accent)}
+.suggestion-text{flex:1;min-width:0;display:flex;align-items:baseline;gap:10px}.suggestion-text strong{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%}.suggestion-text small{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.suggestion em{font-style:normal;font-size:8px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border:1px solid var(--line);border-radius:5px;padding:2px 6px;flex-shrink:0}
+.suggestion:hover,.suggestion[aria-selected=true]{background:var(--raised)}.suggestion[aria-selected=true]{box-shadow:inset 3px 0 0 var(--accent)}
+/* History and bookmarks pages */
+.library-page .downloads-tools{align-items:center}.library-day{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);font-weight:700;margin:26px auto 8px;max-width:900px}
+.library-row{display:flex;align-items:center;gap:14px;padding:8px 12px;border-radius:12px;max-width:900px;margin:0 auto}.library-row:hover,.library-row:focus-within{background:var(--panel)}
+.library-row time{font-size:10px;color:var(--muted);width:42px;flex-shrink:0;font-variant-numeric:tabular-nums}
+.site-letter{width:30px;height:30px;border-radius:9px;background:var(--raised);color:var(--accent);display:grid;place-items:center;font-size:12px;flex-shrink:0}
+.library-open{flex:1;min-width:0;text-align:left;display:flex;flex-direction:column;gap:2px;padding:4px 6px}.library-open:hover{background:none}.library-open strong{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.library-open small{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row-tools{display:flex;gap:2px;opacity:0}.library-row:hover .row-tools,.library-row:focus-within .row-tools{opacity:1}.row-tools button{padding:7px;color:var(--muted)}.row-tools button:hover{color:var(--ink)}.row-tools svg{width:15px;height:15px}
+.rename{flex:1;font:inherit;font-size:12px;padding:8px 10px;border-radius:9px;border:1px solid var(--accent);background:var(--bg);color:var(--ink);outline:none}
+.inline-note{max-width:900px;margin:0 auto 14px;padding:12px 16px;border-radius:12px;background:var(--raised);font-size:11px}
+#bookmark-current{display:flex;align-items:center;gap:7px;margin-left:auto;align-self:start}
+/* Settings: navigation icons, profile editor, choices */
+.settings-nav button{display:flex;align-items:center;gap:11px;position:relative}.settings-nav svg{width:16px;height:16px;opacity:.8}.settings-nav button[aria-current=true] svg{opacity:1}
+.settings-nav button[aria-current=true]::before{content:'';position:absolute;left:0;top:9px;bottom:9px;width:3px;border-radius:3px;background:var(--accent)}
+.gate-card{display:flex;gap:18px;align-items:flex-start}.gate-icon{width:44px;height:44px;border-radius:14px;background:var(--raised);color:var(--accent);display:grid;place-items:center;flex-shrink:0}.gate-card h3{margin-top:4px}
+.profile-card{display:flex;align-items:center;gap:22px}.settings-avatar{width:84px;height:84px;font-size:26px;box-shadow:0 0 0 5px var(--panel),0 0 0 6px var(--line)}.profile-card-text{min-width:0}.profile-card-text h3{font-size:20px;margin:0 0 4px;letter-spacing:-.03em}.profile-card-text p{margin:0 0 12px}
+.button-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.setting-card .button-row button{margin:0}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 18px}.form-grid .wide{grid-column:1/-1}.form-grid h3{margin:0 0 8px}
+.setting-card .form-grid label,.setting-card.form-grid label{display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;gap:7px;padding:10px 0;border:0;font-size:11px;font-weight:600}
+.form-grid label small,.birthday small{font-weight:400;color:var(--muted);font-size:9px}
+.form-grid input:not([type=checkbox]),.form-grid select,.form-grid textarea{width:100%;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:10px;padding:11px 12px;font-size:12px;font-weight:400;outline:none}
+.form-grid textarea{resize:vertical;min-height:84px;line-height:1.6}
+.form-grid input:focus,.form-grid select:focus,.form-grid textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 14%,transparent)}
+.setting-card.form-grid label.toggle{flex-direction:row;align-items:center;justify-content:space-between;border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin:6px 0;padding:14px 0}.toggle span{display:flex;flex-direction:column;gap:4px}
+.birthday{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 0}.birthday .field-label{font-size:11px;font-weight:600;display:flex;flex-direction:column;gap:4px;margin-right:auto}.form-grid .birthday select{width:auto;min-width:96px}
+.setting-card.form-grid label.inline-check{flex-direction:row;align-items:center;gap:8px;padding:0;font-weight:400}
+.form-actions{display:flex;align-items:center;justify-content:flex-end;gap:14px;padding-top:12px}.form-actions span{margin-right:auto;font-size:11px;color:var(--accent)}.setting-card .form-actions button{margin:0}
+#profile-form:not(.dirty) #pf-reset{visibility:hidden}
+.segmented{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}.setting-card .segmented button{border:1px solid var(--line);font-size:11px;display:flex;align-items:center;gap:7px;padding:8px 13px;margin:0;border-radius:999px}.segmented button[aria-checked=true]{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--ink)}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block}.dot.available{background:var(--good)}.dot.busy{background:#d9534f}.dot.away{background:var(--warn)}.dot.ooo{background:#8a8aa3}
+.details{display:grid;grid-template-columns:minmax(120px,190px) 1fr;gap:10px 18px;margin:0 0 6px;font-size:12px}.details dt{color:var(--muted)}.details dd{margin:0;overflow-wrap:anywhere}
+.hint{font-size:10px}
+.choice-list{display:grid;gap:10px}.setting-card label.choice{display:flex;justify-content:flex-start;gap:14px;align-items:flex-start;border:1px solid var(--line);border-radius:14px;padding:14px 16px;cursor:pointer}.choice input{margin-top:3px;accent-color:var(--accent);width:16px;height:16px}.choice span{display:flex;flex-direction:column;gap:3px}.choice small{color:var(--muted);font-size:10px}.setting-card label.choice:has(input:checked){border-color:var(--accent);background:color-mix(in srgb,var(--accent) 9%,transparent)}
+.shortcut-list{display:grid;grid-template-columns:1fr auto;gap:10px 24px;margin:0;font-size:12px}.shortcut-list dd{margin:0;display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}.shortcut-list kbd{font-size:10px;color:var(--ink);background:var(--raised);border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padding:3px 8px}
+@media(max-width:850px){.form-grid{grid-template-columns:1fr}.profile-card{flex-direction:column;align-items:flex-start}}
+
+/* ================= Motion ================= */
+@media(prefers-reduced-motion:no-preference){
+ /* Menus spring in and glide out; full pages rise into place. */
+ .panel{animation:panel-pop .32s var(--out) both}
+ .panel.closing{animation:panel-away .17s var(--in) both;pointer-events:none}
+ .panel[data-panel=settings],.panel[data-panel=downloads],.panel[data-panel=history],.panel[data-panel=bookmarks]{animation:page-rise .34s var(--out) both}
+ .panel.closing[data-panel=settings],.panel.closing[data-panel=downloads],.panel.closing[data-panel=history],.panel.closing[data-panel=bookmarks]{animation:page-sink .17s var(--in) both}
+ #overlay.closing #backdrop{animation:fade-out .17s both}
+ #backdrop{animation:fade-in .24s ease-out}
+ .panel-content{animation:content-in .3s var(--out) both}
+ .menu-content>*{animation:item-in .34s var(--out) both}
+ .menu-content>:nth-child(2){animation-delay:.02s}.menu-content>:nth-child(3){animation-delay:.04s}.menu-content>:nth-child(4){animation-delay:.06s}.menu-content>:nth-child(5){animation-delay:.08s}.menu-content>:nth-child(6){animation-delay:.1s}.menu-content>:nth-child(7){animation-delay:.12s}.menu-content>:nth-child(8){animation-delay:.14s}.menu-content>:nth-child(9){animation-delay:.16s}.menu-content>:nth-child(10){animation-delay:.18s}.menu-content>:nth-child(11){animation-delay:.2s}.menu-content>:nth-child(12){animation-delay:.22s}.menu-content>:nth-child(n+13){animation-delay:.24s}
+ .menu-item>svg:first-child{transition:transform .25s var(--spring)}.menu-item:hover>svg:first-child{transform:scale(1.15) rotate(-6deg)}.menu-item>svg:last-child{transition:transform .2s var(--out)}.menu-item:hover>svg:last-child:not(:first-child){transform:translateX(3px)}
+ .theme-grid>*{animation:item-in .4s var(--out) both}.theme-grid>:nth-child(2){animation-delay:.04s}.theme-grid>:nth-child(3){animation-delay:.08s}.theme-grid>:nth-child(4){animation-delay:.12s}.theme-grid>:nth-child(5){animation-delay:.16s}
+ .theme-card{transition:transform .25s var(--spring),border-color .2s,box-shadow .25s,background .2s}.theme-card:hover{transform:translateY(-3px);box-shadow:0 10px 24px #0003}.theme-card[aria-pressed=true]>svg{animation:pop .4s var(--spring)}
+ ::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}
+ /* Settings: sections slide in and their cards follow one after another. */
+ .settings-body section:not([hidden]){animation:section-in .34s var(--out) both}
+ .settings-body section:not([hidden]) .setting-card{animation:item-in .42s var(--out) both}
+ .settings-body .setting-card:nth-of-type(2){animation-delay:.05s}.settings-body .setting-card:nth-of-type(3){animation-delay:.1s}.settings-body .setting-card:nth-of-type(4){animation-delay:.15s}.settings-body .setting-card:nth-of-type(5){animation-delay:.2s}
+ .settings-nav button{transition:background .2s,color .2s,transform .2s var(--out)}.settings-nav button:hover{transform:translateX(3px)}.settings-nav button[aria-current=true]::before{animation:grow-y .3s var(--spring)}
+ .setting-card label.choice{transition:border-color .2s,background .2s,transform .2s var(--out)}.setting-card label.choice:hover{transform:translateY(-1px)}
+ .segmented button{transition:background .2s,border-color .2s,transform .2s var(--spring)}.segmented button[aria-checked=true]{transform:scale(1.03)}
+ .form-grid input,.form-grid select,.form-grid textarea{transition:border-color .2s,box-shadow .25s}
+ .flash{animation:flash-in .45s var(--out)}
+ #profile-form.dirty .form-actions .primary{animation:nudge 2.4s ease-in-out infinite}
+ .settings-avatar img{transition:transform .35s var(--spring)}.profile-card:hover .settings-avatar img{transform:scale(1.06)}
+ /* Tabs open with a little spring and fold away when closed; the active tab has a sliding accent. */
+ .tab{animation:tab-open .32s var(--spring) both;transition:background .2s,color .2s,box-shadow .2s}
+ .tab.closing{animation:tab-close .2s var(--in) forwards;pointer-events:none}
+ .tab.active::after{content:'';position:absolute;left:14px;right:14px;top:0;height:2px;border-radius:0 0 3px 3px;background:var(--accent);animation:grow-x .35s var(--out)}
+ .tab .close{transition:opacity .15s,background .15s,transform .2s var(--spring)}.tab .close:hover{transform:rotate(90deg)}
+ .tab-icon{animation:pop .35s var(--spring)}
+ /* Toolbar */
+ .icon-button svg,.star svg{transition:transform .22s var(--spring),color .2s}.icon-button:hover:not(:disabled) svg{transform:scale(1.12)}.icon-button:active:not(:disabled) svg{transform:scale(.9)}
+ #reload:hover:not(:disabled) svg{transform:rotate(-40deg) scale(1.1)}#back:hover:not(:disabled) svg{transform:translateX(-2px)}#forward:hover:not(:disabled) svg{transform:translateX(2px)}#new-tab:hover svg{transform:rotate(90deg) scale(1.1)}
+ .account-button{transition:transform .22s var(--out),box-shadow .25s,background .2s,border-color .2s}.account-button:hover{transform:translateY(-1px);box-shadow:0 6px 16px #0003}.account-button.locked .lock-badge{animation:pop .4s var(--spring)}
+ #address-form{transition:border-color .25s,box-shadow .35s var(--out)}#address-form:focus-within{box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 14%,transparent),0 8px 24px #0002}
+ #address-form .address-hint{transition:opacity .2s}
+ .star.starred svg{animation:star-pop .5s var(--spring)}.star:hover svg{transform:scale(1.2) rotate(8deg)}
+ .zoom-pill:not([hidden]){animation:pop .3s var(--spring)}
+ .page-loading .load-bar{animation:loading 1.1s cubic-bezier(.45,0,.55,1) infinite}
+ #download-badge.bump{animation:pop .4s var(--spring)}#update-dot:not([hidden]){animation:pulse-dot 2.2s ease-out infinite}
+ .bookmark-bar button{transition:background .16s,transform .2s var(--out),color .16s}.bookmark-bar button:hover{transform:translateY(-1px)}
+ .user-bookmark{animation:item-in .3s var(--out) both}
+ /* Buttons */
+ .primary{transition:background .2s,box-shadow .25s,transform .2s var(--spring)}.primary:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 8px 22px color-mix(in srgb,var(--accent) 35%,transparent)}.primary:active:not(:disabled){transform:scale(.98)}
+ .secondary{transition:background .2s,border-color .2s}.secondary:hover:not(:disabled){border-color:var(--accent)}
+ /* Suggestions, lists and toasts */
+ #suggestions:not([hidden]){animation:drop-in .22s var(--out)}.suggestion{animation:item-in .26s var(--out) both;animation-delay:calc(var(--i) * 18ms);transition:background .12s}
+ .library-row{animation:item-in .35s var(--out) both;animation-delay:calc(var(--i) * 15ms);transition:background .15s}.library-row.leaving{animation:row-out .18s var(--in) forwards}
+ .row-tools{transition:opacity .15s}.site-letter{transition:transform .25s var(--spring)}.library-row:hover .site-letter{transform:scale(1.08) rotate(-4deg)}
+ .download-item[data-status=downloading] .download-progress::-webkit-progress-value{background-image:linear-gradient(110deg,transparent 30%,#ffffff40 50%,transparent 70%);background-size:200% 100%;animation:shimmer 1.4s linear infinite}
+ #notice.pop{animation:toast .5s var(--spring)}
+ .account-pin-entry.shake{animation:shake .42s cubic-bezier(.36,.07,.19,.97)}
+ .account-pin-boxes .filled{animation:pop .25s var(--spring)}
+ .vpn-power.busy{animation:ring 1.4s ease-out infinite}
+ .downloads-empty>div,.gate-icon{animation:float 4s ease-in-out infinite}
+ .profile-avatar{animation:pop .5s var(--spring)}
+ @keyframes panel-pop{from{opacity:0;transform:translateY(-10px) scale(.95);filter:blur(4px)}to{opacity:1;transform:none;filter:none}}
+ @keyframes panel-away{to{opacity:0;transform:translateY(-6px) scale(.97);filter:blur(2px)}}
+ @keyframes page-rise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+ @keyframes page-sink{to{opacity:0;transform:translateY(12px)}}
+ @keyframes fade-out{to{opacity:0}}
+ @keyframes item-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+ @keyframes section-in{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:none}}
+ @keyframes tab-open{from{opacity:0;transform:translateY(8px) scale(.92)}to{opacity:1;transform:none}}
+ @keyframes tab-close{to{opacity:0;transform:translateY(6px) scale(.9);min-width:0;width:0;padding:0;margin:0}}
+ @keyframes grow-x{from{transform:scaleX(0)}to{transform:none}}
+ @keyframes grow-y{from{transform:scaleY(0)}to{transform:none}}
+ @keyframes pop{0%{transform:scale(.6);opacity:.4}100%{transform:none;opacity:1}}
+ @keyframes star-pop{0%{transform:scale(.4) rotate(-30deg)}60%{transform:scale(1.35) rotate(10deg)}100%{transform:none}}
+ @keyframes loading{from{background-position:-40% 0}to{background-position:140% 0}}
+ @keyframes pulse-dot{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 70%,transparent)}70%,100%{box-shadow:0 0 0 7px transparent}}
+ @keyframes drop-in{from{opacity:0;transform:translateY(-6px) scaleY(.96)}to{opacity:1;transform:none}}
+ @keyframes row-out{to{opacity:0;transform:translateX(24px)}}
+ @keyframes shimmer{from{background-position:120% 0}to{background-position:-80% 0}}
+ @keyframes toast{from{opacity:0;transform:translate(-50%,24px) scale(.94)}to{opacity:1;transform:translate(-50%,0)}}
+ @keyframes shake{10%,90%{transform:translateX(-2px)}20%,80%{transform:translateX(4px)}30%,50%,70%{transform:translateX(-7px)}40%,60%{transform:translateX(7px)}}
+ @keyframes ring{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 45%,transparent)}100%{box-shadow:0 0 0 22px transparent}}
+ @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+ @keyframes flash-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+ @keyframes nudge{0%,88%,100%{transform:none}92%{transform:translateY(-2px)}96%{transform:translateY(1px)}}
+}
+/* HN Browser's own "Reduce motion" setting turns animation off, like the computer's setting. */
+body[data-motion=reduced] *,body[data-motion=reduced] *::before,body[data-motion=reduced] *::after{animation:none!important;transition:none!important}
+.settings-nav{position:sticky;top:0;align-self:start;max-height:calc(100vh - 170px);overflow:auto;scrollbar-width:none}
+.library-page .library-row,.library-page .library-day,.library-page .inline-note{max-width:none}.library-page .library-row{margin:0 -12px}

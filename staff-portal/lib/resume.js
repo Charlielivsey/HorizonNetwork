@@ -67,6 +67,24 @@ function touch(raw) {
   const t = lookup(raw); if (t && t.kind === "browser" && t.expires < Date.now() + TTL_MS - 86400000) { t.expires = Date.now() + TTL_MS; db.save(); }
 }
 
+// HN Browser: entering the PIN (or a full sign-in) gives the browser an unlock key, kept only in its
+// memory, that lets it change the person's profile until the browser locks or 8 hours pass unused.
+const UNLOCK_MS = 8 * 60 * 60 * 1000;
+function unlockKey(raw) {
+  const t = lookup(raw); if (!t || t.kind !== "browser") return null;
+  const key = crypto.randomBytes(32).toString("hex");
+  t.unlock = { hash: hash(key), expires: Date.now() + UNLOCK_MS }; db.save();
+  return key;
+}
+function unlocked(raw, key) {
+  const t = lookup(raw);
+  if (!t || t.kind !== "browser" || !t.unlock || t.unlock.expires < Date.now() || !/^[a-f0-9]{64}$/.test(String(key || ""))) return false;
+  if (!crypto.timingSafeEqual(Buffer.from(hash(key)), Buffer.from(t.unlock.hash))) return false;
+  t.unlock.expires = Date.now() + UNLOCK_MS; db.save();
+  return true;
+}
+function lock(raw) { const t = lookup(raw); if (t && t.unlock) { delete t.unlock; db.save(); } }
+
 function forget(raw) {
   if (raw && db.data.tokens[hash(raw)]) {
     delete db.data.tokens[hash(raw)];
@@ -87,4 +105,4 @@ function cookie(req, raw, clear) {
   return parts.join("; ");
 }
 
-module.exports = { COOKIE, MAX_FAILURES, init, issue, lookup, fail, forget, revokeFor, cookie, touch, resetFailures };
+module.exports = { COOKIE, MAX_FAILURES, init, issue, lookup, fail, forget, revokeFor, cookie, touch, resetFailures, unlockKey, unlocked, lock };

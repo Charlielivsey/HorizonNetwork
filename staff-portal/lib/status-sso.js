@@ -43,6 +43,11 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       ...(!store.hasCode(p)?{codeSetupRequired:true}:{}),statusAdminAllowed:allowed(active,store),ownerAccess:store.hasOwnerAccess(p)&&!active.data.impersonatorId
     };
   }
+  // What HN Browser's settings show and let people change about themselves.
+  function accountView(p){
+    const v=store.meView(p);
+    return{displayName:p.displayName||'',firstName:p.firstName||'',lastName:p.lastName||'',email:identity({person:p,data:{}}).email,jobTitle:p.jobTitle||'',company:p.company||'',department:p.department||'',phone:p.phone||'',location:p.location||'',timezone:p.timezone||'',skills:p.skills||[],languages:p.languages||[],bio:p.bio||'',bioPublic:p.bioPublic!==false,birthday:p.birthday||null,status:p.status||null,photo:!!store.avatarFile(p),supervisor:v.supervisor?.displayName||null,roles:v.roleNames||[],lastLogin:p.account?.lastLoginAt||null};
+  }
   const credentials = serviceRequest;
   return async function handle(req, res, pathname, session) {
     if (pathname === '/status-admin/authorize') {
@@ -61,10 +66,10 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       logEvent(req, session, 'status-admin-sign-in');
       redirect(res, `${STATUS_ORIGIN}/auth/callback?code=${code}&state=${state}`); return true;
     }
-    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/password', '/api/auth/code', '/api/auth/network-leadership', '/api/auth/network-avatar', '/api/auth/account-status', '/api/auth/browser-issue', '/api/auth/browser-profile', '/api/auth/browser-avatar', '/api/auth/browser-offer', '/api/auth/browser-logout', '/api/auth/browser-unlock'].includes(pathname)) return false;
+    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/password', '/api/auth/code', '/api/auth/network-leadership', '/api/auth/network-avatar', '/api/auth/account-status', '/api/auth/browser-issue', '/api/auth/browser-profile', '/api/auth/browser-avatar', '/api/auth/browser-offer', '/api/auth/browser-logout', '/api/auth/browser-unlock', '/api/auth/browser-lock', '/api/auth/browser-account', '/api/auth/browser-account-update', '/api/auth/browser-account-status', '/api/auth/browser-account-photo'].includes(pathname)) return false;
     if (req.method !== 'POST') { sendJson(res, 405, { error: 'Method not allowed.' }); return true; }
     if (!credentials(req)) { sendJson(res, 401, { error: 'Status integration not authenticated.' }); return true; }
-    const body = await readJsonBody(req);
+    const body = await readJsonBody(req, pathname === '/api/auth/browser-account-photo' ? 2 * 1024 * 1024 : undefined);
     if (pathname.startsWith('/api/auth/browser-')) {
       const action=pathname.slice('/api/auth/browser-'.length),raw=body.token;
       const remembered=HEX.test(raw||'')&&resume.lookup(raw);
@@ -73,13 +78,25 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
         if(remembered?.kind==='browser')resume.forget(raw);
         sendJson(res,401,{error:'Your browser account session ended. Sign in again.',restart:true});return true;
       }
-      if(action==='unlock'){const error=verifyBrowserPin(req,active.person,raw,body.code);if(error){sendJson(res,error.status,{error:error.error,restart:error.restart});return true;}resume.touch(raw);sendJson(res,200,{expires:resume.lookup(raw).expires,user:identity(active)});return true;}
+      if(action==='unlock'){const error=verifyBrowserPin(req,active.person,raw,body.code);if(error){sendJson(res,error.status,{error:error.error,restart:error.restart});return true;}resume.touch(raw);sendJson(res,200,{expires:resume.lookup(raw).expires,user:identity(active),unlock:resume.unlockKey(raw)});return true;}
+      if(action==='lock'){resume.lock(raw);sendJson(res,200,{ok:true});return true;}
       if(action==='logout'){resume.forget(raw);sendJson(res,200,{ok:true});return true;}
       if(action==='issue'){
         const token=resume.issue(active.person.id,null,req.headers['user-agent'],{kind:'browser'});
-        logEvent(req,active,'browser-connected');sendJson(res,200,{token,expires:resume.lookup(token).expires,user:identity(active)});return true;
+        logEvent(req,active,'browser-connected');sendJson(res,200,{token,expires:resume.lookup(token).expires,user:identity(active),unlock:resume.unlockKey(token)});return true;
       }
       resume.touch(raw);
+      // Your HN account in HN Browser's settings: only while the browser is unlocked (its unlock key).
+      if(action.startsWith('account')){
+        if(!resume.unlocked(raw,body.unlock)){sendJson(res,423,{error:'Unlock HN Browser with your PIN to change your profile.',locked:true});return true;}
+        const p=active.person,session={person:p,data:{},token:null};
+        try{
+          if(action==='account-update'){const input=body.profile&&typeof body.profile==='object'?body.profile:{};const keep={displayName:p.displayName,phone:p.phone||'',location:p.location||'',timezone:p.timezone||''};store.updateOwnProfile(p,{...keep,...Object.fromEntries(Object.entries(input).filter(([k])=>['displayName','phone','location','timezone','skills','languages','bio','bioPublic','birthdayMonth','birthdayDay','showBirthday'].includes(k)))});logEvent(req,session,'profile-updated',{detail:'HN Browser'});}
+          else if(action==='account-status'){store.setStatus(p,body.status||null);logEvent(req,session,'status-changed',{detail:'HN Browser'});}
+          else if(action==='account-photo'){if(body.remove){store.removeAvatar(p);logEvent(req,session,'photo-removed',{detail:'HN Browser'});}else{store.saveAvatar(p,body.image);logEvent(req,session,'photo-updated',{detail:'HN Browser'});}}
+        }catch(e){if(e.status===400){sendJson(res,400,{error:e.message});return true;}throw e;}
+        sendJson(res,200,{user:identity(active),profile:accountView(p)});return true;
+      }
       if(action==='offer'){
         const token=resume.issue(active.person.id,null,'HN Browser website PIN sign-in',{parent:raw});
         sendJson(res,200,{remembered:token});return true;

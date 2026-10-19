@@ -37,9 +37,9 @@ function setCookie(name, value, age = 43200) { return `${name}=${value}; Path=/;
 function send(res, status, data, cookies = []) { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Set-Cookie': cookies }); res.end(JSON.stringify(data)); }
 function redirect(res, url) { res.writeHead(302, { Location: url, 'Cache-Control': 'no-store' }); res.end(); }
 function fail(status, message) { return Object.assign(new Error(message), { status }); }
-async function body(req) {
+async function body(req, limit = 16384) {
   if (!(req.headers['content-type'] || '').startsWith('application/json')) throw fail(415, 'JSON required.');
-  let value = ''; for await (const chunk of req) { value += chunk; if (value.length > 16384) throw fail(413, 'Request too large.'); }
+  let value = ''; for await (const chunk of req) { value += chunk; if (value.length > limit) throw fail(413, 'Request too large.'); }
   try { return JSON.parse(value); } catch { throw fail(400, 'Invalid request.'); }
 }
 function secret() { const s = fs.readFileSync(secretFile, 'utf8').trim(); if (!HEX.test(s)) throw fail(503, 'Authentication integration is not configured.'); return s; }
@@ -111,7 +111,7 @@ async function persistentAvatar(token,res){
 }
 const native=createNative({codes,applications:applicationSessions,profile,requireReady,send,body,serveAvatar,destination,persistentAvatar,
  issuePersistent:async(entry,req)=>(await staff('/api/auth/browser-issue',{session:entry.staffSession},req)).value,
- persistent:async(action,token,req,data)=>(await staff('/api/auth/browser-'+action,{token,...(action==='unlock'?{code:data.code}:{})},req)).value});
+ persistent:async(action,token,req,data={})=>(await staff('/api/auth/browser-'+action,{token,...(action==='unlock'?{code:data.code}:{}),...(action.startsWith('account')?{unlock:data.unlock,profile:data.profile,status:data.status,image:data.image,remove:!!data.remove}:{})},req)).value});
 const staticFiles = { '/': 'index.html', '/authorize': 'index.html', '/style.css': 'style.css', '/app.js': 'app.js', '/assets/favicon.svg': 'assets/favicon.svg', '/assets/brand/hn-group-wordmark-white.svg': 'assets/brand/hn-group-wordmark-white.svg', '/assets/brand/hn-group-wordmark.svg': 'assets/brand/hn-group-wordmark.svg', '/assets/fonts/plus-jakarta-sans.woff2': 'assets/fonts/plus-jakarta-sans.woff2' };
 const mime = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'application/javascript', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' };
 const server = http.createServer(async (req, res) => {

@@ -14,7 +14,7 @@ function createNative({codes,applications,profile,requireReady,send,body,serveAv
   if(!route.startsWith('/api/native/'))return false;
   if(req.method!=='POST')throw fail(405,'POST required.');
   if(req.headers.origin&&req.headers.origin!=='https://auth.hngroup.org.uk')throw fail(403,'Request origin not allowed.');
-  const data=await body(req);
+  const data=await body(req,route==='/api/native/account/photo'?2*1024*1024:undefined);
   if(route==='/api/native/exchange'){
    const grant=HEX.test(data.code||'')&&codes.get(data.code);codes.delete(data.code);
    if(!grant||grant.client!=='browser'||!grant.native||grant.expires<=Date.now()||grant.state!==data.state||grant.redirect!==data.redirect_uri||!PKCE.test(data.code_verifier||'')||crypto.createHash('sha256').update(data.code_verifier).digest('base64url')!==grant.challenge)throw fail(401,'Browser sign-in expired or could not be verified.');
@@ -27,6 +27,10 @@ function createNative({codes,applications,profile,requireReady,send,body,serveAv
   const active=applications.get(key);
   if(!active&&persistent&&HEX.test(token)){
    if(route==='/api/native/logout'){await persistent('logout',token,req);send(res,200,{ok:true});return true;}
+   if(route==='/api/native/lock'){await persistent('lock',token,req);send(res,200,{ok:true});return true;}
+   // Your profile, from HN Browser's settings. The staff service also requires the browser's unlock key.
+   const account={'/api/native/account':'account','/api/native/account/update':'account-update','/api/native/account/status':'account-status','/api/native/account/photo':'account-photo'}[route];
+   if(account){const value=await persistent(account,token,req,data);send(res,200,{...value,user:{...value.user,avatarUrl:null}});return true;}
    const value=await persistent(route==='/api/native/unlock'?'unlock':'profile',token,req,data);requireReady(value.user);
    if(route==='/api/native/session'||route==='/api/native/unlock'){send(res,200,{...value,user:{...value.user,avatarUrl:null}});return true;}
    if(route==='/api/native/avatar'){await persistentAvatar(token,res);return true;}

@@ -1,6 +1,6 @@
 {
   "name": "hn-group-browser",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "private": true,
   "description": "HN Browser \u2014 a Chromium-powered browser with HN Group account sign-in",
   "author": "HN Group",
@@ -9,7 +9,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test test/*.test.cjs",
-    "test:desktop": "node test/desktop.cjs && node test/downloads-desktop.cjs && node test/account-desktop.cjs && node test/features-desktop.cjs && node test/vpn-desktop.cjs",
+    "test:desktop": "node test/desktop.cjs && node test/downloads-desktop.cjs && node test/account-desktop.cjs && node test/features-desktop.cjs && node test/vpn-desktop.cjs && node test/library-desktop.cjs",
     "icons": "node scripts/icons.cjs",
     "pack": "electron-builder --dir --publish never",
     "build:mac": "electron-builder --mac --publish never",
