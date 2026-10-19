@@ -2,6 +2,8 @@
 // HN Browser 0.7 through the real shell: your profile in Settings (with a stand-in HN Auth that checks the
 // unlock key), status, locking, history, bookmarks, address suggestions, restoring tabs and the new tab page.
 const{_electron:electron}=require('playwright'),assert=require('node:assert/strict'),path=require('node:path'),fs=require('node:fs'),os=require('node:os'),http=require('node:http'),crypto=require('node:crypto'),{Vault}=require('../src/vault.cjs');
+// Settings are saved just after they change, so wait for the file to catch up.
+const savedPrefs=async(file,ok)=>{for(let i=0;i<100;i++){try{const p=JSON.parse(fs.readFileSync(file,'utf8'));if(ok(p))return p;}catch{}await new Promise(r=>setTimeout(r,50));}return JSON.parse(fs.readFileSync(file,'utf8'));};
 (async()=>{const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-library-desktop-')),profile=path.join(dir,'profile'),fixture=path.join(dir,'fixture'),log=path.join(dir,'auth-log.json'),key=crypto.randomBytes(32).toString('hex'),token='a'.repeat(64);let app,server;
  const storageCode=`const crypto=require('node:crypto'),key=Buffer.from('${key}','hex');const storage={isEncryptionAvailable:()=>true,getSelectedStorageBackend:()=> 'gnome_libsecret',encryptString:value=>{const iv=crypto.randomBytes(16),c=crypto.createCipheriv('aes-256-cbc',key,iv);return Buffer.concat([iv,c.update(value),c.final()]);},decryptString:value=>{const c=crypto.createDecipheriv('aes-256-cbc',key,value.subarray(0,16));return Buffer.concat([c.update(value.subarray(16)),c.final()]).toString();}};`;
  new Vault(path.join(profile,'account.enc'),Function('require',storageCode+'return storage;')(require)).save(token);
@@ -46,7 +48,7 @@ const{_electron:electron}=require('playwright'),assert=require('node:assert/stri
   await top.locator('[data-settings=startup]').click();await top.locator('input[name=startup][value=restore]').check();
   await top.locator('[data-settings=accessibility]').click();await top.locator('[data-section=accessibility] [data-preference=reduceMotion]').check();await top.waitForFunction(()=>document.body.dataset.motion==='reduced');await top.locator('[data-section=accessibility] [data-preference=reduceMotion]').uncheck();
   await top.locator('[data-settings=shortcuts]').click();assert.match(await top.locator('#shortcut-list').textContent(),/Lock HN Browser/);
-  await top.waitForFunction(()=>window.browser.state().then(s=>s.preferences.autoLock===15&&s.preferences.startup==='restore'));const prefs=JSON.parse(fs.readFileSync(path.join(profile,'preferences.json')));assert.equal(prefs.autoLock,15);assert.equal(prefs.reduceMotion,false);
+  await top.waitForFunction(()=>window.browser.state().then(s=>s.preferences.autoLock===15&&s.preferences.startup==='restore'));const prefs=await savedPrefs(path.join(profile,'preferences.json'),p=>p.autoLock===15);assert.equal(prefs.autoLock,15);assert.equal(prefs.reduceMotion,false);
   await top.keyboard.press('Escape');await top.locator('#overlay').waitFor({state:'hidden'});
   // ---- History, bookmarks and suggestions ----
   await go(page,site+'alpha');await go(page,site+'beta');

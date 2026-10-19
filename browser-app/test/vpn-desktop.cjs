@@ -3,6 +3,8 @@
 // A stand-in HN Auth and VPN service run inside the app (patched fetch); the WireGuard connection is
 // the in-memory test controller (HN_BROWSER_VPN_FAKE), so nothing on this computer changes.
 const{_electron:electron}=require('playwright'),assert=require('node:assert/strict'),path=require('node:path'),fs=require('node:fs'),os=require('node:os'),http=require('node:http'),crypto=require('node:crypto'),{Vault}=require('../src/vault.cjs');
+// Settings are saved just after they change, so wait for the file to catch up.
+const savedPrefs=async(file,ok)=>{for(let i=0;i<100;i++){try{const p=JSON.parse(fs.readFileSync(file,'utf8'));if(ok(p))return p;}catch{}await new Promise(r=>setTimeout(r,50));}return JSON.parse(fs.readFileSync(file,'utf8'));};
 (async()=>{const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-vpn-desktop-')),profile=path.join(dir,'profile'),fixture=path.join(dir,'fixture'),key=crypto.randomBytes(32).toString('hex'),token='a'.repeat(64),vpnToken='b'.repeat(64);let app,server;
  const storageCode=`const crypto=require('node:crypto'),key=Buffer.from('${key}','hex');const storage={isEncryptionAvailable:()=>true,getSelectedStorageBackend:()=> 'gnome_libsecret',encryptString:value=>{const iv=crypto.randomBytes(16),c=crypto.createCipheriv('aes-256-cbc',key,iv);return Buffer.concat([iv,c.update(value),c.final()]);},decryptString:value=>{const c=crypto.createDecipheriv('aes-256-cbc',key,value.subarray(0,16));return Buffer.concat([c.update(value.subarray(16)),c.final()]).toString();}};`;
  const provider=Function('require',storageCode+'return storage;')(require);new Vault(path.join(profile,'account.enc'),provider).save(token);new Vault(path.join(profile,'vpn.enc'),provider).save(vpnToken);
@@ -35,7 +37,7 @@ const{_electron:electron}=require('playwright'),assert=require('node:assert/stri
   await top.locator('#vpn-power').click();await top.waitForFunction(()=>document.querySelector('#vpn-title').textContent==='Connected');
   assert.equal(await top.locator('#vpn-power').getAttribute('aria-pressed'),'true');await page.locator('#vpn-dot').waitFor({state:'visible'});await top.waitForFunction(()=>document.querySelector('#vpn-chip').textContent.startsWith('Server reachable'));
   fs.mkdirSync(path.resolve(__dirname,'../.test-results'),{recursive:true});await top.screenshot({path:path.resolve(__dirname,'../.test-results/vpn.png')});
-  await top.locator('#vpn-panel input[data-preference=vpnAutoConnect]').check();await page.waitForFunction(()=>window.browser.state().then(s=>s.preferences.vpnAutoConnect));assert.equal(JSON.parse(fs.readFileSync(path.join(profile,'preferences.json'))).vpnAutoConnect,true);
+  await top.locator('#vpn-panel input[data-preference=vpnAutoConnect]').check();await page.waitForFunction(()=>window.browser.state().then(s=>s.preferences.vpnAutoConnect));assert.equal((await savedPrefs(path.join(profile,'preferences.json'),p=>p.vpnAutoConnect===true)).vpnAutoConnect,true);
   await top.locator('#vpn-power').click();await top.waitForFunction(()=>document.querySelector('#vpn-title').textContent==='Not connected');assert.ok(await page.locator('#vpn-dot').isHidden());
   // The menu shows the VPN status, and Settings has its own section.
   await top.keyboard.press('Escape');await page.locator('#browser-menu').click();await top.waitForFunction(()=>document.querySelector('#menu-vpn-status').textContent==='Not connected');await top.keyboard.press('Escape');
