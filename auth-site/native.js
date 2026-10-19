@@ -7,9 +7,10 @@ function nativeDestination(url){
  if(url.searchParams.get('code_challenge_method')!=='S256'||!PKCE.test(url.searchParams.get('code_challenge')||''))return null;
  return{callback:redirect.href,challenge:url.searchParams.get('code_challenge')};}catch{return null;}
 }
-function createNative({codes,applications,profile,requireReady,send,body,serveAvatar}){
+function createNative({codes,applications,profile,requireReady,send,body,serveAvatar,issuePersistent,persistent,persistentAvatar,destination}){
+ const offers=new Map();
  const fail=(status,message)=>Object.assign(new Error(message),{status});
- return async function handle(req,res,route){
+ const handle=async function(req,res,route){
   if(!route.startsWith('/api/native/'))return false;
   if(req.method!=='POST')throw fail(405,'POST required.');
   if(req.headers.origin&&req.headers.origin!=='https://auth.hngroup.org.uk')throw fail(403,'Request origin not allowed.');
@@ -18,16 +19,33 @@ function createNative({codes,applications,profile,requireReady,send,body,serveAv
    const grant=HEX.test(data.code||'')&&codes.get(data.code);codes.delete(data.code);
    if(!grant||grant.client!=='browser'||!grant.native||grant.expires<=Date.now()||grant.state!==data.state||grant.redirect!==data.redirect_uri||!PKCE.test(data.code_verifier||'')||crypto.createHash('sha256').update(data.code_verifier).digest('base64url')!==grant.challenge)throw fail(401,'Browser sign-in expired or could not be verified.');
    const user=await profile(grant.entry);requireReady(user);if(applications.size>=10000)throw fail(503,'Please try signing in again shortly.');
+   if(issuePersistent){const saved=await issuePersistent(grant.entry,req);send(res,200,{...saved,user:{...saved.user,avatarUrl:null}});return true;}
    const token=crypto.randomBytes(32).toString('hex'),key=crypto.createHash('sha256').update(token).digest('hex');applications.set(key,{client:'browser',entry:grant.entry,expires:grant.entry.expires});
    send(res,200,{token,expires:grant.entry.expires,user:{...user,avatarUrl:null}});return true;
   }
   const token=(req.headers.authorization||'').replace(/^Bearer /,''),key=HEX.test(token)?crypto.createHash('sha256').update(token).digest('hex'):'';
-  const active=applications.get(key);if(!active||active.client!=='browser'||active.expires<=Date.now())throw fail(401,'Please sign in to HN Browser again.');
+  const active=applications.get(key);
+  if(!active&&persistent&&HEX.test(token)){
+   if(route==='/api/native/logout'){await persistent('logout',token,req);send(res,200,{ok:true});return true;}
+   const value=await persistent(route==='/api/native/unlock'?'unlock':'profile',token,req,data);requireReady(value.user);
+   if(route==='/api/native/session'||route==='/api/native/unlock'){send(res,200,{...value,user:{...value.user,avatarUrl:null}});return true;}
+   if(route==='/api/native/avatar'){await persistentAvatar(token,res);return true;}
+   if(route==='/api/native/offer'){
+    let url;try{url=new URL(data.authorize_url);}catch{}const client=url&&url.origin==='https://auth.hngroup.org.uk'&&url.pathname==='/authorize'&&destination(url);
+    if(!client||client.native||url.searchParams.get('switch')==='1'||url.searchParams.get('account')==='other')throw fail(400,'Invalid website sign-in request.');
+    for(const[k,v]of offers)if(v.expires<=Date.now())offers.delete(k);if(offers.size>=10000)throw fail(503,'Please try again shortly.');
+    const offer=crypto.randomBytes(32).toString('hex');offers.set(offer,{token,url:url.href,expires:Date.now()+60000});send(res,200,{offer});return true;
+   }
+   throw fail(404,'Not found.');
+  }
+  if(!active||active.client!=='browser'||active.expires<=Date.now())throw fail(401,'Please sign in to HN Browser again.');
   if(route==='/api/native/logout'){applications.delete(key);send(res,200,{ok:true});return true;}
   const user=await profile(active.entry);requireReady(user);active.expires=Math.min(active.expires,active.entry.expires);
   if(route==='/api/native/avatar'){await serveAvatar(active.entry,res);return true;}
-  if(route==='/api/native/session'){send(res,200,{expires:active.expires,user:{...user,avatarUrl:null}});return true;}
+  if(route==='/api/native/session'||route==='/api/native/unlock'){send(res,200,{expires:active.expires,user:{...user,avatarUrl:null}});return true;}
   throw fail(404,'Not found.');
  };
+ handle.consumeOffer=async(req,url)=>{const key=req.headers['x-hn-browser-offer'],offer=offers.get(key);offers.delete(key);if(!offer||offer.expires<=Date.now()||offer.url!==url.href||url.searchParams.get('switch')==='1'||url.searchParams.get('account')==='other')return null;const value=await persistent('offer',offer.token,req);return value.remembered;};
+ return handle;
 }
 module.exports={nativeDestination,createNative};

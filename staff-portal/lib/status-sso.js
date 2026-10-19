@@ -1,4 +1,5 @@
 'use strict';
+const resume = require('./resume');
 const network = require('./network-leadership');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
@@ -25,13 +26,22 @@ function serviceRequest(req) {
 function loginNext(value) {
   return typeof value === 'string' && /^\/status-admin\/authorize\?state=[a-f0-9]{64}$/.test(value) ? value : null;
 }
-function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent, handleChangePassword, handleSetCode }) {
+function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent, handleChangePassword, handleSetCode, verifyBrowserPin }) {
   const codes = new Map();
   function current(token) {
     const data = sessions.get(token);
     if (!data || data.expires <= Date.now()) return null;
     const person = store.getPerson(data.personId);
     return person ? { token, data, person } : null;
+  }
+  function identity(active) {
+    const p=active.person;
+    return {
+      id:p.id,displayName:p.displayName,email:(p.emails||[]).find(e=>e.primary)?.address||p.emails?.[0]?.address||store.loginName(p),
+      jobTitle:p.jobTitle||'',company:p.company||'',avatarUrl:store.avatarFile(p)?'/api/avatar':null,
+      ...(p.account.passwordTemporary?{passwordChangeRequired:true,passwordMinLength:store.meView(p).passwordMinLength}:{}),
+      ...(!store.hasCode(p)?{codeSetupRequired:true}:{}),statusAdminAllowed:allowed(active,store),ownerAccess:store.hasOwnerAccess(p)&&!active.data.impersonatorId
+    };
   }
   const credentials = serviceRequest;
   return async function handle(req, res, pathname, session) {
@@ -51,10 +61,35 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       logEvent(req, session, 'status-admin-sign-in');
       redirect(res, `${STATUS_ORIGIN}/auth/callback?code=${code}&state=${state}`); return true;
     }
-    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/password', '/api/auth/code', '/api/auth/network-leadership', '/api/auth/network-avatar', '/api/auth/account-status'].includes(pathname)) return false;
+    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/password', '/api/auth/code', '/api/auth/network-leadership', '/api/auth/network-avatar', '/api/auth/account-status', '/api/auth/browser-issue', '/api/auth/browser-profile', '/api/auth/browser-avatar', '/api/auth/browser-offer', '/api/auth/browser-logout', '/api/auth/browser-unlock'].includes(pathname)) return false;
     if (req.method !== 'POST') { sendJson(res, 405, { error: 'Method not allowed.' }); return true; }
     if (!credentials(req)) { sendJson(res, 401, { error: 'Status integration not authenticated.' }); return true; }
     const body = await readJsonBody(req);
+    if (pathname.startsWith('/api/auth/browser-')) {
+      const action=pathname.slice('/api/auth/browser-'.length),raw=body.token;
+      const remembered=HEX.test(raw||'')&&resume.lookup(raw);
+      const active=action==='issue'?current(body.session):remembered?.kind==='browser'?{person:store.getPerson(remembered.personId),data:{expires:remembered.expires}}:null;
+      if (!active?.person?.account?.enabled || active.data.impersonatorId || active.person.account.passwordTemporary || !store.hasCode(active.person) || (store.maintenance().on&&!store.hasOwnerAccess(active.person))) {
+        if(remembered?.kind==='browser')resume.forget(raw);
+        sendJson(res,401,{error:'Your browser account session ended. Sign in again.',restart:true});return true;
+      }
+      if(action==='unlock'){const error=verifyBrowserPin(req,active.person,raw,body.code);if(error){sendJson(res,error.status,{error:error.error,restart:error.restart});return true;}resume.touch(raw);sendJson(res,200,{expires:resume.lookup(raw).expires,user:identity(active)});return true;}
+      if(action==='logout'){resume.forget(raw);sendJson(res,200,{ok:true});return true;}
+      if(action==='issue'){
+        const token=resume.issue(active.person.id,null,req.headers['user-agent'],{kind:'browser'});
+        logEvent(req,active,'browser-connected');sendJson(res,200,{token,expires:resume.lookup(token).expires,user:identity(active)});return true;
+      }
+      resume.touch(raw);
+      if(action==='offer'){
+        const token=resume.issue(active.person.id,null,'HN Browser website PIN sign-in',{parent:raw});
+        sendJson(res,200,{remembered:token});return true;
+      }
+      if(action==='avatar'){
+        const avatar=store.avatarFile(active.person);if(!avatar){sendJson(res,404,{error:'No profile picture.'});return true;}
+        res.writeHead(200,{'Content-Type':avatar.mime,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});fs.createReadStream(avatar.file).on('error',()=>res.destroy()).pipe(res);return true;
+      }
+      sendJson(res,200,{expires:resume.lookup(raw).expires,user:identity(active)});return true;
+    }
     // Lets HN Group services (such as the VPN) check that staff accounts they serve are still enabled.
     if (pathname === '/api/auth/account-status') {
       const ids = Array.isArray(body.ids) ? body.ids.filter((x) => typeof x === 'string').slice(0, 5000) : [];
@@ -102,15 +137,7 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
         res.writeHead(200, { 'Content-Type': avatar.mime, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
         fs.createReadStream(avatar.file).on('error', () => res.destroy()).pipe(res); return true;
       }
-      const p = active.person;
-      sendJson(res, 200, { session: token, expires: active.data.expires, user: {
-        id: p.id, displayName: p.displayName, email: (p.emails || []).find(e => e.primary)?.address || p.emails?.[0]?.address || store.loginName(p),
-        jobTitle: p.jobTitle || '', company: p.company || '', avatarUrl: store.avatarFile(p) ? '/api/avatar' : null,
-        ...(p.account.passwordTemporary ? { passwordChangeRequired: true, passwordMinLength: store.meView(p).passwordMinLength } : {}),
-        ...(!store.hasCode(p) ? { codeSetupRequired: true } : {}),
-        statusAdminAllowed: allowed(active, store),
-        ownerAccess: store.hasOwnerAccess(p) && !active.data.impersonatorId
-      } }); return true;
+      sendJson(res,200,{session:token,expires:active.data.expires,user:identity(active)});return true;
     }
     if (!allowed(active, store)) { sendJson(res, 403, { error: 'Only the system owner and Super Admin members can manage status.' }); return true; }
     sendJson(res, 200, { session: token, expires: active.data.expires, user: { id: active.person.id, displayName: active.person.displayName } });

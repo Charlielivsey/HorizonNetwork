@@ -525,7 +525,7 @@ function completeLogin(req, res, person, how) {
 function resumePerson(req) {
   const raw = parseCookies(req)[resume.COOKIE];
   const t = resume.lookup(raw);
-  const person = t ? store.getPerson(t.personId) : null;
+  const person = t && t.kind !== "browser" ? store.getPerson(t.personId) : null;
   if (!person || !person.account || !person.account.enabled || !store.hasCode(person)) return { raw, person: null };
   return { raw, person };
 }
@@ -582,6 +582,13 @@ async function handleResume(req, res, pathname) {
   completeLogin(req, res, person, "resumed");
 }
 
+function verifyBrowserPin(req, person, raw, code) {
+  const ip=clientIp(req);
+  if(isLockedOut(ip))return {status:429,error:'Too many failed attempts. Please try again in 15 minutes.',restart:true};
+  if(!store.verifyCode(person,String(code||''))){recordFailure(ip);logEvent(req,null,'sign-in-code-failed',{actor:store.loginName(person),detail:'HN Browser unlock'});const restart=resume.fail(raw);return {status:401,error:restart?'Too many wrong PINs. Sign in with your email and password again.':"That PIN isn’t right. Please try again.",restart};}
+  failedAttempts.delete(ip);resume.resetFailures(raw);store.recordLogin(person);logEvent(req,null,'signed-in',{actor:store.loginName(person),detail:'HN Browser PIN unlock'});return null;
+}
+
 async function handleLoginCode(req, res) {
   const ip = clientIp(req);
   if (isLockedOut(ip)) {
@@ -622,6 +629,7 @@ async function handleSetCode(req, res, session, suppliedBody) {
     return sendJson(res, 400, { error: "Your current password is incorrect." });
   }
   store.setCode(person, code);
+  if (changing) resume.revokeFor(person.id);
   logEvent(req, session, changing ? "code-changed" : "code-set");
   if (serviceRequest(req)) res.setHeader("Set-Cookie", resume.cookie(req, resume.issue(person.id, parseCookies(req)[resume.COOKIE], req.headers["user-agent"])));
   sendJson(res, 200, { user: meResponse(session) });
@@ -2121,7 +2129,7 @@ extraRoutes.init({
 
 // ---------- Routing ----------
 
-const statusSso = createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent, handleChangePassword, handleSetCode });
+const statusSso = createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent, handleChangePassword, handleSetCode, verifyBrowserPin });
 const portalAuth = portalAuthLib.createPortalAuth({ store, sessions, resume, createSession, cookieFor, parseCookies, send, redirect, logEvent, loginNext, clientIp });
 
 async function route(req, res) {

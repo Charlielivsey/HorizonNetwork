@@ -12,6 +12,7 @@ if [ ! -f "$PORTAL/server.js" ] || [ ! -f "$PORTAL/public/assets/login.js" ] || 
 fi
 node --check "$SOURCE/server.js"
 node --check "$SOURCE/lib/status-sso.js"
+node --check "$SOURCE/lib/resume.js"
 node --check "$SOURCE/lib/network-leadership.js"
 node --check "$SOURCE/lib/portal-auth.js"
 node --check "$SOURCE/public/assets/login.js"
@@ -24,6 +25,7 @@ chmod 600 "$SECRET_DIR/secret"
 # Skip restarting the portal on future status-only updates if these integration files match.
 if cmp -s "$SOURCE/server.js" "$PORTAL/server.js" && \
    cmp -s "$SOURCE/lib/network-leadership.js" "$PORTAL/lib/network-leadership.js" && \
+   cmp -s "$SOURCE/lib/resume.js" "$PORTAL/lib/resume.js" && \
    cmp -s "$SOURCE/lib/status-sso.js" "$PORTAL/lib/status-sso.js" && \
    cmp -s "$SOURCE/lib/portal-auth.js" "$PORTAL/lib/portal-auth.js" && \
    cmp -s "$SOURCE/public/login.html" "$PORTAL/public/login.html" && \
@@ -35,10 +37,12 @@ BACKUP="$(mktemp -d /var/lib/hn-status-sso/portal-backup-XXXXXX)"
 cp "$PORTAL/server.js" "$BACKUP/server.js"
 cp "$PORTAL/public/assets/login.js" "$BACKUP/login.js"
 cp "$PORTAL/public/login.html" "$BACKUP/login.html"
+[ ! -f "$PORTAL/lib/resume.js" ] || cp "$PORTAL/lib/resume.js" "$BACKUP/resume.js"
 [ ! -f "$PORTAL/lib/status-sso.js" ] || cp "$PORTAL/lib/status-sso.js" "$BACKUP/status-sso.js"
 [ ! -f "$PORTAL/lib/portal-auth.js" ] || cp "$PORTAL/lib/portal-auth.js" "$BACKUP/portal-auth.js"
 [ ! -f "$PORTAL/lib/network-leadership.js" ] || cp "$PORTAL/lib/network-leadership.js" "$BACKUP/network-leadership.js"
 cp "$SOURCE/lib/network-leadership.js" "$PORTAL/lib/network-leadership.js"
+cp "$SOURCE/lib/resume.js" "$PORTAL/lib/resume.js"
 cp "$SOURCE/lib/status-sso.js" "$PORTAL/lib/status-sso.js"
 cp "$SOURCE/lib/portal-auth.js" "$PORTAL/lib/portal-auth.js"
 cp "$SOURCE/public/login.html" "$PORTAL/public/login.html"
@@ -61,6 +65,7 @@ if [ "$healthy" != 1 ]; then
     cp "$BACKUP/login.js" "$PORTAL/public/assets/login.js"
     cp "$BACKUP/login.html" "$PORTAL/public/login.html"
     if [ -f "$BACKUP/portal-auth.js" ]; then cp "$BACKUP/portal-auth.js" "$PORTAL/lib/portal-auth.js"; else rm -f "$PORTAL/lib/portal-auth.js"; fi
+    if [ -f "$BACKUP/resume.js" ]; then cp "$BACKUP/resume.js" "$PORTAL/lib/resume.js"; fi
     if [ -f "$BACKUP/status-sso.js" ]; then cp "$BACKUP/status-sso.js" "$PORTAL/lib/status-sso.js"; else rm -f "$PORTAL/lib/status-sso.js"; fi
     pm2 restart "$RESTART_APP" || true
     echo "Staff sign-in integration failed; previous portal files restored. Backup: $BACKUP"

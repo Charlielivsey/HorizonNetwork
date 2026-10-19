@@ -105,7 +105,13 @@ function destination(url) {
  if(!Object.hasOwn(CLIENTS,id||'')||!HEX.test(state||''))return null;
  const client={id,state,...CLIENTS[id]};if(client.native){const native=nativeDestination(url);return native?{...client,...native}:null;}return client;
 }
-const native=createNative({codes,applications:applicationSessions,profile,requireReady,send,body,serveAvatar});
+async function persistentAvatar(token,res){
+ const response=await fetch(backend+'/api/auth/browser-avatar',{method:'POST',headers:{Authorization:'Bearer '+secret(),'Content-Type':'application/json'},body:JSON.stringify({token}),signal:AbortSignal.timeout(5000),redirect:'error'});
+ if(!response.ok)return send(res,response.status,{error:'Profile picture unavailable.'});res.writeHead(200,{'Content-Type':response.headers.get('content-type'),'Cache-Control':'no-store'});res.end(Buffer.from(await response.arrayBuffer()));
+}
+const native=createNative({codes,applications:applicationSessions,profile,requireReady,send,body,serveAvatar,destination,persistentAvatar,
+ issuePersistent:async(entry,req)=>(await staff('/api/auth/browser-issue',{session:entry.staffSession},req)).value,
+ persistent:async(action,token,req,data)=>(await staff('/api/auth/browser-'+action,{token,...(action==='unlock'?{code:data.code}:{})},req)).value});
 const staticFiles = { '/': 'index.html', '/authorize': 'index.html', '/style.css': 'style.css', '/app.js': 'app.js', '/assets/favicon.svg': 'assets/favicon.svg', '/assets/brand/hn-group-wordmark-white.svg': 'assets/brand/hn-group-wordmark-white.svg', '/assets/brand/hn-group-wordmark.svg': 'assets/brand/hn-group-wordmark.svg', '/assets/fonts/plus-jakarta-sans.woff2': 'assets/fonts/plus-jakarta-sans.woff2' };
 const mime = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'application/javascript', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' };
 const server = http.createServer(async (req, res) => {
@@ -227,8 +233,10 @@ const server = http.createServer(async (req, res) => {
       const entry = entryFor(req); await profile(entry);
       return await serveAvatar(entry, res);
     }
+    let browserRemembered=null;
     if (route === '/authorize') {
       if (!destination(url)) throw fail(400, 'Invalid application. Start from the application’s sign-in button.');
+      browserRemembered=await native.consumeOffer(req,url);
       if (url.searchParams.get('switch') === '1') {
         sessions.delete(hash(cookie(req, COOKIE))); res.setHeader('Set-Cookie', setCookie(COOKIE, '', 0));
         url.searchParams.delete('switch'); url.searchParams.set('account', 'other'); return redirect(res, url.pathname + url.search);
@@ -241,7 +249,7 @@ const server = http.createServer(async (req, res) => {
     if (file.endsWith('.html')) {
       sessions.delete(hash(cookie(req, COOKIE)));
       challenges.delete(hash(cookie(req, FLOW)));
-      res.setHeader('Set-Cookie', [setCookie(COOKIE, '', 0), setCookie(FLOW, '', 0)]);
+      res.setHeader('Set-Cookie', [setCookie(COOKIE, '', 0), setCookie(FLOW, '', 0),...(browserRemembered?[setCookie(REMEMBER,browserRemembered,30*86400)]:[])]);
     }
     res.writeHead(200, { 'Content-Type': mime[path.extname(file)], 'Cache-Control': file.endsWith('.html') ? 'no-store' : 'public, max-age=3600' });
     fs.createReadStream(path.join(__dirname, 'public', file)).pipe(res);
