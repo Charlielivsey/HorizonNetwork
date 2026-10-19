@@ -116,7 +116,9 @@ async function api(req, res, route) {
   let m;
   // The Mac app says which version it is, so the profile can show it.
   const appVersion = String(req.headers['x-hn-vpn-app'] || '');
-  if (!current.cookie && /^[0-9][0-9A-Za-z.\- ()]{0,30}$/.test(appVersion)) { const s = store.session(current.token); if (s) s.appVersion = appVersion; }
+  // HN Browser and Secure Terminal both use app sign-ins; X-HN-VPN-Client says which one this is.
+  const appClient = { 'hn-browser': 'HN Browser', 'secure-terminal': 'Secure Terminal' }[String(req.headers['x-hn-vpn-client'] || '')];
+  if (!current.cookie && (appClient || /^[0-9][0-9A-Za-z.\- ()]{0,30}$/.test(appVersion))) { const s = store.session(current.token); if (s) { if (/^[0-9][0-9A-Za-z.\- ()]{0,30}$/.test(appVersion)) s.appVersion = appVersion; if (appClient) s.client = appClient; } }
   if (route === '/api/me' && method === 'GET') {
     return send(res, 200, { user: userView(user), devices: await deviceView(store.devicesFor(user.id)), limit: store.MAX_DEVICES, macApp: appView() });
   }

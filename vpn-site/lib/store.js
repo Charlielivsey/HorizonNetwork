@@ -57,7 +57,7 @@ function sessionsFor(personId, currentToken) {
   prune();
   const mine = currentToken && /^[a-f0-9]{64}$/.test(currentToken) ? hash(currentToken) : '';
   return Object.entries(db.sessions).filter(([, v]) => v.user.id === personId)
-    .map(([k, v]) => ({ id: k.slice(0, 16), kind: v.kind || 'web', createdAt: v.createdAt, lastUsedAt: v.lastUsedAt || v.createdAt, appVersion: v.appVersion || null, current: k === mine }))
+    .map(([k, v]) => ({ id: k.slice(0, 16), kind: v.kind || 'web', client: v.client || (v.kind === 'app' ? 'Secure Terminal' : 'Website'), createdAt: v.createdAt, lastUsedAt: v.lastUsedAt || v.createdAt, appVersion: v.appVersion || null, current: k === mine }))
     .sort((a, b) => String(b.lastUsedAt).localeCompare(String(a.lastUsedAt)));
 }
 function endSessionById(personId, id) {

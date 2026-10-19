@@ -20,7 +20,7 @@ jobs:
         working-directory: browser-app
       - run: npm test
         working-directory: browser-app
-      - run: node --test staff-portal/resume-browser.test.cjs auth-site/native.test.cjs auth-site/browser-session.test.cjs auth-site/test.cjs auth-site/setup.test.cjs downloads-site/test.cjs
+      - run: node --test staff-portal/resume-browser.test.cjs auth-site/native.test.cjs auth-site/browser-session.test.cjs auth-site/test.cjs auth-site/setup.test.cjs downloads-site/test.cjs vpn-site/test.cjs
       - run: xvfb-run -a npm run test:desktop
         working-directory: browser-app
   build:

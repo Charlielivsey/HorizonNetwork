@@ -7,6 +7,8 @@
 // The Mac app signs in the same way in the browser: it starts with /auth/login?app=<challenge>, and
 // after Auth the browser hands a one-time code back to the app (hngroupvpn://signed-in?code=…),
 // which the app swaps, with the secret behind its challenge, for its own token (/api/app/exchange).
+// Apps that can't receive hngroupvpn:// links (HN Browser) add loopback=<port>: the code then goes to
+// http://127.0.0.1:<port>/vpn-callback on the same computer instead.
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 
@@ -94,12 +96,13 @@ function createAuth(store) {
     if (url.pathname === '/auth/login' && req.method === 'GET') {
       const state = crypto.randomBytes(32).toString('hex');
       const app = url.searchParams.get('app') || '';
-      if (app && !HEX.test(app)) { showPage(res, 400, 'Sign-in failed', 'The app’s sign-in request wasn’t valid. Start again from the app.'); return true; }
-      redirect(res, AUTH_ORIGIN + '/authorize?client_id=vpn&state=' + state, [setCookie(STATE_COOKIE, state + '.' + (app || 'web'), 600)]);
+      const loopback = url.searchParams.get('loopback') || '';
+      if ((app && !HEX.test(app)) || (loopback && (!app || !/^[1-9][0-9]{3,4}$/.test(loopback) || Number(loopback) > 65535))) { showPage(res, 400, 'Sign-in failed', 'The app’s sign-in request wasn’t valid. Start again from the app.'); return true; }
+      redirect(res, AUTH_ORIGIN + '/authorize?client_id=vpn&state=' + state, [setCookie(STATE_COOKIE, state + '.' + (app || 'web') + (loopback ? '.' + loopback : ''), 600)]);
       return true;
     }
     if (url.pathname === '/auth/callback' && req.method === 'GET') {
-      const [expected, app] = cookie(req, STATE_COOKIE).split('.');
+      const [expected, app, loopback] = cookie(req, STATE_COOKIE).split('.');
       const state = url.searchParams.get('state') || '';
       const clear = setCookie(STATE_COOKIE, '', 0);
       if (!HEX.test(state) || !HEX.test(expected || '') || !crypto.timingSafeEqual(Buffer.from(state), Buffer.from(expected))) {
@@ -119,6 +122,7 @@ function createAuth(store) {
         if (appCodes.size > 5000) { showPage(res, 503, 'Please try again', 'Please try signing in again shortly.', [clear]); return true; }
         const code = crypto.randomBytes(32).toString('hex');
         appCodes.set(hash(code), { token, challenge: app, expires: Date.now() + 3 * 60000 });
+        if (/^[1-9][0-9]{3,4}$/.test(loopback || '')) { redirect(res, 'http://127.0.0.1:' + loopback + '/vpn-callback?code=' + code, [clear]); return true; }
         showPage(res, 200, 'You’re signed in', 'Return to the HN Group VPN app to finish. If it doesn’t open by itself, use the button below.', [clear], APP_SCHEME + '?code=' + code);
         return true;
       }

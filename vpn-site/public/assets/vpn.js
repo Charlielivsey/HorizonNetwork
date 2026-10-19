@@ -95,7 +95,7 @@
     $('#profile-pills').innerHTML = '<span class="pill pill-accent">' + (p.user.admin ? 'VPN administrator' : 'HN Group staff') + '</span>' +
       '<span class="pill">' + p.devices.length + ' of ' + p.limit + ' devices</span>' + (online ? '<span class="pill pill-success">' + online + ' connected now</span>' : '');
     $('#profile-sessions').innerHTML = '<ul class="rows">' + p.sessions.map((x) => '<li class="row"><span class="device-icon" aria-hidden="true"><svg viewBox="0 0 24 24">' + ICONS[x.kind === 'app' ? 'app' : 'web'] + '</svg></span>' +
-      '<div class="row-main"><strong>' + (x.kind === 'app' ? 'Secure Terminal' + (x.appVersion ? ' ' + esc(x.appVersion) : '') : 'Website') + (x.current ? ' · this one' : '') + '</strong>' +
+      '<div class="row-main"><strong>' + (x.kind === 'app' ? esc(x.client || 'Secure Terminal') + (x.appVersion ? ' ' + esc(x.appVersion) : '') : 'Website') + (x.current ? ' · this one' : '') + '</strong>' +
       '<span class="muted small">Signed in ' + esc(when(x.createdAt)) + ' · last used ' + esc(when(x.lastUsedAt)) + '</span></div>' +
       (x.current ? '<span class="pill pill-success">Current</span>' : '<button class="btn btn-ghost btn-small" type="button" data-end-session="' + esc(x.id) + '">Sign out</button>') + '</li>').join('') + '</ul>';
     $('#profile-device-count').textContent = p.devices.length + ' of ' + p.limit;

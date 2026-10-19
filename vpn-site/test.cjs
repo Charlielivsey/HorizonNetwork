@@ -139,6 +139,24 @@ test('HN Group VPN: Auth sign-in (website and Mac app), devices, admin and accou
     assert.equal(r.status, 200); assert.equal(r.body.user.displayName, 'Sam');
     const sam = r.body.token;
     assert.equal((await call('/api/app/exchange', { json: { code: appCode2, verifier } })).status, 401);
+    // HN Browser: the code goes to its loopback address instead of an hngroupvpn:// link.
+    assert.equal((await call('/auth/login?loopback=50123')).status, 400);
+    assert.equal((await call('/auth/login?app=' + challenge + '&loopback=99999')).status, 400);
+    {
+      const start = await call('/auth/login?app=' + challenge + '&loopback=50123');
+      const st = new URL(start.headers.get('location')).searchParams.get('state');
+      const c = crypto.randomBytes(32).toString('hex'); codes.set(c, { state: st, who: 'sam' });
+      const back = await call('/auth/callback?code=' + c + '&state=' + st, { cookie: cookieOf(start, 'hn_vpn_state') });
+      assert.equal(back.status, 302);
+      const loop = new URL(back.headers.get('location'));
+      assert.equal(loop.origin, 'http://127.0.0.1:50123'); assert.equal(loop.pathname, '/vpn-callback');
+      const browserToken = (await call('/api/app/exchange', { json: { code: loop.searchParams.get('code'), verifier } })).body.token;
+      assert.match(browserToken, /^[a-f0-9]{64}$/);
+      await call('/api/me', { token: browserToken, headers: { 'X-HN-VPN-Client': 'hn-browser', 'X-HN-VPN-App': '0.6.0' } });
+      const mine = (await call('/api/profile', { token: browserToken })).body.sessions.find((x) => x.current);
+      assert.equal(mine.client, 'HN Browser'); assert.equal(mine.appVersion, '0.6.0');
+      assert.equal((await call('/api/sign-out', { token: browserToken, json: {} })).status, 200);
+    }
     // The staff profile picture comes from Auth, for the website and the app.
     assert.ok(r.body.user.avatar);
     r = await call('/api/avatar', { token: sam });

@@ -12,5 +12,50 @@
 .panel[data-panel=settings],.panel[data-panel=downloads]{position:fixed;inset:132px 0 0;width:100%;max-width:none;max-height:none;border-radius:0;border:0;background:var(--bg);overflow:auto;animation:none;transform:none}
 .panel[data-panel=settings] .panel-heading,.panel[data-panel=downloads] .panel-heading{max-width:1200px;margin:auto;padding:24px 32px 0}
 .panel[data-panel=settings] .panel-content,.panel[data-panel=downloads] .panel-content{max-width:1200px;margin:auto;padding:24px 32px 48px}
-.settings-layout{display:grid;grid-template-columns:210px 1fr;gap:48px}.settings-nav{display:flex;flex-direction:column;gap:8px;align-items:stretch}.settings-nav h1{font-size:28px;margin:0 0 20px}.settings-nav button{text-align:left;padding:13px 16px;color:var(--muted)}.settings-nav button[aria-current=true]{background:var(--raised);color:var(--accent)}.settings-body{max-width:760px}.settings-body h2{font-size:23px;margin:28px 0 20px}.setting-card{border:1px solid var(--line);background:var(--panel);border-radius:18px;padding:24px;margin:16px 0}.setting-card p{line-height:1.8;color:var(--muted);overflow-wrap:anywhere}.setting-card h3{margin:14px 0}.setting-card label{display:flex;justify-content:space-between;align-items:center;gap:20px;padding:18px 0;border-bottom:1px solid var(--line)}.setting-card button{margin:8px 8px 8px 0}.setting-card input[type=checkbox]{width:20px;height:20px;accent-color:var(--accent)}select,input[type=search]{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:10px;padding:12px;font:inherit}#settings-search{width:100%}.downloads-tools{display:flex;gap:12px;margin:12px 0 28px;flex-wrap:wrap}.downloads-tools input{flex:1;min-width:150px}.download-item{max-width:900px;margin:12px auto}.downloads-heading{margin-bottom:20px}.hide-bookmarks .bookmark-bar{visibility:hidden}.tab.pinned{max-width:130px}.panel[data-panel=settings]~#page-preview{display:none}
+.settings-layout{display:grid;grid-template-columns:210px 1fr;gap:48px}.settings-nav{display:flex;flex-direction:column;gap:8px;align-items:stretch}.settings-nav h1{font-size:28px;margin:0 0 20px}.settings-nav button{text-align:left;padding:13px 16px;color:var(--muted)}.settings-nav button[aria-current=true]{background:var(--raised);color:var(--accent)}.settings-body{max-width:760px}.settings-body h2{font-size:23px;margin:28px 0 20px}.setting-card{border:1px solid var(--line);background:var(--panel);border-radius:18px;padding:24px;margin:16px 0}.setting-card p{line-height:1.8;color:var(--muted);overflow-wrap:anywhere}.setting-card h3{margin:14px 0}.setting-card label{display:flex;justify-content:space-between;align-items:center;gap:20px;padding:18px 0;border-bottom:1px solid var(--line)}.setting-card button{margin:8px 8px 8px 0}.setting-card input[type=checkbox]{width:20px;height:20px;accent-color:var(--accent)}select,input[type=search]{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:10px;padding:12px;font:inherit}#settings-search{width:100%}.downloads-tools{display:flex;gap:12px;margin:12px 0 28px;flex-wrap:wrap}.downloads-tools input{flex:1;min-width:150px}.download-item{max-width:900px;margin:12px auto}.downloads-heading{margin-bottom:20px}.hide-bookmarks .bookmark-bar>:not(#find-bar){visibility:hidden}.tab.pinned{max-width:130px}.panel[data-panel=settings]~#page-preview{display:none}
 @media(max-width:850px){.settings-layout{grid-template-columns:160px 1fr;gap:20px}.panel[data-panel=settings] .panel-content,.panel[data-panel=downloads] .panel-content{padding:20px}.setting-card{padding:16px}}
+
+/* Tab icons */
+.tab-icon{width:14px;height:14px;border-radius:3px;object-fit:contain;flex-shrink:0}
+/* Find in page, in the bookmarks bar row */
+.finding .bookmark-bar>:not(#find-bar){display:none}
+#find-bar{display:flex;align-items:center;gap:6px;margin-left:auto;height:24px;background:var(--bg);border:1px solid var(--accent);border-radius:8px;padding:0 4px 0 9px;box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 10%,transparent)}
+#find-bar>svg{width:12px;height:12px;color:var(--accent)}
+#find-input{width:220px;background:none;border:0;outline:none;color:var(--ink);font-size:11px}
+#find-input::placeholder{color:var(--muted)}
+#find-count{font-size:9px;color:var(--muted);min-width:58px;text-align:right;white-space:nowrap}
+#find-bar button{padding:3px;border-radius:6px}#find-bar button svg{width:13px;height:13px}
+/* HN VPN */
+.vpn-toggle{position:relative}
+#vpn-dot{position:absolute;right:5px;top:5px;width:7px;height:7px;border-radius:50%;background:#5fae7b;border:1.5px solid var(--panel);box-shadow:0 0 0 0 #5fae7b88}
+.vpn-toggle.on{color:#5fae7b}
+.bookmark-bar button svg{width:12px;height:12px}#bookmark-vpn.on{color:#5fae7b}
+.vpn-hero{text-align:center;padding:6px 0 18px}
+.vpn-power{width:96px;height:96px;border-radius:50%;margin:4px auto 18px;display:grid;place-items:center;background:var(--bg);border:1.5px solid var(--line);color:var(--accent);box-shadow:0 0 0 7px color-mix(in srgb,var(--accent) 7%,transparent)}
+.vpn-power svg{width:36px;height:36px;stroke-width:2}
+.vpn-power:hover:not(:disabled):not([aria-pressed=true]){border-color:var(--accent);background:var(--raised)}
+.vpn-power[aria-pressed=true]{background:linear-gradient(140deg,#5514b4,#3e9ba3);border-color:transparent;color:#fff;box-shadow:0 0 0 7px #5fae7b2e,0 14px 34px #5514b455}
+.vpn-power:disabled{opacity:.45}
+.vpn-hero[data-state=on] .account-tag{color:#5fae7b}
+.vpn-hero h1{margin:0 0 6px}.vpn-hero p{font-size:11px;margin:0 auto;max-width:280px}
+.vpn-chip{display:inline-flex;align-items:center;gap:6px;margin-top:12px;font-size:9px;font-weight:650;padding:5px 10px;border-radius:999px;background:var(--raised);color:var(--muted)}
+.vpn-chip[data-good=true]{color:#5fae7b;background:color-mix(in srgb,#5fae7b 14%,transparent)}
+.vpn-chip::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}
+.vpn-step{display:flex;gap:13px;background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px;text-align:left}
+.vpn-step-number{width:26px;height:26px;border-radius:50%;background:var(--accent);color:var(--bg);display:grid;place-items:center;font-weight:750;font-size:11px;flex-shrink:0}
+.vpn-step h2{font-size:13px;margin:3px 0 4px;letter-spacing:-.01em}.vpn-step p{font-size:10px;margin:0 0 12px;line-height:1.7}.vpn-step>div{flex:1;min-width:0}
+.vpn-step .text-button{display:block;margin:8px auto 0}
+.vpn-auto{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:4px 2px 14px;font-size:11px}
+.vpn-auto small{display:block;color:var(--muted);font-size:9px;margin-top:3px}
+.vpn-auto input{width:18px;height:18px;accent-color:var(--accent)}
+.vpn-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;align-items:center}
+.vpn-actions .secondary{grid-column:1/-1;display:flex;align-items:center;justify-content:center;gap:7px;padding:10px 11px}
+.vpn-actions .text-button{margin:0;justify-self:start}.vpn-actions .text-button+.text-button{justify-self:end}.vpn-power[aria-pressed=true]:hover{filter:brightness(1.08)}
+@media(prefers-reduced-motion:no-preference){
+ #vpn-dot{animation:vpn-pulse 2.4s ease-out infinite}
+ .vpn-power.busy svg{animation:spin 1.2s linear infinite}
+ .vpn-power{transition:background .25s,box-shadow .3s,border-color .2s,color .2s}
+ #find-bar{animation:content-in .16s ease-out}
+ .tab-icon{animation:fade-in .2s}
+ @keyframes vpn-pulse{0%{box-shadow:0 0 0 0 #5fae7b88}70%{box-shadow:0 0 0 6px #5fae7b00}100%{box-shadow:0 0 0 0 #5fae7b00}}
+}
