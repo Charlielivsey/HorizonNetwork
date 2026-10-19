@@ -1,4 +1,5 @@
 'use strict';
+const{siteShortcut}=require('./sites.cjs');
 const THEMES=['midnight-lavender','daylight','deep-ocean','forest','rose'];
 const HOME='hn-browser://start/';
 function address(value){
@@ -8,6 +9,7 @@ function address(value){
  let url;try{url=new URL(/^https?:\/\//i.test(input)?input:'https://'+input);}catch{}
  if(url&&/^https?:$/.test(url.protocol)&&!url.username&&!url.password&&(!/\s/.test(input))&&(url.hostname.includes('.')||url.hostname==='localhost'||url.hostname.includes(':')))return url.href;
  if(/^https?:\/\//i.test(input))throw Error('That website address is not valid.');
+ const shortcut=siteShortcut(input);if(shortcut)return shortcut;
  return 'https://www.google.com/search?q='+encodeURIComponent(input);
 }
 function webURL(value){try{const u=new URL(value);return ['http:','https:'].includes(u.protocol)&&!u.username&&!u.password;}catch{return false;}}

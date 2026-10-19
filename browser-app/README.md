@@ -4,6 +4,8 @@ A Chromium browser built with Electron, for macOS (Apple silicon and Intel) and 
 
 ## Included
 
+- HN site shortcuts in both search boxes: names such as “staff portal”, “wiki” and “Horizon Development” open the canonical site. Case, spaces, common one-character typos/transpositions (including “staff portak”) and phrases such as “go to staff portal” are recognised. Ambiguous/unrelated text still searches the web; explicit URLs are preserved. The fixed public-site list lives in `src/sites.cjs` and is tested against website control’s catalog.
+- Downloads manager in the toolbar and browser menu: live progress, speed/size, pause/resume, cancel, retry, reveal saved files and clear finished history. Save dialogs remain native. History is private to this device; clearing it keeps the files. Interrupted transfers after an app restart can be retried. Resume support depends on the source server; Electron may restart non-resumable transfers.
 - Real Chromium tabs, back/forward, reload/stop, address/search bar, new-tab page, per-device browsing cookies and a native save dialog for downloads.
 - **Midnight Lavender** by default. Daylight, Deep Ocean, Forest and Rose Quartz can be chosen in the toolbar; the theme is remembered on this device.
 - Integrated title bar with native macOS/Windows window controls, draggable tab strip, animated menus and new-tab page, keyboard navigation and reduced-motion support.
@@ -30,7 +32,7 @@ npm ci
 npm start
 ```
 
-`npm test` runs URL and native sign-in tests. `npm run test:desktop` launches a real Electron app through Playwright with a temporary browser profile. Linux tests need a graphical display or `xvfb-run -a npm run test:desktop`; the VPS does not run a public browser GUI. `npm run icons` renders the approved existing HN favicon to app icons. Build with `npm run build:mac` on macOS or `npm run build:win` on Windows.
+`npm test` runs URL and native sign-in tests. `npm run test:desktop` launches a real Electron app through Playwright with a temporary browser profile. The second desktop test streams real downloads through Electron and tests both search boxes with isolated website fixtures. Linux tests need a graphical display or `xvfb-run -a npm run test:desktop`; the VPS does not run a public browser GUI. `npm run icons` renders the approved existing HN favicon to app icons. Build with `npm run build:mac` on macOS or `npm run build:win` on Windows.
 
 The GitHub Actions workflow uses native macOS and Windows runners. All tests and all platform builds must pass before it creates a `browser-vVERSION-RUN` preview release with the installers and SHA256SUMS.txt. The downloads site discovers those releases without GitHub credentials. No binaries or secrets are committed to the source repository.
 
