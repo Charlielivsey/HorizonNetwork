@@ -1,0 +1,21 @@
+{
+ "tag": "browser-v0.6.1-16",
+ "publishedAt": "2026-10-19T13:57:41.944Z",
+ "assets": {
+  "mac-arm64": {
+   "name": "HN-Browser-0.6.1-mac-arm64.dmg",
+   "size": 128118734,
+   "sha256": "ddcec06603e8321d03784eb11cf9a5b9041fbf65375c821acefbf8f0e3cbac01"
+  },
+  "mac-arm64-zip": {
+   "name": "HN-Browser-0.6.1-mac-arm64.zip",
+   "size": 128192820,
+   "sha256": "d56dc6b7b668178941b3df81b1f6fc88d434c167007aaf19fdd50e6b2a50a310"
+  },
+  "windows-x64": {
+   "name": "HN-Browser-0.6.1-win-x64.exe",
+   "size": 111916521,
+   "sha256": "f73a552d2e68d75f065e4c4a126ba4a2e7097d16916d249fa4b3daf2d410fcea"
+  }
+ }
+}
