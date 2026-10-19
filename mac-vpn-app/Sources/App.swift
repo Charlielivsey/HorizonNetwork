@@ -1151,8 +1151,8 @@ struct MenuView: View {
                 model.connected ? Theme.heroOn : Theme.heroOff
                 Glow(color: Theme.pink.opacity(model.connected ? 0.25 : 0.08), size: 180).offset(x: 120, y: -40)
             }
-            .clipped()
         )
+        .clipped()
         .environment(\.colorScheme, .dark)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: model.connected)
     }
@@ -1229,7 +1229,7 @@ enum Snapshots {
                 shoot(MainView().environmentObject(model), size: size, dark: dark, to: folder.appendingPathComponent("\(name)-\(dark ? "dark" : "light").png"))
             }
             let menuModel = sample()
-            shoot(MenuView().environmentObject(menuModel), size: CGSize(width: 320, height: 300), dark: dark, to: folder.appendingPathComponent("menu-\(dark ? "dark" : "light").png"))
+            shoot(MenuView().environmentObject(menuModel), size: CGSize(width: 320, height: 290), dark: dark, to: folder.appendingPathComponent("menu-\(dark ? "dark" : "light").png"))
         }
     }
 
