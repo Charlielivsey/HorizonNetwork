@@ -156,7 +156,7 @@ struct Orb: View {
     @State private var breathe = false
     var body: some View {
         ZStack {
-            Circle().fill((on ? Theme.violet : Theme.purple).opacity(on ? 0.55 : 0.18)).frame(width: size * 0.9, height: size * 0.9).blur(radius: size * 0.22)
+            Glow(color: (on ? Theme.violet : Theme.purple).opacity(on ? 0.6 : 0.22), size: size * 1.3)
                 .scaleEffect(breathe && on && !reduceMotion ? 1.12 : 0.92)
             Circle().stroke(Color.white.opacity(0.06), lineWidth: 1).frame(width: size, height: size)
             Circle().stroke(Color.white.opacity(on ? 0.09 : 0.05), lineWidth: 1).frame(width: size * 0.86, height: size * 0.86)
@@ -192,8 +192,8 @@ struct WelcomeView: View {
         HStack(spacing: 0) {
             ZStack {
                 Theme.heroOn
-                Circle().fill(Theme.pink.opacity(0.18)).frame(width: 260).blur(radius: 70).offset(x: -90, y: -160)
-                Circle().fill(Theme.teal.opacity(0.18)).frame(width: 240).blur(radius: 70).offset(x: 110, y: 170)
+                Glow(color: Theme.pink.opacity(0.18), size: 260).offset(x: -90, y: -160)
+                Glow(color: Theme.teal.opacity(0.18), size: 240).offset(x: 110, y: 170)
                 VStack(spacing: 26) {
                     Orb(on: true, busy: false, size: 220)
                     VStack(spacing: 8) {
@@ -285,7 +285,7 @@ struct SignedInView: View {
             Sidebar()
             Rectangle().fill(Theme.border.opacity(0.7)).frame(width: 1)
             ZStack(alignment: .topTrailing) {
-                Circle().fill(Theme.violet.opacity(0.10)).frame(width: 420).blur(radius: 120).offset(x: 140, y: -160).allowsHitTesting(false)
+                Glow(color: Theme.violet.opacity(0.10), size: 420).offset(x: 140, y: -160).allowsHitTesting(false)
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
                         notices
@@ -591,8 +591,8 @@ struct ConnectCard: View {
         .background(
             ZStack {
                 RoundedRectangle(cornerRadius: 24, style: .continuous).fill(model.connected ? Theme.heroOn : Theme.heroOff)
-                Circle().fill(Theme.pink.opacity(model.connected ? 0.22 : 0.06)).frame(width: 260).blur(radius: 80).offset(x: 260, y: -90)
-                Circle().fill(Theme.teal.opacity(model.connected ? 0.22 : 0.05)).frame(width: 220).blur(radius: 80).offset(x: -220, y: 110)
+                Glow(color: Theme.pink.opacity(model.connected ? 0.22 : 0.06), size: 260).offset(x: 260, y: -90)
+                Glow(color: Theme.teal.opacity(model.connected ? 0.22 : 0.05), size: 220).offset(x: -220, y: 110)
             }
             .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         )
@@ -738,7 +738,7 @@ struct SSHPage: View {
             .background(
                 ZStack {
                     RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Theme.night)
-                    Circle().fill(Theme.violet.opacity(0.16)).frame(width: 260).blur(radius: 80).offset(x: 240, y: 60)
+                    Glow(color: Theme.violet.opacity(0.16), size: 260).offset(x: 240, y: 60)
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             )
@@ -826,7 +826,7 @@ struct ProfilePage: View {
             VStack(alignment: .leading, spacing: 0) {
                 ZStack {
                     Theme.heroOn
-                    Circle().fill(Theme.pink.opacity(0.25)).frame(width: 200).blur(radius: 60).offset(x: 220, y: -20)
+                    Glow(color: Theme.pink.opacity(0.25), size: 200).offset(x: 220, y: -20)
                     HNStripe().frame(height: 3).frame(maxHeight: .infinity, alignment: .bottom)
                 }
                 .frame(height: 96)
@@ -1026,7 +1026,7 @@ struct MenuView: View {
         VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .topLeading) {
                 (model.connected ? Theme.heroOn : Theme.heroOff)
-                Circle().fill(Theme.pink.opacity(model.connected ? 0.25 : 0.06)).frame(width: 160).blur(radius: 50).offset(x: 180, y: -40)
+                Glow(color: Theme.pink.opacity(model.connected ? 0.25 : 0.06), size: 160).offset(x: 180, y: -40)
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(spacing: 8) {
                         AppMark(size: 24)
@@ -1144,5 +1144,16 @@ enum Snapshots {
         host.cacheDisplay(in: host.bounds, to: rep)
         try? rep.representation(using: .png, properties: [:])?.write(to: url)
         window.orderOut(nil)
+    }
+}
+
+/// A soft round glow (a radial gradient, so it looks the same everywhere, screenshots included).
+struct Glow: View {
+    let color: Color
+    let size: CGFloat
+    var body: some View {
+        RadialGradient(colors: [color, color.opacity(0)], center: .center, startRadius: 0, endRadius: size / 2)
+            .frame(width: size, height: size)
+            .allowsHitTesting(false)
     }
 }

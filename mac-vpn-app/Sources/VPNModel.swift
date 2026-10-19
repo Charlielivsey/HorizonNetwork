@@ -68,7 +68,7 @@ final class VPNModel: ObservableObject {
         Task { await checkStatus() }
     }
 
-    var wireGuardInstalled: Bool { Paths.wireGuardInstalled }
+    var wireGuardInstalled: Bool { preview || Paths.wireGuardInstalled }
 
     // MARK: Signing in
 
