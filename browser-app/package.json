@@ -1,6 +1,6 @@
 {
   "name": "hn-group-browser",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "private": true,
   "description": "HN Browser \u2014 a Chromium-powered browser with HN Group account sign-in",
   "author": "HN Group",

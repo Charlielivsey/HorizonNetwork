@@ -27,7 +27,8 @@ struct HNGroupVPNApp: App {
         MenuBarExtra {
             MenuView().environmentObject(model)
         } label: {
-            Image(systemName: model.connected ? "lock.shield.fill" : "lock.shield")
+            // Connected: a filled shield with a tick. Off: an outline shield. Working: a half-filled shield.
+            Image(systemName: model.busy ? "shield.lefthalf.filled" : model.connected ? "checkmark.shield.fill" : "shield")
                 .accessibilityLabel(model.connected ? "HN Secure Network: connected" : "HN Secure Network: not connected")
         }
         .menuBarExtraStyle(.window)
@@ -1070,69 +1071,116 @@ struct SettingsPage: View {
 struct MenuView: View {
     @EnvironmentObject var model: VPNModel
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    static let width: CGFloat = 320
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ZStack(alignment: .topLeading) {
-                (model.connected ? Theme.heroOn : Theme.heroOff)
-                Glow(color: Theme.pink.opacity(model.connected ? 0.25 : 0.06), size: 160).offset(x: 180, y: -40)
-                VStack(alignment: .leading, spacing: 14) {
-                    HStack(spacing: 8) {
-                        AppMark(size: 24)
-                        Text("Secure Network").font(Theme.font(13, .heavy)).foregroundStyle(.white)
-                        Spacer()
-                        if model.stage == .ready, let user = model.user { AvatarView(image: model.avatar, name: user.displayName, size: 24) }
-                    }
-                    if model.stage == .ready && model.isSetUp {
-                        HStack(spacing: 16) {
-                            Button { Task { await model.toggle() } } label: { Orb(on: model.connected, busy: model.busy, size: 86) }
-                                .buttonStyle(.plain).disabled(model.busy)
-                                .accessibilityLabel(model.connected ? "Disconnect" : "Connect")
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(model.connected ? "Protected" : "Not protected").font(Theme.font(19, .heavy)).foregroundStyle(.white)
-                                Text(model.connected ? (model.ip?.ip ?? "Through HN Group") : "Click to connect").font(Theme.font(12)).foregroundStyle(.white.opacity(0.65))
-                                if model.connected { Text("United Kingdom").font(Theme.font(11, .semibold)).foregroundStyle(Theme.green) }
-                            }
-                        }
-                    } else {
-                        Text(model.stage == .ready ? "Finish setting up this Mac in the app." : "Sign in to use the VPN.")
-                            .font(Theme.font(13)).foregroundStyle(.white.opacity(0.75))
-                    }
-                }
-                .padding(14)
-            }
-            .frame(height: model.stage == .ready && model.isSetUp ? 150 : 100)
-            .clipped()
+        VStack(spacing: 0) {
+            header
             HNStripe().frame(height: 3)
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(spacing: 8) {
                 if let release = model.update {
-                    Button { open(.settings) } label: { Label("Version \(release.version) is ready to install", systemImage: "arrow.down.circle.fill") }
-                        .buttonStyle(.plain).foregroundStyle(Theme.accent).font(Theme.font(12, .bold))
+                    Button { open(.settings) } label: {
+                        Label("Version \(release.version) is ready to install", systemImage: "arrow.down.circle.fill")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.plain).foregroundStyle(Theme.accent).font(Theme.font(12, .bold))
+                    .padding(.bottom, 2)
                 }
                 if model.stage == .ready && model.isSetUp {
-                    Button { open(.ssh) } label: { Label("SSH to the server", systemImage: "terminal") }.buttonStyle(HNButtonStyle(primary: false, wide: true))
+                    Button { open(.ssh) } label: { HStack(spacing: 8) { Image(systemName: "terminal"); Text("SSH to the server") } }
+                        .buttonStyle(HNButtonStyle(primary: false, wide: true))
                 }
-                Button("Open Secure Network") { open(nil) }.buttonStyle(HNButtonStyle(wide: true))
+                Button { open(nil) } label: { Text("Open Secure Network") }.buttonStyle(HNButtonStyle(wide: true))
             }
             .padding(14)
-            Divider()
+            Rectangle().fill(Theme.border.opacity(0.8)).frame(height: 1)
             HStack {
                 Button("VPN website") { NSWorkspace.shared.open(API.base) }.buttonStyle(.plain).foregroundStyle(Theme.accent)
                 Spacer()
                 Button("Quit") { NSApplication.shared.terminate(nil) }.buttonStyle(.plain).keyboardShortcut("q")
             }
             .font(Theme.font(12, .semibold))
-            .padding(.horizontal, 14).padding(.vertical, 10)
+            .padding(.horizontal, 16).padding(.vertical, 11)
         }
-        .frame(width: 310)
+        // A fixed width and the content's own height, so the menu bar window is always laid out the same way.
+        .frame(width: Self.width)
+        .fixedSize(horizontal: false, vertical: true)
         .background(Theme.background)
         .foregroundStyle(Theme.text)
+    }
+
+    /// The status: the HN Group logo, who's signed in, and a power switch with the connection details.
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 8) {
+                HNWordmark(height: 22)
+                Spacer(minLength: 8)
+                if model.stage == .ready, let user = model.user {
+                    AvatarView(image: model.avatar, name: user.displayName, size: 26)
+                        .overlay(Circle().strokeBorder(Color.white.opacity(0.25), lineWidth: 1))
+                }
+            }
+            if model.stage == .ready && model.isSetUp {
+                HStack(spacing: 14) {
+                    Button { Task { await model.toggle() } } label: { PowerSwitch(on: model.connected, busy: model.busy) }
+                        .buttonStyle(.plain).disabled(model.busy)
+                        .accessibilityLabel(model.connected ? "Disconnect" : "Connect")
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(model.busy ? "Working…" : model.connected ? "Protected" : "Not protected")
+                            .font(Theme.font(18, .heavy)).foregroundStyle(.white)
+                        Text(model.connected ? (model.ip?.ip ?? "Through HN Group") : "Click to connect")
+                            .font(Theme.font(12)).foregroundStyle(.white.opacity(0.7)).lineLimit(1)
+                        if model.connected {
+                            Label("United Kingdom", systemImage: "mappin.circle.fill")
+                                .font(Theme.font(11, .semibold)).foregroundStyle(Theme.green)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+            } else {
+                Text(model.stage == .ready ? "Finish setting up this Mac in the app." : "Sign in to use the VPN.")
+                    .font(Theme.font(13)).foregroundStyle(.white.opacity(0.8))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(16)
+        .frame(width: Self.width, alignment: .leading)
+        .background(
+            ZStack {
+                model.connected ? Theme.heroOn : Theme.heroOff
+                Glow(color: Theme.pink.opacity(model.connected ? 0.25 : 0.08), size: 180).offset(x: 120, y: -40)
+            }
+            .clipped()
+        )
+        .environment(\.colorScheme, .dark)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: model.connected)
     }
 
     private func open(_ section: VPNModel.Section?) {
         if let section = section { model.show(section) }
         openWindow(id: "main")
         NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
+/// The menu's compact power switch: a glowing round button that fills with the brand colour when on.
+struct PowerSwitch: View {
+    let on: Bool
+    let busy: Bool
+    @State private var hover = false
+    var body: some View {
+        ZStack {
+            Circle().fill(on ? AnyShapeStyle(Theme.brand) : AnyShapeStyle(Color.white.opacity(0.08)))
+            Circle().strokeBorder(on ? AnyShapeStyle(Theme.ring) : AnyShapeStyle(Color.white.opacity(0.22)), lineWidth: 2.5)
+            if busy { ProgressView().controlSize(.small).tint(.white) }
+            else { Image(systemName: "power").font(.system(size: 20, weight: .bold)).foregroundStyle(on ? Color.white : Color.white.opacity(0.8)) }
+        }
+        .frame(width: 58, height: 58)
+        .shadow(color: on ? Theme.violet.opacity(0.6) : .clear, radius: 10)
+        .scaleEffect(hover ? 1.05 : 1)
+        .animation(.easeOut(duration: 0.15), value: hover)
+        .onHover { hover = $0 }
     }
 }
 
@@ -1181,7 +1229,7 @@ enum Snapshots {
                 shoot(MainView().environmentObject(model), size: size, dark: dark, to: folder.appendingPathComponent("\(name)-\(dark ? "dark" : "light").png"))
             }
             let menuModel = sample()
-            shoot(MenuView().environmentObject(menuModel), size: CGSize(width: 310, height: 330), dark: dark, to: folder.appendingPathComponent("menu-\(dark ? "dark" : "light").png"))
+            shoot(MenuView().environmentObject(menuModel), size: CGSize(width: 320, height: 300), dark: dark, to: folder.appendingPathComponent("menu-\(dark ? "dark" : "light").png"))
         }
     }
 

@@ -24,25 +24,25 @@ const{_electron:electron}=require('playwright'),assert=require('node:assert/stri
  const mod=process.platform==='darwin'?'Meta':'Control';
  try{
   app=await electron.launch({executablePath:require('electron'),args:[...((process.getuid?.()===0||process.env.CI)?['--no-sandbox']:[]),fixture],env:{...process.env,HN_BROWSER_TEST_PROFILE:profile,HN_BROWSER_VPN_FAKE:'1'}});
-  const page=await app.firstWindow();await page.locator('#account-pin').waitFor({state:'visible'});await page.waitForFunction(()=>document.activeElement.id==='account-pin');await page.keyboard.type('582947');await page.locator('#overlay').waitFor({state:'hidden'});
+  const page=await app.firstWindow();let top=await require('./layers.cjs').overlayOf(app);await top.locator('#account-pin').waitFor({state:'visible'});await top.waitForFunction(()=>document.activeElement.id==='account-pin');await top.keyboard.type('582947');await top.locator('#overlay').waitFor({state:'hidden'});
   // HN VPN: signed in already (remembered), so the next step is setting up this computer.
-  await page.locator('#vpn-button').click();await page.locator('#vpn-panel').waitFor({state:'visible'});
-  await page.waitForFunction(()=>document.querySelector('#vpn-step-title').textContent==='Set up this computer');
-  assert.equal(await page.locator('#vpn-user').textContent(),'VPN Person');assert.ok(await page.locator('#vpn-power').isDisabled());
+  await page.locator('#vpn-button').click();await top.locator('#vpn-panel').waitFor({state:'visible'});
+  await top.waitForFunction(()=>document.querySelector('#vpn-step-title').textContent==='Set up this computer');
+  assert.equal(await top.locator('#vpn-user').textContent(),'VPN Person');assert.ok(await top.locator('#vpn-power').isDisabled());
   const state=await page.evaluate(()=>window.browser.state());assert.ok(!JSON.stringify(state).includes(vpnToken));assert.ok(!JSON.stringify(state).includes(token));
-  await page.locator('#vpn-step-button').click();await page.waitForFunction(()=>document.querySelector('#vpn-step').hidden);
-  assert.match(await page.locator('#vpn-device').textContent(),/HN Browser on .* · 10\.88\.0\.7/);
-  await page.locator('#vpn-power').click();await page.waitForFunction(()=>document.querySelector('#vpn-title').textContent==='Connected');
-  assert.equal(await page.locator('#vpn-power').getAttribute('aria-pressed'),'true');await page.locator('#vpn-dot').waitFor({state:'visible'});await page.waitForFunction(()=>document.querySelector('#vpn-chip').textContent.startsWith('Server reachable'));
-  fs.mkdirSync(path.resolve(__dirname,'../.test-results'),{recursive:true});await page.screenshot({path:path.resolve(__dirname,'../.test-results/vpn.png')});
-  await page.locator('#vpn-panel input[data-preference=vpnAutoConnect]').check();await page.waitForFunction(()=>window.browser.state().then(s=>s.preferences.vpnAutoConnect));assert.equal(JSON.parse(fs.readFileSync(path.join(profile,'preferences.json'))).vpnAutoConnect,true);
-  await page.locator('#vpn-power').click();await page.waitForFunction(()=>document.querySelector('#vpn-title').textContent==='Not connected');assert.ok(await page.locator('#vpn-dot').isHidden());
+  await top.locator('#vpn-step-button').click();await top.waitForFunction(()=>document.querySelector('#vpn-step').hidden);
+  assert.match(await top.locator('#vpn-device').textContent(),/HN Browser on .* · 10\.88\.0\.7/);
+  await top.locator('#vpn-power').click();await top.waitForFunction(()=>document.querySelector('#vpn-title').textContent==='Connected');
+  assert.equal(await top.locator('#vpn-power').getAttribute('aria-pressed'),'true');await page.locator('#vpn-dot').waitFor({state:'visible'});await top.waitForFunction(()=>document.querySelector('#vpn-chip').textContent.startsWith('Server reachable'));
+  fs.mkdirSync(path.resolve(__dirname,'../.test-results'),{recursive:true});await top.screenshot({path:path.resolve(__dirname,'../.test-results/vpn.png')});
+  await top.locator('#vpn-panel input[data-preference=vpnAutoConnect]').check();await page.waitForFunction(()=>window.browser.state().then(s=>s.preferences.vpnAutoConnect));assert.equal(JSON.parse(fs.readFileSync(path.join(profile,'preferences.json'))).vpnAutoConnect,true);
+  await top.locator('#vpn-power').click();await top.waitForFunction(()=>document.querySelector('#vpn-title').textContent==='Not connected');assert.ok(await page.locator('#vpn-dot').isHidden());
   // The menu shows the VPN status, and Settings has its own section.
-  await page.keyboard.press('Escape');await page.locator('#browser-menu').click();await page.waitForFunction(()=>document.querySelector('#menu-vpn-status').textContent==='Not connected');await page.keyboard.press('Escape');
+  await top.keyboard.press('Escape');await page.locator('#browser-menu').click();await top.waitForFunction(()=>document.querySelector('#menu-vpn-status').textContent==='Not connected');await top.keyboard.press('Escape');
   // Signing out of the VPN leaves sign-in as the next step; signing in opens HN Auth via the VPN site in a tab.
-  await page.locator('#vpn-button').click();await page.locator('#vpn-sign-out').click();await page.waitForFunction(()=>document.querySelector('#vpn-step-title').textContent==='Sign in to the HN VPN');assert.ok(!fs.existsSync(path.join(profile,'vpn.enc')));
+  await page.locator('#vpn-button').click();await top.locator('#vpn-sign-out').click();await top.waitForFunction(()=>document.querySelector('#vpn-step-title').textContent==='Sign in to the HN VPN');assert.ok(!fs.existsSync(path.join(profile,'vpn.enc')));
   await app.evaluate(({session})=>{globalThis.vpnRequests=[];session.fromPartition('persist:hn-browser-pages').webRequest.onBeforeRequest({urls:['https://vpn.hngroup.org.uk/*']},(details,callback)=>{globalThis.vpnRequests.push(details.url);callback({cancel:true});});});
-  await page.locator('#vpn-step-button').click();await page.locator('#overlay').waitFor({state:'hidden'});
+  await top.locator('#vpn-step-button').click();await top.locator('#overlay').waitFor({state:'hidden'});
   let opened='';for(let i=0;i<50&&!opened;i++){opened=(await app.evaluate(()=>globalThis.vpnRequests))[0]||'';if(!opened)await page.waitForTimeout(100);}
   assert.match(opened,/^https:\/\/vpn\.hngroup\.org\.uk\/auth\/login\?app=[a-f0-9]{64}&loopback=[0-9]+$/);
   assert.equal((await page.evaluate(()=>window.browser.state())).vpn.signingIn,true);
@@ -50,11 +50,11 @@ const{_electron:electron}=require('playwright'),assert=require('node:assert/stri
   // Find in page, tab icons and shortcuts on an ordinary website.
   await page.locator('#address').fill(site);await page.keyboard.press('Enter');await page.waitForFunction(()=>[...document.querySelectorAll('.tab-title')].some(t=>t.textContent.includes('Find fixture')));
   await page.waitForFunction(()=>{const i=document.querySelector('.tab.active .tab-icon');return i&&!i.hidden&&i.src.startsWith('data:image/png');});
-  await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].webContents.focus());await page.keyboard.press(mod+'+f');await page.locator('#find-bar').waitFor({state:'visible'});await page.waitForFunction(()=>document.activeElement.id==='find-input');
-  await page.keyboard.type('needle');await page.waitForFunction(()=>document.querySelector('#find-count').textContent==='1 of 3');
-  await page.keyboard.press('Enter');await page.waitForFunction(()=>document.querySelector('#find-count').textContent==='2 of 3');
-  await page.keyboard.press('Shift+Enter');await page.waitForFunction(()=>document.querySelector('#find-count').textContent==='1 of 3');
-  await page.keyboard.press('Escape');await page.locator('#find-bar').waitFor({state:'hidden'});
+  await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].webContents.focus());await page.keyboard.press(mod+'+f');await top.locator('#find-bar').waitFor({state:'visible'});await top.waitForFunction(()=>document.activeElement.id==='find-input');
+  await top.keyboard.type('needle');await top.waitForFunction(()=>document.querySelector('#find-count').textContent==='1 of 3');
+  await top.keyboard.press('Enter');await top.waitForFunction(()=>document.querySelector('#find-count').textContent==='2 of 3');
+  await top.keyboard.press('Shift+Enter');await top.waitForFunction(()=>document.querySelector('#find-count').textContent==='1 of 3');
+  await top.keyboard.press('Escape');await top.locator('#find-bar').waitFor({state:'hidden'});
   const count=()=>page.evaluate(()=>document.querySelectorAll('.tab').length),activeIndex=()=>page.evaluate(()=>[...document.querySelectorAll('.tab')].findIndex(t=>t.classList.contains('active')));
   const before=await count();await page.keyboard.press(mod+'+t');await page.waitForFunction(n=>document.querySelectorAll('.tab').length===n+1,before);
   await page.keyboard.press(mod+'+1');await page.waitForFunction(()=>document.querySelector('.tab').classList.contains('active'));

@@ -250,3 +250,35 @@ body.on-hn #connection{display:none}
  @keyframes badge-in{from{opacity:0;transform:translateX(-6px) scale(.9)}to{opacity:1;transform:none}}
  .tab{transition:background .18s,color .18s,height .2s var(--out),box-shadow .2s}
 }
+
+/* ---------- 0.8.1: layers and smoothness ---------- */
+/* The base layer is the toolbar; menus, the find box and messages are drawn by the overlay layer, a
+   transparent copy of this page laid over the live website. */
+html[data-layer=base] #overlay,html[data-layer=base] #notice,html[data-layer=base] #find-bar{display:none!important}
+html[data-layer=overlay],html[data-layer=overlay] body{background:transparent!important;overflow:hidden}
+html[data-layer=overlay] .browser-top{display:none}
+html[data-layer=overlay] #overlay{inset:0}
+html[data-layer=overlay] #backdrop{inset:0}
+html[data-layer=overlay] .panel{top:10px;max-height:calc(100vh - 20px)}
+html[data-layer=overlay] .panel[data-panel=settings],html[data-layer=overlay] .panel[data-panel=downloads],html[data-layer=overlay] .panel[data-panel=history],html[data-layer=overlay] .panel[data-panel=bookmarks]{inset:0;max-height:none;border:0;box-shadow:none}
+/* Find in page: a small floating box at the top right of the page. */
+#find-bar{position:fixed;top:10px;right:12px;margin:0;height:40px;width:392px;max-width:calc(100vw - 24px);padding:0 6px 0 14px;gap:8px;background:var(--panel);border:1px solid color-mix(in srgb,var(--line) 70%,var(--accent));border-radius:14px;box-shadow:0 12px 30px #0005,0 2px 8px #0003;z-index:15}
+#find-bar input{flex:1;min-width:0;height:28px;border:0;background:transparent;color:var(--ink);font:inherit;font-size:12px;outline:none}
+#find-count{font-size:10px;color:var(--muted);white-space:nowrap}
+#find-bar button svg{width:14px;height:14px}
+body:has(#overlay:not([hidden])) #find-bar{display:none}
+/* Nothing to blur behind the menus any more (and blurring every frame was slow): solid, crisp panels. */
+#backdrop{backdrop-filter:none;background:#0906114d}
+.panel{backdrop-filter:none;background:color-mix(in srgb,var(--panel) 98%,white)}
+@keyframes panel-pop{from{opacity:0;transform:translateY(-8px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes panel-away{to{opacity:0;transform:translateY(-6px) scale(.98)}}
+/* Pulsing dots and the loading bar move with transforms only, so they don't repaint the toolbar every frame. */
+#vpn-dot,#update-dot{animation:none!important;box-shadow:none}
+#vpn-dot::after,#update-dot::after{content:"";position:absolute;inset:-1px;border-radius:50%;background:inherit;opacity:0}
+@media(prefers-reduced-motion:no-preference){
+ body:not([data-motion=reduced]) #vpn-dot::after{animation:dot-ring 2.4s ease-out 3}
+ body:not([data-motion=reduced]) #update-dot:not([hidden])::after{animation:dot-ring 2.2s ease-out 3}
+ body:not([data-motion=reduced]).page-loading .load-bar{animation:load-slide 1.1s cubic-bezier(.45,0,.55,1) infinite}}
+@keyframes dot-ring{0%{opacity:.6;transform:scale(1)}100%{opacity:0;transform:scale(2.6)}}
+.load-bar{right:auto;width:40%;background-size:100% 100%;will-change:transform;transform:translateX(-100%)}
+@keyframes load-slide{from{transform:translateX(-100%)}to{transform:translateX(250%)}}
