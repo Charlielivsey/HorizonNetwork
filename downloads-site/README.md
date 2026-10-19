@@ -6,7 +6,7 @@ Public site: downloads.hngroup.org.uk · PM2 hn-downloads · loopback 5100. Cach
 cd /root/HorizonNetwork && git pull && sudo bash install.sh
 ```
 
-The page previews all five HN Browser themes, defaulting to Midnight Lavender, and offers macOS Apple-silicon, macOS Intel and Windows x64 installers only after those assets exist. The HN Group logo, Plus Jakarta Sans and favicon are copied into its own public assets.
+The page previews all five HN Browser themes, defaulting to Midnight Lavender, and offers macOS Apple-silicon and Windows x64 installers (Intel Macs are no longer supported) only after those assets exist. The HN Group logo, Plus Jakarta Sans and favicon are copied into its own public assets.
 
 The server polls public releases of the fixed `Charlielivsey/HorizonNetwork` repository every five minutes. It accepts only `browser-vVERSION-RUN` tags and recognised installer names/URLs, preserves a known release if GitHub is unavailable, and streams public GitHub release assets from stable `/download/mac-arm64`, `/download/mac-x64` and `/download/windows-x64` routes. It never accepts an arbitrary URL from a visitor or reads staff data. SHA-256 digests are shown where GitHub supplies them. The first preview installers are not developer-signed/notarised; that status is stated on the page.
 

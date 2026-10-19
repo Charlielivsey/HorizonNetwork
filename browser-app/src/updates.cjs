@@ -4,7 +4,7 @@ const ORIGIN='https://downloads.hngroup.org.uk',MAX_BYTES=400*1024*1024;
 function version(value){const m=/^(\d+)\.(\d+)\.(\d+)(?:-(\d+))?$/.exec(value||'');return m?m.slice(1).map(n=>Number(n||0)):null;}
 function newer(candidate,current){const a=version(candidate),b=version(current);if(!a||!b)return false;for(let i=0;i<4;i++)if(a[i]!==b[i])return a[i]>b[i];return false;}
 function installer(release,platform,arch,current){
- const id=platform==='darwin'&&['arm64','x64'].includes(arch)?'mac-'+arch:platform==='win32'&&arch==='x64'?'windows-x64':null;
+ const id=platform==='darwin'&&arch==='arm64'?'mac-arm64':platform==='win32'&&arch==='x64'?'windows-x64':null;
  const asset=id&&release?.assets?.[id];if(!asset||!newer(release.version,current))return null;
  const v=version(release.version),suffix=platform==='darwin'?'mac-'+arch+'.dmg':'win-x64.exe';
  if(asset.url!=='/download/'+id||asset.name!=='HN-Browser-'+v.slice(0,3).join('.')+'-'+suffix||!/^[a-f0-9]{64}$/.test(asset.sha256)||!Number.isSafeInteger(asset.size)||asset.size<1||asset.size>MAX_BYTES)throw Error('The update information could not be verified.');

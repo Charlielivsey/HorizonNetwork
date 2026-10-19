@@ -1,6 +1,6 @@
 # HN Browser · preview
 
-A Chromium browser built with Electron, for macOS (Apple silicon and Intel) and Windows x64. The browser and installers are separate from the VPS websites. Downloads: https://downloads.hngroup.org.uk.
+A Chromium browser built with Electron, for macOS (Apple silicon) and Windows x64. Intel Macs are no longer supported (the user's decision, 19 October 2026). The browser and installers are separate from the VPS websites. Downloads: https://downloads.hngroup.org.uk.
 
 ## Included
 
