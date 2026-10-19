@@ -9,11 +9,11 @@ import Security
 final class VPNModel: ObservableObject {
     enum Stage { case signIn, waiting, ready }
     enum Section: Hashable { case connection, ssh, profile, settings }
-    /// The VPS's address inside the VPN. Only traffic to it goes through the tunnel (split tunnel).
+    /// The VPS's address inside the VPN (used for SSH). All traffic goes through the tunnel (full tunnel).
     static let serverAddress = "10.88.0.1"
     /// Bumped when this Mac's WireGuard configuration must be fetched and installed again
-    /// (2: split tunnel, only the server's traffic goes through the VPN).
-    static let configVersion = "2"
+    /// (2: split tunnel; 3: full tunnel again, all traffic goes through the VPN).
+    static let configVersion = "3"
     enum UpdateState: Equatable { case idle, checking, upToDate, downloading, installing, failed(String) }
 
     /// One model for the app, so links back from the browser reach it.
@@ -170,7 +170,7 @@ final class VPNModel: ObservableObject {
     }
 
     /// Fetches this Mac's current VPN configuration and installs it (one password prompt), for
-    /// example when the VPN moved to a split tunnel.
+    /// example when the VPN moved between a split and a full tunnel.
     func reconfigure() async {
         guard !busy, let deviceId = Keychain.get("deviceId"), let key = Keychain.get("privateKey") else { return }
         error = nil; busy = true; defer { busy = false }

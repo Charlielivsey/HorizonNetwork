@@ -1,7 +1,7 @@
 # HN Secure Network (macOS)
 
 The HN Group VPN app for Mac, renamed Secure Network: it connects this Mac to HN Group's server over
-the VPN (only traffic to the server, 10.88.0.1, uses it) and opens SSH sessions to the server from its
+the VPN (all of the Mac's traffic goes through it; the server is 10.88.0.1 inside it) and opens SSH sessions to the server from its
 SSH page, with the address and username filled in and only the password asked for.
 
 

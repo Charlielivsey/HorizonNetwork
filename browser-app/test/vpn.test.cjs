@@ -65,3 +65,11 @@ test('the bundled Mac helper matches Secure Network’s, so both apps share one 
  const theirs=path.join(__dirname,'../../mac-vpn-app/Resources/hn-vpn-ctl');if(!fs.existsSync(theirs))return;
  assert.equal(fs.readFileSync(path.join(__dirname,'../src/hn-vpn-ctl'),'utf8'),fs.readFileSync(theirs,'utf8'));
 });
+
+test('a computer set up for the earlier split tunnel is offered an update to the full tunnel',async()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-vpn-test-')),service=fakeService(),vault=memoryVault(),controller=new FakeController(),token=crypto.randomBytes(32).toString('hex');service.tokens.add(token);vault.save(token);
+ service.devices.push({id:'d'.repeat(24),name:'HN Browser on Old-PC',address:'10.88.0.9'});controller.installed='[Interface]\nAllowedIPs = 10.88.0.1/32\n';fs.writeFileSync(path.join(dir,'vpn.json'),JSON.stringify({deviceId:'d'.repeat(24)}));
+ const vpn=new VPN({vault,controller,stateFile:path.join(dir,'vpn.json'),fetcher:service.fetch,origin:'https://vpn.example.test',reach:async()=>true,openTab:async()=>null});
+ try{await vpn.restore();assert.equal(vpn.snapshot().outdated,true);await vpn.setUp();assert.equal(vpn.snapshot().outdated,false);assert.equal(JSON.parse(fs.readFileSync(path.join(dir,'vpn.json'))).configVersion,3);assert.equal(service.devices.length,1);
+ }finally{vpn.cancel();fs.rmSync(dir,{recursive:true,force:true});}
+});

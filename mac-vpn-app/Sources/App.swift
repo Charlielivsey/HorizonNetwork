@@ -187,7 +187,7 @@ struct WelcomeView: View {
                     }
                 } else {
                     Text("Welcome to Secure Network").font(Theme.font(28, .heavy)).fixedSize(horizontal: false, vertical: true)
-                    Text("A private, encrypted link from this Mac to HN Group’s server, and SSH to the server with just your password. Only traffic to the server uses the VPN.")
+                    Text("A private, encrypted link from this Mac to HN Group’s server, and SSH to the server with just your password. All of this Mac’s internet traffic goes through the VPN, privately and encrypted.")
                         .foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true).lineSpacing(3)
                     VStack(alignment: .leading, spacing: 10) {
                         Feature(icon: "lock.fill", text: "Encrypted with WireGuard")
@@ -263,7 +263,7 @@ struct SignedInView: View {
         }
         if model.needsReconfigure {
             Banner(kind: .info, icon: "arrow.triangle.2.circlepath", title: "Finish updating this Mac’s VPN connection",
-                   text: "The VPN now only carries traffic to the HN Group server. macOS will ask for your Mac password once.",
+                   text: "The VPN now carries all of this Mac’s internet traffic again. macOS will ask for your Mac password once.",
                    action: ("Update", { Task { await model.reconfigure() } }), busy: model.busy)
         }
         if model.helperOutdated {
@@ -407,7 +407,7 @@ struct SetupCard: View {
                 }
                 Divider()
                 StepRow(number: 2, done: false, active: toolsDone, title: "Set up this Mac",
-                        text: "Registers this Mac with a key that never leaves it. Only traffic to HN Group’s server will use the VPN. macOS asks for your Mac password once.") {
+                        text: "Registers this Mac with a key that never leaves it. While it’s on, all of this Mac’s traffic will use the VPN. macOS asks for your Mac password once.") {
                     Button { Task { await model.setUp() } } label: {
                         HStack(spacing: 8) { if model.busy { ProgressView().controlSize(.small) }; Text(model.busy ? "Setting up…" : "Set up this Mac") }
                     }
@@ -479,7 +479,7 @@ struct ConnectCard: View {
                 .foregroundStyle(model.connected ? Color.white.opacity(0.9) : Theme.muted)
                 Text(model.connected ? "Connected" : "Not connected").font(Theme.font(34, .heavy))
                     .foregroundStyle(model.connected ? Color.white : Theme.text)
-                Text(model.connected ? "This Mac has a private link to HN Group’s server. Everything else uses your normal internet." : "Press the button for a private link to HN Group’s server.")
+                Text(model.connected ? "All of this Mac’s traffic is going through HN Group’s private VPN." : "Press the button for a private link to HN Group’s server.")
                     .foregroundStyle(model.connected ? Color.white.opacity(0.85) : Theme.muted).fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 10) {
                     Button(model.connected ? "Disconnect" : "Connect") { Task { await model.toggle() } }

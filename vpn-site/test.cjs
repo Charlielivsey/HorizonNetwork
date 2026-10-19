@@ -116,9 +116,10 @@ test('HN Group VPN: Auth sign-in (website and Mac app), devices, admin and accou
     r = await call('/api/devices', { cookie: samCookie, origin: SITE, json: { name: 'Sam’s iPhone' } });
     assert.equal(r.status, 201);
     assert.match(r.body.connection.config, /PrivateKey = [A-Za-z0-9+/]{43}=/);
-    // Split tunnel: only traffic to the server goes through the VPN, and DNS is left alone.
-    assert.match(r.body.connection.config, /AllowedIPs = 10\.88\.0\.1\/32, fd88:88::1\/128/);
-    assert.doesNotMatch(r.body.connection.config, /0\.0\.0\.0\/0|::\/0|^DNS/m);
+    // Full tunnel: all traffic (IPv4 and IPv6) and DNS go through the VPN; config version 3.
+    assert.match(r.body.connection.config, /AllowedIPs = 0\.0\.0\.0\/0, ::\/0/);
+    assert.match(r.body.connection.config, /^DNS = 1\.1\.1\.1, 1\.0\.0\.1$/m);
+    assert.equal(r.body.connection.configVersion, 3);
     assert.match(r.body.connection.config, /Endpoint = vpn\.hngroup\.org\.uk:51820/);
     const phone = r.body.device.id;
     // A stale or forged callback is refused.

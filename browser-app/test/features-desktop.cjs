@@ -1,7 +1,7 @@
 'use strict';
 const{_electron:electron}=require('playwright'),assert=require('node:assert/strict'),path=require('node:path'),fs=require('node:fs'),os=require('node:os');
 (async()=>{const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-features-desktop-'));let app;try{
- app=await electron.launch({executablePath:require('electron'),args:[...((process.getuid?.()===0||process.env.CI)?['--no-sandbox']:[]),path.resolve(__dirname,'..')],env:{...process.env,HN_BROWSER_TEST_PROFILE:dir}});const page=await app.firstWindow();await page.waitForFunction(()=>document.querySelector('#version')?.textContent==='v0.7.1');
+ app=await electron.launch({executablePath:require('electron'),args:[...((process.getuid?.()===0||process.env.CI)?['--no-sandbox']:[]),path.resolve(__dirname,'..')],env:{...process.env,HN_BROWSER_TEST_PROFILE:dir}});const page=await app.firstWindow();await page.waitForFunction(()=>document.querySelector('#version')?.textContent==='v0.7.2');
  await app.evaluate(({Menu,session})=>{Menu.prototype.popup=function(){globalThis.testTabMenu=this;};session.fromPartition('persist:hn-browser-pages').protocol.handle('https',()=>new Response('<style>:root{--bg:white;--text:black}body{background:var(--bg);color:var(--text)}</style><title>HN theme fixture</title><input id="draft" value="unsaved text">',{headers:{'Content-Type':'text/html'}}));});
  const selectMenu=async label=>app.evaluate((_electron,label)=>{const item=globalThis.testTabMenu.items.find(x=>x.label===label);if(!item||!item.enabled)throw Error('Missing menu item '+label);item.click();},label);
  await page.locator('.tab').click({button:'right'});await selectMenu('Duplicate tab');await page.waitForFunction(()=>document.querySelectorAll('.tab').length===2);

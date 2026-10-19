@@ -33,27 +33,57 @@ if ! command -v wg >/dev/null || ! command -v wg-quick >/dev/null; then
 fi
 install -d -m 700 /etc/wireguard
 if [ ! -s /etc/wireguard/hn-vpn.key ]; then (umask 077; wg genkey > /etc/wireguard/hn-vpn.key); fi
+WAN="$(ip -4 route show default | awk '{for(i=1;i<NF;i++) if($i=="dev"){print $(i+1); exit}}')"
+[ -n "$WAN" ] || { echo 'Could not find the server’s internet interface. No VPN changes made.'; exit 1; }
+# IPv6: devices send all their IPv6 through the tunnel (so it can't leak around the VPN). When this
+# server has IPv6 internet it's passed on (NAT, like IPv4); otherwise it's refused at once, so
+# devices fall straight back to IPv4. (Silently dropping it broke IPv6 sites such as Google.)
+WAN6="$(ip -6 route show default 2>/dev/null | awk '{for(i=1;i<NF;i++) if($i=="dev"){print $(i+1); exit}}')"
+if [ -n "$WAN6" ] && command -v ip6tables >/dev/null && ip -6 addr show dev "$WAN6" scope global 2>/dev/null | grep -q inet6; then
+    IPV6_RULES="PostUp = ip6tables -t nat -A POSTROUTING -s fd88:88::/64 -o $WAN6 -j MASQUERADE
+PostUp = ip6tables -I FORWARD 1 -i %i -o $WAN6 -j ACCEPT
+PostUp = ip6tables -I FORWARD 1 -i $WAN6 -o %i -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+PostUp = ip6tables -t mangle -A FORWARD -o %i -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+PostUp = ip6tables -t mangle -A FORWARD -i %i -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+PostDown = ip6tables -t nat -D POSTROUTING -s fd88:88::/64 -o $WAN6 -j MASQUERADE
+PostDown = ip6tables -D FORWARD -i %i -o $WAN6 -j ACCEPT
+PostDown = ip6tables -D FORWARD -i $WAN6 -o %i -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+PostDown = ip6tables -t mangle -D FORWARD -o %i -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+PostDown = ip6tables -t mangle -D FORWARD -i %i -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu"
+    IPV6_FORWARD=1
+elif command -v ip6tables >/dev/null; then
+    IPV6_RULES="PostUp = ip6tables -I FORWARD 1 -i %i -j REJECT --reject-with icmp6-adm-prohibited
+PostDown = ip6tables -D FORWARD -i %i -j REJECT --reject-with icmp6-adm-prohibited"
+    IPV6_FORWARD=0
+else
+    IPV6_RULES="# ip6tables isn't available: IPv6 from devices stops at this server."
+    IPV6_FORWARD=0
+fi
 WG_CONF=/etc/wireguard/wg-hn.conf
 NEW_CONF="$(mktemp)"
 cat > "$NEW_CONF" <<WGCONF
 # HN Group VPN (managed by vpn-site/install.sh). Peers are added by the hn-vpn service.
-# Split tunnel: devices only reach this server (10.88.0.1 / fd88:88::1); nothing is forwarded on
-# to the internet or to other devices.
+# Full tunnel: all of a device's traffic goes through the VPN and out to the internet from here.
 [Interface]
 Address = 10.88.0.1/24, fd88:88::1/64
 ListenPort = 51820
 PostUp = wg set %i private-key /etc/wireguard/hn-vpn.key
-PostUp = iptables -I FORWARD 1 -i %i -j REJECT --reject-with icmp-admin-prohibited
-PostDown = iptables -D FORWARD -i %i -j REJECT --reject-with icmp-admin-prohibited
-PostUp = ip6tables -I FORWARD 1 -i %i -j REJECT --reject-with icmp6-adm-prohibited || true
-PostDown = ip6tables -D FORWARD -i %i -j REJECT --reject-with icmp6-adm-prohibited || true
+PostUp = iptables -t nat -A POSTROUTING -s 10.88.0.0/24 -o $WAN -j MASQUERADE
+PostUp = iptables -I FORWARD 1 -i %i -o $WAN -j ACCEPT
+PostUp = iptables -I FORWARD 1 -i $WAN -o %i -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+PostUp = iptables -t mangle -A FORWARD -o %i -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+PostUp = iptables -t mangle -A FORWARD -i %i -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+PostDown = iptables -t nat -D POSTROUTING -s 10.88.0.0/24 -o $WAN -j MASQUERADE
+PostDown = iptables -D FORWARD -i %i -o $WAN -j ACCEPT
+PostDown = iptables -D FORWARD -i $WAN -o %i -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+PostDown = iptables -t mangle -D FORWARD -o %i -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+PostDown = iptables -t mangle -D FORWARD -i %i -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+$IPV6_RULES
 # SSH and ping to this server from VPN devices are let in even when a firewall's default is to drop.
 PostUp = iptables -I INPUT 1 -i %i -p tcp --dport 22 -j ACCEPT
 PostDown = iptables -D INPUT -i %i -p tcp --dport 22 -j ACCEPT
 PostUp = iptables -I INPUT 1 -i %i -p icmp -j ACCEPT
 PostDown = iptables -D INPUT -i %i -p icmp -j ACCEPT
-PostUp = ip6tables -I INPUT 1 -i %i -p tcp --dport 22 -j ACCEPT || true
-PostDown = ip6tables -D INPUT -i %i -p tcp --dport 22 -j ACCEPT || true
 WGCONF
 WG_CHANGED=0
 if ! cmp -s "$NEW_CONF" "$WG_CONF"; then
@@ -62,10 +92,15 @@ if ! cmp -s "$NEW_CONF" "$WG_CONF"; then
     install -m 600 "$NEW_CONF" "$WG_CONF"; WG_CHANGED=1
 fi
 rm -f "$NEW_CONF"
-# Devices only reach this server, so the VPN no longer needs forwarding (the old full-tunnel setting
-# file is removed; forwarding isn't switched off here in case anything else on the server uses it).
-rm -f /etc/sysctl.d/99-hn-vpn.conf
-if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q 'Status: active'; then ufw allow 51820/udp >/dev/null; ufw allow in on wg-hn to any port 22 proto tcp >/dev/null; fi
+# Forward IPv4 (and IPv6 when this server has it) for VPN devices. Turning on IPv6 forwarding would
+# stop Linux accepting router adverts, so the server's own IPv6 keeps them (accept_ra = 2).
+if [ "$IPV6_FORWARD" = 1 ]; then
+    printf 'net.ipv4.ip_forward = 1\nnet.ipv6.conf.%s.accept_ra = 2\nnet.ipv6.conf.all.forwarding = 1\n' "$WAN6" > /etc/sysctl.d/99-hn-vpn.conf
+else
+    printf 'net.ipv4.ip_forward = 1\n' > /etc/sysctl.d/99-hn-vpn.conf
+fi
+sysctl -q -p /etc/sysctl.d/99-hn-vpn.conf
+if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q 'Status: active'; then ufw allow 51820/udp >/dev/null; ufw allow in on wg-hn to any port 22 proto tcp >/dev/null; ufw route allow in on wg-hn out on "$WAN" >/dev/null 2>&1 || true; fi
 if command -v firewall-cmd >/dev/null && firewall-cmd --state >/dev/null 2>&1; then firewall-cmd -q --permanent --add-port=51820/udp && firewall-cmd -q --reload; fi
 systemctl enable wg-quick@wg-hn >/dev/null 2>&1
 systemctl start wg-quick@wg-hn

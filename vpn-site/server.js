@@ -15,6 +15,7 @@ const macApp = require('./lib/macapp');
 const PUBLIC = process.env.VPN_PUBLIC_DIR || path.join(__dirname, 'public');
 const DATA_DIR = process.env.VPN_DATA_DIR || '/var/lib/hn-vpn';
 const ENDPOINT = process.env.VPN_ENDPOINT || 'vpn.hngroup.org.uk:51820';
+const DNS = process.env.VPN_DNS || '1.1.1.1, 1.0.0.1';
 const APP_FILE = path.join(DATA_DIR, 'HN-Group-VPN-macOS.zip');
 const MAX_APP = 80 * 1024 * 1024;
 const fail = staff.fail;
@@ -62,21 +63,22 @@ function showPage(res, status, title, text, cookies, appUrl) {
 }
 
 // What a device needs to connect. The private key is only included when the server made it.
-// Split tunnel: only traffic to the server itself (10.88.0.1 / fd88:88::1) goes through the VPN.
-const SERVER_ADDRESSES = ['10.88.0.1/32', 'fd88:88::1/128'];
+// Full tunnel (the user's request, 19 October 2026): all of a device's traffic goes through the VPN.
+// configVersion 3 tells apps set up for the split tunnel (2) to fetch and install this configuration.
 async function connection(d, privateKey) {
   const serverKey = await wg.serverPublicKey();
   const config = '[Interface]\n' +
-    '# HN Group VPN · ' + d.name.replace(/[\r\n]/g, ' ') + ' · only traffic to the HN Group server (10.88.0.1) uses the VPN\n' +
+    '# HN Group VPN · ' + d.name.replace(/[\r\n]/g, ' ') + ' · all traffic goes through the VPN\n' +
     'PrivateKey = ' + (privateKey || '<this device’s private key>') + '\n' +
-    'Address = ' + d.ipv4 + '/32, ' + d.ipv6 + '/128\n\n' +
+    'Address = ' + d.ipv4 + '/32, ' + d.ipv6 + '/128\n' +
+    'DNS = ' + DNS + '\n\n' +
     '[Peer]\n' +
     'PublicKey = ' + serverKey + '\n' +
     'PresharedKey = ' + d.presharedKey + '\n' +
     'Endpoint = ' + ENDPOINT + '\n' +
-    'AllowedIPs = ' + SERVER_ADDRESSES.join(', ') + '\n' +
+    'AllowedIPs = 0.0.0.0/0, ::/0\n' +
     'PersistentKeepalive = 25\n';
-  return { address: [d.ipv4 + '/32', d.ipv6 + '/128'], serverAddress: '10.88.0.1', serverPublicKey: serverKey, presharedKey: d.presharedKey, endpoint: ENDPOINT, allowedIPs: SERVER_ADDRESSES, configVersion: 2, config };
+  return { address: [d.ipv4 + '/32', d.ipv6 + '/128'], dns: DNS.split(',').map((x) => x.trim()), serverAddress: '10.88.0.1', serverPublicKey: serverKey, presharedKey: d.presharedKey, endpoint: ENDPOINT, allowedIPs: ['0.0.0.0/0', '::/0'], configVersion: 3, config };
 }
 
 async function deviceView(list) {

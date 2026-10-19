@@ -1,11 +1,12 @@
 'use strict';
 // HN VPN in HN Browser: sign in to vpn.hngroup.org.uk (through HN Group Auth in a tab, so an unlocked
 // browser account only needs its PIN), register this computer with its own WireGuard key, and turn the
-// split-tunnel VPN (only traffic to the HN Group server, 10.88.0.1) on and off.
+// full-tunnel VPN (all traffic goes through the HN Group server; it is 10.88.0.1 inside the VPN) on and off.
 // Only an opaque VPN sign-in token is kept, encrypted like the browser account (vpn.enc). Device keys
 // live in the root/Administrator-only WireGuard configuration, never in browser storage.
 const http=require('node:http'),net=require('node:net'),crypto=require('node:crypto'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),{execFile}=require('node:child_process');
-const ORIGIN='https://vpn.hngroup.org.uk',SERVER='10.88.0.1',PLACEHOLDER='<this device’s private key>';
+// CONFIG_VERSION 3: full tunnel (all traffic). Computers set up for the split tunnel (no version) are offered an update.
+const ORIGIN='https://vpn.hngroup.org.uk',SERVER='10.88.0.1',CONFIG_VERSION=3,PLACEHOLDER='<this device’s private key>';
 const run=(file,args,options={})=>new Promise(resolve=>execFile(file,args,{timeout:options.timeout||30000,windowsHide:true},(error,stdout,stderr)=>resolve({code:error?(typeof error.code==='number'?error.code:-1):0,output:String(stdout||'')+String(stderr||'')})));
 const lastLine=text=>String(text||'').trim().split(/\r?\n/).filter(Boolean).at(-1)||'';
 // A WireGuard (Curve25519) key pair, made on this computer.
@@ -90,10 +91,10 @@ class FakeController{constructor(){this.supported=true;this.toolsName='WireGuard
 function controllerFor(platform,options){return platform==='darwin'?new MacController(options):platform==='win32'?new WindowsController(options):new UnsupportedController();}
 
 class VPN{
- constructor({vault,controller,stateFile,openTab,closeTab,changed,fetcher=fetch,origin=ORIGIN,version='0',hostname=os.hostname(),reach=reachable}){Object.assign(this,{vault,controller,stateFile,openTab,closeTab,changed,fetch:fetcher,origin,version,hostname,reach});this.token=null;this.user=null;this.devices=[];this.limit=5;this.deviceId=null;this.ready=false;this.tools=false;this.connected=false;this.reachable=null;this.busy=null;this.error='';this.pending=null;this.generation=0;try{this.deviceId=JSON.parse(fs.readFileSync(stateFile,'utf8')).deviceId||null;}catch{}}
- snapshot(){const device=this.devices.find(d=>d.id===this.deviceId)||null;return{supported:this.controller.supported,toolsName:this.controller.toolsName,signedIn:!!this.token,user:this.user,device:device&&{name:device.name,address:device.address},devices:this.devices.length,limit:this.limit,tools:this.tools,ready:this.ready,shared:this.ready&&!device,connected:this.connected,reachable:this.reachable,busy:this.busy,error:this.error,server:SERVER,signingIn:!!this.pending};}
+ constructor({vault,controller,stateFile,openTab,closeTab,changed,fetcher=fetch,origin=ORIGIN,version='0',hostname=os.hostname(),reach=reachable}){Object.assign(this,{vault,controller,stateFile,openTab,closeTab,changed,fetch:fetcher,origin,version,hostname,reach});this.token=null;this.user=null;this.devices=[];this.limit=5;this.deviceId=null;this.ready=false;this.tools=false;this.connected=false;this.reachable=null;this.busy=null;this.error='';this.pending=null;this.generation=0;try{const saved=JSON.parse(fs.readFileSync(stateFile,'utf8'));this.deviceId=saved.deviceId||null;this.configVersion=saved.configVersion||0;}catch{}}
+ snapshot(){const device=this.devices.find(d=>d.id===this.deviceId)||null;return{outdated:!!(this.ready&&device&&(this.configVersion||0)<CONFIG_VERSION),supported:this.controller.supported,toolsName:this.controller.toolsName,signedIn:!!this.token,user:this.user,device:device&&{name:device.name,address:device.address},devices:this.devices.length,limit:this.limit,tools:this.tools,ready:this.ready,shared:this.ready&&!device,connected:this.connected,reachable:this.reachable,busy:this.busy,error:this.error,server:SERVER,signingIn:!!this.pending};}
  note(){this.changed?.(this.snapshot());}
- saveState(){fs.mkdirSync(path.dirname(this.stateFile),{recursive:true});fs.writeFileSync(this.stateFile+'.tmp',JSON.stringify({deviceId:this.deviceId}),{mode:0o600});fs.renameSync(this.stateFile+'.tmp',this.stateFile);}
+ saveState(){fs.mkdirSync(path.dirname(this.stateFile),{recursive:true});fs.writeFileSync(this.stateFile+'.tmp',JSON.stringify({deviceId:this.deviceId,configVersion:this.configVersion||0}),{mode:0o600});fs.renameSync(this.stateFile+'.tmp',this.stateFile);}
  async call(route,{method='GET',body}={}){let response;try{response=await this.fetch(this.origin+'/'+route,{method,headers:{Accept:'application/json','X-HN-VPN-Client':'hn-browser','X-HN-VPN-App':this.version,...(this.token?{Authorization:'Bearer '+this.token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(20000),redirect:'error'});}catch{throw Error('The HN VPN service can’t be reached. Check your internet connection.');}const value=await response.json().catch(()=>({}));if(!response.ok)throw Object.assign(Error(value.error||'The HN VPN service had a problem. Please try again.'),{status:response.status});return value;}
  async task(name,fn){if(this.busy)throw Error('The VPN is busy. Try again in a moment.');this.busy=name;this.error='';this.note();try{return await fn();}catch(e){this.error=e.message;throw e;}finally{this.busy=null;this.note();}}
  async restore(){this.token=this.vault.load();this.tools=this.controller.tools();await this.poll();if(this.token)await this.refresh();}
@@ -131,7 +132,7 @@ class VPN{
   const created=await this.call('api/devices',{method:'POST',body:{name:('HN Browser on '+this.hostname).slice(0,60),publicKey:key.publicKey}});
   try{await this.controller.install(created.connection.config.split(PLACEHOLDER).join(key.privateKey));}
   catch(e){await this.call('api/devices/'+created.device.id,{method:'DELETE'}).catch(()=>{});throw e;}
-  this.deviceId=created.device.id;this.saveState();
+  this.deviceId=created.device.id;this.configVersion=created.connection.configVersion||CONFIG_VERSION;this.saveState();
   if(old&&old!==this.deviceId)await this.call('api/devices/'+old,{method:'DELETE'}).catch(()=>{});
   await this.refresh();await this.poll();
  });}
