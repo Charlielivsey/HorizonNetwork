@@ -40,13 +40,19 @@ final class VPNModel: ObservableObject {
     @Published var serverReachable: Bool?
     @Published var sshUser: String = UserDefaults.standard.string(forKey: "sshUser") ?? "root"
     @Published var sshBusy = false
+    /// When the VPN last came on (for the connection timer).
+    @Published var connectedSince: Date?
+    /// Screenshots mode (--snapshot): sample data, no network, no keychain.
+    let preview: Bool
     private var avatarTag: String?
     private var lastUpdateCheck = Date.distantPast
 
     private let api = API()
     private var timer: Timer?
 
-    init() {
+    init(preview: Bool = false) {
+        self.preview = preview
+        if preview { return }
         if let token = Keychain.get("token") {
             api.token = token
             stage = .ready
@@ -159,7 +165,7 @@ final class VPNModel: ObservableObject {
         guard Paths.helperInstalled else { connected = false; return }
         let result = await Shell.run("/usr/bin/sudo", ["-n", Paths.helper, "status"])
         let now = result.output.trimmingCharacters(in: .whitespacesAndNewlines) == "up"
-        if now != connected || ip == nil { connected = now; await checkIP() }
+        if now != connected || ip == nil { connected = now; connectedSince = now ? (connectedSince ?? Date()) : nil; await checkIP() }
         if connected { await checkServer() } else { serverReachable = nil }
     }
 

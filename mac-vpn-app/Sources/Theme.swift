@@ -30,6 +30,17 @@ enum Theme {
     /// The eight-colour HN stripe, with its proportions.
     static let stripe: [(Color, CGFloat)] = [(pink, 14), (purple, 14), (yellow, 6), (teal, 20), (plum, 10), (raspberry, 10), (green, 13), (navy, 13)]
 
+    // Deep night tones for the hero panels, and the brand gradients.
+    static let night = Color(hex: 0x0D0B1F)
+    static let nightRaised = Color(hex: 0x1B1640)
+    static let violet = Color(hex: 0x7B3FF2)
+    static let brand = LinearGradient(colors: [Color(hex: 0x6A1FD8), Theme.purple, Color(hex: 0x2B0D6B)], startPoint: .topLeading, endPoint: .bottomTrailing)
+    static let heroOn = LinearGradient(colors: [Color(hex: 0x2A0F6E), Color(hex: 0x16124A), Color(hex: 0x0E2A3A)], startPoint: .topLeading, endPoint: .bottomTrailing)
+    static let heroOff = LinearGradient(colors: [Color(hex: 0x17152B), Color(hex: 0x100E22)], startPoint: .topLeading, endPoint: .bottomTrailing)
+    /// The HN stripe's colours as a ring (for the connect orb).
+    static let ring = AngularGradient(colors: [pink, purple, teal, green, yellow, raspberry, pink], center: .center)
+    static let radius: CGFloat = 18
+
     static func font(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
         .custom("Plus Jakarta Sans", size: size).weight(weight)
     }
@@ -92,9 +103,35 @@ struct Card<Content: View>: View {
         VStack(alignment: .leading, spacing: 0) { content }
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.surface))
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.border))
-            .shadow(color: Color.black.opacity(0.06), radius: 14, y: 6)
+            .background(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous).fill(Theme.surface))
+            .overlay(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous).strokeBorder(Theme.border.opacity(0.8)))
+            .shadow(color: Color.black.opacity(0.05), radius: 10, y: 4)
+    }
+}
+
+/// The window's native translucent material (used for the sidebar).
+struct VisualEffect: NSViewRepresentable {
+    var material: NSVisualEffectView.Material = .sidebar
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = material; view.blendingMode = .behindWindow; view.state = .followsWindowActiveState
+        return view
+    }
+    func updateNSView(_ view: NSVisualEffectView, context: Context) { view.material = material }
+}
+
+/// The HN Secure Network mark: a shield on the brand gradient.
+struct AppMark: View {
+    var size: CGFloat = 34
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: size * 0.28, style: .continuous).fill(Theme.brand)
+            RoundedRectangle(cornerRadius: size * 0.28, style: .continuous).strokeBorder(Color.white.opacity(0.18))
+            Image(systemName: "lock.shield.fill").font(.system(size: size * 0.5, weight: .semibold)).foregroundStyle(.white)
+        }
+        .frame(width: size, height: size)
+        .shadow(color: Theme.purple.opacity(0.35), radius: size * 0.2, y: size * 0.08)
+        .accessibilityHidden(true)
     }
 }
 
@@ -113,18 +150,25 @@ private struct HNButtonLabel: View {
     let primary: Bool
     let wide: Bool
     @Environment(\.isEnabled) private var enabled
+    @State private var hover = false
     var body: some View {
         configuration.label
-            .font(Theme.font(14, .bold))
+            .font(Theme.font(13.5, .bold))
             .foregroundStyle(primary ? Color.white : Theme.text)
-            .padding(.horizontal, 20).padding(.vertical, 11)
+            .padding(.horizontal, 18).padding(.vertical, 10)
             .frame(maxWidth: wide ? .infinity : nil)
-            .background(Capsule().fill(primary ? Theme.purple.opacity(configuration.isPressed ? 0.85 : 1) : (configuration.isPressed ? Theme.accentSoft : Color.clear)))
-            .overlay(Capsule().strokeBorder(primary ? Color.clear : Theme.border, lineWidth: 1))
-            .opacity(enabled ? 1 : 0.55)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            .background(
+                Capsule().fill(primary ? AnyShapeStyle(Theme.brand) : AnyShapeStyle(configuration.isPressed ? Theme.accentSoft : hover ? Theme.surface2 : Theme.surface))
+            )
+            .overlay(Capsule().strokeBorder(primary ? Color.white.opacity(0.14) : Theme.border, lineWidth: 1))
+            .shadow(color: primary && enabled ? Theme.purple.opacity(hover ? 0.4 : 0.25) : .clear, radius: hover ? 12 : 8, y: 4)
+            .brightness(primary && hover && enabled ? 0.05 : 0)
+            .opacity(enabled ? 1 : 0.5)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
+            .animation(.easeOut(duration: 0.15), value: hover)
             .contentShape(Capsule())
+            .onHover { hover = $0 }
     }
 }
 
