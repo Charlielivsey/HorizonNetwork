@@ -654,90 +654,142 @@ struct InfoTile: View {
 
 // MARK: - SSH
 
-/// SSH to the server through the VPN: the address and username are filled in; only the password is asked for.
+/// SSH to the server through the VPN, as a small terminal: the username sits in the prompt and only the
+/// password is asked for. Return opens the session in Terminal.
 struct SSHPage: View {
     @EnvironmentObject var model: VPNModel
     @State private var password = ""
-    @FocusState private var passwordFocused: Bool
+    @FocusState private var focus: Field?
+    enum Field { case user, password }
+
+    private var ready: Bool { !model.sshBusy && !model.busy && !password.isEmpty && model.isSetUp }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            PageTitle(eyebrow: "SSH", title: "Connect to the server", text: "Opens a Terminal window signed in to HN Group’s server through the VPN.")
-            // A small terminal preview of what will run.
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 7) {
-                    Circle().fill(Color(hex: 0xFF5F57)).frame(width: 11, height: 11)
-                    Circle().fill(Color(hex: 0xFEBC2E)).frame(width: 11, height: 11)
-                    Circle().fill(Color(hex: 0x28C840)).frame(width: 11, height: 11)
-                    Spacer()
-                    Text("HN Group server").font(Theme.font(11, .semibold)).foregroundStyle(.white.opacity(0.5))
-                    Spacer()
-                    HStack(spacing: 6) {
-                        Circle().fill(model.serverReachable == true ? Theme.green : Color.white.opacity(0.3)).frame(width: 7, height: 7)
-                        Text(!model.connected ? "VPN off" : model.serverReachable == true ? "Reachable" : "Checking…").font(Theme.font(11, .semibold)).foregroundStyle(.white.opacity(0.6))
-                    }
-                }
-                .padding(.horizontal, 14).padding(.vertical, 10)
-                .background(Color.white.opacity(0.05))
-                VStack(alignment: .leading, spacing: 6) {
-                    (Text("~ ").foregroundColor(Theme.green) + Text("ssh ").foregroundColor(.white) + Text("\(model.sshUser.isEmpty ? "root" : model.sshUser)@\(VPNModel.serverAddress)").foregroundColor(Color(hex: 0xC9B4FF)))
-                    Text(model.connected ? "Ready when you are." : "The VPN connects first, then Terminal opens.").foregroundColor(.white.opacity(0.45))
-                }
-                .font(.system(size: 13, design: .monospaced))
-                .padding(16)
-            }
-            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.night))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.white.opacity(0.08)))
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .shadow(color: .black.opacity(0.2), radius: 16, y: 8)
+        VStack(alignment: .leading, spacing: 20) {
+            PageTitle(eyebrow: "SSH", title: "HN Group server", text: "Open a secure shell on the server, straight through the VPN.")
 
-            Card(padding: 24) {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack(spacing: 14) {
-                        FieldRow(label: "Server address") {
-                            Text(VPNModel.serverAddress).font(.system(size: 14, weight: .semibold, design: .monospaced))
-                                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).padding(.vertical, 10)
-                                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.surface2))
-                                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Theme.border))
-                        }
-                        FieldRow(label: "Username") {
-                            TextField("root", text: $model.sshUser).textFieldStyle(HNFieldStyle()).font(.system(size: 14, design: .monospaced))
+            VStack(alignment: .leading, spacing: 0) {
+                // Title bar
+                HStack(spacing: 8) {
+                    HStack(spacing: 7) {
+                        Circle().fill(Color(hex: 0xFF5F57)); Circle().fill(Color(hex: 0xFEBC2E)); Circle().fill(Color(hex: 0x28C840))
+                    }
+                    .frame(width: 54, height: 12)
+                    Spacer()
+                    Image(systemName: "lock.fill").font(.system(size: 10, weight: .bold)).foregroundStyle(.white.opacity(0.4))
+                    Text("\(user)@\(VPNModel.serverAddress) — ssh").font(.system(size: 12, weight: .medium, design: .monospaced)).foregroundStyle(.white.opacity(0.55))
+                    Spacer()
+                    StatusPill(on: model.connected && model.serverReachable == true,
+                               text: !model.connected ? "VPN off" : model.serverReachable == true ? "Online" : model.serverReachable == false ? "Not answering" : "Checking")
+                }
+                .padding(.horizontal, 16).padding(.vertical, 12)
+                .background(Color.white.opacity(0.04))
+                .overlay(alignment: .bottom) { Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1) }
+
+                // Console
+                VStack(alignment: .leading, spacing: 14) {
+                    Group {
+                        Text("HN Secure Network · encrypted session through the HN Group VPN").foregroundColor(.white.opacity(0.35))
+                        HStack(spacing: 0) {
+                            Text("➜ ").foregroundColor(Theme.green)
+                            Text("ssh ").foregroundColor(.white.opacity(0.9))
+                            TextField("root", text: $model.sshUser)
+                                .textFieldStyle(.plain).foregroundColor(Color(hex: 0xC9B4FF))
                                 .disableAutocorrection(true)
+                                .focused($focus, equals: .user)
+                                .onSubmit { focus = .password }
+                                .fixedSize()
+                            Text("@\(VPNModel.serverAddress)").foregroundColor(Color(hex: 0xC9B4FF))
+                            Spacer(minLength: 0)
                         }
+                        HStack(spacing: 10) {
+                            Text("password:").foregroundColor(.white.opacity(0.55))
+                            SecureField("", text: $password)
+                                .textFieldStyle(.plain).foregroundColor(.white)
+                                .focused($focus, equals: .password)
+                                .onSubmit(go)
+                            if model.sshBusy { ProgressView().controlSize(.small).tint(.white) }
+                        }
+                        .padding(.horizontal, 12).padding(.vertical, 10)
+                        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(focus == .password ? 0.08 : 0.05)))
+                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(focus == .password ? Theme.violet.opacity(0.8) : Color.white.opacity(0.08)))
+                        .animation(.easeOut(duration: 0.15), value: focus)
                     }
-                    FieldRow(label: "Password") {
-                        SecureField("Your server password", text: $password).textFieldStyle(HNFieldStyle())
-                            .focused($passwordFocused)
-                            .onSubmit(go)
-                    }
+                    .font(.system(size: 14, design: .monospaced))
+
                     HStack(spacing: 12) {
                         Button(action: go) {
                             HStack(spacing: 8) {
-                                if model.sshBusy { ProgressView().controlSize(.small) } else { Image(systemName: "terminal") }
-                                Text(model.connected ? "Open SSH session" : "Connect and open SSH")
+                                Text(model.connected ? "Open session" : "Connect & open session")
+                                Image(systemName: "return")
                             }
                         }
-                        .buttonStyle(HNButtonStyle())
+                        .buttonStyle(HeroButtonStyle(filled: true))
                         .keyboardShortcut(.defaultAction)
-                        .disabled(model.sshBusy || model.busy || password.isEmpty || !model.isSetUp)
-                        Label("Your password isn’t saved", systemImage: "lock").font(Theme.font(12)).foregroundStyle(Theme.muted)
+                        .disabled(!ready)
+                        .opacity(ready ? 1 : 0.55)
+                        Text(model.isSetUp ? "Opens in Terminal" : "Set up this Mac on the Connection page first")
+                            .font(Theme.font(12, .medium)).foregroundStyle(model.isSetUp ? Color.white.opacity(0.45) : Theme.danger)
                     }
-                    if !model.isSetUp {
-                        Text("Set up this Mac on the Connection page first.").font(Theme.font(12, .semibold)).foregroundStyle(Theme.danger)
-                    }
+                    .padding(.top, 2)
                 }
+                .padding(20)
             }
-            Text("The first time, the server’s key is remembered so later connections are checked against it.")
-                .font(Theme.font(12)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+            .background(
+                ZStack {
+                    RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Theme.night)
+                    Circle().fill(Theme.violet.opacity(0.16)).frame(width: 260).blur(radius: 80).offset(x: 240, y: 60)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            )
+            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Color.white.opacity(0.09)))
+            .shadow(color: .black.opacity(0.28), radius: 22, y: 12)
+            .environment(\.colorScheme, .dark)
+
+            HStack(spacing: 10) {
+                Chip(icon: "lock.shield.fill", text: "Encrypted through the VPN")
+                Chip(icon: "key.slash", text: "Password never saved")
+                Chip(icon: "checkmark.seal.fill", text: "Server key remembered")
+            }
         }
-        .onAppear { passwordFocused = true }
+        .onAppear { focus = .password }
     }
 
+    private var user: String { model.sshUser.trimmingCharacters(in: .whitespaces).isEmpty ? "root" : model.sshUser }
+
     private func go() {
-        guard !password.isEmpty, !model.sshBusy else { return }
+        guard ready else { return }
         let typed = password
         password = ""
         Task { await model.openSSH(password: typed) }
+    }
+}
+
+struct StatusPill: View {
+    let on: Bool
+    let text: String
+    var body: some View {
+        HStack(spacing: 6) {
+            Circle().fill(on ? Theme.green : Color.white.opacity(0.35)).frame(width: 7, height: 7).shadow(color: on ? Theme.green : .clear, radius: 4)
+            Text(text).font(Theme.font(11, .bold))
+        }
+        .foregroundStyle(.white.opacity(0.75))
+        .padding(.horizontal, 9).padding(.vertical, 4)
+        .background(Capsule().fill(Color.white.opacity(0.07)))
+    }
+}
+
+struct Chip: View {
+    let icon: String
+    let text: String
+    var body: some View {
+        HStack(spacing: 7) {
+            Image(systemName: icon).font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.accent)
+            Text(text).font(Theme.font(12, .semibold)).foregroundStyle(Theme.muted)
+        }
+        .padding(.horizontal, 12).padding(.vertical, 8)
+        .background(Capsule().fill(Theme.surface))
+        .overlay(Capsule().strokeBorder(Theme.border.opacity(0.8)))
     }
 }
 

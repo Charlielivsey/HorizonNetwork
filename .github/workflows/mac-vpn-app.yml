@@ -23,7 +23,8 @@ jobs:
         run: |
           APP="mac-vpn-app/build/HN Secure Network.app"
           rm -rf mac-vpn-app/screenshots
-          timeout 180 "$APP/Contents/MacOS/HN Secure Network" --snapshot "$PWD/mac-vpn-app/screenshots" || true
+          "$APP/Contents/MacOS/HN Secure Network" --snapshot "$PWD/mac-vpn-app/screenshots" &
+          pid=$!; for i in $(seq 1 180); do kill -0 $pid 2>/dev/null || break; sleep 1; done; kill $pid 2>/dev/null || true
           ls -la mac-vpn-app/screenshots || true
       - uses: actions/upload-artifact@v4
         with:
@@ -40,7 +41,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add vpn-site/mac-app/HN-Group-VPN-macOS.zip
-          git add -A mac-vpn-app/screenshots || true
+          [ ! -d mac-vpn-app/screenshots ] || git add -A mac-vpn-app/screenshots
           # downloads.hngroup.org.uk offers the same build from a GitHub preview release, using this record.
           VERSION=$(tr -d '[:space:]' < mac-vpn-app/VERSION); TAG="secure-network-v$VERSION-$GITHUB_RUN_NUMBER"; NAME="HN-Secure-Network-$VERSION-macOS.zip"
           cp mac-vpn-app/build/HN-Secure-Network-macOS.zip "/tmp/$NAME"
