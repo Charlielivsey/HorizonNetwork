@@ -1,0 +1,104 @@
+/* The browser's toolbar: tab strip (44px), toolbar (52px) and the HN stripe (4px) = 100px above the page. */
+body{background:var(--chrome)}
+.browser-top{height:100px;display:flex;flex-direction:column}
+
+/* ---------- Tab strip ---------- */
+.tabs-row{height:44px;display:flex;align-items:flex-end;padding:0 8px 0 6px;background:var(--chrome);-webkit-app-region:drag;transition:background-color .24s var(--out)}
+body:not([data-platform=darwin]) .tabs-row{padding-right:146px}
+.mac-space{width:6px;height:100%;flex-shrink:0}
+body[data-platform=darwin] .mac-space{width:78px}
+.drag-space{flex:1;min-width:24px;height:100%}
+.tabs{display:flex;align-items:flex-end;height:100%;min-width:0;flex:0 1 auto;padding-top:8px;overflow:hidden}
+.tab{position:relative;display:flex;align-items:center;gap:8px;height:36px;width:232px;flex:0 1 auto;min-width:64px;padding:0 6px 0 13px;color:var(--muted);border-radius:12px 12px 0 0;-webkit-app-region:no-drag;cursor:default;
+ transition:color var(--fast) var(--out)}
+.tab-bg{position:absolute;inset:4px 2px 4px;border-radius:9px;background:var(--hover);opacity:0;transition:opacity var(--fast) var(--out);pointer-events:none}
+.tab:hover .tab-bg{opacity:1}
+.tab:not(.active)+.tab:not(.active)::before{content:"";position:absolute;left:0;top:11px;bottom:11px;width:1px;background:var(--line)}
+.tab.active{background:var(--toolbar);color:var(--ink);z-index:1}
+.tab.active .tab-bg{display:none}
+/* The active tab flows into the toolbar with curved feet on both sides. */
+.tab.active::before,.tab.active::after{content:"";position:absolute;bottom:0;width:12px;height:12px;pointer-events:none}
+.tab.active::before{left:-12px;background:radial-gradient(circle at 0 0,transparent 11.5px,var(--toolbar) 12px)}
+.tab.active::after{right:-12px;background:radial-gradient(circle at 100% 0,transparent 11.5px,var(--toolbar) 12px)}
+.tab-indicator,.tab-icon{width:16px;height:16px;flex-shrink:0;position:relative;z-index:1}
+.tab-icon{border-radius:4px;object-fit:contain}
+.tab-indicator{display:grid;place-items:center;color:var(--faint)}
+.tab-indicator svg{width:14px;height:14px}
+.tab.loading .tab-indicator svg{display:none}
+.tab.loading .tab-indicator::after{content:"";width:12px;height:12px;border-radius:50%;border:2px solid var(--accent-soft);border-top-color:var(--accent);animation:spin .75s linear infinite}
+.tab-title{flex:1;min-width:0;text-align:left;font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;position:relative;z-index:1;height:100%;color:inherit;
+ -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 22px),transparent)}
+.tab .close{width:22px;height:22px;border-radius:7px;display:grid;place-items:center;color:var(--muted);opacity:0;flex-shrink:0;position:relative;z-index:1;
+ transition:opacity var(--fast) var(--out),background-color var(--fast),transform var(--fast) var(--out)}
+.tab .close svg{width:12px;height:12px;stroke-width:2.2}
+.tab:hover .close,.tab.active .close{opacity:1}
+.tab .close:hover{background:var(--press);color:var(--ink)}
+.tab .close:active{transform:scale(.88)}
+.tab.pinned{width:46px;flex:0 0 auto;min-width:46px;padding:0;justify-content:center}
+.tab.pinned .tab-title,.tab.pinned .close{display:none}
+.tab.entering{animation:tab-in .26s var(--spring) both}
+.tab.closing{animation:tab-out .16s var(--in) both;pointer-events:none}
+.tab.dragging{opacity:.55}
+@keyframes tab-in{from{opacity:0;transform:translateY(10px) scale(.94)}}
+@keyframes tab-out{to{opacity:0;transform:translateY(6px) scale(.94)}}
+.new-tab{width:30px;height:30px;margin:0 0 3px 6px;border-radius:9px;-webkit-app-region:no-drag}
+.new-tab svg{width:15px;height:15px;stroke-width:2.1}
+
+/* ---------- Toolbar ---------- */
+.toolbar{height:52px;display:flex;align-items:center;gap:8px;padding:0 10px;background:var(--toolbar);transition:background-color .24s var(--out)}
+.nav{display:flex;gap:2px}
+.nav svg{width:17px;height:17px}
+.actions{display:flex;align-items:center;gap:2px}
+.actions .icon-btn svg{width:17px;height:17px}
+
+/* The address bar */
+.omnibox{flex:1;min-width:120px;height:38px;display:flex;align-items:center;gap:8px;padding:0 6px 0 13px;border-radius:19px;background:var(--sunken);border:1px solid var(--line);cursor:text;
+ transition:background-color var(--mid) var(--out),border-color var(--mid) var(--out),box-shadow var(--slow) var(--out)}
+.omnibox:hover{border-color:var(--line-strong)}
+.omnibox:focus-within{background:var(--panel);border-color:color-mix(in srgb,var(--accent) 55%,var(--line));box-shadow:0 0 0 4px var(--accent-soft),0 10px 26px -14px var(--shadow)}
+.omni-lead{display:grid;place-items:center;color:var(--faint)}
+.omni-lead svg{width:15px;height:15px}
+#address{flex:1;min-width:0;height:100%;border:0;background:none;padding:0;font-size:13.5px;font-weight:550;box-shadow:none;border-radius:0}
+#address:focus{box-shadow:none}
+.address-hint{opacity:.9;transition:opacity var(--fast)}
+.omnibox:focus-within .address-hint{opacity:0}
+.hn-badge{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px 0 4px;border-radius:24px;background:var(--accent-soft);color:var(--accent);font-size:11px;font-weight:700;white-space:nowrap;flex-shrink:0;animation:pop-in .24s var(--spring)}
+.hn-badge img{width:16px;height:16px;border-radius:50%;background:#fff;padding:2px}
+.hn-badge.typed{background:color-mix(in srgb,var(--accent) 20%,transparent)}
+.zoom-pill{height:24px;padding:0 9px;border-radius:24px;background:var(--raised);color:var(--muted);font-size:11px;font-weight:700}
+.zoom-pill:hover{color:var(--ink)}
+.star{width:30px;height:30px;border-radius:15px;display:grid;place-items:center;color:var(--faint);transition:color var(--fast),background-color var(--fast),transform var(--fast) var(--out)}
+.star:hover{background:var(--hover);color:var(--ink)}
+.star:active{transform:scale(.88)}
+.star.starred{color:#f6c445}
+.star.starred svg{fill:currentColor;animation:star-pop .42s var(--spring)}
+@keyframes star-pop{40%{transform:scale(1.35) rotate(-10deg)}}
+
+/* The account chip */
+.account-chip{display:flex;align-items:center;gap:8px;height:34px;padding:3px 13px 3px 3px;border-radius:17px;margin:0 2px;position:relative;
+ transition:background-color var(--fast) var(--out),transform var(--fast) var(--out)}
+.account-chip:hover{background:var(--hover)}
+.account-chip:active{transform:scale(.96)}
+.account-chip[aria-expanded=true]{background:var(--accent-soft)}
+.account-chip .avatar{width:28px;height:28px;font-size:10.5px}
+#toolbar-person{width:15px;height:15px;color:#fff}
+#account-label{font-weight:650;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lock-badge{position:absolute;left:20px;top:20px;width:15px;height:15px;border-radius:50%;background:var(--warn);color:#2a1a00;display:grid;place-items:center;box-shadow:0 0 0 2px var(--toolbar)}
+.lock-badge svg{width:9px;height:9px;stroke-width:2.6}
+
+/* Badges on toolbar buttons */
+.dot-badge{position:absolute;right:6px;top:6px;width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px var(--toolbar);animation:pop-in .3s var(--spring)}
+.dot-badge.good{background:var(--good)}
+.dot-badge.good::after{content:"";position:absolute;inset:0;border-radius:50%;background:var(--good);animation:ring 2.2s var(--out) 3}
+.count-badge{position:absolute;right:2px;top:2px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--action);color:#fff;font-size:9.5px;font-weight:800;display:grid;place-items:center;box-shadow:0 0 0 2px var(--toolbar);animation:pop-in .3s var(--spring)}
+@keyframes ring{to{transform:scale(2.6);opacity:0}}
+@keyframes pop-in{from{transform:scale(.4);opacity:0}}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ---------- The HN stripe, with the loading bar running across it ---------- */
+.stripe{height:4px;position:relative;overflow:hidden;background:linear-gradient(90deg,#e97de8 0 14%,#5514b4 14% 28%,#e3e65b 28% 34%,#3e9ba3 34% 54%,#7a1f6c 54% 64%,#c2306b 64% 74%,#5fae7b 74% 87%,#1c2135 87%)}
+.load-bar{position:absolute;inset:0 auto 0 0;width:35%;background:linear-gradient(90deg,transparent,#ffffffd9,transparent);opacity:0;transform:translateX(-100%)}
+.page-loading .load-bar{opacity:1;animation:load 1.1s cubic-bezier(.45,0,.55,1) infinite}
+@keyframes load{to{transform:translateX(300%)}}
+
+@media(max-width:900px){#account-label{display:none}.account-chip{padding-right:3px}.address-hint{display:none}}

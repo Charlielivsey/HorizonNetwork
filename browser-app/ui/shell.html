@@ -1,12 +1,36 @@
-<!doctype html><html lang="en-GB" data-layer="base"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"><title>HN Browser</title><link rel="stylesheet" href="themes.css"><link rel="stylesheet" href="shell.css"><script defer src="theme.js"></script><script defer src="tabs.js"></script><script defer src="chrome.js"></script></head><body data-theme="midnight-lavender"><div class="browser-top">
- <header class="tabs-row"><div class="mac-space" aria-hidden="true"></div><img class="brand-mark" src="assets/favicon.svg" alt="HN Browser"><div id="tabs" class="tabs" role="tablist" aria-label="Browser tabs"></div><button id="new-tab" class="icon-button" title="New tab (Ctrl or Command + T)" aria-label="New tab"><svg><use href="icons.svg#plus"/></svg></button><div class="title-space"></div><span class="window-label">HN <b>BROWSER</b><i>1.0</i></span></header>
- <div class="toolbar"><div class="navigation"><button id="back" class="icon-button" title="Back" aria-label="Back"><svg><use href="icons.svg#back"/></svg></button><button id="forward" class="icon-button" title="Forward" aria-label="Forward"><svg><use href="icons.svg#forward"/></svg></button><button id="reload" class="icon-button" title="Reload" aria-label="Reload"><svg><use id="reload-icon" href="icons.svg#reload"/></svg></button><button id="home" class="icon-button" title="New tab page" aria-label="Home"><svg><use href="icons.svg#home"/></svg></button></div>
- <form id="address-form"><svg id="connection"><use id="connection-icon" href="icons.svg#search"/></svg><span id="hn-badge" class="hn-badge" hidden><img src="assets/favicon.svg" alt=""><span></span></span><input id="address" aria-label="Address or search" placeholder="Search the web or enter an address" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggestions"><button type="button" id="zoom-pill" class="zoom-pill" title="Reset zoom" hidden></button><kbd class="address-hint">⌘ L</kbd><button type="button" id="star" class="star" aria-label="Bookmark this page" title="Bookmark this page (Ctrl or Command + D)" aria-pressed="false"><svg><use href="icons.svg#star"/></svg></button></form>
- <button id="vpn-button" class="icon-button vpn-toggle" title="HN VPN" aria-label="HN VPN" aria-haspopup="dialog" aria-expanded="false"><svg><use href="icons.svg#vpn"/></svg><span id="vpn-dot" hidden></span></button>
- <button id="downloads-button" class="icon-button downloads-toggle" title="Downloads" aria-label="Downloads" aria-haspopup="dialog" aria-expanded="false"><svg><use href="icons.svg#download"/></svg><span id="download-badge" hidden></span></button>
- <button id="appearance" class="icon-button" title="Appearance" aria-label="Appearance" aria-haspopup="dialog" aria-expanded="false"><svg><use href="icons.svg#palette"/></svg></button>
- <button class="account-button" id="account" aria-haspopup="dialog" aria-expanded="false"><span class="avatar toolbar-avatar"><img id="toolbar-picture" alt="" hidden><span id="initials">HN</span></span><i id="toolbar-lock" class="lock-badge" hidden><svg><use href="icons.svg#lock"/></svg></i><span id="account-label">HN account</span></button>
- <button id="browser-menu" class="icon-button menu-toggle" aria-label="Browser menu" title="Browser menu" aria-haspopup="dialog" aria-expanded="false"><svg><use href="icons.svg#menu"/></svg><span id="update-dot" hidden></span></button></div>
-<span id="version" hidden></span><div class="stripe"><i class="load-bar"></i></div>
+<!doctype html><html lang="en-GB" data-layer="base"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"><title>HN Browser</title><link rel="stylesheet" href="themes.css"><link rel="stylesheet" href="base.css"><link rel="stylesheet" href="chrome.css"><script defer src="theme.js"></script><script defer src="tabs.js"></script><script defer src="chrome.js"></script></head>
+<body data-theme="midnight-lavender">
+<div class="browser-top">
+ <header class="tabs-row">
+  <div class="mac-space" aria-hidden="true"></div>
+  <div id="tabs" class="tabs" role="tablist" aria-label="Browser tabs"></div>
+  <button id="new-tab" class="icon-btn new-tab" title="New tab" aria-label="New tab"><svg><use href="icons.svg#plus"/></svg></button>
+  <div class="drag-space"></div>
+ </header>
+ <div class="toolbar">
+  <nav class="nav" aria-label="Page navigation">
+   <button id="back" class="icon-btn" title="Back" aria-label="Back"><svg><use href="icons.svg#back"/></svg></button>
+   <button id="forward" class="icon-btn" title="Forward" aria-label="Forward"><svg><use href="icons.svg#forward"/></svg></button>
+   <button id="reload" class="icon-btn" title="Reload" aria-label="Reload"><svg><use id="reload-icon" href="icons.svg#reload"/></svg></button>
+   <button id="home" class="icon-btn" title="New tab page" aria-label="Home"><svg><use href="icons.svg#home"/></svg></button>
+  </nav>
+  <form id="address-form" class="omnibox" autocomplete="off">
+   <span class="omni-lead"><svg id="connection" aria-label="Connection"><use id="connection-icon" href="icons.svg#search"/></svg></span>
+   <span id="hn-badge" class="hn-badge" hidden><img src="assets/favicon.svg" alt=""><span></span></span>
+   <input id="address" aria-label="Address or search" placeholder="Search the web or enter an address" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false">
+   <button type="button" id="zoom-pill" class="zoom-pill" title="Reset zoom" hidden></button>
+   <kbd class="address-hint">⌘ L</kbd>
+   <button type="button" id="star" class="star" aria-label="Bookmark this page" title="Bookmark this page" aria-pressed="false"><svg><use href="icons.svg#star"/></svg></button>
+  </form>
+  <div class="actions">
+   <button id="vpn-button" class="icon-btn" title="HN VPN" aria-label="HN VPN" aria-haspopup="dialog" aria-expanded="false"><svg><use href="icons.svg#vpn"/></svg><span id="vpn-dot" class="dot-badge good" hidden></span></button>
+   <button id="downloads-button" class="icon-btn" title="Downloads" aria-label="Downloads" aria-haspopup="dialog" aria-expanded="false"><svg><use href="icons.svg#download"/></svg><span id="download-badge" class="count-badge" hidden></span></button>
+   <button id="appearance" class="icon-btn" title="Appearance" aria-label="Appearance" aria-haspopup="dialog" aria-expanded="false"><svg><use href="icons.svg#palette"/></svg></button>
+   <button id="account" class="account-chip" aria-haspopup="dialog" aria-expanded="false"><span class="avatar"><img id="toolbar-picture" alt="" hidden><span id="initials">HN</span><svg id="toolbar-person"><use href="icons.svg#user"/></svg></span><i id="toolbar-lock" class="lock-badge" hidden><svg><use href="icons.svg#lock"/></svg></i><span id="account-label">HN account</span></button>
+   <button id="browser-menu" class="icon-btn" aria-label="Browser menu" title="Browser menu" aria-haspopup="dialog" aria-expanded="false"><svg><use href="icons.svg#menu"/></svg><span id="update-dot" class="dot-badge" hidden></span></button>
+  </div>
+ </div>
+ <div class="stripe" aria-hidden="true"><i class="load-bar"></i></div>
 </div>
+<span id="version" hidden></span>
 </body></html>

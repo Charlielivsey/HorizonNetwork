@@ -48,7 +48,7 @@ const savedPrefs=async(file,ok)=>{for(let i=0;i<100;i++){try{const p=JSON.parse(
   await top.locator('[data-settings=startup]').click();await top.locator('input[name=startup][value=restore]').check();
   await top.locator('[data-settings=accessibility]').click();await top.locator('[data-section=accessibility] [data-preference=reduceMotion]').check();await top.waitForFunction(()=>document.body.dataset.motion==='reduced');await top.locator('[data-section=accessibility] [data-preference=reduceMotion]').uncheck();
   await top.locator('[data-settings=shortcuts]').click();assert.match(await top.locator('#shortcut-list').textContent(),/Lock HN Browser/);
-  await top.waitForFunction(()=>window.browser.state().then(s=>s.preferences.autoLock===15&&s.preferences.startup==='restore'));const prefs=await savedPrefs(path.join(profile,'preferences.json'),p=>p.autoLock===15);assert.equal(prefs.autoLock,15);assert.equal(prefs.reduceMotion,false);
+  await top.waitForFunction(()=>window.browser.state().then(s=>s.preferences.autoLock===15&&s.preferences.startup==='restore'));const prefs=await savedPrefs(path.join(profile,'preferences.json'),p=>p.autoLock===15&&p.reduceMotion===false);assert.equal(prefs.autoLock,15);assert.equal(prefs.reduceMotion,false);
   await top.keyboard.press('Escape');await top.locator('#overlay').waitFor({state:'hidden'});
   // ---- History, bookmarks and suggestions ----
   await go(page,site+'alpha');await go(page,site+'beta');
