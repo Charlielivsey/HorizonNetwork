@@ -147,6 +147,19 @@ const listWords = (items) => items.length < 2 ? items.join('') : items.slice(0, 
 const link = (title) => '[[' + title + ']]';
 const ownerText = (o) => (o.company ? link(o.name) : o.name) + (o.share ? ' (' + o.share + ')' : '');
 const webLink = (site) => { const s = String(site || '').trim(); if (!s) return ''; const url = /^https?:\/\//i.test(s) ? s : 'https://' + s; return safeUrl(url) ? '[' + url + ' ' + s.replace(/^https?:\/\//i, '').replace(/\/$/, '') + ']' : ''; };
+// A company's register status as the wiki shows it. A company the register records as dissolved is
+// shown as defunct (the user's request, 20 October 2026): "Defunct since 3 March 2026".
+const statusLabel = (c) => (c.status === 'Dissolved' ? 'Defunct' : c.status || '');
+const statusKey = (c) => statusLabel(c).toLowerCase().replace(/[^a-z]+/g, '-');
+const inactive = (c) => !!c.status && c.status !== 'Active';
+function statusText(c) { return c.status === 'Dissolved' && c.dissolved ? 'Defunct since ' + longDate(c.dissolved) : statusLabel(c); }
+function statusSentence(c, n) {
+  if (c.status === 'Dissolved') return n + ' is defunct' + (c.dissolved ? ': it ceased to exist as a company on ' + longDate(c.dissolved) : ' and no longer exists as a company') + '.';
+  if (c.status === 'Liquidation') return n + ' is in liquidation.';
+  if (c.status === 'In administration') return n + ' is in administration.';
+  if (c.status === 'Dormant') return n + ' is dormant: it is registered but not currently trading.';
+  return '';
+}
 function companyOf(name) { return companies && companies.register ? companies.register.find(name) : null; }
 function sourceNote(c) { const R = companies.register; return 'Facts from the <a class="external" href="' + esc(R.registerUrl(c)) + '" rel="noopener">HN Group Company Register</a>, updated automatically.'; }
 
@@ -168,7 +181,7 @@ function companyInfobox(params, ctx) {
   add('Manages', R.managedBy(c).filter((x) => x.parent !== c.slug).map((x) => link(R.displayName(x))).join('<br>'));
   add('Divisions', (c.divisions || []).map(link).join('<br>'));
   add('Industry', given.industry || (c.sic || []).join('<br>'));
-  if (c.status && c.status !== 'Active') add('Status', c.status + (c.dissolved ? ' (' + longDate(c.dissolved) + ')' : ''));
+  add('Status', statusText(c));
   add('Founded', longDate(c.incorporated));
   add('Company number', c.number);
   add('Registered office', c.registeredOffice);
@@ -177,7 +190,9 @@ function companyInfobox(params, ctx) {
   add('Email domain', c.emailDomain);
   if (!given.website) add('Website', webLink(c.website));
   const logo = (companies.logo && companies.logo(c)) || (given.logo ? findImage(given.logo) : null);
-  return infobox(['name = ' + R.displayName(c), ...rows], ctx, { logoHtml: logo ? pictureHtml(logo, R.displayName(c)) : '', footer: sourceNote(c), cls: 'company-infobox' });
+  if (c.status === 'Dissolved' && !ctx.categories.includes('Defunct companies')) ctx.categories.push('Defunct companies');
+  const notice = inactive(c) ? '<div class="notice company-status status-' + esc(statusKey(c)) + '" role="note"><span class="co-status status-' + esc(statusKey(c)) + '">' + esc(statusLabel(c)) + '</span> ' + esc(statusSentence(c, R.displayName(c))) + '</div>' : '';
+  return notice + infobox(['name = ' + R.displayName(c), ...rows], ctx, { logoHtml: logo ? pictureHtml(logo, R.displayName(c)) : '', footer: sourceNote(c), cls: 'company-infobox' + (inactive(c) ? ' status-' + statusKey(c) : '') });
 }
 
 // Follows company owners upwards: "owned by A (100%), which is owned by B (100%)". When a company has
@@ -199,8 +214,9 @@ function companyOwnership(params, ctx) {
   const c = companyOf((params[0] || '').trim());
   if (!c) return params[0] ? '<p class="company-facts muted">' + esc(params[0].trim()) + ' isn’t on the HN Group Company Register yet.</p>' : '';
   const R = companies.register, n = R.displayName(c), parts = [];
-  const chain = ownershipChain(c, new Set([c.slug]));
-  parts.push(chain ? n + ' is owned by ' + chain + '.' : 'No owner is recorded for ' + n + ' on the Company Register.');
+  const chain = ownershipChain(c, new Set([c.slug])), gone = c.status === 'Dissolved';
+  if (inactive(c)) parts.push(statusSentence(c, n));
+  parts.push(chain ? n + (gone ? ' was owned by ' : ' is owned by ') + chain + '.' : 'No owner is recorded for ' + n + ' on the Company Register.');
   const parent = c.parent && R.bySlug(c.parent), own = R.owners(c);
   if (parent && !own.some((o) => o.company && o.company.slug === parent.slug)) parts.push('It is a subsidiary of ' + link(R.displayName(parent)) + '.');
   const manager = c.managedBy && R.bySlug(c.managedBy);
@@ -220,7 +236,7 @@ function companyTree(params, ctx) {
   const walk = (c, depth) => {
     if (seen.has(c.slug)) return; seen.add(c.slug);
     const manager = c.managedBy && R.bySlug(c.managedBy), own = R.owners(c), share = own.length === 1 && own[0].company && own[0].share ? own[0].share + ' owned' : '';
-    const notes = [share, manager ? 'managed by ' + link(R.displayName(manager)) : ''].filter(Boolean);
+    const notes = [share, manager ? 'managed by ' + link(R.displayName(manager)) : '', inactive(c) ? statusText(c).charAt(0).toLowerCase() + statusText(c).slice(1) : ''].filter(Boolean);
     lines.push('*'.repeat(depth) + " '''" + link(R.displayName(c)) + "'''" + (notes.length ? ' (' + notes.join(', ') + ')' : ''));
     for (const d of c.divisions || []) lines.push('*'.repeat(depth + 1) + ' ' + link(d) + ' (division)');
     for (const x of R.children(c)) walk(x, depth + 1);
@@ -234,7 +250,7 @@ function companyList(params, ctx) {
   const R = companies.register, order = [], seen = new Set();
   const walk = (c) => { if (seen.has(c.slug)) return; seen.add(c.slug); order.push(c); R.children(c).forEach(walk); };
   R.roots().forEach(walk);
-  const rows = order.map((c) => { const manager = c.managedBy && R.bySlug(c.managedBy); return "| '''" + link(R.displayName(c)) + "''' || " + (R.owners(c).map(ownerText).join('<br>') || '—') + ' || ' + (manager ? link(R.displayName(manager)) : '—') + ' || ' + (c.status || '—') + ' || ' + (longDate(c.incorporated) || '—') + ' || ' + (webLink(c.website) || '—'); });
+  const rows = order.map((c) => { const manager = c.managedBy && R.bySlug(c.managedBy); return "| '''" + link(R.displayName(c)) + "''' || " + (R.owners(c).map(ownerText).join('<br>') || '—') + ' || ' + (manager ? link(R.displayName(manager)) : '—') + ' || ' + (statusText(c) || '—') + ' || ' + (longDate(c.incorporated) || '—') + ' || ' + (webLink(c.website) || '—'); });
   return table(['{| class="wikitable company-list"', '! Company !! Owner !! Managed by !! Status !! Founded !! Website', ...rows.flatMap((r) => ['|-', r]), '|}'], ctx);
 }
 // {{Company cards}}: a card for every company, with its current logo.
@@ -244,7 +260,7 @@ function companyCards(ctx) {
   const walk = (c) => { if (seen.has(c.slug)) return; seen.add(c.slug); order.push(c); R.children(c).forEach(walk); };
   R.roots().forEach(walk);
   return order.map((c) => { const n = R.displayName(c), logo = companies.logo && companies.logo(c), blurb = companies.blurb ? companies.blurb(c) : ''; ctx.links.add(n);
-    return '<a class="company-card" href="' + esc(pageUrl(n)) + '"><span class="cc-logo">' + (logo ? pictureHtml(logo, n) : '<span class="cc-initials">' + esc(n.split(/\s+/).map((w) => w[0]).join('').slice(0, 3)) + '</span>') + '</span><span class="cc-name">' + esc(n) + '</span>' + (blurb ? '<span class="cc-blurb">' + esc(blurb) + '</span>' : '') + '</a>'; }).join('');
+    return '<a class="company-card' + (inactive(c) ? ' status-' + esc(statusKey(c)) : '') + '" href="' + esc(pageUrl(n)) + '"><span class="cc-logo">' + (logo ? pictureHtml(logo, n) : '<span class="cc-initials">' + esc(n.split(/\s+/).map((w) => w[0]).join('').slice(0, 3)) + '</span>') + '</span><span class="cc-name">' + esc(n) + (inactive(c) ? ' <span class="co-status status-' + esc(statusKey(c)) + '">' + esc(statusLabel(c)) + '</span>' : '') + '</span>' + (blurb ? '<span class="cc-blurb">' + esc(blurb) + '</span>' : '') + '</a>'; }).join('');
 }
 
 function table(lines, ctx) {

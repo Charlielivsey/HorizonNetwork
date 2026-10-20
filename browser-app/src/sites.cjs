@@ -22,6 +22,7 @@ const SITES=[
  ['https://careers.hngroup.org.uk/',['careers','hn careers','hn group careers']],
  ['https://docs.hngroup.org.uk/',['docs','documentation','hn docs','hn group docs']],
  ['https://news.hngroup.org.uk/',['news','hn news','hn group news']],
+ ['https://investors.hngroup.org.uk/',['investors','hn investors','hn group investors','investor relations','investor portal']],
  ['https://downloads.hngroup.org.uk/',['downloads','hn downloads','hn group downloads','hn browser','browser download']]
 ];
 const normalize=value=>value.toLowerCase().trim().replace(/^(?:open|visit|go to|take me to)\s+/,'').replace(/[^a-z0-9]/g,'');

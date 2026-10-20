@@ -38,7 +38,7 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
     const p=active.person;
     return {
       id:p.id,displayName:p.displayName,email:(p.emails||[]).find(e=>e.primary)?.address||p.emails?.[0]?.address||store.loginName(p),
-      jobTitle:p.jobTitle||'',company:p.company||'',avatarUrl:store.avatarFile(p)?'/api/avatar':null,
+      jobTitle:p.jobTitle||'',company:p.company||'',companies:[...new Set([p.company,...(p.otherRoles||[]).map(r=>r.company)].filter(Boolean))],avatarUrl:store.avatarFile(p)?'/api/avatar':null,
       ...(p.account.passwordTemporary?{passwordChangeRequired:true,passwordMinLength:store.meView(p).passwordMinLength}:{}),
       ...(!store.hasCode(p)?{codeSetupRequired:true}:{}),statusAdminAllowed:allowed(active,store),ownerAccess:store.hasOwnerAccess(p)&&!active.data.impersonatorId
     };

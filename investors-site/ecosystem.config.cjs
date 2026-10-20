@@ -1,0 +1,1 @@
+module.exports={apps:[{name:'hn-investors',script:'/opt/hn-investors/server.js',cwd:'/opt/hn-investors',instances:1,exec_mode:'fork',autorestart:true,max_memory_restart:'160M',env:{NODE_ENV:'production',HOST:'127.0.0.1',PORT:5200,INVESTORS_PUBLIC_DIR:'/opt/hn-investors/public',INVESTORS_DATA_DIR:'/var/lib/hn-investors'}}]};

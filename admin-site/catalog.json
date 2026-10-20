@@ -112,6 +112,15 @@
     ]
   },
   {
+    "id": "investors",
+    "name": "HN Group Investors",
+    "process": "hn-investors",
+    "port": 5200,
+    "hosts": [
+      "investors.hngroup.org.uk"
+    ]
+  },
+  {
     "id": "media",
     "name": "Horizon Media Group",
     "process": "hn-media",

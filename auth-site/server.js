@@ -23,6 +23,7 @@ const CLIENTS = {
   portal: { name: 'Staff portal', callback: 'https://staff.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use the staff portal.' },
   wiki: { name: 'HN Group Wiki', callback: 'https://wiki.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot edit the HN Group Wiki.' },
   branding: { name: 'HN Group brand centre', callback: 'https://branding.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use the HN Group brand centre.' },
+  investors: { name: 'HN Group Investors', callback: 'https://investors.hngroup.org.uk/auth/callback', allowed: user => !!user.ownerAccess || (Array.isArray(user.companies) ? user.companies : [user.company]).includes('HN Group'), denied: 'Only staff with a role at HN Group can sign in to the investors website.' },
   vpn: { name: 'HN Group VPN', callback: 'https://vpn.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use the HN Group VPN.' },
 };
 const HEX = /^[a-f0-9]{64}$/;

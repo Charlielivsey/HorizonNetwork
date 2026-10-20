@@ -300,3 +300,15 @@ a.external::after { content: "↗"; font-size: .75em; margin-left: .15em; opacit
 @keyframes wiki-fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 @media (max-width: 560px) { .file-list li, .logo-list li { flex-direction: column; } .file-thumb { flex-basis: auto; width: 100%; } }
 @media (prefers-reduced-motion: reduce) { .upload-preview { animation: none; } }
+
+/* Company status from the register: defunct (dissolved), in liquidation, in administration, dormant */
+.co-status { display: inline-block; padding: .05rem .55rem; border-radius: 999px; font-size: .72rem; font-weight: 800; letter-spacing: .02em; vertical-align: 1px; background: var(--surface-2); color: var(--muted); border: 1px solid var(--border-strong); white-space: nowrap; }
+.co-status.status-defunct { background: #2B2D3A; color: #fff; border-color: #2B2D3A; }
+.co-status.status-liquidation, .co-status.status-in-administration { background: #FBE7EE; color: var(--danger); border-color: #F0B9CB; }
+.co-status.status-dormant { background: var(--notice); color: #6B5E00; border-color: var(--notice-border); }
+@media (prefers-color-scheme: dark) { .co-status.status-defunct { background: #ECEBF4; color: #161A2E; border-color: #ECEBF4; } .co-status.status-liquidation, .co-status.status-in-administration { background: #3A1624; } .co-status.status-dormant { color: var(--yellow); } }
+.notice.company-status { display: flex; gap: .6rem; align-items: baseline; flex-wrap: wrap; border-left-color: var(--muted); }
+.notice.company-status.status-liquidation, .notice.company-status.status-in-administration { border-left-color: var(--danger); }
+.infobox.status-defunct .ib-logo img, .company-card.status-defunct .cc-logo img { filter: grayscale(1); opacity: .65; }
+.infobox.status-defunct caption { color: var(--muted); }
+.company-card.status-defunct { border-style: dashed; }

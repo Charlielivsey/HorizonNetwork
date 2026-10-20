@@ -34,7 +34,7 @@ test('real staff password and PIN, minimal live profile, avatar, fixed clients a
     assert.equal((await post('/api/login/code',{code:'111111'},flow)).status,401);
     const verified = await post('/api/login/code',{code:'582947'},flow); assert.equal(verified.status,200);
     const account = (await verified.json()).user;
-    assert.deepEqual(Object.keys(account).sort(),['id','displayName','email','jobTitle','company','avatarUrl','statusAdminAllowed','ownerAccess'].sort());
+    assert.deepEqual(Object.keys(account).sort(),['id','displayName','email','jobTitle','company','companies','avatarUrl','statusAdminAllowed','ownerAccess'].sort());
     assert.equal(account.email,'test.owner@hngroup.org.uk'); assert.equal(account.displayName,'Test Owner'); assert.equal(account.jobTitle,'System owner'); assert.equal(account.company,store.COMPANIES[0]); assert.equal(account.statusAdminAllowed,true); assert.equal(account.ownerAccess,true);
     const cookie = verified.headers.getSetCookie().find(c=>c.startsWith('__Host-hn_auth_session=')).split(';')[0];
     assert.ok(!verified.headers.get('set-cookie').includes('hn_staff_session='));

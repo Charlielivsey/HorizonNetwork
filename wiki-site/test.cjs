@@ -226,6 +226,19 @@ test('HN Group Wiki: reading, editing, history, protection and safety', async ()
     const pictures = await anon.go('/wiki/Horizon_Studios');
     assert.ok(pictures.url.endsWith('/wiki/Horizon_Pictures?from=Horizon%20Studios') && pictures.text.includes('Staff-written history.'));
     assert.ok(pictures.text.includes('<caption>Horizon Pictures</caption>'));
+    // A dissolved company is shown as defunct everywhere: notice, infobox, ownership, list, tree, cards and category.
+    regFeed = { version: 'v4', companies: regFeed.companies.map((c) => c.slug === 'horizon-studios' ? { ...c, status: 'Dissolved', dissolved: '2026-10-19' } : c) };
+    await until(async () => (await anon.go('/wiki/Horizon_Pictures')).text.includes('Defunct since 19 October 2026'), 'the defunct status');
+    const dissolved = (await anon.go('/wiki/Horizon_Pictures')).text;
+    assert.ok(dissolved.includes('class="notice company-status status-defunct"') && dissolved.includes('Horizon Pictures is defunct: it ceased to exist as a company on 19 October 2026.'));
+    assert.ok(!/dissolved/i.test(dissolved.replace(/<footer[\s\S]*$/, '')), 'the word shown is defunct');
+    assert.match(dissolved, /<th scope="row">Status<\/th><td>Defunct since 19 October 2026<\/td>/);
+    assert.ok(dissolved.includes('company-infobox status-defunct') && dissolved.includes('Horizon Pictures was owned by'));
+    assert.ok(dissolved.includes('Defunct companies'), 'category');
+    assert.ok((await anon.go('/wiki/Category:Defunct_companies')).text.includes('Horizon Pictures'));
+    assert.ok((await anon.go('/wiki/List_of_HN_Group_companies')).text.includes('defunct since 19 October 2026'), 'tree');
+    assert.ok((await anon.go('/wiki/Main_Page')).text.includes('company-card status-defunct'), 'card');
+    assert.match((await anon.go('/wiki/HN_Group')).text, /<th scope="row">Status<\/th><td>Active<\/td>/, 'active companies show their status too');
 
     // ---------- Images and logos ----------
     const png = 'data:image/png;base64,' + Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000000', 'hex').toString('base64');
