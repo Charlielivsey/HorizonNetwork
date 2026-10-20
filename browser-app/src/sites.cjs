@@ -15,7 +15,7 @@ const SITES=[
  ['https://companies.hngroup.org.uk/',['companies','company register','companies register','hn group company register']],
  ['https://vpn.hngroup.org.uk/',['vpn','hn vpn','hn group vpn','secure terminal','hn group secure terminal']],
  ['https://media.hngroup.org.uk/',['media','media group','horizon media','horizon media group']],
- ['https://holding.hngroup.org.uk/',['horizon assets management','assets management','horizon holding','holding']],
+ ['https://holding.hngroup.org.uk/',['hn group management','hngroup management','group management','horizon assets management','assets management','horizon holding','holding']],
  ['https://development.hngroup.org.uk/',['development','horizon development']],
  ['https://support.hngroup.org.uk/',['support','hn support','hn group support']],
  ['https://clients.hngroup.org.uk/',['clients','client portal','clients portal','hn group clients']],

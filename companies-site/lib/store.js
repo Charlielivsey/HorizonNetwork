@@ -62,8 +62,22 @@ function init(dataDir) {
 function runGroupMigrations() {
   if (!Array.isArray(db.migrations)) db.migrations = [];
   // The tests' fixtures use the starting structure, so they can switch these updates off.
-  if (process.env.COMPANIES_GROUP_UPDATES === 'off') return;
-  if (!db.migrations.includes('group-structure-2026-10-18')) { groupStructure20261018(); db.migrations.push('group-structure-2026-10-18'); }
+  if (process.env.COMPANIES_GROUP_UPDATES !== 'off' && !db.migrations.includes('group-structure-2026-10-18')) { groupStructure20261018(); db.migrations.push('group-structure-2026-10-18'); }
+  // The user's request (20 October 2026): Horizon Assets Management Limited is now HN Group Management Limited.
+  // The company keeps its old name as a previous name and gets a Change of name filing; references elsewhere follow.
+  if (process.env.COMPANIES_GROUP_UPDATES !== 'off' && !db.migrations.includes('rename-hn-group-management')) {
+    const OLD = /^horizon assets management limited$/i, NEW = 'HN Group Management Limited';
+    const fix = (v) => String(v || '').replace(/Horizon Assets Management Limited/g, NEW).replace(/Horizon Assets Management/g, 'HN Group Management');
+    for (const c of db.companies) {
+      if (OLD.test(String(c.legalName).trim())) { const old = c.legalName; c.legalName = NEW; c.name = 'HN Group Management'; recordNameChange(c, old); c.updatedAt = now(); audit('system', 'company.rename', c.slug + ' ' + old + ' → ' + NEW); }
+      else if (/Horizon Assets Management/.test(c.name)) c.name = fix(c.name);
+      c.description = fix(c.description);
+      for (const x of c.psc) x.name = fix(x.name);
+      for (const o of c.officers) o.name = fix(o.name);
+      for (const x of c.charges) x.entitled = fix(x.entitled);
+    }
+    db.migrations.push('rename-hn-group-management');
+  }
 }
 
 // The user's request (18 October 2026):

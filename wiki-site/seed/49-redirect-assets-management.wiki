@@ -1,3 +1,3 @@
 title: Assets Management
 ---
-#REDIRECT [[Horizon Assets Management]]
+#REDIRECT [[HN Group Management]]

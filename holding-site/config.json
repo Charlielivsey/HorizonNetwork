@@ -3,9 +3,9 @@
   "domain": "holding.hngroup.org.uk",
   "port": 4000,
   "kind": "company",
-  "name": "Horizon Assets Management",
-  "logo": "horizon-assets-management-logo",
-  "legal": "Horizon Assets Management Limited \u00b7 A wholly owned subsidiary of HN Group Limited",
+  "name": "HN Group Management",
+  "logo": "hn-group-management-logo",
+  "legal": "HN Group Management Limited \u00b7 A wholly owned subsidiary of HN Group Limited",
   "content": {
     "eyebrow": "HORIZON ASSETS MANAGEMENT",
     "title": "Looking after what connects us.",
@@ -17,25 +17,25 @@
       {
         "label": "ASSETS",
         "title": "Group ownership.",
-        "text": "Horizon Assets Management owns the group\u2019s assets, domains, Discord servers and technical assets."
+        "text": "HN Group Management owns the group\u2019s assets, domains, Discord servers and technical assets."
       },
       {
         "label": "EMAIL",
         "title": "Keeping the group connected.",
-        "text": "All HN Group email services are managed by Horizon Assets Management, supporting communication across the group."
+        "text": "All HN Group email services are managed by HN Group Management, supporting communication across the group."
       },
       {
         "label": "STEWARDSHIP",
         "title": "Managed by HN Group.",
-        "text": "Horizon Assets Management has no staff of its own. HN Group staff manage it directly."
+        "text": "HN Group Management has no staff of its own. HN Group staff manage it directly."
       }
     ],
     "aboutTitle": "One of three direct subsidiaries.",
-    "about": "Horizon Assets Management Limited is a direct wholly owned subsidiary of HN Group Limited, alongside Horizon Network Limited and Horizon Media Group Limited.",
+    "about": "HN Group Management Limited is a direct wholly owned subsidiary of HN Group Limited, alongside Horizon Network Limited and Horizon Media Group Limited.",
     "relatedLabel": "Explore HN Group",
     "relatedUrl": "https://hngroup.org.uk/companies",
     "detailTitle": "A clear role in the group.",
-    "detail": "Horizon Assets Management looks after ownership and email services. Operational enquiries are handled by HN Group staff; customer support is available through HN Group Support.",
+    "detail": "HN Group Management looks after ownership and email services. Operational enquiries are handled by HN Group staff; customer support is available through HN Group Support.",
     "contactLabel": "OWNERSHIP & SERVICES",
     "contactTitle": "Speak to the group.",
     "contactText": "For questions about group assets, domains or email services, contact the HN Group team.",

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100.0 100.0" width="100" height="100" role="img" aria-label="HN Group Management">
+  <title>HN Group Management</title>
+  <rect width="100.0" height="100.0" fill="#5514B4"/>
+  <g transform="translate(15 15) scale(0.7)">
+  <circle cx="50" cy="50" r="46.9" fill="none" stroke="#FFFFFF" stroke-width="6.2"/>
+  <path transform="translate(16.60 36.62) scale(0.78)" fill="#FFFFFF" fill-rule="evenodd" d="M0 0h7.8v13.45h8.40V0h7.8v34.3h-7.8v-13.45h-8.40v13.45H0z"/>
+  <path transform="translate(37.52 36.62) scale(0.78)" fill="#FFFFFF" fill-rule="evenodd" d="M25 0H12.5A12.5 12.5 0 0 0 0 12.5V21.8A12.5 12.5 0 0 0 12.5 34.3H25V13.4H12.6V21.2H17.2V26.5H12.5A4.7 4.7 0 0 1 7.8 21.8V12.5A4.7 4.7 0 0 1 12.5 7.8H25z"/>
+  <path transform="translate(59.22 36.62) scale(0.78)" fill="#FFFFFF" fill-rule="evenodd" d="M0 0h9.4l6.1 17.6L21.6 0H31v34.3h-7.6V14.2l-5.1 13.6h-5.6L7.6 14.2V34.3H0z"/>
+  </g>
+</svg>

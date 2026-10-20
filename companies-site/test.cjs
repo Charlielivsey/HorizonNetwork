@@ -36,7 +36,7 @@ test('company register: public records, customers, requests, submissions and sta
     // The home page is a search page with the HN Group logo but not the HN Group website theme, and no company list.
     let html = await (await get('/')).text();
     assert.match(html, /hn-group-wordmark-white\.svg/); assert.match(html, /Staff sign in/);
-    assert.doesNotMatch(html, /Plus Jakarta|site\.css|Horizon Network Limited|Holding Co|Assets Management/);
+    assert.doesNotMatch(html, /Plus Jakarta|site\.css|Horizon Network Limited|Holding Co|Assets Management|Group Management/);
     assert.match(html, /run by HN Group Limited for the companies in HN Group/);
     assert.equal((await get('/assets/brand/hn-group-wordmark.svg')).status, 200);
     // Only HN Group and Horizon Network are on the register, with unknown details left blank.
@@ -422,7 +422,10 @@ test('company register: group structure update', () => {
     s = fresh(); s.init(dir); s = fresh(); s.init(dir);
     const by = (n) => s.db.companies.find((c) => c.legalName === n);
     const current = (c) => c.psc.filter((p) => !p.ceased);
-    const hn = by('HN Group Limited'), inv = by('HN Group Investments Limited'), media = by('Horizon Media Group Limited'), net = by('Horizon Network Limited'), ham = by('Horizon Assets Management Limited');
+    const hn = by('HN Group Limited'), inv = by('HN Group Investments Limited'), media = by('Horizon Media Group Limited'), net = by('Horizon Network Limited'), ham = by('HN Group Management Limited');
+    // Horizon Assets Management Limited was renamed HN Group Management Limited (20 October 2026), with a Change of name filing.
+    assert.equal(ham.name, 'HN Group Management'); assert.deepEqual(ham.previousNames.map((p) => p.name), ['Horizon Assets Management Limited']);
+    assert.ok(!by('Horizon Assets Management Limited'));
     assert.deepEqual(current(hn).map((p) => [p.name, p.kind, p.share]), [['Charlie Livsey', 'Individual', '100']]);
     assert.ok(inv && inv.parent === hn.slug && inv.managedBy === hn.slug && inv.officers.some((o) => o.name === 'Charlie Livsey'));
     assert.deepEqual(current(inv).map((p) => [p.name, p.share, p.control.length]), [['HN Group Limited', '100', 4]]);
@@ -440,7 +443,7 @@ test('company register: group structure update', () => {
     assert.match(filed(hn), /Notification of Charlie Livsey as a person with significant control/);
     assert.match(filed(inv), /Incorporation of HN Group Investments Limited/); assert.match(filed(inv), /Appointment of Charlie Livsey as a director/); assert.match(filed(inv), /Notification of HN Group Limited/);
     for (const c of [media, net]) { assert.match(filed(c), /Cessation of HN Group Limited/); assert.match(filed(c), /Notification of HN Group Investments Limited/); }
-    assert.match(filed(ham), /Cessation of Old Holder/); assert.match(filed(ham), /Appointment of Charlie Livsey/); assert.match(filed(ham), /Notification of HN Group Limited/);
+    assert.match(filed(ham), /Cessation of Old Holder/); assert.match(filed(ham), /Appointment of Charlie Livsey/); assert.match(filed(ham), /Notification of HN Group Limited/); assert.match(filed(ham), /Change of name from Horizon Assets Management Limited to HN Group Management Limited/);
     // Running again changes nothing, and every filing has its PDF.
     assert.equal(s.db.filings.filter((f) => /Cessation of HN Group Limited/.test(f.description)).length, 2);
     for (const f of s.db.filings) assert.ok(fs.existsSync(s.filePath(f.file)));

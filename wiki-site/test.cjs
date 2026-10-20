@@ -59,7 +59,7 @@ test('HN Group Wiki: reading, editing, history, protection and safety', async ()
     co('horizon-network', 'Horizon Network Limited', 'Horizon Network', { parent: 'hn-group-investments', website: 'horizon-network.co.uk', emailDomain: 'horizon-network.co.uk', divisions: ['Horizon Development'], owners: [...parentOwner('HN Group Investments Limited'), { name: 'Jack Example', kind: 'Individual', share: '', control: ['Has significant influence or control'] }] }),
     co('horizon-media-group', 'Horizon Media Group Limited', 'Horizon Media Group', { parent: 'hn-group-investments', owners: parentOwner('HN Group Investments Limited') }),
     co('horizon-advertising', 'Horizon Advertising Limited', 'Horizon Advertising', { parent: 'horizon-media-group', managedBy: 'horizon-network', website: 'horizonadvertising.co.uk', emailDomain: 'horizonadvertising.co.uk', owners: parentOwner('Horizon Media Group Limited') }),
-    co('horizon-assets-management', 'Horizon Assets Management Limited', 'Horizon Assets Management', { parent: 'hn-group', emailDomain: 'holding.hngroup.org.uk', owners: parentOwner('HN Group Limited'), previousNames: [{ name: 'Horizon Holding Co Limited', until: '2026-10-17' }] }),
+    co('hn-group-management', 'HN Group Management Limited', 'HN Group Management', { parent: 'hn-group', emailDomain: 'holding.hngroup.org.uk', owners: parentOwner('HN Group Limited'), previousNames: [{ name: 'Horizon Holding Co Limited', until: '2026-10-17' }] }),
   ] };
   const register = http.createServer((req, res) => {
     if (req.url !== '/api/public/companies') { res.writeHead(404); return res.end(); }
@@ -112,7 +112,7 @@ test('HN Group Wiki: reading, editing, history, protection and safety', async ()
     assert.ok((await anon.go('/wiki/Horizon_Advertising')).text.includes('Managed by'), 'Advertising infobox shows who manages it');
     for (const t of ['HN_Group', 'Horizon_Network', 'Horizon_Advertising', 'Horizon_Development', 'Horizon_Media_Group', 'Horizon_Assets_Management', 'List_of_HN_Group_companies']) {
       const html = (await anon.go('/wiki/' + t)).text;
-      assert.ok(!html.includes('Legal name') && !/(Network|Media Group|Assets Management|Advertising) Limited/.test(html.replace(/<footer[\s\S]*$/, '')), t + ' shows no legal names');
+      assert.ok(!html.includes('Legal name') && !/(Network|Media Group|Group Management|Advertising) Limited/.test(html.replace(/<footer[\s\S]*$/, '')), t + ' shows no legal names');
     }
     assert.ok((await anon.go('/wiki/HNGroup')).url.endsWith('/wiki/HN_Group?from=HNGroup'), 'redirect page');
     assert.ok((await anon.go('/wiki/hn_group')).url.endsWith('/wiki/HN_Group'), 'case-insensitive titles');

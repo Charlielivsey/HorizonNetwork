@@ -11,7 +11,7 @@ protected: yes
 {{Columns start}}
 {{Box start|From today's featured article|purple}}
 [[File:hn-group-wordmark.svg|thumb|The HN Group wordmark]]
-'''[[HN Group]]''' brings together [[Horizon Network]] and [[Horizon Media Group]], and [[Horizon Assets Management]] holds the group's assets. [[Horizon Development]] brings software expertise to Horizon Network, and [[Horizon Advertising]], a Horizon Media Group company, is managed by Horizon Network alongside its digital infrastructure. The businesses share people, systems and standards across the group, so a client of one Horizon business can draw on the skills of all of them. ('''[[HN Group|Full article…]]''')
+'''[[HN Group]]''' brings together [[Horizon Network]] and [[Horizon Media Group]], and [[HN Group Management]] holds the group's assets. [[Horizon Development]] brings software expertise to Horizon Network, and [[Horizon Advertising]], a Horizon Media Group company, is managed by Horizon Network alongside its digital infrastructure. The businesses share people, systems and standards across the group, so a client of one Horizon business can draw on the skills of all of them. ('''[[HN Group|Full article…]]''')
 {{Box end}}
 
 {{Box start|Did you know…|teal}}
@@ -19,12 +19,12 @@ protected: yes
 * … that [[Horizon Advertising]] is a subsidiary of [[Horizon Media Group]], but is managed by [[Horizon Network]]?
 * … that Horizon Hosting, [[Horizon Network]]'s planned hosting service, will offer VPS, dedicated servers and managed cloud?
 * … that Horizon Network can also be reached at '''horizonetwork.com''', with '''horizon-network.co.uk''' as its main address?
-* … that [[Horizon Assets Management]] owns the group's domains, Discord servers and technical assets, but has no staff of its own?
+* … that [[HN Group Management]] owns the group's domains, Discord servers and technical assets, but has no staff of its own?
 * … that [[Horizon Advertising]]'s roundel logo is lavender, while the other Horizon roundels are indigo?
 {{Box end}}
 {{Column}}
 {{Box start|Explore the group|pink}}
-* '''Companies:''' [[List of HN Group companies|All companies]] · [[HN Group]] · [[Horizon Network]] · [[Horizon Advertising]] · [[Horizon Development]] · [[Horizon Media Group]] · [[Horizon Assets Management]]
+* '''Companies:''' [[List of HN Group companies|All companies]] · [[HN Group]] · [[Horizon Network]] · [[Horizon Advertising]] · [[Horizon Development]] · [[Horizon Media Group]] · [[HN Group Management]]
 * '''Services:''' [[Horizon Network#Services|Infrastructure]] · [[Horizon Advertising#Services|Advertising]] · [[Horizon Development#Services|Software development]] · [[Horizon Media Group#Activities|Media]]
 * '''Brand:''' [[HN Group#Brand|HN Group brand]] · [[Horizon Advertising#Brand|Horizon Advertising roundel]]
 * '''Lists:''' [[List of HN Group companies]]

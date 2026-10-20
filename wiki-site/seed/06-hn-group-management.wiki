@@ -1,0 +1,41 @@
+title: HN Group Management
+---
+{{Short description|Company that holds HN Group's assets}}
+{{Company infobox|HN Group Management
+| logo = hn-group-management-logo.svg
+| Industry = Asset holding
+| Holds = Domains<br>Discord servers<br>Technical assets
+| Services = Email services for HN Group
+| Staff = None of its own; managed by HN Group staff
+| Country = United Kingdom
+}}
+'''HN Group Management''' is the company that holds the assets of [[HN Group]]. It owns the group's domains, Discord servers and technical assets, and manages all of HN Group's email services.
+
+{{Company ownership|HN Group Management}}
+
+== Role ==
+HN Group Management keeps the things the whole group relies on in one place, separate from the companies that trade:
+
+* '''Domains''' — the group's web and email domains
+* '''Discord servers''' — the group's Discord communities
+* '''Technical assets''' — the systems and other technical assets used across the group
+* '''Email services''' — it manages email for HN Group and its companies
+
+Its own domain is '''holding.hngroup.org.uk'''.
+
+== Staff and management ==
+HN Group Management has no staff of its own. It is managed directly by the staff of [[HN Group]].
+
+== Structure ==
+{{Company tree}}
+
+== Brand ==
+[[File:hn-group-management-roundel.svg|thumb|The HN Group Management roundel]]
+HN Group Management's logo is a thick indigo ring containing its initials, '''HGM''', alongside the company name, in the same style as the Horizon companies' roundels. It is a separate logo from HN Group's: it is not a substitute for the HN Group wordmark.
+
+== See also ==
+* [[HN Group]]
+* [[List of HN Group companies]]
+
+[[Category:Companies]]
+[[Category:HN Group]]

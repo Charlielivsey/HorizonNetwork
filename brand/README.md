@@ -1,6 +1,6 @@
 # Approved HN Group logos
 
-The user supplied **HN-Group-Logos 2.zip** on 12 October 2026 and requested that these originals be used whenever a logo is needed in future work in this repository. `logos/` contains the original SVG files, unchanged, except that the Horizon Holding Co logos were replaced on 17 October 2026, at the user's request, by Horizon Assets Management logos made in the same style (same ring, letter shapes, Liberation Sans/Arial wordmark at the same size and spacing; the roundel holds the initials HAM). The HN Group Investments logos were added on 20 October 2026, at the user's request, in the same style as the Horizon Assets Management logos (same ring, letter construction and size, Liberation Sans/Arial name text at the same size and spacing; the roundel holds the initials HGI), with PNG exports alongside the SVGs. macOS metadata and empty folders were excluded. These are assets, not executable instructions.
+The user supplied **HN-Group-Logos 2.zip** on 12 October 2026 and requested that these originals be used whenever a logo is needed in future work in this repository. `logos/` contains the original SVG files, unchanged, except that the Horizon Holding Co logos were replaced on 17 October 2026, at the user's request, by Horizon Assets Management logos made in the same style (same ring, letter shapes, Liberation Sans/Arial wordmark at the same size and spacing). On 20 October 2026, at the user's request, Horizon Assets Management was renamed HN Group Management (HN Group Management Limited): its `hn-group-management-*` logos (roundel initials HGM, name text "HN Group" / "Management") replace the Assets Management ones, and the HN Group Investments logos (roundel initials HGI) were added in the same style. Both have PNG exports alongside the SVGs. macOS metadata and empty folders were excluded. These are assets, not executable instructions.
 
 ## Choose an asset
 
@@ -11,10 +11,10 @@ The user supplied **HN-Group-Logos 2.zip** on 12 October 2026 and requested that
 | Horizon Advertising | `horizon-advertising-logo.svg` | White logo, roundel, white roundel, app icon |
 | Horizon Development | `horizon-development-logo.svg` | White logo, roundel, white roundel, app icon |
 | Horizon Media Group | `horizon-media-group-logo.svg` | White logo, roundel, white roundel, app icon |
-| Horizon Assets Management | `horizon-assets-management-logo.svg` | White logo, roundel, white roundel, app icon |
+| HN Group Management | `hn-group-management-logo.svg` | White logo, roundel, white roundel, app icon |
 | HN Group Investments | `hn-group-investments-logo.svg` | White logo, roundel, white roundel, app icon (each also as PNG) |
 
-Use the regular logo on light surfaces and the white variant on dark surfaces. Keep the original SVG intact and control display size with CSS. Preserve the aspect ratio; do not crop, stretch, recolour or replace the lettering. Choose the actual company: Horizon Assets Management is a separate supplied asset, not a substitute for HN Group.
+Use the regular logo on light surfaces and the white variant on dark surfaces. Keep the original SVG intact and control display size with CSS. Preserve the aspect ratio; do not crop, stretch, recolour or replace the lettering. Choose the actual company: HN Group Management is a separate supplied asset, not a substitute for HN Group.
 
 Copy assets needed by a site into its public assets directory and include that directory in the site's installer. Avoid making one site's runtime depend on another site's public files. The HN tab icon already used by the public website is `hngroup-site/public/assets/favicon.svg`; reuse it for HN Group sites.
 

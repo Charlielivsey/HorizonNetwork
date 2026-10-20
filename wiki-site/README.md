@@ -4,10 +4,10 @@ A Wikipedia-style encyclopedia of HN Group and its companies, in the HN Group br
 
 ## What's on it
 
-- **Company articles, pre-filled.** HN Group, Horizon Network, Horizon Advertising, Horizon Development, Horizon Media Group and Horizon Assets Management, plus a List of HN Group companies. Each has an infobox with the company's logo, its place in the group, its staff email domain, sections, references to the group's public websites and categories.
+- **Company articles, pre-filled.** HN Group, Horizon Network, Horizon Advertising, Horizon Development, Horizon Media Group and HN Group Management, plus a List of HN Group companies. Each has an infobox with the company's logo, its place in the group, its staff email domain, sections, references to the group's public websites and categories.
   - **Horizon Advertising's ownership.** It is shown as a subsidiary of Horizon Media Group that is managed by Horizon Network.
   - **Companies only.** As requested, there are no articles about the websites or online services yet.
-  - **Facts only.** Articles only state what the group's public websites and brand guide say. Nothing about dates, figures or people has been invented; Horizon Assets Management's role isn't documented, so its article is a stub that says so.
+  - **Facts only.** Articles only state what the group's public websites and brand guide say. Nothing about dates, figures or people has been invented; HN Group Management's role isn't documented, so its article is a stub that says so.
 - **Wikipedia features.** Every article has these:
   - an infobox, a contents box, numbered references and categories;
   - redirects, such as "HNGroup" → HN Group, and a red link to any page that doesn't exist yet;

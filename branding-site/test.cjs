@@ -94,7 +94,7 @@ test('brand centre: staff only, sign-in, downloads and sign-out', async () => {
     const html = await r.text();
     assert.match(html, /Brand centre/);
     assert.match(html, /Ella Brooks/);
-    for (const company of ['HN Group', 'Horizon Network', 'Horizon Media Group', 'Horizon Advertising', 'Horizon Development', 'Horizon Assets Management']) assert.ok(html.includes('>' + company + '<'), company);
+    for (const company of ['HN Group', 'Horizon Network', 'Horizon Media Group', 'Horizon Advertising', 'Horizon Development', 'HN Group Management']) assert.ok(html.includes('>' + company + '<'), company);
     assert.match(html, /#5514B4/);
     assert.doesNotMatch(html, /style="/, 'no inline styles (CSP)');
     assert.equal(r.headers.get('cache-control'), 'no-store');

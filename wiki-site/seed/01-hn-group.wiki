@@ -17,8 +17,8 @@ The group describes its purpose as "building the digital infrastructure, product
 The group's companies, as recorded on the HN Group Company Register:
 {{Company tree}}
 
-=== Horizon Assets Management ===
-[[Horizon Assets Management]] owns the group's assets, including its domains, Discord servers and technical assets, and manages all of HN Group's email services. It has no staff of its own and is managed directly by HN Group staff.
+=== HN Group Management ===
+[[HN Group Management]] owns the group's assets, including its domains, Discord servers and technical assets, and manages all of HN Group's email services. It has no staff of its own and is managed directly by HN Group staff.
 
 === Horizon Advertising ===
 [[Horizon Advertising]] has an unusual arrangement. It is a '''subsidiary of [[Horizon Media Group]]''', but it is '''managed by [[Horizon Network]]''', which runs it day to day alongside its digital infrastructure and [[Horizon Development]]. This is why the group's websites present Horizon Advertising among Horizon Network's services.
@@ -75,7 +75,7 @@ The HN Group wordmark is a heavy logotype set above a stepped line of eight bran
 |}
 
 === Logos ===
-HN Group and [[Horizon Network]] use wordmarks: the company name above the stepped colour stripe. [[Horizon Advertising]], [[Horizon Development]], [[Horizon Media Group]] and [[Horizon Assets Management]] use roundels: a thick ring containing the company's initials, shown alongside the company name. Horizon Advertising's roundel is lavender ({{Swatch|#7B52C4}}<code>#7B52C4</code>); the others are indigo ({{Swatch|#5514B4}}<code>#5514B4</code>). Every logo has a white version for dark backgrounds, and the roundel companies also have an app icon.
+HN Group and [[Horizon Network]] use wordmarks: the company name above the stepped colour stripe. [[Horizon Advertising]], [[Horizon Development]], [[Horizon Media Group]] and [[HN Group Management]] use roundels: a thick ring containing the company's initials, shown alongside the company name. Horizon Advertising's roundel is lavender ({{Swatch|#7B52C4}}<code>#7B52C4</code>); the others are indigo ({{Swatch|#5514B4}}<code>#5514B4</code>). Every logo has a white version for dark backgrounds, and the roundel companies also have an app icon.
 
 {| class="wikitable"
 ! Company !! Logo style !! Colour
@@ -90,7 +90,7 @@ HN Group and [[Horizon Network]] use wordmarks: the company name above the stepp
 |-
 | [[Horizon Media Group]] || Roundel "HM" || Indigo
 |-
-| [[Horizon Assets Management]] || Roundel || Indigo
+| [[HN Group Management]] || Roundel || Indigo
 |}
 
 Logos are used as supplied: they aren't recoloured, stretched, cropped or redrawn, and the regular version is used on light backgrounds with the white version on dark ones.

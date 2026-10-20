@@ -61,7 +61,7 @@ Internal staff portal for the whole of HN Group, served at **https://staff.hngro
 - **Settings.** Opened by clicking your name. It has three tabs: **Profile** (picture, banner, display name, phone, location, time zone, skills, languages and birthday), **Appearance** (theme) and **Security** (password, sign-in code, **Where you're signed in**, where you can sign out other devices, **Sign-in history** and **Download my data**). Birthdays are day and month only, and you choose whether colleagues can see yours.
 - **Profile banners.** Under **Settings → Profile**, everyone can choose one of eight preset gradient banners or upload their own wide image, which is cropped to 3:1. The banner shows at the top of their profile and on their Staff Directory card.
 
-**Companies:** HN Group, Horizon Network, Horizon Advertising, Horizon Development and Horizon Media Group. Horizon Assets Management (Horizon Assets Management Limited) has no staff of its own, so it isn't in the staff company list; it appears on the About HN Group page with its domain, holding.hngroup.org.uk, and its logos.
+**Companies:** HN Group, Horizon Network, Horizon Advertising, Horizon Development and Horizon Media Group. HN Group Management (HN Group Management Limited) has no staff of its own, so it isn't in the staff company list; it appears on the About HN Group page with its domain, holding.hngroup.org.uk, and its logos.
 
 **Email domains:** `hngroup.org.uk`, `horizon-network.co.uk`, `horizonadvertising.co.uk` and `media.hngroup.org.uk`.
 

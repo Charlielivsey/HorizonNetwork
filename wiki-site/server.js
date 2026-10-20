@@ -157,7 +157,7 @@ function sidebarCompanies() {
   const out = [], seen = new Set();
   const walk = (c) => { if (seen.has(c.slug)) return; seen.add(c.slug); out.push(register.displayName(c)); for (const d of c.divisions || []) if (store.get(d) && !out.includes(d)) out.push(d); register.children(c).forEach(walk); };
   register.roots().forEach(walk);
-  return out.length ? out.slice(0, 16) : ['HN Group', 'Horizon Network', 'Horizon Advertising', 'Horizon Development', 'Horizon Media Group', 'Horizon Assets Management'];
+  return out.length ? out.slice(0, 16) : ['HN Group', 'Horizon Network', 'Horizon Advertising', 'Horizon Development', 'Horizon Media Group', 'HN Group Management'];
 }
 function tabHtml(t) {
   return '<li' + (t.active ? ' class="selected"' : '') + '><a href="' + esc(t.href) + '"' + (t.newPage ? ' class="new"' : '') + '>' + esc(t.label) + '</a></li>';
