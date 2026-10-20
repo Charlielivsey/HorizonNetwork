@@ -1,20 +1,17 @@
 title: Horizon Assets Management
 ---
 {{Short description|Company that holds HN Group's assets}}
-{{Infobox
-| name = Horizon Assets Management
+{{Company infobox|Horizon Assets Management
 | logo = horizon-assets-management-logo.svg
-| Type = Wholly owned subsidiary
 | Industry = Asset holding
 | Holds = Domains<br>Discord servers<br>Technical assets
 | Services = Email services for HN Group
 | Staff = None of its own; managed by HN Group staff
 | Country = United Kingdom
-| Email domain = holding.hngroup.org.uk
 }}
 '''Horizon Assets Management''' is the company that holds the assets of [[HN Group]]. It owns the group's domains, Discord servers and technical assets, and manages all of HN Group's email services.
 
-It is a direct, wholly owned subsidiary of [[HN Group]], alongside [[Horizon Network]] and [[Horizon Media Group]].
+{{Company ownership|Horizon Assets Management}}
 
 == Role ==
 Horizon Assets Management keeps the things the whole group relies on in one place, separate from the companies that trade:
@@ -30,12 +27,7 @@ Its own domain is '''holding.hngroup.org.uk'''.
 Horizon Assets Management has no staff of its own. It is managed directly by the staff of [[HN Group]].
 
 == Structure ==
-* [[HN Group]]
-** [[Horizon Network]]
-*** [[Horizon Development]]
-** [[Horizon Media Group]]
-*** [[Horizon Advertising]] (managed by Horizon Network)
-** '''Horizon Assets Management'''
+{{Company tree}}
 
 == Brand ==
 [[File:horizon-assets-management-roundel.svg|thumb|The Horizon Assets Management roundel]]

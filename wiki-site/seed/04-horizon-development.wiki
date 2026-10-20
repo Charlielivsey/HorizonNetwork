@@ -22,7 +22,9 @@ title: Horizon Development
 Horizon Development turns ideas into useful software. As part of Horizon Network, its work can sit on the network's digital infrastructure and be promoted through [[Horizon Advertising]].<ref>[https://horizon-network.co.uk/services Our services], horizon-network.co.uk.</ref> Enquiries about projects are handled through the Horizon Network and HN Group contact forms.
 
 == Structure ==
-Horizon Development is part of [[Horizon Network]] and is not a separate company: it sits within Horizon Network, which is in turn a wholly owned subsidiary of [[HN Group]].
+Horizon Development is part of [[Horizon Network]] and is not a separate company: it sits within Horizon Network.
+
+{{Company ownership|Horizon Network}}
 
 == Brand ==
 [[File:horizon-development-roundel.svg|thumb|The Horizon Development roundel]]

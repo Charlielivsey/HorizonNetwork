@@ -1,17 +1,11 @@
 title: Horizon Advertising
 ---
 {{Short description|Digital advertising company managed by Horizon Network}}
-{{Infobox
-| name = Horizon Advertising
+{{Company infobox|Horizon Advertising
 | logo = horizon-advertising-logo.svg
-| Type = Subsidiary
-| Parent = [[Horizon Media Group]]
-| Managed by = [[Horizon Network]]
 | Industry = Digital advertising
 | Services = Display advertising<br>Campaign management<br>Analytics and reporting
-| Email domain = horizonadvertising.co.uk
 | Brand colour = {{Swatch|#7B52C4}}Lavender <code>#7B52C4</code>
-| Website = [https://horizonadvertising.co.uk horizonadvertising.co.uk]
 }}
 '''Horizon Advertising''' provides digital advertising solutions powered by [[Horizon Network]]. It is a subsidiary of [[Horizon Media Group]], but is managed by Horizon Network. It focuses on reaching audiences with precision and scale, with measurable results.<ref>[https://hngroup.org.uk/companies Our companies], hngroup.org.uk.</ref>
 
@@ -23,19 +17,13 @@ title: Horizon Advertising
 Horizon Advertising works alongside the rest of Horizon Network, so advertising can be combined with the network's digital infrastructure and with software from [[Horizon Development]].<ref>[https://horizon-network.co.uk/services Our services], horizon-network.co.uk.</ref>
 
 == Structure ==
-Horizon Advertising has an unusual position in [[HN Group]]:
+Horizon Advertising has an unusual position in [[HN Group]]: it is a '''subsidiary of [[Horizon Media Group]]''', the group's media business, but it is '''managed by [[Horizon Network]]''', which runs it alongside its digital infrastructure and [[Horizon Development]].
 
-* '''Ownership:''' it is a '''subsidiary of [[Horizon Media Group]]''', the group's media business.
-* '''Management:''' it is '''managed by [[Horizon Network]]''', which runs it alongside its digital infrastructure and [[Horizon Development]].
+{{Company ownership|Horizon Advertising}}
 
 Because Horizon Network manages it, the group's websites list Horizon Advertising among Horizon Network's services. Staff can hold roles at Horizon Advertising and at other group companies at the same time.
 
-* [[HN Group]]
-** [[Horizon Network]]
-*** [[Horizon Development]]
-** [[Horizon Media Group]]
-*** [[Horizon Advertising]] (managed by Horizon Network)
-** [[Horizon Assets Management]]
+{{Company tree}}
 
 == Brand ==
 [[File:horizon-advertising-roundel.svg|thumb|The Horizon Advertising roundel]]

@@ -7,6 +7,8 @@ const path = require('node:path');
 const markup = require('./lib/markup');
 const store = require('./lib/store');
 const auth = require('./lib/auth');
+const register = require('./lib/register');
+const media = require('./lib/media');
 const { esc, normaliseTitle, pageUrl } = markup;
 
 const PUBLIC = process.env.WIKI_PUBLIC_DIR || path.join(__dirname, 'public');
@@ -19,18 +21,90 @@ const brandDir = path.join(PUBLIC, 'assets', 'brand');
 const brandFiles = new Set(fs.existsSync(brandDir) ? fs.readdirSync(brandDir) : []);
 markup.setFileCheck((f) => brandFiles.has(f));
 store.init(DATA_DIR, SEED_DIR);
+media.init(DATA_DIR);
+register.init(DATA_DIR);
+const SYSTEM = { id: 'system', name: 'HN Group Wiki' };
+
+// Uploaded images are used in articles by name, like the brand files: [[File:office.jpg|thumb|…]].
+markup.setFileResolver((name) => { const f = media.image(name); return f ? { src: '/w/upload/' + f.file, dark: null } : null; });
+// A company's logo: the one staff set on the wiki, otherwise its original brand logo when there is one.
+const slugOf = (text) => String(text).toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+function brandLogo(c) {
+  const base = slugOf(register.displayName(c));
+  for (const name of [base + '-wordmark.svg', base + '-logo.svg']) if (brandFiles.has(name)) { const white = name.replace('.svg', '-white.svg'); return { src: '/assets/brand/' + name, dark: brandFiles.has(white) ? '/assets/brand/' + white : null }; }
+  return null;
+}
+function companyLogo(c) {
+  const set = media.logo(c.slug);
+  if (set && set.light) return { src: '/w/upload/' + set.light, dark: set.dark ? '/w/upload/' + set.dark : null };
+  return brandLogo(c);
+}
+// The wiki shows only the names companies go by: registered names in register text are swapped for them.
+function cleanNames(text) {
+  let out = String(text || '');
+  for (const c of register.all()) {
+    const shown = register.displayName(c);
+    for (const legal of [c.legalName, ...(c.previousNames || []).map((p) => p.name)]) if (legal && legal !== shown) out = out.split(legal).join(shown);
+  }
+  return out.replace(/\s+(Limited|Ltd\.?)(?=[\s.,;:)]|$)/g, '');
+}
+function companyBlurb(c) {
+  const title = store.companyPage(c.slug) || register.displayName(c), page = store.get(title);
+  if (page) { const d = markup.shortDescription(store.latest(page).text); if (d) return d; }
+  return cleanNames(c.description).split(/(?<=[.!?])\s/)[0].slice(0, 120);
+}
+markup.setCompanySource({ register, logo: companyLogo, blurb: companyBlurb });
+
+// Every company on the register has an article. New companies get one automatically; when a
+// company's name changes, its article moves to the new name (with a redirect from the old one).
+function companyArticle(c) {
+  const n = register.displayName(c), inGroup = register.ancestors(c).some((a) => register.displayName(a) === 'HN Group') || n === 'HN Group';
+  const description = cleanNames(c.description).trim();
+  return '{{Short description|' + (companyBlurb(c) || 'Company recorded on the HN Group Company Register').replace(/[{}|]/g, '') + '}}\n{{Company infobox|' + n + '}}\n' +
+    "'''" + n + "''' is " + (inGroup && n !== 'HN Group' ? 'a company in [[HN Group]].' : 'a company recorded on the HN Group Company Register.') + (description ? ' ' + description : '') + '\n\n' +
+    '== Ownership ==\n{{Company ownership|' + n + '}}\n\n== See also ==\n* [[List of HN Group companies]]\n\n{{Stub}}\n\n[[Category:Companies]]\n';
+}
+const AUTO = /^(Created|Updated) from the Company Register$/;
+function syncCompanyPages() {
+  let changed = false;
+  for (const c of register.all()) {
+    const title = markup.normaliseTitle(register.displayName(c)), mapped = store.companyPage(c.slug);
+    if (mapped && mapped !== title && store.get(mapped) && !store.get(title)) {
+      const before = store.latest(store.get(mapped)), wasAuto = before.author.id === 'system' && AUTO.test(before.summary);
+      store.move(mapped, title, SYSTEM, 'Renamed on the Company Register');
+      // The article's company templates follow the new name.
+      if (wasAuto) store.edit(title, companyArticle(c), SYSTEM, 'Updated from the Company Register');
+      const text = store.latest(store.get(title)).text, esc_ = mapped.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const next = text.replace(new RegExp('(\\{\\{\\s*Company (?:infobox|ownership|tree)\\s*\\|\\s*)' + esc_ + '(?=\\s*[|}])', 'gi'), '$1' + title);
+      if (next !== text) store.edit(title, next, SYSTEM, 'Renamed on the Company Register');
+      changed = true;
+    }
+    const page = store.get(title);
+    if (!page) { store.edit(title, companyArticle(c), SYSTEM, 'Created from the Company Register'); changed = true; }
+    else {
+      // Articles made from the register that nobody has edited since follow its description too.
+      const last = store.latest(page), text = companyArticle(c);
+      if (last.author.id === 'system' && AUTO.test(last.summary) && last.text !== text) { store.edit(title, text, SYSTEM, 'Updated from the Company Register'); changed = true; }
+    }
+    store.setCompanyPage(c.slug, title);
+    // Registered names lead to the article too, so searches for them still find it.
+    if (c.legalName && markup.normaliseTitle(c.legalName) !== title && !store.get(c.legalName)) { store.edit(c.legalName, '#REDIRECT [[' + title + ']]\n', SYSTEM, 'Redirect from the registered name'); changed = true; }
+  }
+  if (changed) renderCache = new Map();
+}
+register.onChange(() => { renderCache = new Map(); syncCompanyPages(); });
 
 // Rendering is cached per revision; links to missing pages are red, so the cache is cleared
 // whenever pages are created or deleted.
 let renderCache = new Map();
-const exists = (t) => !!store.get(t);
+const exists = (t) => !!store.get(t) || isSpecial(t);
 function rendered(page, rev) {
-  const r = rev || store.latest(page);
-  if (!renderCache.has(r.id)) {
+  const r = rev || store.latest(page), id = r.id + '|' + register.version() + '|' + media.version();
+  if (!renderCache.has(id)) {
     if (renderCache.size > 2000) renderCache = new Map();
-    renderCache.set(r.id, markup.render(r.text, { exists, editUrl: editUrl(page.title) }));
+    renderCache.set(id, markup.render(r.text, { exists, editUrl: editUrl(page.title) }));
   }
-  return renderCache.get(r.id);
+  return renderCache.get(id);
 }
 const editUrl = (title) => pageUrl(title) + '?action=edit';
 const historyUrl = (title) => pageUrl(title) + '?action=history';
@@ -49,7 +123,7 @@ function layout(o) {
     (o.noindex ? '<meta name="robots" content="noindex">' : '') +
     (o.canonical ? '<link rel="canonical" href="' + esc(auth.WIKI_ORIGIN + o.canonical) + '">' : '') +
     '<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="preload" href="/assets/fonts/plus-jakarta-sans.woff2" as="font" type="font/woff2" crossorigin>' +
-    '<link rel="stylesheet" href="/assets/wiki.css?v=20261015c"><script src="/assets/wiki.js?v=20261015b" defer></script></head><body>' +
+    '<link rel="stylesheet" href="/assets/wiki.css?v=20261020a"><script src="/assets/wiki.js?v=20261020a" defer></script></head><body>' +
     '<a class="skip" href="#content">Skip to content</a><div class="stripe" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>' +
     '<header class="site-header"><button class="menu-toggle" type="button" aria-expanded="false" aria-controls="sidebar" aria-label="Main menu"><span></span><span></span><span></span></button>' +
     '<a class="brand" href="/wiki/Main_Page" aria-label="HN Group Wiki main page"><img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="92" height="32"><img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="92" height="32"><span class="brand-wiki">Wiki</span></a>' +
@@ -61,7 +135,8 @@ function layout(o) {
     '<div class="page"><nav class="sidebar" id="sidebar" aria-label="Wiki navigation"><ul>' +
     '<li><a href="/wiki/Main_Page">Main page</a></li><li><a href="/wiki/Special:AllPages">All pages</a></li><li><a href="/wiki/Special:Categories">Categories</a></li>' +
     '<li><a href="/wiki/Special:Random">Random article</a></li><li><a href="/wiki/Special:RecentChanges">Recent changes</a></li></ul>' +
-    '<h3>Companies</h3><ul><li><a href="/wiki/HN_Group">HN Group</a></li><li><a href="/wiki/Horizon_Network">Horizon Network</a></li><li><a href="/wiki/Horizon_Advertising">Horizon Advertising</a></li><li><a href="/wiki/Horizon_Development">Horizon Development</a></li><li><a href="/wiki/Horizon_Media_Group">Horizon Media Group</a></li><li><a href="/wiki/Horizon_Assets_Management">Horizon Assets Management</a></li></ul>' +
+    '<h3>Companies</h3><ul>' + sidebarCompanies().map((t) => '<li><a href="' + esc(pageUrl(t)) + '">' + esc(t) + '</a></li>').join('') + '</ul>' +
+    '<h3>Tools</h3><ul><li><a href="/wiki/Special:Upload">Upload an image</a></li><li><a href="/wiki/Special:ListFiles">Images</a></li><li><a href="/wiki/Special:CompanyLogo">Company logos</a></li></ul>' +
     '<h3>Help</h3><ul><li><a href="/wiki/Help:Editing">How to edit</a></li><li><a href="/wiki/HN_Group_Wiki:About">About this wiki</a></li></ul>' +
     '<h3>HN Group sites</h3><ul><li><a class="external" href="https://hngroup.org.uk">hngroup.org.uk</a></li><li><a class="external" href="https://horizon-network.co.uk">horizon-network.co.uk</a></li><li><a class="external" href="https://staff.hngroup.org.uk">Staff portal</a></li><li><a class="external" href="https://status.hngroup.org.uk">Service status</a></li></ul></nav>' +
     '<main class="content" id="content">' +
@@ -75,6 +150,14 @@ function layout(o) {
     '<footer class="footer">' + (o.lastEdited ? '<p>This page was last edited on ' + esc(fmtDate(o.lastEdited)) + '.</p>' : '') +
     '<p>Content is maintained by HN Group staff. © ' + new Date().getFullYear() + ' HN Group Limited. <a href="/wiki/HN_Group_Wiki:About">About HN Group Wiki</a> · <a class="external" href="https://hngroup.org.uk/privacy">Privacy</a> · <a class="external" href="https://hngroup.org.uk/contact">Contact</a></p></footer>' +
     '</main></div></body></html>';
+}
+// The sidebar's companies: everything on the Company Register (in group order), and their divisions
+// that have articles.
+function sidebarCompanies() {
+  const out = [], seen = new Set();
+  const walk = (c) => { if (seen.has(c.slug)) return; seen.add(c.slug); out.push(register.displayName(c)); for (const d of c.divisions || []) if (store.get(d) && !out.includes(d)) out.push(d); register.children(c).forEach(walk); };
+  register.roots().forEach(walk);
+  return out.length ? out.slice(0, 16) : ['HN Group', 'Horizon Network', 'Horizon Advertising', 'Horizon Development', 'Horizon Media Group', 'Horizon Assets Management'];
 }
 function tabHtml(t) {
   return '<li' + (t.active ? ' class="selected"' : '') + '><a href="' + esc(t.href) + '"' + (t.newPage ? ' class="new"' : '') + '>' + esc(t.label) + '</a></li>';
@@ -99,6 +182,8 @@ function articleTabs(title, active, opts) {
     const canEdit = opts && opts.user && (!page || !page.protected || opts.user.admin);
     tabs.push({ label: page ? (canEdit || !opts || !opts.user ? 'Edit' : 'View source') : 'Create', href: editUrl(title), active: active === 'edit', side: 'right' });
     if (page) tabs.push({ label: 'View history', href: historyUrl(title), active: active === 'history', side: 'right' });
+    const company = page && opts && opts.user && markup.companyOfSource(store.latest(page).text);
+    if (company) tabs.push({ label: 'Logo', href: '/wiki/Special:CompanyLogo?company=' + encodeURIComponent(company.slug), side: 'right' });
   }
   return tabs;
 }
@@ -256,6 +341,9 @@ function specialPage(req, res, url, user, name) {
         (results.length ? '<p class="muted">' + results.length + ' result' + (results.length === 1 ? '' : 's') + '</p><ul class="search-results">' + results.slice(0, 50).map((x) => '<li><a href="' + esc(pageUrl(x.p.title)) + '">' + esc(x.p.title) + '</a><div class="snippet">' + snippet(x.text, q) + '</div></li>').join('') + '</ul>' : '<p>There were no results matching the query.</p>') : '');
     return send(res, 200, layout({ title: 'Search results', user, returnTo: '/wiki/Special:Search', body, tagline: false, searchValue: q, noindex: true }));
   }
+  if (lower === 'upload') return uploadPage(res, user);
+  if (lower === 'listfiles') return listFilesPage(res, url, user);
+  if (lower === 'companylogo') return logoPage(res, url, user);
   return errorPage(res, 404, 'No such special page', 'You have requested an invalid special page.');
 }
 
@@ -282,6 +370,99 @@ function suggest(raw) {
   });
 }
 
+// ---------- Images and company logos ----------
+
+const csrfField = (user) => '<input type="hidden" name="csrf" value="' + esc(user.csrf) + '">';
+const signInFirst = (returnTo, what) => '<div class="notice">Staff can <a href="/auth/login?return=' + encodeURIComponent(returnTo) + '">sign in with HN Group Auth</a> to ' + what + '.</div>';
+const fileInput = (name, label, hint) => '<div class="field"><label for="' + name + '-file">' + label + '</label><input type="file" id="' + name + '-file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" data-into="' + name + '" data-preview="' + name + '-preview"' + (name === 'file' ? ' data-name="name"' : '') + '><input type="hidden" name="' + name + '">' +
+  (hint ? '<p class="muted small">' + hint + '</p>' : '') + '<div class="upload-preview" id="' + name + '-preview" hidden></div></div>';
+const noScript = '<noscript><div class="notice">Uploading needs JavaScript turned on.</div></noscript>';
+// Where an uploaded image is used on the wiki.
+function usesOf(name) {
+  const re = new RegExp('\\[\\[\\s*File:\\s*' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*[|\\]]|logo\\s*=\\s*' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i');
+  return store.all().filter((p) => re.test(store.latest(p).text)).map((p) => p.title);
+}
+
+function uploadPage(res, user, error, values) {
+  const v = values || {};
+  const body = (error ? '<div class="notice error">' + esc(error) + '</div>' : '') +
+    '<p>Upload a photo, diagram or other image to use in articles. Images can be PNG, JPEG, WebP, GIF or plain SVG, up to 4 MB, and everyone can see them, so only upload images HN Group is allowed to publish. To change a company’s logo, use <a href="/wiki/Special:CompanyLogo">Company logos</a>.</p>' +
+    (user ? noScript + '<form method="post" action="/wiki/Special:Upload" class="upload-form" data-upload>' + csrfField(user) +
+      fileInput('file', 'Image') +
+      '<div class="field"><label for="name">Name on the wiki</label><input type="text" id="name" name="name" maxlength="60" value="' + esc(v.name || '') + '" placeholder="for example office-reception"><p class="muted small">Articles use it like <code>[[File:office-reception.jpg|thumb|Caption]]</code>.</p></div>' +
+      '<div class="field"><label for="description">Description</label><input type="text" id="description" name="description" maxlength="300" value="' + esc(v.description || '') + '"></div>' +
+      '<div class="edit-buttons"><button class="button primary" type="submit">Upload image</button><a class="button quiet" href="/wiki/Special:ListFiles">See all images</a></div></form>'
+      : signInFirst('/wiki/Special:Upload', 'upload images'));
+  send(res, error ? 400 : 200, layout({ title: 'Upload an image', user, returnTo: '/wiki/Special:Upload', body, noindex: true, tagline: false }));
+}
+
+function listFilesPage(res, url, user) {
+  const list = media.images(), added = url.searchParams.get('uploaded');
+  const body = (added && media.image(added) ? '<div class="notice success">Uploaded. Use it in an article with <code>[[File:' + esc(added) + '|thumb|Caption]]</code>.</div>' : '') +
+    '<p>' + list.length + (list.length === 1 ? ' image has' : ' images have') + ' been uploaded to HN Group Wiki.' + (user ? ' <a href="/wiki/Special:Upload">Upload an image</a>.' : '') + '</p>' +
+    (list.length ? '<ul class="file-list">' + list.map((f) => {
+      const uses = usesOf(f.name);
+      return '<li id="file-' + esc(f.name) + '"><a class="file-thumb" href="/w/upload/' + esc(f.file) + '"><img src="/w/upload/' + esc(f.file) + '" alt="' + esc(f.description || f.name) + '" loading="lazy"></a><div class="file-info"><b>' + esc(f.name) + '</b>' +
+        (f.description ? '<span>' + esc(f.description) + '</span>' : '') + '<span class="muted small">' + esc(fmtDate(f.at)) + (user ? ' · ' + esc(f.by.name) : '') + ' · ' + Math.max(1, Math.round(f.size / 1024)) + ' KB</span>' +
+        '<code>[[File:' + esc(f.name) + '|thumb|Caption]]</code>' + (uses.length ? '<span class="small">Used on ' + uses.map((t) => '<a href="' + esc(pageUrl(t)) + '">' + esc(t) + '</a>').join(', ') + '</span>' : '<span class="muted small">Not used in any article yet.</span>') +
+        (user && (user.admin || user.id === f.by.id) ? '<form method="post" action="/wiki/Special:ListFiles?action=delete" class="inline-form" data-confirm="Delete ' + esc(f.name) + '? Articles using it will show a missing image.">' + csrfField(user) + '<input type="hidden" name="name" value="' + esc(f.name) + '"><button class="button small danger" type="submit">Delete</button></form>' : '') +
+        '</div></li>';
+    }).join('') + '</ul>' : '');
+  send(res, 200, layout({ title: 'Images', user, returnTo: '/wiki/Special:ListFiles', body, tagline: false }));
+}
+
+function logoPage(res, url, user, error) {
+  const slug = url.searchParams.get('company'), c = slug && register.bySlug(slug);
+  const logoBox = (c) => { const l = companyLogo(c), n = register.displayName(c); return '<span class="logo-box">' + (l ? '<span class="logo-light"><img src="' + esc(l.src) + '" alt="' + esc(n) + ' logo"></span>' + (l.dark ? '<span class="logo-dark"><img src="' + esc(l.dark) + '" alt="' + esc(n) + ' logo for dark backgrounds"></span>' : '') : '<span class="cc-initials">' + esc(n.split(/\s+/).map((w) => w[0]).join('').slice(0, 3)) + '</span>') + '</span>'; };
+  if (!c) {
+    const list = register.all().slice().sort((a, b) => register.displayName(a).localeCompare(register.displayName(b)));
+    const body = '<p>Each company’s logo appears in its infobox, on the Main Page and in search suggestions. Changing a logo here updates it everywhere straight away.</p>' +
+      (list.length ? '<ul class="logo-list">' + list.map((x) => { const set = media.logo(x.slug);
+        return '<li>' + logoBox(x) + '<div><a href="' + esc(pageUrl(store.companyPage(x.slug) || register.displayName(x))) + '"><b>' + esc(register.displayName(x)) + '</b></a><span class="muted small">' + (set ? 'Logo set on the wiki' + (user ? ' by ' + esc(set.by.name) : '') + ' on ' + esc(fmtDate(set.at)) : brandLogo(x) ? 'Original brand logo' : 'No logo yet') + '</span>' +
+          (user ? '<a class="button small" href="/wiki/Special:CompanyLogo?company=' + encodeURIComponent(x.slug) + '">' + (set || brandLogo(x) ? 'Change logo' : 'Add logo') + '</a>' : '') + '</div></li>'; }).join('') + '</ul>' : '<p class="muted">No companies have been received from the Company Register yet.</p>') +
+      (user ? '' : signInFirst('/wiki/Special:CompanyLogo', 'change company logos'));
+    return send(res, 200, layout({ title: 'Company logos', user, returnTo: '/wiki/Special:CompanyLogo', body, tagline: false }));
+  }
+  const n = register.displayName(c), set = media.logo(c.slug), back = '/wiki/Special:CompanyLogo?company=' + encodeURIComponent(c.slug);
+  const body = (error ? '<div class="notice error">' + esc(error) + '</div>' : '') +
+    '<div class="logo-current">' + logoBox(c) + '<p>This is ' + esc(n) + '’s logo now' + (set ? ', set on the wiki' + (user ? ' by ' + esc(set.by.name) : '') + ' on ' + esc(fmtDate(set.at)) : brandLogo(c) ? ' (its original brand logo)' : '') + '. A new logo shows everywhere on the wiki straight away.</p></div>' +
+    (user ? noScript + '<form method="post" action="' + esc(back) + '" class="upload-form" data-upload>' + csrfField(user) + '<input type="hidden" name="company" value="' + esc(c.slug) + '">' +
+      fileInput('light', 'Logo', 'Shown on light backgrounds. SVG or a PNG with a transparent background works best.') +
+      fileInput('dark', 'Logo for dark backgrounds (optional)', 'Usually a white version. Without one, the logo above is used in dark mode too.') +
+      (set && set.dark ? '<label class="check"><input type="checkbox" name="removeDark" value="1"> Remove the dark-background logo</label>' : '') +
+      '<div class="edit-buttons"><button class="button primary" type="submit">Save logo</button><a class="button quiet" href="/wiki/Special:CompanyLogo">Back to company logos</a></div></form>' +
+      (set ? '<form method="post" action="' + esc(back) + '" class="inline-form" data-confirm="Go back to ' + esc(n) + '’s ' + (brandLogo(c) ? 'original brand logo' : 'having no logo') + '?">' + csrfField(user) + '<input type="hidden" name="company" value="' + esc(c.slug) + '"><input type="hidden" name="reset" value="1"><button class="button small" type="submit">' + (brandLogo(c) ? 'Use the original brand logo' : 'Remove this logo') + '</button></form>' : '')
+      : signInFirst(back, 'change this logo'));
+  send(res, error ? 400 : 200, layout({ title: n + ' logo', heading: '<i>' + esc(n) + '</i> logo', user, returnTo: back, body, noindex: true, tagline: false }));
+}
+
+async function mediaPost(req, res, url, user, which, form) {
+  const who = { id: user.id, name: user.name };
+  if (which === 'upload') {
+    try { const name = media.addImage(form.file, form.name || form.filename, form.description, who); return redirect(res, '/wiki/Special:ListFiles?uploaded=' + encodeURIComponent(name) + '#file-' + encodeURIComponent(name), 303); }
+    catch (e) { if (e.status === 400) return uploadPage(res, user, e.message, form); throw e; }
+  }
+  if (which === 'listfiles' && url.searchParams.get('action') === 'delete') {
+    const f = media.image(form.name);
+    if (!f) return errorPage(res, 404, 'Image not found', 'That image has already been deleted.');
+    if (!user.admin && user.id !== f.by.id) return errorPage(res, 403, 'Not allowed', 'Only the person who uploaded an image or a wiki administrator can delete it.');
+    media.removeImage(form.name, who); renderCache = new Map();
+    return redirect(res, '/wiki/Special:ListFiles', 303);
+  }
+  if (which === 'companylogo') {
+    const c = register.bySlug(form.company);
+    if (!c) return errorPage(res, 404, 'Company not found', 'That company isn’t on the Company Register.');
+    url.searchParams.set('company', c.slug);
+    if (form.reset === '1') media.resetLogo(c.slug, who);
+    else {
+      try { media.setLogo(c.slug, { light: form.light || null, dark: form.dark || null, removeDark: form.removeDark === '1' }, who); }
+      catch (e) { if (e.status === 400) return logoPage(res, url, user, e.message); throw e; }
+    }
+    return redirect(res, pageUrl(store.companyPage(c.slug) || register.displayName(c)), 303);
+  }
+  return errorPage(res, 400, 'Not possible', 'That action isn’t available.');
+}
+
 // ---------- Saving ----------
 
 function readForm(req, limit) {
@@ -297,11 +478,14 @@ function readForm(req, limit) {
 async function handlePost(req, res, url, title) {
   const origin = req.headers.origin;
   if (origin && origin !== auth.WIKI_ORIGIN && origin !== 'null') return errorPage(res, 403, 'Not allowed', 'This request came from another website.');
-  const form = await readForm(req, 400 * 1024);
+  // Images arrive as base64 inside the form: up to two 4 MB pictures for a logo.
+  const mediaPage = /^Special:(Upload|ListFiles|CompanyLogo)$/i.exec(title);
+  const form = await readForm(req, mediaPage ? 12 * 1024 * 1024 : 400 * 1024);
   let user;
   try { user = await auth.current(req, { fresh: true }); } catch (e) { return errorPage(res, 503, 'Can’t save right now', e.message); }
   if (!user) return errorPage(res, 401, 'Please sign in', 'Your sign-in has ended. Copy any changes, sign in again and retry.');
   if (form.csrf !== user.csrf) return errorPage(res, 403, 'Session expired', 'This form has expired. Go back, reload the page and try again.');
+  if (mediaPage) return mediaPost(req, res, url, user, mediaPage[1].toLowerCase(), form);
   const action = url.searchParams.get('action');
   const page = store.get(title);
   if (namespaceOf(title) === 'Special') return errorPage(res, 400, 'Can’t edit', 'Special pages can’t be edited.');
@@ -358,6 +542,14 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/xml' });
       return res.end('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + store.all().filter((p) => !rendered(p).redirect).map((p) => '<url><loc>' + esc(auth.WIKI_ORIGIN + pageUrl(p.title)) + '</loc><lastmod>' + store.latest(p).at.slice(0, 10) + '</lastmod></url>').join('') + '</urlset>');
     }
+    if (route.startsWith('/w/upload/') && (req.method === 'GET' || req.method === 'HEAD')) {
+      const found = media.filePath(route.slice(10));
+      if (!found) { res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('Not found'); }
+      // Stored names are random and never reused, so images can be cached for a long time.
+      res.writeHead(200, { 'Content-Type': found.type, 'Cache-Control': 'public, max-age=31536000, immutable', 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox" });
+      if (req.method === 'HEAD') return res.end();
+      return fs.createReadStream(found.path).pipe(res);
+    }
     if (route === '/w/api/suggest' && req.method === 'GET') {
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
       return res.end(JSON.stringify({ results: suggest(url.searchParams.get('q')) }));
@@ -393,5 +585,8 @@ const server = http.createServer(async (req, res) => {
 if (require.main === module) {
   const PORT = Number(process.env.PORT || 3800), HOST = process.env.HOST || '127.0.0.1';
   server.listen(PORT, HOST, () => console.log(`HN Group Wiki on http://${HOST}:${PORT}`));
+  // Company articles follow the Company Register: check it every 20 seconds.
+  syncCompanyPages();
+  register.start(Number(process.env.COMPANIES_FEED_INTERVAL || 20000));
 }
-module.exports = { server };
+module.exports = { server, syncCompanyPages };

@@ -629,6 +629,13 @@ async function route(req, res) {
   }
 
   // Public register.
+  // A read-only feed of the public company records, which the HN Group Wiki follows.
+  if (req.method === 'GET' && p === '/api/public/companies') {
+    const feed = store.publicFeed(), etag = '"' + feed.version + '"';
+    if (req.headers['if-none-match'] === etag) { res.writeHead(304, { ETag: etag, 'Cache-Control': 'no-cache' }); return res.end(); }
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache', ETag: etag, 'Access-Control-Allow-Origin': '*' });
+    return res.end(JSON.stringify(feed));
+  }
   if (req.method === 'GET' && p === '/') return homePage(res, ctx);
   if (req.method === 'GET' && p === '/search') return searchPage(res, ctx, String(url.searchParams.get('q') || '').slice(0, 120));
   if (req.method === 'GET' && p === '/about') return aboutPage(res, ctx);

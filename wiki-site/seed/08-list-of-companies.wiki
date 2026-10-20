@@ -1,34 +1,19 @@
 title: List of HN Group companies
 ---
 {{Short description|List of the companies in HN Group}}
-This is a list of the companies in '''[[HN Group]]'''. HN Group has three direct, wholly owned subsidiaries: [[Horizon Network]], [[Horizon Media Group]] and [[Horizon Assets Management]]. [[Horizon Development]] is part of Horizon Network; [[Horizon Advertising]] is a subsidiary of Horizon Media Group and is managed by Horizon Network.<ref>[https://hngroup.org.uk/companies Our companies], hngroup.org.uk.</ref>
+This is a list of the companies in '''[[HN Group]]''', kept up to date automatically from the HN Group Company Register: when a company is added or changed there, this list changes too. [[Horizon Development]] is part of [[Horizon Network]] rather than a separate company, and [[Horizon Advertising]] is managed by Horizon Network.
 
-{| class="wikitable"
-! Company !! Part of !! Focus !! Website
-|-
-| '''[[HN Group]]''' || — (parent company) || Brings the Horizon businesses together || [https://hngroup.org.uk hngroup.org.uk]
-|-
-| '''[[Horizon Network]]''' || HN Group (wholly owned) || Digital infrastructure, advertising and software || [https://horizon-network.co.uk horizon-network.co.uk]
-|-
-| '''[[Horizon Advertising]]''' || Horizon Media Group (managed by Horizon Network) || Display advertising, campaign management, analytics and reporting || [https://horizonadvertising.co.uk horizonadvertising.co.uk]
-|-
-| '''[[Horizon Development]]''' || Horizon Network || Custom software and web applications || Through Horizon Network
-|-
-| '''[[Horizon Media Group]]''' || HN Group (wholly owned) || Media and content, press enquiries || Through HN Group
-|-
-| '''[[Horizon Assets Management]]''' || HN Group (wholly owned) || Owns the group's assets, domains, Discord servers and technical assets; manages email services || —
-|}
+{{Company list}}
 
 == Group structure ==
-* [[HN Group]]
-** [[Horizon Network]]
-*** [[Horizon Development]]
-** [[Horizon Media Group]]
-*** [[Horizon Advertising]] (managed by Horizon Network)
-** [[Horizon Assets Management]]
+{{Company tree}}
 
-== References ==
-{{Reflist}}
+== Divisions ==
+{| class="wikitable"
+! Division !! Part of !! Focus
+|-
+| '''[[Horizon Development]]''' || [[Horizon Network]] || Custom software and web applications
+|}
 
 [[Category:Companies]]
 [[Category:HN Group]]

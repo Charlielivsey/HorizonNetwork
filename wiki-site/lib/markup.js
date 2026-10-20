@@ -7,6 +7,8 @@
 //   {{Infobox ... }}, {{Hatnote|...}}, {{Main|Page}}, {{Stub}}, {{Swatch|#5514B4}}
 //   [[File:logo.svg|thumb|Caption]]           {| class="wikitable" ... |} tables
 //   [[Category:Companies]]                    #REDIRECT [[Page]]
+//   {{Company infobox|Name}}, {{Company ownership|Name}}, {{Company tree}}, {{Company list}},
+//   {{Company cards}}: facts drawn live from the HN Group Company Register
 //
 // Everything typed is escaped; only the tags this file writes reach the page.
 
@@ -26,20 +28,33 @@ function safeUrl(url) {
   return /^(https?:\/\/|mailto:)[^\s<>"']+$/i.test(u) ? u : null;
 }
 
-// Brand images available to [[File:...]] and infobox logos (copied from brand/logos).
-let fileExists = () => false;
+// Images for [[File:...]] and infobox logos: the brand files (copied from brand/logos) and images staff
+// have uploaded. The resolver answers { src, dark } for a file name, or null.
+let fileExists = () => false, resolveFile = null;
 function setFileCheck(fn) { fileExists = fn; }
-function imageHtml(name, alt, cls) {
+function setFileResolver(fn) { resolveFile = fn; }
+function findImage(name) {
   const file = String(name || '').trim().replace(/^File:/i, '');
-  if (!/^[a-z0-9][a-z0-9._-]*\.(svg|png|jpg|jpeg|webp)$/i.test(file) || !fileExists(file)) return '<span class="missing-file">' + esc(file || 'image') + '</span>';
+  if (!/^[a-z0-9][a-z0-9._-]*\.(svg|png|jpg|jpeg|webp|gif)$/i.test(file)) return null;
+  if (resolveFile) { const found = resolveFile(file); if (found) return found; }
+  if (!fileExists(file)) return null;
   const white = file.replace(/\.(svg|png)$/i, '-white.$1');
-  const src = '/assets/brand/' + file;
-  if (fileExists(white) && white !== file) {
-    return '<img class="on-light ' + (cls || '') + '" src="' + src + '" alt="' + esc(alt) + '" loading="lazy">' +
-      '<img class="on-dark ' + (cls || '') + '" src="/assets/brand/' + white + '" alt="' + esc(alt) + '" loading="lazy">';
-  }
-  return '<img class="' + (cls || '') + '" src="' + src + '" alt="' + esc(alt) + '" loading="lazy">';
+  return { src: '/assets/brand/' + file, dark: white !== file && fileExists(white) ? '/assets/brand/' + white : null };
 }
+function pictureHtml(found, alt, cls) {
+  if (found.dark) return '<img class="on-light ' + (cls || '') + '" src="' + esc(found.src) + '" alt="' + esc(alt) + '" loading="lazy"><img class="on-dark ' + (cls || '') + '" src="' + esc(found.dark) + '" alt="' + esc(alt) + '" loading="lazy">';
+  return '<img class="' + (cls || '') + '" src="' + esc(found.src) + '" alt="' + esc(alt) + '" loading="lazy">';
+}
+function imageHtml(name, alt, cls) {
+  const found = findImage(name);
+  if (!found) return '<span class="missing-file">' + esc(String(name || '').replace(/^File:/i, '').trim() || 'image') + '</span>';
+  return pictureHtml(found, alt, cls);
+}
+
+// Company facts come from the Company Register (see lib/register.js); the server supplies it with
+// logo(company) → { src, dark } and blurb(company) → a one-line description.
+let companies = null;
+function setCompanySource(source) { companies = source; }
 
 // Inline markup within a line of text.
 function inline(text, ctx) {
@@ -104,7 +119,7 @@ function splitParams(body) {
   return parts;
 }
 
-function infobox(params, ctx) {
+function infobox(params, ctx, extra) {
   const rows = [];
   let name = '', logo = '', caption = '', image = '';
   for (const p of params) {
@@ -119,10 +134,117 @@ function infobox(params, ctx) {
     else if (key.startsWith('header')) rows.push('<tr><th colspan="2" class="ib-header">' + inline(value, ctx) + '</th></tr>');
     else rows.push('<tr><th scope="row">' + esc(key.replace(/_/g, ' ')) + '</th><td>' + value.split(/\s*<br>\s*|\n/).map((v) => inline(v, ctx)).join('<br>') + '</td></tr>');
   }
-  return '<table class="infobox">' + (name ? '<caption>' + esc(name) + '</caption>' : '') +
-    (logo ? '<tr><td colspan="2" class="ib-logo">' + imageHtml(logo, name) + '</td></tr>' : '') +
+  const logoHtml = extra && extra.logoHtml ? extra.logoHtml : logo ? imageHtml(logo, name) : '';
+  return '<table class="infobox' + (extra && extra.cls ? ' ' + extra.cls : '') + '">' + (name ? '<caption>' + esc(name) + '</caption>' : '') +
+    (logoHtml ? '<tr><td colspan="2" class="ib-logo">' + logoHtml + '</td></tr>' : '') +
     (image ? '<tr><td colspan="2" class="ib-image">' + imageHtml(image, caption || name) + (caption ? '<div class="ib-caption">' + inline(caption, ctx) + '</div>' : '') + '</td></tr>' : '') +
-    rows.join('') + '</table>';
+    rows.join('') + (extra && extra.footer ? '<tr><td colspan="2" class="ib-source">' + extra.footer + '</td></tr>' : '') + '</table>';
+}
+
+// ---------- Company templates (live from the Company Register) ----------
+const longDate = (iso) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ''); return m ? Number(m[3]) + ' ' + ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][Number(m[2]) - 1] + ' ' + m[1] : ''; };
+const listWords = (items) => items.length < 2 ? items.join('') : items.slice(0, -1).join(', ') + ' and ' + items[items.length - 1];
+const link = (title) => '[[' + title + ']]';
+const ownerText = (o) => (o.company ? link(o.name) : o.name) + (o.share ? ' (' + o.share + ')' : '');
+const webLink = (site) => { const s = String(site || '').trim(); if (!s) return ''; const url = /^https?:\/\//i.test(s) ? s : 'https://' + s; return safeUrl(url) ? '[' + url + ' ' + s.replace(/^https?:\/\//i, '').replace(/\/$/, '') + ']' : ''; };
+function companyOf(name) { return companies && companies.register ? companies.register.find(name) : null; }
+function sourceNote(c) { const R = companies.register; return 'Facts from the <a class="external" href="' + esc(R.registerUrl(c)) + '" rel="noopener">HN Group Company Register</a>, updated automatically.'; }
+
+// {{Company infobox|Name|Products = …|Industry = …}}: the register's facts, plus any rows written here.
+function companyInfobox(params, ctx) {
+  const name = (params[0] || '').trim(), extras = params.slice(1).filter((p) => p.includes('='));
+  const c = companyOf(name);
+  if (!c) return infobox(['name = ' + name, ...extras], ctx);
+  const R = companies.register, own = R.owners(c), parent = c.parent && R.bySlug(c.parent), manager = c.managedBy && R.bySlug(c.managedBy);
+  const given = Object.fromEntries(extras.map((p) => [p.slice(0, p.indexOf('=')).trim().toLowerCase(), p.slice(p.indexOf('=') + 1).trim()]));
+  const rows = [];
+  const add = (key, value) => { if (value) rows.push(key + ' = ' + value); };
+  const whollyOwned = own.length === 1 && own[0].company && own[0].share === '100%';
+  add('Type', c.type || (parent ? (whollyOwned ? 'Wholly owned subsidiary' : 'Subsidiary') : ''));
+  add(own.length > 1 ? 'Owners' : 'Owner', own.map(ownerText).join('<br>'));
+  if (parent && !own.some((o) => o.company && o.company.slug === parent.slug)) add('Parent', link(R.displayName(parent)));
+  if (manager) add('Managed by', link(R.displayName(manager)));
+  add('Subsidiaries', R.children(c).map((x) => link(R.displayName(x))).join('<br>'));
+  add('Manages', R.managedBy(c).filter((x) => x.parent !== c.slug).map((x) => link(R.displayName(x))).join('<br>'));
+  add('Divisions', (c.divisions || []).map(link).join('<br>'));
+  add('Industry', given.industry || (c.sic || []).join('<br>'));
+  if (c.status && c.status !== 'Active') add('Status', c.status + (c.dissolved ? ' (' + longDate(c.dissolved) + ')' : ''));
+  add('Founded', longDate(c.incorporated));
+  add('Company number', c.number);
+  add('Registered office', c.registeredOffice);
+  add('Key people', (c.officers || []).map((o) => o.name + (o.role ? ' (' + o.role + ')' : '')).join('<br>'));
+  for (const p of extras) { const k = p.slice(0, p.indexOf('=')).trim(); if (!['industry', 'logo', 'name'].includes(k.toLowerCase())) rows.push(p); }
+  add('Email domain', c.emailDomain);
+  if (!given.website) add('Website', webLink(c.website));
+  const logo = (companies.logo && companies.logo(c)) || (given.logo ? findImage(given.logo) : null);
+  return infobox(['name = ' + R.displayName(c), ...rows], ctx, { logoHtml: logo ? pictureHtml(logo, R.displayName(c)) : '', footer: sourceNote(c), cls: 'company-infobox' });
+}
+
+// Follows company owners upwards: "owned by A (100%), which is owned by B (100%)". When a company has
+// several owners and one of them is a company, that company's owners follow in a sentence of their own.
+function ownershipChain(c, seen) {
+  const R = companies.register, own = R.owners(c);
+  if (!own.length) return '';
+  let text = listWords(own.map(ownerText));
+  const owning = own.filter((o) => o.company), next = owning.length === 1 && owning[0].company;
+  if (next && !seen.has(next.slug)) {
+    seen.add(next.slug);
+    const up = ownershipChain(next, seen);
+    if (up) text += own.length === 1 ? ', which is owned by ' + up : '. ' + R.displayName(next) + ' is owned by ' + up;
+  }
+  return text;
+}
+// {{Company ownership|Name}}: who owns, runs and belongs to the company, as sentences.
+function companyOwnership(params, ctx) {
+  const c = companyOf((params[0] || '').trim());
+  if (!c) return params[0] ? '<p class="company-facts muted">' + esc(params[0].trim()) + ' isn’t on the HN Group Company Register yet.</p>' : '';
+  const R = companies.register, n = R.displayName(c), parts = [];
+  const chain = ownershipChain(c, new Set([c.slug]));
+  parts.push(chain ? n + ' is owned by ' + chain + '.' : 'No owner is recorded for ' + n + ' on the Company Register.');
+  const parent = c.parent && R.bySlug(c.parent), own = R.owners(c);
+  if (parent && !own.some((o) => o.company && o.company.slug === parent.slug)) parts.push('It is a subsidiary of ' + link(R.displayName(parent)) + '.');
+  const manager = c.managedBy && R.bySlug(c.managedBy);
+  if (manager) parts.push('It is managed by ' + link(R.displayName(manager)) + '.');
+  const subs = R.children(c).map((x) => link(R.displayName(x)));
+  if (subs.length) parts.push((subs.length === 1 ? 'Its subsidiary is ' : 'Its subsidiaries are ') + listWords(subs) + '.');
+  const runs = R.managedBy(c).filter((x) => x.parent !== c.slug).map((x) => link(R.displayName(x)));
+  if (runs.length) parts.push('It also manages ' + listWords(runs) + '.');
+  if ((c.divisions || []).length) parts.push(listWords(c.divisions.map(link)) + ((c.divisions.length === 1) ? ' is part of ' : ' are part of ') + n + '.');
+  return '<p class="company-facts">' + inline(parts.join(' '), ctx) + '<sup class="register-ref" title="From the HN Group Company Register"><a class="external" href="' + esc(R.registerUrl(c)) + '" rel="noopener">[register]</a></sup></p>';
+}
+// {{Company tree}} or {{Company tree|Name}}: the group's structure from the register.
+function companyTree(params, ctx) {
+  if (!companies || !companies.register) return '';
+  const R = companies.register, start = (params[0] || '').trim(), top = start ? [companyOf(start)].filter(Boolean) : R.roots();
+  const lines = [], seen = new Set();
+  const walk = (c, depth) => {
+    if (seen.has(c.slug)) return; seen.add(c.slug);
+    const manager = c.managedBy && R.bySlug(c.managedBy), own = R.owners(c), share = own.length === 1 && own[0].company && own[0].share ? own[0].share + ' owned' : '';
+    const notes = [share, manager ? 'managed by ' + link(R.displayName(manager)) : ''].filter(Boolean);
+    lines.push('*'.repeat(depth) + " '''" + link(R.displayName(c)) + "'''" + (notes.length ? ' (' + notes.join(', ') + ')' : ''));
+    for (const d of c.divisions || []) lines.push('*'.repeat(depth + 1) + ' ' + link(d) + ' (division)');
+    for (const x of R.children(c)) walk(x, depth + 1);
+  };
+  for (const c of top) walk(c, 1);
+  return '<div class="company-tree">' + render(lines.join('\n'), { exists: ctx.exists, noToc: true }).html + '</div>';
+}
+// {{Company list}}: a table of every company on the register.
+function companyList(params, ctx) {
+  if (!companies || !companies.register) return '';
+  const R = companies.register, order = [], seen = new Set();
+  const walk = (c) => { if (seen.has(c.slug)) return; seen.add(c.slug); order.push(c); R.children(c).forEach(walk); };
+  R.roots().forEach(walk);
+  const rows = order.map((c) => { const manager = c.managedBy && R.bySlug(c.managedBy); return "| '''" + link(R.displayName(c)) + "''' || " + (R.owners(c).map(ownerText).join('<br>') || '—') + ' || ' + (manager ? link(R.displayName(manager)) : '—') + ' || ' + (c.status || '—') + ' || ' + (longDate(c.incorporated) || '—') + ' || ' + (webLink(c.website) || '—'); });
+  return table(['{| class="wikitable company-list"', '! Company !! Owner !! Managed by !! Status !! Founded !! Website', ...rows.flatMap((r) => ['|-', r]), '|}'], ctx);
+}
+// {{Company cards}}: a card for every company, with its current logo.
+function companyCards(ctx) {
+  if (!companies || !companies.register) return '';
+  const R = companies.register, order = [], seen = new Set();
+  const walk = (c) => { if (seen.has(c.slug)) return; seen.add(c.slug); order.push(c); R.children(c).forEach(walk); };
+  R.roots().forEach(walk);
+  return order.map((c) => { const n = R.displayName(c), logo = companies.logo && companies.logo(c), blurb = companies.blurb ? companies.blurb(c) : ''; ctx.links.add(n);
+    return '<a class="company-card" href="' + esc(pageUrl(n)) + '"><span class="cc-logo">' + (logo ? pictureHtml(logo, n) : '<span class="cc-initials">' + esc(n.split(/\s+/).map((w) => w[0]).join('').slice(0, 3)) + '</span>') + '</span><span class="cc-name">' + esc(n) + '</span>' + (blurb ? '<span class="cc-blurb">' + esc(blurb) + '</span>' : '') + '</a>'; }).join('');
 }
 
 function table(lines, ctx) {
@@ -161,6 +283,11 @@ function render(source, opts) {
   text = extractTemplates(text, (body) => {
     const params = splitParams(body);
     const name = params[0].trim().toLowerCase();
+    if (name === 'company infobox') return keepBlock(companyInfobox(params.slice(1), ctx));
+    if (name === 'company ownership') return keepBlock(companyOwnership(params.slice(1), ctx));
+    if (name === 'company tree') return keepBlock(companyTree(params.slice(1), ctx));
+    if (name === 'company list') return keepBlock(companyList(params.slice(1), ctx));
+    if (name === 'company cards') return keepBlock(companyCards(ctx));
     if (name === 'infobox' || name.startsWith('infobox ')) return keepBlock(infobox(params.slice(1), ctx));
     if (name === 'reflist') return keepBlock('\u0003REFLIST\u0003');
     if (name === 'hatnote') return keepBlock('<div class="hatnote">' + inline(params.slice(1).join('|'), ctx) + '</div>');
@@ -286,12 +413,16 @@ function shortDescription(source) {
   return sentence.length > 100 ? sentence.slice(0, 97).replace(/\s+\S*$/, '') + '…' : sentence;
 }
 
-// For search suggestions: the infobox logo, as light and (when there is one) dark image paths.
+// For search suggestions: the infobox logo (a company's current logo for company infoboxes), as light
+// and (when there is one) dark image paths.
 function infoboxImage(source) {
-  const m = /\{\{\s*infobox[\s\S]*?\|\s*logo\s*=\s*([a-z0-9][a-z0-9._-]*\.(?:svg|png|jpe?g|webp))/i.exec(String(source || ''));
-  if (!m || !fileExists(m[1])) return null;
-  const white = m[1].replace(/\.(svg|png)$/i, '-white.$1');
-  return { light: '/assets/brand/' + m[1], dark: white !== m[1] && fileExists(white) ? '/assets/brand/' + white : null };
+  const company = /\{\{\s*company infobox\s*\|([^|}]+)/i.exec(String(source || ''));
+  if (company) { const c = companyOf(company[1].trim()), logo = c && companies.logo && companies.logo(c); if (logo) return { light: logo.src, dark: logo.dark || null }; }
+  const m = /\{\{\s*infobox[\s\S]*?\|\s*logo\s*=\s*([a-z0-9][a-z0-9._-]*\.(?:svg|png|jpe?g|webp|gif))/i.exec(String(source || ''));
+  const found = m && findImage(m[1]);
+  return found ? { light: found.src, dark: found.dark || null } : null;
 }
+// The company a page's {{Company infobox}} is about, if it has one.
+function companyOfSource(source) { const m = /\{\{\s*company infobox\s*\|([^|}]+)/i.exec(String(source || '')); return m ? companyOf(m[1].trim()) : null; }
 
-module.exports = { shortDescription, infoboxImage, render, plainText, normaliseTitle, pageUrl, anchorId, esc, setFileCheck, imageHtml };
+module.exports = { shortDescription, infoboxImage, render, plainText, normaliseTitle, pageUrl, anchorId, esc, setFileCheck, setFileResolver, setCompanySource, companyOfSource, imageHtml, findImage };

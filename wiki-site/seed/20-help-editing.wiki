@@ -45,6 +45,27 @@ Company articles start with an infobox, the summary box on the right:
 
 Any <code>| Label = value</code> line becomes a row. Logos are the approved HN Group logo files; the white version is shown automatically in dark mode.
 
+=== Company infoboxes ===
+Articles about companies on the HN Group Company Register use a company infobox instead:
+<code>{{Company infobox|Horizon Network</code><br>
+<code>| Industry = Digital infrastructure</code><br>
+<code>| Products = Horizon Hosting</code><br>
+<code>}}</code>
+
+Its owners (people, companies or both, with their shares), parent, managing company, subsidiaries, divisions, status, founding date, company number, registered office, key people, email domain and website come straight from the register and change on the wiki automatically when the register changes. Rows you add, such as Industry or Products, appear alongside them. The company's logo is shown too.
+
+* <code>{{Company ownership|Company}}</code> — who owns and manages the company, written as sentences
+* <code>{{Company tree}}</code> — the group's structure; <code>{{Company tree|Company}}</code> starts at one company
+* <code>{{Company list}}</code> — a table of every company on the register
+* <code>{{Company cards}}</code> — a card for every company with its logo (used on the Main Page)
+
+When a company is added to the register, the wiki creates a short article for it. When a company's name changes, its article moves to the new name and the old name redirects to it.
+
+== Images and logos ==
+Signed-in staff can upload photos and other images at [[Special:Upload]] (PNG, JPEG, WebP, GIF or plain SVG, up to 4 MB). Use an uploaded image in an article with <code>[[File:name.jpg|thumb|Caption]]</code>. Every uploaded image is listed at [[Special:ListFiles]].
+
+To add or change a company's logo, open [[Special:CompanyLogo]] or choose '''Logo''' at the top of the company's article. You can add a second version for dark backgrounds. A new logo appears everywhere the company is shown on the wiki straight away, and you can go back to the original brand logo at any time.
+
 == Other templates ==
 * <code>{{Main|Page}}</code> — "Main article" note under a heading
 * <code>{{Hatnote|text}}</code> — a short italic note at the top of a section

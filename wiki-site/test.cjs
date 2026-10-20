@@ -49,7 +49,27 @@ test('HN Group Wiki: reading, editing, history, protection and safety', async ()
   });
   await new Promise((r) => auth.listen(authPort, '127.0.0.1', r));
 
-  const env = { ...process.env, PORT: String(wikiPort), WIKI_DATA_DIR: path.join(dir, 'data'), WIKI_ORIGIN: WIKI, AUTH_ORIGIN: AUTH, AUTH_BACKEND: AUTH, STATUS_SSO_SECRET_FILE: path.join(dir, 'secret') };
+  // Stand-in for the Company Register's public feed, shaped like the real group structure.
+  const regPort = await freePort();
+  const co = (slug, legalName, name, extra) => ({ slug, legalName, name, number: '', status: 'Active', type: '', incorporated: '', dissolved: '', registeredOffice: '', sic: [], description: '', website: '', emailDomain: '', parent: '', managedBy: '', divisions: [], previousNames: [], officers: [], owners: [], ...extra });
+  const parentOwner = (name) => [{ name, kind: 'Parent company', share: '100', control: ['Ownership of shares – 75% or more'] }];
+  let regFeed = { version: 'v1', companies: [
+    co('hn-group', 'HN Group Limited', 'HN Group', { website: 'hngroup.org.uk', emailDomain: 'hngroup.org.uk', incorporated: '2024-03-01', officers: [{ name: 'Charlie Livsey', role: 'Director' }], owners: [{ name: 'Charlie Livsey', kind: 'Individual', share: '100', control: [] }] }),
+    co('hn-group-investments', 'HN Group Investments Limited', 'HN Group Investments', { parent: 'hn-group', managedBy: 'hn-group', description: 'A wholly owned subsidiary of HN Group Limited, managed by HN Group Limited.', owners: parentOwner('HN Group Limited') }),
+    co('horizon-network', 'Horizon Network Limited', 'Horizon Network', { parent: 'hn-group-investments', website: 'horizon-network.co.uk', emailDomain: 'horizon-network.co.uk', divisions: ['Horizon Development'], owners: [...parentOwner('HN Group Investments Limited'), { name: 'Jack Example', kind: 'Individual', share: '', control: ['Has significant influence or control'] }] }),
+    co('horizon-media-group', 'Horizon Media Group Limited', 'Horizon Media Group', { parent: 'hn-group-investments', owners: parentOwner('HN Group Investments Limited') }),
+    co('horizon-advertising', 'Horizon Advertising Limited', 'Horizon Advertising', { parent: 'horizon-media-group', managedBy: 'horizon-network', website: 'horizonadvertising.co.uk', emailDomain: 'horizonadvertising.co.uk', owners: parentOwner('Horizon Media Group Limited') }),
+    co('horizon-assets-management', 'Horizon Assets Management Limited', 'Horizon Assets Management', { parent: 'hn-group', emailDomain: 'holding.hngroup.org.uk', owners: parentOwner('HN Group Limited'), previousNames: [{ name: 'Horizon Holding Co Limited', until: '2026-10-17' }] }),
+  ] };
+  const register = http.createServer((req, res) => {
+    if (req.url !== '/api/public/companies') { res.writeHead(404); return res.end(); }
+    if (req.headers['if-none-match'] === '"' + regFeed.version + '"') { res.writeHead(304); return res.end(); }
+    res.writeHead(200, { 'Content-Type': 'application/json', ETag: '"' + regFeed.version + '"' }); res.end(JSON.stringify(regFeed));
+  });
+  await new Promise((r) => register.listen(regPort, '127.0.0.1', r));
+  const until = async (check, what) => { for (let i = 0; i < 100; i++) { if (await check()) return; await new Promise((r) => setTimeout(r, 50)); } throw new Error('timed out waiting for ' + what); };
+
+  const env = { ...process.env, PORT: String(wikiPort), WIKI_DATA_DIR: path.join(dir, 'data'), WIKI_ORIGIN: WIKI, AUTH_ORIGIN: AUTH, AUTH_BACKEND: AUTH, STATUS_SSO_SECRET_FILE: path.join(dir, 'secret'), COMPANIES_FEED_URL: 'http://127.0.0.1:' + regPort + '/api/public/companies', COMPANIES_FEED_INTERVAL: '100' };
   let child;
   const start = async () => {
     child = spawn(process.execPath, [path.join(__dirname, 'server.js')], { env, stdio: 'ignore' });
@@ -83,6 +103,8 @@ test('HN Group Wiki: reading, editing, history, protection and safety', async ()
   try {
     await start();
     const anon = browser();
+    // The register's companies arrive within a moment of starting.
+    await until(async () => (await anon.go('/wiki/HN_Group_Investments')).status === 200, 'the register feed');
     // Reading
     for (const [route, text] of [['/wiki/Main_Page', 'Welcome to HN Group Wiki'], ['/wiki/HN_Group', 'parent company'], ['/wiki/Horizon_Network', 'horizon-network.co.uk'], ['/wiki/Horizon_Advertising', 'subsidiary of'], ['/wiki/Horizon_Development', 'Custom software'], ['/wiki/Horizon_Media_Group', 'media arm'], ['/wiki/Horizon_Assets_Management', 'Discord servers'], ['/wiki/Horizon_Network_Limited', 'Horizon Network Limited'], ['/wiki/List_of_HN_Group_companies', 'Horizon Advertising'], ['/wiki/Help:Editing', 'Infoboxes'], ['/wiki/Category:Companies', 'Pages in category']]) {
       const r = await anon.go(route); assert.equal(r.status, 200, route); assert.ok(r.text.includes(text), route + ' should mention ' + text);
@@ -131,7 +153,7 @@ test('HN Group Wiki: reading, editing, history, protection and safety', async ()
     assert.ok(back.text.includes('Ella Brooks') && !back.text.includes(' readonly'));
     const csrf = field(back.text, 'csrf'), base = field(back.text, 'base');
     const original = sourceOf(back.text);
-    assert.ok(original.includes('{{Infobox'));
+    assert.ok(original.includes('{{Company infobox|HN Group'));
 
     // CSRF and cross-site protection
     assert.equal((await ella.form('/wiki/HN_Group?action=submit', { text: original + '\nx', save: '1', csrf: 'wrong', base })).status, 403);
@@ -169,6 +191,67 @@ test('HN Group Wiki: reading, editing, history, protection and safety', async ()
     assert.ok((await anon.go('/wiki/Category:Companies')).text.includes('Test page'));
     assert.ok((await anon.go('/wiki/Special:RecentChanges')).text.includes('Test page'));
 
+    // ---------- The Company Register ----------
+    // Owners come from the register: a person, a company, or both.
+    const hnPage = (await anon.go('/wiki/HN_Group')).text;
+    assert.match(hnPage, /<th scope="row">Owner<\/th><td>Charlie Livsey \(100%\)<\/td>/);
+    assert.ok(hnPage.includes('HN Group Investments') && hnPage.includes('Company Register'));
+    const networkPage = (await anon.go('/wiki/Horizon_Network')).text;
+    assert.match(networkPage, /<th scope="row">Owners<\/th><td><a href="\/wiki\/HN_Group_Investments">HN Group Investments<\/a> \(100%\)<br>Jack Example<\/td>/);
+    assert.ok(networkPage.includes('Horizon Network is owned by'), 'ownership sentence');
+    assert.ok(networkPage.includes('Jack Example. HN Group Investments is owned by <a href="/wiki/HN_Group">HN Group</a> (100%), which is owned by Charlie Livsey (100%).'), 'ownership chain');
+    const advertising = (await anon.go('/wiki/Horizon_Advertising')).text;
+    assert.match(advertising, /Managed by<\/th><td><a href="\/wiki\/Horizon_Network">/);
+    assert.match(advertising, /Owner<\/th><td><a href="\/wiki\/Horizon_Media_Group">Horizon Media Group<\/a> \(100%\)/);
+    // Automatically created article, registered-name redirect and no legal names in what's shown.
+    const investments = await anon.go('/wiki/HN_Group_Investments');
+    assert.ok(investments.text.includes('a company in <a href="/wiki/HN_Group">HN Group</a>') && investments.text.includes('managed by HN Group.'));
+    assert.ok(!/Limited/.test(investments.text.replace(/<footer[\s\S]*$/, '')), 'no registered names on an automatic article');
+    assert.ok((await anon.go('/wiki/HN_Group_Investments_Limited')).url.endsWith('/wiki/HN_Group_Investments?from=HN%20Group%20Investments%20Limited'));
+    assert.ok((await anon.go('/wiki/List_of_HN_Group_companies')).text.includes('<a href="/wiki/HN_Group_Investments">HN Group Investments</a>'));
+    assert.ok((await anon.go('/wiki/Main_Page')).text.includes('href="/wiki/HN_Group_Investments"'), 'Main Page card');
+    // A new company on the register gets an article; a change of owner shows up without anyone editing.
+    regFeed = { version: 'v2', companies: [...regFeed.companies.map((c) => c.slug === 'horizon-media-group' ? { ...c, owners: [...c.owners, { name: 'Ella Brooks', kind: 'Individual', share: '10', control: [] }] } : c),
+      co('horizon-studios', 'Horizon Studios Limited', 'Horizon Studios', { parent: 'horizon-media-group', incorporated: '2026-10-20', description: 'Video production for Horizon Media Group Limited.', owners: parentOwner('Horizon Media Group Limited') })] };
+    await until(async () => (await anon.go('/wiki/Horizon_Studios')).status === 200, 'the new company');
+    const studios = (await anon.go('/wiki/Horizon_Studios')).text;
+    assert.ok(studios.includes('Video production for Horizon Media Group.') && studios.includes('20 October 2026'));
+    const media = (await anon.go('/wiki/Horizon_Media_Group')).text;
+    assert.ok(media.includes('Ella Brooks (10%)') && media.includes('href="/wiki/Horizon_Studios"'), 'owners and subsidiaries follow the register');
+    // Renaming on the register moves the article (staff edits kept) and leaves a redirect.
+    const studioEdit = await ella.go('/wiki/Horizon_Studios?action=edit');
+    await ella.form('/wiki/Horizon_Studios?action=submit', { text: sourceOf(studioEdit.text) + '\nStaff-written history.', save: '1', csrf, base: field(studioEdit.text, 'base') });
+    regFeed = { version: 'v3', companies: regFeed.companies.map((c) => c.slug === 'horizon-studios' ? { ...c, name: 'Horizon Pictures', legalName: 'Horizon Pictures Limited', previousNames: [{ name: 'Horizon Studios Limited', until: '2026-10-20' }] } : c) };
+    await until(async () => (await anon.go('/wiki/Horizon_Pictures')).status === 200, 'the renamed company');
+    const pictures = await anon.go('/wiki/Horizon_Studios');
+    assert.ok(pictures.url.endsWith('/wiki/Horizon_Pictures?from=Horizon%20Studios') && pictures.text.includes('Staff-written history.'));
+    assert.ok(pictures.text.includes('<caption>Horizon Pictures</caption>'));
+
+    // ---------- Images and logos ----------
+    const png = 'data:image/png;base64,' + Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000000', 'hex').toString('base64');
+    assert.equal((await anon.form('/wiki/Special:Upload', { file: png, name: 'x', csrf: '' })).status, 401);
+    assert.ok((await anon.go('/wiki/Special:Upload')).text.includes('sign in'));
+    const up = await ella.form('/wiki/Special:Upload', { file: png, name: 'Office Reception.png', description: 'Reception', csrf });
+    assert.ok(up.url.includes('/wiki/Special:ListFiles?uploaded=office-reception.png') && up.text.includes('[[File:office-reception.png|thumb|Caption]]'));
+    const stored = /src="(\/w\/upload\/[a-f0-9]{24}\.png)"/.exec(up.text)[1];
+    const img = await fetch(WIKI + stored);
+    assert.equal(img.headers.get('content-type'), 'image/png'); assert.match(img.headers.get('content-security-policy'), /sandbox/);
+    const evil = 'data:image/svg+xml;base64,' + Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>').toString('base64');
+    assert.ok((await ella.form('/wiki/Special:Upload', { file: evil, name: 'evil', csrf })).text.includes('scripts or links'), 'SVG scripts refused');
+    assert.ok((await ella.form('/wiki/Special:Upload', { file: 'data:text/html;base64,' + Buffer.from('<p>hi</p>').toString('base64'), csrf })).text.includes('Upload a PNG'));
+    assert.equal((await fetch(WIKI + '/w/upload/../pages.json')).status, 404);
+    // Changing a company's logo shows the new one everywhere at once; resetting brings the brand logo back.
+    assert.ok((await ella.go('/wiki/Horizon_Network')).text.includes('/wiki/Special:CompanyLogo?company=horizon-network'), 'Logo tab');
+    const svg = 'data:image/svg+xml;base64,' + Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10" fill="#5514B4"/></svg>').toString('base64');
+    const logoSaved = await ella.form('/wiki/Special:CompanyLogo?company=horizon-network', { company: 'horizon-network', light: svg, csrf });
+    assert.ok(logoSaved.url.endsWith('/wiki/Horizon_Network'));
+    const newLogo = /<td colspan="2" class="ib-logo"><img class="" src="(\/w\/upload\/[a-f0-9]{24}\.svg)"/.exec(logoSaved.text)[1];
+    assert.ok((await anon.go('/wiki/Main_Page')).text.includes(newLogo), 'Main Page card uses the new logo');
+    assert.equal((await sug('horizon net'))[0].image.light, newLogo, 'search suggestions use the new logo');
+    assert.ok((await anon.go('/wiki/Special:CompanyLogo')).text.includes(newLogo));
+    await ella.form('/wiki/Special:CompanyLogo?company=horizon-network', { company: 'horizon-network', reset: '1', csrf });
+    assert.ok((await anon.go('/wiki/Horizon_Network')).text.includes('/assets/brand/horizon-network-wordmark.svg'));
+
     // Protected Main Page: editors can't change it; admins can, and can protect/delete pages.
     assert.equal((await ella.form('/wiki/Main_Page?action=submit', { text: 'Vandalised', save: '1', csrf, base: '' })).status, 403);
     assert.equal((await ella.form('/wiki/Test_page?action=delete', { csrf })).status, 400, 'editors cannot delete');
@@ -194,6 +277,7 @@ test('HN Group Wiki: reading, editing, history, protection and safety', async ()
   } finally {
     if (child && child.exitCode === null) await stop();
     await new Promise((r) => auth.close(r));
+    await new Promise((r) => register.close(r));
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });

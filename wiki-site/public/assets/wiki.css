@@ -261,3 +261,42 @@ a.external::after { content: "↗"; font-size: .75em; margin-left: .15em; opacit
 .mp-box .thumb img { max-height: 80px; }
 .body dt { font-weight: 700; margin-top: .6rem; }
 .body dl + dl { margin-top: 0; }
+
+/* Company facts from the Company Register */
+.infobox .ib-source { font-size: .74rem; color: var(--muted); text-align: center; background: var(--surface); padding: .5rem .8rem; }
+.company-facts { margin: .4rem 0 1rem; }
+.register-ref { font-size: .72em; margin-left: .2em; }
+.register-ref a.external::after { content: ""; }
+.company-tree ul { margin: .2rem 0 .2rem 1.2rem; }
+.company-tree > ul { margin-left: .2rem; }
+.cc-initials { display: inline-flex; align-items: center; justify-content: center; width: 54px; height: 54px; border-radius: 14px; background: var(--accent-soft); color: var(--link); font-weight: 800; letter-spacing: .02em; }
+
+/* Images and company logos */
+.small { font-size: .82rem; }
+.notice.success { border-left-color: var(--success); }
+.upload-form { max-width: 620px; display: grid; gap: .2rem; margin: 1rem 0; }
+.upload-form .field { display: grid; gap: .3rem; margin: .5rem 0; }
+.upload-form label { font-weight: 700; font-size: .9rem; }
+.upload-form .field p { margin: 0; }
+.upload-form input[type="text"] { font: inherit; padding: .55rem .8rem; border: 1.5px solid var(--border-strong); border-radius: 10px; background: var(--surface); color: var(--text); }
+.upload-form input[type="file"] { font: inherit; font-size: .9rem; }
+.upload-form input:focus-visible { outline: 3px solid var(--accent-soft); border-color: var(--link); }
+.upload-form label.check { display: flex; gap: .5rem; align-items: center; font-weight: 600; }
+.upload-preview { padding: .8rem; border: 1px dashed var(--border-strong); border-radius: 12px; background: var(--surface-2); text-align: center; animation: wiki-fade .2s ease-out; }
+.upload-preview img { max-width: 100%; max-height: 180px; }
+.file-list, .logo-list { list-style: none; padding: 0; margin: 1rem 0; display: grid; gap: .8rem; }
+.file-list li, .logo-list li { display: flex; gap: 1rem; align-items: flex-start; padding: .9rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); }
+.file-thumb { flex: 0 0 120px; height: 90px; display: flex; align-items: center; justify-content: center; border-radius: 10px; background: var(--surface); overflow: hidden; }
+.file-thumb img { max-width: 100%; max-height: 100%; }
+.file-info, .logo-list li > div { display: flex; flex-direction: column; gap: .25rem; min-width: 0; overflow-wrap: anywhere; }
+.file-info .inline-form, .logo-list .button { align-self: flex-start; margin-top: .3rem; }
+.logo-box { flex: 0 0 auto; display: inline-flex; gap: .5rem; }
+.logo-box > span { display: flex; align-items: center; justify-content: center; width: 140px; height: 76px; padding: .5rem; border-radius: 10px; border: 1px solid var(--border); }
+.logo-box .logo-light { background: #fff; }
+.logo-box .logo-dark { background: #161A2E; }
+.logo-box img { max-width: 100%; max-height: 100%; }
+.logo-current { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin: .5rem 0 1rem; }
+.logo-current p { flex: 1 1 260px; margin: 0; }
+@keyframes wiki-fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (max-width: 560px) { .file-list li, .logo-list li { flex-direction: column; } .file-thumb { flex-basis: auto; width: 100%; } }
+@media (prefers-reduced-motion: reduce) { .upload-preview { animation: none; } }

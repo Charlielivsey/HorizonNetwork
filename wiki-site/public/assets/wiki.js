@@ -98,6 +98,32 @@
     list.addEventListener('mousedown', function (e) { e.preventDefault(); });
     input.addEventListener('blur', function () { setTimeout(close, 0); });
   }
+  // Image uploads: the chosen file is read here and sent inside the form, with a preview first.
+  document.querySelectorAll('input[type="file"][data-into]').forEach(function (picker) {
+    var form = picker.form, field = form.querySelector('input[name="' + picker.dataset.into + '"]'), preview = document.getElementById(picker.dataset.preview);
+    picker.addEventListener('change', function () {
+      var file = picker.files && picker.files[0];
+      field.value = ''; if (preview) { preview.textContent = ''; preview.hidden = true; }
+      if (!file) return;
+      if (file.size > 4 * 1024 * 1024) { window.alert('That image is too large. The limit is 4 MB.'); picker.value = ''; return; }
+      var reader = new FileReader();
+      reader.onload = function () {
+        field.value = String(reader.result);
+        if (picker.dataset.name) { var name = form.querySelector('input[name="' + picker.dataset.name + '"]'); if (name && !name.value) name.value = file.name.replace(/\.[^.]+$/, ''); }
+        if (preview) { var img = document.createElement('img'); img.alt = 'Preview of ' + file.name; img.src = String(reader.result); preview.appendChild(img); preview.hidden = false; }
+      };
+      reader.readAsDataURL(file);
+    });
+  });
+  document.querySelectorAll('form[data-upload]').forEach(function (f) {
+    f.addEventListener('submit', function (e) {
+      if (f.dataset.sending) { e.preventDefault(); return; }
+      var files = f.querySelectorAll('input[type="file"][data-into]'), chosen = false;
+      files.forEach(function (p) { if (f.querySelector('input[name="' + p.dataset.into + '"]').value) chosen = true; });
+      if (!chosen && !f.querySelector('input[name="removeDark"]:checked')) { e.preventDefault(); window.alert('Choose an image first.'); return; }
+      f.dataset.sending = '1'; var b = f.querySelector('button[type="submit"]'); if (b) { b.disabled = true; b.textContent = 'Uploading…'; }
+    });
+  });
   // Confirm before deleting a page.
   document.querySelectorAll('form[data-confirm]').forEach(function (f) {
     f.addEventListener('submit', function (e) { if (!window.confirm(f.dataset.confirm)) e.preventDefault(); });

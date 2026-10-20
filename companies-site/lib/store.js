@@ -206,6 +206,25 @@ function search(q) {
   return { companies: found, officers };
 }
 
+// The public facts of every company on the register, for other HN Group sites (the wiki reads this to
+// keep its company articles up to date). Only what the register already shows publicly: hidden
+// companies, resigned officers, ceased persons with significant control and private notes are left out.
+function publicFeed() {
+  const list = companies().map((c) => ({
+    slug: c.slug, name: c.name, legalName: c.legalName, number: c.number, status: c.status, type: c.type,
+    incorporated: c.incorporated, dissolved: c.dissolved, registeredOffice: c.registeredOffice, sic: c.sic.slice(),
+    description: c.description, website: c.website, emailDomain: c.emailDomain,
+    parent: c.parent && company(c.parent) && !company(c.parent).hidden ? c.parent : '',
+    managedBy: c.managedBy && company(c.managedBy) && !company(c.managedBy).hidden ? c.managedBy : '',
+    divisions: c.divisions.slice(), previousNames: (c.previousNames || []).map((p) => ({ name: p.name, until: p.until || p.changed || '' })),
+    officers: c.officers.filter((o) => !o.resigned).map((o) => ({ name: o.name, role: o.role, appointed: o.appointed })),
+    owners: c.psc.filter((p) => !p.ceased).map((p) => ({ name: p.name, kind: p.kind, share: p.share, control: (p.control || []).slice(), notified: p.notified })),
+    updatedAt: c.updatedAt,
+  }));
+  const version = crypto.createHash('sha256').update(JSON.stringify(list)).digest('hex').slice(0, 16);
+  return { version, companies: list };
+}
+
 function slugify(s) { return String(s).toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60); }
 
 // A new company must be added with its first officer and first person with significant control
@@ -774,6 +793,7 @@ function decideSubmission(s, accept, note, actor) {
 }
 
 module.exports = {
+  publicFeed,
   init, STATUSES, FILING_CATEGORIES, OFFICER_ROLES, PSC_KINDS, REQUEST_KINDS, CHANGE_TYPES,
   canManage, managedCompanies, groupOf, groupReport, addApplication, addManager, removeManager,
   companies, company, children, search, saveCompany, deleteCompany, saveItem, deleteItem,

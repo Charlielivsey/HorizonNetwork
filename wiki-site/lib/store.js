@@ -14,7 +14,7 @@ function init(dataDir, seedDir) {
   fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 });
   file = path.join(dataDir, 'pages.json');
   data = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : { pages: {}, seeded: {} };
-  data.pages = data.pages || {}; data.seeded = data.seeded || {};
+  data.pages = data.pages || {}; data.seeded = data.seeded || {}; data.companyPages = data.companyPages || {};
   if (seedDir && fs.existsSync(seedDir)) seed(seedDir);
 }
 
@@ -106,6 +106,24 @@ function remove(title) {
   delete data.pages[k]; data.seeded[k] = true; save(); return true;
 }
 
+// Moves a page (with its whole history) to a new title and leaves a redirect at the old one.
+function move(from, to, author, summary) {
+  const page = get(from);
+  if (!page || get(to)) return null;
+  const oldTitle = page.title;
+  delete data.pages[key(from)];
+  page.title = normaliseTitle(to);
+  data.pages[key(to)] = page;
+  addRevision(page, latest(page).text, author, summary || ('Moved from ' + oldTitle));
+  create(oldTitle, '#REDIRECT [[' + page.title + ']]\n', author, 'Moved to ' + page.title);
+  save();
+  return page;
+}
+
+// Which wiki article belongs to each company on the Company Register (by register id).
+const companyPage = (slug) => data.companyPages[slug] || null;
+function setCompanyPage(slug, title) { if (data.companyPages[slug] !== title) { data.companyPages[slug] = title; save(); } }
+
 function all() {
   return Object.values(data.pages).sort((a, b) => a.title.localeCompare(b.title));
 }
@@ -116,4 +134,4 @@ function recentChanges(limit) {
   return list.sort((a, b) => b.rev.at.localeCompare(a.rev.at)).slice(0, limit || 100);
 }
 
-module.exports = { init, get, latest, edit, setProtected, remove, all, recentChanges, key };
+module.exports = { init, get, latest, edit, setProtected, remove, all, recentChanges, key, move, companyPage, setCompanyPage };

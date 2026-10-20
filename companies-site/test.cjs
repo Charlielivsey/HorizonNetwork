@@ -53,6 +53,16 @@ test('company register: public records, customers, requests, submissions and sta
     assert.match(await (await get('/search?q=network')).text(), /1 result/);
     assert.equal((await get('/company/nope')).status, 404);
     assert.doesNotMatch(html, /style="/);
+    // The public feed the HN Group Wiki follows: current facts only, with a version for If-None-Match.
+    let feedRes = await get('/api/public/companies');
+    assert.equal(feedRes.headers.get('content-type'), 'application/json; charset=utf-8');
+    const feed = await feedRes.json();
+    assert.match(feed.version, /^[a-f0-9]{16}$/);
+    const feedNet = feed.companies.find((c) => c.slug === 'horizon-network');
+    assert.equal(feedNet.parent, 'hn-group'); assert.deepEqual(feedNet.divisions, ['Horizon Development']);
+    assert.deepEqual(feedNet.owners.map((o) => [o.name, o.kind, o.share]), [['HN Group Limited', 'Parent company', '100']]);
+    assert.equal(feedRes.headers.get('etag'), '"' + feed.version + '"');
+    assert.equal((await fetch(SITE + '/api/public/companies', { headers: { 'If-None-Match': '"' + feed.version + '"' } })).status, 304);
 
     // Customer actions need an account; anyone can create one.
     assert.equal((await get('/company/hn-group/request')).headers.get('location'), '/account/login?return=%2Fcompany%2Fhn-group%2Frequest');
@@ -227,6 +237,7 @@ test('company register: public records, customers, requests, submissions and sta
     await post('/admin/company/horizon-network', { csrf: staffCsrf, legalName: 'Horizon Network Limited', parent: 'hn-group', hidden: 'on' }, owner);
     assert.equal((await get('/company/horizon-network')).status, 404);
     assert.equal((await get('/company/horizon-network', owner)).status, 200);
+    assert.ok(!(await (await get('/api/public/companies')).json()).companies.some((c) => c.slug === 'horizon-network'), 'hidden companies are left out of the feed');
     assert.equal((await get('/document/' + docId)).status, 404);
 
     // Staff can make a customer a manager directly.

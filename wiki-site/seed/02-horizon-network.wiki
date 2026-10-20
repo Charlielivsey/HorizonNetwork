@@ -1,15 +1,11 @@
 title: Horizon Network
 ---
 {{Short description|Digital infrastructure, advertising and software company}}
-{{Infobox
-| name = Horizon Network
+{{Company infobox|Horizon Network
 | logo = horizon-network-wordmark.svg
-| Type = Wholly owned subsidiary
 | Industry = Digital infrastructure<br>Advertising<br>Software development
-| Divisions = [[Horizon Development]]
 | Products = Horizon Hosting (coming soon)
 | Country = United Kingdom
-| Email domain = horizon-network.co.uk
 | Website = [https://horizon-network.co.uk horizon-network.co.uk]<br>[https://horizonetwork.com horizonetwork.com]
 }}
 '''Horizon Network''' is the [[HN Group]] business for digital infrastructure, advertising and software. It brings together its own digital services and infrastructure with [[Horizon Development]], which is part of Horizon Network, and [[Horizon Advertising]], a [[Horizon Media Group]] subsidiary that Horizon Network manages.<ref>[https://horizon-network.co.uk/ Horizon Network], horizon-network.co.uk.</ref>
@@ -34,14 +30,11 @@ Horizon Network describes itself as a growing network of digital services and so
 Horizon Hosting is Horizon Network's planned hosting service, offering VPS, dedicated servers and managed cloud. It is listed as "coming soon".
 
 == Structure ==
-Horizon Network is a direct, wholly owned subsidiary of [[HN Group]], alongside [[Horizon Media Group]] and [[Horizon Assets Management]]. [[Horizon Development]] is part of Horizon Network. Horizon Network also manages [[Horizon Advertising]], which is a subsidiary of Horizon Media Group. Together they combine specialist skills with the shared people and systems of HN Group.
+{{Company ownership|Horizon Network}}
 
-* [[HN Group]]
-** '''Horizon Network'''
-*** [[Horizon Development]]
-** [[Horizon Media Group]]
-*** [[Horizon Advertising]] (managed by Horizon Network)
-** [[Horizon Assets Management]]
+[[Horizon Development]] is part of Horizon Network, and Horizon Network manages [[Horizon Advertising]], a subsidiary of [[Horizon Media Group]]. Together they combine specialist skills with the shared people and systems of HN Group.
+
+{{Company tree}}
 
 == Leadership ==
 The "About us" page of the Horizon Network website introduces the people guiding the network. It is published live from HN Group's staff records and shows staff whose role at Horizon Network is in the '''Network Leadership''' department, with their job title, photo and the introduction they choose to share.<ref>[https://horizon-network.co.uk/about About us], horizon-network.co.uk.</ref>

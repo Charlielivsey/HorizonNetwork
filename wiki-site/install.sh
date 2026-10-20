@@ -13,7 +13,7 @@ CHALLENGE_DIR=/var/www/hn-wiki-acme
 LE_DIR="/etc/letsencrypt/live/$DOMAIN"
 [ "$(id -u)" = 0 ] || { echo 'Run with sudo.'; exit 1; }
 for tool in node pm2 nginx certbot curl python3 openssl; do command -v "$tool" >/dev/null || { echo "Required tool missing: $tool"; exit 1; }; done
-for file in server.js lib/markup.js lib/store.js lib/auth.js public/assets/wiki.js; do node --check "$SCRIPT_DIR/$file"; done
+for file in server.js lib/markup.js lib/store.js lib/auth.js lib/register.js lib/media.js public/assets/wiki.js; do node --check "$SCRIPT_DIR/$file"; done
 if python3 -c 'import socket;s=socket.socket();s.settimeout(2);exit(s.connect_ex(("127.0.0.1",3800)))'; then
     pm2 describe hn-wiki >/dev/null 2>&1 || { echo 'Port 3800 belongs to another service. No changes made.'; exit 1; }
 fi
