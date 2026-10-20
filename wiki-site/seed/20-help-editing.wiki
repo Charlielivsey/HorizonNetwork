@@ -59,7 +59,7 @@ Its owners (people, companies or both, with their shares), parent, managing comp
 * <code>{{Company list}}</code> — a table of every company on the register
 * <code>{{Company cards}}</code> — a card for every company with its logo (used on the Main Page)
 
-When a company's shares are split into classes on the register, the infobox also shows its '''Share classes''', each owner's classes and share of the votes, and who has '''Voting control'''. Class A shares are ordinary shares with one vote each; Class B shares are staff shares with half a vote each; Class C shares are special issue shares, issued by the Chair of the Board, with two votes each, and anyone holding more than 10% of the Class C shares holds 51% of the votes.
+When a company's shares are split into classes on the register, the infobox also shows its '''Share classes''', each owner's classes and share of the votes, and who has '''Voting control'''. Class A shares are ordinary shares with one vote each; Class B shares are staff shares with half a vote each; Class C shares are special issue shares, issued by one of the company's officers, with two votes each, and anyone holding more than 10% of the Class C shares holds 51% of the votes.
 
 When a company is added to the register, the wiki creates a short article for it. When a company's name changes, its article moves to the new name and the old name redirects to it.
 

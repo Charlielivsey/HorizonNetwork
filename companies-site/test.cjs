@@ -441,9 +441,12 @@ test('company register: group structure update', () => {
     assert.deepEqual(current(ham).map((p) => p.name), ['HN Group Limited']);
     const filed = (c) => s.filings(c.slug).map((f) => f.description).join('\n');
     assert.match(filed(hn), /Notification of Charlie Livsey as a person with significant control/);
-    assert.match(filed(inv), /Incorporation of HN Group Investments Limited/); assert.match(filed(inv), /Appointment of Charlie Livsey as a director/); assert.match(filed(inv), /Notification of HN Group Limited/);
+    assert.match(filed(inv), /Incorporation of HN Group Investments Limited/); assert.match(filed(inv), /Appointment of Charlie Livsey as a managing director/); assert.match(filed(inv), /Notification of HN Group Limited/);
     for (const c of [media, net]) { assert.match(filed(c), /Cessation of HN Group Limited/); assert.match(filed(c), /Notification of HN Group Investments Limited/); }
     assert.match(filed(ham), /Cessation of Old Holder/); assert.match(filed(ham), /Appointment of Charlie Livsey/); assert.match(filed(ham), /Notification of HN Group Limited/); assert.match(filed(ham), /Change of name from Horizon Assets Management Limited to HN Group Management Limited/);
+    // Charlie Livsey is Managing director on every company where he is a current officer.
+    const charlies = s.db.companies.flatMap((x) => x.officers.filter((o) => !o.resigned && o.name === 'Charlie Livsey'));
+    assert.ok(charlies.length >= 3); assert.ok(charlies.every((o) => o.role === 'Managing director'));
     // Running again changes nothing, and every filing has its PDF.
     assert.equal(s.db.filings.filter((f) => /Cessation of HN Group Limited/.test(f.description)).length, 2);
     for (const f of s.db.filings) assert.ok(fs.existsSync(s.filePath(f.file)));
@@ -460,13 +463,13 @@ test('company register: share classes and voting power', () => {
   process.env.COMPANIES_GROUP_UPDATES = 'off';
   try {
     const s = require(store); s.init(dir);
-    const c = s.saveCompany('', { legalName: 'Class Test Limited', incorporated: '2026-01-01' }, 't', { officer: { name: 'Clara Chair', role: 'Chair' }, psc: { name: 'Xavier Public', kind: 'Individual', classA: '60' } });
+    const c = s.saveCompany('', { legalName: 'Class Test Limited', incorporated: '2026-01-01' }, 't', { officer: { name: 'Clara Chair', role: 'Secretary' }, psc: { name: 'Xavier Public', kind: 'Individual', classA: '60' } });
     const err = (fn) => { try { fn(); } catch (e) { return e.message; } return ''; };
     const votes = () => { const v = s.votingPower(s.company(c.slug)); return Object.fromEntries(s.company(c.slug).psc.filter((p) => !p.ceased).map((p) => [p.name, v[p.id]])); };
     assert.equal(s.company(c.slug).psc[0].share, '60', 'the shareholding is the total of its classes');
     // Class B is for staff: people only. Class C needs the Chair. Classes must match the shareholding.
     assert.match(err(() => s.saveItem(c.slug, 'psc', '', { name: 'Parent Co Limited', kind: 'Parent company', classB: '10' }, 't')), /only a person/);
-    assert.match(err(() => s.saveItem(c.slug, 'psc', '', { name: 'Zed', kind: 'Individual', classC: '20' }, 't')), /Chair of the Board/);
+    assert.match(err(() => s.saveItem(c.slug, 'psc', '', { name: 'Zed', kind: 'Individual', classC: '20' }, 't')), /one of the company’s officers/);
     assert.match(err(() => s.saveItem(c.slug, 'psc', '', { name: 'Zed', kind: 'Individual', classC: '20', classCIssuedBy: 'Someone Else' }, 't')), /Clara Chair/);
     assert.match(err(() => s.saveItem(c.slug, 'psc', '', { name: 'Yasmin Staff', kind: 'Individual', share: '30', classB: '20' }, 't')), /add up to 20%, but the shareholding is 30%/);
     assert.match(err(() => s.saveItem(c.slug, 'psc', '', { name: 'Too Much', kind: 'Individual', classA: '50' }, 't')), /more than 100%/);

@@ -63,6 +63,12 @@ function runGroupMigrations() {
   if (!Array.isArray(db.migrations)) db.migrations = [];
   // The tests' fixtures use the starting structure, so they can switch these updates off.
   if (process.env.COMPANIES_GROUP_UPDATES !== 'off' && !db.migrations.includes('group-structure-2026-10-18')) { groupStructure20261018(); db.migrations.push('group-structure-2026-10-18'); }
+  // The user's request (20 October 2026): Charlie Livsey is Managing director on every company where he is a
+  // current officer.
+  if (process.env.COMPANIES_GROUP_UPDATES !== 'off' && !db.migrations.includes('charlie-managing-director')) {
+    for (const c of db.companies) for (const o of c.officers) if (!o.resigned && /^charlie\s+livsey$/i.test(String(o.name).trim()) && o.role !== 'Managing director') { const was = o.role; o.role = 'Managing director'; c.updatedAt = now(); audit('system', 'officer.role', c.slug + ' Charlie Livsey ' + was + ' → Managing director'); }
+    db.migrations.push('charlie-managing-director');
+  }
   // The user's request (20 October 2026): Horizon Assets Management Limited is now HN Group Management Limited.
   // The company keeps its old name as a previous name and gets a Change of name filing; references elsewhere follow.
   if (process.env.COMPANIES_GROUP_UPDATES !== 'off' && !db.migrations.includes('rename-hn-group-management')) {
@@ -112,7 +118,7 @@ function groupStructure20261018() {
   if (!hn) return;
   const charlieAt = (c) => c && c.officers.find((o) => same(o.name, 'Charlie Livsey') && !o.resigned);
   const charlie = charlieAt(hn) || db.companies.map(charlieAt).find(Boolean) || null;
-  const charlieDetails = { name: 'Charlie Livsey', role: 'Director', occupation: charlie ? charlie.occupation || '' : '', nationality: charlie ? charlie.nationality || '' : '', countryOfResidence: charlie ? charlie.countryOfResidence || '' : '' };
+  const charlieDetails = { name: 'Charlie Livsey', role: 'Managing director', occupation: charlie ? charlie.occupation || '' : '', nationality: charlie ? charlie.nationality || '' : '', countryOfResidence: charlie ? charlie.countryOfResidence || '' : '' };
 
   // HN Group Limited: Charlie Livsey, 100%.
   for (const p of hn.psc) if (!p.ceased && !same(p.name, 'Charlie Livsey')) cease(hn, p);
@@ -317,7 +323,8 @@ function percent(v, label) {
 // as a percentage of all the company's shares:
 // - Class A: ordinary shares, available to the public and other companies. One vote each.
 // - Class B: staff shares, so only people (not companies) hold them. Half the votes of Class A.
-// - Class C: special issue shares, issued only by the Chair of the Board. Double the votes of Class A;
+// - Class C: special issue shares, issued only by one of the company's current officers (any role; the user's
+//   change, 20 October 2026, from the Chair only). Double the votes of Class A;
 //   anyone holding more than 10% of all the Class C shares holds 51% of the votes. Only one holder may be
 //   over that line, so the register refuses a Class C issue that would put a second holder over it.
 // A holding not split into classes counts as Class A.
@@ -333,7 +340,7 @@ function withClasses(x, i) {
     x.share = String(sum);
   }
   if (Number(x.classB || 0) > 0 && x.kind !== 'Individual') throw bad('Class B shares are for staff, so only a person (an Individual) can hold them.');
-  if (Number(x.classC || 0) > 0 && !x.classCIssuedBy) throw bad('Class C shares can only be issued by the Chair of the Board. Enter the Chair who issued them.');
+  if (Number(x.classC || 0) > 0 && !x.classCIssuedBy) throw bad('Class C shares can only be issued by one of the company’s officers. Enter the officer who issued them.');
   return x;
 }
 const classesOf = (p) => { const split = CLASS_KEYS.some((k) => p[k] !== undefined && p[k] !== ''); return { split, a: split ? Number(p.classA || 0) : (p.share !== '' && p.share != null ? Number(p.share) : 0), b: split ? Number(p.classB || 0) : 0, c: split ? Number(p.classC || 0) : 0, known: split || (p.share !== '' && p.share != null) }; };
@@ -342,8 +349,8 @@ function checkShareRules(c, holdings, officers) {
   const cur = holdings.filter((p) => !p.ceased), split = cur.filter((p) => classesOf(p).split);
   const total = Math.round(split.reduce((n, p) => n + Number(p.share || 0), 0) * 100) / 100;
   if (total > 100.001) throw bad('The shares split into classes on this company would add up to ' + total + '%, which is more than 100%.');
-  const chairs = (officers || c.officers).filter((o) => !o.resigned && o.role === 'Chair').map((o) => o.name.trim().toLowerCase());
-  for (const p of cur) if (Number(p.classC || 0) > 0 && !chairs.includes(String(p.classCIssuedBy || '').trim().toLowerCase())) throw bad('Class C shares can only be issued by the Chair of the Board. ' + (chairs.length ? 'Enter the name of the current Chair (' + (officers || c.officers).filter((o) => !o.resigned && o.role === 'Chair').map((o) => o.name).join(' or ') + ').' : 'Record the Chair as an officer (role: Chair) first.'));
+  const current = (officers || c.officers).filter((o) => !o.resigned), issuers = current.map((o) => o.name.trim().toLowerCase());
+  for (const p of cur) if (Number(p.classC || 0) > 0 && !issuers.includes(String(p.classCIssuedBy || '').trim().toLowerCase())) throw bad('Class C shares can only be issued by one of the company’s current officers. ' + (current.length ? 'Enter the name of the officer who issued them (' + current.map((o) => o.name).join(', ') + ').' : 'Record the officer first.'));
   const totalC = cur.reduce((n, p) => n + classesOf(p).c, 0);
   const over = totalC > 0 ? cur.filter((p) => classesOf(p).c / totalC * 100 > CLASS_C_CONTROL) : [];
   if (over.length > 1) throw bad('Only one holder can have more than ' + CLASS_C_CONTROL + '% of the Class C shares, because that gives them ' + CONTROL_VOTES + '% of the votes. This would give ' + over.map((p) => p.name).join(' and ') + ' more than ' + CLASS_C_CONTROL + '% each.');

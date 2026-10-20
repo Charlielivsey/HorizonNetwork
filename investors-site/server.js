@@ -121,7 +121,7 @@ function change(now, before) {
 const CLASS_HELP = '<details class="explain"><summary>How share classes and voting power work</summary><ul>' +
   '<li><b>Class A</b> shares are ordinary shares, available to the public and other companies. Each carries one vote.</li>' +
   '<li><b>Class B</b> shares are for HN Group staff. Each carries half the votes of a Class A share.</li>' +
-  '<li><b>Class C</b> shares are special issue shares, issued only by the Chair of the Board. Each carries double the votes of a Class A share. Anyone holding more than 10% of all the Class C shares holds 51% of the company’s votes (or more, if their shares already give them more), and only one holder can be in that position.</li>' +
+  '<li><b>Class C</b> shares are special issue shares, issued only by one of the company’s officers. Each carries double the votes of a Class A share. Anyone holding more than 10% of all the Class C shares holds 51% of the company’s votes (or more, if their shares already give them more), and only one holder can be in that position.</li>' +
   '<li>Holdings not split into classes count as Class A. Your voting power is your share of all the votes held by the company’s recorded shareholders.</li></ul></details>';
 const classesOf = (h) => register.classText(h) || (h.share !== null ? 'Not split (counted as Class A)' : '—');
 function votesBar(v) { const w = Math.max(0, Math.min(100, v)); return '<svg class="bar" viewBox="0 0 100 8" preserveAspectRatio="none" aria-hidden="true"><rect class="bar-bg" width="100" height="8" rx="4"/><rect class="bar-fill" width="' + w.toFixed(2) + '" height="8" rx="4"/></svg>'; }
