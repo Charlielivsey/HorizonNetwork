@@ -278,6 +278,7 @@ test('company register: public records, customers, requests, submissions and sta
     const skyId = JSON.parse(fs.readFileSync(path.join(dir, 'data', 'register.json'), 'utf8')).companies.find((x) => x.slug === 'hn-group').psc.find((p) => p.name === 'Sky Holder').id;
     html = await (await get('/company/hn-group/file?type=psc_change&psc=' + skyId, sam)).text();
     assert.match(html, /name="psc_share" type="number" value="25"/);
+    assert.match(html, /data-vote-preview data-others="\[\[50.5,0,0\]/, 'voting power preview with the other holdings'); assert.match(html, /% of votes<\/p>|% of votes/);
     assert.match(await (await upload('/company/hn-group/file', { csrf: samCsrf, kind: 'psc_change', psc: skyId, psc_name: 'Sky Holder', psc_kind: 'Individual', psc_share: '25', psc_control: 'Ownership of shares – more than 25% but not more than 50%', changed: '2026-07-05' }, null, sam)).text(), /Nothing has changed/);
     await upload('/company/hn-group/file', { csrf: samCsrf, kind: 'psc_change', psc: skyId, psc_name: 'Sky Holder', psc_kind: 'Individual', psc_share: '39.5', psc_control: 'Ownership of shares – more than 50% but less than 75%', changed: '2026-07-05' }, null, sam);
     html = await (await get('/admin/submissions', owner)).text();
