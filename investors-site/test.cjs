@@ -138,7 +138,7 @@ test('HN Group Investors: staff access, investors, holdings, values and news', a
     assert.ok(article.text.includes('Second &lt;b&gt;paragraph&lt;/b&gt;.'), 'news text is escaped');
     const holdingsPage = await inv.go('/holdings');
     assert.ok(holdingsPage.text.includes('Valuation history') && holdingsPage.text.includes('Opening valuation'));
-    assert.ok(holdingsPage.text.includes('Class C issued by Charlie Livsey') && holdingsPage.text.includes('<th class="num">Votes</th>'));
+    assert.ok(holdingsPage.text.includes('C issued by Charlie Livsey') && holdingsPage.text.includes('<th class="num">Votes</th>'));
     // Investors can't reach staff pages.
     const staffOnly = await fetch(SITE + '/staff', { redirect: 'manual', headers: { Cookie: Object.entries(inv.jar).map(([k, v]) => k + '=' + v).join('; ') } });
     assert.equal(staffOnly.status, 303); assert.ok(staffOnly.headers.get('location').startsWith('/auth/login'));

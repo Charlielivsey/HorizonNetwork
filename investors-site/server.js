@@ -49,7 +49,7 @@ function layout(o) {
   return '<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
     '<meta name="theme-color" content="#5514B4"><meta name="robots" content="noindex, nofollow"><title>' + esc(o.title) + ' · HN Group Investors</title>' +
     '<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="preload" href="/assets/fonts/plus-jakarta-sans.woff2" as="font" type="font/woff2" crossorigin>' +
-    '<link rel="stylesheet" href="/assets/investors.css?v=3"><script src="/assets/investors.js?v=1" defer></script></head><body class="' + (who || 'public') + '">' +
+    '<link rel="stylesheet" href="/assets/investors.css?v=6"><script src="/assets/investors.js?v=1" defer></script></head><body class="' + (who || 'public') + '">' +
     '<a class="skip" href="#content">Skip to content</a><div class="stripe" aria-hidden="true">' + STRIPE.map(([id, w]) => '<i class="c-' + id + ' f' + w + '"></i>').join('') + '</div>' +
     '<header class="top"><a class="brand" href="' + (who === 'staff' ? '/staff' : '/') + '"><img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="92" height="32"><img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="92" height="32"><span class="brand-name">Investors</span></a>' +
     (nav.length ? '<nav class="nav" aria-label="Main">' + nav.map(([href, label]) => '<a href="' + href + '"' + (o.active === href ? ' aria-current="page"' : '') + '>' + label + (href === '/news' && o.unread ? ' <span class="badge">' + o.unread + '</span>' : '') + '</a>').join('') + '</nav>' : '') +
@@ -123,7 +123,7 @@ const CLASS_HELP = '<details class="explain"><summary>How share classes and voti
   '<li><b>Class B</b> shares are for HN Group staff. Each carries half the votes of a Class A share.</li>' +
   '<li><b>Class C</b> shares are special issue shares, issued only by one of the company’s officers. Each carries double the votes of a Class A share. Anyone holding more than 10% of all the Class C shares holds 51% of the company’s votes (or more, if their shares already give them more), and only one holder can be in that position.</li>' +
   '<li>Holdings not split into classes count as Class A. Your voting power is your share of all the votes held by the company’s recorded shareholders.</li></ul></details>';
-const classesOf = (h) => register.classText(h) || (h.share !== null ? 'Not split (counted as Class A)' : '—');
+const classesOf = (h) => register.classText(h) || (h.share !== null ? 'Class A (not split)' : '—');
 function votesBar(v) { const w = Math.max(0, Math.min(100, v)); return '<svg class="bar" viewBox="0 0 100 8" preserveAspectRatio="none" aria-hidden="true"><rect class="bar-bg" width="100" height="8" rx="4"/><rect class="bar-fill" width="' + w.toFixed(2) + '" height="8" rx="4"/></svg>'; }
 function votingSection(s) {
   const list = s.direct.filter((h) => h.votes !== null);
@@ -132,6 +132,17 @@ function votingSection(s) {
     list.map((h) => '<div class="vote-row"><span class="cell-co">' + logo(h.company, 'sm') + esc(register.displayName(h.company)) + '</span><span class="vote-figure"><b>' + esc(h.votes) + '%</b> of votes' + (h.votingControl ? ' <span class="pill ok">Voting control</span>' : '') + '</span>' + votesBar(h.votes) +
       '<span class="muted small">' + esc(classesOf(h)) + (h.votingControl ? ' · You hold more than 10% of the Class C shares, so you hold 51% of the votes or more.' : '') + '</span></div>').join('') + '</div>' + CLASS_HELP + '</section>';
 }
+// The register's nature-of-control wording, shortened for the holdings table (the full text is the tooltip).
+function shortControl(x) {
+  const t = String(x), range = (/(more than 25% but not more than 50%|more than 50% but less than 75%|75% or more)/i.exec(t) || [])[1];
+  const r = range ? ' ' + { 'more than 25% but not more than 50%': '25–50%', 'more than 50% but less than 75%': '50–75%', '75% or more': '75%+' }[range.toLowerCase()] : '';
+  if (/^ownership of shares/i.test(t)) return 'Shares' + r;
+  if (/^ownership of voting/i.test(t)) return 'Votes' + r;
+  if (/appoint and remove directors/i.test(t)) return 'Appoints directors';
+  if (/significant influence or control/i.test(t)) return 'Significant influence';
+  return t.length > 28 ? t.slice(0, 26) + '…' : t;
+}
+const shortDate = (iso) => { const d = new Date(iso + 'T12:00:00Z'); return isNaN(d) ? '' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/London' }); };
 function holdingCard(h) {
   const c = h.company;
   return '<article class="holding"><div class="holding-head">' + logo(c) + '<div><h3>' + esc(register.displayName(c)) + '</h3><p class="muted small">' + esc(c.legalName || '') + (c.number ? ' · Company ' + esc(c.number) : '') + '</p></div></div>' +
@@ -174,12 +185,16 @@ function investorOverview(x, ctx, preview) {
 }
 function holdingsPage(x, ctx) {
   const s = holdings.summary(x.holders, store.valuations());
-  const rows = s.direct.map((h) => '<tr><td><span class="cell-co">' + logo(h.company, 'sm') + esc(register.displayName(h.company)) + '</span></td><td>' + esc(h.holder) + '</td><td>' + esc(h.kind || '') + '</td><td>' + esc(h.shareText) + '</td><td>' + esc(classesOf(h)) + (Number((h.classes || {}).C || 0) > 0 && h.classCIssuedBy ? '<div class="muted small">Class C issued by ' + esc(h.classCIssuedBy) + '</div>' : '') + '</td><td class="num">' + (h.votes !== null ? esc(h.votes) + '%' + (h.votingControl ? '<div><span class="pill ok">Control</span></div>' : '') : '—') + '</td><td>' + (h.control.length ? h.control.map(esc).join('<br>') : '—') + '</td><td>' + (h.notified ? esc(longDate(h.notified)) : '—') + '</td><td class="num">' + (h.value !== null ? esc(money(h.value)) : '—') + '</td></tr>').join('');
+  const rows = s.direct.map((h) => '<tr><td><span class="cell-co">' + logo(h.company, 'sm') + '<span><b>' + esc(register.displayName(h.company)) + '</b><span class="sub">' + esc(h.holder) + (h.kind ? ' · ' + esc(h.kind) : '') + '</span></span></span></td>' +
+    '<td><b>' + esc(h.shareText) + '</b><span class="sub wrap">' + esc(classesOf(h)) + (Number((h.classes || {}).C || 0) > 0 && h.classCIssuedBy ? ' · C issued by ' + esc(h.classCIssuedBy) : '') + '</span></td>' +
+    '<td class="num"><b>' + (h.votes !== null ? esc(h.votes) + '%' : '—') + '</b>' + (h.votingControl ? '<span class="sub"><span class="pill ok">Control</span></span>' : '') + '</td>' +
+    '<td>' + (h.control.length ? '<span class="chips">' + h.control.map((x) => '<span class="chip" title="' + esc(x) + '">' + esc(shortControl(x)) + '</span>').join('') + '</span>' : '<span class="muted">—</span>') + '</td>' +
+    '<td class="nowrap since">' + (h.notified ? esc(shortDate(h.notified)) : '—') + '</td><td class="num"><b>' + (h.value !== null ? esc(money(h.value)) : '—') + '</b></td></tr>').join('');
   const history = s.direct.filter((h) => h.history.length).map((h) => '<h3>' + esc(register.displayName(h.company)) + '</h3><div class="table-wrap"><table><thead><tr><th>Valuation date</th><th class="num">Company valuation</th><th class="num">Your share</th></tr></thead><tbody>' +
     (store.valuations()[h.company.slug] || []).slice().sort((a, b) => b.asOf.localeCompare(a.asOf)).map((v) => '<tr><td>' + esc(longDate(v.asOf)) + (v.note ? '<div class="muted small">' + esc(v.note) + '</div>' : '') + '</td><td class="num">' + esc(money(v.amount)) + '</td><td class="num">' + esc(money(Math.round(v.amount * h.share) / 100)) + '</td></tr>').join('') + '</tbody></table></div>').join('');
   const body = '<section class="hero small"><p class="eyebrow">Your investments</p><h1>Holdings</h1><p class="lede">Every holding recorded for you on the HN Group Company Register, as ' + esc(x.holders.join(', ') || '—') + '.</p></section>' +
-    (s.direct.length ? '<div class="table-wrap"><table><thead><tr><th>Company</th><th>Held as</th><th>Type</th><th>Share</th><th>Share classes</th><th class="num">Votes</th><th>Nature of control</th><th>Since</th><th class="num">Value</th></tr></thead><tbody>' + rows + '</tbody>' +
-      '<tfoot><tr><th colspan="8">Total</th><th class="num">' + esc(money(s.total)) + '</th></tr></tfoot></table></div>' + CLASS_HELP : '<p class="muted">No holdings are recorded for you yet.</p>') +
+    (s.direct.length ? '<div class="table-wrap"><table class="holdings-table"><thead><tr><th>Company</th><th>Share</th><th class="num">Votes</th><th>Nature of control</th><th class="since">Since</th><th class="num">Value</th></tr></thead><tbody>' + rows + '</tbody>' +
+      '<tfoot><tr><th colspan="4">Total</th><td class="since"></td><th class="num">' + esc(money(s.total)) + '</th></tr></tfoot></table></div>' + CLASS_HELP : '<p class="muted">No holdings are recorded for you yet.</p>') +
     interestsTable(s.indirect) + (history ? '<section class="block"><h2>Valuation history</h2>' + history + '</section>' : '');
   return layout({ ...ctx, title: 'Holdings', active: '/holdings', body, unread: unreadFor(x) });
 }
