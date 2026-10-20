@@ -117,11 +117,11 @@ function change(now, before) {
   return '<span class="change ' + (d > 0 ? 'up' : d < 0 ? 'down' : '') + '">' + (d > 0 ? '▲ ' : d < 0 ? '▼ ' : '') + esc(money(Math.abs(d))) + (pct !== null ? ' (' + (d >= 0 ? '+' : '−') + Math.abs(pct).toFixed(1) + '%)' : '') + ' since the previous valuation</span>';
 }
 // Share classes and votes (worked out by the Company Register): Class A one vote, Class B half a vote,
-// Class C two votes, or 51% of the votes for the holder of more than 10% of the Class C shares.
+// Class C two votes, and 51% of the votes for the largest Class C holder if they have more than 10% of them.
 const CLASS_HELP = '<details class="explain"><summary>How share classes and voting power work</summary><ul>' +
   '<li><b>Class A</b> shares are ordinary shares, available to the public and other companies. Each carries one vote.</li>' +
   '<li><b>Class B</b> shares are for HN Group staff. Each carries half the votes of a Class A share.</li>' +
-  '<li><b>Class C</b> shares are special issue shares, issued only by one of the company’s officers. Each carries double the votes of a Class A share. Anyone holding more than 10% of all the Class C shares holds 51% of the company’s votes (or more, if their shares already give them more), and only one holder can be in that position.</li>' +
+  '<li><b>Class C</b> shares are special issue shares, issued only by one of the company’s officers. Each carries double the votes of a Class A share. Of the holders with more than 10% of all the Class C shares, the one holding the most holds 51% of the company’s votes (or more, if their shares already give them more); the others count double.</li>' +
   '<li>Holdings not split into classes count as Class A. Your voting power is your share of all the votes held by the company’s recorded shareholders.</li></ul></details>';
 const classesOf = (h) => register.classText(h) || (h.share !== null ? 'Class A (not split)' : '—');
 function votesBar(v) { const w = Math.max(0, Math.min(100, v)); return '<svg class="bar" viewBox="0 0 100 8" preserveAspectRatio="none" aria-hidden="true"><rect class="bar-bg" width="100" height="8" rx="4"/><rect class="bar-fill" width="' + w.toFixed(2) + '" height="8" rx="4"/></svg>'; }
@@ -130,7 +130,7 @@ function votingSection(s) {
   if (!list.length) return '';
   return '<section class="block"><h2>Your voting power</h2><p class="intro">Your share of the votes in each company you hold directly, based on the classes of share you hold.</p><div class="votes">' +
     list.map((h) => '<div class="vote-row"><span class="cell-co">' + logo(h.company, 'sm') + esc(register.displayName(h.company)) + '</span><span class="vote-figure"><b>' + esc(h.votes) + '%</b> of votes' + (h.votingControl ? ' <span class="pill ok">Voting control</span>' : '') + '</span>' + votesBar(h.votes) +
-      '<span class="muted small">' + esc(classesOf(h)) + (h.votingControl ? ' · You hold more than 10% of the Class C shares, so you hold 51% of the votes or more.' : '') + '</span></div>').join('') + '</div>' + CLASS_HELP + '</section>';
+      '<span class="muted small">' + esc(classesOf(h)) + (h.votingControl ? ' · You hold the most Class C shares (more than 10% of them), so you hold 51% of the votes or more.' : '') + '</span></div>').join('') + '</div>' + CLASS_HELP + '</section>';
 }
 // The register's nature-of-control wording, shortened for the holdings table (the full text is the tooltip).
 function shortControl(x) {

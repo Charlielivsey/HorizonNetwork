@@ -231,7 +231,7 @@ function companyOwnership(params, ctx) {
   parts.push(chain ? n + (gone ? ' was owned by ' : ' is owned by ') + chain + '.' : 'No owner is recorded for ' + n + ' on the Company Register.');
   const parent = c.parent && R.bySlug(c.parent), own = R.owners(c);
   if (hasClasses(c) && own.some((o) => o.votes !== null)) {
-    const voters = own.filter((o) => o.votes !== null).sort((a, b) => b.votes - a.votes).map((o) => (o.company ? link(o.name) : o.name) + ' ' + o.votes + '%' + (o.votingControl ? ' (holding more than 10% of the Class C shares gives it 51% of the votes or more)' : ''));
+    const voters = own.filter((o) => o.votes !== null).sort((a, b) => b.votes - a.votes).map((o) => (o.company ? link(o.name) : o.name) + ' ' + o.votes + '%' + (o.votingControl ? ' (the largest holder of Class C shares, with more than 10% of them, holds 51% of the votes or more)' : ''));
     parts.push('Its shares are split into classes with different voting rights, so the votes are held ' + (voters.length > 1 ? 'as follows: ' : 'by ') + listWords(voters) + '.');
   }
   if (parent && !own.some((o) => o.company && o.company.slug === parent.slug)) parts.push('It is a subsidiary of ' + link(R.displayName(parent)) + '.');

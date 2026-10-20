@@ -249,7 +249,7 @@ test('HN Group Wiki: reading, editing, history, protection and safety', async ()
     assert.ok(classed.includes('<a href="/wiki/HN_Group_Investments">HN Group Investments</a> (Class A 60% · 42% of votes)') && classed.includes('Zara Special (Class C 15% · 51% of votes)'));
     assert.match(classed, /<th scope="row">Share classes<\/th><td>Class A 60%<br>Class B 20%<br>Class C 15%<\/td>/);
     assert.match(classed, /<th scope="row">Voting control<\/th><td>Zara Special \(51% of votes, through Class C shares\)<\/td>/);
-    assert.ok(classed.includes('so the votes are held as follows: Zara Special 51% (holding more than 10% of the Class C shares gives it 51% of the votes or more)'));
+    assert.ok(classed.includes('so the votes are held as follows: Zara Special 51% (the largest holder of Class C shares, with more than 10% of them, holds 51% of the votes or more)'));
 
     // ---------- Images and logos ----------
     const png = 'data:image/png;base64,' + Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000000', 'hex').toString('base64');

@@ -325,8 +325,10 @@ function percent(v, label) {
 // - Class B: staff shares, so only people (not companies) hold them. Half the votes of Class A.
 // - Class C: special issue shares, issued only by one of the company's current officers (any role; the user's
 //   change, 20 October 2026, from the Chair only). Double the votes of Class A;
-//   anyone holding more than 10% of all the Class C shares holds 51% of the votes. Only one holder may be
-//   over that line, so the register refuses a Class C issue that would put a second holder over it.
+//   of the holders with more than 10% of all the Class C shares, the one holding the most holds 51% of the
+//   votes (holders tied for the most share it); the others count double like any Class C share (the user's
+//   change, 20 October 2026: several holders may pass 10%, the largest has the extra voting power).
+// A company can't issue more than 100% of its shares: all current holdings together can't pass 100%.
 // A holding not split into classes counts as Class A.
 const CLASS_KEYS = ['classA', 'classB', 'classC'];
 const CLASS_C_CONTROL = 10, CONTROL_VOTES = 51;
@@ -346,14 +348,11 @@ function withClasses(x, i) {
 const classesOf = (p) => { const split = CLASS_KEYS.some((k) => p[k] !== undefined && p[k] !== ''); return { split, a: split ? Number(p.classA || 0) : (p.share !== '' && p.share != null ? Number(p.share) : 0), b: split ? Number(p.classB || 0) : 0, c: split ? Number(p.classC || 0) : 0, known: split || (p.share !== '' && p.share != null) }; };
 // Checks a company's holdings (current entries only) against the share class rules.
 function checkShareRules(c, holdings, officers) {
-  const cur = holdings.filter((p) => !p.ceased), split = cur.filter((p) => classesOf(p).split);
-  const total = Math.round(split.reduce((n, p) => n + Number(p.share || 0), 0) * 100) / 100;
-  if (total > 100.001) throw bad('The shares split into classes on this company would add up to ' + total + '%, which is more than 100%.');
+  const cur = holdings.filter((p) => !p.ceased);
+  const total = Math.round(cur.reduce((n, p) => n + Number(p.share || 0), 0) * 100) / 100;
+  if (total > 100.001) throw bad('Only 100% of a company’s shares can be issued. The shareholdings on this company would add up to ' + total + '% (' + Math.round((total - 100) * 100) / 100 + '% too many).');
   const current = (officers || c.officers).filter((o) => !o.resigned), issuers = current.map((o) => o.name.trim().toLowerCase());
   for (const p of cur) if (Number(p.classC || 0) > 0 && !issuers.includes(String(p.classCIssuedBy || '').trim().toLowerCase())) throw bad('Class C shares can only be issued by one of the company’s current officers. ' + (current.length ? 'Enter the name of the officer who issued them (' + current.map((o) => o.name).join(', ') + ').' : 'Record the officer first.'));
-  const totalC = cur.reduce((n, p) => n + classesOf(p).c, 0);
-  const over = totalC > 0 ? cur.filter((p) => classesOf(p).c / totalC * 100 > CLASS_C_CONTROL) : [];
-  if (over.length > 1) throw bad('Only one holder can have more than ' + CLASS_C_CONTROL + '% of the Class C shares, because that gives them ' + CONTROL_VOTES + '% of the votes. This would give ' + over.map((p) => p.name).join(' and ') + ' more than ' + CLASS_C_CONTROL + '% each.');
 }
 // Each current holder's share of the votes, as a percentage, and whether their Class C shares give them control.
 function votingPower(c) {
@@ -362,11 +361,13 @@ function votingPower(c) {
   const W = cur.reduce((n, x) => n + weight(x.k), 0), totalC = cur.reduce((n, x) => n + x.k.c, 0);
   const out = {};
   if (!W) return out;
-  const ctrl = totalC > 0 ? cur.find((x) => x.k.c / totalC * 100 > CLASS_C_CONTROL) : null;
+  // The holder (or holders tied) with the most Class C shares, if that's more than 10% of them, has control.
+  const over = totalC > 0 ? cur.filter((x) => x.k.c / totalC * 100 > CLASS_C_CONTROL) : [];
+  const most = over.length ? Math.max(...over.map((x) => x.k.c)) : 0, ctrl = over.filter((x) => Math.abs(x.k.c - most) < 1e-9);
   const round = (n) => Math.round(n * 100) / 100;
-  if (!ctrl) { for (const x of cur) out[x.p.id] = { votes: round(weight(x.k) / W * 100), control: false }; return out; }
-  const rest = W - weight(ctrl.k), own = rest > 0 ? Math.max(CONTROL_VOTES, weight(ctrl.k) / W * 100) : 100;
-  for (const x of cur) out[x.p.id] = x === ctrl ? { votes: round(own), control: true } : { votes: round(rest > 0 ? (100 - own) * weight(x.k) / rest : 0), control: false };
+  if (!ctrl.length) { for (const x of cur) out[x.p.id] = { votes: round(weight(x.k) / W * 100), control: false }; return out; }
+  const wCtrl = ctrl.reduce((n, x) => n + weight(x.k), 0), rest = W - wCtrl, own = rest > 0 ? Math.max(CONTROL_VOTES, wCtrl / W * 100) : 100;
+  for (const x of cur) out[x.p.id] = ctrl.includes(x) ? { votes: round(own * weight(x.k) / wCtrl), control: true } : { votes: round(rest > 0 ? (100 - own) * weight(x.k) / rest : 0), control: false };
   return out;
 }
 // The company's issued shares by class, from the holdings recorded on it.

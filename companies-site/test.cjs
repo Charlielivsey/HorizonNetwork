@@ -279,12 +279,12 @@ test('company register: public records, customers, requests, submissions and sta
     html = await (await get('/company/hn-group/file?type=psc_change&psc=' + skyId, sam)).text();
     assert.match(html, /name="psc_share" type="number" value="25"/);
     assert.match(await (await upload('/company/hn-group/file', { csrf: samCsrf, kind: 'psc_change', psc: skyId, psc_name: 'Sky Holder', psc_kind: 'Individual', psc_share: '25', psc_control: 'Ownership of shares – more than 25% but not more than 50%', changed: '2026-07-05' }, null, sam)).text(), /Nothing has changed/);
-    await upload('/company/hn-group/file', { csrf: samCsrf, kind: 'psc_change', psc: skyId, psc_name: 'Sky Holder', psc_kind: 'Individual', psc_share: '60', psc_control: 'Ownership of shares – more than 50% but less than 75%', changed: '2026-07-05' }, null, sam);
+    await upload('/company/hn-group/file', { csrf: samCsrf, kind: 'psc_change', psc: skyId, psc_name: 'Sky Holder', psc_kind: 'Individual', psc_share: '39.5', psc_control: 'Ownership of shares – more than 50% but less than 75%', changed: '2026-07-05' }, null, sam);
     html = await (await get('/admin/submissions', owner)).text();
-    assert.match(html, /Change of details of Sky Holder as a person with significant control on 5 July 2026/); assert.match(html, /New details<\/dt><dd>Sky Holder · Individual · 60%/);
+    assert.match(html, /Change of details of Sky Holder as a person with significant control on 5 July 2026/); assert.match(html, /New details<\/dt><dd>Sky Holder · Individual · 39.5%/);
     for (const sid of [...html.matchAll(/\/admin\/submissions\/([a-f0-9]{24})"/g)].map((x) => x[1])) await post('/admin/submissions/' + sid, { csrf: staffCsrf, decision: 'accept' }, owner);
     html = await (await get('/company/hn-group/persons-with-significant-control')).text();
-    assert.match(html, /Morgan Holder[\s\S]*<dd>10%<\/dd>/); assert.match(html, /Sky Holder[\s\S]*<dd>60%<\/dd>[\s\S]*more than 50% but less than 75%/);
+    assert.match(html, /Morgan Holder[\s\S]*<dd>10%<\/dd>/); assert.match(html, /Sky Holder[\s\S]*<dd>39.5%<\/dd>[\s\S]*more than 50% but less than 75%/);
     assert.match(await (await get('/company/hn-group/filing-history')).text(), /Change of details of Sky Holder as a person with significant control on 5 July 2026/);
 
     // A change that no longer fits the record can't be accepted.
@@ -472,25 +472,35 @@ test('company register: share classes and voting power', () => {
     assert.match(err(() => s.saveItem(c.slug, 'psc', '', { name: 'Zed', kind: 'Individual', classC: '20' }, 't')), /one of the company’s officers/);
     assert.match(err(() => s.saveItem(c.slug, 'psc', '', { name: 'Zed', kind: 'Individual', classC: '20', classCIssuedBy: 'Someone Else' }, 't')), /Clara Chair/);
     assert.match(err(() => s.saveItem(c.slug, 'psc', '', { name: 'Yasmin Staff', kind: 'Individual', share: '30', classB: '20' }, 't')), /add up to 20%, but the shareholding is 30%/);
-    assert.match(err(() => s.saveItem(c.slug, 'psc', '', { name: 'Too Much', kind: 'Individual', classA: '50' }, 't')), /more than 100%/);
+    assert.match(err(() => s.saveItem(c.slug, 'psc', '', { name: 'Too Much', kind: 'Individual', classA: '50' }, 't')), /Only 100% of a company’s shares can be issued/);
     // Without Class C: A one vote, B half a vote.
     s.saveItem(c.slug, 'psc', '', { name: 'Yasmin Staff', kind: 'Individual', classB: '20' }, 't');
     assert.deepEqual(votes(), { 'Xavier Public': { votes: 85.71, control: false }, 'Yasmin Staff': { votes: 14.29, control: false } });
-    // Class C issued by the Chair: holding more than 10% of the Class C shares gives 51% of the votes.
+    // Class C issued by an officer: the largest holder with more than 10% of the Class C shares has 51% of the votes.
     s.saveItem(c.slug, 'psc', '', { name: 'Zara Special', kind: 'Individual', classC: '15', classCIssuedBy: 'clara chair' }, 't');
     let v = votes();
     assert.deepEqual(v['Zara Special'], { votes: 51, control: true });
     assert.equal(v['Xavier Public'].votes, 42); assert.equal(v['Yasmin Staff'].votes, 7);
-    // A second holder can't pass 10% of the Class C shares; a small Class C holding just counts double.
-    assert.match(err(() => s.saveItem(c.slug, 'psc', '', { name: 'Walt', kind: 'Individual', classC: '1.67', classCIssuedBy: 'Clara Chair' }, 't')), /Only one holder can have more than 10% of the Class C shares/);
-    s.saveItem(c.slug, 'psc', '', { name: 'Walt', kind: 'Individual', classC: '1.5', classCIssuedBy: 'Clara Chair' }, 't');
+    // Several holders can pass 10% of the Class C shares; the one holding the most has the 51%, the others count double.
+    s.saveItem(c.slug, 'psc', '', { name: 'Walt', kind: 'Individual', classC: '4', classCIssuedBy: 'Clara Chair' }, 't');
     v = votes();
-    assert.equal(v['Zara Special'].votes, 51); assert.equal(v['Walt'].votes, 2.01, 'double votes: 49% × 3/73');
+    assert.deepEqual(v['Zara Special'], { votes: 51, control: true });
+    assert.deepEqual(v['Walt'], { votes: 5.03, control: false }, 'double votes: 49% × 8/78');
+    assert.equal(v['Xavier Public'].votes, 37.69); assert.equal(v['Yasmin Staff'].votes, 6.28);
+    // Only 100% of the shares can be issued, whether or not a holding is split into classes (99% issued so far).
+    assert.match(err(() => s.saveItem(c.slug, 'psc', '', { name: 'Too Much', kind: 'Individual', share: '2' }, 't')), /Only 100% of a company’s shares can be issued.*101%/);
+    s.saveItem(c.slug, 'psc', '', { name: 'Last One', kind: 'Individual', share: '1' }, 't');
+    // Holders tied for the most Class C shares share the extra voting power.
+    const tie = s.saveCompany('', { legalName: 'Tie Limited' }, 't', { officer: { name: 'Olive Officer', role: 'Secretary' }, psc: { name: 'Ann', kind: 'Individual', classC: '40', classCIssuedBy: 'Olive Officer' } });
+    s.saveItem(tie.slug, 'psc', '', { name: 'Ben', kind: 'Individual', classC: '40', classCIssuedBy: 'Olive Officer' }, 't');
+    s.saveItem(tie.slug, 'psc', '', { name: 'Cat', kind: 'Individual', classA: '20' }, 't');
+    const tv = Object.fromEntries(s.company(tie.slug).psc.map((p) => [p.name, s.votingPower(s.company(tie.slug))[p.id]]));
+    assert.deepEqual(tv, { Ann: { votes: 44.44, control: true }, Ben: { votes: 44.44, control: true }, Cat: { votes: 11.11, control: false } });
     // The public feed carries classes, votes and the company's shares by class.
     const feed = s.publicFeed().companies.find((x) => x.slug === c.slug);
     const zara = feed.owners.find((o) => o.name === 'Zara Special');
     assert.deepEqual([zara.classes, zara.votes, zara.votingControl, zara.classCIssuedBy], [{ A: '', B: '', C: '15' }, 51, true, 'clara chair']);
-    assert.deepEqual(feed.shareClasses, { classA: 60, classB: 20, classC: 16.5 });
+    assert.deepEqual(feed.shareClasses, { classA: 60, classB: 20, classC: 19 });
     // Holdings not split into classes count as Class A.
     const d = s.saveCompany('', { legalName: 'Plain Limited' }, 't', { officer: { name: 'Pat Director' }, psc: { name: 'Pat Director', kind: 'Individual', share: '100' } });
     assert.equal(Object.values(s.votingPower(s.company(d.slug)))[0].votes, 100);
