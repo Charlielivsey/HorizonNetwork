@@ -36,7 +36,7 @@ function layout(o) {
       : '<a href="/account/login">Sign in</a><a href="/account/register">Create an account</a><a href="/staff/login" class="staff-link">Staff sign in</a>';
   return '<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0b0c0c">' +
     '<title>' + esc(o.title) + ' – Company Register – HN Group</title>' + (o.description ? '<meta name="description" content="' + esc(o.description) + '">' : '') + (o.noindex ? '<meta name="robots" content="noindex">' : '') +
-    '<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/assets/companies.css?v=4"><script src="/assets/companies.js?v=4" defer></script></head><body>' +
+    '<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/assets/companies.css?v=5"><script src="/assets/companies.js?v=4" defer></script></head><body>' +
     '<a class="skip" href="#main">Skip to main content</a>' +
     '<header class="header"><div class="wrap header-inner"><a class="logo" href="/"><img src="/assets/brand/hn-group-wordmark-white.svg" alt="HN Group" width="126" height="44"></a>' +
     '<a class="service" href="/">Company Register</a><nav class="header-nav" aria-label="Account">' + nav + '</nav></div></header>' +
@@ -204,10 +204,15 @@ function peoplePage(res, ctx, c, sub) {
   const psc = sub === 'persons-with-significant-control';
   const officers = [...c.officers].sort((a, b) => (!!a.resigned - !!b.resigned) || a.name.localeCompare(b.name));
   const active = officers.filter((o) => !o.resigned).length;
+  const votes = store.votingPower(c), classes = store.shareClasses(c);
+  const classLine = (p) => { const k = store.classesOf(p); return k.split ? [['A', p.classA], ['B', p.classB], ['C', p.classC]].filter(([, v]) => Number(v || 0) > 0).map(([n, v]) => 'Class ' + n + ' ' + esc(v) + '%').join('<br>') + (Number(p.classC || 0) > 0 ? '<br><span class="muted">Class C issued by ' + esc(p.classCIssuedBy) + '</span>' : '') : (p.share ? 'Not split into classes (counted as Class A)' : val('')); };
+  const voteLine = (p) => { const v = votes[p.id]; return p.ceased ? val('') : v ? '<strong>' + esc(v.votes) + '%</strong>' + (v.control ? ' <span class="status">Voting control</span><br><span class="muted">Holds more than ' + store.CLASS_C_CONTROL + '% of the Class C shares, so holds ' + store.CONTROL_VOTES + '% of the votes or more.</span>' : '') : val(''); };
   const body = psc
     ? '<h2 class="heading-m">' + plural(c.psc.filter((p) => !p.ceased).length, 'active person', 'active persons') + ' with significant control</h2>' +
+      (classes ? '<div class="inset share-classes"><p><strong>Shares by class</strong> (recorded holdings): Class A ' + esc(classes.classA) + '% · Class B ' + esc(classes.classB) + '% · Class C ' + esc(classes.classC) + '%</p>' +
+        '<details><summary>How share classes vote</summary><ul class="list"><li><strong>Class A</strong>: ordinary shares for the public and other companies. One vote each.</li><li><strong>Class B</strong>: staff shares, held by people only. Half the votes of Class A.</li><li><strong>Class C</strong>: special issue shares, issued only by the Chair of the Board. Double the votes of Class A. Anyone holding more than ' + store.CLASS_C_CONTROL + '% of all the Class C shares holds ' + store.CONTROL_VOTES + '% of the votes, and only one holder can be over that line.</li></ul></details></div>' : '') +
       (c.psc.length ? c.psc.map((p) => '<article class="person"><h2 class="person-name">' + esc(p.name) + (p.ceased ? ' <span class="status warn">Ceased</span>' : '') + '</h2>' + dl([
-        ['Type', esc(p.kind)], ...(p.kind === 'Parent company' ? [['Company', parentLink(p.name)]] : []), ['Shareholding', p.share ? esc(p.share) + '%' : val('')], ['Notified on', val(fmt(p.notified))], ...(p.ceased ? [['Ceased on', esc(fmt(p.ceased))]] : []),
+        ['Type', esc(p.kind)], ...(p.kind === 'Parent company' ? [['Company', parentLink(p.name)]] : []), ['Shareholding', p.share ? esc(p.share) + '%' : val('')], ['Share classes', classLine(p)], ['Voting power', voteLine(p)], ['Notified on', val(fmt(p.notified))], ...(p.ceased ? [['Ceased on', esc(fmt(p.ceased))]] : []),
         ['Nature of control', p.control.length ? p.control.map(esc).join('<br>') : val('')]], 'data cols-3') + '</article>').join('') : '<p class="muted">No persons with significant control have been recorded.</p>')
     : '<h2 class="heading-m">' + plural(officers.length, 'officer', 'officers') + ' / ' + plural(officers.length - active, 'resignation', 'resignations') + '</h2>' +
       (officers.length ? officers.map((o) => '<article class="person"><h2 class="person-name">' + esc(o.name) + (o.resigned ? ' <span class="status warn">Resigned</span>' : '') + '</h2>' + dl([
@@ -359,7 +364,7 @@ function submitForm(res, ctx, c, values, error, kind) {
         body: '<section class="panel narrow"><p class="eyebrow">' + esc(c.legalName) + '</p><h1>Whose details have changed?</h1><div class="choice-grid one">' + now.map((p) => '<a class="choice-card" href="' + base + '?type=psc_change&amp;psc=' + p.id + '"><strong>' + esc(p.name) + '</strong><span>' + esc(p.kind) + (p.share ? ' · ' + esc(p.share) + '%' : '') + '</span></a>').join('') + '</div><p><a class="cancel" href="' + base + '">Back</a></p></section>' });
       const item = v.item || chosen;
       fields = '<input type="hidden" name="psc" value="' + esc(chosen.id) + '">' + inset('Changing the details of', '<strong>' + esc(chosen.name) + '</strong><br>' + esc(chosen.kind) + (chosen.share ? ' · ' + esc(chosen.share) + '%' : '')) +
-        prefixed('psc_', field('Name', 'name', item.name, { required: true, max: 160 }) + select('Type', 'kind', store.PSC_KINDS, item.kind) + field('Share percentage', 'share', item.share, { type: 'number', number: true, max: 6, hint: 'From 0 to 100. Leave blank if not known.' }) + controlField(item.control)) +
+        prefixed('psc_', field('Name', 'name', item.name, { required: true, max: 160 }) + select('Type', 'kind', store.PSC_KINDS, item.kind) + field('Share percentage', 'share', item.share, { type: 'number', number: true, max: 6, hint: 'From 0 to 100. Leave blank if not known, or if you give the share classes below.' }) + classFields(item) + controlField(item.control)) +
         field('Date the details changed', 'changed', v.changed, { type: 'date', required: true });
       break;
     }
@@ -480,9 +485,15 @@ function companyForm(c, ctx, values) {
     '<div class="form-actions"><button class="button" type="submit">' + (c ? 'Save company details' : 'Add company') + '</button></div></form>';
 }
 
+// Share classes: each as a percentage of all the company's shares (see lib/store.js for the rules).
+const classFields = (p) => '<div class="wide"><p class="field-group-title">Share classes</p><p class="hint">Split the shareholding into classes, each as a percentage of all the company’s shares. Leave them blank if the shares aren’t split (they count as Class A).</p></div>' +
+  field('Class A shares (%)', 'classA', p.classA, { type: 'number', number: true, max: 6, hint: 'Ordinary shares for the public and other companies. One vote each.' }) +
+  field('Class B shares (%)', 'classB', p.classB, { type: 'number', number: true, max: 6, hint: 'Staff shares, held by people only. Half a vote each.' }) +
+  field('Class C shares (%)', 'classC', p.classC, { type: 'number', number: true, max: 6, hint: 'Special issue by the Chair of the Board. Two votes each, or 51% of all votes for a holder with more than 10% of the Class C shares.' }) +
+  field('Class C issued by', 'classCIssuedBy', p.classCIssuedBy, { max: 120, hint: 'The Chair of the Board who issued them (they must be recorded as an officer with the role Chair).' });
 const ITEM_FIELDS = {
     officers: (o, opt) => { opt = opt || {}; return field('Full name', 'name', o.name, { required: true, max: 120 }) + select('Role', 'role', store.OFFICER_ROLES, o.role || 'Director') + field('Appointed on', 'appointed', o.appointed, { type: 'date', required: !!opt.appointedRequired }) + (opt.noResigned ? '' : field('Resigned on', 'resigned', o.resigned, { type: 'date' })) + field('Occupation', 'occupation', o.occupation, { max: 80 }) + field('Nationality', 'nationality', o.nationality, { max: 60 }) + field('Country of residence', 'countryOfResidence', o.countryOfResidence, { max: 60 }); },
-    psc: (p, opt) => { opt = opt || {}; return field('Name', 'name', p.name, { required: true, max: 160, hint: 'A person’s full name, or a company’s registered name exactly as it appears on the register.' }) + select('Type', 'kind', store.PSC_KINDS, p.kind || 'Individual') + field('Share percentage', 'share', p.share, { type: 'number', number: true, max: 6, hint: 'From 0 to 100. Leave blank if not known.' }) + field('Notified on', 'notified', p.notified, { type: 'date', required: !!opt.notifiedRequired }) + (opt.noCeased ? '' : field('Ceased on', 'ceased', p.ceased, { type: 'date' })) + controlField(p.control); },
+    psc: (p, opt) => { opt = opt || {}; return field('Name', 'name', p.name, { required: true, max: 160, hint: 'A person’s full name, or a company’s registered name exactly as it appears on the register.' }) + select('Type', 'kind', store.PSC_KINDS, p.kind || 'Individual') + field('Share percentage', 'share', p.share, { type: 'number', number: true, max: 6, hint: 'From 0 to 100. Leave blank if not known, or if you give the share classes below.' }) + classFields(p) + field('Notified on', 'notified', p.notified, { type: 'date', required: !!opt.notifiedRequired }) + (opt.noCeased ? '' : field('Ceased on', 'ceased', p.ceased, { type: 'date' })) + controlField(p.control); },
     charges: (x) => field('Charge code', 'code', x.code, { max: 40 }) + select('Status', 'status', ['Outstanding', 'Part satisfied', 'Satisfied'], x.status || 'Outstanding') + field('Created on', 'created', x.created, { type: 'date' }) + field('Delivered on', 'delivered', x.delivered, { type: 'date' }) + field('Satisfied on', 'satisfied', x.satisfied, { type: 'date' }) + field('Persons entitled', 'entitled', x.entitled, { required: true, max: 200 }) + field('Brief description', 'description', x.description, { textarea: true, rows: 2, max: 600 }),
 };
 function itemForms(c, ctx, list) {
@@ -518,14 +529,15 @@ function managersPanel(c, ctx) {
     '<form method="post" action="' + base + '" class="form inline-form">' + csrfField(ctx.staffUser.csrf) + field('Add a manager by their account email', 'email', '', { type: 'email', required: true, max: 160 }) + '<div class="form-actions"><button class="button small" type="submit">Add manager</button></div></form></section>';
 }
 
+const classSummary = (p) => [['A', p.classA], ['B', p.classB], ['C', p.classC]].filter(([, v]) => Number(v || 0) > 0).map(([n, v]) => 'Class ' + n + ' ' + v + '%').join(', ') + (Number(p.classC || 0) > 0 ? ' (Class C issued by ' + p.classCIssuedBy + ')' : '');
 // The details of a filed change, as staff need to review it.
 function changeDetails(s) {
   const ch = s.change || {};
   const rows = [];
   if (s.kind === 'appoint' && ch.officer) { const o = ch.officer; rows.push(['Name', o.name], ['Role', o.role], ['Appointed on', fmt(o.appointed)], ['Occupation', o.occupation], ['Nationality', o.nationality], ['Country of residence', o.countryOfResidence]); }
-  else if (s.kind === 'psc_add' && ch.psc) { const p = ch.psc; rows.push(['Name', p.name], ['Type', p.kind], ['Shareholding', p.share ? p.share + '%' : ''], ['Nature of control', (p.control || []).join('; ')], ['Notified on', fmt(p.notified)]); }
+  else if (s.kind === 'psc_add' && ch.psc) { const p = ch.psc; rows.push(['Name', p.name], ['Type', p.kind], ['Shareholding', p.share ? p.share + '%' : ''], ['Share classes', classSummary(p)], ['Nature of control', (p.control || []).join('; ')], ['Notified on', fmt(p.notified)]); }
   else if (s.kind === 'psc_change' && ch.after) {
-    const show = (y) => [y.name, y.kind, y.share ? y.share + '%' : 'Shareholding not recorded', (y.control || []).join('; ')].filter(Boolean).join(' · ');
+    const show = (y) => [y.name, y.kind, y.share ? y.share + '%' : 'Shareholding not recorded', classSummary(y), (y.control || []).join('; ')].filter(Boolean).join(' · ');
     rows.push(['Previous details', show(ch.before)], ['New details', show(ch.after)], ['Changed on', fmt(ch.changed)]);
   }
   else if (s.kind === 'sic') rows.push(['New nature of business', ch.sic.join('; ')]);

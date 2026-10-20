@@ -239,6 +239,17 @@ test('HN Group Wiki: reading, editing, history, protection and safety', async ()
     assert.ok((await anon.go('/wiki/List_of_HN_Group_companies')).text.includes('defunct since 19 October 2026'), 'tree');
     assert.ok((await anon.go('/wiki/Main_Page')).text.includes('company-card status-defunct'), 'card');
     assert.match((await anon.go('/wiki/HN_Group')).text, /<th scope="row">Status<\/th><td>Active<\/td>/, 'active companies show their status too');
+    // Share classes: each owner's classes and votes, the company's classes and who has voting control.
+    regFeed = { version: 'v5', companies: regFeed.companies.map((c) => c.slug === 'horizon-media-group' ? { ...c, shareClasses: { classA: 60, classB: 20, classC: 15 }, owners: [
+      { name: 'HN Group Investments Limited', kind: 'Parent company', share: '60', classes: { A: '60', B: '', C: '' }, votes: 42, votingControl: false, control: [] },
+      { name: 'Yasmin Staff', kind: 'Individual', share: '20', classes: { A: '', B: '20', C: '' }, votes: 7, votingControl: false, control: [] },
+      { name: 'Zara Special', kind: 'Individual', share: '15', classes: { A: '', B: '', C: '15' }, votes: 51, votingControl: true, control: [] }] } : c) };
+    await until(async () => (await anon.go('/wiki/Horizon_Media_Group')).text.includes('Voting control'), 'share classes');
+    const classed = (await anon.go('/wiki/Horizon_Media_Group')).text;
+    assert.ok(classed.includes('<a href="/wiki/HN_Group_Investments">HN Group Investments</a> (Class A 60% · 42% of votes)') && classed.includes('Zara Special (Class C 15% · 51% of votes)'));
+    assert.match(classed, /<th scope="row">Share classes<\/th><td>Class A 60%<br>Class B 20%<br>Class C 15%<\/td>/);
+    assert.match(classed, /<th scope="row">Voting control<\/th><td>Zara Special \(51% of votes, through Class C shares\)<\/td>/);
+    assert.ok(classed.includes('so the votes are held as follows: Zara Special 51% (holding more than 10% of the Class C shares gives it 51% of the votes or more)'));
 
     // ---------- Images and logos ----------
     const png = 'data:image/png;base64,' + Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000000', 'hex').toString('base64');

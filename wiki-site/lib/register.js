@@ -66,7 +66,7 @@ const registerUrl = (c) => PUBLIC_URL + '/company/' + encodeURIComponent(c.slug)
 function owners(c) {
   return (c.owners || []).map((o) => {
     const company = o.kind === 'Individual' ? null : find(o.name);
-    return { name: company ? displayName(company) : String(o.name || '').trim(), company, kind: o.kind, share: shareText(o) };
+    return { name: company ? displayName(company) : String(o.name || '').trim(), company, kind: o.kind, share: shareText(o), classes: o.classes || null, votes: typeof o.votes === 'number' ? o.votes : null, votingControl: !!o.votingControl };
   });
 }
 function shareText(o) {

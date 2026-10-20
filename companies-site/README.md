@@ -36,3 +36,13 @@ cd /root/HorizonNetwork && git pull && sudo bash install.sh
 ```
 node --test companies-site/test.cjs
 ```
+
+## Share classes and voting power
+
+Each person with significant control can have their shareholding split into Class A, Class B and Class C shares, each given as a percentage of all the company's shares (their total becomes the shareholding; a holding that isn't split counts as Class A):
+
+- **Class A**: ordinary shares for the public and other companies. One vote each.
+- **Class B**: staff shares, held by people only. Half a vote each.
+- **Class C**: special issue shares, issued only by the Chair of the Board (recorded as an officer with the role Chair; the form asks who issued them). Two votes each. Anyone holding more than 10% of all the Class C shares holds 51% of the votes; the register refuses a Class C holding that would put a second holder over that line.
+
+The persons with significant control page shows the company's shares by class and each holder's classes and voting power. The public feed includes them for the wiki and the investors website.

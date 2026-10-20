@@ -145,7 +145,16 @@ function infobox(params, ctx, extra) {
 const longDate = (iso) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ''); return m ? Number(m[3]) + ' ' + ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][Number(m[2]) - 1] + ' ' + m[1] : ''; };
 const listWords = (items) => items.length < 2 ? items.join('') : items.slice(0, -1).join(', ') + ' and ' + items[items.length - 1];
 const link = (title) => '[[' + title + ']]';
-const ownerText = (o) => (o.company ? link(o.name) : o.name) + (o.share ? ' (' + o.share + ')' : '');
+// An owner, with their share, its classes and their share of the votes when the company's shares are
+// split into classes (Class A one vote, Class B half, Class C double, or 51% for the holder of more than
+// 10% of the Class C shares; worked out by the register).
+const classList = (cl) => (cl ? ['A', 'B', 'C'].filter((k) => Number(cl[k] || 0) > 0).map((k) => 'Class ' + k + ' ' + Number(cl[k]) + '%').join(', ') : '');
+function ownerText(o, withVotes) {
+  const parts = [o.classes ? classList(o.classes) || o.share : o.share];
+  if (withVotes && o.votes !== null) parts.push(o.votes + '% of votes');
+  return (o.company ? link(o.name) : o.name) + (parts.filter(Boolean).length ? ' (' + parts.filter(Boolean).join(' · ') + ')' : '');
+}
+const hasClasses = (c) => !!c.shareClasses;
 const webLink = (site) => { const s = String(site || '').trim(); if (!s) return ''; const url = /^https?:\/\//i.test(s) ? s : 'https://' + s; return safeUrl(url) ? '[' + url + ' ' + s.replace(/^https?:\/\//i, '').replace(/\/$/, '') + ']' : ''; };
 // A company's register status as the wiki shows it. A company the register records as dissolved is
 // shown as defunct (the user's request, 20 October 2026): "Defunct since 3 March 2026".
@@ -174,7 +183,10 @@ function companyInfobox(params, ctx) {
   const add = (key, value) => { if (value) rows.push(key + ' = ' + value); };
   const whollyOwned = own.length === 1 && own[0].company && own[0].share === '100%';
   add('Type', c.type || (parent ? (whollyOwned ? 'Wholly owned subsidiary' : 'Subsidiary') : ''));
-  add(own.length > 1 ? 'Owners' : 'Owner', own.map(ownerText).join('<br>'));
+  add(own.length > 1 ? 'Owners' : 'Owner', own.map((o) => ownerText(o, hasClasses(c))).join('<br>'));
+  if (hasClasses(c)) add('Share classes', ['A', 'B', 'C'].map((k) => 'Class ' + k + ' ' + c.shareClasses['class' + k] + '%').join('<br>'));
+  const ctrl = own.find((o) => o.votingControl);
+  if (ctrl) add('Voting control', (ctrl.company ? link(ctrl.name) : ctrl.name) + ' (' + ctrl.votes + '% of votes, through Class C shares)');
   if (parent && !own.some((o) => o.company && o.company.slug === parent.slug)) add('Parent', link(R.displayName(parent)));
   if (manager) add('Managed by', link(R.displayName(manager)));
   add('Subsidiaries', R.children(c).map((x) => link(R.displayName(x))).join('<br>'));
@@ -200,7 +212,7 @@ function companyInfobox(params, ctx) {
 function ownershipChain(c, seen) {
   const R = companies.register, own = R.owners(c);
   if (!own.length) return '';
-  let text = listWords(own.map(ownerText));
+  let text = listWords(own.map((o) => ownerText(o)));
   const owning = own.filter((o) => o.company), next = owning.length === 1 && owning[0].company;
   if (next && !seen.has(next.slug)) {
     seen.add(next.slug);
@@ -218,6 +230,10 @@ function companyOwnership(params, ctx) {
   if (inactive(c)) parts.push(statusSentence(c, n));
   parts.push(chain ? n + (gone ? ' was owned by ' : ' is owned by ') + chain + '.' : 'No owner is recorded for ' + n + ' on the Company Register.');
   const parent = c.parent && R.bySlug(c.parent), own = R.owners(c);
+  if (hasClasses(c) && own.some((o) => o.votes !== null)) {
+    const voters = own.filter((o) => o.votes !== null).sort((a, b) => b.votes - a.votes).map((o) => (o.company ? link(o.name) : o.name) + ' ' + o.votes + '%' + (o.votingControl ? ' (holding more than 10% of the Class C shares gives it 51% of the votes or more)' : ''));
+    parts.push('Its shares are split into classes with different voting rights, so the votes are held ' + (voters.length > 1 ? 'as follows: ' : 'by ') + listWords(voters) + '.');
+  }
   if (parent && !own.some((o) => o.company && o.company.slug === parent.slug)) parts.push('It is a subsidiary of ' + link(R.displayName(parent)) + '.');
   const manager = c.managedBy && R.bySlug(c.managedBy);
   if (manager) parts.push('It is managed by ' + link(R.displayName(manager)) + '.');
@@ -250,7 +266,7 @@ function companyList(params, ctx) {
   const R = companies.register, order = [], seen = new Set();
   const walk = (c) => { if (seen.has(c.slug)) return; seen.add(c.slug); order.push(c); R.children(c).forEach(walk); };
   R.roots().forEach(walk);
-  const rows = order.map((c) => { const manager = c.managedBy && R.bySlug(c.managedBy); return "| '''" + link(R.displayName(c)) + "''' || " + (R.owners(c).map(ownerText).join('<br>') || '—') + ' || ' + (manager ? link(R.displayName(manager)) : '—') + ' || ' + (statusText(c) || '—') + ' || ' + (longDate(c.incorporated) || '—') + ' || ' + (webLink(c.website) || '—'); });
+  const rows = order.map((c) => { const manager = c.managedBy && R.bySlug(c.managedBy); return "| '''" + link(R.displayName(c)) + "''' || " + (R.owners(c).map((o) => ownerText(o, hasClasses(c))).join('<br>') || '—') + ' || ' + (manager ? link(R.displayName(manager)) : '—') + ' || ' + (statusText(c) || '—') + ' || ' + (longDate(c.incorporated) || '—') + ' || ' + (webLink(c.website) || '—'); });
   return table(['{| class="wikitable company-list"', '! Company !! Owner !! Managed by !! Status !! Founded !! Website', ...rows.flatMap((r) => ['|-', r]), '|}'], ctx);
 }
 // {{Company cards}}: a card for every company, with its current logo.

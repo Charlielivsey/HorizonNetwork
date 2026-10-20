@@ -40,7 +40,7 @@ test('HN Group Investors: staff access, investors, holdings, values and news', a
   const co = (slug, legalName, name, owners, extra) => ({ slug, legalName, name, number: '', status: 'Active', description: '', website: '', owners, ...extra });
   const parent = (name) => [{ name, kind: 'Parent company', share: '100', control: ['Ownership of shares – 75% or more'] }];
   const feed = { version: 'v1', companies: [
-    co('hn-group', 'HN Group Limited', 'HN Group', [{ name: 'Charlie Livsey', kind: 'Individual', share: '100', control: [] }], { number: '12345678', website: 'hngroup.org.uk' }),
+    co('hn-group', 'HN Group Limited', 'HN Group', [{ name: 'Charlie Livsey', kind: 'Individual', share: '100', classes: { A: '90', B: '', C: '10' }, classCIssuedBy: 'Charlie Livsey', votes: 100, votingControl: true, control: [] }], { number: '12345678', website: 'hngroup.org.uk', shareClasses: { classA: 90, classB: 0, classC: 10 } }),
     co('hn-group-investments', 'HN Group Investments Limited', 'HN Group Investments', parent('HN Group Limited')),
     co('horizon-network', 'Horizon Network Limited', 'Horizon Network', [{ name: 'HN Group Investments Limited', kind: 'Parent company', share: '75', control: [] }, { name: 'Jack Example', kind: 'Individual', share: '25', control: [] }]),
     co('horizon-media-group', 'Horizon Media Group Limited', 'Horizon Media Group', [{ name: 'HN Group Investments Limited', kind: 'Parent company', share: '', control: ['Ownership of shares – 75% or more'] }]),
@@ -129,11 +129,16 @@ test('HN Group Investors: staff access, investors, holdings, values and news', a
     assert.ok(page.text.includes('Not recorded'), 'a range on the register has no exact effective share');
     assert.ok(page.text.includes('Half-year update') && !page.text.includes('Draft only'));
     assert.ok(page.text.includes('<polyline'), 'value chart');
+    // Share classes and voting power from the register.
+    assert.ok(page.text.includes('Your voting power') && page.text.includes('<b>100%</b> of votes') && page.text.includes('Voting control'));
+    assert.ok(page.text.includes('Class A 90%, Class C 10%') && page.text.includes('How share classes and voting power work'));
+    assert.ok(page.text.includes('<td>Not split (counted as Class A)</td>') === false);
     assert.equal((await inv.go(link.replace(/^https?:\/\/[^/]+/, ''))).status, 410, 'invitations work once');
     const article = await inv.go(/href="(\/news\/[a-f0-9]{24})"/.exec(page.text)[1]);
     assert.ok(article.text.includes('Second &lt;b&gt;paragraph&lt;/b&gt;.'), 'news text is escaped');
     const holdingsPage = await inv.go('/holdings');
     assert.ok(holdingsPage.text.includes('Valuation history') && holdingsPage.text.includes('Opening valuation'));
+    assert.ok(holdingsPage.text.includes('Class C issued by Charlie Livsey') && holdingsPage.text.includes('<th class="num">Votes</th>'));
     // Investors can't reach staff pages.
     const staffOnly = await fetch(SITE + '/staff', { redirect: 'manual', headers: { Cookie: Object.entries(inv.jar).map(([k, v]) => k + '=' + v).join('; ') } });
     assert.equal(staffOnly.status, 303); assert.ok(staffOnly.headers.get('location').startsWith('/auth/login'));

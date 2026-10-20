@@ -189,3 +189,18 @@ code { font-size: .82rem; background: var(--surface-2); padding: .1rem .35rem; b
   *, *::before, *::after { transition: none !important; }
   .button:hover, .choice:hover, .holding:hover, .news-list a:hover { transform: none; }
 }
+
+/* Voting power */
+.votes { display: grid; gap: 10px; }
+.vote-row { display: grid; grid-template-columns: minmax(180px, 1.2fr) auto; gap: .35rem 1rem; align-items: center; padding: 14px 18px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
+.vote-row .bar, .vote-row > .small { grid-column: 1 / -1; }
+.vote-figure { text-align: right; }
+.bar { width: 100%; height: 8px; display: block; }
+.bar-bg { fill: var(--accent-soft); }
+.bar-fill { fill: var(--purple); animation: grow .6s ease-out both; transform-box: fill-box; transform-origin: left; }
+@media (prefers-color-scheme: dark) { .bar-fill { fill: var(--link); } }
+@keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.explain { margin-top: 14px; padding: 12px 16px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--border); }
+.explain ul { margin: .6rem 0 0; padding-left: 1.2rem; }
+.explain li { margin: .35rem 0; }
+@media (prefers-reduced-motion: reduce) { .bar-fill { animation: none; } }

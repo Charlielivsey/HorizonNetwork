@@ -224,7 +224,7 @@ function search(q) {
 // keep its company articles up to date). Only what the register already shows publicly: hidden
 // companies, resigned officers, ceased persons with significant control and private notes are left out.
 function publicFeed() {
-  const list = companies().map((c) => ({
+  const list = companies().map((c) => { const votes = votingPower(c); return {
     slug: c.slug, name: c.name, legalName: c.legalName, number: c.number, status: c.status, type: c.type,
     incorporated: c.incorporated, dissolved: c.dissolved, registeredOffice: c.registeredOffice, sic: c.sic.slice(),
     description: c.description, website: c.website, emailDomain: c.emailDomain,
@@ -232,9 +232,10 @@ function publicFeed() {
     managedBy: c.managedBy && company(c.managedBy) && !company(c.managedBy).hidden ? c.managedBy : '',
     divisions: c.divisions.slice(), previousNames: (c.previousNames || []).map((p) => ({ name: p.name, until: p.until || p.changed || '' })),
     officers: c.officers.filter((o) => !o.resigned).map((o) => ({ name: o.name, role: o.role, appointed: o.appointed })),
-    owners: c.psc.filter((p) => !p.ceased).map((p) => ({ name: p.name, kind: p.kind, share: p.share, control: (p.control || []).slice(), notified: p.notified })),
+    owners: c.psc.filter((p) => !p.ceased).map((p) => { const v = votes[p.id]; return { name: p.name, kind: p.kind, share: p.share, classes: classesOf(p).split ? { A: p.classA || '', B: p.classB || '', C: p.classC || '' } : null, classCIssuedBy: p.classCIssuedBy || '', votes: v ? v.votes : null, votingControl: !!(v && v.control), control: (p.control || []).slice(), notified: p.notified }; }),
+    shareClasses: shareClasses(c),
     updatedAt: c.updatedAt,
-  }));
+  }; });
   const version = crypto.createHash('sha256').update(JSON.stringify(list)).digest('hex').slice(0, 16);
   return { version, companies: list };
 }
@@ -254,6 +255,7 @@ function saveCompany(slug, input, actor, opts) {
     const incorporated = d(input.incorporated);
     firstOfficer = LISTS.officers({ ...opts.officer, appointed: opts.officer.appointed || incorporated });
     firstPsc = LISTS.psc({ ...opts.psc, notified: opts.psc.notified || incorporated });
+    checkShareRules({ officers: [firstOfficer] }, [firstPsc], [firstOfficer]);
   }
   const c = existing || blankCompany({ slug: '', name: legalName, legalName });
   if (!existing) {
@@ -299,17 +301,75 @@ function deleteCompany(slug, actor) {
 // Officers, PSCs and charges are lists on the company record.
 const LISTS = {
   officers: (i) => ({ name: req(i.name, 'Enter the officer’s name.', 120), role: OFFICER_ROLES.includes(i.role) ? i.role : 'Director', appointed: d(i.appointed), resigned: d(i.resigned), occupation: t(i.occupation, 80), nationality: t(i.nationality, 60), countryOfResidence: t(i.countryOfResidence, 60) }),
-  psc: (i) => ({ name: req(i.name, 'Enter the name.', 160), kind: PSC_KINDS.includes(i.kind) ? i.kind : 'Individual', share: percent(i.share), control: String(i.control || '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 6).map((x) => x.slice(0, 160)), notified: d(i.notified), ceased: d(i.ceased) }),
+  psc: (i) => withClasses({ name: req(i.name, 'Enter the name.', 160), kind: PSC_KINDS.includes(i.kind) ? i.kind : 'Individual', share: percent(i.share), control: String(i.control || '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 6).map((x) => x.slice(0, 160)), notified: d(i.notified), ceased: d(i.ceased) }, i),
   charges: (i) => ({ code: t(i.code, 40), created: d(i.created), delivered: d(i.delivered), status: ['Outstanding', 'Satisfied', 'Part satisfied'].includes(i.status) ? i.status : 'Outstanding', entitled: req(i.entitled, 'Enter who is entitled to the charge.', 200), description: t(i.description, 600), satisfied: d(i.satisfied) }),
 };
 // A shareholding between 0 and 100, to at most two decimal places, or blank when not given.
-function percent(v) {
+function percent(v, label) {
   const s = String(v == null ? '' : v).trim().replace(/%$/, '');
   if (!s) return '';
   const n = Number(s);
-  if (!Number.isFinite(n) || n < 0 || n > 100) throw Object.assign(new Error('Enter a share percentage between 0 and 100.'), { status: 400 });
+  if (!Number.isFinite(n) || n < 0 || n > 100) throw Object.assign(new Error('Enter ' + (label ? 'the ' + label + ' as a percentage' : 'a share percentage') + ' between 0 and 100.'), { status: 400 });
   return String(Math.round(n * 100) / 100);
 }
+// ---------- Share classes and voting power ----------
+// The user's request (20 October 2026). A holding can be split into three classes of share, each given
+// as a percentage of all the company's shares:
+// - Class A: ordinary shares, available to the public and other companies. One vote each.
+// - Class B: staff shares, so only people (not companies) hold them. Half the votes of Class A.
+// - Class C: special issue shares, issued only by the Chair of the Board. Double the votes of Class A;
+//   anyone holding more than 10% of all the Class C shares holds 51% of the votes. Only one holder may be
+//   over that line, so the register refuses a Class C issue that would put a second holder over it.
+// A holding not split into classes counts as Class A.
+const CLASS_KEYS = ['classA', 'classB', 'classC'];
+const CLASS_C_CONTROL = 10, CONTROL_VOTES = 51;
+function withClasses(x, i) {
+  for (const k of CLASS_KEYS) x[k] = percent(i[k], 'Class ' + k.slice(-1) + ' shares');
+  x.classCIssuedBy = x.classC && Number(x.classC) > 0 ? t(i.classCIssuedBy, 120) : '';
+  if (CLASS_KEYS.some((k) => x[k] !== '')) {
+    const sum = Math.round(CLASS_KEYS.reduce((n, k) => n + Number(x[k] || 0), 0) * 100) / 100;
+    if (sum > 100) throw bad('The share classes add up to ' + sum + '%, which is more than 100%.');
+    if (x.share !== '' && Math.abs(Number(x.share) - sum) > 0.01) throw bad('The share classes add up to ' + sum + '%, but the shareholding is ' + x.share + '%. Make them match, or leave the shareholding blank.');
+    x.share = String(sum);
+  }
+  if (Number(x.classB || 0) > 0 && x.kind !== 'Individual') throw bad('Class B shares are for staff, so only a person (an Individual) can hold them.');
+  if (Number(x.classC || 0) > 0 && !x.classCIssuedBy) throw bad('Class C shares can only be issued by the Chair of the Board. Enter the Chair who issued them.');
+  return x;
+}
+const classesOf = (p) => { const split = CLASS_KEYS.some((k) => p[k] !== undefined && p[k] !== ''); return { split, a: split ? Number(p.classA || 0) : (p.share !== '' && p.share != null ? Number(p.share) : 0), b: split ? Number(p.classB || 0) : 0, c: split ? Number(p.classC || 0) : 0, known: split || (p.share !== '' && p.share != null) }; };
+// Checks a company's holdings (current entries only) against the share class rules.
+function checkShareRules(c, holdings, officers) {
+  const cur = holdings.filter((p) => !p.ceased), split = cur.filter((p) => classesOf(p).split);
+  const total = Math.round(split.reduce((n, p) => n + Number(p.share || 0), 0) * 100) / 100;
+  if (total > 100.001) throw bad('The shares split into classes on this company would add up to ' + total + '%, which is more than 100%.');
+  const chairs = (officers || c.officers).filter((o) => !o.resigned && o.role === 'Chair').map((o) => o.name.trim().toLowerCase());
+  for (const p of cur) if (Number(p.classC || 0) > 0 && !chairs.includes(String(p.classCIssuedBy || '').trim().toLowerCase())) throw bad('Class C shares can only be issued by the Chair of the Board. ' + (chairs.length ? 'Enter the name of the current Chair (' + (officers || c.officers).filter((o) => !o.resigned && o.role === 'Chair').map((o) => o.name).join(' or ') + ').' : 'Record the Chair as an officer (role: Chair) first.'));
+  const totalC = cur.reduce((n, p) => n + classesOf(p).c, 0);
+  const over = totalC > 0 ? cur.filter((p) => classesOf(p).c / totalC * 100 > CLASS_C_CONTROL) : [];
+  if (over.length > 1) throw bad('Only one holder can have more than ' + CLASS_C_CONTROL + '% of the Class C shares, because that gives them ' + CONTROL_VOTES + '% of the votes. This would give ' + over.map((p) => p.name).join(' and ') + ' more than ' + CLASS_C_CONTROL + '% each.');
+}
+// Each current holder's share of the votes, as a percentage, and whether their Class C shares give them control.
+function votingPower(c) {
+  const cur = c.psc.filter((p) => !p.ceased).map((p) => ({ p, k: classesOf(p) })).filter((x) => x.k.known);
+  const weight = (k) => k.a + k.b * 0.5 + k.c * 2;
+  const W = cur.reduce((n, x) => n + weight(x.k), 0), totalC = cur.reduce((n, x) => n + x.k.c, 0);
+  const out = {};
+  if (!W) return out;
+  const ctrl = totalC > 0 ? cur.find((x) => x.k.c / totalC * 100 > CLASS_C_CONTROL) : null;
+  const round = (n) => Math.round(n * 100) / 100;
+  if (!ctrl) { for (const x of cur) out[x.p.id] = { votes: round(weight(x.k) / W * 100), control: false }; return out; }
+  const rest = W - weight(ctrl.k), own = rest > 0 ? Math.max(CONTROL_VOTES, weight(ctrl.k) / W * 100) : 100;
+  for (const x of cur) out[x.p.id] = x === ctrl ? { votes: round(own), control: true } : { votes: round(rest > 0 ? (100 - own) * weight(x.k) / rest : 0), control: false };
+  return out;
+}
+// The company's issued shares by class, from the holdings recorded on it.
+function shareClasses(c) {
+  const cur = c.psc.filter((p) => !p.ceased && classesOf(p).split), r = (n) => Math.round(n * 100) / 100;
+  const sum = (k) => r(cur.reduce((n, p) => n + Number(p[k] || 0), 0));
+  return cur.length ? { classA: sum('classA'), classB: sum('classB'), classC: sum('classC') } : null;
+}
+const classText = (p) => { const k = classesOf(p); if (!k.split) return ''; return [['A', p.classA], ['B', p.classB], ['C', p.classC]].filter(([, v]) => Number(v || 0) > 0).map(([n, v]) => 'Class ' + n + ' ' + v + '%').join(', ') + (Number(p.classC || 0) > 0 ? ' (Class C issued by ' + p.classCIssuedBy + ')' : ''); };
+
 function t(v, max) { return String(v == null ? '' : v).trim().slice(0, max); }
 function d(v) { const s = t(v, 10); return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : ''; }
 function req(v, message, max) { const s = t(v, max); if (!s) throw Object.assign(new Error(message), { status: 400 }); return s; }
@@ -319,6 +379,8 @@ function saveItem(slug, list, itemId, input, actor) {
   if (!c || !LISTS[list]) throw Object.assign(new Error('Not found.'), { status: 404 });
   const value = LISTS[list](input);
   const existing = itemId && c[list].find((x) => x.id === itemId);
+  if (list === 'psc') checkShareRules(c, existing ? c.psc.map((x) => (x === existing ? { ...x, ...value } : x)) : c.psc.concat([value]));
+  if (list === 'officers' && existing) checkShareRules(c, c.psc, c.officers.map((x) => (x === existing ? { ...x, ...value } : x)));
   if (existing) Object.assign(existing, value); else c[list].push({ id: id(), ...value });
   c.updatedAt = now();
   generateFilings(c);
@@ -354,7 +416,7 @@ function generateFilings(c) {
   }
   for (const p of c.psc || []) if (p.notified && !p.notificationFiling) {
     p.notificationFiling = pushGenerated(c, p.notified, 'Persons with significant control', 'Notification of ' + p.name + ' as a person with significant control on ' + longDate(p.notified), { code: FORM_CODES.psc_add, heading: 'Notification of a person with significant control', rows: [
-      ['Name', p.name], ['Type', p.kind], ['Shareholding', p.share ? p.share + '%' : ''], ['Nature of control', (p.control || []).join('; ')], ['Notified on', longDate(p.notified)], ['Company', c.legalName]] });
+      ['Name', p.name], ['Type', p.kind], ['Shareholding', p.share ? p.share + '%' : ''], ['Share classes', classText(p)], ['Nature of control', (p.control || []).join('; ')], ['Notified on', longDate(p.notified)], ['Company', c.legalName]] });
   }
 }
 // A change to the registered name keeps the old name and files a change of name automatically.
@@ -532,14 +594,15 @@ function checkChange(c, kind, input) {
     case 'address': { const v = req(input.registeredOffice, 'Enter the new registered office address.', 300); if (v === c.registeredOffice) throw bad('That is already the registered office address.'); return { registeredOffice: v }; }
     case 'appoint': { const o = LISTS.officers(input); if (!o.appointed) throw bad('Enter the date of appointment.'); o.resigned = ''; return { officer: o }; }
     case 'terminate': { const o = c.officers.find((x) => x.id === input.officer && !x.resigned); if (!o) throw bad('Choose a current officer.'); const date = d(input.resigned); if (!date) throw bad('Enter the date they stopped being an officer.'); return { officer: o.id, name: o.name, role: o.role, resigned: date }; }
-    case 'psc_add': { const x = LISTS.psc(input.item || input); if (!x.notified) throw bad('Enter the date they became a person with significant control.'); x.ceased = ''; return { psc: x }; }
+    case 'psc_add': { const x = LISTS.psc(input.item || input); if (!x.notified) throw bad('Enter the date they became a person with significant control.'); x.ceased = ''; checkShareRules(c, c.psc.concat([x])); return { psc: x }; }
     case 'psc_change': {
       const x = c.psc.find((y) => y.id === input.psc && !y.ceased); if (!x) throw bad('Choose a current person with significant control.');
       const date = d(input.changed); if (!date) throw bad('Enter the date the details changed.');
       const next = LISTS.psc({ ...(input.item || {}), notified: x.notified });
-      const pick = (y) => ({ name: y.name, kind: y.kind, share: y.share || '', control: [...(y.control || [])] });
+      const pick = (y) => ({ name: y.name, kind: y.kind, share: y.share || '', control: [...(y.control || [])], classA: y.classA || '', classB: y.classB || '', classC: y.classC || '', classCIssuedBy: y.classCIssuedBy || '' });
       const before = pick(x), after = pick(next);
       if (JSON.stringify(before) === JSON.stringify(after)) throw bad('Nothing has changed. Update at least one detail.');
+      checkShareRules(c, c.psc.map((y) => (y === x ? { ...y, ...after } : y)));
       return { psc: x.id, name: x.name, changed: date, before, after };
     }
     case 'psc_cease': { const x = c.psc.find((y) => y.id === input.psc && !y.ceased); if (!x) throw bad('Choose a current person with significant control.'); const date = d(input.ceased); if (!date) throw bad('Enter the date they ceased.'); return { psc: x.id, name: x.name, ceased: date }; }
@@ -691,6 +754,7 @@ function addApplication(cust, input, officerInput, pscInput) {
   // Checked now so problems are reported straight away; they're checked again when staff accept.
   const officer = LISTS.officers(officerInput || {});
   const psc = LISTS.psc(pscInput || {});
+  checkShareRules({ officers: [officer] }, [psc], [officer]);
   const s = { id: id(), ref: newRef(), customer: cust.id, company: '', kind: 'incorporate', change: { details, officer, psc }, category: 'Incorporation',
     description: 'Application to register ' + legalName + (parent ? ' as a subsidiary of ' + company(parent).legalName : ''),
     note: t(input.note, 2000), file: '', pages: 0, status: 'Pending', staffNote: '', createdAt: now(), decidedAt: null, filing: '' };
@@ -747,7 +811,7 @@ function applyChange(s) {
       const item = { id: id(), ...(kind === 'appoint' ? ch.officer : ch.psc) };
       const fid = filing(kind === 'appoint' ? item.appointed : item.notified, kind === 'appoint'
         ? [['Name', item.name], ['Role', item.role], ['Appointed on', longDate(item.appointed)], ['Occupation', item.occupation], ['Nationality', item.nationality], ['Country of residence', item.countryOfResidence]]
-        : [['Name', item.name], ['Type', item.kind], ['Shareholding', item.share ? item.share + '%' : ''], ['Nature of control', (item.control || []).join('; ')], ['Notified on', longDate(item.notified)]]);
+        : [['Name', item.name], ['Type', item.kind], ['Shareholding', item.share ? item.share + '%' : ''], ['Share classes', classText(item)], ['Nature of control', (item.control || []).join('; ')], ['Notified on', longDate(item.notified)]]);
       item[kind === 'appoint' ? 'appointmentFiling' : 'notificationFiling'] = fid;
       list.push(item);
       return fid;
@@ -755,7 +819,7 @@ function applyChange(s) {
     case 'terminate': { const o = c.officers.find((x) => x.id === ch.officer); if (!o || o.resigned) throw bad('That officer is no longer current, so this change can’t be applied.'); o.resigned = ch.resigned; return filing(ch.resigned, [['Name', o.name], ['Role', o.role], ['Appointed on', longDate(o.appointed)], ['Appointment ended on', longDate(ch.resigned)]]); }
     case 'psc_change': {
       const x = c.psc.find((y) => y.id === ch.psc); if (!x || x.ceased) throw bad('That person is no longer a current person with significant control, so this change can’t be applied.');
-      const show = (y) => [y.name, y.kind, y.share ? y.share + '%' : 'Shareholding not recorded', (y.control || []).join('; ')].filter(Boolean).join(' · ');
+      const show = (y) => [y.name, y.kind, y.share ? y.share + '%' : 'Shareholding not recorded', classText(y), (y.control || []).join('; ')].filter(Boolean).join(' · ');
       Object.assign(x, ch.after);
       return filing(ch.changed, [['Person with significant control', ch.name], ['Previous details', show(ch.before)], ['New details', show(ch.after)], ['Changed on', longDate(ch.changed)]]);
     }
@@ -787,6 +851,8 @@ function checkStillValid(s) {
   const ch = s.change || {};
   if (s.kind === 'terminate' && !c.officers.some((o) => o.id === ch.officer && !o.resigned)) throw bad('That officer is no longer current, so this change can’t be applied. Reject it instead.');
   if ((s.kind === 'psc_cease' || s.kind === 'psc_change') && !c.psc.some((p) => p.id === ch.psc && !p.ceased)) throw bad('That person is no longer a current person with significant control, so this change can’t be applied. Reject it instead.');
+  if (s.kind === 'psc_add' && ch.psc) checkShareRules(c, c.psc.concat([ch.psc]));
+  if (s.kind === 'psc_change' && ch.after) checkShareRules(c, c.psc.map((y) => (y.id === ch.psc ? { ...y, ...ch.after } : y)));
 }
 const submission = (sid) => db.submissions.find((s) => s.id === sid) || null;
 function decideSubmission(s, accept, note, actor) {
@@ -808,7 +874,7 @@ function decideSubmission(s, accept, note, actor) {
 
 module.exports = {
   publicFeed,
-  init, STATUSES, FILING_CATEGORIES, OFFICER_ROLES, PSC_KINDS, REQUEST_KINDS, CHANGE_TYPES,
+  init, STATUSES, votingPower, shareClasses, classesOf, CLASS_C_CONTROL, CONTROL_VOTES, FILING_CATEGORIES, OFFICER_ROLES, PSC_KINDS, REQUEST_KINDS, CHANGE_TYPES,
   canManage, managedCompanies, groupOf, groupReport, addApplication, addManager, removeManager,
   companies, company, children, search, saveCompany, deleteCompany, saveItem, deleteItem,
   filings, filing, addFiling, deleteFiling, filePath,

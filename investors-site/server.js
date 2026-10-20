@@ -49,7 +49,7 @@ function layout(o) {
   return '<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
     '<meta name="theme-color" content="#5514B4"><meta name="robots" content="noindex, nofollow"><title>' + esc(o.title) + ' · HN Group Investors</title>' +
     '<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="preload" href="/assets/fonts/plus-jakarta-sans.woff2" as="font" type="font/woff2" crossorigin>' +
-    '<link rel="stylesheet" href="/assets/investors.css?v=2"><script src="/assets/investors.js?v=1" defer></script></head><body class="' + (who || 'public') + '">' +
+    '<link rel="stylesheet" href="/assets/investors.css?v=3"><script src="/assets/investors.js?v=1" defer></script></head><body class="' + (who || 'public') + '">' +
     '<a class="skip" href="#content">Skip to content</a><div class="stripe" aria-hidden="true">' + STRIPE.map(([id, w]) => '<i class="c-' + id + ' f' + w + '"></i>').join('') + '</div>' +
     '<header class="top"><a class="brand" href="' + (who === 'staff' ? '/staff' : '/') + '"><img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="92" height="32"><img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="92" height="32"><span class="brand-name">Investors</span></a>' +
     (nav.length ? '<nav class="nav" aria-label="Main">' + nav.map(([href, label]) => '<a href="' + href + '"' + (o.active === href ? ' aria-current="page"' : '') + '>' + label + (href === '/news' && o.unread ? ' <span class="badge">' + o.unread + '</span>' : '') + '</a>').join('') + '</nav>' : '') +
@@ -116,10 +116,28 @@ function change(now, before) {
   const d = now - before, pct = before ? (d / before) * 100 : null;
   return '<span class="change ' + (d > 0 ? 'up' : d < 0 ? 'down' : '') + '">' + (d > 0 ? '▲ ' : d < 0 ? '▼ ' : '') + esc(money(Math.abs(d))) + (pct !== null ? ' (' + (d >= 0 ? '+' : '−') + Math.abs(pct).toFixed(1) + '%)' : '') + ' since the previous valuation</span>';
 }
+// Share classes and votes (worked out by the Company Register): Class A one vote, Class B half a vote,
+// Class C two votes, or 51% of the votes for the holder of more than 10% of the Class C shares.
+const CLASS_HELP = '<details class="explain"><summary>How share classes and voting power work</summary><ul>' +
+  '<li><b>Class A</b> shares are ordinary shares, available to the public and other companies. Each carries one vote.</li>' +
+  '<li><b>Class B</b> shares are for HN Group staff. Each carries half the votes of a Class A share.</li>' +
+  '<li><b>Class C</b> shares are special issue shares, issued only by the Chair of the Board. Each carries double the votes of a Class A share. Anyone holding more than 10% of all the Class C shares holds 51% of the company’s votes (or more, if their shares already give them more), and only one holder can be in that position.</li>' +
+  '<li>Holdings not split into classes count as Class A. Your voting power is your share of all the votes held by the company’s recorded shareholders.</li></ul></details>';
+const classesOf = (h) => register.classText(h) || (h.share !== null ? 'Not split (counted as Class A)' : '—');
+function votesBar(v) { const w = Math.max(0, Math.min(100, v)); return '<svg class="bar" viewBox="0 0 100 8" preserveAspectRatio="none" aria-hidden="true"><rect class="bar-bg" width="100" height="8" rx="4"/><rect class="bar-fill" width="' + w.toFixed(2) + '" height="8" rx="4"/></svg>'; }
+function votingSection(s) {
+  const list = s.direct.filter((h) => h.votes !== null);
+  if (!list.length) return '';
+  return '<section class="block"><h2>Your voting power</h2><p class="intro">Your share of the votes in each company you hold directly, based on the classes of share you hold.</p><div class="votes">' +
+    list.map((h) => '<div class="vote-row"><span class="cell-co">' + logo(h.company, 'sm') + esc(register.displayName(h.company)) + '</span><span class="vote-figure"><b>' + esc(h.votes) + '%</b> of votes' + (h.votingControl ? ' <span class="pill ok">Voting control</span>' : '') + '</span>' + votesBar(h.votes) +
+      '<span class="muted small">' + esc(classesOf(h)) + (h.votingControl ? ' · You hold more than 10% of the Class C shares, so you hold 51% of the votes or more.' : '') + '</span></div>').join('') + '</div>' + CLASS_HELP + '</section>';
+}
 function holdingCard(h) {
   const c = h.company;
   return '<article class="holding"><div class="holding-head">' + logo(c) + '<div><h3>' + esc(register.displayName(c)) + '</h3><p class="muted small">' + esc(c.legalName || '') + (c.number ? ' · Company ' + esc(c.number) : '') + '</p></div></div>' +
     '<dl class="facts"><div><dt>Your holding</dt><dd>' + esc(h.shareText) + '</dd></div>' +
+    '<div><dt>Share classes</dt><dd>' + esc(classesOf(h)) + '</dd></div>' +
+    '<div><dt>Voting power</dt><dd>' + (h.votes !== null ? '<b>' + esc(h.votes) + '%</b>' + (h.votingControl ? ' <span class="pill ok">Control</span>' : '') : '<span class="muted">Not recorded</span>') + '</dd></div>' +
     '<div><dt>Value</dt><dd>' + (h.value !== null ? '<b>' + esc(money(h.value)) + '</b>' : '<span class="muted">' + (h.share === null ? 'Needs an exact share on the register' : 'Not valued yet') + '</span>') + '</dd></div>' +
     '<div><dt>Company valuation</dt><dd>' + (h.valuation ? esc(money(h.valuation.amount)) + '<span class="muted small"> on ' + esc(longDate(h.valuation.asOf)) + '</span>' : '<span class="muted">Not recorded</span>') + '</dd></div>' +
     (h.holder ? '<div><dt>Held as</dt><dd>' + esc(h.holder) + '</dd></div>' : '') + '</dl>' +
@@ -147,7 +165,7 @@ function investorOverview(x, ctx, preview) {
     (s.unvalued ? '<span class="muted small">' + s.unvalued + ' holding' + (s.unvalued === 1 ? ' isn’t' : 's aren’t') + ' valued yet.</span>' : '') + '</div>' +
     '<div class="stat"><span class="stat-label">Companies you hold directly</span><span class="stat-value">' + s.direct.length + '</span></div>' +
     '<div class="stat"><span class="stat-label">Held through them</span><span class="stat-value">' + s.indirect.length + '</span></div></section>' +
-    chart(s.series) +
+    chart(s.series) + votingSection(s) +
     '<section class="block"><div class="block-head"><h2>What you’re invested in</h2><a href="/holdings">Full details</a></div>' +
     (s.direct.length ? '<div class="holdings">' + s.direct.map(holdingCard).join('') + '</div>' : '<p class="muted">No holdings are recorded for you on the Company Register yet. If you think this is wrong, contact HN Group.</p>') + '</section>' +
     interestsTable(s.indirect) +
@@ -156,12 +174,12 @@ function investorOverview(x, ctx, preview) {
 }
 function holdingsPage(x, ctx) {
   const s = holdings.summary(x.holders, store.valuations());
-  const rows = s.direct.map((h) => '<tr><td><span class="cell-co">' + logo(h.company, 'sm') + esc(register.displayName(h.company)) + '</span></td><td>' + esc(h.holder) + '</td><td>' + esc(h.kind || '') + '</td><td>' + esc(h.shareText) + '</td><td>' + (h.control.length ? h.control.map(esc).join('<br>') : '—') + '</td><td>' + (h.notified ? esc(longDate(h.notified)) : '—') + '</td><td class="num">' + (h.value !== null ? esc(money(h.value)) : '—') + '</td></tr>').join('');
+  const rows = s.direct.map((h) => '<tr><td><span class="cell-co">' + logo(h.company, 'sm') + esc(register.displayName(h.company)) + '</span></td><td>' + esc(h.holder) + '</td><td>' + esc(h.kind || '') + '</td><td>' + esc(h.shareText) + '</td><td>' + esc(classesOf(h)) + (Number((h.classes || {}).C || 0) > 0 && h.classCIssuedBy ? '<div class="muted small">Class C issued by ' + esc(h.classCIssuedBy) + '</div>' : '') + '</td><td class="num">' + (h.votes !== null ? esc(h.votes) + '%' + (h.votingControl ? '<div><span class="pill ok">Control</span></div>' : '') : '—') + '</td><td>' + (h.control.length ? h.control.map(esc).join('<br>') : '—') + '</td><td>' + (h.notified ? esc(longDate(h.notified)) : '—') + '</td><td class="num">' + (h.value !== null ? esc(money(h.value)) : '—') + '</td></tr>').join('');
   const history = s.direct.filter((h) => h.history.length).map((h) => '<h3>' + esc(register.displayName(h.company)) + '</h3><div class="table-wrap"><table><thead><tr><th>Valuation date</th><th class="num">Company valuation</th><th class="num">Your share</th></tr></thead><tbody>' +
     (store.valuations()[h.company.slug] || []).slice().sort((a, b) => b.asOf.localeCompare(a.asOf)).map((v) => '<tr><td>' + esc(longDate(v.asOf)) + (v.note ? '<div class="muted small">' + esc(v.note) + '</div>' : '') + '</td><td class="num">' + esc(money(v.amount)) + '</td><td class="num">' + esc(money(Math.round(v.amount * h.share) / 100)) + '</td></tr>').join('') + '</tbody></table></div>').join('');
   const body = '<section class="hero small"><p class="eyebrow">Your investments</p><h1>Holdings</h1><p class="lede">Every holding recorded for you on the HN Group Company Register, as ' + esc(x.holders.join(', ') || '—') + '.</p></section>' +
-    (s.direct.length ? '<div class="table-wrap"><table><thead><tr><th>Company</th><th>Held as</th><th>Type</th><th>Share</th><th>Nature of control</th><th>Since</th><th class="num">Value</th></tr></thead><tbody>' + rows + '</tbody>' +
-      '<tfoot><tr><th colspan="6">Total</th><th class="num">' + esc(money(s.total)) + '</th></tr></tfoot></table></div>' : '<p class="muted">No holdings are recorded for you yet.</p>') +
+    (s.direct.length ? '<div class="table-wrap"><table><thead><tr><th>Company</th><th>Held as</th><th>Type</th><th>Share</th><th>Share classes</th><th class="num">Votes</th><th>Nature of control</th><th>Since</th><th class="num">Value</th></tr></thead><tbody>' + rows + '</tbody>' +
+      '<tfoot><tr><th colspan="8">Total</th><th class="num">' + esc(money(s.total)) + '</th></tr></tfoot></table></div>' + CLASS_HELP : '<p class="muted">No holdings are recorded for you yet.</p>') +
     interestsTable(s.indirect) + (history ? '<section class="block"><h2>Valuation history</h2>' + history + '</section>' : '');
   return layout({ ...ctx, title: 'Holdings', active: '/holdings', body, unread: unreadFor(x) });
 }
@@ -249,7 +267,7 @@ function staffCompanies(user, url, error) {
     (register.all().map((c) => {
       const list = (vals[c.slug] || []).slice().sort((a, b) => b.asOf.localeCompare(a.asOf) || b.at.localeCompare(a.at));
       return '<section class="card company" id="' + esc(c.slug) + '"><div class="holding-head">' + logo(c) + '<div><h2>' + esc(register.displayName(c)) + '</h2><p class="muted small">' + esc(c.legalName || '') + (c.status ? ' · ' + esc(c.status) : '') + '</p></div><span class="spacer"></span><span class="company-value">' + (list[0] ? esc(money(list[0].amount)) + '<span class="muted small"> on ' + esc(longDate(list[0].asOf)) + '</span>' : '<span class="muted">Not valued</span>') + '</span></div>' +
-        '<h3>Owners on the register</h3><ul class="plain">' + ((c.owners || []).map((o) => '<li>' + esc(o.name) + ' · ' + esc(register.shareText(o)) + ' <span class="muted small">' + esc(o.kind || '') + '</span>' + (register.sharePercent(o) === null ? ' <span class="pill warn">No exact share recorded</span>' : '') + '</li>').join('') || '<li class="muted">None recorded</li>') + '</ul>' +
+        '<h3>Owners on the register</h3><ul class="plain">' + ((c.owners || []).map((o) => '<li>' + esc(o.name) + ' · ' + esc(register.shareText(o)) + (register.classText(o) ? ' (' + esc(register.classText(o)) + ')' : '') + (typeof o.votes === 'number' ? ' · <b>' + esc(o.votes) + '% of votes</b>' : '') + (o.votingControl ? ' <span class="pill ok">Voting control</span>' : '') + ' <span class="muted small">' + esc(o.kind || '') + '</span>' + (register.sharePercent(o) === null ? ' <span class="pill warn">No exact share recorded</span>' : '') + '</li>').join('') || '<li class="muted">None recorded</li>') + '</ul>' +
         '<details' + (list.length ? '' : ' open') + '><summary>Record a valuation</summary><form method="post" action="/staff/companies/' + esc(c.slug) + '/valuation" class="form inline-grid" data-once><input type="hidden" name="csrf" value="' + esc(user.csrf) + '">' +
         '<div><label for="amount-' + esc(c.slug) + '">Company valuation (£)</label><input id="amount-' + esc(c.slug) + '" name="amount" inputmode="decimal" required placeholder="250000"></div>' +
         '<div><label for="asof-' + esc(c.slug) + '">As of</label><input id="asof-' + esc(c.slug) + '" name="asOf" type="date" max="' + today + '" value="' + today + '" required></div>' +

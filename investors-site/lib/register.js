@@ -61,4 +61,6 @@ const status = () => ({ version: feed.version, at: feed.at || null, healthy: Dat
 // Tests replace the data directly.
 function set(next) { feed = { version: String(next.version || Date.now()), companies: next.companies || [], at: new Date().toISOString() }; lastOk = Date.now(); }
 
-module.exports = { init, refresh, start, stop, set, all, bySlug, displayName, companyNamed, registerUrl, sharePercent, shareText, holderNames, status, same, PUBLIC_URL };
+// A holding's classes, for example "Class A 60%, Class C 15%", or '' when not split into classes.
+const classText = (o) => (o.classes ? ['A', 'B', 'C'].filter((k) => Number(o.classes[k] || 0) > 0).map((k) => 'Class ' + k + ' ' + Number(o.classes[k]) + '%').join(', ') : '');
+module.exports = { classText, init, refresh, start, stop, set, all, bySlug, displayName, companyNamed, registerUrl, sharePercent, shareText, holderNames, status, same, PUBLIC_URL };

@@ -298,3 +298,12 @@ details.mini { border: 0; padding: 0 0 6px; }
 .footer { border-top: 1px solid var(--border); }
 .nowrap { white-space: nowrap; }
 .button.is-sending { opacity: .7; cursor: progress; }
+
+/* Share classes */
+.grid-form > .wide:has(> .field-group-title) { gap: 4px; }
+.field-group-title { font-weight: 700; font-size: 19px; margin: 10px 0 0; }
+.share-classes { margin: 0 0 30px; }
+.share-classes p { margin: 0 0 10px; }
+.share-classes summary { cursor: pointer; color: var(--link, #1d70b8); text-decoration: underline; }
+.share-classes ul { margin: 10px 0 0; padding-left: 20px; }
+.share-classes li { margin-bottom: 6px; }

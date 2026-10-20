@@ -452,3 +452,48 @@ test('company register: group structure update', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('company register: share classes and voting power', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-companies-classes-'));
+  const store = path.join(__dirname, 'lib', 'store.js');
+  delete require.cache[require.resolve(store)];
+  process.env.COMPANIES_GROUP_UPDATES = 'off';
+  try {
+    const s = require(store); s.init(dir);
+    const c = s.saveCompany('', { legalName: 'Class Test Limited', incorporated: '2026-01-01' }, 't', { officer: { name: 'Clara Chair', role: 'Chair' }, psc: { name: 'Xavier Public', kind: 'Individual', classA: '60' } });
+    const err = (fn) => { try { fn(); } catch (e) { return e.message; } return ''; };
+    const votes = () => { const v = s.votingPower(s.company(c.slug)); return Object.fromEntries(s.company(c.slug).psc.filter((p) => !p.ceased).map((p) => [p.name, v[p.id]])); };
+    assert.equal(s.company(c.slug).psc[0].share, '60', 'the shareholding is the total of its classes');
+    // Class B is for staff: people only. Class C needs the Chair. Classes must match the shareholding.
+    assert.match(err(() => s.saveItem(c.slug, 'psc', '', { name: 'Parent Co Limited', kind: 'Parent company', classB: '10' }, 't')), /only a person/);
+    assert.match(err(() => s.saveItem(c.slug, 'psc', '', { name: 'Zed', kind: 'Individual', classC: '20' }, 't')), /Chair of the Board/);
+    assert.match(err(() => s.saveItem(c.slug, 'psc', '', { name: 'Zed', kind: 'Individual', classC: '20', classCIssuedBy: 'Someone Else' }, 't')), /Clara Chair/);
+    assert.match(err(() => s.saveItem(c.slug, 'psc', '', { name: 'Yasmin Staff', kind: 'Individual', share: '30', classB: '20' }, 't')), /add up to 20%, but the shareholding is 30%/);
+    assert.match(err(() => s.saveItem(c.slug, 'psc', '', { name: 'Too Much', kind: 'Individual', classA: '50' }, 't')), /more than 100%/);
+    // Without Class C: A one vote, B half a vote.
+    s.saveItem(c.slug, 'psc', '', { name: 'Yasmin Staff', kind: 'Individual', classB: '20' }, 't');
+    assert.deepEqual(votes(), { 'Xavier Public': { votes: 85.71, control: false }, 'Yasmin Staff': { votes: 14.29, control: false } });
+    // Class C issued by the Chair: holding more than 10% of the Class C shares gives 51% of the votes.
+    s.saveItem(c.slug, 'psc', '', { name: 'Zara Special', kind: 'Individual', classC: '15', classCIssuedBy: 'clara chair' }, 't');
+    let v = votes();
+    assert.deepEqual(v['Zara Special'], { votes: 51, control: true });
+    assert.equal(v['Xavier Public'].votes, 42); assert.equal(v['Yasmin Staff'].votes, 7);
+    // A second holder can't pass 10% of the Class C shares; a small Class C holding just counts double.
+    assert.match(err(() => s.saveItem(c.slug, 'psc', '', { name: 'Walt', kind: 'Individual', classC: '1.67', classCIssuedBy: 'Clara Chair' }, 't')), /Only one holder can have more than 10% of the Class C shares/);
+    s.saveItem(c.slug, 'psc', '', { name: 'Walt', kind: 'Individual', classC: '1.5', classCIssuedBy: 'Clara Chair' }, 't');
+    v = votes();
+    assert.equal(v['Zara Special'].votes, 51); assert.equal(v['Walt'].votes, 2.01, 'double votes: 49% × 3/73');
+    // The public feed carries classes, votes and the company's shares by class.
+    const feed = s.publicFeed().companies.find((x) => x.slug === c.slug);
+    const zara = feed.owners.find((o) => o.name === 'Zara Special');
+    assert.deepEqual([zara.classes, zara.votes, zara.votingControl, zara.classCIssuedBy], [{ A: '', B: '', C: '15' }, 51, true, 'clara chair']);
+    assert.deepEqual(feed.shareClasses, { classA: 60, classB: 20, classC: 16.5 });
+    // Holdings not split into classes count as Class A.
+    const d = s.saveCompany('', { legalName: 'Plain Limited' }, 't', { officer: { name: 'Pat Director' }, psc: { name: 'Pat Director', kind: 'Individual', share: '100' } });
+    assert.equal(Object.values(s.votingPower(s.company(d.slug)))[0].votes, 100);
+    assert.equal(s.publicFeed().companies.find((x) => x.slug === d.slug).owners[0].classes, null);
+  } finally {
+    delete process.env.COMPANIES_GROUP_UPDATES;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
