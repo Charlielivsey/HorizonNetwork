@@ -176,6 +176,26 @@ function groupStructure20261018() {
 function runMigrations() {
   if (!Array.isArray(db.migrations)) db.migrations = [];
   const once = (name, fn) => { if (db.migrations.includes(name)) return; fn(); db.migrations.push(name); };
+  // The user's request (20 October 2026): delete every company and start the register again from scratch.
+  // Runs once on the existing register (a new, empty register has nothing to delete). Everything is kept
+  // in DATA_DIR/backups/company-reset-<time>/ first: the full data file and every PDF. Companies go with
+  // their filings and PDFs, and the customer filings and requests about them; customer and staff
+  // accounts and the activity log stay. The starting companies are not added again.
+  once('reset-companies-2026-10-20', () => {
+    if (!db.companies.length && !db.filings.length) return;
+    const backup = path.join(dir, 'backups', 'company-reset-' + now().replace(/[:.]/g, '-'));
+    fs.mkdirSync(backup, { recursive: true, mode: 0o700 });
+    fs.writeFileSync(path.join(backup, 'register.json'), JSON.stringify(db), { mode: 0o600 });
+    fs.cpSync(filesDir, path.join(backup, 'files'), { recursive: true });
+    const count = db.companies.length, about = (x) => !!x.company;
+    for (const f of db.filings) removeFile(f.file);
+    for (const x of db.submissions.filter(about)) removeFile(x.file);
+    db.companies = []; db.filings = [];
+    db.submissions = db.submissions.filter((x) => !about(x));
+    db.requests = db.requests.filter((x) => !about(x));
+    for (const seed of SEED) if (!db.seeded.includes(seed.slug)) db.seeded.push(seed.slug);
+    audit('system', 'register.reset', count + ' companies deleted; backup in ' + path.relative(dir, backup));
+  });
   // The user's request (17 October 2026): the officer is recorded as Charlie Livsey on every company. Nothing else changes.
   // The user's request (17 October 2026): Horizon Holding Co Limited is now Horizon Assets Management Limited. A company
   // recorded under the old name keeps it as a previous name and gets a Change of name filing; references elsewhere follow.

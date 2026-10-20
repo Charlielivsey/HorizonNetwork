@@ -511,3 +511,43 @@ test('company register: share classes and voting power', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('company register: one-off reset deletes every company, keeps accounts and a full backup', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-companies-reset-'));
+  const store = path.join(__dirname, 'lib', 'store.js');
+  const fresh = () => { delete require.cache[require.resolve(store)]; return require(store); };
+  process.env.COMPANIES_GROUP_UPDATES = 'off';
+  try {
+    let s = fresh(); s.init(dir);
+    assert.ok(s.company('hn-group'), 'a new register starts with its seeds (nothing to reset)');
+    s.saveCompany('', { legalName: 'Old Company Limited', incorporated: '2026-01-01' }, 't', { officer: { name: 'Olive Officer' }, psc: { name: 'Olive Officer', kind: 'Individual', share: '100' } });
+    const file = path.join(dir, 'register.json'), data = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const pdfs = data.filings.map((f) => f.file).filter(Boolean);
+    assert.ok(pdfs.length, 'generated filings have PDFs');
+    // An existing register from before the reset: some customer items, and no record of the reset.
+    data.customers.push({ id: 'c1', email: 'keep@example.com', name: 'Kept Customer' });
+    data.requests.push({ id: 'r1', company: 'hn-group', customer: 'c1', status: 'Open' });
+    data.submissions.push({ id: 's1', company: 'hn-group', customer: 'c1', status: 'Pending', file: '' }, { id: 's2', company: '', kind: 'incorporate', customer: 'c1', status: 'Pending', file: '' });
+    data.migrations = data.migrations.filter((m) => m !== 'reset-companies-2026-10-20');
+    fs.writeFileSync(file, JSON.stringify(data));
+    s = fresh(); s.init(dir);
+    assert.deepEqual(s.db.companies, []); assert.deepEqual(s.db.filings, []);
+    assert.deepEqual(s.db.requests, []); assert.deepEqual(s.db.submissions.map((x) => x.id), ['s2']);
+    assert.equal(s.db.customers.length, 1, 'customer accounts are kept');
+    for (const f of pdfs) assert.ok(!fs.existsSync(path.join(dir, 'files', f)), 'company PDFs are removed');
+    const backups = fs.readdirSync(path.join(dir, 'backups'));
+    assert.equal(backups.length, 1);
+    const saved = JSON.parse(fs.readFileSync(path.join(dir, 'backups', backups[0], 'register.json'), 'utf8'));
+    assert.ok(saved.companies.some((c) => c.legalName === 'Old Company Limited'));
+    for (const f of pdfs) assert.ok(fs.existsSync(path.join(dir, 'backups', backups[0], 'files', f)), 'PDFs are in the backup');
+    assert.equal(s.publicFeed().companies.length, 0);
+    assert.ok(s.db.audit.some((a) => a.action === 'register.reset'));
+    // It runs once: the seeds don't come back and new companies stay.
+    s.saveCompany('', { legalName: 'New Start Limited' }, 't', { officer: { name: 'Nia' }, psc: { name: 'Nia', kind: 'Individual', share: '100' } });
+    s = fresh(); s.init(dir);
+    assert.deepEqual(s.db.companies.map((c) => c.legalName), ['New Start Limited']);
+  } finally {
+    delete process.env.COMPANIES_GROUP_UPDATES;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

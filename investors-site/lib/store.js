@@ -18,6 +18,22 @@ function init(dataDir) {
   try { db = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { db = {}; }
   for (const k of ['investors', 'sessions', 'news', 'audit']) db[k] = Array.isArray(db[k]) ? db[k] : [];
   db.valuations = db.valuations && typeof db.valuations === 'object' ? db.valuations : {};
+  db.migrations = Array.isArray(db.migrations) ? db.migrations : [];
+  // The user's request (20 October 2026): the Company Register starts again from scratch, so the company
+  // valuations recorded here and the cached copy of the register go too. A backup of both is kept in
+  // DATA_DIR/backups/; investor accounts, sessions and news stay.
+  if (!db.migrations.includes('reset-companies-2026-10-20')) {
+    const cached = path.join(dataDir, 'register.json');
+    if (Object.keys(db.valuations).length || fs.existsSync(cached)) {
+      const backup = path.join(dataDir, 'backups', 'company-reset-' + now().replace(/[:.]/g, '-'));
+      fs.mkdirSync(backup, { recursive: true, mode: 0o700 });
+      fs.writeFileSync(path.join(backup, 'investors.json'), JSON.stringify(db), { mode: 0o600 });
+      if (fs.existsSync(cached)) { fs.copyFileSync(cached, path.join(backup, 'register.json')); fs.rmSync(cached, { force: true }); }
+      audit('system', 'companies.reset', Object.keys(db.valuations).length + ' companies’ valuations removed; backup in ' + path.relative(dataDir, backup));
+      db.valuations = {};
+    }
+    db.migrations.push('reset-companies-2026-10-20');
+  }
   save();
 }
 function save() { const tmp = file + '.' + process.pid + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(db), { mode: 0o600 }); fs.renameSync(tmp, file); }

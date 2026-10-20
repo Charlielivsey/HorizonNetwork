@@ -30,6 +30,9 @@ async function refresh() {
       if (!next || !Array.isArray(next.companies)) return false;
       lastOk = Date.now();
       if (next.version && next.version === feed.version) return false;
+      // An empty register (for example while it's being rebuilt from scratch) doesn't wipe the companies
+      // the wiki already knows about; the wiki keeps its last copy until the register has companies again.
+      if (!next.companies.length && feed.companies.length) return false;
       const previous = feed;
       feed = { version: String(next.version || ''), companies: next.companies };
       if (file) { const tmp = file + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(feed), { mode: 0o600 }); fs.renameSync(tmp, file); }

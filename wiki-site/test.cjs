@@ -325,3 +325,23 @@ test('HN Group Wiki: seed updates refresh unedited articles only', () => {
     assert.equal(store.get('Alpha').revisions.length, 2, 'no duplicate revision when unchanged');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('HN Group Wiki: an empty register feed does not wipe the companies the wiki knows', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-wiki-empty-'));
+  const port = await freePort();
+  const server = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ version: 'empty', companies: [] })); });
+  await new Promise((r) => server.listen(port, '127.0.0.1', r));
+  const regPath = path.join(__dirname, 'lib', 'register.js');
+  process.env.COMPANIES_FEED_URL = 'http://127.0.0.1:' + port + '/feed';
+  delete require.cache[require.resolve(regPath)];
+  try {
+    const register = require(regPath);
+    register.init(dir, { feed: { version: 'v1', companies: [{ slug: 'hn-group', name: 'HN Group', legalName: 'HN Group Limited', owners: [] }] } });
+    assert.equal(await register.refresh(), false);
+    assert.equal(register.all().length, 1, 'kept');
+    assert.ok(register.find('HN Group'));
+  } finally {
+    delete process.env.COMPANIES_FEED_URL; delete require.cache[require.resolve(regPath)];
+    await new Promise((r) => server.close(r)); fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

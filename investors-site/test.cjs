@@ -164,3 +164,25 @@ test('HN Group Investors: staff access, investors, holdings, values and news', a
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('HN Group Investors: one-off company reset clears valuations, keeps investors and news', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-investors-reset-'));
+  const storePath = path.join(__dirname, 'lib', 'store.js');
+  const fresh = () => { delete require.cache[require.resolve(storePath)]; return require(storePath); };
+  try {
+    // An existing site from before the reset: valuations, an investor, news and a cached register.
+    fs.writeFileSync(path.join(dir, 'investors.json'), JSON.stringify({ investors: [{ id: 'a'.repeat(24), name: 'Kept Investor', email: 'kept@example.com', holders: ['Kept'], enabled: true }], sessions: [], news: [{ id: 'b'.repeat(24), title: 'Kept news', body: 'x', status: 'published' }], audit: [], valuations: { 'hn-group': [{ id: 'v', amount: 10, asOf: '2026-01-01', at: '2026-01-01' }] } }));
+    fs.writeFileSync(path.join(dir, 'register.json'), JSON.stringify({ version: 'old', companies: [{ slug: 'hn-group' }] }));
+    let s = fresh(); s.init(dir);
+    assert.deepEqual(s.valuations(), {});
+    assert.equal(s.investors().length, 1); assert.equal(s.news().length, 1);
+    assert.ok(!fs.existsSync(path.join(dir, 'register.json')), 'the cached register copy is removed');
+    const backup = fs.readdirSync(path.join(dir, 'backups'))[0];
+    assert.ok(JSON.parse(fs.readFileSync(path.join(dir, 'backups', backup, 'investors.json'), 'utf8')).valuations['hn-group']);
+    assert.ok(fs.existsSync(path.join(dir, 'backups', backup, 'register.json')));
+    // It only happens once: new valuations stay.
+    s.addValuation('new-co', { amount: '5', asOf: '2026-01-01' }, 't');
+    s = fresh(); s.init(dir);
+    assert.ok(s.valuations()['new-co']);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
