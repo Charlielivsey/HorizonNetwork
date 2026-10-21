@@ -23,6 +23,7 @@ const CLIENTS = {
   portal: { name: 'Staff portal', callback: 'https://staff.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use the staff portal.' },
   wiki: { name: 'HN Group Wiki', callback: 'https://wiki.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot edit the HN Group Wiki.' },
   branding: { name: 'HN Group brand centre', callback: 'https://branding.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use the HN Group brand centre.' },
+  accounts: { name: 'HN Account', callback: 'https://accounts.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use HN Account.' },
   investors: { name: 'HN Group Investors', callback: 'https://investors.hngroup.org.uk/auth/callback', allowed: user => !!user.ownerAccess || (Array.isArray(user.companies) ? user.companies : [user.company]).includes('HN Group'), denied: 'Only staff with a role at HN Group can sign in to the investors website.' },
   vpn: { name: 'HN Group VPN', callback: 'https://vpn.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use the HN Group VPN.' },
 };
@@ -143,8 +144,9 @@ const server = http.createServer(async (req, res) => {
       const entry = detachedEntry || (HEX.test(token || '') && sessions.get(token)), user = await profile(entry);
       requireReady(user);
       if (!CLIENTS[clientId].allowed(user)) throw fail(403, CLIENTS[clientId].denied);
-      if (clientId === 'portal') {
-        // The application starts its own session; this Auth sign-in has done its job.
+      if (clientId === 'portal' || clientId === 'accounts') {
+        // The application starts its own session (HN Account swaps this one for its own on the staff
+        // account service); this Auth sign-in has done its job.
         sessions.delete(token);
         return send(res, 200, { user, staffSession: entry.staffSession });
       }

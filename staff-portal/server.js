@@ -2129,7 +2129,9 @@ extraRoutes.init({
 
 // ---------- Routing ----------
 
-const statusSso = createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent, handleChangePassword, handleSetCode, verifyBrowserPin });
+// A new staff session for an HN Group service acting for this person (HN Account), from where they are.
+const issueSession = (personId, ip, userAgent) => createSession(personId, { socket: { remoteAddress: "127.0.0.1" }, headers: { "x-real-ip": ip || "127.0.0.1", "user-agent": userAgent || "HN Account" } });
+const statusSso = createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent, handleChangePassword, handleSetCode, verifyBrowserPin, issueSession });
 const portalAuth = portalAuthLib.createPortalAuth({ store, sessions, resume, createSession, cookieFor, parseCookies, send, redirect, logEvent, loginNext, clientIp });
 
 async function route(req, res) {

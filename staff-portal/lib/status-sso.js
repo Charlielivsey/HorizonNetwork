@@ -26,7 +26,7 @@ function serviceRequest(req) {
 function loginNext(value) {
   return typeof value === 'string' && /^\/status-admin\/authorize\?state=[a-f0-9]{64}$/.test(value) ? value : null;
 }
-function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent, handleChangePassword, handleSetCode, verifyBrowserPin }) {
+function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent, handleChangePassword, handleSetCode, verifyBrowserPin, issueSession }) {
   const codes = new Map();
   function current(token) {
     const data = sessions.get(token);
@@ -66,7 +66,7 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       logEvent(req, session, 'status-admin-sign-in');
       redirect(res, `${STATUS_ORIGIN}/auth/callback?code=${code}&state=${state}`); return true;
     }
-    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/password', '/api/auth/code', '/api/auth/network-leadership', '/api/auth/network-avatar', '/api/auth/account-status', '/api/auth/browser-issue', '/api/auth/browser-profile', '/api/auth/browser-avatar', '/api/auth/browser-offer', '/api/auth/browser-logout', '/api/auth/browser-unlock', '/api/auth/browser-lock', '/api/auth/browser-account', '/api/auth/browser-account-update', '/api/auth/browser-account-status', '/api/auth/browser-account-photo'].includes(pathname)) return false;
+    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/password', '/api/auth/code', '/api/auth/network-leadership', '/api/auth/network-avatar', '/api/auth/account-status', '/api/auth/accounts-session', '/api/auth/browser-issue', '/api/auth/browser-profile', '/api/auth/browser-avatar', '/api/auth/browser-offer', '/api/auth/browser-logout', '/api/auth/browser-unlock', '/api/auth/browser-lock', '/api/auth/browser-account', '/api/auth/browser-account-update', '/api/auth/browser-account-status', '/api/auth/browser-account-photo'].includes(pathname)) return false;
     if (req.method !== 'POST') { sendJson(res, 405, { error: 'Method not allowed.' }); return true; }
     if (!credentials(req)) { sendJson(res, 401, { error: 'Status integration not authenticated.' }); return true; }
     const body = await readJsonBody(req, pathname === '/api/auth/browser-account-photo' ? 2 * 1024 * 1024 : undefined);
@@ -147,6 +147,16 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       if (pathname === '/api/auth/code') {
         if (store.hasCode(active.person)) { sendJson(res, 403, { error: 'A sign-in PIN is already configured.' }); return true; }
         await handleSetCode(req, res, active, { code: body.code }); return true;
+      }
+      // HN Account (accounts.hngroup.org.uk): swaps the sign-in Auth just made for the account website's own
+      // staff session, which it keeps on its server and uses for the person's own account and, where their
+      // permissions allow, staff accounts. The Auth sign-in session ends here.
+      if (pathname === '/api/auth/accounts-session') {
+        const ip = typeof body.ip === 'string' ? body.ip.slice(0, 64) : '', ua = typeof body.userAgent === 'string' ? body.userAgent.slice(0, 300) : '';
+        const raw = issueSession(active.person.id, ip, ua);
+        sessions.delete(token);
+        logEvent({ socket: { remoteAddress: '127.0.0.1' }, headers: { 'x-real-ip': ip, 'user-agent': ua } }, null, 'signed-in', { actor: store.loginName(active.person), detail: 'HN Account', ua });
+        sendJson(res, 200, { token: raw, user: identity(active) }); return true;
       }
       if (pathname === '/api/auth/avatar') {
         const avatar = store.avatarFile(active.person);

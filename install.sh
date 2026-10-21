@@ -98,6 +98,7 @@ changed horizon-advertising/ && run 'Horizon Advertising' bash "$ROOT/horizon-ad
 changed links-site/ && run 'Links' bash "$ROOT/links-site/install.sh" "$EMAIL"
 changed branding-site/ && run 'Brand centre (branding.hngroup.org.uk)' bash "$ROOT/branding-site/install.sh" "$EMAIL"
 changed companies-site/ && run 'Company register (companies.hngroup.org.uk)' bash "$ROOT/companies-site/install.sh" "$EMAIL"
+changed accounts-site/ && run 'HN Account (accounts.hngroup.org.uk)' bash "$ROOT/accounts-site/install.sh" "$EMAIL"
 changed investors-site/ && run 'Investors (investors.hngroup.org.uk)' bash "$ROOT/investors-site/install.sh" "$EMAIL"
 changed vpn-site/ && run 'VPN (vpn.hngroup.org.uk + WireGuard)' bash "$ROOT/vpn-site/install.sh" "$EMAIL"
 changed downloads-site/ && run 'Downloads (downloads.hngroup.org.uk)' bash "$ROOT/downloads-site/install.sh" "$EMAIL"

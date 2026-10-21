@@ -121,6 +121,15 @@
     ]
   },
   {
+    "id": "accounts",
+    "name": "HN Account",
+    "process": "hn-account-web",
+    "port": 5300,
+    "hosts": [
+      "accounts.hngroup.org.uk"
+    ]
+  },
+  {
     "id": "media",
     "name": "Horizon Media Group",
     "process": "hn-media",

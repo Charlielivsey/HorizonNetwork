@@ -22,6 +22,7 @@ const SITES=[
  ['https://careers.hngroup.org.uk/',['careers','hn careers','hn group careers']],
  ['https://docs.hngroup.org.uk/',['docs','documentation','hn docs','hn group docs']],
  ['https://news.hngroup.org.uk/',['news','hn news','hn group news']],
+ ['https://accounts.hngroup.org.uk/',['hn account','my account','hn group account','account settings','accounts']],
  ['https://investors.hngroup.org.uk/',['investors','hn investors','hn group investors','investor relations','investor portal']],
  ['https://downloads.hngroup.org.uk/',['downloads','hn downloads','hn group downloads','hn browser','browser download']]
 ];

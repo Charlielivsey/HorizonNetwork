@@ -22,6 +22,7 @@ const APPS = {
     granted: 'Your staff portal account is ready.', restricted: '' },
   wiki: { name: 'HN Group Wiki', short: 'the wiki', allowed: () => true, granted: 'You can edit HN Group Wiki articles.', restricted: '' },
   branding: { name: 'HN Group brand centre', short: 'the brand centre', allowed: () => true, granted: 'You can use the HN Group brand centre.', restricted: '' },
+  accounts: { name: 'HN Account', short: 'HN Account', allowed: () => true, granted: 'You can manage your HN account.', restricted: '' },
   investors: { name: 'HN Group Investors', short: 'the investors website', allowed: user => !!user.ownerAccess || (Array.isArray(user.companies) ? user.companies : [user.company]).includes('HN Group'), granted: 'You can manage investors, valuations and investor news.', restricted: 'Only staff with a role at HN Group can sign in to the investors website.' },
   vpn: { name: 'HN Group VPN', short: 'the VPN', allowed: () => true, granted: 'You can use the HN Group VPN.', restricted: '' },
 };
