@@ -1,26 +1,27 @@
 /* Menus and windows, drawn on a transparent layer over the live page.
    popover: small menus that open under their toolbar button (account, appearance, menu, VPN, downloads, about)
    sheet:   floating windows centred over the page (settings, history, bookmarks, SSH)
-   lock:    the PIN card, centred */
+   lock:    the PIN box, a pop-over under the account button (opens by itself when HN Browser starts locked) */
 html,body{background:transparent!important}
 body{user-select:text}
 
 #overlay{position:fixed;inset:0;z-index:10}
-#overlay:not([data-kind=popover]){display:grid;place-items:center;padding:16px}
+#overlay[data-kind=sheet]{display:grid;place-items:center;padding:16px}
 #backdrop{position:absolute;inset:0}
-#overlay:not([data-kind=popover]) #backdrop{background:var(--scrim);animation:fade .26s var(--out) both}
-#overlay[data-kind=lock] #backdrop{background:color-mix(in srgb,var(--bg) 78%,transparent)}
+#overlay[data-kind=sheet] #backdrop{background:var(--scrim);animation:fade .26s var(--out) both}
 #overlay.closing #backdrop{animation:fade-out .17s var(--in) both}
 
 .panel:focus,.panel:focus-visible{outline:none}
 .panel{position:relative;display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:18px;overflow:hidden;
  box-shadow:0 1px 0 #ffffff0a inset,0 28px 70px -18px var(--shadow),0 10px 24px -14px var(--shadow)}
-.panel[data-kind=popover]{position:absolute;top:6px;right:var(--right,10px);width:var(--width,340px);max-width:calc(100vw - 16px);max-height:calc(100vh - 14px);transform-origin:var(--origin,90%) 0;animation:pop .26s var(--out) both}
+.panel[data-kind=popover],.panel[data-kind=lock]{position:absolute;top:6px;right:var(--right,10px);width:var(--width,340px);max-width:calc(100vw - 16px);max-height:calc(100vh - 14px);transform-origin:var(--origin,90%) 0;animation:pop .26s var(--out) both}
 .panel[data-kind=sheet]{width:min(1080px,100%);height:min(760px,100%);animation:sheet .32s var(--out) both}
-.panel[data-kind=lock]{width:min(400px,100%);animation:sheet .36s var(--out) both}
+.panel[data-kind=lock]{animation:lock-in .46s var(--spring) both;box-shadow:0 1px 0 #ffffff0a inset,0 0 0 1px var(--accent-soft),0 28px 70px -18px var(--shadow),0 10px 24px -14px var(--shadow)}
+.panel.waiting{visibility:hidden;animation:none}
 .panel.closing{animation:pop-out .16s var(--in) both;pointer-events:none}
-.panel[data-kind=sheet].closing,.panel[data-kind=lock].closing{animation:sheet-out .17s var(--in) both}
+.panel[data-kind=sheet].closing{animation:sheet-out .17s var(--in) both}
 @keyframes pop{from{opacity:0;transform:translateY(-8px) scale(.95)}}
+@keyframes lock-in{from{opacity:0;transform:translateY(-14px) scale(.9)}60%{opacity:1}}
 @keyframes pop-out{to{opacity:0;transform:translateY(-6px) scale(.97)}}
 @keyframes sheet{from{opacity:0;transform:translateY(16px) scale(.97)}}
 @keyframes sheet-out{to{opacity:0;transform:translateY(10px) scale(.98)}}
@@ -36,7 +37,7 @@ body{user-select:text}
 .panel[data-kind=lock] .panel-head{display:none}
 .panel-body{flex:1;min-height:0;overflow:auto;padding:4px 12px 14px;overscroll-behavior:contain}
 .panel[data-kind=sheet] .panel-body{padding:22px 28px 28px}
-.panel[data-kind=lock] .panel-body{padding:34px 30px 26px}
+.panel[data-kind=lock] .panel-body{padding:24px 22px 18px}
 .panel-content{animation:content .3s var(--out) both}
 @keyframes content{from{opacity:0;transform:translateY(5px)}}
 .panel h1{font-size:17px;font-weight:750;letter-spacing:-.02em;line-height:1.25}
@@ -93,10 +94,14 @@ body{user-select:text}
 #sign-in{margin-top:4px}
 #account-actions{margin-bottom:4px}
 
-/* The lock card: big avatar, six PIN boxes */
-.panel[data-kind=lock] .profile-hero{flex-direction:column;text-align:center;gap:12px;padding:0 0 18px}
-.panel[data-kind=lock] .profile-avatar{width:84px;height:84px;font-size:28px;box-shadow:0 0 0 4px var(--panel),0 0 0 7px var(--accent-soft);animation:avatar-in .5s var(--spring) both}
-.panel[data-kind=lock] .profile-text h1{font-size:22px}
+/* The PIN box: avatar, name and six PIN boxes, each arriving just after the last */
+.panel[data-kind=lock] .profile-hero{flex-direction:column;text-align:center;gap:10px;padding:0 0 14px}
+.panel[data-kind=lock] .profile-avatar{width:64px;height:64px;font-size:22px;box-shadow:0 0 0 3px var(--panel),0 0 0 6px var(--accent-soft);animation:avatar-in .5s .06s var(--spring) both}
+.panel[data-kind=lock] .profile-text{animation:rise .36s .12s var(--out) both}
+.panel[data-kind=lock] .profile-text h1{font-size:19px}
+.panel[data-kind=lock] #unlock-form{animation:rise .36s .18s var(--out) both}
+.panel[data-kind=lock] .account-pin-entry{height:50px}
+@keyframes rise{from{opacity:0;transform:translateY(8px)}}
 .panel[data-kind=lock] .note{justify-content:center;text-align:left}
 @keyframes avatar-in{from{transform:scale(.7);opacity:0}}
 #unlock-form{display:grid;gap:10px}

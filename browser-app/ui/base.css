@@ -79,5 +79,5 @@ progress::-webkit-progress-bar{background:var(--line);border-radius:5px}
 progress::-webkit-progress-value{background:linear-gradient(90deg,var(--action),var(--accent));border-radius:5px;transition:width .3s var(--out)}
 
 /* ---------- Reduce motion: HN Browser's setting and the computer's ---------- */
-body[data-motion=reduced] *,body[data-motion=reduced] *::before,body[data-motion=reduced] *::after{animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important}
-@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important}}
+body[data-motion=reduced] *,body[data-motion=reduced] *::before,body[data-motion=reduced] *::after{animation-duration:1ms!important;animation-delay:0s!important;animation-iteration-count:1!important;transition-duration:1ms!important}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:1ms!important;animation-delay:0s!important;animation-iteration-count:1!important;transition-duration:1ms!important}}
