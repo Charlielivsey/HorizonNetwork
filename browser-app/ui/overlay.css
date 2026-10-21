@@ -17,7 +17,6 @@ body{user-select:text}
 .panel[data-kind=popover],.panel[data-kind=lock]{position:absolute;top:6px;right:var(--right,10px);width:var(--width,340px);max-width:calc(100vw - 16px);max-height:calc(100vh - 14px);transform-origin:var(--origin,90%) 0;animation:pop .26s var(--out) both}
 .panel[data-kind=sheet]{width:min(1080px,100%);height:min(760px,100%);animation:sheet .32s var(--out) both}
 .panel[data-kind=lock]{animation:lock-in .46s var(--spring) both;box-shadow:0 1px 0 #ffffff0a inset,0 0 0 1px var(--accent-soft),0 28px 70px -18px var(--shadow),0 10px 24px -14px var(--shadow)}
-.panel.waiting{visibility:hidden;animation:none}
 .panel.closing{animation:pop-out .16s var(--in) both;pointer-events:none}
 .panel[data-kind=sheet].closing{animation:sheet-out .17s var(--in) both}
 @keyframes pop{from{opacity:0;transform:translateY(-8px) scale(.95)}}

@@ -61,7 +61,7 @@ $('address-form').onsubmit=async e=>{e.preventDefault();const chosen=suggestItem
 
 window.browser.focusAddress(()=>{$('address').focus();$('address').select();});
 window.browser.suggestChosen(()=>{suggestSeq++;editing=false;suggestItems=[];suggestIndex=-1;$('address').blur();});
-window.browser.subscribe(render);window.browser.state().then(state=>{if(!current)render(state);requestAnimationFrame(sendAnchors);});
+window.browser.subscribe(render);window.browser.state().then(state=>{if(!current)render(state);sendAnchors();requestAnimationFrame(sendAnchors);});
 // Some input methods and automation deliver shortcuts as DOM keys instead of to the browser first.
 document.addEventListener('keydown',event=>{const mod=current?.platform==='darwin'?event.metaKey:event.ctrlKey,key=event.key.toLowerCase();if(event.ctrlKey&&key==='tab'||mod&&!event.altKey&&(['t','w','r','f','d','p',',','j','h','y','+','=','-','0','[',']'].includes(key)||/^[1-9]$/.test(key)||event.shiftKey&&['o','v','s','l'].includes(key))){event.preventDefault();event.stopImmediatePropagation();action('key',{key:event.key,control:event.ctrlKey,meta:event.metaKey,shift:event.shiftKey,alt:event.altKey});}},true);
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&current?.panel&&document.activeElement!==$('address'))action('panel',null);});

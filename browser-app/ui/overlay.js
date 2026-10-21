@@ -24,7 +24,7 @@ themes.forEach(([id,label],i)=>{const b=document.createElement('button');b.class
 for(const list of document.querySelectorAll('.menu-list'))[...list.children].forEach((n,i)=>n.style.setProperty('--i',i));
 
 // Where a pop-over sits: right under the toolbar button that opens it.
-function place(panel,state){const node=$('panel');node.classList.toggle('waiting',panel==='account'&&!!state.locked&&!state.anchors?.account);if(!SHEETS.has(panel)){const a=state.anchors?.[panel]||state.anchors?.menu,width=WIDTHS[panel]||340,right=a?Math.max(8,innerWidth-a.right-2):10;node.style.setProperty('--width',width+'px');node.style.setProperty('--right',right+'px');node.style.setProperty('--origin',a?Math.max(10,width-(a.right-a.x)/2-2)+'px':'90%');}}
+function place(panel,state){const node=$('panel');if(!SHEETS.has(panel)){const a=state.anchors?.[panel]||state.anchors?.menu,width=WIDTHS[panel]||340,right=a?Math.max(8,innerWidth-a.right-2):(panel==='account'?54:10);node.style.setProperty('--width',width+'px');node.style.setProperty('--right',right+'px');node.style.setProperty('--origin',a?Math.max(10,width-(a.right-a.x)/2-2)+'px':'90%');}}
 
 function renderUpdate(state){const u=state.update||{status:'idle'},busy=['checking','downloading'].includes(u.status),available=['available','ready','downloading'].includes(u.status);setText($('about-version'),'Version '+state.version+' · Build '+state.build);setText($('menu-version'),'Version '+state.version);$('menu-update-label').hidden=!available;
  $('check-update').hidden=available;$('check-update').disabled=busy;$('check-update').textContent=u.status==='checking'?'Checking…':u.status==='error'?'Try again':'Check for updates';$('download-update').hidden=u.status!=='available';$('install-update').hidden=u.status!=='ready';$('install-update').textContent=u.inPlace?'Restart to update':'Open installer & quit';$('download-update').textContent=u.inPlace?'Download and update':'Download update';$('update-progress').hidden=u.status!=='downloading';$('update-progress').value=u.progress||0;
@@ -52,7 +52,7 @@ function render(state){const previous=current;if(state.avatarSame)state.avatar=p
  if(panel==='settings')renderSettings(state);if(panel==='bookmarks')libraryUI.bookmarks();if(panel==='history'&&(lastPanel!=='history'||state.historyVersion!==libraryUI.version))libraryUI.history();if(panel==='settings'&&settingsSection==='profile'&&(lastPanel!=='settings'||!previous?.user))profileUI.load();
  renderFind(state);
  if(state.platform!=='darwin'){setText($('new-tab-shortcut'),'Ctrl T');setText($('find-shortcut'),'Ctrl F');setText($('print-shortcut'),'Ctrl P');setText($('history-shortcut'),'Ctrl H');setText($('lock-shortcut'),'Ctrl ⇧ L');setText($('settings-shortcut'),'Ctrl ,');}
- if(state.locked&&panel==='account'&&(!wasLocked||panel!==lastPanel))requestAnimationFrame(()=>$('account-pin').focus());wasLocked=state.locked;
+ if(state.locked&&panel==='account'&&(!wasLocked||panel!==lastPanel)){$('account-pin').focus();requestAnimationFrame(()=>$('account-pin').focus());}wasLocked=state.locked;
  if(panel!==lastPanel&&!closing){if(panel)requestAnimationFrame(()=>{if(!(state.locked&&panel==='account'))$('panel').focus();});lastPanel=panel;lastKind=kind;}
  if(!panel&&!state.panelClosing){lastPanel=null;lastKind=null;}
 }
