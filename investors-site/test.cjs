@@ -16,7 +16,7 @@ test('HN Group Investors: staff access, investors, holdings, values and news', a
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-investors-test-'));
   const secret = 'b'.repeat(64);
   fs.writeFileSync(path.join(dir, 'secret'), secret);
-  const [sitePort, authPort, regPort] = [await freePort(), await freePort(), await freePort()];
+  const [sitePort, authPort, regPort, newsPort] = [await freePort(), await freePort(), await freePort(), await freePort()];
   const SITE = 'http://127.0.0.1:' + sitePort, AUTH = 'http://127.0.0.1:' + authPort;
 
   let nextUser = null;
@@ -46,9 +46,16 @@ test('HN Group Investors: staff access, investors, holdings, values and news', a
     co('horizon-media-group', 'Horizon Media Group Limited', 'Horizon Media Group', [{ name: 'HN Group Investments Limited', kind: 'Parent company', share: '', control: ['Ownership of shares – 75% or more'] }]),
   ] };
   const reg = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(feed)); });
-  await Promise.all([new Promise((r) => auth.listen(authPort, '127.0.0.1', r)), new Promise((r) => reg.listen(regPort, '127.0.0.1', r))]);
+  // A stand-in for HN Group News: its private investor feed needs the service secret.
+  const newsItems = [{ id: 'c'.repeat(24), title: 'Half-year update', summary: 'Results so far.', body: 'First paragraph.\n\nSecond <b>paragraph</b>.', category: 'Results', publishedAt: '2026-10-20T09:00:00.000Z', updatedAt: '2026-10-20T09:00:00.000Z', author: 'Ada' }];
+  const newsServer = http.createServer((req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    if (req.url !== '/api/private/investor-news' || req.headers.authorization !== 'Bearer ' + secret) { res.writeHead(404); return res.end('{}'); }
+    res.end(JSON.stringify({ posts: newsItems }));
+  });
+  await Promise.all([new Promise((r) => auth.listen(authPort, '127.0.0.1', r)), new Promise((r) => reg.listen(regPort, '127.0.0.1', r)), new Promise((r) => newsServer.listen(newsPort, '127.0.0.1', r))]);
 
-  const env = { ...process.env, PORT: String(sitePort), INVESTORS_DATA_DIR: path.join(dir, 'data'), INVESTORS_ORIGIN: SITE, AUTH_ORIGIN: AUTH, AUTH_BACKEND: AUTH, STATUS_SSO_SECRET_FILE: path.join(dir, 'secret'), COMPANIES_FEED_URL: 'http://127.0.0.1:' + regPort + '/feed', COMPANIES_FEED_INTERVAL: '100' };
+  const env = { ...process.env, PORT: String(sitePort), INVESTORS_DATA_DIR: path.join(dir, 'data'), INVESTORS_ORIGIN: SITE, AUTH_ORIGIN: AUTH, AUTH_BACKEND: AUTH, STATUS_SSO_SECRET_FILE: path.join(dir, 'secret'), NEWS_FEED_URL: 'http://127.0.0.1:' + newsPort + '/api/private/investor-news', NEWS_FEED_INTERVAL: '150', NEWS_ORIGIN: 'https://news.example', COMPANIES_FEED_URL: 'http://127.0.0.1:' + regPort + '/feed', COMPANIES_FEED_INTERVAL: '100' };
   const child = spawn(process.execPath, [path.join(__dirname, 'server.js')], { env, stdio: ['ignore', 'ignore', 'inherit'] });
   try {
     for (let i = 0; i < 100; i++) { try { if ((await fetch(SITE + '/healthz')).ok) break; } catch {} await new Promise((r) => setTimeout(r, 50)); }
@@ -110,9 +117,11 @@ test('HN Group Investors: staff access, investors, holdings, values and news', a
     assert.equal((await staff.form('/staff/investors/new', { csrf: token, name: 'Again', email: 'charlie@example.com' })).status, 400, 'duplicate email');
     const investorId = /\/staff\/investors\/([a-f0-9]{24})\/preview/.exec(page.text)[1];
 
-    // News: drafts stay with staff; published news reaches investors.
-    await staff.form('/staff/news/new', { csrf: token, title: 'Draft only', body: 'Not yet.', status: 'draft' });
-    await staff.form('/staff/news/new', { csrf: token, title: 'Half-year update', body: 'First paragraph.\n\nSecond <b>paragraph</b>.', company: 'hn-group', status: 'published' });
+    // News: written on HN Group News and sent to the investors site; only published items arrive.
+    const write = await fetch(SITE + '/staff/news/new', { headers: { Cookie: Object.entries(staff.jar).map(([k, v]) => k + '=' + v).join('; ') }, redirect: 'manual' });
+    assert.equal(write.headers.get('location'), 'https://news.example/admin', 'new investor news is written on HN Group News');
+    const staffNewsPage = await staff.go('/staff/news');
+    assert.ok(staffNewsPage.text.includes('Write news on HN Group News') && staffNewsPage.text.includes('Half-year update'));
 
     // The investor accepts the invitation and sees their holdings and what they're worth.
     const inv = browser();
@@ -160,7 +169,7 @@ test('HN Group Investors: staff access, investors, holdings, values and news', a
   } finally {
     child.kill();
     await new Promise((r) => child.once('exit', r));
-    auth.close(); reg.close();
+    auth.close(); reg.close(); newsServer.close();
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });

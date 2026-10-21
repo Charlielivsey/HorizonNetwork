@@ -168,10 +168,14 @@ function removeValuation(slug, vid, actor) {
 const valuations = () => db.valuations;
 
 // ---------- News ----------
-const news = (all) => db.news.filter((n) => all || n.status === 'published').sort((a, b) => (b.publishedAt || b.updatedAt).localeCompare(a.publishedAt || a.updatedAt));
-const post = (nid) => db.news.find((n) => n.id === nid) || null;
+// New investor news comes from HN Group News (lib/newsroom.js, set with useFeed). Items written here
+// before that are kept and can still be edited or deleted.
+let feed = () => [];
+function useFeed(fn) { feed = fn; }
+const news = (all) => db.news.filter((n) => all || n.status === 'published').concat(feed()).sort((a, b) => (b.publishedAt || b.updatedAt).localeCompare(a.publishedAt || a.updatedAt));
+const post = (nid) => db.news.find((n) => n.id === nid) || feed().find((n) => n.id === nid) || null;
 function savePost(nid, input, actor) {
-  const n = nid ? post(nid) : { id: id(), createdAt: now(), status: 'draft', publishedAt: null };
+  const n = nid ? db.news.find((x) => x.id === nid) : { id: id(), createdAt: now(), status: 'draft', publishedAt: null };
   if (!n) throw bad('News item not found.', 404);
   n.title = text(input.title, 160, 'a title', true);
   n.body = String(input.body || '').replace(/\r/g, '').trim();
@@ -185,8 +189,8 @@ function savePost(nid, input, actor) {
   audit(actor, nid ? 'news.update' : 'news.create', (publish ? '[published] ' : '[draft] ') + n.title); save();
   return n;
 }
-function removePost(nid, actor) { const n = post(nid); if (!n) throw bad('News item not found.', 404); db.news = db.news.filter((x) => x.id !== nid); audit(actor, 'news.delete', n.title); save(); }
+function removePost(nid, actor) { const n = db.news.find((x) => x.id === nid); if (!n) throw bad('News item not found.', 404); db.news = db.news.filter((x) => x.id !== nid); audit(actor, 'news.delete', n.title); save(); }
 
 const activity = (limit) => db.audit.slice(0, limit || 200);
 
-module.exports = { init, investors, investor, view, createInvestor, updateInvestor, setEnabled, removeInvestor, reinvite, inviteFor, acceptInvite, signIn, session, signOut, changePassword, markNewsSeen, addValuation, removeValuation, valuations, news, post, savePost, removePost, activity, audit, hashPassword };
+module.exports = { init, investors, investor, view, createInvestor, updateInvestor, setEnabled, removeInvestor, reinvite, inviteFor, acceptInvite, signIn, session, signOut, changePassword, markNewsSeen, addValuation, removeValuation, valuations, news, post, useFeed, savePost, removePost, activity, audit, hashPassword };

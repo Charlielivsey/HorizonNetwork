@@ -328,3 +328,5 @@ dialog.apply::backdrop { background: rgba(14, 16, 32, 0.6); backdrop-filter: blu
 @media(min-width:851px){.leadership-grid.is-compact{gap:18px}.is-compact .leader-body{padding-left:20px;padding-right:20px}.is-compact .leader-brand{margin-left:20px;margin-right:20px;max-width:calc(100% - 40px)}.is-compact .leader h3{font-size:1.35rem}}
 /* Keep card footers aligned when profiles contain different amounts of information. */
 .leader{display:flex;flex-direction:column}.leader-banner{flex-shrink:0}.leader-body{flex:1}
+.news-list{display:grid;gap:1.2rem;margin-top:2rem;max-width:860px}.news-item h2{font-size:clamp(1.3rem,2.4vw,1.7rem);margin:.3rem 0 .6rem}.news-item .lead{margin:0 0 .8rem}.news-topic{color:var(--accent);font-weight:700}.news-item summary{cursor:pointer;color:var(--accent);font-weight:700}.news-body{white-space:pre-line;margin-top:.8rem;color:var(--text)}.news-more{margin-top:1.6rem}
+@media(prefers-reduced-motion:no-preference){.news-item{animation:news-in .4s both cubic-bezier(.2,.8,.2,1)}@keyframes news-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}}

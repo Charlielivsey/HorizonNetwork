@@ -13,7 +13,7 @@ Investor relations for HN Group. PM2 `hn-investors`, loopback port 5200, data in
 - **Value** = the holding's share × the company's latest valuation. The register has no valuations, so staff record them on the site (Companies → Record a valuation, with a date and an optional note investors can see). A holding with no exact share on the register, or a company with no valuation, isn't given a value. The overview shows the total, the change since the previous valuation and a chart of past valuations.
 - **Held through your companies**: companies owned by their holdings in turn, with the effective share. Their value is already part of the owning company's, so it isn't added again.
 - **Share classes and voting power** come from the register too: each holding's Class A/B/C split, the investor's share of the votes (Class A one vote, Class B half, Class C two, or 51% for the holder of more than 10% of the Class C shares) and whether it gives voting control. The overview has a "Your voting power" section with an explanation of the classes.
-- **News**: staff write investor news (plain text, optionally about one company) as drafts and publish it; investors see published items with a "New" badge until they open News.
+- **News**: investor news is written on [HN Group News](https://news.hngroup.org.uk/admin) by ticking **HN Group Investors** (tick only that to keep it private to investors). The site reads it every 20 seconds from News's private feed with the service secret and keeps a copy in `newsroom.json`. News written here before that is kept and can still be edited. Investors see published items with a "New" badge until they open News.
 
 ## Staff area (`/staff`)
 

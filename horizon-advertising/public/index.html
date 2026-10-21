@@ -163,6 +163,15 @@
             margin-top: 4rem;
         }
 
+        .news { max-width: 1000px; margin: 2rem auto 0; padding: 0 2rem; }
+        .news h2 { font-size: 1.6rem; margin-bottom: 0.5rem; }
+        .news .services { padding: 1rem 0; }
+        .news .meta { font-size: 0.8rem; color: var(--accent); margin-bottom: 0.5rem; }
+        .news details { margin-top: 0.75rem; }
+        .news summary { cursor: pointer; color: var(--primary-light); font-weight: 600; font-size: 0.9rem; }
+        .news .body { white-space: pre-line; margin-top: 0.75rem; }
+        @media (prefers-reduced-motion: reduce) { .status-dot { animation: none; } .card, .btn, .nav-links a { transition: none; } }
+
         @media (max-width: 600px) {
             .hero h1 { font-size: 2rem; }
             .hero p { font-size: 1rem; }
@@ -176,6 +185,7 @@
         <ul class="nav-links">
             <li><a href="#services">Services</a></li>
             <li><a href="#about">About</a></li>
+            <li><a href="#news">News</a></li>
             <li><a href="#contact">Contact</a></li>
             <li><a href="/">Horizon Network</a></li>
         </ul>
@@ -206,8 +216,14 @@
         </div>
     </section>
 
+    <section id="news" class="news" hidden>
+        <h2>Latest news</h2>
+        <div id="news-list" class="services"></div>
+    </section>
+
     <footer>
         &copy; 2026 Horizon Advertising — A Horizon Network Company
     </footer>
+    <script src="/news.js" defer></script>
 </body>
 </html>

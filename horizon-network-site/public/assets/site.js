@@ -259,3 +259,26 @@
         target.setAttribute('aria-busy', 'false');
     }
 })();
+
+// News sent to Horizon Network from HN Group News (news.hngroup.org.uk).
+(async function () {
+    const target = document.getElementById('news-list');
+    if (!target) return;
+    const esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+    const day = function (iso) { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }); };
+    try {
+        const response = await fetch('/api/news');
+        if (!response.ok) throw new Error();
+        const posts = (await response.json()).posts || [];
+        target.innerHTML = posts.length ? posts.map(function (p) {
+            return '<article class="news-item card" id="article-' + esc(p.id) + '"><p class="news-meta small muted"><span class="news-topic">' + esc(p.category) + '</span> · ' + esc(day(p.publishedAt || p.updatedAt)) + '</p>' +
+                '<h2>' + esc(p.title) + '</h2><p class="lead">' + esc(p.summary) + '</p>' +
+                '<details><summary>Read more</summary><div class="news-body">' + esc(p.body) + '</div></details></article>';
+        }).join('') : '<p class="muted">There’s no news yet. New announcements will appear here when they’re published.</p>';
+        const open = location.hash && document.getElementById(location.hash.slice(1));
+        if (open) { const d = open.querySelector('details'); if (d) d.open = true; open.scrollIntoView(); }
+    } catch (e) {
+        target.innerHTML = '<p class="muted">News couldn’t be loaded just now. Please try again shortly.</p>';
+    }
+    target.setAttribute('aria-busy', 'false');
+})();

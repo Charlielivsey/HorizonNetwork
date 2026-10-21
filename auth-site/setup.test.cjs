@@ -38,13 +38,16 @@ test('direct Auth requires temporary-password replacement and missing PIN setup 
  const resetSigned=await post('/api/login/code',{code:'482957'},cookie(resetLogin,'__Host-hn_auth_flow'));assert.equal(resetSigned.status,200);const resetUser=(await resetSigned.json()).user;assert.equal(resetUser.passwordChangeRequired,true);assert.equal(resetUser.codeSetupRequired,undefined);
  const resetChanged=await post('/api/password',{newPassword:'Amber-garden-8539!'},cookie(resetSigned,'__Host-hn_auth_session'));assert.equal(resetChanged.status,200);const resetDone=(await resetChanged.json()).user;assert.equal(resetDone.passwordChangeRequired,undefined);assert.equal(resetDone.codeSetupRequired,undefined);
  const ordinarySession=cookie(resetSigned,'__Host-hn_auth_session');
- for(const client_id of ['media','holding','development','support','clients','careers','docs','news']){
+ for(const client_id of ['media','holding','development','support','clients','careers','docs']){
    const result=await post('/api/continue',{client_id,state:'b'.repeat(64)},ordinarySession);
    const target=new URL((await result.json()).redirect);
    assert.equal(target.origin,`https://${client_id}.hngroup.org.uk`);
    assert.equal(target.searchParams.get('error'),'access_denied');
    assert.equal(target.searchParams.has('code'),false);
  }
+ // HN Group News admits anyone with a role at HN Group, not only owners and Super Admins.
+ const newsGrant=new URL((await(await post('/api/continue',{client_id:'news',state:'b'.repeat(64)},ordinarySession)).json()).redirect);
+ assert.equal(newsGrant.origin,'https://news.hngroup.org.uk');assert.equal(newsGrant.searchParams.has('code'),true);
 
  }finally{await new Promise(r=>server.close(r));if(child.exitCode===null){child.kill();await new Promise(r=>child.once('exit',r));}fs.rmSync(dir,{recursive:true,force:true});}
 });

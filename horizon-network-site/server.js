@@ -4,6 +4,9 @@ const { createAuth, STATUS_ORIGIN: ORIGIN } = require('./auth');
 const auth = createAuth();
 const BACKEND=process.env.STAFF_PORTAL_BACKEND || 'http://127.0.0.1:3200';
 const SECRET=process.env.STATUS_SSO_SECRET_FILE || '/var/lib/hn-status-sso/secret';
+// News sent to Horizon Network from HN Group News, read over loopback and cached briefly.
+let newsCache={at:0,posts:[]};
+async function siteNews(){if(Date.now()-newsCache.at<30000)return newsCache.posts;newsCache.at=Date.now();try{const r=await fetch((process.env.NEWS_BACKEND||'http://127.0.0.1:4600')+'/api/posts?site=network',{signal:AbortSignal.timeout(4000),redirect:'error'});if(r.ok){const v=await r.json();if(Array.isArray(v.posts))newsCache.posts=v.posts.slice(0,30);}}catch{}return newsCache.posts;}
 async function leadership(route,res,id){
  const secret=fs.readFileSync(SECRET,'utf8').trim();if(!/^[a-f0-9]{64}$/.test(secret))throw Error('Configuration unavailable');
  const result=await fetch(BACKEND+'/api/auth/network-'+route,{method:'POST',headers:{Authorization:'Bearer '+secret,'Content-Type':'application/json'},body:JSON.stringify(id?{id}:{}),signal:AbortSignal.timeout(6000),redirect:'error'});
@@ -78,6 +81,7 @@ const server=http.createServer(async(req,res)=>{
     if(route==='/api/leadership'&&req.method==='GET')return await leadership('leadership',res);
     const match=/^\/api\/leadership\/avatar\/([a-f0-9]{16})$/.exec(route);
     if(match&&req.method==='GET')return await leadership('avatar',res,match[1]);
+    if(route==='/api/news'&&req.method==='GET')return json(res,200,{posts:await siteNews()});
     if(route==='/api/public/enquiry'&&req.method==='POST')return publicApi(req,res);
     if(route.startsWith('/api/'))return json(res,404,{error:'Not found.'});
     if(!['GET','HEAD'].includes(req.method))return json(res,405,{error:'Method not allowed.'});

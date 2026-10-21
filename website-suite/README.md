@@ -33,7 +33,9 @@ Use `/admin` or the Staff admin button on each site. Sign-in goes through HN Gro
 
 Support admins can publish help articles, read tickets, reply and change their status. Customers receive a private 64-character reference which they use to read and reply. **Anyone holding the reference can access that ticket.** Email notifications are not sent; the interface says so. Ticket references are stored as hashes, never included in staff lists, and checked via POST rather than URL queries.
 
-Docs and News admins can create, edit, publish/unpublish and delete plain-text articles. Drafts stay private. Seed help/docs articles are installed only once; edits or deleted articles are never overwritten or restored by deployment. News starts without fabricated announcements. No articles are added to the separate company Wiki.
+Docs and News admins can create, edit, publish/unpublish and delete plain-text articles.
+
+**HN Group News is the newsroom for every site.** Anyone with a role at HN Group (plus owner-level accounts and Super Admin members) can manage it. Each article lists the websites it appears on: HN Group News itself, Horizon Network, Horizon Media Group, Horizon Advertising, Horizon Development, HN Group Management and HN Group Investors. Sites fetch `GET /api/posts?site=<id>` from the News service over loopback (`NEWS_BACKEND`, default `http://127.0.0.1:4600`): Media, Management and Development show a Latest news section on their page, Horizon Network has `/news` and Horizon Advertising a news section. HN Group Investors news is private: only `/api/private/investor-news` returns it, with the service secret and never through nginx. Drafts appear nowhere. Drafts stay private. Seed help/docs articles are installed only once; edits or deleted articles are never overwritten or restored by deployment. News starts without fabricated announcements. No articles are added to the separate company Wiki.
 
 ## Client portal
 

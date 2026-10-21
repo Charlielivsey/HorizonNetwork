@@ -10,6 +10,8 @@ const auth = require('./lib/auth');
 const store = require('./lib/store');
 const register = require('./lib/register');
 const holdings = require('./lib/holdings');
+const newsroom = require('./lib/newsroom');
+const NEWS_ADMIN = (process.env.NEWS_ORIGIN || 'https://news.hngroup.org.uk') + '/admin';
 
 const PUBLIC = process.env.INVESTORS_PUBLIC_DIR || path.join(__dirname, 'public');
 const DATA_DIR = process.env.INVESTORS_DATA_DIR || '/var/lib/hn-investors';
@@ -18,6 +20,8 @@ const INVESTOR_COOKIE = (auth.SECURE ? '__Host-' : '') + 'hn_investor';
 const MIME = { '.css': 'text/css; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8' };
 store.init(DATA_DIR);
 register.init(DATA_DIR);
+newsroom.init(DATA_DIR);
+store.useFeed(newsroom.all);
 
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const money = (n) => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: n >= 1000 ? 0 : 2 }).format(n);
@@ -206,7 +210,7 @@ function newsPage(x, ctx) {
 }
 function articlePage(n, ctx, back) {
   const c = n.company && register.all().find((y) => y.slug === n.company);
-  const body = '<article class="article"><p class="eyebrow"><a href="' + back + '">← News</a></p><h1>' + esc(n.title) + '</h1><p class="muted">' + esc(longDate(n.publishedAt || n.updatedAt)) + (c ? ' · ' + esc(register.displayName(c)) : '') + (n.status === 'draft' ? ' · <span class="tag">Draft</span>' : '') + '</p><div class="prose">' + paragraphs(n.body) + '</div></article>';
+  const body = '<article class="article"><p class="eyebrow"><a href="' + back + '">← News</a></p><h1>' + esc(n.title) + '</h1><p class="muted">' + esc(longDate(n.publishedAt || n.updatedAt)) + (c ? ' · ' + esc(register.displayName(c)) : '') + (n.topic && n.topic !== 'General' ? ' · ' + esc(n.topic) : '') + (n.status === 'draft' ? ' · <span class="tag">Draft</span>' : '') + '</p><div class="prose">' + paragraphs(n.body) + '</div></article>';
   return layout({ ...ctx, title: n.title, active: back === '/news' ? '/news' : '/staff/news', body, narrow: true });
 }
 function accountPage(x, ctx, error) {
@@ -233,7 +237,7 @@ function staffDashboard(user, url) {
     '<div class="stat"><span class="stat-label">Companies valued</span><span class="stat-value">' + valued + ' of ' + companies.length + '</span></div>' +
     '<div class="stat"><span class="stat-label">Published news</span><span class="stat-value">' + store.news().length + '</span></div></section>' +
     '<section class="block"><div class="grid2"><div class="card"><h2>Company Register</h2><p>' + (st.companies ? st.companies + ' companies received' + (st.at ? ', last changed ' + esc(dateTime(st.at)) : '') + '.' : 'Nothing received from the register yet.') + ' ' + (st.healthy ? '<span class="pill ok">Connected</span>' : '<span class="pill warn">Not connected</span>') + '</p><p class="muted small">Holdings follow the register’s persons with significant control automatically. Change who owns what on the register; record valuations here.</p><p><a class="button secondary" href="/staff/companies">Companies and valuations</a></p></div>' +
-    '<div class="card"><h2>Quick actions</h2><p><a class="button" href="/staff/investors/new">Add an investor</a></p><p><a class="button secondary" href="/staff/news/new">Write investor news</a></p></div></div></section>';
+    '<div class="card"><h2>Quick actions</h2><p><a class="button" href="/staff/investors/new">Add an investor</a></p><p><a class="button secondary" href="' + esc(NEWS_ADMIN) + '">Write investor news</a></p></div></div></section>';
   return layout({ staff: user, title: 'Dashboard', active: '/staff', body, flash: flashOf(url) });
 }
 function holderChoices(selected) {
@@ -294,7 +298,7 @@ function staffCompanies(user, url, error) {
   return layout({ staff: user, title: 'Companies', active: '/staff/companies', body, flash: flashOf(url) });
 }
 function staffNews(user, url) {
-  const body = '<section class="hero small"><p class="eyebrow">HN Group staff</p><h1>Investor news</h1><p class="lede">Published news is shown to every signed-in investor. Drafts are only visible to staff.</p></section><p><a class="button" href="/staff/news/new">Write news</a></p>' + newsList(store.news(true), null, '/staff/news/');
+  const body = '<section class="hero small"><p class="eyebrow">HN Group staff</p><h1>Investor news</h1><p class="lede">Investor news is written on HN Group News, where you can write news for every HN Group website. Tick <strong>HN Group Investors</strong> to show it here; tick only that to keep it private to investors.</p></section><p><a class="button" href="' + esc(NEWS_ADMIN) + '">Write news on HN Group News</a></p>' + newsList(store.news(true), null, '/staff/news/');
   return layout({ staff: user, title: 'News', active: '/staff/news', body, flash: flashOf(url) });
 }
 function newsForm(user, n, error, values) {
@@ -349,7 +353,7 @@ async function staffRoutes(req, res, url, route, user) {
   if (get && route === '/staff/investors') return send(res, 200, staffInvestors(user, url));
   if (get && route === '/staff/companies') return send(res, 200, staffCompanies(user, url));
   if (get && route === '/staff/news') return send(res, 200, staffNews(user, url));
-  if (get && route === '/staff/news/new') return send(res, 200, newsForm(user, null));
+  if (route === '/staff/news/new') return redirect(res, NEWS_ADMIN);
   if (get && route === '/staff/activity') return send(res, 200, staffActivity(user));
   if (get && route === '/staff/investors/new') return send(res, 200, layout({ staff: user, title: 'Add an investor', active: '/staff/investors', narrow: true, body: '<p class="eyebrow"><a href="/staff/investors">← Investors</a></p><h1>Add an investor</h1>' + investorForm(user, null) }));
   let m = /^\/staff\/investors\/([a-f0-9]{24})(?:\/(preview))?$/.exec(route);
@@ -358,9 +362,9 @@ async function staffRoutes(req, res, url, route, user) {
     return send(res, 200, m[2] ? investorOverview(x, { staff: user }, true) : staffInvestor(user, x, { flash: flashOf(url) }));
   }
   m = /^\/staff\/news\/([a-f0-9]{24})$/.exec(route);
-  if (get && m) { const n = store.post(m[1]); if (!n) return message(res, 404, 'Not found', 'That news item doesn’t exist.', null, ['News', '/staff/news'], { staff: user }); return send(res, 200, articlePage(n, { staff: user }, '/staff/news').replace('</article>', '<p><a class="button secondary" href="/staff/news/' + esc(n.id) + '/edit">Edit</a></p></article>')); }
+  if (get && m) { const n = store.post(m[1]); if (!n) return message(res, 404, 'Not found', 'That news item doesn’t exist.', null, ['News', '/staff/news'], { staff: user }); return send(res, 200, articlePage(n, { staff: user }, '/staff/news').replace('</article>', n.source === 'news' ? '<p><a class="button secondary" href="' + esc(NEWS_ADMIN) + '">Edit on HN Group News</a></p></article>' : '<p><a class="button secondary" href="/staff/news/' + esc(n.id) + '/edit">Edit</a></p></article>')); }
   m = /^\/staff\/news\/([a-f0-9]{24})\/edit$/.exec(route);
-  if (get && m) { const n = store.post(m[1]); if (!n) return message(res, 404, 'Not found', 'That news item doesn’t exist.', null, ['News', '/staff/news'], { staff: user }); return send(res, 200, newsForm(user, n)); }
+  if (get && m) { const n = store.post(m[1]); if (!n) return message(res, 404, 'Not found', 'That news item doesn’t exist.', null, ['News', '/staff/news'], { staff: user }); if (n.source === 'news') return redirect(res, NEWS_ADMIN); return send(res, 200, newsForm(user, n)); }
   if (req.method !== 'POST') return message(res, 404, 'Not found', 'That page isn’t here.', null, ['Dashboard', '/staff'], { staff: user });
 
   if (!sameSite(req)) return message(res, 403, 'Not allowed', 'That form came from another website.', null, null, { staff: user });
@@ -390,7 +394,7 @@ async function staffRoutes(req, res, url, route, user) {
       try { store.addValuation(m[1], { amount: form.get('amount'), asOf: form.get('asOf'), note: form.get('note') }, who); return redirect(res, '/staff/companies?done=valuation#' + m[1]); }
       catch (e) { if (e.status === 400) return send(res, 400, staffCompanies(user, url, register.displayName(register.bySlug(m[1])) + ': ' + e.message)); throw e; }
     }
-    m = /^\/staff\/news\/(?:new|([a-f0-9]{24})\/(edit|delete))$/.exec(route);
+    m = /^\/staff\/news\/([a-f0-9]{24})\/(edit|delete)$/.exec(route);
     if (m) {
       if (m[2] === 'delete') { store.removePost(m[1], who); return redirect(res, '/staff/news?done=deleted'); }
       const n = m[1] ? store.post(m[1]) : null;
@@ -483,5 +487,6 @@ if (require.main === module) {
   const PORT = Number(process.env.PORT) || 5200;
   server.listen(PORT, process.env.HOST || '127.0.0.1', () => console.log('HN Group Investors on ' + PORT));
   register.start(Number(process.env.COMPANIES_FEED_INTERVAL || 20000));
+  newsroom.start(Number(process.env.NEWS_FEED_INTERVAL || 20000));
 }
 module.exports = { server };
