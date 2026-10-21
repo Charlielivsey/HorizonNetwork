@@ -10,22 +10,8 @@ concurrency:
   group: hn-browser-${{ github.ref }}
   cancel-in-progress: false
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: {node-version: '24', cache: npm, cache-dependency-path: browser-app/package-lock.json}
-      - run: npm ci
-        working-directory: browser-app
-      - run: npm test
-        working-directory: browser-app
-      # One file at a time: these tests start real servers on ports chosen at run time.
-      - run: node --test --test-concurrency=1 staff-portal/resume-browser.test.cjs auth-site/native.test.cjs auth-site/browser-session.test.cjs auth-site/test.cjs auth-site/setup.test.cjs downloads-site/test.cjs vpn-site/test.cjs
-      - run: xvfb-run -a npm run test:desktop
-        working-directory: browser-app
+  # Tests run before pushing (npm test and npm run test:desktop in browser-app); GitHub only builds and publishes.
   build:
-    needs: test
     strategy:
       fail-fast: false
       matrix:
