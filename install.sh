@@ -102,6 +102,7 @@ changed accounts-site/ && run 'HN Account (accounts.hngroup.org.uk)' bash "$ROOT
 changed investors-site/ && run 'Investors (investors.hngroup.org.uk)' bash "$ROOT/investors-site/install.sh" "$EMAIL"
 changed vpn-site/ && run 'VPN (vpn.hngroup.org.uk + WireGuard)' bash "$ROOT/vpn-site/install.sh" "$EMAIL"
 changed downloads-site/ && run 'Downloads (downloads.hngroup.org.uk)' bash "$ROOT/downloads-site/install.sh" "$EMAIL"
+changed vps-welcome/ && run 'VPS welcome and horizon shortcuts' bash "$ROOT/vps-welcome/install.sh"
 # Central control goes last so it adds maintenance gates for every site installed above.
 changed admin-site/ && run 'Website control (admin.hngroup.org.uk)' bash "$ROOT/admin-site/install.sh" "$EMAIL"
 [ "$RAN" = 0 ] && echo "The changes don't affect any website (for example documentation only). No sites restarted."
