@@ -1,6 +1,6 @@
 {
   "name": "hn-secure-network-windows",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "HN Secure Network for Windows: the HN Group VPN and SSH sessions to the HN Group server",
   "author": "HN Group",
@@ -11,10 +11,13 @@
     "test": "node --test test/*.test.cjs",
     "test:desktop": "node test/desktop.cjs",
     "icons": "node scripts/icons.cjs",
-    "build:win": "electron-builder --win --x64 --publish never"
+    "build:win": "electron-builder --win --x64 --publish never",
+    "postinstall": "node scripts/vendor.cjs"
   },
   "devDependencies": {
     "@resvg/resvg-js": "2.6.2",
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/xterm": "6.0.0",
     "electron": "44.9.0",
     "electron-builder": "26.15.3",
     "playwright": "1.61.1",
@@ -58,5 +61,8 @@
   },
   "engines": {
     "node": ">=22.12.0"
+  },
+  "dependencies": {
+    "ssh2": "1.17.0"
   }
 }

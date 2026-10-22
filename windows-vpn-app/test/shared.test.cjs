@@ -1,9 +1,9 @@
 'use strict';
-// HN Secure Network for Windows shares its VPN controller and secure storage with HN Browser: the
+// HN Secure Network for Windows shares its VPN controller, secure storage and SSH module with HN Browser: the
 // copies must stay identical, so a fix in one reaches both.
 const{test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
-test('the VPN controller and secure storage are identical to HN Browser’s',()=>{
- for(const file of['vpn.cjs','vault.cjs'])assert.equal(fs.readFileSync(path.join(__dirname,'..','src',file),'utf8'),fs.readFileSync(path.join(__dirname,'..','..','browser-app','src',file),'utf8'),file+' differs from browser-app/src/'+file);
+test('the VPN controller, secure storage and SSH module are identical to HN Browser’s',()=>{
+ for(const file of['vpn.cjs','vault.cjs','ssh.cjs'])assert.equal(fs.readFileSync(path.join(__dirname,'..','src',file),'utf8'),fs.readFileSync(path.join(__dirname,'..','..','browser-app','src',file),'utf8'),file+' differs from browser-app/src/'+file);
 });
 test('sign-ins are labelled HN Secure Network and devices are named after this PC',async()=>{
  const{VPN,FakeController}=require('../src/vpn.cjs'),os=require('node:os');const calls=[];let saved=null;

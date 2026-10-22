@@ -3,6 +3,7 @@
 // up this PC, connect and disconnect, SSH, profile, settings, an update, and sign out. The VPN service,
 // downloads site and OS storage are test stand-ins; the WireGuard connection lives in memory.
 //   xvfb-run -a node test/desktop.cjs      (screenshots: windows-vpn-app/screenshots/)
+const{Server,utils}=require('ssh2');
 const{_electron:electron}=require('playwright'),assert=require('node:assert/strict'),path=require('node:path'),fs=require('node:fs'),os=require('node:os'),crypto=require('node:crypto');
 const pkg=require('../package.json'),shots=path.join(__dirname,'..','screenshots');
 (async()=>{
@@ -33,9 +34,15 @@ global.fetch=async(url,options={})=>{const u=new URL(url),method=options.method|
   if(u.pathname==='/download/secure-network-windows')return new Response(installer);}
  return new Response('',{status:404});};
 require(${JSON.stringify(path.resolve(__dirname,'../src/main.cjs'))});`);
- let app;
+ let app,sshServer;
  try{
-  app=await electron.launch({executablePath:require('electron'),args:[...((process.getuid?.()===0||process.env.CI)?['--no-sandbox']:[]),fixture],env:{...process.env,HN_SECURE_NETWORK_TEST:'1',HN_SECURE_NETWORK_FAKE_VPN:'1',HN_SECURE_NETWORK_PROFILE:profileDir}});
+  // A real SSH server on this computer stands in for the HN Group server.
+  const sshAuth=[];sshServer=new Server({hostKeys:[utils.generateKeyPairSync('ed25519').private]},client=>{
+   client.on('authentication',ctx=>{sshAuth.push(ctx.method);if(ctx.method==='password'&&ctx.username==='charlie'&&ctx.password==='server-pass-582')ctx.accept();else ctx.reject(['password']);});
+   client.on('ready',()=>client.on('session',accept=>{const session=accept();session.on('pty',a=>a?.());session.on('window-change',a=>a?.());session.on('shell',acceptShell=>{const stream=acceptShell();stream.write('Welcome to the HN Group server\r\n$ ');stream.on('data',d=>stream.write(d));});}));
+   client.on('error',()=>{});});
+  await new Promise(r=>sshServer.listen(0,'127.0.0.1',r));
+  app=await electron.launch({executablePath:require('electron'),args:[...((process.getuid?.()===0||process.env.CI)?['--no-sandbox']:[]),fixture],env:{...process.env,HN_SECURE_NETWORK_TEST:'1',HN_SECURE_NETWORK_FAKE_VPN:'1',HN_SECURE_NETWORK_PROFILE:profileDir,HN_SECURE_NETWORK_SSH_PORT:String(sshServer.address().port)}});
   const page=await app.firstWindow();
   const test=fn=>app.evaluate(fn);
   const shot=async name=>{await page.evaluate(()=>{document.getElementById('toast').hidden=true;});for(const scheme of ['light','dark']){await page.emulateMedia({colorScheme:scheme});await page.waitForTimeout(450);await page.screenshot({path:path.join(shots,name+'-'+scheme+'.png')});}await page.emulateMedia({colorScheme:'light'});};
@@ -60,12 +67,20 @@ require(${JSON.stringify(path.resolve(__dirname,'../src/main.cjs'))});`);
   await page.getByText('217.154.34.205').first().waitFor();await page.getByText('Reachable for SSH').waitFor();await page.waitForTimeout(600);await shot('connected');
   const state=await page.evaluate(()=>window.secureNetwork.state());
   assert.ok(!JSON.stringify(state).includes(token),'the VPN token never reaches the window');
-  assert.deepEqual(Object.keys(await page.evaluate(()=>window.secureNetwork)).sort(),['action','onGo','state','subscribe']);
-  // SSH opens Windows Terminal with the remembered username.
-  await page.locator('[data-page=ssh]').click();await page.locator('#ssh-user').fill('charlie');await page.waitForTimeout(300);await shot('ssh');await page.locator('#open-ssh').click();
-  await page.waitForFunction(()=>window.secureNetwork.state().then(s=>s.prefs.sshUser==='charlie'));
-  assert.deepEqual((await test(()=>global.__secureNetworkTest.log.filter(x=>x.ssh))).at(-1).ssh,['-o','ConnectTimeout=15','charlie@10.88.0.1']);
-  assert.equal((await page.evaluate(()=>window.secureNetwork.action('ssh',{user:'bad user; rm'}))).error,'Enter a valid username, for example root.');
+  assert.deepEqual(Object.keys(await page.evaluate(()=>window.secureNetwork)).sort(),['action','onGo','state','subscribe','terminalAck','terminalData']);
+  // SSH inside the app, to a real local SSH server: the password is typed here and used once, keys are
+  // never offered, a wrong password is refused, and the terminal works both ways.
+  await page.locator('[data-page=ssh]').click();assert.equal(await page.locator('#ssh-user').inputValue(),'root','root by default');
+  await page.locator('#ssh-user').fill('charlie');await page.locator('#ssh-password').fill('not-the-password');await page.waitForTimeout(300);await shot('ssh');
+  await page.locator('#ssh-connect').click();await page.getByText('The username, password or private key was not accepted. Try again.').first().waitFor();
+  await page.locator('#ssh-new').click();assert.equal(await page.locator('#ssh-user').inputValue(),'charlie','the username is remembered');assert.equal(await page.locator('#ssh-password').inputValue(),'','the password field starts empty');
+  await page.locator('#ssh-password').fill('server-pass-582');await page.locator('#ssh-password').press('Enter');
+  await page.locator('.xterm-rows',{hasText:'Welcome to the HN Group server'}).waitFor();
+  await page.locator('.term-host:not([hidden]) .xterm').click();await page.keyboard.type('uptime');await page.locator('.xterm-rows',{hasText:'uptime'}).waitFor();
+  await page.waitForTimeout(400);await shot('ssh-terminal');
+  assert.ok(sshAuth.length&&sshAuth.every(m=>m!=='publickey'),'no SSH key is ever offered: '+sshAuth.join(','));assert.ok(sshAuth.includes('password'));
+  const afterSSH=await page.evaluate(()=>window.secureNetwork.state());assert.ok(!JSON.stringify(afterSSH).includes('server-pass-582'),'the password never reaches the window state');
+  const saved=fs.readFileSync(path.join(profileDir,'ssh.json'),'utf8');assert.ok(!saved.includes('server-pass-582'));assert.equal(JSON.parse(saved).username,'charlie');assert.match(JSON.parse(saved).fingerprint,/^SHA256:/);
   // Profile.
   await page.locator('[data-page=profile]').click();await page.getByText('Where you’re signed in').waitFor();await page.getByText('VPN administrator').waitFor();
   await page.waitForFunction(()=>getComputedStyle(document.querySelector('.profile-top .avatar')).backgroundImage.includes('data:image/png'));await page.waitForTimeout(500);await shot('profile');
@@ -83,5 +98,5 @@ require(${JSON.stringify(path.resolve(__dirname,'../src/main.cjs'))});`);
   assert.equal(await test(()=>global.__secureNetworkTest.vpn().controller.installed),null,'signing out removes the VPN configuration');
   assert.ok(!fs.existsSync(path.join(profileDir,'vpn.enc')),'and the saved sign-in');
   console.log('Secure Network desktop passed: sign-in, setup, connect/disconnect, SSH, profile, settings, verified update and sign-out. Screenshots in windows-vpn-app/screenshots.');
- }finally{await app?.close().catch(()=>{});fs.rmSync(dir,{recursive:true,force:true});}
+ }finally{await app?.close().catch(()=>{});sshServer?.close();fs.rmSync(dir,{recursive:true,force:true});}
 })().catch(e=>{console.error(e);process.exitCode=1;});

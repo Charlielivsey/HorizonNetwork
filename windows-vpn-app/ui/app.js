@@ -1,6 +1,7 @@
 'use strict';
 // HN Secure Network for Windows: draws the app from the state the main process sends.
 const api=window.secureNetwork,root=document.getElementById('app');
+let sshForm=false,sshBusy=false,sshSelect=null;
 let state=null,page='connection',viewKey='',profile=null,profileLoading=false,avatarData=null,avatarTag=null,sshDraft=null,toastTimer=null,lastError='';
 
 // Small helpers: h('div',{class:'x',onclick:fn},child, 'text', …)
@@ -102,17 +103,27 @@ function connection(){const v=state.vpn,busy=v.busy==='connecting'||v.busy==='di
    tile('server','HN Group server',v.server,on?(v.reachable?'Reachable for SSH':v.reachable===false?'Not answering':'Checking…'):'Connect to reach it',on?(v.reachable?'good':v.reachable===false?'bad':''):''),
    tile('laptop','This PC',v.device?.name||state.hostname,v.device?.address?v.device.address+' · its key never leaves this PC':'Its key never leaves this PC')));}
 
-function ssh(){const v=state.vpn,user=sshDraft??state.prefs.sshUser??'root';
- const open=async()=>{const value=document.getElementById('ssh-user').value;const r=await act('ssh',{user:value});if(r)toast('Opening an SSH session to '+value+'@'+v.server+'…',false);};
- return h('section',{class:'page'},
-  h('header',{},h('p',{class:'eyebrow'},'Secure shell'),h('h1',{},'SSH to the HN Group server'),h('p',{},'Opens Windows Terminal connected to the server through the VPN. You type your password there; it’s never saved.')),
-  h('div',{class:'terminal'},h('div',{class:'bar'},h('i'),h('i'),h('i'),h('span',{},h('span',{class:'ssh-as'},user),'@'+v.server+' — ssh')),
-   h('pre',{},h('span',{class:'dim'},'HN Secure Network · encrypted session through the HN Group VPN\n'),h('span',{class:'ok'},'➜ '),'ssh ',h('span',{class:'ssh-as'},user),h('span',{class:'host'},'@'+v.server),'\n',h('span',{class:'dim'},h('span',{class:'ssh-as'},user),'@'+v.server+'’s password:'))),
-  h('div',{class:'card'},
-   h('div',{class:'field'},h('label',{for:'ssh-user'},'Username'),h('input',{id:'ssh-user',value:user,spellcheck:'false',autocomplete:'off',oninput:e=>{sshDraft=e.target.value;for(const el of document.querySelectorAll('.ssh-as'))el.textContent=sshDraft.trim()||'root';},onkeydown:e=>{if(e.key==='Enter')open();}})),
-   h('div',{class:'row'},h('button',{class:'btn primary',id:'open-ssh',disabled:!!v.busy,onclick:open},icon('terminal'),v.connected?'Open SSH session':'Connect and open SSH')),
-   !state.ssh?h('div',{class:'banner warn'},h('div',{class:'grow'},h('strong',{},'Windows’ SSH client isn’t installed'),h('p',{},'Add “OpenSSH Client” in Settings → System → Optional features.'))):null,
-   h('p',{class:'muted small'},'The first time, you’ll be asked to trust the server’s key: check it with HN Group if you’re unsure.')));}
+// SSH inside the app: the username (remembered) and the password (typed here, used once, never saved;
+// SSH keys on this PC are never used) sign in to the HN Group server through the VPN.
+function ssh(){const v=state.vpn,s=state.ssh,sessions=s.sessions,showForm=!sessions.length||sshForm,user=sshDraft??s.username??'root';
+ window.SNTerminal.sync(s);const current=sessions.find(x=>x.id===window.SNTerminal.active);
+ const connect=async()=>{const pw=document.getElementById('ssh-password'),button=document.getElementById('ssh-connect');if(!pw.value){toast('Enter your server password.');pw.focus();return;}
+  button.disabled=true;sshBusy=true;for(const x of sessions)if(['error','closed'].includes(x.status))api.action('ssh-close',x.id);const r=await api.action('ssh-connect',{username:document.getElementById('ssh-user').value,password:pw.value,cols:110,rows:30});pw.value='';sshBusy=false;
+  if(r?.error){toast(r.error);button.disabled=false;document.getElementById('ssh-password')?.focus();return;}sshForm=false;sshSelect=r.result;viewKey='';draw();};
+ const enter=e=>{if(e.key==='Enter'){e.preventDefault();connect();}};
+ const form=h('div',{class:'term-card login'},h('div',{class:'bar'},h('i'),h('i'),h('i'),h('span',{},h('span',{class:'ssh-as'},user),'@'+state.server+' — ssh')),
+  h('div',{class:'login-body'},h('p',{class:'dim'},'HN Secure Network · encrypted session through the HN Group VPN'),
+   h('label',{class:'prompt',for:'ssh-user'},h('span',{class:'ok'},'➜ '),'ssh ',h('input',{id:'ssh-user',class:'inline',value:user,'data-keep':'',spellcheck:'false',autocomplete:'off','aria-label':'Server username',size:Math.max(4,user.length),oninput:e=>{sshDraft=e.target.value;e.target.size=Math.max(4,e.target.value.length);for(const el of document.querySelectorAll('.ssh-as'))el.textContent=sshDraft.trim()||'root';},onkeydown:enter}),h('span',{class:'host'},'@'+state.server)),
+   h('label',{class:'prompt',for:'ssh-password'},h('span',{class:'dim'},h('span',{class:'ssh-as'},user),'@'+state.server+'’s password: '),h('input',{id:'ssh-password',class:'inline secret',type:'password','data-keep':'',autocomplete:'off','aria-label':'Server password',onkeydown:enter})),
+   h('div',{class:'row'},h('button',{class:'btn primary',id:'ssh-connect',disabled:!!v.busy||sshBusy,onclick:connect},icon('terminal'),v.connected?'Connect':'Connect the VPN and sign in'),sessions.length?h('button',{class:'btn glass',onclick:()=>{sshForm=false;viewKey='';draw();}},'Back to the terminal'):null)));
+ const panel=sessions.length&&!showForm?h('div',{class:'term-card live'},h('div',{class:'bar tabs',role:'tablist'},sessions.map(x=>h('span',{class:'tab'+(x.id===window.SNTerminal.active?' on':''),role:'tab','aria-selected':String(x.id===window.SNTerminal.active)},
+   h('button',{class:'tab-name',onclick:()=>{window.SNTerminal.select(x.id);viewKey='';draw();}},h('span',{class:'dot'+(x.status==='connected'?' on':'')}),x.username+'@'+state.server),h('button',{class:'tab-close','aria-label':'Close this session',onclick:()=>act('ssh-close',x.id)},'×'))),
+   h('span',{class:'grow'}),h('button',{class:'btn glass small',onclick:()=>window.SNTerminal.copy()},'Copy'),h('button',{class:'btn glass small',onclick:()=>window.SNTerminal.paste()},'Paste'),h('button',{class:'btn glass small',id:'ssh-new',onclick:()=>{sshForm=true;viewKey='';draw();requestAnimationFrame(()=>document.getElementById('ssh-password')?.focus());}},'New session')),
+  current&&current.status!=='connected'?h('p',{class:'term-status'},current.status==='connecting'?'Connecting securely…':current.error||'This session has ended.'):null,window.SNTerminal.dock):null;
+ return h('section',{class:'page wide'},
+  h('header',{},h('p',{class:'eyebrow'},'Secure shell'),h('h1',{},'SSH to the HN Group server'),h('p',{},'Sign in with your server password. It’s typed here, used once and never saved, and SSH keys on this PC are never used.')),
+  showForm?form:panel,
+  showForm?h('p',{class:'muted small'},'The first time, HN Secure Network shows the server’s fingerprint for you to check. After that it refuses to connect if the server’s key ever changes.'):h('p',{class:'muted small'},'Ctrl+Shift+C copies and Ctrl+Shift+V pastes. Sessions end when the VPN disconnects.'));}
 
 async function loadProfile(){if(profileLoading)return;profileLoading=true;const r=await act('profile');profileLoading=false;if(r){profile=r;viewKey='';draw();}}
 function profilePage(){const v=state.vpn,p=profile;
@@ -150,14 +161,18 @@ function settings(){const v=state.vpn,u=state.update||{},p=state.prefs;
 function stage(){const v=state.vpn;return!v.signedIn?'welcome':(!v.ready||v.removed)?'setup':'app';}
 function draw(){if(!state)return;const v=state.vpn,s=stage();
  const key=JSON.stringify([s,page,v,state.prefs,state.update,state.toolsBusy,state.ssh,!!state.connectedAt,avatarData?.length,profile?1:0,profileLoading]);if(key===viewKey)return;viewKey=key;
- const focused=document.activeElement?.id,sel=document.activeElement?.selectionStart;
+ const focused=document.activeElement?.id,sel=document.activeElement?.selectionStart,kept=[...document.querySelectorAll('[data-keep]')].map(el=>[el.id,el.value]);
  root.replaceChildren(s==='welcome'?welcome():s==='setup'?setup():shell());
+ for(const[id,value]of kept){const el=document.getElementById(id);if(el)el.value=value;}
+ if(page==='ssh')requestAnimationFrame(()=>window.SNTerminal.fit());
  if(focused){const el=document.getElementById(focused);if(el){el.focus();if(sel!=null&&el.setSelectionRange)try{el.setSelectionRange(sel,sel);}catch{}}}
  document.body.dataset.stage=s;wordmarks();}
 async function receive(next){state=next;const v=state.vpn;
  if(v.error&&v.error!==lastError)toast(v.error);lastError=v.error||'';
  if(state.avatarTag!==avatarTag){avatarTag=state.avatarTag;avatarData=null;if(avatarTag){const data=await act('avatar');if(typeof data==='string'&&data.startsWith('data:image/'))avatarData=data;}}
- if(stage()!=='app')profile=null;draw();}
+ if(stage()!=='app')profile=null;
+ if(sshSelect&&state.ssh.sessions.some(x=>x.id===sshSelect)){window.SNTerminal.sync(state.ssh);window.SNTerminal.select(sshSelect);sshSelect=null;viewKey='';}
+ draw();}
 setInterval(()=>{const el=document.getElementById('elapsed');if(el&&state?.connectedAt)el.textContent=duration(Date.now()-state.connectedAt);},1000);
 const wordmarks=()=>{for(const img of document.querySelectorAll('[data-light]'))img.src=matchMedia('(prefers-color-scheme: dark)').matches?'assets/hn-group-wordmark-white.svg':'assets/hn-group-wordmark.svg';};
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',wordmarks);
