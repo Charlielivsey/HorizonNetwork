@@ -28,3 +28,11 @@ test('HN Secure Network is offered only from a genuine record, newest first',asy
   const a=createApp(path.join(dir,'data'),{bundled,fetcher:async()=>Response.json(record('2.0.0',9))});await a.refresh();assert.equal(a.current.version,'2.1.0-31');
   const b=createApp(path.join(dir,'data2'),{bundled:path.join(dir,'none'),fetcher:async()=>Response.json(record('2.1.0',32))});await b.refresh();assert.equal(b.current.version,'2.1.0-32');
  }finally{fs.rmSync(dir,{recursive:true,force:true});}});
+
+test('HN Secure Network for Windows is offered only from a genuine Windows record',async()=>{const{readApp,createApp}=require('./lib/apps');const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-download-win-'));
+ const record=(v,n)=>({tag:'secure-network-windows-v'+v+'-'+n,asset:{name:'HN-Secure-Network-'+v+'-windows-x64.exe',size:5000,sha256:'b'.repeat(64)}});
+ try{assert.equal(readApp(record('1.0.0',3),'mac'),null,'a Windows record is never a Mac one');assert.equal(readApp({tag:'secure-network-v1.0.0-3',asset:{name:'HN-Secure-Network-1.0.0-macOS.zip',size:1,sha256:'b'.repeat(64)}},'windows'),null);
+  assert.equal(readApp({...record('1.0.0',3),asset:{name:'HN-Secure-Network-1.0.1-windows-x64.exe',size:5000,sha256:'b'.repeat(64)}},'windows'),null,'the file name must match the version');
+  const w=readApp(record('1.0.0',3),'windows');assert.equal(w.release,'1.0.0');assert.equal(w.build,3);assert.equal(w.asset.url,'https://github.com/Charlielivsey/HorizonNetwork/releases/download/secure-network-windows-v1.0.0-3/HN-Secure-Network-1.0.0-windows-x64.exe');
+  const a=createApp(path.join(dir,'data'),{kind:'windows',bundled:path.join(dir,'none'),fetcher:async url=>{assert.match(url,/secure-network-windows\.json$/);return Response.json(record('1.0.0',4));}});await a.refresh();assert.equal(a.current.build,4);
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}});

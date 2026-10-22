@@ -1,0 +1,62 @@
+{
+  "name": "hn-secure-network-windows",
+  "version": "1.0.0",
+  "private": true,
+  "description": "HN Secure Network for Windows: the HN Group VPN and SSH sessions to the HN Group server",
+  "author": "HN Group",
+  "license": "UNLICENSED",
+  "main": "src/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.cjs",
+    "test:desktop": "node test/desktop.cjs",
+    "icons": "node scripts/icons.cjs",
+    "build:win": "electron-builder --win --x64 --publish never"
+  },
+  "devDependencies": {
+    "@resvg/resvg-js": "2.6.2",
+    "electron": "44.9.0",
+    "electron-builder": "26.15.3",
+    "playwright": "1.61.1",
+    "png-to-ico": "3.0.1"
+  },
+  "build": {
+    "appId": "uk.org.hngroup.securenetwork",
+    "productName": "HN Secure Network",
+    "executableName": "HN Secure Network",
+    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**",
+      "ui/**",
+      "package.json"
+    ],
+    "artifactName": "HN-Secure-Network-${version}-windows-x64.${ext}",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "runAfterFinish": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "HN Secure Network",
+      "deleteAppDataOnUninstall": false
+    },
+    "npmRebuild": false
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}
