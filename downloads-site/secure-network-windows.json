@@ -1,11 +1,11 @@
 {
- "tag": "secure-network-windows-v1.0.0-1",
- "version": "1.0.0",
- "build": 1,
- "publishedAt": "2026-10-22T18:36:57.102Z",
+ "tag": "secure-network-windows-v1.0.1-2",
+ "version": "1.0.1",
+ "build": 2,
+ "publishedAt": "2026-10-22T23:32:11.008Z",
  "asset": {
-  "name": "HN-Secure-Network-1.0.0-windows-x64.exe",
-  "size": 112012636,
-  "sha256": "a51b99df57e8b220afcce107e0986158a3cd9c4e82c46acedca2ddb76aa95400"
+  "name": "HN-Secure-Network-1.0.1-windows-x64.exe",
+  "size": 113061876,
+  "sha256": "04c9d56d89ce11f2134324133427cfb4c10a76f1ccf59ec9190021225c6cd8f1"
  }
 }
