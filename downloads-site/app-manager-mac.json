@@ -1,11 +1,11 @@
 {
- "tag": "app-manager-v1.0.0-1",
+ "tag": "app-manager-v1.0.0-3",
  "version": "1.0.0",
- "build": 1,
- "publishedAt": "2026-10-23T19:37:05.734Z",
+ "build": 3,
+ "publishedAt": "2026-10-23T19:41:42.604Z",
  "asset": {
   "name": "HN-Group-App-Manager-1.0.0-mac-universal.zip",
-  "size": 228106663,
-  "sha256": "4de4493ced0ddb75a8448e73382da010119d0ff1d1f26f0921ffa20571aaaab1"
+  "size": 229863088,
+  "sha256": "adb604ca0638036edabea750680b4ae39d83424408efec2793ca43719eedbf44"
  }
 }
