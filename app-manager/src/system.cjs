@@ -6,6 +6,7 @@ const within=(root,file)=>{const p=path.relative(root,file);return p!==''&&!p.st
 async function run(file,args,options={}){return(await exec(file,args,{timeout:30000,maxBuffer:16*1024*1024,windowsHide:true,...options})).stdout.trim();}
 async function ps(script){return run('powershell.exe',['-NoProfile','-NonInteractive','-Command',script]);}
 function uninstallPath(command,dir){if(typeof command!=='string')throw Error('No registered uninstaller was found.');const match=/^"([^"]+\.exe)"(?:\s|$)/i.exec(command)||/^([^"\r\n]+\.exe)(?:\s|$)/i.exec(command);const exe=match?.[1];if(!exe||!path.win32.isAbsolute(exe)||!/^Uninstall[^\\/]*\.exe$/i.test(path.win32.basename(exe))||path.win32.dirname(exe).toLowerCase()!==path.win32.resolve(dir).toLowerCase())throw Error('The registered uninstaller is not inside this app. Use Windows Installed apps to remove it.');return exe;}
+function processPrefix(dir){return path.win32.resolve(dir).replace(/[\\/]+$/,'')+'\\';}
 class System{
  constructor({platform=process.platform,arch=process.arch,home=os.homedir(),roaming=process.env.APPDATA}={}){this.platform=platform;this.arch=arch;this.home=home;this.roaming=roaming;}
  get supported(){return this.platform==='darwin'||this.platform==='win32'&&this.arch==='x64';}
@@ -20,7 +21,7 @@ class System{
  }
  async running(installed){if(!installed)return false;
   if(this.platform==='darwin'){const list=await run('/bin/ps',['-axo','comm=']);return list.split('\n').some(p=>p.trim()===installed.exe||p.trim().startsWith(installed.path+'/Contents/'));}
-  const script="$ErrorActionPreference='Stop'; $root="+psq(installed.path+'\\')+"; @(Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($root,[System.StringComparison]::OrdinalIgnoreCase) }).Count";return Number(await ps(script))>0;
+  const script="$ErrorActionPreference='Stop'; $root="+psq(processPrefix(installed.path))+"; @(Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($root,[System.StringComparison]::OrdinalIgnoreCase) }).Count";return Number(await ps(script))>0;
  }
  async idle(id){const installed=await this.detect(id);if(installed&&await this.running(installed))throw Error('Quit '+entry(id).name+' first, including its menu bar or system tray icon, then try again.');return installed;}
  async preferences(id){const file=profileFile(id,this.platform,this.home,this.roaming);let saved={},spec={...settings.schema(id,this.platform)};if(file)saved=await settings.readJSON(file);else{try{saved.sshUser=await run('/usr/bin/defaults',['read',entry(id).bundle,'sshUser']);}catch{}const installed=await this.detect(id);if(installed&&!newer('2.4.1',installed.version)&&!await this.running(installed))saved.launchAtLogin=(await run(installed.exe,['--app-manager-login-item','read']))==='true';else delete spec.launchAtLogin;}return{schema:spec,values:settings.values(id,this.platform,saved)};}
@@ -51,4 +52,4 @@ class System{
  async trash(bundle){const trash=path.join(this.home,'.Trash');await fs.promises.mkdir(trash,{recursive:true});await this.move(bundle,path.join(trash,path.basename(bundle)+'-'+Date.now()));}
  async uninstall(id){const installed=await this.idle(id);if(!installed)throw Error('This app is not installed.');if(this.platform==='darwin')await this.trash(installed.path);else{if(!installed.uninstall||!fs.existsSync(installed.uninstall))throw Error('Use Windows Installed apps to remove this installation.');await run(installed.uninstall,['/S'],{timeout:300000});}}
 }
-module.exports={System,within,uninstallPath};
+module.exports={System,within,uninstallPath,processPrefix};
