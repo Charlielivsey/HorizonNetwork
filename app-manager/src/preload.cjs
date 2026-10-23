@@ -1,0 +1,2 @@
+'use strict';
+const{contextBridge,ipcRenderer}=require('electron');contextBridge.exposeInMainWorld('manager',Object.freeze({call:(method,...args)=>{if(!['state','refresh','action','settings','save','cancel','website'].includes(method))throw Error('Unknown request.');return ipcRenderer.invoke('manager:'+method,...args);},onState:callback=>{const handler=(_event,state)=>callback(state);ipcRenderer.on('manager:state',handler);return()=>ipcRenderer.removeListener('manager:state',handler);}}));

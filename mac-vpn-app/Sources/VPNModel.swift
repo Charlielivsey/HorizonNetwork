@@ -58,7 +58,7 @@ final class VPNModel: ObservableObject {
 
     init(preview: Bool = false) {
         self.preview = preview
-        if preview { return }
+        if preview || CommandLine.arguments.contains("--app-manager-login-item") { return }
         if let token = Keychain.get("token") {
             api.token = token
             stage = .ready

@@ -1,0 +1,8 @@
+{
+ "name":"hn-group-app-manager","version":"1.0.0","private":true,
+ "description":"Install, update and manage HN Group desktop apps","author":"HN Group","license":"UNLICENSED",
+ "main":"src/main.cjs",
+ "scripts":{"start":"electron .","test":"node --test test/*.test.cjs","test:desktop":"node test/desktop.cjs","icons":"node scripts/icons.cjs","build:mac":"electron-builder --mac --universal --publish never","build:win":"electron-builder --win --x64 --publish never"},
+ "devDependencies":{"electron":"44.9.0","electron-builder":"26.15.3","playwright":"1.61.1","@resvg/resvg-js":"2.6.2","png-to-ico":"3.0.1"},
+ "build":{"appId":"uk.org.hngroup.appmanager","productName":"HN Group App Manager","executableName":"HN Group App Manager","asar":true,"directories":{"output":"dist"},"files":["src/**","ui/**","package.json"],"artifactName":"HN-Group-App-Manager-${version}-${os}-${arch}.${ext}","mac":{"target":["dmg","zip"],"category":"public.app-category.utilities","icon":"build/icon.png","identity":null},"win":{"target":["nsis"],"icon":"build/icon.ico"},"nsis":{"oneClick":false,"perMachine":false,"allowToChangeInstallationDirectory":true,"createDesktopShortcut":true,"deleteAppDataOnUninstall":false},"npmRebuild":false}
+}

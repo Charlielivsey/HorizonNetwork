@@ -7,6 +7,8 @@
 const fs=require('node:fs'),path=require('node:path'),{newer}=require('./releases');
 const REPO='Charlielivsey/HorizonNetwork',BASE='https://github.com/'+REPO+'/releases/download/',RAW='https://raw.githubusercontent.com/'+REPO+'/claude/confident-volta-gxjboo/downloads-site/';
 const KINDS={
+ 'manager-mac':{file:'app-manager-mac.json',tag:/^app-manager-v(\d+\.\d+\.\d+)-(\d+)$/,asset:v=>'HN-Group-App-Manager-'+v+'-mac-universal.zip'},
+ 'manager-windows':{file:'app-manager-windows.json',tag:/^app-manager-v(\d+\.\d+\.\d+)-(\d+)$/,asset:v=>'HN-Group-App-Manager-'+v+'-win-x64.exe'},
  mac:{file:'secure-network.json',tag:/^secure-network-v(\d+\.\d+\.\d+)-(\d+)$/,asset:v=>'HN-Secure-Network-'+v+'-macOS.zip'},
  windows:{file:'secure-network-windows.json',tag:/^secure-network-windows-v(\d+\.\d+\.\d+)-(\d+)$/,asset:v=>'HN-Secure-Network-'+v+'-windows-x64.exe'},
 };

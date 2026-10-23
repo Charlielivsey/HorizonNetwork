@@ -1,5 +1,7 @@
 import SwiftUI
 import AppKit
+import ServiceManagement
+import Darwin
 
 /// HN Secure Network for HN Group staff: the HN Group VPN (a private link to the server) and
 /// SSH to the server, in a full app window with a shield in the menu bar for quick access.
@@ -39,6 +41,24 @@ struct HNGroupVPNApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         let args = CommandLine.arguments
+        // App Manager invokes this fixed, non-secret setting only while this app is closed.
+        // SMAppService must run inside the installed app whose login item is being changed.
+        if let i = args.firstIndex(of: "--app-manager-login-item"), i + 1 < args.count {
+            do {
+                switch args[i + 1] {
+                case "read": break
+                case "true": try SMAppService.mainApp.register()
+                case "false": try SMAppService.mainApp.unregister()
+                default: throw NSError(domain: "HNAppManager", code: 1)
+                }
+                let enabled = SMAppService.mainApp.status == .enabled
+                print(enabled ? "true" : "false")
+                Darwin.exit(0)
+            } catch {
+                fputs("Unable to change the login item. Check macOS Login Items permissions.\n", stderr)
+                Darwin.exit(1)
+            }
+        }
         if let i = args.firstIndex(of: "--snapshot"), i + 1 < args.count {
             Task { @MainActor in Snapshots.render(to: URL(fileURLWithPath: args[i + 1])); NSApp.terminate(nil) }
         }

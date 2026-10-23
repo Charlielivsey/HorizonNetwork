@@ -29,6 +29,9 @@ cp -r "$SCRIPT_DIR/lib" "$SCRIPT_DIR/public" /opt/hn-downloads/
 # The latest browser release CI recorded, so the site is current even before it reaches GitHub.
 [ ! -f "$SCRIPT_DIR/release.json" ] || cp "$SCRIPT_DIR/release.json" /opt/hn-downloads/release.json
 [ ! -f "$SCRIPT_DIR/secure-network.json" ] || cp "$SCRIPT_DIR/secure-network.json" /opt/hn-downloads/secure-network.json
+for manifest in secure-network-windows.json app-manager-mac.json app-manager-windows.json; do
+    [ ! -f "$SCRIPT_DIR/$manifest" ] || cp "$SCRIPT_DIR/$manifest" /opt/hn-downloads/
+done
 pm2 startOrRestart "$SCRIPT_DIR/ecosystem.config.cjs" --update-env
 healthy=0
 for attempt in {1..15}; do
