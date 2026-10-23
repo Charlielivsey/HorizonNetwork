@@ -1,11 +1,11 @@
 'use strict';
-// HN Secure Network for Windows: draws the app from the state the main process sends.
-const api=window.secureNetwork,root=document.getElementById('app');
-let sshForm=false,sshBusy=false,sshSelect=null;
-let state=null,page='connection',viewKey='',profile=null,profileLoading=false,avatarData=null,avatarTag=null,sshDraft=null,toastTimer=null,lastError='';
+// HN Secure Network for Windows: the page is built once (index.html) and kept up to date from the state the
+// main process sends, so nothing is redrawn while you type and animations only play when something changes.
+const api=window.secureNetwork;
+const $=id=>document.getElementById(id),$$=(selector,root=document)=>[...root.querySelectorAll(selector)];
+let state=null,view='',page='connection',profile=null,profileLoading=false,avatarTag=null,avatarData=null,lastError='',toastTimer=null,usernameDraft=null;
 
-// Small helpers: h('div',{class:'x',onclick:fn},child, 'text', …)
-function h(tag,attrs,...children){const el=document.createElement(tag);for(const[k,v]of Object.entries(attrs||{})){if(v==null||v===false)continue;if(k.startsWith('on'))el.addEventListener(k.slice(2),v);else if(k==='html')el.innerHTML=v;else el.setAttribute(k,v===true?'':v);}for(const c of children.flat(9)){if(c==null||c===false)continue;el.append(c instanceof Node?c:document.createTextNode(String(c)));}return el;}
+// ---------- Icons ----------
 const ICONS={
  power:'<path d="M12 3v8"/><path d="M6.6 6.6a8 8 0 1 0 10.8 0"/>',
  terminal:'<rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3"/><path d="M12.5 15H17"/>',
@@ -19,6 +19,7 @@ const ICONS={
  check:'<path d="m5 12 4.5 4.5L19 7"/>',
  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
  key:'<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3M14 9l2 2"/>',
+ lock:'<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
  devices:'<rect x="2" y="5" width="14" height="10" rx="2"/><rect x="17" y="8" width="5" height="11" rx="1.5"/><path d="M6 19h6"/>',
  history:'<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/>',
  refresh:'<path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 21v-5h-5"/>',
@@ -26,155 +27,206 @@ const ICONS={
  download:'<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
  phone:'<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>',
  web:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/>',
+ alert:'<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5"/><path d="M12 16.5h.01"/>',
+ signout:'<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5"/><path d="M5 12h11"/>',
+ trash:'<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/>',
 };
-const icon=name=>h('span',{html:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+ICONS[name]+'</svg>'}).firstChild;
-const spinner=()=>{const s=icon('refresh');s.classList.add('spin');return s;};
+function paint(svg,name){svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','2');svg.setAttribute('stroke-linecap','round');svg.setAttribute('stroke-linejoin','round');svg.setAttribute('aria-hidden','true');svg.innerHTML=ICONS[name]||'';}
+const icon=name=>{const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');paint(svg,name);return svg;};
+for(const svg of $$('svg[data-icon]'))paint(svg,svg.dataset.icon);
+
+// ---------- Small helpers ----------
+function el(tag,attrs,...children){const node=document.createElement(tag);for(const[k,v]of Object.entries(attrs||{})){if(v==null||v===false)continue;if(k.startsWith('on'))node.addEventListener(k.slice(2),v);else node.setAttribute(k,v===true?'':v);}for(const c of children.flat(9)){if(c==null||c===false)continue;node.append(c instanceof Node?c:document.createTextNode(String(c)));}return node;}
+const setText=(node,value)=>{if(typeof node==='string')node=$(node);value=String(value??'');if(node&&node.textContent!==value)node.textContent=value;};
+const showIf=(node,on)=>{if(typeof node==='string')node=$(node);if(node&&node.hidden===!!on)node.hidden=!on;};
 const first=name=>String(name||'').trim().split(/\s+/)[0]||'there';
 const initials=name=>String(name||'HN').trim().split(/\s+/).slice(0,2).map(s=>s[0]).join('').toUpperCase();
-const greeting=()=>{const hr=new Date().getHours();return hr<12?'Good morning':hr<18?'Good afternoon':'Good evening';};
+const greeting=()=>{const h=new Date().getHours();return h<12?'Good morning':h<18?'Good afternoon':'Good evening';};
 const when=iso=>{const d=new Date(iso);return isNaN(d)?'':d.toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});};
 const ago=iso=>{const d=new Date(iso);if(!iso||isNaN(d))return'Never connected';const s=(Date.now()-d)/1000;return s<90?'Just now':s<3600?Math.round(s/60)+' min ago':s<86400?Math.round(s/3600)+' h ago':when(iso);};
 const duration=ms=>{const s=Math.max(0,Math.floor(ms/1000)),hh=Math.floor(s/3600),mm=Math.floor(s%3600/60),ss=s%60;return(hh?hh+':'+String(mm).padStart(2,'0'):mm)+':'+String(ss).padStart(2,'0');};
+const reduced=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
+function toast(message,bad=true){const t=$('toast');t.textContent=message;t.className='toast'+(bad?' bad':'');t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.hidden=true;},7000);}
+async function act(name,data,{quiet=false}={}){const r=await api.action(name,data);if(r?.error){if(!quiet)toast(r.error);return null;}return r?.result??true;}
+// Buttons show a spinner while their action runs.
+async function busy(button,fn){if(!button||button.disabled)return;button.disabled=true;button.classList.add('working');try{return await fn();}finally{button.classList.remove('working');button.disabled=false;render();}}
 
-function toast(message,bad=true){const t=document.getElementById('toast');t.textContent=message;t.className='toast'+(bad?' bad':'');t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.hidden=true;},7000);}
-async function act(name,data){const r=await api.action(name,data);if(r?.error){toast(r.error);return null;}return r?.result??true;}
-function avatarEl(cls){const v=state.vpn,el=h('span',{class:'avatar'+(cls?' '+cls:''),'aria-hidden':'true'},avatarData?'':initials(v.user?.displayName));if(avatarData)el.style.backgroundImage='url("'+avatarData+'")';return el;}
+// ---------- Questions in the window (never a plain Windows box) ----------
+// One card at a time over a dimmed window; the PIN uses the same layer.
+const queue=[];let current=null;
+function openLayer(item){queue.push(item);if(!current)next();}
+function next(){current=queue.shift()||null;const layer=$('layer');
+ if(!current){layer.classList.remove('open');setTimeout(()=>{if(!current){layer.hidden=true;$('dialog').hidden=true;$('pin').hidden=true;}},reduced()?0:180);return;}
+ $('dialog').hidden=current.kind==='pin';$('pin').hidden=current.kind!=='pin';layer.hidden=false;
+ layer.classList.remove('open');void layer.offsetWidth;layer.classList.add('open');
+ if(current.kind==='pin')showPin(current);else showDialog(current);}
+function showDialog(spec){
+ $('dialog').dataset.tone=spec.tone||'accent';paint($('dialog-icon').firstElementChild,spec.icon||(spec.kind==='trust'?'shield':'alert'));
+ setText('dialog-title',spec.title);setText('dialog-text',spec.text);
+ setText('dialog-detail',spec.detail||'');showIf('dialog-detail',!!spec.detail);setText('dialog-note',spec.note||'');showIf('dialog-note',!!spec.note);
+ const buttons=$('dialog-buttons');buttons.replaceChildren(...spec.buttons.map(b=>el('button',{class:'btn'+(b.primary?' primary':'')+(b.danger?' danger-fill':''),'data-choice':b.id,onclick:()=>answer(b.id)},b.label)));
+ // The safe choice has focus, so Enter never removes or trusts anything by accident.
+ const safe=buttons.querySelector('[data-choice=cancel]');safe?.focus();requestAnimationFrame(()=>{if(current===spec)safe?.focus();});}
+function answer(choice){const item=current;if(!item||item.kind==='pin')return;next();item.resolve(choice);}
+// Asks in the window and resolves with the chosen button id.
+const confirmDialog=spec=>new Promise(resolve=>openLayer({kind:'confirm',...spec,resolve}));
+async function confirmThen(spec,fn){if(await confirmDialog({...spec,buttons:[{id:'cancel',label:'Cancel'},{id:'ok',label:spec.confirm,primary:!spec.danger,danger:!!spec.danger}]})==='ok')return fn();}
+api.onDialog(spec=>openLayer({...spec,kind:spec.kind||'confirm',fromApp:spec.id,resolve:choice=>api.action('dialog-answer',{id:spec.id,choice})}),
+ id=>{if(current?.fromApp===id)next();else{const i=queue.findIndex(q=>q.fromApp===id);if(i>=0)queue.splice(i,1);}});
+document.addEventListener('keydown',e=>{if(e.key!=='Escape'||!current)return;e.preventDefault();if(current.kind==='pin')cancelPin();else answer('cancel');});
+$('layer').querySelector('.scrim').addEventListener('click',()=>{if(current?.kind==='pin')cancelPin();});
 
-// ---------- Welcome and sign-in ----------
-function brandPane(){return h('aside',{class:'brand-pane'},h('img',{class:'wordmark',src:'assets/hn-group-wordmark-white.svg',alt:'HN Group'}),
- h('div',{class:'art'},h('div',{class:'shield'},icon('shield')),h('h2',{},'Private by default.'),h('p',{class:'sub'},'Encrypted. Fast. Yours.')),
- h('div',{class:'staff'},icon('check'),'For HN Group staff'));}
-function welcome(){const v=state.vpn;
- if(v.signingIn)return h('div',{class:'split'},brandPane(),h('main',{class:'content-pane'},h('p',{class:'eyebrow'},'Almost there'),h('h1',{},'Finish signing in in your browser'),
-  h('p',{class:'lede'},'Your browser has opened HN Group Auth. Sign in with your password and six-digit PIN, and you’ll come straight back here.'),
-  h('div',{class:'row'},h('button',{class:'btn',onclick:()=>act('sign-in')},icon('refresh'),'Open the sign-in page again'),h('button',{class:'btn ghost',onclick:()=>act('cancel-sign-in')},'Cancel'))));
- return h('div',{class:'split'},brandPane(),h('main',{class:'content-pane'},h('p',{class:'eyebrow'},'HN Secure Network'),h('h1',{},'Welcome back.'),
-  h('p',{class:'lede'},'Send all of this PC’s internet traffic through HN Group’s private VPN, and open SSH sessions to the HN Group server with just your password.'),
-  h('div',{class:'row'},h('button',{class:'btn primary',id:'sign-in',onclick:()=>act('sign-in')},'Sign in with HN Group Auth',icon('arrow'))),
-  h('p',{class:'hint'},'Your browser opens HN Group Auth. You’ll need your password and six-digit PIN.'),
-  v.error?h('div',{class:'banner bad'},h('div',{class:'grow'},h('strong',{},'That didn’t work'),h('p',{},v.error))):null));}
+// ---------- The PIN: asked before every connection ----------
+const pinInput=$('pin-input');
+// purpose.ssh = {username,password} when connecting to open SSH.
+function askPin(purpose={}){if(current?.kind==='pin'||queue.some(q=>q.kind==='pin'))return;openLayer({kind:'pin',...purpose});}
+function showPin(item){pinInput.value='';pinInput.disabled=false;item.checking=false;setText('pin-title',item.ssh?'Enter your PIN to connect and open SSH':'Enter your PIN to connect');pinMessage('You’re asked every time you connect.');drawPin();focusPin();}
+function focusPin(){pinInput.focus();requestAnimationFrame(()=>pinInput.focus());}
+function pinMessage(text,bad=false){const m=$('pin-message');setText(m,text);m.classList.toggle('bad',bad);}
+function drawPin(){const n=pinInput.value.length,checking=!!current?.checking;$$('#pin-boxes i').forEach((box,i)=>{box.classList.toggle('filled',i<n);box.classList.toggle('current',i===Math.min(n,5)&&!checking&&document.activeElement===pinInput);});$('pin-boxes').classList.toggle('checking',checking);}
+pinInput.addEventListener('input',()=>{const digits=pinInput.value.replace(/\D/g,'').slice(0,6);if(digits!==pinInput.value)pinInput.value=digits;drawPin();if(digits.length===6)submitPin(digits);});
+pinInput.addEventListener('focus',drawPin);pinInput.addEventListener('blur',drawPin);
+$('pin-boxes').addEventListener('mousedown',e=>{e.preventDefault();focusPin();});
+$('pin-cancel').addEventListener('click',cancelPin);
+function cancelPin(){if(current?.kind!=='pin'||current.checking)return;current.ssh=null;next();}
+async function submitPin(pin){
+ const item=current;if(!item||item.kind!=='pin'||item.checking)return;
+ item.checking=true;pinInput.disabled=true;$('pin-cancel').disabled=true;pinMessage(item.ssh?'Checking your PIN and connecting…':'Checking your PIN and connecting…');drawPin();
+ const r=await api.action(item.ssh?'ssh-open':'connect',item.ssh?{...item.ssh,pin}:{pin});
+ item.checking=false;pinInput.disabled=false;$('pin-cancel').disabled=false;
+ if(current!==item)return;
+ if(r?.error&&r.pin){
+  // Wrong PIN: shake, clear and try again (the server locks after five wrong tries).
+  pinInput.value='';pinMessage(r.error,true);drawPin();const boxes=$('pin-boxes');boxes.classList.remove('shake');void boxes.offsetWidth;boxes.classList.add('shake');focusPin();return;}
+ const ssh=item.ssh;item.ssh=null;next();
+ if(r?.error)toast(r.error);else if(ssh)sshOpened();
+ render();}
 
-// ---------- Setting up this PC ----------
-function setup(){const v=state.vpn,busy=v.busy==='setting-up',tools=v.tools;
- const step=(n,done,active,title,text,action)=>h('div',{class:'step'+(done?' done':active?' active':'')},h('span',{class:'num'},done?icon('check'):n),h('div',{},h('h3',{},title),h('p',{},text)),action||'');
- return h('div',{class:'split'},brandPane(),h('main',{class:'content-pane'},h('p',{class:'eyebrow'},'Signed in as '+(v.user?.displayName||'')),h('h1',{},'Let’s get this PC ready'),
-  h('p',{class:'lede'},v.removed?'This PC was removed from the VPN on the website. Set it up again to connect.':'Three quick steps. Windows will ask for permission once while setting up.'),
-  h('div',{class:'steps'},
-   step(1,tools,!tools,'Install WireGuard for Windows','HN Secure Network uses WireGuard, the open-source VPN, to carry the connection.',!tools?h('button',{class:'btn primary small',id:'install-tools',disabled:state.toolsBusy,onclick:()=>act('install-tools')},state.toolsBusy?[spinner(),'Installing…']:'Install'):null),
-   step(2,v.ready&&!v.removed,tools&&!v.ready,'Set up this PC','Registers this PC with a key made here (it never leaves this PC). '+v.devices+' of '+v.limit+' devices used.',tools?h('button',{class:'btn primary small',id:'set-up',disabled:busy||v.devices>=v.limit,onclick:()=>act('set-up')},busy?[spinner(),'Setting up…']:'Set up'):null),
-   step(3,false,false,'Connect','Turn the VPN on with one click. You can also use the tray icon.')),
-  state.toolsBusy?h('p',{class:'hint'},'Approve the Windows prompt to let WireGuard install. This can take a minute.'):null,
-  v.devices>=v.limit&&!v.ready?h('div',{class:'banner warn'},h('div',{class:'grow'},h('strong',{},'You’ve used all '+v.limit+' devices'),h('p',{},'Remove one on the VPN website first.')),h('button',{class:'btn small',onclick:()=>act('open','devices')},'Open the website')):null,
-  v.error?h('div',{class:'banner bad'},h('div',{class:'grow'},h('strong',{},'That didn’t work'),h('p',{},v.error))):null,
-  h('div',{class:'row'},h('button',{class:'btn ghost small',onclick:()=>act('sign-out')},'Sign out'))));}
+// ---------- Actions ----------
+function connectClicked(){if(!state?.vpn.ready||state.vpn.busy)return;if(state.vpn.connected)busy($('toggle'),()=>act('disconnect'));else askPin();}
+$('power').addEventListener('click',connectClicked);$('toggle').addEventListener('click',connectClicked);
+$('sign-in').addEventListener('click',e=>busy(e.currentTarget,()=>act('sign-in')));
+$('sign-in-again').addEventListener('click',e=>busy(e.currentTarget,()=>act('sign-in')));
+$('cancel-sign-in').addEventListener('click',()=>act('cancel-sign-in'));
+$('install-tools').addEventListener('click',()=>act('install-tools'));
+$('set-up').addEventListener('click',()=>act('set-up'));
+for(const b of $$('[data-action=set-up]'))b.addEventListener('click',e=>busy(e.currentTarget,()=>act('set-up')));
+for(const b of $$('[data-open]'))b.addEventListener('click',()=>act('open',b.dataset.open));
+for(const b of $$('[data-go]'))b.addEventListener('click',()=>go(b.dataset.go));
+for(const b of $$('.nav'))b.addEventListener('click',()=>go(b.dataset.page));
+$('side-status').addEventListener('click',()=>go('connection'));$('side-user').addEventListener('click',()=>go('profile'));$('side-update').addEventListener('click',()=>go('settings'));
+const signOut=()=>confirmThen({title:'Sign out of HN Secure Network?',text:'Signing out disconnects and removes this PC from the VPN. You can sign in and set it up again at any time.',confirm:'Sign out',danger:true,icon:'signout',tone:'danger'},()=>act('sign-out'));
+$('sign-out').addEventListener('click',signOut);$('setup-sign-out').addEventListener('click',signOut);
+$('remove').addEventListener('click',e=>{const b=e.currentTarget;confirmThen({title:'Remove this PC from the HN VPN?',text:'It disconnects and this PC’s VPN key is deleted. You can set it up again at any time.',confirm:'Remove this PC',danger:true,icon:'trash',tone:'danger'},()=>busy(b,()=>act('remove')));});
+for(const b of $$('[data-pref]'))b.addEventListener('click',()=>act('preference',{key:b.dataset.pref,value:!state.prefs[b.dataset.pref]}));
+for(const b of $$('[data-theme]'))b.addEventListener('click',()=>act('preference',{key:'theme',value:b.dataset.theme}));
+$('update-button').addEventListener('click',e=>{const u=state.update||{};busy(e.currentTarget,()=>act(u.status==='available'?'download-update':u.status==='ready'?'install-update':'check-update'));});
 
-// ---------- Signed in ----------
-function shell(){const v=state.vpn;
- const nav=(id,label,ic)=>h('button',{class:'nav','data-page':id,'aria-current':page===id?'page':null,onclick:()=>go(id)},icon(ic),label);
- const update=state.update||{};
- return h('div',{class:'shell'},
-  h('nav',{class:'side','aria-label':'HN Secure Network'},h('img',{class:'wordmark',src:'assets/hn-group-wordmark.svg',alt:'HN Group','data-light':''}),
-   h('p',{class:'menu-label'},'MENU'),nav('connection','Connection','power'),nav('ssh','SSH','terminal'),nav('profile','Profile','user'),nav('settings','Settings','settings'),
-   h('div',{class:'spacer'}),
-   ['available','downloading','ready'].includes(update.status)?h('button',{class:'update-card',onclick:()=>go('settings')},icon('download'),update.status==='ready'?'Update ready to install':'Update available'):null,
-   h('button',{class:'status-card',onclick:()=>go('connection')},h('span',{class:'dot'+(v.connected?' on':'')}),h('span',{},h('strong',{},v.connected?'Protected':'Not connected'),h('small',{},v.connected?(v.publicIp||'Connected'):'Your own connection'))),
-   h('button',{class:'user-card',onclick:()=>go('profile')},avatarEl(),h('span',{},h('strong',{},v.user?.displayName||'HN Group'),h('small',{},v.user?.email||'')))),
-  h('main',{class:'main',id:'main'},({connection,ssh,profile:profilePage,settings})[page]()));}
-function go(id){page=id;viewKey='';if(id==='profile')loadProfile();draw();document.getElementById('main')?.scrollTo(0,0);}
+// SSH: the username is remembered (root by default); the password is only ever in this field until it's
+// handed to the SSH window, and the field is cleared straight away.
+const sshUser=$('ssh-user'),sshPassword=$('ssh-password');
+const sizeUser=()=>{sshUser.size=Math.max(4,sshUser.value.length);};
+sshUser.addEventListener('input',()=>{usernameDraft=sshUser.value;sizeUser();for(const s of $$('.ssh-as'))setText(s,sshUser.value.trim()||'root');});
+for(const input of[sshUser,sshPassword])input.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();openSSH();}});
+$('ssh-open').addEventListener('click',openSSH);
+async function openSSH(){
+ const v=state?.vpn;if(!v?.ready)return toast('Set up the VPN on this PC first.');
+ const username=sshUser.value.trim()||'root',password=sshPassword.value;
+ if(!/^[a-z_][a-z0-9_.-]{0,31}$/i.test(username)){toast('Enter a valid server username.');sshUser.focus();return;}
+ if(!password){toast('Enter your server password.');sshPassword.focus();return;}
+ sshPassword.value='';
+ if(!v.connected)return askPin({ssh:{username,password}});
+ await busy($('ssh-open'),async()=>{const r=await api.action('ssh-open',{username,password});if(r?.error){if(r.needPin)askPin({ssh:{username,password}});else{toast(r.error);sshPassword.focus();}}else sshOpened();});}
+function sshOpened(){toast('The SSH session is opening in its own window.',false);usernameDraft=null;}
 
-function connection(){const v=state.vpn,busy=v.busy==='connecting'||v.busy==='disconnecting',on=v.connected;
- const title=v.busy==='connecting'?'Connecting…':v.busy==='disconnecting'?'Disconnecting…':on?'You’re protected':'You’re not connected';
- const tile=(ic,label,value,note,cls)=>h('div',{class:'tile'},h('span',{class:'icon'},icon(ic)),h('div',{},h('small',{},label),h('strong',{},value),h('span',{class:'note'+(cls?' '+cls:'')},note)));
- const date=new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
- return h('section',{class:'page'},
-  h('header',{},h('p',{class:'eyebrow'},date),h('h1',{},greeting()+', '+first(v.user?.displayName))),
-  v.outdated?h('div',{class:'banner warn'},h('div',{class:'grow'},h('strong',{},'Finish updating this PC’s VPN'),h('p',{},'HN Group changed how the VPN works. Update this PC’s connection to keep using it (Windows asks once).')),h('button',{class:'btn small',disabled:!!v.busy,onclick:()=>act('set-up')},'Update')):null,
-  v.shared?h('div',{class:'banner warn'},h('div',{class:'grow'},h('strong',{},'This PC is set up for another HN account'),h('p',{},'Set it up for your account to see its details here.')),h('button',{class:'btn small',disabled:!!v.busy,onclick:()=>act('set-up')},'Set up')):null,
-  h('div',{class:'hero'+(on?' on':'')},
-   h('button',{class:'power'+(busy?' busy':''),id:'power','aria-label':on?'Disconnect':'Connect',disabled:busy||!v.ready,onclick:()=>act(on?'disconnect':'connect')},h('span',{class:'halo'}),h('span',{class:'ring'}),h('span',{class:'core'},icon('power'))),
-   h('div',{},h('span',{class:'pill'},h('span',{class:'dot'+(on?' on':'')}),on?'Protected':'Not protected'),h('h2',{id:'hero-title'},title),
-    h('p',{},on?'All of this PC’s internet traffic is encrypted and going through HN Group’s UK server.':'Connect to send this PC’s internet traffic through HN Group’s private VPN.'),
-    on&&state.connectedAt?h('p',{class:'meta'},icon('clock'),'Connected for ',h('span',{id:'elapsed'},duration(Date.now()-state.connectedAt))):null,
-    h('div',{class:'row'},h('button',{class:'btn glass',id:'toggle',disabled:busy||!v.ready,onclick:()=>act(on?'disconnect':'connect')},on?'Disconnect':'Connect'),h('button',{class:'btn glass',onclick:()=>go('ssh')},icon('terminal'),'Open SSH')))),
-  on&&v.reachable===false?h('div',{class:'banner bad'},h('div',{class:'grow'},h('strong',{},'The HN Group server isn’t answering'),h('p',{},'The VPN is on, but no traffic is getting through. Your network may block UDP port 51820.'))):null,
-  h('div',{class:'tiles'},
-   tile('globe','Your traffic appears as',v.publicIp||(on?'Checking…':'—'),on?(v.viaVpn?'HN Group VPN address':'Checking the route…'):'Connect to use the VPN address',on&&v.viaVpn?'good':''),
-   tile('pin','Location',on?'United Kingdom':'Your own connection',on?'HN Group’s UK server':'Not through the VPN',on?'good':''),
-   tile('server','HN Group server',v.server,on?(v.reachable?'Reachable for SSH':v.reachable===false?'Not answering':'Checking…'):'Connect to reach it',on?(v.reachable?'good':v.reachable===false?'bad':''):''),
-   tile('laptop','This PC',v.device?.name||state.hostname,v.device?.address?v.device.address+' · its key never leaves this PC':'Its key never leaves this PC')));}
+// ---------- Pages ----------
+function go(id){if(!['connection','ssh','profile','settings'].includes(id))return;if(page!==id){page=id;if(id==='profile')loadProfile();$('main').scrollTo(0,0);}render();if(id==='ssh'&&!current)requestAnimationFrame(()=>{if(!current)sshPassword.focus();});}
+api.onGo(target=>{go(target.page);if(target.connect&&state?.vpn.ready&&!state.vpn.connected)askPin();});
 
-// SSH inside the app: the username (remembered) and the password (typed here, used once, never saved;
-// SSH keys on this PC are never used) sign in to the HN Group server through the VPN.
-function ssh(){const v=state.vpn,s=state.ssh,sessions=s.sessions,showForm=!sessions.length||sshForm,user=sshDraft??s.username??'root';
- window.SNTerminal.sync(s);const current=sessions.find(x=>x.id===window.SNTerminal.active);
- const connect=async()=>{const pw=document.getElementById('ssh-password'),button=document.getElementById('ssh-connect');if(!pw.value){toast('Enter your server password.');pw.focus();return;}
-  button.disabled=true;sshBusy=true;for(const x of sessions)if(['error','closed'].includes(x.status))api.action('ssh-close',x.id);const r=await api.action('ssh-connect',{username:document.getElementById('ssh-user').value,password:pw.value,cols:110,rows:30});pw.value='';sshBusy=false;
-  if(r?.error){toast(r.error);button.disabled=false;document.getElementById('ssh-password')?.focus();return;}sshForm=false;sshSelect=r.result;viewKey='';draw();};
- const enter=e=>{if(e.key==='Enter'){e.preventDefault();connect();}};
- const form=h('div',{class:'term-card login'},h('div',{class:'bar'},h('i'),h('i'),h('i'),h('span',{},h('span',{class:'ssh-as'},user),'@'+state.server+' — ssh')),
-  h('div',{class:'login-body'},h('p',{class:'dim'},'HN Secure Network · encrypted session through the HN Group VPN'),
-   h('label',{class:'prompt',for:'ssh-user'},h('span',{class:'ok'},'➜ '),'ssh ',h('input',{id:'ssh-user',class:'inline',value:user,'data-keep':'',spellcheck:'false',autocomplete:'off','aria-label':'Server username',size:Math.max(4,user.length),oninput:e=>{sshDraft=e.target.value;e.target.size=Math.max(4,e.target.value.length);for(const el of document.querySelectorAll('.ssh-as'))el.textContent=sshDraft.trim()||'root';},onkeydown:enter}),h('span',{class:'host'},'@'+state.server)),
-   h('label',{class:'prompt',for:'ssh-password'},h('span',{class:'dim'},h('span',{class:'ssh-as'},user),'@'+state.server+'’s password: '),h('input',{id:'ssh-password',class:'inline secret',type:'password','data-keep':'',autocomplete:'off','aria-label':'Server password',onkeydown:enter})),
-   h('div',{class:'row'},h('button',{class:'btn primary',id:'ssh-connect',disabled:!!v.busy||sshBusy,onclick:connect},icon('terminal'),v.connected?'Connect':'Connect the VPN and sign in'),sessions.length?h('button',{class:'btn glass',onclick:()=>{sshForm=false;viewKey='';draw();}},'Back to the terminal'):null)));
- const panel=sessions.length&&!showForm?h('div',{class:'term-card live'},h('div',{class:'bar tabs',role:'tablist'},sessions.map(x=>h('span',{class:'tab'+(x.id===window.SNTerminal.active?' on':''),role:'tab','aria-selected':String(x.id===window.SNTerminal.active)},
-   h('button',{class:'tab-name',onclick:()=>{window.SNTerminal.select(x.id);viewKey='';draw();}},h('span',{class:'dot'+(x.status==='connected'?' on':'')}),x.username+'@'+state.server),h('button',{class:'tab-close','aria-label':'Close this session',onclick:()=>act('ssh-close',x.id)},'×'))),
-   h('span',{class:'grow'}),h('button',{class:'btn glass small',onclick:()=>window.SNTerminal.copy()},'Copy'),h('button',{class:'btn glass small',onclick:()=>window.SNTerminal.paste()},'Paste'),h('button',{class:'btn glass small',id:'ssh-new',onclick:()=>{sshForm=true;viewKey='';draw();requestAnimationFrame(()=>document.getElementById('ssh-password')?.focus());}},'New session')),
-  current&&current.status!=='connected'?h('p',{class:'term-status'},current.status==='connecting'?'Connecting securely…':current.error||'This session has ended.'):null,window.SNTerminal.dock):null;
- return h('section',{class:'page wide'},
-  h('header',{},h('p',{class:'eyebrow'},'Secure shell'),h('h1',{},'SSH to the HN Group server'),h('p',{},'Sign in with your server password. It’s typed here, used once and never saved, and SSH keys on this PC are never used.')),
-  showForm?form:panel,
-  showForm?h('p',{class:'muted small'},'The first time, HN Secure Network shows the server’s fingerprint for you to check. After that it refuses to connect if the server’s key ever changes.'):h('p',{class:'muted small'},'Ctrl+Shift+C copies and Ctrl+Shift+V pastes. Sessions end when the VPN disconnects.'));}
+async function loadProfile(){if(profileLoading)return;profileLoading=true;drawProfile();const r=await act('profile');profileLoading=false;if(r)profile=r;drawProfile();render();}
+function drawProfile(){
+ const p=profile;showIf('profile-loading',!p);setText('profile-loading',profileLoading?'Loading your profile…':'Your profile couldn’t be loaded.');
+ for(const id of['card-sessions','card-devices','card-activity'])showIf(id,!!p);if(!p)return;
+ $('sessions').replaceChildren(...(p.sessions.length?p.sessions.map(s=>el('div',{class:'item'},el('span',{class:'icon'},icon(s.kind==='web'?'web':'laptop')),
+  el('div',{class:'grow'},el('strong',{},(s.client||'Website')+(s.appVersion?' '+s.appVersion:'')+(s.current?' · this PC':'')),el('small',{},'Signed in '+when(s.createdAt)+(s.lastUsedAt?' · last used '+when(s.lastUsedAt):''))),
+  s.current?el('span',{class:'tag good'},'Current'):el('button',{class:'btn small',onclick:e=>{const b=e.currentTarget;confirmThen({title:'Sign out of that device?',text:(s.client||'The website')+' will need to sign in again.',confirm:'Sign out',danger:true,icon:'signout',tone:'danger'},()=>busy(b,async()=>{if(await act('end-session',s.id)){toast('Signed out of that device.',false);loadProfile();}}));}},'Sign out'))):[el('p',{class:'empty'},'No sign-ins.')]));
+ $('devices').replaceChildren(...(p.devices.length?p.devices.map(d=>el('div',{class:'item'},el('span',{class:'icon'},icon(/phone|iphone|android/i.test(d.name)?'phone':'laptop')),el('div',{class:'grow'},el('strong',{},d.name),el('small',{},d.address+(d.lastHandshake?' · '+ago(d.lastHandshake):''))),
+  el('span',{class:'tag'+(d.connected?' good':'')},d.connected?'Connected':d.lastHandshake?'Not connected':'Never connected'))):[el('p',{class:'empty'},'No devices yet.')]));
+ $('activity').replaceChildren(...(p.activity.length?p.activity.map(a=>el('div',{class:'event'},el('span',{},a.detail?a.action+' · '+a.detail:a.action),el('small',{class:'muted'},when(a.at)))):[el('p',{class:'empty'},'Nothing yet.')]));}
 
-async function loadProfile(){if(profileLoading)return;profileLoading=true;const r=await act('profile');profileLoading=false;if(r){profile=r;viewKey='';draw();}}
-function profilePage(){const v=state.vpn,p=profile;
- return h('section',{class:'page'},
-  h('div',{class:'profile-top'},h('div',{class:'cover'}),h('div',{class:'who'},avatarEl(),h('div',{},h('h1',{},v.user?.displayName||''),h('p',{class:'muted'},v.user?.email||''),
-   h('div',{class:'row'},v.user?.admin?h('span',{class:'tag accent'},'VPN administrator'):null,h('span',{class:'tag good'},(p?p.devices.length:v.devices)+' of '+v.limit+' devices'))))),
-  h('p',{class:'muted small'},'Your name and photo come from your HN Group staff profile. Change them in the staff portal, HN Account or HN Browser.'),
-  !p?h('div',{class:'card'},h('p',{class:'empty'},profileLoading?'Loading your profile…':'Your profile couldn’t be loaded.')):[
-   h('div',{class:'card'},h('h2',{},icon('key'),'Where you’re signed in'),h('div',{class:'list'},p.sessions.length?p.sessions.map(s=>h('div',{class:'item'},h('span',{class:'icon'},icon(s.kind==='web'?'web':'laptop')),
-    h('div',{class:'grow'},h('strong',{},(s.client||'Website')+(s.appVersion?' '+s.appVersion:'')+(s.current?' · this PC':'')),h('small',{},'Signed in '+when(s.createdAt)+(s.lastUsedAt?' · last used '+when(s.lastUsedAt):''))),
-    s.current?h('span',{class:'tag good'},'Current'):h('button',{class:'btn small',onclick:async()=>{if(await act('end-session',s.id)){toast('Signed out of that device.',false);loadProfile();}}},'Sign out'))):h('p',{class:'empty'},'No sign-ins.'))),
-   h('div',{class:'card'},h('div',{class:'head'},h('h2',{},icon('devices'),'Your devices'),h('button',{class:'btn ghost small',onclick:()=>act('open','devices')},'Manage on the web')),
-    h('div',{class:'list'},p.devices.length?p.devices.map(d=>h('div',{class:'item'},h('span',{class:'icon'},icon(/phone|iphone|android/i.test(d.name)?'phone':'laptop')),h('div',{class:'grow'},h('strong',{},d.name),h('small',{},d.address+(d.lastHandshake?' · '+ago(d.lastHandshake):''))),
-     h('span',{class:'tag'+(d.connected?' good':'')},d.connected?'Connected':d.lastHandshake?'Not connected':'Never connected'))):h('p',{class:'empty'},'No devices yet.'))),
-   h('div',{class:'card'},h('h2',{},icon('history'),'Recent activity'),p.activity.length?h('div',{class:'timeline'},p.activity.map(a=>h('div',{class:'event'},h('span',{},a.detail?a.action+' · '+a.detail:a.action),h('small',{class:'muted'},when(a.at))))):h('p',{class:'empty'},'Nothing yet.'))]);}
-
-function settings(){const v=state.vpn,u=state.update||{},p=state.prefs;
- const toggle=(key,title,text)=>h('div',{class:'toggle'},h('div',{},h('strong',{},title),h('small',{},text)),h('button',{class:'switch',role:'switch','aria-checked':String(!!p[key]),'aria-label':title,onclick:()=>act('preference',{key,value:!p[key]})}));
- const updateText={idle:'',checking:'Checking…',current:'You have the latest version.',available:'Version '+(u.latest||'')+' is available.',downloading:'Downloading the update…',ready:'The update is ready. Installing restarts HN Secure Network.',error:u.error||'Couldn’t check for updates.'}[u.status]||'';
- return h('section',{class:'page'},
-  h('header',{},h('p',{class:'eyebrow'},'Settings'),h('h1',{},'Settings')),
-  h('div',{class:'card'},h('div',{class:'head'},h('div',{},h('h2',{},'HN Secure Network'),h('p',{class:'muted small'},'Version '+state.version+(state.build?' (build '+state.build+')':'')+' for Windows')),
-   u.status==='available'?h('button',{class:'btn primary small',onclick:()=>act('download-update')},icon('download'),'Download update'):u.status==='ready'?h('button',{class:'btn primary small',onclick:()=>act('install-update')},'Install and restart'):h('button',{class:'btn small',id:'check-update',disabled:u.status==='checking'||u.status==='downloading',onclick:()=>act('check-update')},u.status==='checking'?[spinner(),'Checking…']:'Check for updates')),
-   updateText?h('p',{class:'small'+(u.status==='error'?'':' muted')},updateText):null,
-   u.status==='downloading'?h('div',{class:'progress'},h('i',{style:'transform:scaleX('+((u.progress||0)/100)+')'})):null,
-   h('p',{class:'muted small'},'Updates come from downloads.hngroup.org.uk and are checked before they install.')),
-  h('div',{class:'card'},h('h2',{},'Startup'),toggle('launchAtLogin','Open when I sign in to Windows','HN Secure Network waits in the system tray.'),toggle('connectOnLaunch','Connect automatically','Turn the VPN on whenever HN Secure Network opens.')),
-  h('div',{class:'card'},h('h2',{},'Appearance'),h('div',{class:'segmented',role:'group','aria-label':'Appearance'},['system','light','dark'].map(t=>h('button',{'aria-pressed':String(p.theme===t),onclick:()=>act('preference',{key:'theme',value:t})},t==='system'?'Match Windows':t[0].toUpperCase()+t.slice(1))))),
-  h('div',{class:'card'},h('h2',{},'This PC'),h('p',{class:'muted small'},(v.device?v.device.name+' · '+v.device.address:state.hostname)+'. WireGuard for Windows carries the connection; its configuration is only readable by administrators.'),
-   h('div',{class:'row'},h('button',{class:'btn small',disabled:!!v.busy,onclick:()=>act('set-up')},icon('refresh'),'Reinstall the VPN configuration'),h('button',{class:'btn small danger',disabled:!!v.busy,onclick:()=>act('remove')},'Remove this PC from the VPN'))),
-  h('div',{class:'card'},h('h2',{},'Account'),h('p',{class:'muted small'},'Signed in as '+(v.user?.email||'')+'. Signing out disconnects and removes this PC from the VPN.'),h('div',{class:'row'},h('button',{class:'btn small',onclick:()=>act('open','vpn')},'Open the VPN website'),h('button',{class:'btn small danger',id:'sign-out',onclick:()=>act('sign-out')},'Sign out'))));}
-
-// ---------- Drawing ----------
-// Redraws only when something on screen changes, so typing and focus are never interrupted.
+// ---------- Keeping the page up to date ----------
 function stage(){const v=state.vpn;return!v.signedIn?'welcome':(!v.ready||v.removed)?'setup':'app';}
-function draw(){if(!state)return;const v=state.vpn,s=stage();
- const key=JSON.stringify([s,page,v,state.prefs,state.update,state.toolsBusy,state.ssh,!!state.connectedAt,avatarData?.length,profile?1:0,profileLoading]);if(key===viewKey)return;viewKey=key;
- const focused=document.activeElement?.id,sel=document.activeElement?.selectionStart,kept=[...document.querySelectorAll('[data-keep]')].map(el=>[el.id,el.value]);
- root.replaceChildren(s==='welcome'?welcome():s==='setup'?setup():shell());
- for(const[id,value]of kept){const el=document.getElementById(id);if(el)el.value=value;}
- if(page==='ssh')requestAnimationFrame(()=>window.SNTerminal.fit());
- if(focused){const el=document.getElementById(focused);if(el){el.focus();if(sel!=null&&el.setSelectionRange)try{el.setSelectionRange(sel,sel);}catch{}}}
- document.body.dataset.stage=s;wordmarks();}
-async function receive(next){state=next;const v=state.vpn;
- if(v.error&&v.error!==lastError)toast(v.error);lastError=v.error||'';
- if(state.avatarTag!==avatarTag){avatarTag=state.avatarTag;avatarData=null;if(avatarTag){const data=await act('avatar');if(typeof data==='string'&&data.startsWith('data:image/'))avatarData=data;}}
- if(stage()!=='app')profile=null;
- if(sshSelect&&state.ssh.sessions.some(x=>x.id===sshSelect)){window.SNTerminal.sync(state.ssh);window.SNTerminal.select(sshSelect);sshSelect=null;viewKey='';}
- draw();}
-setInterval(()=>{const el=document.getElementById('elapsed');if(el&&state?.connectedAt)el.textContent=duration(Date.now()-state.connectedAt);},1000);
-const wordmarks=()=>{for(const img of document.querySelectorAll('[data-light]'))img.src=matchMedia('(prefers-color-scheme: dark)').matches?'assets/hn-group-wordmark-white.svg':'assets/hn-group-wordmark.svg';};
-matchMedia('(prefers-color-scheme: dark)').addEventListener('change',wordmarks);
-api.subscribe(receive);api.onGo(id=>{if(['connection','ssh','profile','settings'].includes(id))go(id);});
+function render(){if(!state)return;const v=state.vpn,s=stage();
+ if(s!==view){view=s;document.body.dataset.view=s;for(const id of['welcome','setup','app'])showIf('view-'+id,id===s);if(s!=='app'){profile=null;drawProfile();}}
+ const ts=$('title-status');showIf(ts,s==='app');ts.classList.toggle('on',v.connected);setText(ts.lastElementChild,v.connected?'Protected':'Not connected');
+ // The person's name and picture, wherever they appear.
+ for(const a of $$('[data-avatar]')){setText(a,avatarData?'':initials(v.user?.displayName));const image=avatarData?'url("'+avatarData+'")':'';if(a.style.backgroundImage!==image)a.style.backgroundImage=image;}
+ for(const n of $$('[data-name]'))setText(n,v.user?.displayName||'');for(const n of $$('[data-email]'))setText(n,v.user?.email||'');for(const n of $$('[data-first]'))setText(n,first(v.user?.displayName));
+ if(s==='welcome')renderWelcome(v);else if(s==='setup')renderSetup(v);else renderApp(v);}
+
+function renderWelcome(v){
+ const waiting=!!v.signingIn;for(const m of $$('#view-welcome [data-mode]'))showIf(m,(m.dataset.mode==='waiting')===waiting);
+ setText($('welcome-error').querySelector('p'),v.error);showIf('welcome-error',!!v.error&&!waiting);}
+
+function renderSetup(v){
+ const tools=v.tools,ready=v.ready&&!v.removed,full=!ready&&v.devices>=v.limit,setting=v.busy==='setting-up';
+ setText('setup-who','Signed in as '+(v.user?.displayName||''));
+ setText('setup-lede',v.removed?'This PC was removed from the VPN on the website. Set it up again to connect.':'Three quick steps. Windows will ask for permission once while setting up.');
+ $('step-tools').className='step'+(tools?' done':' active');$('step-setup').className='step'+(ready?' done':tools?' active':'');
+ const install=$('install-tools');showIf(install,!tools);install.disabled=state.toolsBusy;install.classList.toggle('working',state.toolsBusy);setText(install,state.toolsBusy?'Installing…':'Install');
+ const setUp=$('set-up');showIf(setUp,tools);setUp.disabled=setting||full;setUp.classList.toggle('working',setting);setText(setUp,setting?'Setting up…':'Set up');
+ setText('setup-devices','Registers this PC with a key made here; it never leaves this PC. '+v.devices+' of '+v.limit+' devices used.');
+ showIf('tools-hint',state.toolsBusy);showIf('setup-limit',full);
+ setText($('setup-error').querySelector('p'),v.error);showIf('setup-error',!!v.error);}
+
+function renderApp(v){
+ for(const b of $$('.nav')){if(b.dataset.page===page)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');}
+ for(const p of $$('[data-page-id]'))showIf(p,p.dataset.pageId===page);
+ const u=state.update||{},on=v.connected,working=v.busy==='connecting'||v.busy==='disconnecting';
+ showIf('side-update',['available','downloading','ready'].includes(u.status));setText($('side-update').querySelector('span'),u.status==='ready'?'Update ready to install':u.status==='downloading'?'Downloading update…':'Update available');
+ const st=$('side-status');st.querySelector('.dot').classList.toggle('on',on);setText(st.querySelector('strong'),on?'Protected':'Not connected');setText(st.querySelector('small'),on?(v.publicIp||'Connected'):'Your own connection');
+ if(page==='connection'){
+  setText('today',new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'}));setText('greeting',greeting()+', '+first(v.user?.displayName));
+  showIf('banner-outdated',v.outdated);showIf('banner-shared',v.shared);showIf('banner-unreachable',on&&v.reachable===false);
+  $('hero').classList.toggle('on',on);$('power').classList.toggle('busy',working);$('power').disabled=working;$('power').setAttribute('aria-label',on?'Disconnect':'Connect');
+  $('hero').querySelector('.pill .dot').classList.toggle('on',on);setText('hero-pill',on?'Protected':'Not protected');
+  setText('hero-title',v.busy==='connecting'?'Connecting…':v.busy==='disconnecting'?'Disconnecting…':on?'You’re protected':'You’re not connected');
+  setText('hero-text',on?'All of this PC’s internet traffic is encrypted and going through HN Group’s UK server.':'Connect to send this PC’s internet traffic through HN Group’s private VPN. You’ll be asked for your PIN.');
+  showIf('hero-meta',on&&!!state.connectedAt);tick();
+  const t=$('toggle');if(!t.classList.contains('working')){setText(t,on?'Disconnect':'Connect');t.disabled=working;}
+  setText('tile-ip',v.publicIp||(on?'Checking…':'—'));note('tile-ip-note',on?(v.viaVpn?'HN Group VPN address':'Checking the route…'):'Connect to use the VPN address',on&&v.viaVpn?'good':'');
+  setText('tile-place',on?'United Kingdom':'Your own connection');note('tile-place-note',on?'HN Group’s UK server':'Not through the VPN',on?'good':'');
+  setText('tile-server',v.server);note('tile-server-note',on?(v.reachable?'Reachable for SSH':v.reachable===false?'Not answering':'Checking…'):'Connect to reach it',on?(v.reachable?'good':v.reachable===false?'bad':''):'');
+  setText('tile-pc',v.device?.name||state.hostname);note('tile-pc-note',v.device?.address?v.device.address+' · its key never leaves this PC':'Its key never leaves this PC','');}
+ if(page==='ssh'){
+  const ssh=state.ssh;if(usernameDraft===null&&document.activeElement!==sshUser&&sshUser.value!==ssh.username){sshUser.value=ssh.username;sizeUser();}
+  for(const n of $$('.ssh-as'))setText(n,sshUser.value.trim()||'root');for(const n of $$('.ssh-host'))setText(n,ssh.host);
+  const pill=$('ssh-pill');pill.querySelector('.dot').classList.toggle('on',!!(on&&v.reachable));setText(pill.lastElementChild,!on?'VPN off':v.reachable?'Online':v.reachable===false?'Not answering':'Checking');
+  setText($('ssh-open').querySelector('span'),on?'Open in a terminal window':'Connect and open');setText('ssh-note',on?'Opens in its own terminal window':'You’ll be asked for your PIN to connect first');
+  const last=ssh.last,status=$('ssh-status');showIf(status,!!last&&Date.now()-last.at<10*60000);
+  if(last){status.className='console-status '+last.status;setText(status,last.status==='connecting'?'Signing in to the server in the SSH window…':last.status==='open'?'Signed in. The session is open in its own window.':last.error);}
+  setText('ssh-fingerprint',ssh.fingerprint?'Server identity confirmed on this PC: '+ssh.fingerprint:'The server’s identity hasn’t been confirmed on this PC yet. You’ll be asked to check it the first time.');}
+ if(page==='profile'){setText('profile-devices',(profile?profile.devices.length:v.devices)+' of '+v.limit+' devices');showIf('profile-admin',!!v.user?.admin);}
+ if(page==='settings'){
+  setText('version','Version '+state.version+(state.build?' (build '+state.build+')':'')+' for Windows');
+  const b=$('update-button');if(!b.classList.contains('working')){setText(b,u.status==='available'?'Download update':u.status==='ready'?'Install and restart':u.status==='checking'?'Checking…':u.status==='downloading'?'Downloading…':'Check for updates');b.classList.toggle('primary',['available','ready'].includes(u.status));b.disabled=['checking','downloading'].includes(u.status);}
+  const text={checking:'Checking for updates…',current:'You have the latest version.',available:'Version '+(u.latest||'')+' is available.',downloading:'Downloading the update… '+(u.progress||0)+'%',ready:'The update is ready. Installing restarts HN Secure Network.',error:u.error||'Couldn’t check for updates.'}[u.status]||'';
+  setText('update-text',text);showIf('update-text',!!text);$('update-text').classList.toggle('bad',u.status==='error');
+  showIf('update-progress',u.status==='downloading');$('update-progress').firstElementChild.style.transform='scaleX('+((u.progress||0)/100)+')';
+  for(const sw of $$('[data-pref]'))sw.setAttribute('aria-checked',String(!!state.prefs[sw.dataset.pref]));
+  for(const t of $$('[data-theme]'))t.setAttribute('aria-pressed',String(state.prefs.theme===t.dataset.theme));
+  setText('pc-text',(v.device?v.device.name+' · '+v.device.address:state.hostname)+'. WireGuard for Windows carries the connection; its configuration can only be read by administrators.');
+  setText('account-text','Signed in as '+(v.user?.email||'')+'. Signing out disconnects and removes this PC from the VPN.');
+  for(const btn of $$('[data-action=set-up],#remove'))if(!btn.classList.contains('working'))btn.disabled=!!v.busy;}}
+function note(id,text,cls){const n=$(id);setText(n,text);n.className='note'+(cls?' '+cls:'');}
+function tick(){if(state?.connectedAt)setText('elapsed',duration(Date.now()-state.connectedAt));}
+setInterval(tick,1000);
+
+async function receive(incoming){state=incoming;const v=state.vpn;
+ if(v.error&&v.error!==lastError&&stage()==='app')toast(v.error);lastError=v.error||'';
+ if(state.avatarTag!==avatarTag){avatarTag=state.avatarTag;avatarData=null;if(avatarTag){const data=await act('avatar',undefined,{quiet:true});if(typeof data==='string'&&data.startsWith('data:image/'))avatarData=data;}}
+ // A PIN left open is put away if the VPN came on another way or this PC can no longer connect.
+ if(current?.kind==='pin'&&!current.checking&&!current.ssh&&(v.connected||!v.ready))next();
+ render();}
+api.subscribe(receive);
 api.state().then(s=>{if(!state)receive(s);});

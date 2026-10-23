@@ -1,8 +1,8 @@
 {
   "name": "hn-secure-network-windows",
-  "version": "1.0.1",
+  "version": "2.0.0",
   "private": true,
-  "description": "HN Secure Network for Windows: the HN Group VPN and SSH sessions to the HN Group server",
+  "description": "HN Secure Network for Windows: the HN Group VPN (connect with your PIN) and SSH sessions to the HN Group server in their own terminal window",
   "author": "HN Group",
   "license": "UNLICENSED",
   "main": "src/main.cjs",
@@ -12,16 +12,17 @@
     "test:desktop": "node test/desktop.cjs",
     "icons": "node scripts/icons.cjs",
     "build:win": "electron-builder --win --x64 --publish never",
-    "postinstall": "node scripts/vendor.cjs"
+    "ssh-helper": "node scripts/ssh-helper.cjs"
   },
   "devDependencies": {
     "@resvg/resvg-js": "2.6.2",
-    "@xterm/addon-fit": "0.11.0",
-    "@xterm/xterm": "6.0.0",
     "electron": "44.9.0",
     "electron-builder": "26.15.3",
+    "esbuild": "0.25.11",
     "playwright": "1.61.1",
-    "png-to-ico": "3.0.1"
+    "png-to-ico": "3.0.1",
+    "postject": "1.0.0-alpha.6",
+    "ssh2": "1.17.0"
   },
   "build": {
     "appId": "uk.org.hngroup.securenetwork",
@@ -33,6 +34,7 @@
     },
     "files": [
       "src/**",
+      "!src/ssh-console.cjs",
       "ui/**",
       "package.json"
     ],
@@ -57,12 +59,18 @@
       "shortcutName": "HN Secure Network",
       "deleteAppDataOnUninstall": false
     },
-    "npmRebuild": false
+    "npmRebuild": false,
+    "extraResources": [
+      {
+        "from": "build/ssh",
+        "to": "ssh",
+        "filter": [
+          "HN Secure Network SSH.exe"
+        ]
+      }
+    ]
   },
   "engines": {
     "node": ">=22.12.0"
-  },
-  "dependencies": {
-    "ssh2": "1.17.0"
   }
 }

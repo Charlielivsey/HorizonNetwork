@@ -2,19 +2,195 @@
 <html lang="en-GB">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HN Secure Network</title>
-<link rel="stylesheet" href="vendor/xterm.css">
 <link rel="stylesheet" href="app.css">
 </head>
-<body>
-<div class="titlebar" aria-hidden="true"><img class="title-icon" src="assets/tray.png" alt=""><span>HN Secure Network</span></div>
-<div id="app"></div>
-<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-<script src="vendor/xterm.js"></script>
-<script src="vendor/addon-fit.js"></script>
-<script src="terminal.js"></script>
+<body data-view="loading">
+<!-- The window's own title bar: drag it to move the window; Windows draws its buttons on the right. -->
+<header class="titlebar">
+ <img class="title-icon" src="assets/tray.png" alt="">
+ <span class="title-name">HN Secure Network</span>
+ <span class="title-status" id="title-status" hidden><i class="dot"></i><span></span></span>
+</header>
+
+<div class="views">
+ <!-- Signed out, and waiting for the browser sign-in -->
+ <section class="view split" id="view-welcome" hidden>
+  <aside class="brand-pane">
+   <img class="wordmark" src="assets/hn-group-wordmark-white.svg" alt="HN Group">
+   <div class="art"><div class="shield"><svg data-icon="shield"></svg></div><h2>Private by default.</h2><p class="sub">Encrypted. Fast. Yours.</p></div>
+   <div class="staff"><svg data-icon="check"></svg>For HN Group staff</div>
+  </aside>
+  <main class="content-pane">
+   <div class="stack" data-mode="idle">
+    <p class="eyebrow">HN Secure Network</p>
+    <h1>Welcome back.</h1>
+    <p class="lede">Send all of this PC’s internet traffic through HN Group’s private VPN, and open SSH sessions to the HN Group server in their own terminal window.</p>
+    <div class="row"><button class="btn primary large" id="sign-in">Sign in with HN Group Auth<svg data-icon="arrow"></svg></button></div>
+    <p class="hint">Your browser opens HN Group Auth. You’ll need your password and six-digit PIN.</p>
+   </div>
+   <div class="stack" data-mode="waiting" hidden>
+    <p class="eyebrow">Almost there</p>
+    <h1>Finish signing in in your browser</h1>
+    <p class="lede">Your browser has opened HN Group Auth. Sign in with your password and six-digit PIN, and you’ll come straight back here.</p>
+    <div class="waiting-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+    <div class="row"><button class="btn" id="sign-in-again"><svg data-icon="refresh"></svg>Open the sign-in page again</button><button class="btn ghost" id="cancel-sign-in">Cancel</button></div>
+   </div>
+   <div class="banner bad" id="welcome-error" hidden><svg data-icon="alert"></svg><div class="grow"><strong>That didn’t work</strong><p></p></div></div>
+  </main>
+ </section>
+
+ <!-- Signed in, this PC not set up yet -->
+ <section class="view split" id="view-setup" hidden>
+  <aside class="brand-pane">
+   <img class="wordmark" src="assets/hn-group-wordmark-white.svg" alt="HN Group">
+   <div class="art"><div class="shield"><svg data-icon="laptop"></svg></div><h2>Three quick steps.</h2><p class="sub">Windows asks for permission once.</p></div>
+   <div class="staff"><svg data-icon="check"></svg>For HN Group staff</div>
+  </aside>
+  <main class="content-pane">
+   <p class="eyebrow" id="setup-who">Signed in</p>
+   <h1>Let’s get this PC ready</h1>
+   <p class="lede" id="setup-lede">Windows will ask for permission once while setting up.</p>
+   <div class="steps">
+    <div class="step" id="step-tools"><span class="num"><b>1</b><svg data-icon="check"></svg></span><div><h3>Install WireGuard for Windows</h3><p>The open-source VPN that carries the connection. Its official installer is checked before it runs.</p></div><button class="btn primary small" id="install-tools">Install</button></div>
+    <div class="step" id="step-setup"><span class="num"><b>2</b><svg data-icon="check"></svg></span><div><h3>Set up this PC</h3><p id="setup-devices">Registers this PC with a key made here; it never leaves this PC.</p></div><button class="btn primary small" id="set-up">Set up</button></div>
+    <div class="step" id="step-connect"><span class="num"><b>3</b><svg data-icon="check"></svg></span><div><h3>Connect with your PIN</h3><p>Turn the VPN on with one click and your six-digit HN Group PIN.</p></div></div>
+   </div>
+   <p class="hint" id="tools-hint" hidden>Approve the Windows prompt to let WireGuard install. This can take a minute.</p>
+   <div class="banner warn" id="setup-limit" hidden><svg data-icon="devices"></svg><div class="grow"><strong>You’ve used all your devices</strong><p>Remove one on the VPN website first.</p></div><button class="btn small" data-open="devices">Open the website</button></div>
+   <div class="banner bad" id="setup-error" hidden><svg data-icon="alert"></svg><div class="grow"><strong>That didn’t work</strong><p></p></div></div>
+   <div class="row"><button class="btn ghost small" id="setup-sign-out">Sign out</button></div>
+  </main>
+ </section>
+
+ <!-- Signed in and set up -->
+ <section class="view shell" id="view-app" hidden>
+  <nav class="side" aria-label="HN Secure Network">
+   <img class="wordmark only-light" src="assets/hn-group-wordmark.svg" alt="HN Group"><img class="wordmark only-dark" src="assets/hn-group-wordmark-white.svg" alt="HN Group">
+   <p class="menu-label">Menu</p>
+   <button class="nav" data-page="connection"><svg data-icon="power"></svg>Connection</button>
+   <button class="nav" data-page="ssh"><svg data-icon="terminal"></svg>SSH</button>
+   <button class="nav" data-page="profile"><svg data-icon="user"></svg>Profile</button>
+   <button class="nav" data-page="settings"><svg data-icon="settings"></svg>Settings</button>
+   <div class="spacer"></div>
+   <button class="side-card update" id="side-update" hidden><svg data-icon="download"></svg><span>Update available</span></button>
+   <button class="side-card status" id="side-status"><i class="dot"></i><span><strong>Not connected</strong><small>Your own connection</small></span></button>
+   <button class="side-card user" id="side-user"><span class="avatar" data-avatar></span><span><strong data-name></strong><small data-email></small></span></button>
+  </nav>
+  <main class="main" id="main">
+   <!-- Connection -->
+   <section class="page" data-page-id="connection" hidden>
+    <header><p class="eyebrow" id="today"></p><h1 id="greeting">Hello</h1></header>
+    <div class="banner warn" id="banner-outdated" hidden><svg data-icon="refresh"></svg><div class="grow"><strong>Finish updating this PC’s VPN</strong><p>HN Group changed how the VPN works. Update this PC’s connection to keep using it (Windows asks once).</p></div><button class="btn small" data-action="set-up">Update</button></div>
+    <div class="banner warn" id="banner-shared" hidden><svg data-icon="user"></svg><div class="grow"><strong>This PC is set up for another HN account</strong><p>Set it up for your account to see its details here.</p></div><button class="btn small" data-action="set-up">Set up</button></div>
+    <div class="hero" id="hero">
+     <button class="power" id="power" aria-label="Connect"><span class="halo"></span><span class="ring"></span><span class="core"><svg data-icon="power"></svg></span></button>
+     <div class="hero-text">
+      <span class="pill"><i class="dot"></i><span id="hero-pill">Not protected</span></span>
+      <h2 id="hero-title">You’re not connected</h2>
+      <p id="hero-text">Connect to send this PC’s internet traffic through HN Group’s private VPN. You’ll be asked for your PIN.</p>
+      <p class="meta" id="hero-meta" hidden><svg data-icon="clock"></svg>Connected for <span id="elapsed">0:00</span></p>
+      <div class="row"><button class="btn glass" id="toggle">Connect</button><button class="btn glass" data-go="ssh"><svg data-icon="terminal"></svg>Open SSH</button></div>
+     </div>
+    </div>
+    <div class="banner bad" id="banner-unreachable" hidden><svg data-icon="alert"></svg><div class="grow"><strong>The HN Group server isn’t answering</strong><p>The VPN is on, but no traffic is getting through. Your network may block UDP port 51820.</p></div></div>
+    <div class="tiles">
+     <div class="tile"><span class="icon"><svg data-icon="globe"></svg></span><div><small>Your traffic appears as</small><strong id="tile-ip">—</strong><span class="note" id="tile-ip-note">Connect to use the VPN address</span></div></div>
+     <div class="tile"><span class="icon"><svg data-icon="pin"></svg></span><div><small>Location</small><strong id="tile-place">Your own connection</strong><span class="note" id="tile-place-note">Not through the VPN</span></div></div>
+     <div class="tile"><span class="icon"><svg data-icon="server"></svg></span><div><small>HN Group server</small><strong id="tile-server">10.88.0.1</strong><span class="note" id="tile-server-note">Connect to reach it</span></div></div>
+     <div class="tile"><span class="icon"><svg data-icon="laptop"></svg></span><div><small>This PC</small><strong id="tile-pc">—</strong><span class="note" id="tile-pc-note">Its key never leaves this PC</span></div></div>
+    </div>
+   </section>
+
+   <!-- SSH -->
+   <section class="page" data-page-id="ssh" hidden>
+    <header><p class="eyebrow">Secure shell</p><h1>SSH to the HN Group server</h1><p>Opens a secure shell in its own terminal window, straight through the VPN.</p></header>
+    <div class="console">
+     <div class="console-bar"><i></i><i></i><i></i><svg data-icon="lock"></svg><span><span class="ssh-as">root</span>@<span class="ssh-host">10.88.0.1</span> — ssh</span><span class="console-pill" id="ssh-pill"><i class="dot"></i><span>VPN off</span></span></div>
+     <div class="console-body">
+      <p class="dim">HN Secure Network · encrypted session through the HN Group VPN</p>
+      <label class="prompt" for="ssh-user"><span class="ok">➜</span> ssh <input id="ssh-user" class="inline" spellcheck="false" autocomplete="off" aria-label="Server username" size="4"><span class="host">@<span class="ssh-host">10.88.0.1</span></span></label>
+      <label class="password" for="ssh-password"><span class="dim"><span class="ssh-as">root</span>@<span class="ssh-host">10.88.0.1</span>’s password:</span><input id="ssh-password" class="inline secret" type="password" autocomplete="off" aria-label="Server password"></label>
+      <div class="row"><button class="btn primary" id="ssh-open"><svg data-icon="terminal"></svg><span>Open in a terminal window</span></button><span class="console-note" id="ssh-note">Opens in Windows Terminal</span></div>
+      <p class="console-status" id="ssh-status" hidden></p>
+     </div>
+    </div>
+    <div class="chips"><span class="chip"><svg data-icon="shield"></svg>Encrypted through the VPN</span><span class="chip"><svg data-icon="key"></svg>Password only, never saved</span><span class="chip"><svg data-icon="check"></svg>Server identity remembered</span></div>
+    <div class="card">
+     <h2><svg data-icon="key"></svg>How it works</h2>
+     <p class="muted small">Your password is typed here and handed once to the SSH window that opens; it is never saved or put on a command line. SSH keys on this PC are never read or offered. The first time, HN Secure Network shows the server’s fingerprint for you to check; after that it refuses to connect if the server’s identity ever changes.</p>
+     <p class="small fingerprint" id="ssh-fingerprint">The server’s identity hasn’t been confirmed on this PC yet.</p>
+    </div>
+   </section>
+
+   <!-- Profile -->
+   <section class="page" data-page-id="profile" hidden>
+    <div class="profile-top"><div class="cover"></div><div class="who"><span class="avatar" data-avatar></span><div><h1 data-name></h1><p class="muted" data-email></p><div class="row"><span class="tag accent" id="profile-admin" hidden>VPN administrator</span><span class="tag good" id="profile-devices"></span></div></div></div></div>
+    <p class="muted small">Your name and photo come from your HN Group staff profile. Change them in HN Account, the staff portal or HN Browser.</p>
+    <p class="empty card" id="profile-loading">Loading your profile…</p>
+    <div class="card" id="card-sessions" hidden><h2><svg data-icon="key"></svg>Where you’re signed in</h2><div class="list" id="sessions"></div></div>
+    <div class="card" id="card-devices" hidden><div class="head"><h2><svg data-icon="devices"></svg>Your devices</h2><button class="btn ghost small" data-open="devices">Manage on the web</button></div><div class="list" id="devices"></div></div>
+    <div class="card" id="card-activity" hidden><h2><svg data-icon="history"></svg>Recent activity</h2><div class="timeline" id="activity"></div></div>
+   </section>
+
+   <!-- Settings -->
+   <section class="page" data-page-id="settings" hidden>
+    <header><p class="eyebrow">Settings</p><h1>Settings</h1></header>
+    <div class="card">
+     <div class="head"><div><h2>HN Secure Network</h2><p class="muted small" id="version"></p></div><button class="btn small" id="update-button">Check for updates</button></div>
+     <p class="small muted" id="update-text" hidden></p>
+     <div class="progress" id="update-progress" hidden><i></i></div>
+     <p class="muted small">Updates come from downloads.hngroup.org.uk and are checked twice before they install by themselves.</p>
+    </div>
+    <div class="card">
+     <h2>Startup</h2>
+     <div class="toggle"><div><strong>Open when I sign in to Windows</strong><small>HN Secure Network waits in the system tray.</small></div><button class="switch" role="switch" data-pref="launchAtLogin" aria-label="Open when I sign in to Windows"></button></div>
+     <div class="toggle"><div><strong>Ask to connect when the app opens</strong><small>Opens straight on your PIN, so connecting takes one step.</small></div><button class="switch" role="switch" data-pref="connectOnLaunch" aria-label="Ask to connect when the app opens"></button></div>
+    </div>
+    <div class="card">
+     <h2>Appearance</h2>
+     <div class="segmented" role="group" aria-label="Appearance"><button data-theme="system">Match Windows</button><button data-theme="light">Light</button><button data-theme="dark">Dark</button></div>
+    </div>
+    <div class="card">
+     <h2>This PC</h2>
+     <p class="muted small" id="pc-text"></p>
+     <div class="row"><button class="btn small" data-action="set-up"><svg data-icon="refresh"></svg>Reinstall the VPN configuration</button><button class="btn small danger" id="remove">Remove this PC from the VPN</button></div>
+    </div>
+    <div class="card">
+     <h2>Account</h2>
+     <p class="muted small" id="account-text"></p>
+     <div class="row"><button class="btn small" data-open="vpn">Open the VPN website</button><button class="btn small danger" id="sign-out">Sign out</button></div>
+    </div>
+   </section>
+  </main>
+ </section>
+</div>
+
+<!-- Questions and the PIN: a card in the middle of the window over a dimmed page -->
+<div class="layer" id="layer" hidden>
+ <div class="scrim"></div>
+ <div class="sheet" id="dialog" role="alertdialog" aria-modal="true" aria-labelledby="dialog-title" aria-describedby="dialog-text" hidden>
+  <span class="sheet-icon" id="dialog-icon"><svg data-icon="shield"></svg></span>
+  <h2 id="dialog-title"></h2>
+  <p id="dialog-text"></p>
+  <code class="fingerprint-box" id="dialog-detail" hidden></code>
+  <p class="small muted" id="dialog-note" hidden></p>
+  <div class="sheet-actions" id="dialog-buttons"></div>
+ </div>
+ <div class="sheet pin" id="pin" role="dialog" aria-modal="true" aria-labelledby="pin-title" hidden>
+  <span class="avatar large" data-avatar></span>
+  <h2 id="pin-title">Enter your PIN to connect</h2>
+  <p class="muted">Your six-digit HN Group PIN, <span data-first></span>.</p>
+  <label class="pin-boxes" for="pin-input" id="pin-boxes"><i></i><i></i><i></i><i></i><i></i><i></i>
+   <input id="pin-input" type="password" inputmode="numeric" autocomplete="one-time-code" maxlength="6" aria-label="Six-digit PIN"></label>
+  <p class="pin-message" id="pin-message" aria-live="polite">You’re asked every time you connect.</p>
+  <div class="sheet-actions"><button class="btn" id="pin-cancel">Cancel</button></div>
+ </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 <script src="app.js"></script>
 </body>
 </html>

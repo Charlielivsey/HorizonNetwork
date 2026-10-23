@@ -142,6 +142,9 @@ class VPN{
  connect(){return this.task('connecting',async()=>{if(!this.ready)throw Error('Set up the HN VPN on this computer first.');await this.controller.up();await new Promise(r=>setTimeout(r,800));await this.poll();if(!this.connected)throw Error('The VPN didn’t connect. Try again.');if(this.reachable===false){this.error='The tunnel started, but the HN server is not answering. UDP 51820 may be blocked by your network or the hosting provider firewall. Check the VPN handshake and try again.';this.note();}});}
  disconnect(){return this.task('disconnecting',async()=>{await this.controller.down();await this.poll();});}
  toggle(){return this.connected?this.disconnect():this.connect();}
+ // HN Secure Network asks for the HN account's six-digit PIN before every connection; vpn.hngroup.org.uk
+ // checks it with the staff backend (five wrong tries lock it for 15 minutes).
+ async verifyPin(pin){if(!/^\d{6}$/.test(String(pin||'')))throw Error('Enter your six-digit PIN.');if(!this.token)throw Error('Sign in to the HN VPN first.');try{await this.call('api/app/verify-pin',{method:'POST',body:{pin:String(pin)}});}catch(e){if(e.status===404)throw Error('The VPN server needs its latest update before it can check PINs. Please try again later.');if(e.status===401){this.forgetToken();this.error='Your HN VPN sign-in ended. Sign in again.';this.note();}throw e;}}
  // Removes this computer's VPN connection and its registration.
  remove(){return this.task('removing',async()=>{await this.controller.down().catch(()=>{});await this.controller.remove();if(this.deviceId&&this.token)await this.call('api/devices/'+this.deviceId,{method:'DELETE'}).catch(()=>{});this.deviceId=null;this.saveState();await this.refresh();await this.poll();});}
 }

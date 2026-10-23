@@ -22,6 +22,9 @@ jobs:
         working-directory: windows-vpn-app
       - run: npm run icons
         working-directory: windows-vpn-app
+      - name: Build the SSH window (HN Secure Network SSH.exe)
+        run: npm run ssh-helper
+        working-directory: windows-vpn-app
       - name: Record the build number
         shell: bash
         run: node -e "require('fs').writeFileSync('src/build.json', JSON.stringify({build:Number(process.env.GITHUB_RUN_NUMBER)}))"
@@ -37,6 +40,10 @@ jobs:
           name: secure-network-windows
           path: windows-vpn-app/dist/HN-Secure-Network-*-windows-x64.exe
           if-no-files-found: error
+      - name: Check the installer carries the SSH window
+        shell: bash
+        run: test -f "dist/win-unpacked/resources/ssh/HN Secure Network SSH.exe"
+        working-directory: windows-vpn-app
   publish:
     needs: build
     runs-on: ubuntu-latest
@@ -53,7 +60,7 @@ jobs:
           VERSION=$(node -p "require('./windows-vpn-app/package.json').version")
           TAG="secure-network-windows-v$VERSION-$GITHUB_RUN_NUMBER"; NAME="HN-Secure-Network-$VERSION-windows-x64.exe"
           test -f "installer/$NAME"
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "HN Secure Network $VERSION for Windows · build $GITHUB_RUN_NUMBER" --notes 'HN Secure Network for Windows 10 and 11 (64-bit): the HN Group VPN and SSH sessions to the HN Group server. For HN Group staff; sign in with your HN Group account. It installs WireGuard for Windows if needed and keeps itself up to date. Preview builds are not code-signed yet.' "installer/$NAME"
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "HN Secure Network $VERSION for Windows · build $GITHUB_RUN_NUMBER" --notes 'HN Secure Network for Windows 10 and 11 (64-bit): the HN Group VPN (connect with your PIN) and SSH sessions to the HN Group server in their own terminal window. For HN Group staff; sign in with your HN Group account. It installs WireGuard for Windows if needed and keeps itself up to date. Preview builds are not code-signed yet.' "installer/$NAME"
           # downloads.hngroup.org.uk (and so the in-app updater) finds this build from this record.
           TAG="$TAG" NAME="$NAME" VERSION="$VERSION" node -e "const fs=require('fs'),crypto=require('crypto');const data=fs.readFileSync('installer/'+process.env.NAME);fs.writeFileSync('downloads-site/secure-network-windows.json',JSON.stringify({tag:process.env.TAG,version:process.env.VERSION,build:Number(process.env.GITHUB_RUN_NUMBER),publishedAt:new Date().toISOString(),asset:{name:process.env.NAME,size:data.length,sha256:crypto.createHash('sha256').update(data).digest('hex')}},null,1));"
           cat downloads-site/secure-network-windows.json
