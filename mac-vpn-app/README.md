@@ -28,7 +28,9 @@ The app isn't notarised by Apple, so the first time you open it, right-click it 
 4. Choose **Set up this Mac** and enter your Mac password once. This installs a small helper
    (`/usr/local/libexec/hn-vpn/hn-vpn-ctl`), this Mac's VPN configuration (root-only, in
    `/usr/local/etc/hn-vpn/`) and a rule that lets you connect without a password each time.
-5. Use the switch to connect or disconnect. **Sign out** disconnects and removes this Mac from the VPN.
+5. Use the switch to connect or disconnect. Every connection asks for your six-digit HN Group PIN first
+   (in the window or the menu bar); vpn.hngroup.org.uk checks it with the staff backend, which locks
+   after five wrong tries for 15 minutes. **Sign out** disconnects and removes this Mac from the VPN.
 
 Requires macOS 13 (Ventura) or later, on Apple silicon or Intel.
 

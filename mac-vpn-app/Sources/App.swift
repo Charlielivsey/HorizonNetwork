@@ -163,6 +163,7 @@ enum When {
 
 struct MainView: View {
     @EnvironmentObject var model: VPNModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -173,7 +174,9 @@ struct MainView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.3), value: model.stage)
+            if model.stage == .ready, model.pinRequest != nil { PinSheet() }
         }
+        .animation(reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.34, dampingFraction: 0.86), value: model.pinRequest)
         .frame(minWidth: 900, minHeight: 620)
         .background(Theme.background)
         .font(Theme.font(14))
@@ -1121,7 +1124,20 @@ struct MenuView: View {
                         .overlay(Circle().strokeBorder(Color.white.opacity(0.25), lineWidth: 1))
                 }
             }
-            if model.stage == .ready && model.isSetUp {
+            if model.stage == .ready && model.isSetUp && model.pinRequest != nil {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Enter your PIN to connect").font(Theme.font(16, .heavy)).foregroundStyle(.white)
+                    PinEntry(compact: true)
+                    HStack {
+                        Text(model.pinError ?? "Your six-digit HN Group PIN")
+                            .font(Theme.font(11, .semibold)).foregroundStyle(model.pinError == nil ? Color.white.opacity(0.7) : Color(hex: 0xFFB4C8))
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 8)
+                        Button("Cancel") { model.cancelPin() }.buttonStyle(.plain).font(Theme.font(12, .bold)).foregroundStyle(.white.opacity(0.85))
+                    }
+                }
+                .transition(.opacity)
+            } else if model.stage == .ready && model.isSetUp {
                 HStack(spacing: 14) {
                     Button { Task { await model.toggle() } } label: { PowerSwitch(on: model.connected, busy: model.busy) }
                         .buttonStyle(.plain).disabled(model.busy)
@@ -1155,12 +1171,120 @@ struct MenuView: View {
         .clipped()
         .environment(\.colorScheme, .dark)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: model.connected)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: model.pinRequest)
     }
 
     private func open(_ section: VPNModel.Section?) {
         if let section = section { model.show(section) }
         openWindow(id: "main")
         NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
+// MARK: - PIN before connecting
+
+/// Six masked boxes for the HN Group PIN. Typing the sixth digit checks it once; a wrong PIN shakes
+/// the boxes and clears them. One hidden field takes the typing (and pasting) so the boxes stay simple.
+struct PinEntry: View {
+    @EnvironmentObject var model: VPNModel
+    var compact = false
+    @State private var code = ""
+    @State private var shakes: CGFloat = 0
+    @FocusState private var focused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ZStack {
+            SecureField("", text: $code)
+                .textFieldStyle(.plain)
+                .focused($focused)
+                .frame(width: 1, height: 1).opacity(0.01)
+                .accessibilityLabel("Six-digit PIN")
+                .onChange(of: code) { typed in
+                    let digits = String(typed.filter { $0.isASCII && $0.isNumber }.prefix(6))
+                    if digits != typed { code = digits; return }
+                    if digits.count == 6 && !model.pinBusy { Task { await model.submitPin(digits) } }
+                }
+            HStack(spacing: compact ? 7 : 10) {
+                ForEach(0..<6, id: \.self) { i in box(i) }
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { focused = true }
+        }
+        .modifier(Shake(amount: shakes))
+        .opacity(model.pinBusy ? 0.6 : 1)
+        .onAppear { code = ""; focused = true; DispatchQueue.main.async { focused = true } }
+        .onChange(of: model.pinError) { message in
+            guard message != nil else { return }
+            code = ""; focused = true
+            if !reduceMotion { withAnimation(.linear(duration: 0.4)) { shakes += 1 } }
+        }
+    }
+
+    private func box(_ i: Int) -> some View {
+        let filled = i < code.count, current = focused && i == min(code.count, 5) && !model.pinBusy
+        let size: CGFloat = compact ? 38 : 48
+        return RoundedRectangle(cornerRadius: compact ? 10 : 12, style: .continuous)
+            .fill(compact ? Color.white.opacity(filled ? 0.18 : 0.08) : (filled ? Theme.accentSoft : Theme.surface2))
+            .overlay(RoundedRectangle(cornerRadius: compact ? 10 : 12, style: .continuous)
+                .strokeBorder(current ? Theme.violet : (compact ? Color.white.opacity(0.22) : Theme.border), lineWidth: current ? 2 : 1))
+            .overlay(Circle().fill(compact ? Color.white : Theme.accent).frame(width: compact ? 9 : 11, height: compact ? 9 : 11)
+                .scaleEffect(filled ? 1 : 0.2).opacity(filled ? 1 : 0))
+            .frame(width: size, height: size + (compact ? 4 : 8))
+            .animation(reduceMotion ? nil : .spring(response: 0.25, dampingFraction: 0.7), value: filled)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: current)
+    }
+}
+
+/// A short side-to-side shake for a wrong PIN.
+struct Shake: GeometryEffect {
+    var amount: CGFloat
+    var animatableData: CGFloat { get { amount } set { amount = newValue } }
+    func effectValue(size: CGSize) -> ProjectionTransform {
+        ProjectionTransform(CGAffineTransform(translationX: 9 * sin(amount * .pi * 6), y: 0))
+    }
+}
+
+/// The window's PIN card, centred over a lightly dimmed page.
+struct PinSheet: View {
+    @EnvironmentObject var model: VPNModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.32).ignoresSafeArea().onTapGesture { if !model.pinBusy { model.cancelPin() } }
+                .transition(.opacity)
+            VStack(spacing: 16) {
+                if let user = model.user {
+                    AvatarView(image: model.avatar, name: user.displayName, size: 56)
+                        .overlay(Circle().strokeBorder(Theme.border, lineWidth: 1))
+                }
+                VStack(spacing: 5) {
+                    Text(model.pinRequest?.ssh == nil ? "Enter your PIN to connect" : "Enter your PIN to connect and open SSH")
+                        .font(Theme.font(19, .heavy)).multilineTextAlignment(.center)
+                    Text("Your six-digit HN Group PIN")
+                        .font(Theme.font(13)).foregroundStyle(Theme.muted).multilineTextAlignment(.center)
+                }
+                PinEntry()
+                ZStack {
+                    if model.pinBusy { HStack(spacing: 8) { ProgressView().controlSize(.small); Text("Checking…") }.foregroundStyle(Theme.muted) }
+                    else if let message = model.pinError { Text(message).foregroundStyle(Theme.danger).multilineTextAlignment(.center) }
+                    else { Text("You’re asked every time you connect.").foregroundStyle(Theme.muted) }
+                }
+                .font(Theme.font(12, .semibold)).frame(minHeight: 18)
+                Button("Cancel") { model.cancelPin() }
+                    .buttonStyle(HNButtonStyle(primary: false))
+                    .keyboardShortcut(.cancelAction)
+                    .disabled(model.pinBusy)
+            }
+            .padding(.horizontal, 30).padding(.vertical, 26)
+            .frame(width: 400)
+            .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Theme.surface))
+            .overlay(alignment: .top) { HNStripe().frame(height: 4).clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous)) }
+            .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Theme.border))
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .shadow(color: .black.opacity(0.3), radius: 30, y: 16)
+            .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.94)).combined(with: .offset(y: 10)))
+        }
     }
 }
 
@@ -1213,6 +1337,8 @@ enum Snapshots {
         return m
     }
 
+    static func askingForPin(_ m: VPNModel) -> VPNModel { m.pinRequest = VPNModel.PinRequest(); return m }
+
     static func render(to folder: URL) {
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let pages: [(String, VPNModel, CGSize, Bool)] = [
@@ -1223,6 +1349,7 @@ enum Snapshots {
             ("ssh", sample(section: .ssh), CGSize(width: 1040, height: 760), false),
             ("profile", sample(section: .profile), CGSize(width: 1040, height: 860), false),
             ("settings", sample(section: .settings), CGSize(width: 1040, height: 700), false),
+            ("pin", askingForPin(sample(connected: false)), CGSize(width: 1040, height: 760), false),
         ]
         for dark in [true, false] {
             for (name, model, size, _) in pages {
@@ -1230,6 +1357,8 @@ enum Snapshots {
             }
             let menuModel = sample()
             shoot(MenuView().environmentObject(menuModel), size: CGSize(width: 320, height: 290), dark: dark, to: folder.appendingPathComponent("menu-\(dark ? "dark" : "light").png"))
+            let pinMenu = askingForPin(sample(connected: false))
+            shoot(MenuView().environmentObject(pinMenu), size: CGSize(width: 320, height: 300), dark: dark, to: folder.appendingPathComponent("menu-pin-\(dark ? "dark" : "light").png"))
         }
     }
 

@@ -83,6 +83,7 @@ final class API {
         request.timeoutInterval = 20
         if let token = token { request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization") }
         request.setValue("\(AppInfo.version) (\(AppInfo.build))", forHTTPHeaderField: "X-HN-VPN-App")
+        request.setValue("secure-terminal", forHTTPHeaderField: "X-HN-VPN-Client")
         return request
     }
 

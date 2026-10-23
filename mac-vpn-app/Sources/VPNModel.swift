@@ -42,6 +42,12 @@ final class VPNModel: ObservableObject {
     @Published var sshBusy = false
     /// When the VPN last came on (for the connection timer).
     @Published var connectedSince: Date?
+    /// Connecting always asks for the person's six-digit HN Group PIN first (checked by the server).
+    /// `ssh` holds a typed SSH password to use once connected, when the connection was asked for by SSH.
+    struct PinRequest: Equatable { let id = UUID(); var ssh: String? }
+    @Published var pinRequest: PinRequest?
+    @Published var pinError: String?
+    @Published var pinBusy = false
     /// Screenshots mode (--snapshot): sample data, no network, no keychain.
     let preview: Bool
     private var avatarTag: String?
@@ -253,10 +259,45 @@ final class VPNModel: ObservableObject {
     // MARK: Connecting
 
     func toggle() async {
-        if connected { await disconnect() } else { await connect() }
+        if connected { await disconnect() } else { requestConnect() }
     }
 
-    func connect() async {
+    /// Asks for the PIN; the VPN comes on once the server has accepted it.
+    func requestConnect(ssh password: String? = nil) {
+        guard !busy, !connected || password != nil else { return }
+        pinError = nil
+        pinRequest = PinRequest(ssh: password)
+    }
+
+    func cancelPin() { pinRequest = nil; pinError = nil }
+
+    /// Checks the six-digit PIN with the server (it counts wrong tries and locks after five), then connects.
+    func submitPin(_ pin: String) async {
+        guard let request = pinRequest, !pinBusy else { return }
+        guard pin.range(of: "^[0-9]{6}$", options: .regularExpression) != nil else { pinError = "Enter your six-digit PIN."; return }
+        pinError = nil; pinBusy = true
+        do {
+            if !preview { _ = try await api.send("api/app/verify-pin", method: "POST", body: ["pin": pin], as: OKResponse.self) }
+            pinBusy = false
+            guard pinRequest == request else { return }
+            pinRequest = nil
+            await connect()
+            if let password = request.ssh, connected { await openSSH(password: password) }
+        } catch let e as APIError where e.status == 401 {
+            pinBusy = false; pinRequest = nil
+            Keychain.set("token", nil); api.token = nil; stage = .signIn
+            error = "Your sign-in has expired. Please sign in again."
+        } catch let e as APIError where e.status == 404 {
+            pinBusy = false
+            pinError = "The VPN server needs its latest update before it can check PINs. Please try again later."
+        } catch {
+            pinBusy = false
+            pinError = error.localizedDescription
+        }
+    }
+
+    /// Only after the PIN has been checked (see submitPin).
+    private func connect() async {
         guard !busy else { return }
         error = nil; busy = true; defer { busy = false }
         let result = await Shell.run("/usr/bin/sudo", ["-n", Paths.helper, "up"])
@@ -409,7 +450,8 @@ final class VPNModel: ObservableObject {
         guard !password.isEmpty else { error = "Enter your password."; return }
         UserDefaults.standard.set(user, forKey: "sshUser")
         error = nil; sshBusy = true; defer { sshBusy = false }
-        if !connected { await connect() }
+        // Not connected yet: ask for the PIN, connect, then come back here with the password.
+        if !connected { requestConnect(ssh: password); return }
         guard connected else { error = error ?? "Connect to the VPN first."; return }
         // Make sure the server answers through the VPN before opening Terminal, so a session never
         // sits waiting on a connection that can't work.
