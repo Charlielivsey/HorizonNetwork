@@ -26,7 +26,7 @@ function serviceRequest(req) {
 function loginNext(value) {
   return typeof value === 'string' && /^\/status-admin\/authorize\?state=[a-f0-9]{64}$/.test(value) ? value : null;
 }
-function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent, handleChangePassword, handleSetCode, verifyBrowserPin, issueSession }) {
+function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent, handleChangePassword, handleSetCode, verifyBrowserPin, verifyVpnPin, issueSession }) {
   const codes = new Map();
   function current(token) {
     const data = sessions.get(token);
@@ -66,7 +66,7 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       logEvent(req, session, 'status-admin-sign-in');
       redirect(res, `${STATUS_ORIGIN}/auth/callback?code=${code}&state=${state}`); return true;
     }
-    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/password', '/api/auth/code', '/api/auth/network-leadership', '/api/auth/network-avatar', '/api/auth/account-status', '/api/auth/accounts-session', '/api/auth/browser-issue', '/api/auth/browser-profile', '/api/auth/browser-avatar', '/api/auth/browser-offer', '/api/auth/browser-logout', '/api/auth/browser-unlock', '/api/auth/browser-lock', '/api/auth/browser-account', '/api/auth/browser-account-update', '/api/auth/browser-account-status', '/api/auth/browser-account-photo'].includes(pathname)) return false;
+    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/password', '/api/auth/code', '/api/auth/network-leadership', '/api/auth/network-avatar', '/api/auth/account-status', '/api/auth/vpn-pin', '/api/auth/accounts-session', '/api/auth/browser-issue', '/api/auth/browser-profile', '/api/auth/browser-avatar', '/api/auth/browser-offer', '/api/auth/browser-logout', '/api/auth/browser-unlock', '/api/auth/browser-lock', '/api/auth/browser-account', '/api/auth/browser-account-update', '/api/auth/browser-account-status', '/api/auth/browser-account-photo'].includes(pathname)) return false;
     if (req.method !== 'POST') { sendJson(res, 405, { error: 'Method not allowed.' }); return true; }
     if (!credentials(req)) { sendJson(res, 401, { error: 'Status integration not authenticated.' }); return true; }
     const body = await readJsonBody(req, pathname === '/api/auth/browser-account-photo' ? 2 * 1024 * 1024 : undefined);
@@ -113,6 +113,11 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       const accounts = {};
       for (const id of ids) { const p = store.getPerson(id); accounts[id] = !!(p && p.account && p.account.enabled); }
       sendJson(res, 200, { accounts }); return true;
+    }
+    // HN Secure Network asks for the PIN before connecting the VPN (checked through vpn.hngroup.org.uk).
+    if (pathname === '/api/auth/vpn-pin') {
+      const error = verifyVpnPin(body.id, body.code, typeof body.ip === 'string' ? body.ip.slice(0, 64) : '', typeof body.client === 'string' ? body.client.slice(0, 80) : '');
+      sendJson(res, error ? error.status : 200, error ? { error: error.error } : { ok: true }); return true;
     }
     if (pathname === '/api/auth/network-leadership') {
       sendJson(res, 200, { leaders: network.publicMembers(store) }); return true;

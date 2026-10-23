@@ -582,6 +582,27 @@ async function handleResume(req, res, pathname) {
   completeLogin(req, res, person, "resumed");
 }
 
+// HN Secure Network asks for the person's six-digit PIN each time it connects the VPN; the VPN service
+// checks it here. Five wrong PINs lock VPN connections for that person (and the address) for 15 minutes.
+function verifyVpnPin(personId, code, ip, client) {
+  const person = store.getPerson(String(personId || ""));
+  if (!person || !person.account || !person.account.enabled) return { status: 403, error: "This account can’t use the VPN right now." };
+  if (!store.hasCode(person)) return { status: 403, error: "Set up your six-digit PIN in HN Group Auth first." };
+  const key = "vpn:" + person.id, entry = pinFailures.get(key), fresh = entry && Date.now() - entry.first <= LOCKOUT_WINDOW_MS;
+  const req = { socket: { remoteAddress: "127.0.0.1" }, headers: { "x-real-ip": ip || "127.0.0.1", "user-agent": client || "HN Secure Network" } };
+  if ((fresh && entry.count >= MAX_PIN_ATTEMPTS) || (ip && isLockedOut(ip))) return { status: 429, error: "Too many wrong PINs. Try again in 15 minutes." };
+  if (!/^\d{6}$/.test(String(code || "")) || !store.verifyCode(person, String(code))) {
+    if (ip) recordFailure(ip);
+    if (!fresh) pinFailures.set(key, { count: 1, first: Date.now() }); else entry.count++;
+    logEvent(req, null, "sign-in-code-failed", { actor: store.loginName(person), detail: "HN VPN connect" });
+    const left = MAX_PIN_ATTEMPTS - pinFailures.get(key).count;
+    return { status: left > 0 ? 401 : 429, error: left > 0 ? "That PIN isn’t right. " + left + (left === 1 ? " try" : " tries") + " left." : "Too many wrong PINs. Try again in 15 minutes." };
+  }
+  pinFailures.delete(key);
+  logEvent(req, null, "vpn-pin-confirmed", { actor: store.loginName(person), detail: "HN VPN connect" });
+  return null;
+}
+
 function verifyBrowserPin(req, person, raw, code) {
   const ip=clientIp(req);
   if(isLockedOut(ip))return {status:429,error:'Too many failed attempts. Please try again in 15 minutes.',restart:true};
@@ -2131,7 +2152,7 @@ extraRoutes.init({
 
 // A new staff session for an HN Group service acting for this person (HN Account), from where they are.
 const issueSession = (personId, ip, userAgent) => createSession(personId, { socket: { remoteAddress: "127.0.0.1" }, headers: { "x-real-ip": ip || "127.0.0.1", "user-agent": userAgent || "HN Account" } });
-const statusSso = createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent, handleChangePassword, handleSetCode, verifyBrowserPin, issueSession });
+const statusSso = createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent, handleChangePassword, handleSetCode, verifyBrowserPin, verifyVpnPin, issueSession });
 const portalAuth = portalAuthLib.createPortalAuth({ store, sessions, resume, createSession, cookieFor, parseCookies, send, redirect, logEvent, loginNext, clientIp });
 
 async function route(req, res) {

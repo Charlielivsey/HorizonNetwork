@@ -121,6 +121,14 @@ async function api(req, res, route) {
   // HN Browser and Secure Network both use app sign-ins; X-HN-VPN-Client says which one this is.
   const appClient = { 'hn-browser': 'HN Browser', 'secure-terminal': 'HN Secure Network', 'secure-network': 'HN Secure Network' }[String(req.headers['x-hn-vpn-client'] || '')];
   if (!current.cookie && (appClient || /^[0-9][0-9A-Za-z.\- ()]{0,30}$/.test(appVersion))) { const s = store.session(current.token); if (s) { if (/^[0-9][0-9A-Za-z.\- ()]{0,30}$/.test(appVersion)) s.appVersion = appVersion; if (appClient) s.client = appClient; } }
+  // HN Secure Network (Mac and Windows) asks for the six-digit PIN before every VPN connection.
+  if (route === '/api/app/verify-pin' && method === 'POST') {
+    const body = await json(req);
+    if (!/^\d{6}$/.test(String(body.pin || ''))) throw fail(400, 'Enter your six-digit PIN.');
+    await staff.verifyPin(user.id, body.pin, { ip: clientIp(req), agent: appClient || 'HN Group VPN' });
+    store.audit(user.email, 'vpn.pin-confirmed', appClient || 'App'); store.save();
+    return send(res, 200, { ok: true });
+  }
   if (route === '/api/me' && method === 'GET') {
     return send(res, 200, { user: userView(user), devices: await deviceView(store.devicesFor(user.id)), limit: store.MAX_DEVICES, macApp: appView() });
   }

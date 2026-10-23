@@ -65,6 +65,11 @@ test('HN Group VPN: Auth sign-in (website and Mac app), devices, admin and accou
   const backend = http.createServer((req, res) => {
     let body = ''; req.on('data', (c) => { body += c; }); req.on('end', () => {
       const data = JSON.parse(body || '{}');
+      if (req.headers.authorization === 'Bearer ' + secret && req.url === '/api/auth/vpn-pin') {
+        const ok = data.id === 'p-sam' && data.code === '123456' && data.client === 'HN Secure Network';
+        res.writeHead(ok ? 200 : 401, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify(ok ? { ok: true } : { error: 'That PIN isn’t right. 4 tries left.' }));
+      }
       res.writeHead(req.headers.authorization === 'Bearer ' + secret && req.url === '/api/auth/account-status' ? 200 : 401, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ accounts: Object.fromEntries((data.ids || []).map((id) => [id, !!enabled[id]])) }));
     });
@@ -140,6 +145,13 @@ test('HN Group VPN: Auth sign-in (website and Mac app), devices, admin and accou
     assert.equal(r.status, 200); assert.equal(r.body.user.displayName, 'Sam');
     const sam = r.body.token;
     assert.equal((await call('/api/app/exchange', { json: { code: appCode2, verifier } })).status, 401);
+    // Connecting asks for the account's PIN every time; the staff backend checks it (with its lockout).
+    const pinAs = (pin, token) => call('/api/app/verify-pin', { token, json: { pin }, headers: { 'X-HN-VPN-Client': 'secure-network' } });
+    assert.equal((await pinAs('123456')).status, 401);
+    assert.equal((await pinAs('12ab56', sam)).status, 400);
+    const wrongPin = await pinAs('654321', sam);
+    assert.equal(wrongPin.status, 400); assert.match(wrongPin.body.error, /PIN isn’t right/);
+    assert.equal((await pinAs('123456', sam)).status, 200);
     // HN Browser: the code goes to its loopback address instead of an hngroupvpn:// link.
     assert.equal((await call('/auth/login?loopback=50123')).status, 400);
     assert.equal((await call('/auth/login?app=' + challenge + '&loopback=99999')).status, 400);
