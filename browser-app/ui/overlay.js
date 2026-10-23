@@ -50,12 +50,29 @@ function render(state){const previous=current;if(state.avatarSame)state.avatar=p
  const zoom=state.tabs.find(t=>t.id===state.active)?.zoom||0;setText($('zoom-level'),Math.round(Math.pow(1.2,zoom)*100)+'%');
  downloadsUI.render(state.downloads||[]);vpnUI.render(state);window.HNTerminal.render(state);
  if(panel==='settings')renderSettings(state);if(panel==='bookmarks')libraryUI.bookmarks();if(panel==='history'&&(lastPanel!=='history'||state.historyVersion!==libraryUI.version))libraryUI.history();if(panel==='settings'&&settingsSection==='profile'&&(lastPanel!=='settings'||!previous?.user))profileUI.load();
- renderFind(state);
+ renderFind(state);renderQuestion(state);
  if(state.platform!=='darwin'){setText($('new-tab-shortcut'),'Ctrl T');setText($('find-shortcut'),'Ctrl F');setText($('print-shortcut'),'Ctrl P');setText($('history-shortcut'),'Ctrl H');setText($('lock-shortcut'),'Ctrl ⇧ L');setText($('settings-shortcut'),'Ctrl ,');}
  if(state.locked&&panel==='account'&&(!wasLocked||panel!==lastPanel)){$('account-pin').focus();requestAnimationFrame(()=>$('account-pin').focus());}wasLocked=state.locked;
  if(panel!==lastPanel&&!closing){if(panel)requestAnimationFrame(()=>{if(!(state.locked&&panel==='account'))$('panel').focus();});lastPanel=panel;lastKind=kind;}
  if(!panel&&!state.panelClosing){lastPanel=null;lastKind=null;}
 }
+
+// ---------- Questions, asked in the HN design ----------
+let shownQuestion=null;
+function renderQuestion(state){const q=state.question,layer=$('question-layer');
+ if(!q){if(!layer.hidden){layer.hidden=true;shownQuestion=null;}return;}
+ if(q.id===shownQuestion)return;shownQuestion=q.id;layer.hidden=false;
+ const card=$('question');card.dataset.tone=q.tone;restart(card);$('question-icon').setAttribute('href','icons.svg#'+q.icon);
+ setText($('question-title'),q.title);setText($('question-text'),q.text);$('question-text').hidden=!q.text;
+ setText($('question-detail'),q.detail);$('question-detail').hidden=!q.detail;setText($('question-note'),q.note);$('question-note').hidden=!q.note;
+ $('question-actions').replaceChildren(...q.buttons.map(b=>{const button=document.createElement('button');button.type='button';button.className='btn '+(b.tone==='danger'?'danger-fill':b.tone==='primary'?'primary':'secondary');button.dataset.choice=b.id;button.textContent=b.label;button.onclick=()=>answer(b.id);return button;}));
+ // The safe choice has focus, so Enter never clears, removes or trusts anything by accident.
+ const safe=$('question-actions').querySelector('[data-choice=cancel]')||$('question-actions').firstElementChild;safe?.focus();requestAnimationFrame(()=>{if(shownQuestion===q.id)safe?.focus();});}
+function answer(choice){if(!current?.question)return;const id=current.question.id;$('question-layer').hidden=true;shownQuestion=null;window.browser.action('question-answer',{id,choice});}
+$('question-scrim').onmousedown=()=>answer('cancel');
+document.addEventListener('keydown',e=>{if(!current?.question||$('question-layer').hidden)return;
+ if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();answer('cancel');return;}
+ if(e.key==='Tab'||e.key==='ArrowLeft'||e.key==='ArrowRight'){const items=[...$('question-actions').children],i=items.indexOf(document.activeElement);e.preventDefault();e.stopImmediatePropagation();items[(i+(e.shiftKey||e.key==='ArrowLeft'?-1:1)+items.length)%items.length]?.focus();}},true);
 
 $('backdrop').onmousedown=()=>action('panel',null);$('close-panel').onclick=()=>action('panel',null);
 for(const b of document.querySelectorAll('[data-action]'))b.onclick=()=>action(b.dataset.action);
