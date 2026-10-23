@@ -61,7 +61,7 @@ jobs:
         run: |
           VERSION=$(node -p "require('./app-manager/package.json').version")
           TAG="app-manager-v$VERSION-$GITHUB_RUN_NUMBER"
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "HN Group App Manager $VERSION · build $GITHUB_RUN_NUMBER" --notes 'Manage HN Browser and HN Secure Network: verified installs and updates, app removal preserving account data, and local settings. For Apple silicon/Intel Macs and Windows x64. HN Browser requires Apple silicon. Preview installers are not yet developer-signed or notarised.' installers/*
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "HN Group App Manager $VERSION · build $GITHUB_RUN_NUMBER" --notes 'HN Group App Manager: install, update, reinstall and remove HN Browser and HN Secure Network from verified downloads, change their settings, update all at once, and keep App Manager itself up to date. For Apple silicon/Intel Macs and Windows x64 (HN Browser needs Apple silicon). Preview installers are not yet developer-signed or notarised.' installers/*
           VERSION="$VERSION" TAG="$TAG" node app-manager/scripts/manifest.cjs
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

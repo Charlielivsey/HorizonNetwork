@@ -11,3 +11,31 @@ test('Windows uninstallation only uses an uninstaller inside the registered app 
 test('settings and removal refuse a running app before writing anything',async()=>{const system=new System({platform:'darwin'});system.detect=async()=>({path:'/Applications/HN Browser.app'});system.running=async()=>true;await assert.rejects(system.save('browser',{theme:'rose'}),/Quit HN Browser first/);await assert.rejects(system.uninstall('browser'),/Quit HN Browser first/);await assert.rejects(system.idle('unexpected'),/Choose an HN Group app/);});
 
 test('Windows process paths use one trailing separator even when registry locations include it',()=>{const{processPrefix}=require('../src/system.cjs');assert.equal(processPrefix('C:\\Users\\a\\Apps\\'),processPrefix('C:\\Users\\a\\Apps'));assert.equal(processPrefix('C:/Users/a/Apps/'),'C:\\Users\\a\\Apps\\');});
+
+test('App Manager keeps its preferences and activity between runs, and refuses unknown settings',()=>{const{Store}=require('../src/store.cjs'),dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-manager-store-'));
+ try{const a=new Store(dir);assert.deepEqual(a.preferences,{theme:'system',autoCheck:true,notify:true,autoUpdate:false,background:true,openAtLogin:false});
+  a.set('autoUpdate',true);a.set('theme','dark');a.log('update','HN Browser was updated to 1.1.4.','browser');
+  assert.throws(()=>a.set('theme','neon'));assert.throws(()=>a.set('shell','rm'));assert.throws(()=>a.set('autoUpdate','yes'));
+  const b=new Store(dir);assert.equal(b.preferences.autoUpdate,true);assert.equal(b.preferences.theme,'dark');assert.equal(b.activity[0].message,'HN Browser was updated to 1.1.4.');
+  for(let i=0;i<250;i++)b.log('check','Checked '+i);assert.equal(new Store(dir).activity.length,200,'the history is capped');
+  fs.writeFileSync(path.join(dir,'app-manager.json'),JSON.stringify({preferences:{theme:'evil',autoCheck:'no'},activity:[{at:'x',kind:'bad',message:1}]}));
+  const c=new Store(dir);assert.equal(c.preferences.theme,'system');assert.equal(c.preferences.autoCheck,true);assert.deepEqual(c.activity,[]);}
+ finally{fs.rmSync(dir,{recursive:true,force:true});}});
+
+test('a change waits until the app is quit, never stopping it, and can be cancelled',async()=>{const system=new System({platform:'darwin'});let open=true,checks=0,told=0;
+ system.detect=async()=>({path:'/Applications/HN Browser.app'});system.running=async()=>{checks++;if(checks===3)open=false;return open;};
+ await system.closed('browser',{every:5,onWait:()=>told++});assert.equal(told,1);assert.equal(checks,3);
+ open=true;checks=-1000;const controller=new AbortController();const waiting=system.closed('browser',{every:20,signal:controller.signal});setTimeout(()=>controller.abort(),30);await assert.rejects(waiting,/Cancelled/);});
+
+test('App Manager updates itself only from its own checked download, swapping back if anything fails',async()=>{const{installSelf,bundleOf,swapScript}=require('../src/self-update.cjs');
+ assert.equal(bundleOf('/Applications/HN Group App Manager.app/Contents/MacOS/HN Group App Manager'),'/Applications/HN Group App Manager.app');assert.equal(bundleOf('/usr/bin/node'),null);
+ const script=swapScript(42,"/Applications/HN Group App Manager.app","/Applications/.hn-manager-self-x.app");
+ assert.match(script,/kill -0 42/);assert.match(script,/then \/bin\/rm -rf .*manager-old.*else \/bin\/mv .*manager-old.* '\/Applications\/HN Group App Manager.app'/s);assert.match(script,/\/usr\/bin\/open '\/Applications\/HN Group App Manager.app'$/);
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-manager-self-'));
+ try{const file=path.join(dir,'HN-Group-App-Manager-2.0.1-win-x64.exe');fs.writeFileSync(file,'good');const a={size:4,sha256:digest('good')};let launched=null,quit=false;
+  await installSelf({file,release:a,platform:'win32',launch:(f,args)=>{launched=[f,args];return{unref(){}};},quit:()=>{quit=true;}});
+  assert.deepEqual(launched,[file,['/S','--force-run']]);assert.ok(quit);
+  fs.writeFileSync(file,'evil');launched=null;await assert.rejects(installSelf({file,release:a,platform:'win32',launch:()=>{launched=true;},quit:()=>{}}),/verification/);assert.equal(launched,null,'a changed download never runs');}
+ finally{fs.rmSync(dir,{recursive:true,force:true});}});
+
+test('release dates are carried through for the app pages',()=>{const f=feed();f.release.publishedAt='2026-10-23T20:00:00Z';assert.equal(release.asset(f,'browser','win32','x64').publishedAt,'2026-10-23T20:00:00.000Z');f.release.publishedAt='nonsense';assert.equal(release.asset(f,'browser','win32','x64').publishedAt,null);});
