@@ -6,7 +6,7 @@ const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypt
 const{verified}=require('./releases.cjs'),{run,sq}=require('./system.cjs');
 const BUNDLE='uk.org.hngroup.appmanager';
 // The .app that contains this executable (…/HN Group App Manager.app/Contents/MacOS/HN Group App Manager).
-function bundleOf(exe){const bundle=path.resolve(exe,'..','..','..');return bundle.endsWith('.app')?bundle:null;}
+function bundleOf(exe){const bundle=path.posix.resolve(exe,'..','..','..');return bundle.endsWith('.app')?bundle:null;}
 function swapScript(pid,bundle,staged){const backup=bundle+'.manager-old-'+crypto.randomUUID();
  return['while /bin/kill -0 '+Number(pid)+' 2>/dev/null; do /bin/sleep 0.2; done',
   'if /bin/mv '+sq(bundle)+' '+sq(backup)+'; then if /bin/mv '+sq(staged)+' '+sq(bundle)+'; then /bin/rm -rf '+sq(backup)+'; else /bin/mv '+sq(backup)+' '+sq(bundle)+'; /bin/rm -rf '+sq(staged)+'; fi; fi',
