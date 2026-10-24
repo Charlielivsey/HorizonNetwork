@@ -9,6 +9,7 @@ const ORIGIN = 'https://auth.hngroup.org.uk';
 // Registered applications: fixed callbacks and who may use them.
 const CLIENTS = {
   browser: { name: 'HN Browser', native: true, allowed: () => true, denied: 'This account cannot use HN Browser.' },
+  'app-manager': { name: 'HN Group App Manager', native: true, allowed: () => true, denied: 'This account cannot use HN Group App Manager.' },
   media: { name: 'Horizon Media Group administration', callback: 'https://media.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage this website.' },
   holding: { name: 'HN Group Management administration', callback: 'https://holding.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage this website.' },
   development: { name: 'Horizon Development administration', callback: 'https://development.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage this website.' },
@@ -26,6 +27,7 @@ const CLIENTS = {
   accounts: { name: 'HN Account', callback: 'https://accounts.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use HN Account.' },
   investors: { name: 'HN Group Investors', callback: 'https://investors.hngroup.org.uk/auth/callback', allowed: user => !!user.ownerAccess || (Array.isArray(user.companies) ? user.companies : [user.company]).includes('HN Group'), denied: 'Only staff with a role at HN Group can sign in to the investors website.' },
   vpn: { name: 'HN Group VPN', callback: 'https://vpn.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use the HN Group VPN.' },
+  devices: { name: 'HN Group Devices', callback: 'https://devices.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use HN Group Devices.' },
 };
 const HEX = /^[a-f0-9]{64}$/;
 const COOKIE = '__Host-hn_auth_session', FLOW = '__Host-hn_auth_flow', REMEMBER = '__Host-hn_auth_resume';

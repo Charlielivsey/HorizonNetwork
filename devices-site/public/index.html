@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>HN Group Devices</title>
+<meta name="description" content="The computers allowed to use HN Group’s desktop apps.">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/devices.css?v=1">
+<script src="/assets/devices.js?v=1" defer></script>
+</head>
+<body>
+<header class="top">
+ <div class="wrap top-inner">
+  <a class="brand" href="/"><img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="118" height="41"><img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="118" height="41"><span class="brand-name">Devices</span></a>
+  <div class="who" id="who" hidden><span class="avatar" id="who-avatar"></span><span class="who-text"><strong id="who-name"></strong><small id="who-role"></small></span><form method="post" action="/auth/logout"><button class="btn small ghost" type="submit">Sign out</button></form></div>
+ </div>
+ <div class="stripe" aria-hidden="true"></div>
+</header>
+
+<main class="wrap">
+ <!-- Signed out -->
+ <section class="hero" id="signed-out" hidden>
+  <div>
+   <p class="eyebrow">HN Group Devices</p>
+   <h1>Your computers, approved for HN Group apps.</h1>
+   <p class="lede">HN Browser, HN Secure Network and HN Group App Manager only work on computers HN Group has approved. Sign in to add yours with the code the app shows you.</p>
+   <a class="btn primary large" id="sign-in" href="/auth/login">Sign in with HN Group Auth</a>
+  </div>
+  <div class="hero-art" aria-hidden="true"><div class="laptop"><div class="screen"><span class="tick"></span></div><div class="base"></div></div></div>
+ </section>
+
+ <!-- Signed in -->
+ <div id="signed-in" hidden>
+  <section class="page-head"><div><p class="eyebrow" id="greeting">Your devices</p><h1>Computers</h1><p class="muted">A computer can use HN Group’s apps once it’s added to your account and approved.</p></div></section>
+
+  <section class="card add" id="add-card">
+   <div class="add-text"><h2>Add a computer</h2><p class="muted">Open HN Group App Manager, HN Browser or HN Secure Network on it, and type the code it shows.</p></div>
+   <form class="add-form" id="link-form" autocomplete="off">
+    <label class="sr" for="code">Code</label>
+    <input id="code" name="code" inputmode="text" maxlength="9" placeholder="ABCD-2345" spellcheck="false" autocapitalize="characters">
+    <button class="btn primary" type="submit" id="link-button">Add computer</button>
+   </form>
+   <p class="form-message" id="link-message" role="status" aria-live="polite"></p>
+  </section>
+
+  <section class="section">
+   <h2 class="section-title">Your computers</h2>
+   <div class="list" id="mine"></div>
+  </section>
+
+  <!-- Owner-level and Super Admin accounts -->
+  <section class="section" id="admin" hidden>
+   <h2 class="section-title">Every computer</h2>
+   <div class="tiles"><div class="tile pending"><strong id="count-pending">0</strong><span>Waiting for approval</span></div><div class="tile good"><strong id="count-authorised">0</strong><span>Approved</span></div><div class="tile bad"><strong id="count-revoked">0</strong><span>Revoked</span></div></div>
+   <div class="toolbar"><div class="segmented" id="filter" role="group" aria-label="Show"><button data-filter="pending" aria-pressed="true">Waiting</button><button data-filter="authorised" aria-pressed="false">Approved</button><button data-filter="revoked" aria-pressed="false">Revoked</button><button data-filter="all" aria-pressed="false">All</button></div><input class="search" id="search" type="search" placeholder="Search computers or people" aria-label="Search computers or people"></div>
+   <div class="list" id="everyone"></div>
+   <h2 class="section-title">Recent activity</h2>
+   <div class="audit" id="audit"></div>
+  </section>
+ </div>
+
+ <p class="muted small foot">HN Group Devices only knows each computer’s name, kind, the HN apps it uses and when it was last seen. It never sees what’s on it.</p>
+</main>
+
+<div class="layer" id="layer" hidden><div class="scrim"></div><div class="sheet" role="alertdialog" aria-modal="true" aria-labelledby="dialog-title"><h2 id="dialog-title"></h2><p id="dialog-text"></p><input id="dialog-input" hidden maxlength="60" aria-label="Name"><div class="sheet-actions"><button class="btn" id="dialog-cancel">Cancel</button><button class="btn primary" id="dialog-ok"></button></div></div></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>

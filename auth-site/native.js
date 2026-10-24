@@ -2,6 +2,8 @@
 // Public desktop client: short-lived one-use codes + S256 PKCE, no shared secret in the app.
 const crypto=require('node:crypto');
 const HEX=/^[a-f0-9]{64}$/,PKCE=/^[A-Za-z0-9_-]{43}$/;
+// The desktop apps that sign in this way (HN Browser, and HN Group App Manager since 23 October 2026).
+const NATIVE_CLIENTS=['browser','app-manager'];
 function nativeDestination(url){
  try{const redirect=new URL(url.searchParams.get('redirect_uri'));if(redirect.protocol!=='http:'||redirect.hostname!=='127.0.0.1'||!redirect.port||Number(redirect.port)<1||redirect.pathname!=='/callback'||redirect.username||redirect.password||redirect.search||redirect.hash)return null;
  if(url.searchParams.get('code_challenge_method')!=='S256'||!PKCE.test(url.searchParams.get('code_challenge')||''))return null;
@@ -17,10 +19,10 @@ function createNative({codes,applications,profile,requireReady,send,body,serveAv
   const data=await body(req,route==='/api/native/account/photo'?2*1024*1024:undefined);
   if(route==='/api/native/exchange'){
    const grant=HEX.test(data.code||'')&&codes.get(data.code);codes.delete(data.code);
-   if(!grant||grant.client!=='browser'||!grant.native||grant.expires<=Date.now()||grant.state!==data.state||grant.redirect!==data.redirect_uri||!PKCE.test(data.code_verifier||'')||crypto.createHash('sha256').update(data.code_verifier).digest('base64url')!==grant.challenge)throw fail(401,'Browser sign-in expired or could not be verified.');
+   if(!grant||!NATIVE_CLIENTS.includes(grant.client)||!grant.native||grant.expires<=Date.now()||grant.state!==data.state||grant.redirect!==data.redirect_uri||!PKCE.test(data.code_verifier||'')||crypto.createHash('sha256').update(data.code_verifier).digest('base64url')!==grant.challenge)throw fail(401,'Browser sign-in expired or could not be verified.');
    const user=await profile(grant.entry);requireReady(user);if(applications.size>=10000)throw fail(503,'Please try signing in again shortly.');
    if(issuePersistent){const saved=await issuePersistent(grant.entry,req);send(res,200,{...saved,user:{...saved.user,avatarUrl:null}});return true;}
-   const token=crypto.randomBytes(32).toString('hex'),key=crypto.createHash('sha256').update(token).digest('hex');applications.set(key,{client:'browser',entry:grant.entry,expires:grant.entry.expires});
+   const token=crypto.randomBytes(32).toString('hex'),key=crypto.createHash('sha256').update(token).digest('hex');applications.set(key,{client:grant.client,entry:grant.entry,expires:grant.entry.expires});
    send(res,200,{token,expires:grant.entry.expires,user:{...user,avatarUrl:null}});return true;
   }
   const token=(req.headers.authorization||'').replace(/^Bearer /,''),key=HEX.test(token)?crypto.createHash('sha256').update(token).digest('hex'):'';
@@ -42,7 +44,7 @@ function createNative({codes,applications,profile,requireReady,send,body,serveAv
    }
    throw fail(404,'Not found.');
   }
-  if(!active||active.client!=='browser'||active.expires<=Date.now())throw fail(401,'Please sign in to HN Browser again.');
+  if(!active||!NATIVE_CLIENTS.includes(active.client)||active.expires<=Date.now())throw fail(401,'Please sign in again.');
   if(route==='/api/native/logout'){applications.delete(key);send(res,200,{ok:true});return true;}
   const user=await profile(active.entry);requireReady(user);active.expires=Math.min(active.expires,active.entry.expires);
   if(route==='/api/native/avatar'){await serveAvatar(active.entry,res);return true;}
@@ -52,4 +54,4 @@ function createNative({codes,applications,profile,requireReady,send,body,serveAv
  handle.consumeOffer=async(req,url)=>{const key=req.headers['x-hn-browser-offer'],offer=offers.get(key);offers.delete(key);if(!offer||offer.expires<=Date.now()||offer.url!==url.href||url.searchParams.get('switch')==='1'||url.searchParams.get('account')==='other')return null;const value=await persistent('offer',offer.token,req);return value.remembered;};
  return handle;
 }
-module.exports={nativeDestination,createNative};
+module.exports={nativeDestination,createNative,NATIVE_CLIENTS};

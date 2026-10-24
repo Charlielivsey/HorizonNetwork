@@ -1,0 +1,1 @@
+module.exports={apps:[{name:'hn-devices',script:'/opt/hn-devices/server.js',cwd:'/opt/hn-devices',instances:1,exec_mode:'fork',autorestart:true,max_memory_restart:'192M',env:{NODE_ENV:'production',HOST:'127.0.0.1',PORT:5400,DEVICES_DATA_DIR:'/var/lib/hn-devices',DEVICES_PUBLIC_DIR:'/opt/hn-devices/public'}}]};

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>This device is not authorised</title>
+<link rel="stylesheet" href="device.css">
+<script src="device.js" defer></script>
+</head>
+<body>
+<div class="drag" aria-hidden="true"></div>
+<main class="gate" id="gate">
+ <img class="mark only-light" src="assets/hn-group-wordmark.svg" alt="HN Group"><img class="mark only-dark" src="assets/hn-group-wordmark-white.svg" alt="">
+ <div class="icon" id="icon" aria-hidden="true"><span class="lock"></span></div>
+ <p class="eyebrow" id="app-name">HN Group</p>
+ <h1 id="title">This device is not authorised</h1>
+ <p class="text" id="text">Checking this computer with HN Group…</p>
+ <div class="code" id="code-box" hidden><small>Your code</small><strong id="code"></strong></div>
+ <ol class="steps" id="steps" hidden>
+  <li>Open <b>devices.hngroup.org.uk</b> and sign in with your HN Group account.</li>
+  <li>Type the code above to add this computer.</li>
+  <li>An administrator approves it, and this opens by itself.</li>
+ </ol>
+ <div class="row">
+  <button class="btn primary" id="open">Open devices.hngroup.org.uk</button>
+  <button class="btn" id="check"><span>Check again</span></button>
+ </div>
+ <p class="status" id="status" role="status" aria-live="polite"></p>
+ <button class="link" id="quit">Quit</button>
+</main>
+</body>
+</html>

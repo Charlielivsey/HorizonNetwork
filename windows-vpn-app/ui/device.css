@@ -1,0 +1,43 @@
+/* "This device is not authorised", in the HN Group design (light and dark; reduce motion respected). */
+@font-face{font-family:"Plus Jakarta Sans";src:url(assets/plus-jakarta-sans.woff2) format("woff2");font-weight:200 800;font-display:block}
+:root{--bg:#F6F4FA;--surface:#fff;--text:#1B1A21;--muted:#5E6070;--border:#E2DDEB;--accent:#5514B4;--accent-soft:#EEE6FA;--bad:#B4234F;--bad-soft:#FBE7ED;--warn:#8A5A00;--warn-soft:#FFF3D6;--good:#2E7D4F;--good-soft:#E3F3E9;
+ --stripe:linear-gradient(90deg,#e97de8 0 14%,#5514b4 14% 28%,#e3e65b 28% 34%,#3e9ba3 34% 54%,#7a1f6c 54% 64%,#c2306b 64% 74%,#5fae7b 74% 87%,#1c2135 87%);color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#0E1020;--surface:#161A2E;--text:#ECEBF4;--muted:#A4A7BA;--border:#2A2F4A;--accent:#B794F6;--accent-soft:#2A2350;--bad:#F28AA8;--bad-soft:#3A1726;--warn:#F2C76B;--warn-soft:#3A2E12;--good:#7CD3A0;--good-soft:#173528;color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:14px/1.55 "Plus Jakarta Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+body{display:grid;place-items:center;padding:28px;overflow:auto}
+body::before{content:"";position:fixed;inset:0 0 auto 0;height:4px;background:var(--stripe)}
+.drag{position:fixed;inset:0 0 auto 0;height:28px;-webkit-app-region:drag}
+[hidden]{display:none!important}
+h1,p,ol{margin:0}
+.only-dark{display:none}
+@media (prefers-color-scheme:dark){.only-dark{display:block}.only-light{display:none}}
+.gate{width:min(440px,100%);display:grid;justify-items:center;gap:12px;text-align:center;animation:rise .45s cubic-bezier(.2,.8,.2,1) both}
+@keyframes rise{from{opacity:0;transform:translateY(12px)}}
+.mark{width:104px;margin-bottom:10px}
+.icon{width:76px;height:76px;border-radius:24px;display:grid;place-items:center;background:var(--bad-soft);color:var(--bad);margin:6px 0 4px;animation:pop .5s .1s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes pop{from{opacity:0;transform:scale(.7)}}
+body[data-status=pending] .icon{background:var(--warn-soft);color:var(--warn)}
+body[data-status=authorised] .icon{background:var(--good-soft);color:var(--good)}
+body[data-status=unknown] .icon{background:var(--accent-soft);color:var(--accent)}
+.lock{position:relative;width:28px;height:22px;border-radius:6px;background:currentColor;margin-top:12px}
+.lock::before{content:"";position:absolute;left:5px;right:5px;top:-14px;height:18px;border:4px solid currentColor;border-bottom:0;border-radius:12px 12px 0 0}
+body[data-status=authorised] .lock::before{transform:translateX(9px) rotate(18deg);transform-origin:right bottom;transition:transform .4s}
+.eyebrow{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+h1{font-size:25px;font-weight:800;letter-spacing:-.025em;line-height:1.2}
+.text{color:var(--muted);max-width:380px}
+.code{display:grid;gap:2px;padding:14px 26px;border-radius:16px;border:1.5px dashed var(--border);background:var(--surface);margin:6px 0}
+.code small{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.code strong{font:800 30px/1.2 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.14em;user-select:all}
+.steps{text-align:left;color:var(--muted);font-size:13px;padding-left:20px;display:grid;gap:4px;max-width:360px}
+.steps b{color:var(--text)}
+.row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:8px}
+.btn{position:relative;display:inline-flex;align-items:center;justify-content:center;height:42px;padding:0 18px;border-radius:12px;border:1px solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:700;cursor:pointer;transition:transform .15s}
+.btn:active{transform:scale(.97)}.btn:disabled{opacity:.6;cursor:default}
+.btn.primary{background:linear-gradient(135deg,#6A1FD8,#5514B4);border-color:transparent;color:#fff;box-shadow:0 8px 20px -10px #5514b4cc}
+.btn.working span{opacity:0}
+.btn.working::after{content:"";position:absolute;width:16px;height:16px;border-radius:50%;border:2px solid var(--accent);border-right-color:transparent;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.status{font-size:12px;color:var(--muted);min-height:18px}
+.link{border:0;background:none;color:var(--muted);font:inherit;font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}

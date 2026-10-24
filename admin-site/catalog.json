@@ -130,6 +130,15 @@
     ]
   },
   {
+    "id": "devices",
+    "name": "HN Group Devices",
+    "process": "hn-devices",
+    "port": 5400,
+    "hosts": [
+      "devices.hngroup.org.uk"
+    ]
+  },
+  {
     "id": "media",
     "name": "Horizon Media Group",
     "process": "hn-media",
