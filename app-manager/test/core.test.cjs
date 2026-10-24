@@ -13,7 +13,7 @@ test('settings and removal refuse a running app before writing anything',async()
 test('Windows process paths use one trailing separator even when registry locations include it',()=>{const{processPrefix}=require('../src/system.cjs');assert.equal(processPrefix('C:\\Users\\a\\Apps\\'),processPrefix('C:\\Users\\a\\Apps'));assert.equal(processPrefix('C:/Users/a/Apps/'),'C:\\Users\\a\\Apps\\');});
 
 test('App Manager keeps its preferences and activity between runs, and refuses unknown settings',()=>{const{Store}=require('../src/store.cjs'),dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-manager-store-'));
- try{const a=new Store(dir);assert.deepEqual(a.preferences,{theme:'system',autoCheck:true,notify:true,autoUpdate:false,background:true,openAtLogin:false});
+ try{const a=new Store(dir);assert.deepEqual(a.preferences,{theme:'system',autoCheck:true,notify:true,autoUpdate:false,autoUpdateManager:true,background:true,openAtLogin:false});
   a.set('autoUpdate',true);a.set('theme','dark');a.log('update','HN Browser was updated to 1.1.4.','browser');
   assert.throws(()=>a.set('theme','neon'));assert.throws(()=>a.set('shell','rm'));assert.throws(()=>a.set('autoUpdate','yes'));
   const b=new Store(dir);assert.equal(b.preferences.autoUpdate,true);assert.equal(b.preferences.theme,'dark');assert.equal(b.activity[0].message,'HN Browser was updated to 1.1.4.');
@@ -27,10 +27,16 @@ test('a change waits until the app is quit, never stopping it, and can be cancel
  await system.closed('browser',{every:5,onWait:()=>told++});assert.equal(told,1);assert.equal(checks,3);
  open=true;checks=-1000;const controller=new AbortController();const waiting=system.closed('browser',{every:20,signal:controller.signal});setTimeout(()=>controller.abort(),30);await assert.rejects(waiting,/Cancelled/);});
 
-test('App Manager updates itself only from its own checked download, swapping back if anything fails',async()=>{const{installSelf,bundleOf,swapScript}=require('../src/self-update.cjs');
+test('App Manager updates itself only from its own checked download, swapping back if anything fails',async()=>{const{installSelf,bundleOf,scripts,targetOf,temporary}=require('../src/self-update.cjs');
  assert.equal(bundleOf('/Applications/HN Group App Manager.app/Contents/MacOS/HN Group App Manager'),'/Applications/HN Group App Manager.app');assert.equal(bundleOf('/usr/bin/node'),null);
- const script=swapScript(42,"/Applications/HN Group App Manager.app","/Applications/.hn-manager-self-x.app");
- assert.match(script,/kill -0 42/);assert.match(script,/then \/bin\/rm -rf .*manager-old.*else \/bin\/mv .*manager-old.* '\/Applications\/HN Group App Manager.app'/s);assert.match(script,/\/usr\/bin\/open '\/Applications\/HN Group App Manager.app'$/);
+ // A copy running from the disk image or Downloads (translocated) is installed into Applications instead.
+ assert.equal(targetOf('/Users/a/Applications/HN Group App Manager.app'),'/Users/a/Applications/HN Group App Manager.app');
+ for(const odd of['/Volumes/HN Group App Manager/HN Group App Manager.app','/private/var/folders/x/AppTranslocation/1/d/HN Group App Manager.app']){assert.ok(temporary(odd));assert.equal(targetOf(odd),'/Applications/HN Group App Manager.app');}
+ const{swap,main}=scripts({pid:42,source:'/tmp/w/HN Group App Manager.app',target:'/Applications/HN Group App Manager.app',fallback:'/Volumes/x/HN Group App Manager.app',work:'/tmp/w'});
+ assert.match(main,/kill -0 42/);assert.match(main,/with administrator privileges/);assert.match(main,/\[ -w '\/Applications' \]/,'an administrator is only asked for when the folder needs one');
+ assert.match(main,/then \/usr\/bin\/open '\/Applications\/HN Group App Manager.app'; else \/usr\/bin\/open '\/Volumes\/x\/HN Group App Manager.app'; fi/,'it always reopens, the old copy if the swap failed');
+ assert.match(swap,/then \/bin\/rm -rf .*manager-old.*else \[ -e .*manager-old.* \] && \/bin\/mv .*manager-old.* '\/Applications\/HN Group App Manager.app'/s,'the old copy is put back if the swap fails');
+ assert.match(swap,/xattr -dr com.apple.quarantine/);
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-manager-self-'));
  try{const file=path.join(dir,'HN-Group-App-Manager-2.0.1-win-x64.exe');fs.writeFileSync(file,'good');const a={size:4,sha256:digest('good')};let launched=null,quit=false;
   await installSelf({file,release:a,platform:'win32',launch:(f,args)=>{launched=[f,args];return{unref(){}};},quit:()=>{quit=true;}});

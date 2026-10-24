@@ -1,6 +1,7 @@
 'use strict';
 // HN Group App Manager, end to end in the real app on a pretend Windows PC (src/fake-system.cjs) with a local
-// release feed: overview, an update that waits for the app to be quit, installing, settings written to the app's
+// release feed and a stand-in HN Group Auth: the "not authorised" window until the PC is approved, signing in and
+// the PIN, overview, an update that waits for the app to be quit, installing, settings written to the app's
 // own preferences, reinstalling, cancelling, removing, activity, App Manager's settings and its own update.
 //   xvfb-run -a node test/desktop.cjs      (screenshots: app-manager/screenshots/)
 const{_electron:electron}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),crypto=require('node:crypto');
@@ -12,17 +13,39 @@ const pkg=require('../package.json'),shots=path.join(__dirname,'..','screenshots
  const browser=file('windows-x64','HN-Browser-1.1.4-win-x64.exe','1.1.4',39);
  fs.writeFileSync(path.join(fixtures,'feed.json'),JSON.stringify({release:{version:'1.1.4-39',publishedAt:'2026-10-23T20:00:00Z',assets:{'windows-x64':browser.asset}},apps:{'secure-network-windows':file('secure-network-windows','HN-Secure-Network-2.0.0-windows-x64.exe','2.0.0',3),'app-manager-windows':file('app-manager-windows','HN-Group-App-Manager-9.9.9-win-x64.exe','9.9.9',1)}}));
  // HN Browser's existing preferences, with a setting App Manager doesn't know about.
- fs.mkdirSync(path.join(profile,'hn-group-browser'),{recursive:true});fs.writeFileSync(path.join(profile,'hn-group-browser','preferences.json'),JSON.stringify({theme:'daylight',futureFeature:42}));
+ fs.mkdirSync(path.join(profile,'HN Browser'),{recursive:true});fs.writeFileSync(path.join(profile,'HN Browser','preferences.json'),JSON.stringify({theme:'daylight',futureFeature:42}));
+ // This PC isn't approved on devices.hngroup.org.uk yet.
+ fs.writeFileSync(path.join(profile,'device-status.txt'),'unlinked');
  let app;
  try{
   app=await electron.launch({args:[path.join(__dirname,'..'),...((process.getuid?.()===0||process.env.CI)?['--no-sandbox']:[])],env:{...process.env,HN_MANAGER_TEST:'1',HN_MANAGER_TEST_PROFILE:profile,HN_MANAGER_TEST_FIXTURES:fixtures}});
-  const page=await app.firstWindow();page.setDefaultTimeout(15000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  const step=name=>console.log('· '+name);
+  step('this device is not authorised');
+  const gate=await app.firstWindow();gate.setDefaultTimeout(15000);await gate.waitForURL(/device\.html$/);
+  await gate.waitForFunction(()=>document.querySelector('#code')?.textContent==='ABCD-2345');
+  assert.equal(await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().length),1,'App Manager doesn’t open before the PC is approved');
+  for(const scheme of['light','dark']){await gate.emulateMedia({colorScheme:scheme});await gate.waitForTimeout(500);await gate.screenshot({path:path.join(shots,'device-not-authorised-'+scheme+'.png')});}
+  fs.writeFileSync(path.join(profile,'device-status.txt'),'authorised');
+  const opened=app.waitForEvent('window',{predicate:w=>!w.url().endsWith('device.html'),timeout:20000});await gate.locator('#check').click();
+  const page=await opened;page.setDefaultTimeout(15000);const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.waitForURL(/index\.html$/);
   const test=(fn,arg)=>app.evaluate(fn,arg);
   const running=(id,on)=>test(({},[id,on])=>{const s=global.__managerTest.system;if(on)s.open.add(id);else s.open.delete(id);},[id,on]);
   const events=()=>test(()=>global.__managerTest.system.events);
   const shot=async name=>{await page.evaluate(()=>{document.getElementById('toast').hidden=true;});for(const scheme of['light','dark']){await page.emulateMedia({colorScheme:scheme});await page.waitForTimeout(450);await page.screenshot({path:path.join(shots,name+'-'+scheme+'.png')});}await page.emulateMedia({colorScheme:'light'});};
   const confirmDialog=async(text,choice='ok')=>{await page.locator('#dialog',{hasText:text}).waitFor();assert.equal(await page.evaluate(()=>document.activeElement?.dataset.choice),'cancel','the safe choice has focus');await page.locator('#dialog [data-choice='+choice+']').click();await page.locator('#layer').waitFor({state:'hidden'});};
-  const step=name=>console.log('· '+name);
+
+  step('signing in with HN Group Auth');
+  await page.locator('[data-step=signed-out]').waitFor();assert.equal(await page.locator('#layout').isVisible(),false,'nothing else shows before signing in');
+  assert.match((await page.evaluate(()=>window.manager.call('enqueue','browser','update'))).error,/Unlock App Manager/,'changes need the account');
+  await page.waitForTimeout(300);await shot('sign-in');
+  await page.locator('#sign-in').click();await page.locator('[data-step=waiting]').waitFor();
+  const signIn=new URL(await test(()=>global.__managerTest.log.find(x=>x.signIn)?.signIn));
+  assert.equal(signIn.origin+signIn.pathname,'https://auth.hngroup.org.uk/authorize');assert.equal(signIn.searchParams.get('client_id'),'app-manager');assert.equal(signIn.searchParams.get('code_challenge_method'),'S256');
+  const back=new URL(signIn.searchParams.get('redirect_uri'));assert.equal(back.hostname,'127.0.0.1');
+  const reply=await fetch(back.href+'?code='+'b'.repeat(64)+'&state='+signIn.searchParams.get('state'));assert.equal(reply.status,200);assert.match(await reply.text(),/You’re signed in/);
+  await page.locator('#layout').waitFor();await page.locator('#me-name',{hasText:'Charlie Livsey'}).waitFor();
+  assert.equal((await fetch(back.href+'?code='+'b'.repeat(64)+'&state='+signIn.searchParams.get('state')).catch(()=>({status:0}))).status!==200,true,'the callback works once');
+  assert.ok(!fs.readFileSync(path.join(profile,'account.enc'),'utf8').includes('Charlie'),'only the token is kept, by the system’s secure storage');
 
   step('overview');
   await page.locator('#hero-title',{hasText:'HN Browser has an update'}).waitFor();
@@ -56,7 +79,7 @@ const pkg=require('../package.json'),shots=path.join(__dirname,'..','screenshots
   await page.locator('#setting-theme').selectOption('forest');await page.locator('#setting-reduceMotion').click();await page.locator('#setting-startup [data-value=restore]').click();
   await page.locator('#save-bar').waitFor();await page.waitForTimeout(400);await shot('app');
   await page.locator('#settings-save').click();await page.locator('#save-bar').waitFor({state:'hidden'});
-  const prefs=JSON.parse(fs.readFileSync(path.join(profile,'hn-group-browser','preferences.json'),'utf8'));
+  const prefs=JSON.parse(fs.readFileSync(path.join(profile,'HN Browser','preferences.json'),'utf8'));
   assert.deepEqual(prefs,{theme:'forest',futureFeature:42,reduceMotion:true,startup:'restore'},'only the changed settings are written and unknown ones kept');
   // While the app is open, its settings can't be changed here.
   await running('browser',true);await page.locator('#fact-status',{hasText:'Open'}).waitFor({timeout:20000});
@@ -98,6 +121,16 @@ const pkg=require('../package.json'),shots=path.join(__dirname,'..','screenshots
   await page.waitForFunction(()=>window.manager.call('state').then(r=>r.value.activity.some(a=>a.message.includes('App Manager 9.9.9 is installing'))));
   assert.ok(await test(()=>global.__managerTest.log.some(x=>x.selfUpdate==='9.9.9-1')),'the verified App Manager update would install');
 
+  step('locking, and the PIN');
+  await page.locator('.nav[data-page=overview]').click();await page.locator('#lock').click();await page.locator('[data-step=locked]').waitFor();
+  await page.locator('#lock-name',{hasText:'Charlie Livsey'}).waitFor();
+  assert.match((await page.evaluate(()=>window.manager.call('enqueue','browser','reinstall'))).error,/Unlock App Manager/,'a locked App Manager changes nothing');
+  await page.keyboard.type('111111');await page.locator('#pin-status',{hasText:'That PIN isn’t right'}).waitFor();
+  assert.equal(await page.locator('#pin-input').inputValue(),'','a wrong PIN clears the boxes');
+  await page.keyboard.type('2468');await page.waitForTimeout(250);await shot('pin');
+  await page.keyboard.type('10');await page.locator('#layout').waitFor();
+  assert.ok((await test(()=>global.__managerTest.log.filter(x=>x.auth==='/api/native/unlock').length))===2,'each PIN is checked once by HN Group Auth');
+
   step('isolation');
   assert.equal(await page.evaluate(()=>typeof require),'undefined');
   assert.deepEqual(await page.evaluate(()=>Object.keys(window.manager).sort()),['call','onDialog','onNavigate','onState']);
@@ -106,6 +139,6 @@ const pkg=require('../package.json'),shots=path.join(__dirname,'..','screenshots
   await page.locator('.nav[data-page=overview]').click();await page.setViewportSize({width:900,height:680});await page.waitForTimeout(300);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'no sideways scrolling at the smallest size');
   assert.deepEqual(errors,[]);
-  console.log('App Manager desktop passed: overview, waiting for an app to be quit, install, settings, reinstall, cancel, remove, activity, preferences, self-update and isolation. Screenshots in app-manager/screenshots.');
+  console.log('App Manager desktop passed: not-authorised window, HN Group sign-in and PIN, overview, waiting for an app to be quit, install, settings, reinstall, cancel, remove, activity, preferences, self-update and isolation. Screenshots in app-manager/screenshots.');
  }finally{await app?.evaluate(({app})=>{setTimeout(()=>app.exit(0),50);}).catch(()=>{});await app?.close().catch(()=>{});fs.rmSync(dir,{recursive:true,force:true});}
 })().catch(e=>{console.error(e);process.exitCode=1;});

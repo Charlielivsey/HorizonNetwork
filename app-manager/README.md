@@ -6,6 +6,27 @@ The desktop app that installs, updates, repairs and looks after HN Browser and H
 Version 2.0.0 is a rebuild on the original's safe core (the user's request, 23 October 2026: "completely rebuild
 the app manager, i like the base it has made, but it can heavily be improved").
 
+Version 2.1.0 (the user's request, 23 October 2026, on a Mac: "it is far too buggy", "there needs to be a way to
+update the app manager without having to redownload it every time", "add in HN Group Authentication", and a
+device must be authorised to use, update or reinstall the apps):
+
+- **This device is not authorised:** it only opens on a computer approved on devices.hngroup.org.uk (the shared
+  `src/device.cjs`/`device-gate.cjs`/`ui/device.*`, identical in HN Browser and HN Secure Network for Windows).
+  Installs, updates, reinstalls and its own update are refused on an unapproved computer, and it hides behind the
+  "not authorised" window if the computer is revoked while open.
+- **HN Group Authentication:** sign in through HN Group Auth in the default browser (Auth's public `app-manager`
+  client, S256 PKCE, one-use loopback callback; `src/account.cjs`). The account is remembered with an encrypted,
+  revocable token (`src/vault.cjs`, `account.enc`) and App Manager opens locked on the six-digit PIN every time
+  (and locks after 15 minutes hidden in the menu bar or tray). Nothing but the theme can change until it's unlocked.
+- **Mac fixes:** app settings go to the apps' real data folders (`HN Browser`, `HN Secure Network`, Electron's
+  productName; 2.0 wrote to the wrong folders); new Mac installs go in /Applications when it's writable.
+- **Updates itself reliably:** the Mac update runs from a private folder, copies and swaps after App Manager
+  quits, asks for an administrator only when the folder needs one, always reopens (the old copy if the swap
+  failed), and a copy running from the disk image or Downloads (translocated) offers **Move to Applications**
+  first. Settings has **Check for App Manager updates** and **Keep App Manager up to date by itself** (on by
+  default: its own update installs while you're not using it), and the overview shows a one-click banner.
+- It follows the standard HN Group theme throughout, sign-in, PIN and device screens included.
+
 ## What it does
 
 - **Overview:** what's installed and what has an update, with **Update all**, a card per app and **Check for updates**.
@@ -40,7 +61,8 @@ Node access: `src/preload.cjs` exposes a fixed list of requests and the main pro
 - `src/main.cjs`: state, queue, waiting, notifications, tray, window and requests.
 - `src/system.cjs`: finding apps, whether they're running, waiting for them to close, installing, removing, settings.
 - `src/releases.cjs`: the release feed and checked downloads. `src/settings.cjs`: each app's settings.
-- `src/store.cjs`: App Manager's preferences and activity. `src/self-update.cjs`: updating itself.
+- `src/store.cjs`: App Manager's preferences and activity. `src/self-update.cjs`: updating itself and Move to Applications.
+- `src/account.cjs`, `src/vault.cjs`: the HN Group account. `src/device.cjs`, `src/device-gate.cjs`, `src/device-preload.cjs`, `ui/device.*`: the device check (shared copies).
 - `ui/index.html`, `ui/app.js`, `ui/style.css`: the window (built once and updated in place).
 - `src/fake-system.cjs`: a pretend Windows PC for the desktop test only (left out of builds).
 

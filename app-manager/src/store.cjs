@@ -6,6 +6,7 @@ const PREFERENCES=Object.freeze({
  autoCheck:{type:'boolean',default:true},
  notify:{type:'boolean',default:true},
  autoUpdate:{type:'boolean',default:false},
+ autoUpdateManager:{type:'boolean',default:true},
  background:{type:'boolean',default:true},
  openAtLogin:{type:'boolean',default:false},
 });

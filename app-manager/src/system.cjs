@@ -82,7 +82,7 @@ class System{
   if(this.platform!=='darwin')throw Error('Installations need macOS or Windows.');
   const{dir,source}=await this.unpackMac(file,entry(id).bundle,release.version);let staged=null;
   try{
-   const previous=await this.idle(id),folder=previous?path.dirname(previous.path):path.join(this.home,'Applications');await fs.promises.mkdir(folder,{recursive:true});
+   const previous=await this.idle(id),folder=previous?path.dirname(previous.path):await this.applications();await fs.promises.mkdir(folder,{recursive:true});
    // Staged beside the destination so the final rename is atomic. macOS asks for an administrator only when
    // replacing an app in a protected Applications folder.
    const target=previous?.path||path.join(folder,entry(id).app);staged=path.join(folder,'.hn-manager-'+crypto.randomUUID()+'.app');
@@ -91,6 +91,9 @@ class System{
    try{await this.move(staged,target);staged=null;}catch(e){if(previous)await this.move(backup,target);throw e;}
    if(previous)await this.trash(backup);
   }finally{await fs.promises.rm(dir,{recursive:true,force:true});if(staged)await fs.promises.rm(staged,{recursive:true,force:true}).catch(()=>{});}}
+ // New installs go in /Applications (where people look for apps) when this account can write there, otherwise
+ // in the Applications folder in their home folder.
+ async applications(){try{await fs.promises.access('/Applications',fs.constants.W_OK);return'/Applications';}catch{return path.join(this.home,'Applications');}}
  async trash(bundle){const trash=path.join(this.home,'.Trash');await fs.promises.mkdir(trash,{recursive:true});await this.move(bundle,path.join(trash,path.basename(bundle)+'-'+Date.now()));}
  async uninstall(id){const installed=await this.idle(id);if(!installed)throw Error('This app is not installed.');
   if(this.platform==='darwin')await this.trash(installed.path);

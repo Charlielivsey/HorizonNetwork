@@ -26,6 +26,7 @@ const ICONS={
  wrench:'<path d="M14.7 6.3a4 4 0 0 0-5.4 5.2L3 17.8V21h3.2l6.3-6.3a4 4 0 0 0 5.2-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>',
  x:'<path d="M6 6l12 12M18 6 6 18"/>',
  folder:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+ lock:'<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
 };
 function paint(svg,name){svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','2');svg.setAttribute('stroke-linecap','round');svg.setAttribute('stroke-linejoin','round');svg.setAttribute('aria-hidden','true');svg.innerHTML=ICONS[name]||'';}
 const icon=name=>{const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');paint(svg,name);return svg;};
@@ -188,14 +189,58 @@ function renderPreferences(){const p=state.preferences,m=state.manager;
  for(const b of $$('[data-theme]'))b.setAttribute('aria-pressed',String(p.theme===b.dataset.theme));
  setText('background-label',state.platform==='darwin'?'Keep running in the menu bar':'Keep running in the system tray');
  setText('about-version','Version '+state.version+(state.build?' (build '+state.build+')':'')+' for '+(state.platform==='darwin'?'macOS':'Windows'));
- setText('self-text',m.status==='downloading'?'Downloading the update… '+m.progress+'%':m.status==='installing'?'Installing. App Manager reopens by itself.':m.status==='error'?m.error:m.update?'Version '+short(m.latest.version)+' is ready. It installs in place and reopens App Manager.':state.checkedAt?'App Manager is up to date.':'');
+ setText('self-text',m.location==='temporary'?'Move App Manager to Applications so it can keep itself up to date.':m.status==='downloading'?'Downloading the update… '+m.progress+'%':m.status==='installing'?'Installing. App Manager reopens by itself.':m.status==='error'?m.error:m.update?'Version '+short(m.latest.version)+' is ready. It installs in place and reopens App Manager.':state.checkedAt?'App Manager is up to date. Checked '+when(m.checkedAt||state.checkedAt).toLowerCase()+'.':'');
  $('self-text').classList.toggle('bad',m.status==='error');
  showIf('self-update',m.update&&m.status!=='installing');const b=$('self-update');if(!b.classList.contains('working'))b.disabled=m.status==='downloading';
  showIf('self-progress',m.status==='downloading');$('self-progress').firstElementChild.style.transform='scaleX('+(m.progress||0)/100+')';}
 for(const sw of $$('[data-pref]'))sw.addEventListener('click',()=>act('preference',sw.dataset.pref,!state.preferences[sw.dataset.pref]));
 for(const b of $$('[data-theme]'))b.addEventListener('click',()=>act('preference','theme',b.dataset.theme));
-$('self-update').addEventListener('click',async e=>{const b=e.currentTarget;if(await confirmed({title:'Update App Manager to '+short(state.manager.latest.version)+'?',text:'It downloads and checks the update, then closes and reopens by itself. Your apps aren’t touched.',icon:'download',confirm:'Update and reopen'}))busy(b,()=>act('manager-update'));});
+$('self-update').addEventListener('click',e=>updateManager(e.currentTarget));
 $('open-downloads').addEventListener('click',()=>act('website','downloads'));
+
+// ---------- Your HN Group account ----------
+// Signed out → sign in through HN Group Auth in the browser; remembered → the six-digit PIN. Nothing else in the
+// window works until it's unlocked.
+const initials=name=>String(name||'').split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase()||'?';
+function avatarInto(node,acc){const key=(acc.avatar||'')+'|'+(acc.user?.displayName||'');if(node.dataset.key===key)return;node.dataset.key=key;node.replaceChildren(acc.avatar?el('img',{src:acc.avatar,alt:''}):document.createTextNode(initials(acc.user?.displayName)));}
+const pinInput=$('pin-input'),PIN_HINT='It unlocks as soon as you type the sixth digit.';let pinBusy=false,lastStatus=null;
+function paintPin(){const v=pinInput.value;$$('#pin span').forEach((s,i)=>{s.classList.toggle('filled',i<v.length);s.classList.toggle('next',i===Math.min(v.length,5));});}
+function renderAccount(){const acc=state.account,open=acc.status==='unlocked';
+ showIf('account-screen',!open);showIf('layout',open);
+ for(const s of $$('.account-step'))showIf(s,s.dataset.step===acc.status);
+ const e=$('account-error');showIf(e,!!acc.error&&!open);setText(e.querySelector('p'),acc.error||'');
+ setText('account-version','App Manager '+state.version);
+ if(acc.user){setText('lock-name',acc.user.displayName);setText('lock-email',acc.user.email);setText('me-name',acc.user.displayName);setText('me-email',acc.user.jobTitle||acc.user.email);setText('settings-name',acc.user.displayName);setText('settings-email',acc.user.email);
+  for(const id of['lock-avatar','me-avatar','settings-avatar'])avatarInto($(id),acc);}
+ // Arriving on the PIN: start fresh with the cursor in the boxes.
+ if(acc.status==='locked'&&lastStatus!=='locked'){pinInput.value='';paintPin();setText('pin-status',PIN_HINT);$('pin-status').classList.remove('bad');requestAnimationFrame(()=>pinInput.focus());}
+ if(open&&lastStatus&&lastStatus!=='unlocked')$('main').scrollTo(0,0);
+ lastStatus=acc.status;}
+pinInput.addEventListener('input',async()=>{pinInput.value=pinInput.value.replace(/\D/g,'').slice(0,6);paintPin();const box=$('pin');box.classList.remove('wrong');
+ if(pinInput.value.length<6||pinBusy)return;pinBusy=true;box.classList.add('busy');setText('pin-status','Checking your PIN…');$('pin-status').classList.remove('bad');
+ try{await call('unlock',pinInput.value);setText('pin-status',PIN_HINT);}
+ catch(e){void box.offsetWidth;box.classList.add('wrong');setText('pin-status',e.message);$('pin-status').classList.add('bad');}
+ finally{pinInput.value='';pinBusy=false;box.classList.remove('busy');paintPin();if(state?.account.status==='locked')pinInput.focus();}});
+pinInput.addEventListener('focus',()=>$('pin').classList.add('focus'));pinInput.addEventListener('blur',()=>$('pin').classList.remove('focus'));
+$('pin').addEventListener('click',()=>pinInput.focus());
+$('sign-in').addEventListener('click',e=>busy(e.currentTarget,()=>act('sign-in')));
+$('sign-in-again').addEventListener('click',()=>act('sign-in'));
+$('sign-in-cancel').addEventListener('click',()=>act('sign-in-cancel'));
+$('switch-account').addEventListener('click',async()=>{if(await confirmed({title:'Sign in with another account?',text:'App Manager forgets '+(state.account.user?.displayName||'this account')+' on this computer. Installed apps aren’t touched.',icon:'key',confirm:'Use another account'}))act('sign-out');});
+for(const id of['lock','settings-lock'])$(id).addEventListener('click',()=>act('lock'));
+$('sign-out').addEventListener('click',async()=>{if(await confirmed({title:'Sign out of App Manager?',text:'Your account is forgotten on this computer, and you’ll need to sign in again with HN Group Auth. Installed apps aren’t touched.',icon:'key',tone:'danger',confirm:'Sign out'}))act('sign-out');});
+$('settings-account').addEventListener('click',()=>act('website','account'));
+$('open-devices').addEventListener('click',()=>act('website','devices'));
+
+// ---------- App Manager keeping itself up to date ----------
+async function updateManager(button){if(await confirmed({title:'Update App Manager to '+short(state.manager.latest.version)+'?',text:'It downloads and checks the update, then closes and reopens by itself. Your apps aren’t touched.',icon:'download',confirm:'Update and reopen'}))busy(button,()=>act('manager-update'));}
+async function moveManager(button){if(await confirmed({title:'Move App Manager to Applications?',text:'It copies itself into your Applications folder and reopens from there, so it can keep itself up to date. macOS may ask for your password.',icon:'folder',confirm:'Move and reopen'}))busy(button,()=>act('move-to-applications'));}
+$('self-check').addEventListener('click',e=>busy(e.currentTarget,async()=>{try{const update=await call('manager-check');toast(update?'App Manager '+short(state.manager.latest.version)+' is ready to install.':'App Manager is up to date.');}catch(err){toast(err.message,true);}}));
+for(const id of['self-move','move-now'])$(id).addEventListener('click',e=>moveManager(e.currentTarget));
+$('self-banner-update').addEventListener('click',e=>updateManager(e.currentTarget));
+function renderManagerBanners(){const m=state.manager;showIf('move-banner',m.location==='temporary');showIf('self-move',m.location==='temporary');
+ showIf('self-banner',m.update&&m.location!=='temporary'&&!['installing'].includes(m.status));setText('self-banner-title',m.update?'App Manager '+short(m.latest.version)+' is ready':'');
+ const d=state.device;if(d){setText('device-name',d.name||'This computer');setText('device-text',d.allowed?'Approved on devices.hngroup.org.uk'+(d.owner?' for '+d.owner.displayName:'')+'.':'Not approved on devices.hngroup.org.uk.');}}
 
 // ---------- The dock: what's happening now ----------
 function renderDock(){const op=state.operation,dock=$('dock');showIf(dock,!!op);if(!op)return;const a=appOf(op.id);
@@ -219,6 +264,7 @@ $('error-dismiss').addEventListener('click',()=>showIf('error',false));
 // ---------- Keeping the page up to date ----------
 function render(){if(!state)return;
  document.body.dataset.platform=state.platform;
+ renderAccount();renderManagerBanners();
  const pageId=['browser','network'].includes(page)?'app':page;
  for(const p of $$('[data-page-id]'))showIf(p,p.dataset.pageId===pageId);
  for(const b of $$('.nav')){if(b.dataset.page===page)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');}

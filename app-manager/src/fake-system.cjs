@@ -10,7 +10,7 @@ class FakeSystem extends System{
  async detect(id){entry(id);return this.apps[id]?{...this.apps[id]}:null;}
  async running(installed){return!!installed&&this.open.has(installed.id);}
  async install(id,file,release){await this.idle(id);await verified(file,release);await new Promise(r=>setTimeout(r,500));const[version,build]=release.version.split('-');
-  this.apps[id]={id,path:'C:\\Users\\charlie\\AppData\\Local\\Programs\\'+entry(id).profile,exe:'C:\\Users\\charlie\\AppData\\Local\\Programs\\'+entry(id).profile+'\\'+entry(id).exe,version,build:Number(build)||0};this.events.push({install:id,version:release.version});}
+  this.apps[id]={id,path:'C:\\Users\\charlie\\AppData\\Local\\Programs\\'+entry(id).name,exe:'C:\\Users\\charlie\\AppData\\Local\\Programs\\'+entry(id).name+'\\'+entry(id).exe,version,build:Number(build)||0};this.events.push({install:id,version:release.version});}
  async uninstall(id){if(!await this.idle(id))throw Error('This app is not installed.');await new Promise(r=>setTimeout(r,300));this.apps[id]=null;this.events.push({uninstall:id});}
 }
 module.exports={FakeSystem};

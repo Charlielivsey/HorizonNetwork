@@ -20,6 +20,13 @@ server (217.154.34.205).
 
 The app isn't notarised by Apple, so the first time you open it, right-click it and choose **Open**.
 
+## This device must be approved
+
+Since 2.5.0 the app only opens, and only updates, on a Mac approved on devices.hngroup.org.uk
+(`Sources/Device.swift`, sharing the identity files with HN Browser and HN Group App Manager in
+`~/Library/Application Support/HN Group/Device`). Until then the window and the menu bar show "This device is not
+authorised" with the code to add the Mac; it opens by itself once approved, and turns the VPN off if the Mac is revoked.
+
 ## Using it
 
 1. Open **HN Secure Network**; a shield appears in the menu bar.

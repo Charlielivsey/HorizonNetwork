@@ -1,6 +1,6 @@
 {
  "name": "hn-group-app-manager",
- "version": "2.0.0",
+ "version": "2.1.0",
  "private": true,
  "description": "Install, update, repair and look after HN Group desktop apps",
  "author": "HN Group",

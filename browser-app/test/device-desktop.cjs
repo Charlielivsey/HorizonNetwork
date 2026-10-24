@@ -5,7 +5,7 @@ const{_electron:electron}=require('playwright'),assert=require('node:assert/stri
 (async()=>{const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-browser-device-'));let app;try{
  fs.writeFileSync(path.join(dir,'device-status.txt'),'unlinked');
  app=await electron.launch({executablePath:require('electron'),args:[...((process.getuid?.()===0||process.env.CI)?['--no-sandbox']:[]),path.resolve(__dirname,'..')],env:{...process.env,HN_BROWSER_TEST_PROFILE:dir}});
- const gate=await app.firstWindow();assert.match(gate.url(),/device\.html$/);
+ const gate=await app.firstWindow();await gate.waitForURL(/device\.html$/);
  await gate.waitForFunction(()=>document.querySelector('#code')?.textContent==='ABCD-2345');
  assert.equal(await gate.locator('#title').textContent(),'This device is not authorised');assert.ok(await gate.locator('#open').isVisible());
  assert.equal(await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().length),1,'the browser must not open before approval');

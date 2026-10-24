@@ -2,7 +2,7 @@
 <html lang="en-GB">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>HN Group App Manager</title>
 <link rel="icon" href="assets/app-manager.svg">
@@ -17,7 +17,43 @@
  <span class="title-status" id="title-status" hidden><i class="spinner"></i><span></span></span>
 </header>
 
-<div class="layout">
+<!-- Before anything else: sign in with your HN Group account, or unlock it with your PIN -->
+<section class="account-screen" id="account-screen" hidden>
+ <div class="account-art" aria-hidden="true">
+  <div class="orbit"><img src="assets/browser.svg" alt=""><img src="assets/secure-network.svg" alt=""><img src="assets/app-manager.svg" alt=""></div>
+  <p class="art-line">Install, update and look after your HN Group apps.</p>
+ </div>
+ <div class="account-panel">
+  <img class="wordmark only-light" src="assets/hn-group-wordmark.svg" alt="HN Group"><img class="wordmark only-dark" src="assets/hn-group-wordmark-white.svg" alt="HN Group">
+  <!-- Signed out -->
+  <div class="account-step" data-step="signed-out">
+   <p class="eyebrow">HN Group App Manager</p>
+   <h1>Sign in to App Manager</h1>
+   <p class="muted">Use your HN Group account. Your browser opens HN Group Auth, where you sign in with your password and six-digit PIN, and then you come straight back here.</p>
+   <button class="btn primary large" id="sign-in"><svg data-icon="key"></svg><span>Sign in with HN Group Auth</span></button>
+   <p class="small muted">App Manager remembers your account on this computer and asks for your PIN each time it opens. It never sees your password.</p>
+  </div>
+  <!-- Finishing in the browser -->
+  <div class="account-step" data-step="waiting">
+   <p class="eyebrow">HN Group App Manager</p>
+   <h1><i class="spinner big"></i>Finish signing in in your browser</h1>
+   <p class="muted">Sign in on the HN Group Auth page that opened. App Manager carries on by itself as soon as you’re done.</p>
+   <div class="row"><button class="btn" id="sign-in-again"><svg data-icon="external"></svg><span>Open the sign-in page again</span></button><button class="btn" id="sign-in-cancel">Cancel</button></div>
+  </div>
+  <!-- Remembered, locked: the PIN -->
+  <div class="account-step" data-step="locked">
+   <div class="who"><span class="avatar large" id="lock-avatar"></span><div><p class="eyebrow">Welcome back</p><h1 id="lock-name"></h1><p class="muted small" id="lock-email"></p></div></div>
+   <label class="pin-label" for="pin-input">Enter your six-digit HN Group PIN</label>
+   <div class="pin" id="pin" role="group" aria-label="PIN"><input id="pin-input" type="password" inputmode="numeric" autocomplete="one-time-code" maxlength="6" aria-label="Six-digit PIN"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+   <p class="pin-status small muted" id="pin-status" role="status" aria-live="polite">It unlocks as soon as you type the sixth digit.</p>
+   <button class="link" id="switch-account">Not you? Sign in with another account</button>
+  </div>
+  <div class="banner bad" id="account-error" hidden><svg data-icon="alert"></svg><div class="grow"><strong>Couldn’t sign in</strong><p></p></div></div>
+  <p class="side-version" id="account-version"></p>
+ </div>
+</section>
+
+<div class="layout" id="layout">
  <nav class="side" aria-label="App Manager">
   <img class="wordmark only-light" src="assets/hn-group-wordmark.svg" alt="HN Group"><img class="wordmark only-dark" src="assets/hn-group-wordmark-white.svg" alt="HN Group">
   <button class="nav" data-page="overview"><svg data-icon="grid"></svg><span>Overview</span><b class="count" id="nav-updates" hidden></b></button>
@@ -29,6 +65,7 @@
   <button class="nav" data-page="settings"><svg data-icon="settings"></svg><span>Settings</span></button>
   <div class="spacer"></div>
   <button class="self-card" id="self-card" data-go="settings" hidden><img src="assets/app-manager.svg" alt=""><span><strong>App Manager update</strong><small id="self-card-text"></small></span></button>
+  <div class="me" id="me"><span class="avatar" id="me-avatar"></span><span class="grow"><strong id="me-name"></strong><small id="me-email"></small></span><button class="icon-btn" id="lock" title="Lock App Manager" aria-label="Lock App Manager"><svg data-icon="lock"></svg></button></div>
   <p class="side-version" id="side-version"></p>
  </nav>
 
@@ -48,6 +85,8 @@
     </div>
     <div class="hero-art" aria-hidden="true"><img src="assets/browser.svg" alt=""><img src="assets/secure-network.svg" alt=""><img src="assets/app-manager.svg" alt=""></div>
    </div>
+   <div class="banner info" id="move-banner" hidden><svg data-icon="folder"></svg><div class="grow"><strong>Move App Manager to Applications</strong><p>It’s running from the download, so it can’t keep itself up to date. Move it once and it updates by itself from then on.</p></div><button class="btn small primary" id="move-now">Move to Applications</button></div>
+   <div class="banner info" id="self-banner" hidden><img src="assets/app-manager.svg" alt=""><div class="grow"><strong id="self-banner-title"></strong><p>It installs in place and reopens. Nothing to download by hand.</p></div><button class="btn small primary" id="self-banner-update">Update App Manager</button></div>
    <div class="banner bad" id="error" hidden><svg data-icon="alert"></svg><div class="grow"><strong>That didn’t work</strong><p></p></div><button class="btn small" id="error-dismiss">Dismiss</button></div>
    <div class="cards" id="cards"></div>
    <div class="trust">
@@ -103,7 +142,17 @@
    <div class="card about">
     <img src="assets/app-manager.svg" alt="">
     <div class="grow"><h2>HN Group App Manager</h2><p class="muted small" id="about-version"></p><p class="small" id="self-text"></p><div class="bar" id="self-progress" hidden><i></i></div></div>
-    <button class="btn primary" id="self-update" hidden><svg data-icon="download"></svg><span>Update App Manager</span></button>
+    <div class="row stack"><button class="btn primary" id="self-update" hidden><svg data-icon="download"></svg><span>Update App Manager</span></button><button class="btn" id="self-check"><svg data-icon="refresh"></svg><span>Check for App Manager updates</span></button><button class="btn" id="self-move" hidden><svg data-icon="folder"></svg><span>Move to Applications</span></button></div>
+   </div>
+   <div class="card">
+    <h2>Your HN Group account</h2>
+    <div class="account-row"><span class="avatar large" id="settings-avatar"></span><div class="grow"><strong id="settings-name"></strong><p class="muted small" id="settings-email"></p></div>
+     <div class="row"><button class="btn small" id="settings-lock"><svg data-icon="lock"></svg><span>Lock</span></button><button class="btn small" id="settings-account"><svg data-icon="external"></svg><span>Manage account</span></button><button class="btn small danger" id="sign-out">Sign out</button></div></div>
+    <p class="muted small">App Manager asks for your PIN each time it opens. Signing out forgets your account on this computer.</p>
+   </div>
+   <div class="card">
+    <h2>This computer</h2>
+    <div class="account-row"><span class="device-icon"><svg data-icon="shield"></svg></span><div class="grow"><strong id="device-name">Approved</strong><p class="muted small" id="device-text">Approved on devices.hngroup.org.uk.</p></div><button class="btn small" id="open-devices"><svg data-icon="external"></svg><span>Your devices</span></button></div>
    </div>
    <div class="card">
     <h2>Appearance</h2>
@@ -113,6 +162,7 @@
     <h2>Updates</h2>
     <div class="toggle"><div><strong>Check for updates automatically</strong><small>When App Manager opens and every six hours.</small></div><button class="switch" role="switch" data-pref="autoCheck" aria-label="Check for updates automatically"></button></div>
     <div class="toggle"><div><strong>Tell me when updates are ready</strong><small>A notification, so you don’t have to open App Manager to find out.</small></div><button class="switch" role="switch" data-pref="notify" aria-label="Tell me when updates are ready"></button></div>
+    <div class="toggle"><div><strong>Keep App Manager up to date by itself</strong><small>Its own updates install while you’re not using it, and it reopens in the background.</small></div><button class="switch" role="switch" data-pref="autoUpdateManager" aria-label="Keep App Manager up to date by itself"></button></div>
     <div class="toggle"><div><strong>Install app updates by themselves</strong><small>Only for apps that are closed. Apps that are open are left alone.</small></div><button class="switch" role="switch" data-pref="autoUpdate" aria-label="Install app updates by themselves"></button></div>
    </div>
    <div class="card">
