@@ -306,6 +306,12 @@ final class VPNModel: ObservableObject {
         await checkStatus(); await checkIP()
     }
 
+    /// Used when this Mac stops being approved on devices.hngroup.org.uk.
+    func disconnectIfConnected() async {
+        await checkStatus()
+        if connected { await disconnect() }
+    }
+
     func disconnect() async {
         guard !busy else { return }
         error = nil; busy = true; defer { busy = false }
@@ -373,6 +379,8 @@ final class VPNModel: ObservableObject {
 
     func installUpdate() async {
         guard let release = update, updateState != .downloading, updateState != .installing else { return }
+        // Updates only install on a Mac approved on devices.hngroup.org.uk.
+        guard DeviceGate.shared.allowed else { updateState = .failed("This Mac isn’t approved on devices.hngroup.org.uk, so HN Secure Network can’t be updated here."); return }
         updateState = .downloading
         let work = FileManager.default.temporaryDirectory.appendingPathComponent("hn-vpn-update-" + UUID().uuidString)
         do {

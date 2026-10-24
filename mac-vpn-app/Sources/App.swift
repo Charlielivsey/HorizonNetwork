@@ -183,18 +183,21 @@ enum When {
 
 struct MainView: View {
     @EnvironmentObject var model: VPNModel
+    @ObservedObject var gate = DeviceGate.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack(alignment: .top) {
             Group {
-                switch model.stage {
+                if !gate.allowed { DeviceGateView(gate: gate).transition(.opacity) }
+                else { switch model.stage {
                 case .signIn, .waiting: WelcomeView().transition(.opacity)
                 case .ready: SignedInView().transition(.opacity)
-                }
+                } }
             }
             .animation(.easeInOut(duration: 0.3), value: model.stage)
-            if model.stage == .ready, model.pinRequest != nil { PinSheet() }
+            .animation(.easeInOut(duration: 0.3), value: gate.allowed)
+            if gate.allowed, model.stage == .ready, model.pinRequest != nil { PinSheet() }
         }
         .animation(reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.34, dampingFraction: 0.86), value: model.pinRequest)
         .frame(minWidth: 900, minHeight: 620)
@@ -1095,9 +1098,26 @@ struct MenuView: View {
     @EnvironmentObject var model: VPNModel
     @Environment(\.openWindow) private var openWindow
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ObservedObject var gate = DeviceGate.shared
     static let width: CGFloat = 320
 
     var body: some View {
+        // Not approved on devices.hngroup.org.uk: the menu only explains why, with the code to add this Mac.
+        if !gate.allowed {
+            VStack(spacing: 0) {
+                HNStripe().frame(height: 3)
+                DeviceGateView(gate: gate, compact: true)
+            }
+            .frame(width: Self.width)
+            .fixedSize(horizontal: false, vertical: true)
+            .background(Theme.background)
+            .foregroundStyle(Theme.text)
+        } else {
+            menu
+        }
+    }
+
+    private var menu: some View {
         VStack(spacing: 0) {
             header
             HNStripe().frame(height: 3)
@@ -1372,6 +1392,8 @@ enum Snapshots {
             ("pin", askingForPin(sample(connected: false)), CGSize(width: 1040, height: 760), false),
         ]
         for dark in [true, false] {
+            shoot(DeviceGateView(gate: DeviceGate(preview: true, status: .unlinked, code: "ABCD-2345")).background(Theme.background).foregroundStyle(Theme.text), size: CGSize(width: 920, height: 640), dark: dark, to: folder.appendingPathComponent("device-not-authorised-\(dark ? "dark" : "light").png"))
+            shoot(DeviceGateView(gate: DeviceGate(preview: true, status: .unlinked, code: "ABCD-2345"), compact: true).background(Theme.background).foregroundStyle(Theme.text), size: CGSize(width: 320, height: 420), dark: dark, to: folder.appendingPathComponent("menu-device-\(dark ? "dark" : "light").png"))
             for (name, model, size, _) in pages {
                 shoot(MainView().environmentObject(model), size: size, dark: dark, to: folder.appendingPathComponent("\(name)-\(dark ? "dark" : "light").png"))
             }
