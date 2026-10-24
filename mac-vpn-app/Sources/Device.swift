@@ -49,8 +49,8 @@ final class DeviceGate: ObservableObject {
         apply()
         // Not approved: checks every 15 seconds, so it opens by itself once approved. Approved: every 3 hours.
         timer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
+            guard let gate = self else { return }
             Task { @MainActor in
-                guard let gate = self else { return }
                 if !gate.allowed || Date().timeIntervalSince(gate.lastAttempt) > 3 * 3600 { await gate.check() }
             }
         }
