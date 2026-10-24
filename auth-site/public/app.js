@@ -177,7 +177,7 @@ $('code-cancel').onclick = () => busy($('code-cancel'), logout);
 $('password-cancel').onclick = () => busy($('password-cancel'), logout);
 $('show-password').onclick = () => { const show = $('password').type === 'password'; $('password').type = show ? 'text' : 'password'; $('show-password').textContent = show ? 'Hide' : 'Show'; $('show-password').setAttribute('aria-pressed',String(show)); };
 async function connectToStatus() {
-  const result = await api('continue', { client_id: client, state,...(client==='browser'?Object.fromEntries(['redirect_uri','code_challenge','code_challenge_method'].map(k=>[k,query.get(k)])): {}) });
+  const result = await api('continue', { client_id: client, state,...(['browser','app-manager'].includes(client)?Object.fromEntries(['redirect_uri','code_challenge','code_challenge_method'].map(k=>[k,query.get(k)])): {}) });
   location.replace(result.redirect);
 }
 $('continue').onclick = () => busy($('continue'), connectToStatus, 'Connecting…');

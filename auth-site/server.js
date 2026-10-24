@@ -257,7 +257,9 @@ const server = http.createServer(async (req, res) => {
       challenges.delete(hash(cookie(req, FLOW)));
       res.setHeader('Set-Cookie', [setCookie(COOKIE, '', 0), setCookie(FLOW, '', 0),...(browserRemembered?[setCookie(REMEMBER,browserRemembered,30*86400)]:[])]);
     }
-    res.writeHead(200, { 'Content-Type': mime[path.extname(file)], 'Cache-Control': file.endsWith('.html') ? 'no-store' : 'public, max-age=3600' });
+    res.writeHead(200, { 'Content-Type': mime[path.extname(file)], // The page and its script/stylesheet are always revalidated, so an update reaches people at once
+    // (a cached old app.js once left the new Devices sign-in stuck); fonts and pictures may be kept for an hour.
+    'Cache-Control': file.endsWith('.html') ? 'no-store' : /\.(js|css)$/.test(file) ? 'no-cache' : 'public, max-age=3600' });
     fs.createReadStream(path.join(__dirname, 'public', file)).pipe(res);
   } catch (e) { send(res, e.status || 503, { error: e.status ? e.message : 'Authentication service is unavailable. Please try again shortly.', ...(e.restart ? { restart: true } : {}) }, e.restart ? [setCookie(REMEMBER, '', 0)] : []); }
 });
