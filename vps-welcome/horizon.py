@@ -52,7 +52,7 @@ def confirm(description):
         print('Run this shortcut in an interactive terminal so you can confirm it.', file=sys.stderr)
         return False
     try:
-        return input(description + ' [y/N] ').strip().lower() in ('y', 'yes')
+        return input(description + ' [1 = continue, 0 = cancel] ').strip() == '1'
     except (EOFError, KeyboardInterrupt):
         return False
 
@@ -97,7 +97,8 @@ def welcome():
         print('  ' + colour(number, '1;38;5;183') + '  ' + description)
         print(colour('     horizon ' + command, '2'))
     print()
-    print('  Enter: continue to the shell   ·   horizon: open this menu again')
+    print('  ' + colour('0', '1;38;5;183') + '  Open the normal console')
+    print('  Choose a number, then press Enter. Type horizon in the console to reopen.')
     print('  horizon help: show the exact commands')
     print()
 
@@ -111,23 +112,25 @@ def logs(process=None):
         if not sys.stdin.isatty():
             print('Choose a process: horizon logs <name>', file=sys.stderr)
             return 2
-        try:
-            choice = input('Website number or process name (Enter to cancel): ').strip()
-        except (EOFError, KeyboardInterrupt):
-            return 0
-        if not choice:
-            return 0
-        if choice.isdigit() and 1 <= int(choice) <= len(entries):
-            process = entries[int(choice) - 1][0]
-        else:
-            process = choice
+        print('   0  Back to the welcome menu')
+        while True:
+            try:
+                choice = input('Website number (0 to go back): ').strip()
+            except (EOFError, KeyboardInterrupt):
+                return 0
+            if choice == '0':
+                return 0
+            if choice in {str(i) for i in range(1, len(entries) + 1)}:
+                process = entries[int(choice) - 1][0]
+                break
+            print('Choose one of the listed numbers, or 0 to go back.')
     if process not in allowed:
         print('Unknown website process. Use horizon logs to choose from the installed catalog.', file=sys.stderr)
         return 2
     if os.geteuid() != 0:
         print('Website processes run as root. Use sudo horizon logs ' + process, file=sys.stderr)
         return 1
-    print('Press Ctrl+C to return to your shell.')
+    print('Press Ctrl+C to stop following logs.')
     return run(['pm2', 'logs', process, '--lines', '80'])
 
 
@@ -180,19 +183,25 @@ def main(argv=None):
     welcome()
     if args.welcome or not sys.stdin.isatty() or not sys.stdout.isatty():
         return 0
-    try:
-        choice = input('  Shortcut number or name (Enter for shell): ').strip()
-    except (EOFError, KeyboardInterrupt):
-        print()
-        return 0
-    if not choice or choice.lower() in ('0', 'q', 'quit', 'exit'):
-        return 0
     commands = {number: command for number, command, _, _ in ACTIONS}
-    command = commands.get(choice, choice)
-    if command not in {row[1] for row in ACTIONS}:
-        print('Unknown shortcut. Type horizon to choose again.', file=sys.stderr)
-        return 2
-    return execute(command)
+    while True:
+        try:
+            choice = input('  Choose a number (0 for console): ').strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return 0
+        if choice == '0':
+            return 0
+        if choice not in commands:
+            print('  Choose a number from 0 to 8. Use 0 to open the console.')
+            continue
+        try:
+            result = execute(commands[choice])
+            if result:
+                print('  Shortcut finished with exit status ' + str(result) + '.')
+        except KeyboardInterrupt:
+            print('\n  Shortcut stopped. Returning to the welcome menu.')
+        welcome()
 
 
 if __name__ == '__main__':

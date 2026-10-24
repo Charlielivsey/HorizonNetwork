@@ -4,8 +4,12 @@ import io
 import os
 from pathlib import Path
 import pty
+import select
+import shlex
 import subprocess
+import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -49,6 +53,32 @@ class ShortcutTests(unittest.TestCase):
             self.assertIn('horizon', output.getvalue())
             run.assert_not_called()
 
+    def test_menu_requires_numbers_and_stays_open_after_shortcuts(self):
+        with patch.object(horizon.sys, 'stdin') as stdin, patch.object(horizon.sys, 'stdout') as stdout, patch.object(horizon, 'welcome') as welcome, patch.object(horizon, 'execute', return_value=0) as execute, patch('builtins.input', side_effect=['', 'status', '9', '7', '8', '0']):
+            stdin.isatty.return_value = stdout.isatty.return_value = True
+            self.assertEqual(horizon.main([]), 0)
+            self.assertEqual([call.args for call in execute.call_args_list], [('resources',), ('git',)])
+            self.assertEqual(welcome.call_count, 3)
+
+    def test_interrupted_shortcut_returns_to_menu(self):
+        with patch.object(horizon.sys, 'stdin') as stdin, patch.object(horizon.sys, 'stdout') as stdout, patch.object(horizon, 'welcome') as welcome, patch.object(horizon, 'execute', side_effect=KeyboardInterrupt), patch('builtins.input', side_effect=['3', '0']):
+            stdin.isatty.return_value = stdout.isatty.return_value = True
+            self.assertEqual(horizon.main([]), 0)
+            self.assertEqual(welcome.call_count, 2)
+
+    def test_log_menu_rejects_names_and_accepts_number(self):
+        with patch.object(horizon, 'catalog', return_value={'hn-auth': 'Auth'}), patch.object(horizon.sys, 'stdin') as stdin, patch.object(horizon.os, 'geteuid', return_value=0), patch.object(horizon, 'run', return_value=0) as run, patch('builtins.input', side_effect=['', 'hn-auth', '1']), contextlib.redirect_stdout(io.StringIO()):
+            stdin.isatty.return_value = True
+            self.assertEqual(horizon.logs(), 0)
+            run.assert_called_once_with(['pm2', 'logs', 'hn-auth', '--lines', '80'])
+
+    def test_numeric_confirmation(self):
+        with patch.object(horizon.sys, 'stdin') as stdin:
+            stdin.isatty.return_value = True
+            for answer, expected in [('1', True), ('0', False), ('', False), ('yes', False)]:
+                with patch('builtins.input', return_value=answer):
+                    self.assertEqual(horizon.confirm('Continue?'), expected)
+
 
 class LoginTests(unittest.TestCase):
     def hook(self, interactive, tty, ssh=True, disabled=False):
@@ -80,8 +110,52 @@ class LoginTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0)
             return marker.read_text().splitlines() if marker.exists() else []
 
-    def test_interactive_ssh_runs_once_and_does_not_block(self):
+    def test_interactive_ssh_opens_menu_once(self):
         self.assertEqual(self.hook(True, True), ['welcome'])
+
+    def test_real_login_waits_for_zero_before_releasing_the_console(self):
+        with tempfile.TemporaryDirectory() as name:
+            directory = Path(name)
+            command = directory / 'horizon'
+            command.write_text('#!/bin/sh\nexec ' + shlex.quote(sys.executable) + ' ' + shlex.quote(str(ROOT / 'horizon.py')) + ' "$@"\n')
+            command.chmod(0o755)
+            hook = directory / 'hook.sh'
+            hook.write_text((ROOT / 'profile.sh').read_text().replace('/usr/local/bin/horizon', str(command)))
+            env = {**os.environ, 'TERM': 'xterm-256color', 'SSH_CONNECTION': '192.0.2.2 12345 192.0.2.1 22'}
+            for key in ('HN_HORIZON_SHOWN', 'HN_HORIZON_DISABLE'):
+                env.pop(key, None)
+            master, slave = pty.openpty()
+            child = subprocess.Popen(['/bin/bash', '--noprofile', '--norc', '-ic', '. ' + shlex.quote(str(hook)) + '; echo CONSOLE_READY'], stdin=slave, stdout=slave, stderr=slave, env=env)
+            os.close(slave)
+            output = b''
+
+            def until(marker):
+                nonlocal output
+                end = time.monotonic() + 5
+                while marker not in output and time.monotonic() < end:
+                    if select.select([master], [], [], 0.1)[0]:
+                        try:
+                            output += os.read(master, 65536)
+                        except OSError:
+                            break
+                self.assertIn(marker, output)
+
+            try:
+                until(b'Choose a number (0 for console):')
+                self.assertIsNone(child.poll())
+                self.assertNotIn(b'CONSOLE_READY', output)
+                os.write(master, b'\n9\n')
+                until(b'Choose a number from 0 to 8.')
+                self.assertIsNone(child.poll())
+                self.assertNotIn(b'CONSOLE_READY', output)
+                os.write(master, b'0\n')
+                until(b'CONSOLE_READY')
+                self.assertEqual(child.wait(timeout=5), 0)
+            finally:
+                if child.poll() is None:
+                    child.kill()
+                    child.wait()
+                os.close(master)
 
     def test_command_ssh_with_or_without_tty_stays_silent(self):
         self.assertEqual(self.hook(False, True), [])

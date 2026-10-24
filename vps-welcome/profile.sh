@@ -6,7 +6,7 @@ case $- in
             && [ -x /usr/local/bin/horizon ]; then
             HN_HORIZON_SHOWN=1
             export HN_HORIZON_SHOWN
-            /usr/local/bin/horizon --welcome || :
+            /usr/local/bin/horizon || :
         fi
         ;;
 esac
