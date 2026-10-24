@@ -5,6 +5,10 @@ const{test}=require('node:test'),assert=require('node:assert/strict'),fs=require
 test('the VPN controller and secure storage are identical to HN Browser’s',()=>{
  for(const file of['vpn.cjs','vault.cjs'])assert.equal(fs.readFileSync(path.join(__dirname,'..','src',file),'utf8'),fs.readFileSync(path.join(__dirname,'..','..','browser-app','src',file),'utf8'),file+' differs from browser-app/src/'+file);
 });
+test('the device check is identical in HN Browser, HN Secure Network and HN Group App Manager',()=>{
+ for(const file of['src/device.cjs','src/device-gate.cjs','src/device-preload.cjs','ui/device.html','ui/device.js','ui/device.css'])for(const other of['browser-app','app-manager'])
+  assert.equal(fs.readFileSync(path.join(__dirname,'..',file),'utf8'),fs.readFileSync(path.join(__dirname,'..','..',other,file),'utf8'),file+' differs from '+other+'/'+file);
+});
 test('sign-ins are labelled HN Secure Network, devices are named after this PC, and the PIN is checked by the server',async()=>{
  const{VPN,FakeController}=require('../src/vpn.cjs'),os=require('node:os');const calls=[];let saved=null;
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-sn-shared-'));

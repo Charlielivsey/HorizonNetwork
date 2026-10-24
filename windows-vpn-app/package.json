@@ -1,6 +1,6 @@
 {
   "name": "hn-secure-network-windows",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "private": true,
   "description": "HN Secure Network for Windows: the HN Group VPN (connect with your PIN) and SSH sessions to the HN Group server in their own terminal window",
   "author": "HN Group",
@@ -9,7 +9,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test test/*.test.cjs",
-    "test:desktop": "node test/desktop.cjs",
+    "test:desktop": "node test/desktop.cjs && node test/device-desktop.cjs",
     "icons": "node scripts/icons.cjs",
     "build:win": "electron-builder --win --x64 --publish never",
     "ssh-helper": "node scripts/ssh-helper.cjs"

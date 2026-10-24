@@ -11,6 +11,7 @@ const{VPN,controllerFor,FakeController,ORIGIN:VPN_ORIGIN,SERVER}=require('./vpn.
 const{Vault}=require('./vault.cjs');
 const{Updates}=require('./updates.cjs');
 const{Terminals}=require('./terminal.cjs');
+const{Device,testFetcher}=require('./device.cjs'),{createDeviceGate}=require('./device-gate.cjs');
 
 // Desktop tests only (never in an installed copy): a profile folder, an in-memory VPN connection and an SSH
 // window that runs with pipes instead of a console.
@@ -23,7 +24,7 @@ const DEFAULTS={launchAtLogin:true,connectOnLaunch:false,theme:'system',trayHint
 let prefs={...DEFAULTS};try{prefs={...DEFAULTS,...JSON.parse(fs.readFileSync(path.join(DATA,'preferences.json'),'utf8'))};}catch{}
 const savePrefs=()=>{fs.mkdirSync(DATA,{recursive:true});fs.writeFileSync(path.join(DATA,'preferences.json.tmp'),JSON.stringify(prefs));fs.renameSync(path.join(DATA,'preferences.json.tmp'),path.join(DATA,'preferences.json'));};
 
-let win=null,tray=null,vpn,updates,terminals,quitting=false,connectedAt=null,toolsBusy=false,stateTimer=null,avatar={tag:null,data:null};
+let win=null,tray=null,device,deviceGate,vpn,updates,terminals,quitting=false,connectedAt=null,toolsBusy=false,stateTimer=null,avatar={tag:null,data:null};
 const testLog=[],dialogs=new Map();
 
 if(!app.requestSingleInstanceLock())app.quit();
@@ -32,6 +33,7 @@ else{
  app.whenReady().then(start).catch(e=>{console.error(e);app.quit();});
 }
 
+function requireDevice(){if(!device.state().allowed)throw Error('This PC isn’t approved on devices.hngroup.org.uk, so HN Secure Network can’t be updated here.');}
 function show(){if(!win||win.isDestroyed())return;if(win.isMinimized())win.restore();win.show();win.focus();}
 function send(channel,value){if(win&&!win.isDestroyed())win.webContents.send(channel,value);}
 function changed(){if(stateTimer)return;stateTimer=setTimeout(()=>{stateTimer=null;const s=snapshot();send('sn:state',s);updateTray(s);},16);}
@@ -44,6 +46,10 @@ const colors=()=>nativeTheme.shouldUseDarkColors?{color:'#0E1020',symbolColor:'#
 async function start(){
  app.setAppUserModelId('uk.org.hngroup.securenetwork');
  nativeTheme.themeSource=['light','dark'].includes(prefs.theme)?prefs.theme:'system';
+ // This PC must be approved on devices.hngroup.org.uk before the app opens (desktop tests answer from a file).
+ device=new Device({app:'secure-network',version:app.getVersion(),...(TESTING?{dir:path.join(DATA,'device'),fetcher:testFetcher(path.join(DATA,'device-status.txt')),machine:'0'.repeat(64),name:'Test PC'}:{})});
+ deviceGate=createDeviceGate({device,appName:'HN Secure Network',electron:require('electron'),uiDir:UI,preloadDir:__dirname,icon:path.join(UI,'assets','tray.png')});
+ await deviceGate.ensure();
  const controller=TESTING&&process.env.HN_SECURE_NETWORK_FAKE_VPN?new FakeController():controllerFor(process.platform);
  vpn=new VPN({vault:new Vault(path.join(DATA,'vpn.enc'),safeStorage),controller,stateFile:path.join(DATA,'vpn.json'),changed,client:'secure-network',appName:'HN Secure Network',deviceName:os.hostname()+' (Windows)',version:app.getVersion()+(build?' ('+build+')':''),...(TESTING?{reach:async()=>true}:{}),
   openTab:async url=>{if(TESTING){testLog.push({signIn:url});return null;}await shell.openExternal(url);return null;}});
@@ -62,6 +68,8 @@ async function start(){
  // The connection is checked every 10 seconds while the window is open (30 while it's in the tray).
  let ticks=0;setInterval(()=>{ticks++;if(win?.isVisible()||ticks%3===0)vpn.poll().catch(()=>{});},10000).unref();
  setInterval(()=>vpn.refresh().catch(()=>{}),300000).unref();
+ // Revoked while open: disconnect, hide the app and show the "not authorised" window until it's approved again.
+ deviceGate.watch({onBlocked:()=>{vpn.disconnect?.().catch(()=>{});if(win&&!win.isDestroyed())win.hide();},onAllowed:()=>show()});
  if(!TESTING){setTimeout(()=>updates.check(),15000).unref();setInterval(()=>updates.check(),6*3600000).unref();}
 }
 
@@ -171,8 +179,8 @@ ipcMain.handle('sn:action',async(event,name,data)=>{trusted(event);try{let resul
  case'dialog-answer':{const d=dialogs.get(String(data?.id));if(d)d.finish(d.buttons.includes(data?.choice)?data.choice:'cancel');break;}
  case'preference':{const{key,value}=data||{},rule=PREFS[key];if(!rule||(rule==='boolean'?typeof value!=='boolean':!rule.includes(value)))throw Error('That setting can’t be changed.');prefs[key]=value;savePrefs();if(key==='theme')nativeTheme.themeSource=value;if(key==='launchAtLogin'&&!TESTING)app.setLoginItemSettings({openAtLogin:value,args:['--hidden']});break;}
  case'check-update':await updates.check();break;
- case'download-update':await updates.download();break;
- case'install-update':{const file=await updates.verifiedFile();if(TESTING){testLog.push({install:file});break;}const child=spawn(file,['/S','--force-run'],{detached:true,stdio:'ignore',windowsHide:true});child.on('error',()=>{});child.unref();quitting=true;setTimeout(()=>app.quit(),500);break;}
+ case'download-update':requireDevice();await updates.download();break;
+ case'install-update':{requireDevice();const file=await updates.verifiedFile();if(TESTING){testLog.push({install:file});break;}const child=spawn(file,['/S','--force-run'],{detached:true,stdio:'ignore',windowsHide:true});child.on('error',()=>{});child.unref();quitting=true;setTimeout(()=>app.quit(),500);break;}
  case'open':{const pages={vpn:VPN_ORIGIN+'/',devices:VPN_ORIGIN+'/#devices',downloads:DOWNLOADS+'/',wireguard:WIREGUARD_PAGE};if(!pages[data])throw Error('Unknown page.');openWeb(pages[data]);break;}
  default:throw Error('Unknown action.');}
  changed();return{ok:true,result};}catch(e){changed();return{error:e.message||'Something went wrong.',...(e.pin?{pin:true}:{}),...(e.needPin?{needPin:true}:{})};}});
