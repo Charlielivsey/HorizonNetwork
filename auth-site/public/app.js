@@ -25,6 +25,8 @@ const APPS = {
   accounts: { name: 'HN Account', short: 'HN Account', allowed: () => true, granted: 'You can manage your HN account.', restricted: '' },
   investors: { name: 'HN Group Investors', short: 'the investors website', allowed: user => !!user.ownerAccess || (Array.isArray(user.companies) ? user.companies : [user.company]).includes('HN Group'), granted: 'You can manage investors, valuations and investor news.', restricted: 'Only staff with a role at HN Group can sign in to the investors website.' },
   vpn: { name: 'HN Group VPN', short: 'the VPN', allowed: () => true, granted: 'You can use the HN Group VPN.', restricted: '' },
+  devices: { name: 'HN Group Devices', short: 'HN Group Devices', allowed: () => true, granted: 'You can add and manage your computers.', restricted: '' },
+  'app-manager': { name: 'HN Group App Manager', short: 'App Manager', allowed: () => true, granted: 'Your HN account is ready for App Manager.', restricted: '' },
 };
 const app = Object.prototype.hasOwnProperty.call(APPS, client) ? APPS[client] : null;
 const connecting = !!app && /^[a-f0-9]{64}$/.test(state || '');
