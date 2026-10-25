@@ -220,6 +220,8 @@ function runMigrations() {
     'Horizon Network Limited': '2025-04-21', 'HN Group Limited': '2026-09-01',
     'Horizon Media Group Limited': '2026-10-01', 'Horizon Advertising Limited': '2026-10-01',
   }));
+  // The user's change (25 October 2026): Horizon Media Group Limited was incorporated on 27 December 2025.
+  once('backdate-horizon-media-group-2025-12-27', () => backdateIncorporations({ 'Horizon Media Group Limited': '2025-12-27' }));
   once('officer-charlie-livsey', () => {
     for (const c of db.companies) for (const o of c.officers) if (/^charlie\s+dean\s+livsey$/i.test(String(o.name).trim())) { o.name = 'Charlie Livsey'; audit('system', 'officer.rename', c.slug + ' Charlie Dean Livsey → Charlie Livsey'); }
   });
