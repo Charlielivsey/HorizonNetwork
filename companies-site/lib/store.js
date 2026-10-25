@@ -215,6 +215,11 @@ function runMigrations() {
   once('pdf-design-2', redrawGeneratedFilings);
   // The user's request (17 October 2026): the register carries HN Group branding again, on new and existing documents.
   once('pdf-design-3-hn-group', redrawGeneratedFilings);
+  // The user's request (25 October 2026): backdate the start dates of four companies, with their filings.
+  once('backdate-incorporations-2026-10-25', () => backdateIncorporations({
+    'Horizon Network Limited': '2025-04-21', 'HN Group Limited': '2026-09-01',
+    'Horizon Media Group Limited': '2026-10-01', 'Horizon Advertising Limited': '2026-10-01',
+  }));
   once('officer-charlie-livsey', () => {
     for (const c of db.companies) for (const o of c.officers) if (/^charlie\s+dean\s+livsey$/i.test(String(o.name).trim())) { o.name = 'Charlie Livsey'; audit('system', 'officer.rename', c.slug + ' Charlie Dean Livsey → Charlie Livsey'); }
   });
@@ -445,6 +450,45 @@ function generateFilings(c) {
   for (const p of c.psc || []) if (p.notified && !p.notificationFiling) {
     p.notificationFiling = pushGenerated(c, p.notified, 'Persons with significant control', 'Notification of ' + p.name + ' as a person with significant control on ' + longDate(p.notified), { code: FORM_CODES.psc_add, heading: 'Notification of a person with significant control', rows: [
       ['Name', p.name], ['Type', p.kind], ['Shareholding', p.share ? p.share + '%' : ''], ['Share classes', classText(p)], ['Nature of control', (p.control || []).join('; ')], ['Notified on', longDate(p.notified)], ['Company', c.legalName]] });
+  }
+}
+// Moves a generated filing to a new date: its date, the date shown on the document and in its description,
+// then the PDF is drawn again in place (uploaded PDFs are never touched).
+function redateFiling(filingId, date, label) {
+  const f = db.filings.find((x) => x.id === filingId);
+  if (!f || f.date === date) return;
+  const before = f.date;
+  f.date = date;
+  if (before) f.description = f.description.split(longDate(before)).join(longDate(date));
+  if (f.source !== 'generated' || !f.doc || !f.file) return;
+  f.doc = { ...f.doc, rows: f.doc.rows.map(([k, v]) => [k, k === label ? longDate(date) : v]) };
+  const at = filePath(f.file), tmp = at + '.tmp';
+  fs.writeFileSync(tmp, renderFiling(f), { mode: 0o600 });
+  fs.renameSync(tmp, at);
+}
+// Sets companies' incorporation dates (by registered name) and keeps their records consistent: the Incorporation
+// filing moves to the new date (or is filed if there isn't one), and officers and persons with significant control
+// recorded on the old incorporation date, or before the new one, move to it with their filings. A company that is
+// itself a person with significant control is never shown as one before it was incorporated.
+function backdateIncorporations(dates) {
+  const byName = (n) => db.companies.find((c) => c.legalName.trim().toLowerCase() === n.toLowerCase());
+  const incorporatedOn = (n) => (Object.entries(dates).find(([k]) => k.toLowerCase() === String(n).trim().toLowerCase()) || [])[1] || (byName(String(n).trim()) || {}).incorporated || '';
+  for (const [name, date] of Object.entries(dates)) {
+    const c = byName(name);
+    if (!c) { audit('system', 'company.backdate-missing', name + ' is not on the register'); continue; }
+    const old = c.incorporated;
+    c.incorporated = date;
+    if (c.incorporationFiling && db.filings.some((f) => f.id === c.incorporationFiling)) redateFiling(c.incorporationFiling, date, 'Incorporated on');
+    else c.incorporationFiling = '';
+    const move = (when) => when && (when === old || when < date);
+    for (const o of c.officers) if (move(o.appointed)) { o.appointed = date; if (o.appointmentFiling) redateFiling(o.appointmentFiling, date, 'Appointed on'); }
+    for (const p of c.psc || []) if (move(p.notified)) {
+      const since = p.kind !== 'Individual' ? incorporatedOn(p.name) : '';
+      p.notified = since > date ? since : date;
+      if (p.notificationFiling) redateFiling(p.notificationFiling, p.notified, 'Notified on');
+    }
+    generateFilings(c);
+    audit('system', 'company.backdate', c.slug + ' incorporated ' + (old || 'not recorded') + ' → ' + date);
   }
 }
 // A change to the registered name keeps the old name and files a change of name automatically.
