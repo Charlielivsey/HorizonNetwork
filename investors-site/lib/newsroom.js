@@ -14,6 +14,7 @@ const shape = (p) => (p && /^[a-f0-9]{24}$/.test(p.id) && typeof p.title === 'st
   id: p.id, title: p.title.slice(0, 160), summary: String(p.summary || '').slice(0, 300), body: String(p.body || '').slice(0, 40000),
   topic: String(p.category || '').slice(0, 80), author: String(p.author || '').slice(0, 120),
   publishedAt: String(p.publishedAt || p.updatedAt || ''), updatedAt: String(p.updatedAt || ''), status: 'published', source: 'news',
+  document: p.document && /^https:\/\/news\.hngroup\.org\.uk\/api\/posts\/[a-f0-9]{24}\/document$/.test(p.document.url || '') ? { url: p.document.url, label: String(p.document.label || 'Document (PDF)').slice(0, 80) } : null,
 } : null);
 
 function init(dataDir) {

@@ -26,3 +26,7 @@ Dashboard, Investors (add, edit, register names, invitation links, preview what 
 ## Tests
 
 `node --test investors-site/test.cjs` — stand-ins for HN Group Auth and the register; covers staff access by HN Group role, valuations, investor invitations, holdings and values, indirect interests, news drafts/publishing, escaping, CSRF/origin checks, lockout and disabling.
+
+## Documents
+
+Share certificates and other documents for individual investors ship with the site in `documents/` (`index.json` plus one PDF each, each naming its holder as on the Company Register). An investor sees only the documents for the register names linked to their account, on the Documents page and their overview (`lib/documents.js`); they're never public.

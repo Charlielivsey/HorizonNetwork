@@ -47,7 +47,7 @@ test('HN Group Investors: staff access, investors, holdings, values and news', a
   ] };
   const reg = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(feed)); });
   // A stand-in for HN Group News: its private investor feed needs the service secret.
-  const newsItems = [{ id: 'c'.repeat(24), title: 'Half-year update', summary: 'Results so far.', body: 'First paragraph.\n\nSecond <b>paragraph</b>.', category: 'Results', publishedAt: '2026-10-20T09:00:00.000Z', updatedAt: '2026-10-20T09:00:00.000Z', author: 'Ada' }];
+  const newsItems = [{ id: 'c'.repeat(24), title: 'Half-year update', summary: 'Results so far.', body: 'First paragraph.\n\nSecond <b>paragraph</b>.', category: 'Results', publishedAt: '2026-10-20T09:00:00.000Z', updatedAt: '2026-10-20T09:00:00.000Z', author: 'Ada', document: { url: 'https://news.hngroup.org.uk/api/posts/' + 'c'.repeat(24) + '/document', label: 'Merger agreement (PDF)' } }, { id: 'd'.repeat(24), title: 'Bad link', summary: 'x', body: 'x', category: 'x', publishedAt: '2026-10-01T09:00:00.000Z', updatedAt: '2026-10-01T09:00:00.000Z', document: { url: 'https://evil.example/x.pdf', label: 'Evil' } }];
   const newsServer = http.createServer((req, res) => {
     res.setHeader('Content-Type', 'application/json');
     if (req.url !== '/api/private/investor-news' || req.headers.authorization !== 'Bearer ' + secret) { res.writeHead(404); return res.end('{}'); }
@@ -145,6 +145,17 @@ test('HN Group Investors: staff access, investors, holdings, values and news', a
     assert.equal((await inv.go(link.replace(/^https?:\/\/[^/]+/, ''))).status, 410, 'invitations work once');
     const article = await inv.go(/href="(\/news\/[a-f0-9]{24})"/.exec(page.text)[1]);
     assert.ok(article.text.includes('Second &lt;b&gt;paragraph&lt;/b&gt;.'), 'news text is escaped');
+    assert.ok(article.text.includes('href="https://news.hngroup.org.uk/api/posts/' + 'c'.repeat(24) + '/document"') && article.text.includes('Merger agreement (PDF)'), 'the attached document is linked');
+    assert.ok(!(await inv.go('/news/' + 'd'.repeat(24))).text.includes('evil.example'), 'only HN Group News documents are linked');
+    // Share certificates: only the ones issued to the register names on this account (Charlie Livsey).
+    assert.ok(page.text.includes('Your documents') && page.text.includes('HNG-001') && page.text.includes('HNW-001') && !page.text.includes('HNG-002'));
+    const docs = await inv.go('/documents');
+    assert.ok(docs.text.includes('Share certificate HNG-001: HN Group Limited') && docs.text.includes('75% of the shares, Class C') && !docs.text.includes('Jack Vinckx'));
+    const pdf = await inv.go('/documents/share-certificate-hng-001');
+    assert.equal(pdf.status, 200); assert.ok(pdf.text.startsWith('%PDF'), 'the certificate PDF');
+    assert.equal((await inv.go('/documents/share-certificate-hng-002')).status, 404, 'another holder’s certificate');
+    assert.equal((await inv.go('/documents/..%2Findex.json')).status, 404);
+    assert.ok((await browser().go('/documents/share-certificate-hng-001')).url.endsWith('/login'), 'signed out');
     const holdingsPage = await inv.go('/holdings');
     assert.ok(holdingsPage.text.includes('Valuation history') && holdingsPage.text.includes('Opening valuation'));
     assert.ok(holdingsPage.text.includes('C issued by Charlie Livsey') && holdingsPage.text.includes('<th class="num">Votes</th>'));

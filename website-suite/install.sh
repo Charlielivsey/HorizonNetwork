@@ -40,6 +40,8 @@ chmod 700 "/var/lib/$APP"
 cp "$SHARED/server.js" "$SOURCE/auth.js" "$SOURCE/config.json" "/opt/$APP/"
 cp -r "$SHARED/public/." "/opt/$APP/public/"
 cp -r "$SOURCE/public/." "/opt/$APP/public/"
+# Announcements shipped with the site (News only) are published once by the server.
+if [ -d "$SOURCE/announcements" ]; then rm -rf "/opt/$APP/announcements"; cp -r "$SOURCE/announcements" "/opt/$APP/announcements"; fi
 # Seeds are additive only: never overwrite articles edited in the admin panel.
 if [ -f "$SOURCE/seed.json" ]; then
     node "$SHARED/seed.cjs" "$SOURCE/seed.json" "/var/lib/$APP/records.json"

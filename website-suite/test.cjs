@@ -24,3 +24,17 @@ const investor=(await(await feed({Authorization:'Bearer '+'a'.repeat(64)})).json
 // A company website shows the news sent to it.
 media=await fixture('media',{NEWS_BACKEND:news.base});assert.deepEqual((await(await media.request('/api/news')).json()).posts.map(p=>p.title),['Group launch']);
 }finally{await news.close();if(media)await media.close();}});
+test('announcements shipped with HN Group News are published once with their PDF, and edits or deletions are kept',async()=>{const news=await fixture('news',{ANNOUNCEMENTS_DIR:path.join(ROOT,'news-site','announcements')});try{
+const shipped=JSON.parse(fs.readFileSync(path.join(ROOT,'news-site','announcements','hn-group-merger-2026.json'),'utf8'));
+let posts=(await(await news.request('/api/posts?site=news')).json()).posts;const post=posts.find(p=>p.id===shipped.id);assert.ok(post,'the press release is published');assert.equal(post.category,'Press release');
+assert.equal(post.document.url,'https://news.hngroup.org.uk/api/posts/'+shipped.id+'/document');
+for(const site of['network','media'])assert.ok((await(await news.request('/api/posts?site='+site)).json()).posts.some(p=>p.id===shipped.id),'shown on '+site);
+const pdf=await news.request('/api/posts/'+shipped.id+'/document');assert.equal(pdf.status,200);assert.equal(pdf.headers.get('content-type'),'application/pdf');
+const bytes=Buffer.from(await pdf.arrayBuffer());assert.ok(bytes.equals(fs.readFileSync(path.join(ROOT,'news-site','announcements',shipped.document.file))),'the merger agreement as shipped');
+assert.equal((await news.request('/api/posts/'+'f'.repeat(24)+'/document')).status,404);
+// Edited on the site: the attachment stays; restarting doesn't add it again.
+news.user({companies:['HN Group']});const staff=await news.admin();await news.request('/api/admin/post',{id:shipped.id,title:'Edited title',summary:post.summary,body:post.body,category:'Press release',published:true,sites:['news','network']},staff);
+await news.restart();posts=(await(await news.request('/api/posts?site=news')).json()).posts;assert.equal(posts.filter(p=>p.id===shipped.id).length,1);assert.equal(posts.find(p=>p.id===shipped.id).title,'Edited title');assert.ok(posts.find(p=>p.id===shipped.id).document);
+// Deleted on the site: it doesn't come back.
+await news.request('/api/admin/delete-post',{id:shipped.id},await news.admin());await news.restart();assert.ok(!(await(await news.request('/api/posts?site=news')).json()).posts.some(p=>p.id===shipped.id));
+}finally{await news.close();}});

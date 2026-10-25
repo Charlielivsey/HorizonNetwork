@@ -54,3 +54,7 @@ PLAYWRIGHT_MODULE=/path/to/playwright node links-site/browser-smoke.cjs
 ```
 
 Tests use temporary data and fixture accounts only. Browser checks exercise layouts in both colour schemes, reduced motion, enquiry submission, CV applications, support tracking/replies, article publication, client activation and approval. No production accounts or staff data are created by these tests.
+
+## Announcements (HN Group News)
+
+An announcement can ship with the News site in `news-site/announcements/` (a JSON file with a fixed `id` and `key`, optionally with a PDF beside it). The server publishes it once at startup and remembers its key, so later edits or a deletion on the site are kept. An attached PDF is served at `/api/posts/<id>/document` and linked from the article on News, the company websites and investor news.

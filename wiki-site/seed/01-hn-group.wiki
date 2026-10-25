@@ -10,6 +10,9 @@ title: HN Group
 
 The group describes its purpose as "building the digital infrastructure, products and media for tomorrow's businesses".<ref>[https://hngroup.org.uk/ HN Group home page], hngroup.org.uk.</ref>
 
+== History ==
+HN Group was formed by the merger of [[Horizon Network]] and [[Horizon Media Group]], which took effect on 1 September 2026, the day HN Group's parent company was incorporated. Both companies came under HN Group's ownership, keeping their own names, brands and subsidiaries, and all of their staff and staff contracts moved to HN Group.<ref>[https://news.hngroup.org.uk/#article-5e9bd91db3d9ece8a6b701a0 Horizon Network and Horizon Media Group merge to form HN Group], HN Group News.</ref>
+
 == Structure ==
 {{Main|List of HN Group companies}}
 {{Company ownership|HN Group}}

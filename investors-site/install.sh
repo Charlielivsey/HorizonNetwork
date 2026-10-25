@@ -28,7 +28,8 @@ install -d -m 700 /var/lib/hn-investors
 mkdir -p /opt/hn-investors "$CHALLENGE_DIR" /etc/nginx/sites-available /etc/nginx/sites-enabled
 rm -rf /opt/hn-investors/lib /opt/hn-investors/public
 cp "$SCRIPT_DIR/server.js" /opt/hn-investors/server.js
-cp -r "$SCRIPT_DIR/lib" "$SCRIPT_DIR/public" /opt/hn-investors/
+rm -rf /opt/hn-investors/documents
+cp -r "$SCRIPT_DIR/lib" "$SCRIPT_DIR/public" "$SCRIPT_DIR/documents" /opt/hn-investors/
 if ! grep -q "investors: { name: 'HN Group Investors'" /opt/hn-auth/server.js 2>/dev/null; then
     echo 'Note: HN Group Auth does not know the investors website yet, so staff cannot sign in.'
     echo '      Run: sudo bash auth-site/install.sh'

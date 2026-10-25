@@ -11,6 +11,7 @@ const store = require('./lib/store');
 const register = require('./lib/register');
 const holdings = require('./lib/holdings');
 const newsroom = require('./lib/newsroom');
+const documents = require('./lib/documents');
 const NEWS_ADMIN = (process.env.NEWS_ORIGIN || 'https://news.hngroup.org.uk') + '/admin';
 
 const PUBLIC = process.env.INVESTORS_PUBLIC_DIR || path.join(__dirname, 'public');
@@ -46,7 +47,7 @@ const paragraphs = (text) => String(text || '').split(/\n{2,}/).map((p) => '<p>'
 
 function layout(o) {
   const who = o.investor ? 'investor' : o.staff ? 'staff' : '';
-  const nav = who === 'investor' ? [['/', 'Overview'], ['/holdings', 'Holdings'], ['/news', 'News'], ['/account', 'Account']]
+  const nav = who === 'investor' ? [['/', 'Overview'], ['/holdings', 'Holdings'], ['/documents', 'Documents'], ['/news', 'News'], ['/account', 'Account']]
     : who === 'staff' ? [['/staff', 'Dashboard'], ['/staff/investors', 'Investors'], ['/staff/companies', 'Companies'], ['/staff/news', 'News'], ['/staff/activity', 'Activity']] : [];
   const signOut = who === 'investor' ? '<form method="post" action="/logout"><input type="hidden" name="csrf" value="' + esc(o.csrf) + '"><button type="submit" class="link">Sign out</button></form>'
     : who === 'staff' ? '<form method="post" action="/auth/logout"><input type="hidden" name="csrf" value="' + esc(o.staff.csrf) + '"><button type="submit" class="link">Sign out</button></form>' : '';
@@ -184,6 +185,7 @@ function investorOverview(x, ctx, preview) {
     '<section class="block"><div class="block-head"><h2>What you’re invested in</h2><a href="/holdings">Full details</a></div>' +
     (s.direct.length ? '<div class="holdings">' + s.direct.map(holdingCard).join('') + '</div>' : '<p class="muted">No holdings are recorded for you on the Company Register yet. If you think this is wrong, contact HN Group.</p>') + '</section>' +
     interestsTable(s.indirect) +
+    (documents.forInvestor(x).length ? '<section class="block"><div class="block-head"><h2>Your documents</h2>' + (preview ? '' : '<a href="/documents">All documents</a>') + '</div>' + documentList(documents.forInvestor(x), !preview) + '</section>' : '') +
     '<section class="block"><div class="block-head"><h2>Investor news</h2><a href="' + (preview ? '/staff/news' : '/news') + '">All news</a></div>' + newsList(store.news().slice(0, 3), preview ? null : x, preview ? '/staff/news/' : '/news/') + '</section>';
   return layout({ ...ctx, title: 'Your investments', active: '/', body, unread: preview ? 0 : unreadFor(x) });
 }
@@ -202,6 +204,17 @@ function holdingsPage(x, ctx) {
     interestsTable(s.indirect) + (history ? '<section class="block"><h2>Valuation history</h2>' + history + '</section>' : '');
   return layout({ ...ctx, title: 'Holdings', active: '/holdings', body, unread: unreadFor(x) });
 }
+// Your documents: share certificates and other documents issued to the register names on your account.
+function documentList(list, links) {
+  return '<div class="table-wrap"><table><thead><tr><th>Document</th><th>Company</th><th>Issued</th>' + (links ? '<th></th>' : '') + '</tr></thead><tbody>' + list.map((d) => '<tr><td><b>' + esc(d.title) + '</b><span class="sub">' + esc(d.kind) + (d.detail ? ' · ' + esc(d.detail) : '') + ' · ' + esc(d.holder) + '</span></td><td>' + esc(d.company) + '</td><td class="nowrap">' + esc(longDate(d.issued)) + '</td>' +
+    (links ? '<td class="num"><a class="button" href="/documents/' + esc(d.id) + '" target="_blank" rel="noopener">Open PDF</a></td>' : '') + '</tr>').join('') + '</tbody></table></div>';
+}
+function documentsPage(x, ctx) {
+  const list = documents.forInvestor(x);
+  const body = '<section class="hero small"><p class="eyebrow">Your investments</p><h1>Documents</h1><p class="lede">Share certificates and other documents issued to you as ' + esc(x.holders.join(', ') || '—') + ' on the HN Group Company Register. Only you can see them.</p></section>' +
+    (list.length ? documentList(list, true) : '<p class="muted">There are no documents for you yet.</p>');
+  return layout({ ...ctx, title: 'Documents', active: '/documents', body, unread: unreadFor(x) });
+}
 function newsPage(x, ctx) {
   const items = store.news(), body = '<section class="hero small"><p class="eyebrow">For investors</p><h1>News</h1></section>' + newsList(items, x, '/news/');
   const html = layout({ ...ctx, title: 'News', active: '/news', body, unread: 0 });
@@ -210,7 +223,7 @@ function newsPage(x, ctx) {
 }
 function articlePage(n, ctx, back) {
   const c = n.company && register.all().find((y) => y.slug === n.company);
-  const body = '<article class="article"><p class="eyebrow"><a href="' + back + '">← News</a></p><h1>' + esc(n.title) + '</h1><p class="muted">' + esc(longDate(n.publishedAt || n.updatedAt)) + (c ? ' · ' + esc(register.displayName(c)) : '') + (n.topic && n.topic !== 'General' ? ' · ' + esc(n.topic) : '') + (n.status === 'draft' ? ' · <span class="tag">Draft</span>' : '') + '</p><div class="prose">' + paragraphs(n.body) + '</div></article>';
+  const body = '<article class="article"><p class="eyebrow"><a href="' + back + '">← News</a></p><h1>' + esc(n.title) + '</h1><p class="muted">' + esc(longDate(n.publishedAt || n.updatedAt)) + (c ? ' · ' + esc(register.displayName(c)) : '') + (n.topic && n.topic !== 'General' ? ' · ' + esc(n.topic) : '') + (n.status === 'draft' ? ' · <span class="tag">Draft</span>' : '') + '</p><div class="prose">' + paragraphs(n.body) + '</div>' + (n.document ? '<p><a class="button primary" href="' + esc(n.document.url) + '" target="_blank" rel="noopener">' + esc(n.document.label) + ' ↓</a></p>' : '') + '</article>';
   return layout({ ...ctx, title: n.title, active: back === '/news' ? '/news' : '/staff/news', body, narrow: true });
 }
 function accountPage(x, ctx, error) {
@@ -435,7 +448,7 @@ async function investorRoutes(req, res, url, route) {
   }
   if (!s) {
     if (route === '/' && req.method === 'GET') return landing(res, url);
-    if (['/holdings', '/news', '/account'].includes(route) || route.startsWith('/news/')) return redirect(res, '/login');
+    if (['/holdings', '/documents', '/news', '/account'].includes(route) || route.startsWith('/news/') || route.startsWith('/documents/')) return redirect(res, '/login');
     return null;
   }
   const x = s.investor, ctx = { investor: x, csrf: s.csrf };
@@ -443,6 +456,14 @@ async function investorRoutes(req, res, url, route) {
     if (route === '/') return send(res, 200, investorOverview(x, ctx));
     if (route === '/holdings') return send(res, 200, holdingsPage(x, ctx));
     if (route === '/news') return send(res, 200, newsPage(x, ctx));
+    if (route === '/documents') return send(res, 200, documentsPage(x, ctx));
+    m = /^\/documents\/([a-z0-9-]{3,80})$/.exec(route);
+    if (m) {
+      const d = documents.find(x, m[1]);
+      if (!d) return message(res, 404, 'Not found', 'That document isn’t available.', null, ['Documents', '/documents'], ctx);
+      res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': 'inline; filename="' + d.file + '"', 'Cache-Control': 'private, no-store' });
+      return fs.createReadStream(documents.filePath(d)).on('error', () => res.destroy()).pipe(res);
+    }
     if (route === '/account') return send(res, 200, accountPage(x, { ...ctx, flash: flashOf(url) }));
     m = /^\/news\/([a-f0-9]{24})$/.exec(route);
     if (m) { const n = store.post(m[1]); if (!n || n.status !== 'published') return message(res, 404, 'Not found', 'That news item isn’t available.', null, ['News', '/news'], ctx); return send(res, 200, articlePage(n, ctx, '/news')); }

@@ -29,6 +29,9 @@ Horizon Network describes itself as a growing network of digital services and so
 === Horizon Hosting ===
 Horizon Hosting is Horizon Network's planned hosting service, offering VPS, dedicated servers and managed cloud. It is listed as "coming soon".
 
+== History ==
+On 1 September 2026, Horizon Network merged with [[Horizon Media Group]] to form [[HN Group]], which became its largest shareholder. Horizon Network kept its name, brand and services, and its staff moved to HN Group.<ref>[https://news.hngroup.org.uk/#article-5e9bd91db3d9ece8a6b701a0 Horizon Network and Horizon Media Group merge to form HN Group], HN Group News.</ref>
+
 == Structure ==
 {{Company ownership|Horizon Network}}
 
