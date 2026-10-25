@@ -24,7 +24,6 @@ const BROWSER={
  openDownloadsOnStart:bool('Downloads','Show downloads when one starts',false),
  autoLock:choice('Account and VPN','Lock after I’m away for',[0,5,15,30,60],0,'You unlock with your six-digit PIN.'),
  lockOnSleep:bool('Account and VPN','Lock when this computer sleeps',false),
- vpnAutoConnect:bool('Account and VPN','Connect the HN VPN after unlocking',false),
 };
 const NETWORK_WINDOWS={
  theme:choice('Appearance','Appearance',['system','light','dark'],'system'),
