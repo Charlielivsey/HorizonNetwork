@@ -1,285 +1,390 @@
 'use strict';
-// HN Group App Manager's window. The page is built once (index.html) and kept up to date from the state the
-// main process sends; parts are only redrawn when what they show changes, so nothing flickers or replays.
-const api=window.manager;
-const $=id=>document.getElementById(id),$$=(selector,root=document)=>[...root.querySelectorAll(selector)];
-let state=null,page='overview',filter='all',toastTimer=null;
-const forms={};// per app: {schema, values, draft, loading, error, key}
+// HN Group App Manager's window. The page is built once (index.html) and updated in place from the state the main
+// process sends, so nothing flickers. Every request goes through window.manager.call, which the main process checks.
+const api = window.manager;
+const $ = (id) => document.getElementById(id), $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+let state = null, page = 'apps', appId = null, filter = 'all', toastTimer = null, lastAccount = null, pinBusy = false;
+const forms = {};
 
-// ---------- Icons ----------
-const ICONS={
- grid:'<rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/>',
- history:'<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/>',
- settings:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
- download:'<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
- refresh:'<path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 21v-5h-5"/>',
- alert:'<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5"/><path d="M12 16.5h.01"/>',
- shield:'<path d="M12 3 20 6v6c0 4.6-3.4 8.2-8 9-4.6-.8-8-4.4-8-9V6z"/><path d="m9 12 2 2 4-4"/>',
- key:'<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3M14 9l2 2"/>',
- clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
- sliders:'<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
- sparkle:'<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
- trash:'<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/>',
- external:'<path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/>',
- check:'<path d="m5 12 4.5 4.5L19 7"/>',
- play:'<path d="M7 4v16l13-8z"/>',
- wrench:'<path d="M14.7 6.3a4 4 0 0 0-5.4 5.2L3 17.8V21h3.2l6.3-6.3a4 4 0 0 0 5.2-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>',
- x:'<path d="M6 6l12 12M18 6 6 18"/>',
- folder:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
- lock:'<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+// ---------- Small helpers ----------
+const ICONS = {
+  grid: '<rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/>',
+  refresh: '<path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 21v-5h-5"/>',
+  history: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>',
+  download: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
+  key: '<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3M14 9l2 2"/>',
+  lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+  external: '<path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/>',
+  folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  shield: '<path d="M12 3 20 6v6c0 4.6-3.4 8.2-8 9-4.6-.8-8-4.4-8-9V6z"/><path d="m9 12 2 2 4-4"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  check: '<path d="m5 12 4.5 4.5L19 7"/>', x: '<path d="M6 6l12 12M18 6 6 18"/>', copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
+  play: '<path d="M7 4v16l13-8z"/>', more: '<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>', back: '<path d="M15 6l-6 6 6 6"/>',
+  wrench: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.2L3 17.8V21h3.2l6.3-6.3a4 4 0 0 0 5.2-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>', trash: '<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/>',
+  alert: '<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5"/><path d="M12 16.5h.01"/>', sliders: '<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="8" cy="18" r="2"/>',
 };
-function paint(svg,name){svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','2');svg.setAttribute('stroke-linecap','round');svg.setAttribute('stroke-linejoin','round');svg.setAttribute('aria-hidden','true');svg.innerHTML=ICONS[name]||'';}
-const icon=name=>{const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');paint(svg,name);return svg;};
-for(const svg of $$('svg[data-icon]'))paint(svg,svg.dataset.icon);
+const svg = (name) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[name] || '') + '</svg>';
+const paintIcons = (root = document) => { for (const i of $$('i[data-icon]', root)) if (!i.firstChild) i.innerHTML = svg(i.dataset.icon); };
+function el(tag, attrs, ...children) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) { if (v == null || v === false) continue; if (k.startsWith('on')) n.addEventListener(k.slice(2), v); else if (k === 'html') n.innerHTML = v; else n.setAttribute(k, v === true ? '' : v); }
+  for (const c of children.flat(9)) if (c != null && c !== false) n.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  return n;
+}
+const icon = (name) => el('i', { 'data-icon': name, html: svg(name) });
+const text = (id, v) => { const n = typeof id === 'string' ? $(id) : id; v = String(v ?? ''); if (n && n.textContent !== v) n.textContent = v; };
+const showIf = (id, on) => { const n = typeof id === 'string' ? $(id) : id; if (n && n.hidden === !!on) n.hidden = !on; };
+const short = (v) => String(v || '').split('-')[0];
+const mb = (b) => (b / 1048576).toFixed(b >= 104857600 ? 0 : 1) + ' MB';
+const day = (iso) => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }); };
+const ago = (at) => { const d = new Date(at); if (isNaN(d)) return ''; const s = (Date.now() - d) / 1000; if (s < 60) return 'just now'; if (s < 3600) return Math.round(s / 60) + ' min ago'; return (new Date().toDateString() === d.toDateString() ? 'today' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })) + ' at ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); };
+const mac = () => state && state.platform === 'darwin';
+function toast(message, bad = false) { const t = $('toast'); t.textContent = message; t.className = 'toast' + (bad ? ' bad' : ''); t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 6000); }
+async function call(method, ...args) { const r = await api.call(method, ...args); if (!r || !r.ok) throw Error((r && r.error) || 'Something went wrong.'); return r.value; }
+async function act(method, ...args) { try { return { value: await call(method, ...args) }; } catch (e) { toast(e.message, true); return null; } }
+async function busy(button, fn) { if (!button || button.disabled) return; button.disabled = true; button.classList.add('working'); try { return await fn(); } finally { button.classList.remove('working'); button.disabled = false; render(); } }
 
-// ---------- Helpers ----------
-function el(tag,attrs,...children){const node=document.createElement(tag);for(const[k,v]of Object.entries(attrs||{})){if(v==null||v===false)continue;if(k.startsWith('on'))node.addEventListener(k.slice(2),v);else node.setAttribute(k,v===true?'':v);}for(const c of children.flat(9)){if(c==null||c===false)continue;node.append(c instanceof Node?c:document.createTextNode(String(c)));}return node;}
-const setText=(node,value)=>{if(typeof node==='string')node=$(node);value=String(value??'');if(node&&node.textContent!==value)node.textContent=value;};
-const showIf=(node,on)=>{if(typeof node==='string')node=$(node);if(node&&node.hidden===!!on)node.hidden=!on;};
-const short=v=>String(v||'').split('-')[0];
-const mb=bytes=>(bytes/1048576).toFixed(bytes>=104857600?0:1)+' MB';
-const reduced=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
-const when=at=>{const d=new Date(at);if(isNaN(d))return'';const s=(Date.now()-d)/1000;if(s<60)return'Just now';if(s<3600)return Math.round(s/60)+' min ago';const today=new Date().toDateString()===d.toDateString();return(today?'Today':d.toLocaleDateString('en-GB',{day:'numeric',month:'short'}))+' at '+d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});};
-const day=iso=>{const d=new Date(iso);return isNaN(d)?'':d.toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});};
-function toast(message,bad=false){const t=$('toast');t.textContent=message;t.className='toast'+(bad?' bad':'');t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.hidden=true;},6000);}
-async function call(method,...args){const r=await api.call(method,...args);if(!r?.ok)throw Error(r?.error||'Something went wrong.');return r.value;}
-async function act(method,...args){try{return await call(method,...args);}catch(e){toast(e.message,true);return undefined;}}
-async function busy(button,fn){if(!button||button.disabled)return;button.disabled=true;button.classList.add('working');try{return await fn();}finally{button.classList.remove('working');button.disabled=false;render();}}
-const appOf=id=>state?.apps.find(a=>a.id===id);
-const platformName=()=>state?.platform==='darwin'?'Mac':'PC';
+// ---------- Questions, as cards in the HN design ----------
+const questions = []; let asking = null;
+function ask(spec) { return new Promise((resolve) => { questions.push({ ...spec, resolve }); if (!asking) nextQuestion(); }); }
+function nextQuestion() {
+  asking = questions.shift() || null;
+  const layer = $('layer');
+  if (!asking) { layer.classList.remove('open'); setTimeout(() => { if (!asking) layer.hidden = true; }, 180); return; }
+  $('sheet').dataset.tone = asking.tone || 'accent';
+  $('sheet-icon').innerHTML = svg(asking.icon || 'alert');
+  text('sheet-title', asking.title); text('sheet-text', asking.text || ''); text('sheet-note', asking.note || ''); showIf('sheet-note', !!asking.note);
+  $('sheet-buttons').replaceChildren(...asking.buttons.map((b) => el('button', { class: 'btn ' + (b.tone === 'danger' ? 'danger-fill' : b.tone === 'primary' ? 'primary' : ''), 'data-choice': b.id, onclick: () => answer(b.id) }, b.label)));
+  layer.hidden = false; layer.classList.remove('open'); void layer.offsetWidth; layer.classList.add('open');
+  const safe = $('sheet-buttons').querySelector('[data-choice=cancel]'); if (safe) { safe.focus(); requestAnimationFrame(() => safe.focus()); }
+}
+function answer(choice) { const q = asking; if (!q) return; nextQuestion(); q.resolve(choice); }
+const confirmed = async (spec) => (await ask({ ...spec, buttons: [{ id: 'cancel', label: spec.cancel || 'Cancel' }, { id: 'ok', label: spec.confirm, tone: spec.tone === 'danger' ? 'danger' : 'primary' }] })) === 'ok';
+api.onDialog((spec) => ask({ ...spec, fromMain: spec.id }).then((c) => api.call('dialog-answer', spec.id, c)), (id) => { if (asking && asking.fromMain === id) answer('cancel'); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (asking) { e.preventDefault(); answer('cancel'); } else closeMenu(); } });
+$('layer').querySelector('.scrim').addEventListener('click', () => answer('cancel'));
 
-// ---------- Questions, asked in the HN design ----------
-const questions=[];let asking=null;
-function ask(spec){return new Promise(resolve=>{questions.push({...spec,resolve});if(!asking)nextQuestion();});}
-function nextQuestion(){asking=questions.shift()||null;const layer=$('layer');
- if(!asking){layer.classList.remove('open');setTimeout(()=>{if(!asking)layer.hidden=true;},reduced()?0:180);return;}
- const d=$('dialog');d.dataset.tone=asking.tone||'accent';paint($('dialog-icon').firstElementChild,asking.icon||'alert');
- setText('dialog-title',asking.title);setText('dialog-text',asking.text||'');setText('dialog-note',asking.note||'');showIf('dialog-note',!!asking.note);
- $('dialog-buttons').replaceChildren(...asking.buttons.map(b=>el('button',{class:'btn '+(b.tone==='danger'?'danger-fill':b.tone==='primary'?'primary':''),'data-choice':b.id,onclick:()=>answer(b.id)},b.label)));
- layer.hidden=false;layer.classList.remove('open');void layer.offsetWidth;layer.classList.add('open');
- // The safe choice has focus, so Enter never installs or removes anything by accident.
- const safe=$('dialog-buttons').querySelector('[data-choice=cancel]');safe?.focus();requestAnimationFrame(()=>safe?.focus());}
-function answer(choice){const q=asking;if(!q)return;nextQuestion();q.resolve(choice);}
-const confirmed=async spec=>await ask({...spec,buttons:[{id:'cancel',label:spec.cancel||'Cancel'},{id:'ok',label:spec.confirm,tone:spec.tone==='danger'?'danger':'primary'}]})==='ok';
-api.onDialog(spec=>ask({...spec,fromApp:spec.id}).then(choice=>api.call('dialog-answer',spec.id,choice)),id=>{if(asking?.fromApp===id)answer('cancel');});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&asking){e.preventDefault();answer('cancel');}});
-$('layer').querySelector('.scrim').addEventListener('click',()=>answer('cancel'));
+// ---------- The "…" menu ----------
+let menuFor = null;
+function openMenu(button, items) {
+  const m = $('menu'); menuFor = button;
+  m.replaceChildren(...items.map((i) => el('button', { role: 'menuitem', class: i.tone === 'danger' ? 'danger' : '', onclick: () => { closeMenu(); i.run(); } }, icon(i.icon), el('span', {}, i.label))));
+  m.hidden = false;
+  const r = button.getBoundingClientRect();
+  m.style.top = Math.min(r.bottom + 6, innerHeight - m.offsetHeight - 10) + 'px'; m.style.left = Math.max(10, r.right - m.offsetWidth) + 'px';
+  m.classList.remove('open'); void m.offsetWidth; m.classList.add('open'); const first = m.querySelector('button'); if (first) first.focus();
+}
+function closeMenu() { const m = $('menu'); if (m.hidden) return; m.hidden = true; if (menuFor && document.contains(menuFor)) menuFor.focus(); menuFor = null; }
+document.addEventListener('click', (e) => { if (!$('menu').hidden && !$('menu').contains(e.target) && !(menuFor && menuFor.contains(e.target))) closeMenu(); });
 
-// ---------- What each app can do right now ----------
-// The main thing to do, and the other actions, for an app (used on its card and its page).
-function actionsFor(a){
- const queued=state.queue.some(j=>j.id===a.id),working=state.operation?.id===a.id;
- if(working||queued)return{main:{kind:'cancel',label:working?'Cancel':'Remove from queue',icon:'x'},more:[]};
- if(!a.installed){
-  if(!a.canInstall)return{main:null,more:[],note:a.id==='browser'&&state.platform==='darwin'?'HN Browser needs a Mac with Apple silicon.':'Not available for this computer.'};
-  return{main:{kind:'install',label:'Install',icon:'download',disabled:!a.latest},more:[],note:a.latest?'':'There’s no download for this computer yet.'};}
- const more=[{kind:'open',label:'Open',icon:'play'}];
- if(a.latest&&!a.update)more.push({kind:'reinstall',label:'Reinstall',icon:'wrench'});
- return{main:a.update?{kind:'update',label:'Update to '+short(a.latest.version),icon:'download'}:{kind:'open',label:'Open',icon:'play'},more:a.update?more:more.slice(1)};}
-async function perform(id,kind,button){
- const a=appOf(id);if(!a)return;
- const run=async()=>{await busy(button,async()=>{await call('enqueue',id,kind);});};
- try{
-  if(kind==='open')return await busy(button,()=>call('open',id));
-  if(kind==='cancel')return await call('cancel',id);
-  if(kind==='install'){if(!await confirmed({title:'Install '+a.name+' '+short(a.latest.version)+'?',text:state.platform==='darwin'?'It’s installed in your Applications folder after its download is checked.':'Its installer runs quietly after the download is checked. Windows may ask for permission.',icon:'download',confirm:'Install'}))return;return await run();}
-  if(kind==='reinstall'){if(!await confirmed({title:'Reinstall '+a.name+'?',text:'A fresh, checked copy of version '+short(a.latest.version)+' replaces the one on this '+platformName()+'. Your account, settings and data are kept.',icon:'wrench',confirm:'Reinstall'}))return;return await run();}
-  if(kind==='update'){await run();if(a.running)toast(a.name+' updates as soon as you quit it.');return;}
-  if(kind==='uninstall'){if(!await confirmed({title:'Remove '+a.name+'?',text:(state.platform==='darwin'?'The app moves to the Bin.':'Its Windows uninstaller runs.')+' Your account, settings and data stay on this '+platformName()+', so reinstalling picks up where you left off.',note:a.id==='network'?'Disconnect the VPN first. WireGuard and this computer’s VPN set-up are kept.':'',icon:'trash',tone:'danger',confirm:'Remove'}))return;await run();if(a.running)toast(a.name+' is removed as soon as you quit it.');}
- }catch(e){toast(e.message,true);}}
-function actionButtons(a,{large=false}={}){const{main,more,note}=actionsFor(a),buttons=[];
- if(main)buttons.push(el('button',{class:'btn '+(main.kind==='cancel'?'':'primary')+(large?' large':''),disabled:main.disabled||null,'data-action':main.kind,onclick:e=>perform(a.id,main.kind,e.currentTarget)},icon(main.icon),el('span',{},main.label)));
- for(const m of more)buttons.push(el('button',{class:'btn'+(large?' large':''),'data-action':m.kind,onclick:e=>perform(a.id,m.kind,e.currentTarget)},icon(m.icon),el('span',{},m.label)));
- if(note)buttons.push(el('span',{class:'muted small'},note));return buttons;}
-function status(a){const op=state.operation?.id===a.id?state.operation:null;
- if(op)return{text:{preparing:'Getting ready',waiting:'Waiting for you to quit it',downloading:'Downloading',installing:op.kind==='uninstall'?'Removing':'Installing',removing:'Removing'}[op.phase]||'Working',tone:'busy'};
- if(state.queue.some(j=>j.id===a.id))return{text:'Queued',tone:'busy'};
- if(a.error)return{text:'Couldn’t check',tone:'bad'};
- if(!a.installed)return{text:a.canInstall?'Not installed':'Not available',tone:''};
- if(a.update)return{text:'Update available',tone:'accent'};
- return{text:a.running?'Up to date · open':'Up to date',tone:'good'};}
+// ---------- What an app can do now ----------
+const appOf = (id) => state && state.manager.apps.find((a) => a.id === id);
+const jobFor = (id) => (state.manager.job && state.manager.job.id === id ? state.manager.job : null);
+const queued = (id) => state.manager.queue.some((j) => j.id === id);
+function status(a) {
+  const j = jobFor(a.id);
+  if (j) return { text: { preparing: 'Getting ready', waiting: 'Waiting for you to quit it', downloading: 'Downloading', installing: 'Installing', removing: 'Removing' }[j.phase] || 'Working', tone: 'busy' };
+  if (queued(a.id)) return { text: 'Queued', tone: 'busy' };
+  if (!a.available) return { text: 'Not for this computer', tone: '' };
+  if (a.error) return { text: 'Couldn’t check', tone: 'bad' };
+  if (!a.installed) return { text: 'Not installed', tone: '' };
+  if (a.update) return { text: 'Update available', tone: 'accent' };
+  return { text: a.running ? 'Up to date · open' : 'Up to date', tone: 'good' };
+}
+function primary(a) {
+  if (jobFor(a.id) || queued(a.id)) return { kind: 'cancel', label: jobFor(a.id) ? 'Cancel' : 'Remove from queue', icon: 'x', disabled: !!jobFor(a.id) && !jobFor(a.id).cancellable };
+  if (!a.available) return null;
+  if (!a.installed) return { kind: 'install', label: 'Install', icon: 'download', disabled: !a.latest };
+  if (a.update) return { kind: 'update', label: 'Update to ' + short(a.latest.version), icon: 'download' };
+  return { kind: 'open', label: 'Open', icon: 'play' };
+}
+function moreItems(a) {
+  if (!a.installed || jobFor(a.id) || queued(a.id)) return [];
+  const items = [];
+  if (a.update) items.push({ label: 'Open', icon: 'play', run: () => perform(a.id, 'open') });
+  items.push({ label: mac() ? 'Show in Finder' : 'Show in folder', icon: 'folder', run: () => act('reveal', a.id) });
+  if (a.latest) items.push({ label: 'Reinstall', icon: 'wrench', run: () => perform(a.id, 'reinstall') });
+  items.push({ label: 'Settings', icon: 'sliders', run: () => go('app', a.id) });
+  items.push({ label: 'Remove…', icon: 'trash', tone: 'danger', run: () => perform(a.id, 'remove') });
+  return items;
+}
+async function perform(id, kind, button) {
+  const a = appOf(id); if (!a) return;
+  const queueIt = async () => { const r = await act('enqueue', id, kind); return !!r; };
+  if (kind === 'open') return act('open', id);
+  if (kind === 'cancel') return act('cancel', id);
+  if (kind === 'install') { if (await confirmed({ title: 'Install ' + a.name + ' ' + short(a.latest.version) + '?', text: mac() ? 'It goes in your Applications folder once its download is checked. macOS may ask for your password.' : 'Its installer runs quietly once the download is checked.', icon: 'download', confirm: 'Install' })) await queueIt(); return; }
+  if (kind === 'reinstall') { if (await confirmed({ title: 'Reinstall ' + a.name + '?', text: 'A fresh, checked copy of version ' + short(a.latest.version) + ' replaces the one on this ' + (mac() ? 'Mac' : 'PC') + '. Your account, settings and data are kept.', icon: 'wrench', confirm: 'Reinstall' })) await queueIt(); return; }
+  if (kind === 'update') { if (await queueIt() && a.running) toast(a.name + ' updates as soon as you quit it.'); return; }
+  if (kind === 'remove') {
+    if (!await confirmed({ title: 'Remove ' + a.name + '?', text: (mac() ? 'It moves to the Bin.' : 'Its uninstaller runs.') + ' Your account, settings and data stay on this computer, so reinstalling picks up where you left off.', note: a.id === 'network' ? 'Disconnect the VPN first. WireGuard and this computer’s VPN set-up are kept.' : '', icon: 'trash', tone: 'danger', confirm: 'Remove' })) return;
+    if (await queueIt() && a.running) toast(a.name + ' is removed as soon as you quit it.');
+  }
+}
+function actionButtons(a, large) {
+  const p = primary(a), out = [];
+  if (p) out.push(el('button', { class: 'btn ' + (p.kind === 'cancel' ? '' : 'primary') + (large ? ' big' : ''), 'data-action': p.kind, disabled: p.disabled || null, onclick: (e) => busy(e.currentTarget, () => perform(a.id, p.kind, e.currentTarget)) }, icon(p.icon), el('span', {}, p.label)));
+  if (moreItems(a).length) out.push(el('button', { class: 'btn icon-only' + (large ? ' big' : ''), 'aria-label': 'More for ' + a.name, 'aria-haspopup': 'menu', 'data-action': 'more', onclick: (e) => openMenu(e.currentTarget, moreItems(a)) }, icon('more')));
+  if (!a.available) out.push(el('span', { class: 'small muted' }, a.id === 'browser' && mac() ? 'HN Browser needs a Mac with Apple silicon.' : 'Not available for this computer.'));
+  else if (!a.installed && !a.latest && !jobFor(a.id)) out.push(el('span', { class: 'small muted' }, state.manager.checkedAt ? 'There’s no download for this computer yet.' : 'Check for updates to install it.'));
+  return out;
+}
+function progress(j) {
+  const bar = el('div', { class: 'bar' + (j.phase === 'downloading' ? '' : ' moving') }, el('i'));
+  if (j.phase === 'downloading' && j.total) bar.firstChild.style.transform = 'scaleX(' + j.received / j.total + ')';
+  return bar;
+}
+function phaseText(a, j) {
+  return j.phase === 'waiting' ? 'Waiting for you to quit ' + a.name + (mac() ? ', including its menu bar icon.' : ', including its tray icon.')
+    : j.phase === 'downloading' ? 'Downloading ' + short(j.version) + ' · ' + mb(j.received) + ' of ' + mb(j.total)
+      : j.phase === 'installing' ? 'Installing ' + short(j.version) + '…' : j.phase === 'removing' ? 'Removing…' : 'Getting ready…';
+}
 
-// ---------- Overview ----------
-const cards={};
-function card(a){if(cards[a.id])return cards[a.id];
- const pill=el('span',{class:'pill'}),version=el('p',{class:'card-version'}),actions=el('div',{class:'row card-actions'}),progress=el('div',{class:'bar mini',hidden:true},el('i'));
- const node=el('article',{class:'app-card','data-app':a.id},
-  el('div',{class:'card-top'},el('img',{class:'app-icon',src:'assets/'+a.icon,alt:''}),pill),
-  el('h2',{},a.name),el('p',{class:'muted'},a.tagline),version,progress,actions,
-  el('button',{class:'link details',onclick:()=>go(a.id)},'Details and settings',icon('external')));
- $('cards').append(node);return cards[a.id]={node,pill,version,actions,progress,key:''};}
-function renderOverview(){
- const updates=state.apps.filter(a=>a.update),installed=state.apps.filter(a=>a.installed),op=state.operation;
- setText('hero-title',state.checking&&!state.checkedAt?'Checking your apps…':op?'Working on it…':updates.length?(updates.length===1?updates[0].name+' has an update':updates.length+' updates are ready'):installed.length?'Everything’s up to date':'Let’s get you set up');
- setText('hero-text',updates.length?'Updates install in place. Your account, settings and data are kept.':installed.length?installed.map(a=>a.name+' '+a.installed.version).join(' · '):'Install HN Browser and HN Secure Network with one click. Every download is checked before it runs.');
- showIf('update-all',updates.length>1||(updates.length===1&&!op));setText($('update-all').querySelector('span'),updates.length>1?'Update all ('+updates.length+')':'Update');
- $('update-all').disabled=updates.every(a=>state.queue.some(j=>j.id===a.id)||op?.id===a.id);
- const c=$('check');c.disabled=state.checking;c.classList.toggle('working',state.checking);
- setText('checked',state.checking?'Checking downloads.hngroup.org.uk…':state.checkedAt?'Last checked '+when(state.checkedAt).toLowerCase():'');
- const e=$('error');showIf(e,!!state.error);setText(e.querySelector('p'),state.error||'');
- for(const a of state.apps){const c=card(a),s=status(a);
-  c.pill.className='pill '+s.tone;setText(c.pill,s.text);
-  setText(c.version,a.installed?'Version '+a.installed.version+(a.update?' → '+short(a.latest.version):''):a.latest?'Latest version '+short(a.latest.version):'');
-  const o=state.operation?.id===a.id?state.operation:null;showIf(c.progress,!!o);if(o)c.progress.firstElementChild.style.transform='scaleX('+(o.phase==='downloading'&&o.total?o.received/o.total:o.phase==='installing'||o.phase==='removing'?1:0)+')';c.progress.classList.toggle('indeterminate',!!o&&o.phase!=='downloading');
-  const key=JSON.stringify(actionsFor(a));if(key!==c.key){c.key=key;c.actions.replaceChildren(...actionButtons(a));}}}
+// ---------- Apps ----------
+const rows = {};
+function renderApps() {
+  const m = state.manager, apps = m.apps, updates = apps.filter((a) => a.update), installed = apps.filter((a) => a.installed);
+  text('apps-title', m.job ? 'Working on it…' : updates.length ? (updates.length === 1 ? updates[0].name + ' has an update' : updates.length + ' updates are ready') : installed.length ? 'Everything’s up to date' : 'Let’s get you set up');
+  text('apps-sub', m.checking ? 'Checking downloads.hngroup.org.uk…' : m.checkedAt ? 'Last checked ' + ago(m.checkedAt) + '.' : 'Not checked yet.');
+  const c = $('check'); c.disabled = m.checking; c.classList.toggle('working', m.checking);
+  showIf('update-all', updates.length > 1 || (updates.length === 1 && !m.job)); text($('update-all').querySelector('span'), updates.length > 1 ? 'Update all (' + updates.length + ')' : 'Update');
+  showIf('apps-error', !!m.error); text('apps-error', m.error || '');
+  showIf('move-banner', state.updater.location === 'temporary');
+  for (const a of apps) {
+    let r = rows[a.id];
+    if (!r) {
+      r = rows[a.id] = { node: el('article', { class: 'app-row', 'data-app': a.id }), pill: el('span', { class: 'pill' }), line: el('p', { class: 'small muted line-text' }), actions: el('div', { class: 'row end' }), prog: el('div', { class: 'row-progress' }), key: '' };
+      r.node.append(el('img', { class: 'app-icon', src: 'assets/' + a.icon, alt: '' }), el('div', { class: 'grow' }, el('div', { class: 'title-line' }, el('button', { class: 'app-name', onclick: () => go('app', a.id) }, a.name), r.pill), el('p', { class: 'muted' }, a.tagline), r.line, r.prog), r.actions);
+      $('app-list').append(r.node);
+    }
+    const s = status(a), j = jobFor(a.id);
+    r.pill.className = 'pill ' + s.tone; text(r.pill, s.text);
+    text(r.line, j ? phaseText(a, j) : a.installed ? 'Version ' + a.installed.version + (a.installed.build ? ' (build ' + a.installed.build + ')' : '') + (a.update ? ' → ' + short(a.latest.version) : '') : a.latest ? 'Latest version ' + short(a.latest.version) + ' · ' + mb(a.latest.size) : a.error || '');
+    r.prog.replaceChildren(...(j ? [progress(j)] : []));
+    const key = JSON.stringify([primary(a), moreItems(a).map((i) => i.label), a.available, !!a.latest, !!m.checkedAt]);
+    if (key !== r.key) { r.key = key; r.actions.replaceChildren(...actionButtons(a)); }
+  }
+}
 
-// ---------- One app's page ----------
-let shownApp=null,appKey='';
-function renderApp(id){const a=appOf(id);if(!a)return;
- if(shownApp!==id){shownApp=id;appKey='';$('app-icon').src='assets/'+a.icon;setText('app-name',a.name);setText('app-tagline',a.tagline);setText('app-eyebrow',a.id==='browser'?'Web browser':'VPN and SSH');
-  $('app-features').replaceChildren(...a.features.map(f=>el('li',{},icon('check'),el('span',{},f))));}
- const s=status(a);$('app-pill').className='pill '+s.tone;setText('app-pill',s.text);
- const key=JSON.stringify(actionsFor(a));if(key!==appKey){appKey=key;$('app-actions').replaceChildren(...actionButtons(a,{large:true}));}
- setText('fact-installed',a.installed?a.installed.version:'Not installed');setText('fact-installed-note',a.installed?.build?'Build '+a.installed.build:'');
- setText('fact-latest',a.latest?short(a.latest.version):'—');setText('fact-latest-note',a.latest?(a.latest.publishedAt?'Released '+day(a.latest.publishedAt):'Build '+(a.latest.version.split('-')[1]||'—'))+' · '+mb(a.latest.size):'No download yet');
- setText('fact-status',a.running?'Open':a.installed?'Closed':'—');setText('fact-status-note',a.running?'Quit it to update, remove or change settings':a.installed?'Ready for changes':'');
- setText('fact-location',a.installed?.path||'—');showIf('reveal',!!a.installed);
- const op=state.operation?.id===id?state.operation:null,p=$('app-progress');showIf(p,!!op);if(op)p.replaceChildren(...progressContent(a,op));
- showIf('danger',!!a.installed);setText('remove-text',state.platform==='darwin'?'Moves '+a.name+' to the Bin. Your account, settings and data are kept.':'Runs '+a.name+'’s uninstaller. Your account, settings and data are kept.');
- renderSettings(a);}
-function progressContent(a,op){const title={preparing:'Getting ready…',waiting:'Waiting for you to quit '+a.name,downloading:'Downloading '+a.name+' '+short(op.version),installing:(op.kind==='uninstall'?'Removing ':'Installing ')+a.name+'…',removing:'Removing '+a.name+'…'}[op.phase]||'Working…';
- const text=op.phase==='waiting'?'It starts by itself as soon as you quit it, including its menu bar or tray icon.':op.phase==='downloading'?mb(op.received)+' of '+mb(op.total)+(op.speed?' · '+mb(op.speed)+'/s':''):op.phase==='installing'?'Checking the download again and installing. This can take a minute.':'';
- const bar=el('div',{class:'bar'+(op.phase==='downloading'?'':' indeterminate')},el('i'));if(op.phase==='downloading'&&op.total)bar.firstElementChild.style.transform='scaleX('+op.received/op.total+')';
- return[el('div',{class:'grow'},el('strong',{},title),el('span',{class:'muted small'},text),bar)];}
-// Settings for one app, read from its preferences while it's closed.
-async function loadSettings(id,force=false){const f=forms[id]||(forms[id]={});if(f.loading||(f.schema&&!force))return;f.loading=true;f.error='';renderSettings(appOf(id));
- try{const data=await call('settings',id);Object.assign(f,{schema:data.schema,values:data.values,draft:{...data.values},key:''});}catch(e){f.error=e.message;}finally{f.loading=false;render();}}
-const LABELS={'midnight-lavender':'Midnight Lavender',daylight:'Daylight','deep-ocean':'Deep Ocean',forest:'Forest',rose:'Rose Quartz',newtab:'A new tab',restore:'My tabs from last time',system:'Match the computer',light:'Light',dark:'Dark',google:'Google',bing:'Bing',duckduckgo:'DuckDuckGo'};
-const label=v=>typeof v==='number'?(v===0?'Never':v+' minutes'):LABELS[v]||String(v);
-function renderSettings(a){if(!a)return;const f=forms[a.id]||{},body=$('settings-body'),locked=a.running||state.operation?.id===a.id;
- setText('settings-note',!a.installed?'Install '+a.name+' to change its settings here.':a.running?'Quit '+a.name+' to change its settings here. You can also change them inside the app.':'Saved to '+a.name+' while it’s closed. They apply the next time it opens.');
- const dirty=!!f.draft&&Object.keys(f.draft).some(k=>f.draft[k]!==f.values[k]);showIf('save-bar',dirty&&!locked);
- const key=JSON.stringify([a.id,!!a.installed,locked,f.loading,f.error,f.schema&&Object.keys(f.schema),f.values]);
- if(key===f.key&&body.dataset.app===a.id){for(const input of $$('[data-setting]',body))syncField(input,f);return;}
- f.key=key;body.dataset.app=a.id;
- if(!a.installed){body.replaceChildren();return;}
- if(f.loading||!f.schema){body.replaceChildren(el('p',{class:'muted small'},f.error||'Loading settings…'));return;}
- const groups={};for(const[k,field]of Object.entries(f.schema))(groups[field.group]||(groups[field.group]=[])).push([k,field]);
- body.replaceChildren(...Object.entries(groups).map(([group,fields])=>el('div',{class:'setting-group'},el('h3',{},group),...fields.map(([k,field])=>settingRow(a,k,field,f,locked)))));}
-function settingRow(a,k,field,f,locked){const id='setting-'+k;let control;
- if(field.type==='boolean')control=el('button',{class:'switch',role:'switch',id,'data-setting':k,'aria-label':field.label,'aria-checked':String(!!f.draft[k]),disabled:locked||null,onclick:()=>{f.draft[k]=!f.draft[k];renderSettings(a);}});
- else if(field.type==='choice'&&field.values.length<=3)control=el('div',{class:'segmented small',role:'group','aria-label':field.label,id,'data-setting':k},...field.values.map(v=>el('button',{'aria-pressed':String(f.draft[k]===v),disabled:locked||null,'data-value':String(v),onclick:()=>{f.draft[k]=v;renderSettings(a);}},label(v))));
- else if(field.type==='choice'){control=el('select',{id,'data-setting':k,disabled:locked||null,onchange:e=>{const v=field.values.find(x=>String(x)===e.target.value);f.draft[k]=v;renderSettings(a);}},...field.values.map(v=>el('option',{value:String(v)},label(v))));control.value=String(f.draft[k]);}
- else control=el('input',{id,'data-setting':k,value:f.draft[k],spellcheck:'false',autocomplete:'off',disabled:locked||null,oninput:e=>{f.draft[k]=e.target.value;renderSettings(a);}});
- return el('div',{class:'setting'},el('label',{for:id},el('strong',{},field.label),field.hint?el('small',{},field.hint):null),control);}
-function syncField(input,f){const k=input.dataset.setting,v=f.draft[k];
- if(input.classList.contains('switch'))input.setAttribute('aria-checked',String(!!v));
- else if(input.classList.contains('segmented'))for(const b of input.children)b.setAttribute('aria-pressed',String(b.dataset.value===String(v)));
- else if(input.tagName==='SELECT'){if(input.value!==String(v))input.value=String(v);}
- else if(document.activeElement!==input&&input.value!==v)input.value=v;}
-$('settings-discard').addEventListener('click',()=>{const f=forms[page];if(f?.values){f.draft={...f.values};renderSettings(appOf(page));}});
-$('settings-save').addEventListener('click',e=>{const id=page,f=forms[id];if(!f?.draft)return;const patch={};for(const k of Object.keys(f.draft))if(f.draft[k]!==f.values[k])patch[k]=f.draft[k];
- busy(e.currentTarget,async()=>{try{await call('save',id,patch);f.values={...f.draft};f.key='';toast('Saved. '+appOf(id).name+' uses them when it next opens.');}catch(err){toast(err.message,true);}});});
-$('reveal').addEventListener('click',()=>act('reveal',page));
-$('remove').addEventListener('click',e=>perform(page,'uninstall',e.currentTarget));
+// ---------- One app ----------
+let shownApp = null, appKey = '';
+function renderApp() {
+  const a = appOf(appId); if (!a) { page = 'apps'; return renderApps(); }
+  if (shownApp !== a.id) { shownApp = a.id; appKey = ''; $('app-icon').src = 'assets/' + a.icon; text('app-name', a.name); text('app-kind', a.kind); text('app-tagline', a.tagline); }
+  const s = status(a); $('app-pill').className = 'pill ' + s.tone; text('app-pill', s.text);
+  const key = JSON.stringify([primary(a), moreItems(a).map((i) => i.label), !!a.latest]);
+  if (key !== appKey) { appKey = key; $('app-actions').replaceChildren(...actionButtons(a, true)); }
+  const j = jobFor(a.id); showIf('app-progress', !!j);
+  if (j) $('app-progress').replaceChildren(el('b', {}, j.phase === 'waiting' ? 'Waiting for you to quit ' + a.name : { downloading: 'Downloading ', installing: 'Installing ', removing: 'Removing ' }[j.phase] ? { downloading: 'Downloading ', installing: 'Installing ', removing: 'Removing ' }[j.phase] + a.name : 'Getting ready'), el('span', { class: 'small muted' }, phaseText(a, j)), progress(j));
+  const facts = [['Installed', a.installed ? a.installed.version : 'Not installed', a.installed && a.installed.build ? 'Build ' + a.installed.build : ''],
+    ['Latest', a.latest ? short(a.latest.version) : '—', a.latest ? (a.latest.publishedAt ? 'Released ' + day(a.latest.publishedAt) + ' · ' : '') + mb(a.latest.size) : ''],
+    ['Status', a.running ? 'Open' : a.installed ? 'Closed' : '—', a.running ? 'Quit it to update, remove or change its settings.' : ''],
+    ['Location', a.installed ? a.installed.path : '—', '']];
+  const fk = JSON.stringify(facts);
+  if ($('app-facts').dataset.key !== fk) { $('app-facts').dataset.key = fk; $('app-facts').replaceChildren(...facts.map(([k, v, n]) => el('div', {}, el('dt', {}, k), el('dd', { class: k === 'Location' ? 'path' : '' }, v), n ? el('small', { class: 'muted' }, n) : null))); }
+  showIf('app-danger', !!a.installed);
+  text('remove-text', mac() ? 'Moves ' + a.name + ' to the Bin. Your account, settings and data are kept.' : 'Runs ' + a.name + '’s uninstaller. Your account, settings and data are kept.');
+  renderSettings(a);
+}
+async function loadSettings(id, force) {
+  const f = forms[id] || (forms[id] = {}); if (f.loading || (f.data && !force)) return;
+  f.loading = true; f.error = '';
+  try { f.data = await call('settings', id); f.draft = { ...f.data.values }; f.key = ''; } catch (e) { f.error = e.message; } finally { f.loading = false; render(); }
+}
+function renderSettings(a) {
+  const f = forms[a.id] || {}, body = $('settings-body'), locked = a.running || !!jobFor(a.id) || queued(a.id);
+  text('settings-note', !a.installed ? 'Install ' + a.name + ' to change its settings here.' : locked ? 'Quit ' + a.name + ' to change its settings here, or change them in the app itself.' : 'Saved to ' + a.name + ' while it’s closed. They apply the next time it opens.');
+  const dirty = !!(f.data && f.draft) && Object.keys(f.draft).some((k) => f.draft[k] !== f.data.values[k]); showIf('save-bar', dirty && !locked);
+  const key = JSON.stringify([a.id, !!a.installed, locked, f.loading, f.error, f.data && f.data.values]);
+  if (key === f.key && body.dataset.app === a.id) { for (const c of $$('[data-setting]', body)) sync(c, f); return; }
+  f.key = key; body.dataset.app = a.id;
+  if (!a.installed) return body.replaceChildren();
+  if (f.loading || !f.data) return body.replaceChildren(el('p', { class: 'muted small' }, f.error || 'Loading settings…'));
+  const groups = {}; for (const field of f.data.fields) (groups[field.group] = groups[field.group] || []).push(field);
+  body.replaceChildren(...Object.entries(groups).map(([g, fields]) => el('div', { class: 'group' }, el('h3', {}, g), ...fields.map((field) => settingRow(a, field, f, locked)))));
+}
+function settingRow(a, field, f, locked) {
+  const id = 'setting-' + field.key, k = field.key; let control;
+  if (field.type === 'boolean') control = el('button', { class: 'switch', role: 'switch', id, 'data-setting': k, 'aria-label': field.label, 'aria-checked': String(!!f.draft[k]), disabled: locked || null, onclick: () => { f.draft[k] = !f.draft[k]; renderSettings(a); } });
+  else if (field.type === 'choice' && field.options.length <= 3) control = el('div', { class: 'segmented small', id, 'data-setting': k, role: 'group', 'aria-label': field.label }, ...field.options.map((o) => el('button', { 'data-value': String(o.value), 'aria-pressed': String(f.draft[k] === o.value), disabled: locked || null, onclick: () => { f.draft[k] = o.value; renderSettings(a); } }, o.label)));
+  else if (field.type === 'choice') { control = el('select', { id, 'data-setting': k, disabled: locked || null, onchange: (e) => { f.draft[k] = field.options.find((o) => String(o.value) === e.target.value).value; renderSettings(a); } }, ...field.options.map((o) => el('option', { value: String(o.value) }, o.label))); control.value = String(f.draft[k]); }
+  else control = el('input', { id, 'data-setting': k, value: f.draft[k], spellcheck: 'false', autocomplete: 'off', disabled: locked || null, oninput: (e) => { f.draft[k] = e.target.value; renderSettings(a); } });
+  return el('div', { class: 'setting' }, el('label', { for: id }, el('b', {}, field.label), field.hint ? el('small', {}, field.hint) : null), control);
+}
+function sync(c, f) {
+  const v = f.draft[c.dataset.setting];
+  if (c.classList.contains('switch')) c.setAttribute('aria-checked', String(!!v));
+  else if (c.classList.contains('segmented')) { for (const b of c.children) b.setAttribute('aria-pressed', String(b.dataset.value === String(v))); }
+  else if (c.tagName === 'SELECT') { if (c.value !== String(v)) c.value = String(v); }
+  else if (document.activeElement !== c && c.value !== v) c.value = v;
+}
+$('settings-discard').addEventListener('click', () => { const f = forms[appId]; if (f && f.data) { f.draft = { ...f.data.values }; renderSettings(appOf(appId)); } });
+$('settings-save').addEventListener('click', (e) => {
+  const id = appId, f = forms[id], patch = {};
+  for (const k of Object.keys(f.draft)) if (f.draft[k] !== f.data.values[k]) patch[k] = f.draft[k];
+  busy(e.currentTarget, async () => { try { await call('save-settings', id, patch); f.data.values = { ...f.draft }; f.key = ''; toast('Saved. ' + appOf(id).name + ' uses them when it next opens.'); } catch (err) { toast(err.message, true); } });
+});
+$('remove').addEventListener('click', (e) => busy(e.currentTarget, () => perform(appId, 'remove')));
+
+// ---------- Updates ----------
+function renderUpdates() {
+  const u = state.updater, latest = u.latest ? short(u.latest.version) : '';
+  text('self-version', 'Version ' + state.version + (state.build ? ' (build ' + state.build + ')' : '') + ' for ' + (mac() ? 'macOS' : 'Windows'));
+  const msg = { idle: 'Not checked yet.', checking: 'Checking for updates…', 'up-to-date': 'App Manager is up to date' + (u.checkedAt ? ' (checked ' + ago(u.checkedAt) + ').' : '.'), available: 'Version ' + latest + ' is available.', downloading: 'Downloading version ' + latest + '… ' + u.progress + '%', ready: 'Version ' + latest + ' is ready to install.' + (state.preferences.autoUpdateSelf ? ' It installs when App Manager next restarts, or now.' : ''), installing: 'Installing. App Manager reopens by itself.', error: u.error || 'The update didn’t work.', unsupported: 'This copy of App Manager can’t update itself (it isn’t an installed copy).' }[u.status] || '';
+  text('self-status', msg); $('self-status').className = u.status === 'error' ? 'bad' : u.status === 'ready' ? 'good' : '';
+  showIf('self-bar', u.status === 'downloading'); $('self-bar').firstElementChild.style.transform = 'scaleX(' + (u.progress || 0) / 100 + ')';
+  const key = [u.status, u.location, !!u.latest].join();
+  if ($('self-actions').dataset.key !== key) {
+    $('self-actions').dataset.key = key;
+    const b = [];
+    if (u.location === 'temporary') b.push(el('button', { class: 'btn primary', 'data-action': 'move', onclick: (e) => moveToApplications(e.currentTarget) }, icon('folder'), el('span', {}, 'Move to Applications')));
+    if (u.status === 'available' || (u.status === 'error' && u.latest)) b.push(el('button', { class: 'btn primary', id: 'self-download', onclick: (e) => busy(e.currentTarget, () => act('self-download')) }, icon('download'), el('span', {}, u.status === 'error' ? 'Try again' : 'Download update')));
+    if (u.status === 'ready') b.push(el('button', { class: 'btn primary', id: 'self-install', onclick: (e) => restart(e.currentTarget) }, icon('refresh'), el('span', {}, 'Restart to update')));
+    if (!['downloading', 'installing', 'checking'].includes(u.status)) b.push(el('button', { class: 'btn', id: 'self-check', onclick: (e) => busy(e.currentTarget, async () => { const r = await act('self-check'); if (r && r.value.status === 'up-to-date') toast('App Manager is up to date.'); }) }, icon('refresh'), el('span', {}, 'Check now')));
+    $('self-actions').replaceChildren(...b);
+  }
+  const list = state.manager.apps.filter((a) => a.installed);
+  const lk = JSON.stringify(list.map((a) => [a.id, a.update, a.installed.version, !!jobFor(a.id), queued(a.id)]));
+  if ($('updates-list').dataset.key !== lk) {
+    $('updates-list').dataset.key = lk;
+    $('updates-list').replaceChildren(...(list.length ? list.map((a) => el('div', { class: 'line' }, el('img', { class: 'app-icon s', src: 'assets/' + a.icon, alt: '' }), el('div', { class: 'grow' }, el('b', {}, a.name), el('p', { class: 'small muted' }, a.update ? a.installed.version + ' → ' + short(a.latest.version) : 'Up to date · ' + a.installed.version)),
+      ...(jobFor(a.id) || queued(a.id) ? [el('span', { class: 'pill busy' }, status(a).text)] : a.update ? [el('button', { class: 'btn small primary', onclick: (e) => busy(e.currentTarget, () => perform(a.id, 'update')) }, 'Update')] : []))) : [el('p', { class: 'muted small' }, 'No HN Group apps are installed yet.')]));
+  }
+}
+async function restart(button) { if (await confirmed({ title: 'Restart to update App Manager?', text: 'App Manager closes, installs version ' + short(state.updater.latest.version) + ' and opens again. Your apps aren’t touched.' + (mac() ? ' macOS may ask for your password.' : ''), icon: 'refresh', confirm: 'Restart and update' })) busy(button, () => act('self-install')); }
+async function moveToApplications(button) { if (await confirmed({ title: 'Move App Manager to Applications?', text: 'It copies itself to your Applications folder and reopens from there, so it can keep itself up to date. macOS may ask for your password.', icon: 'folder', confirm: 'Move and reopen' })) busy(button, () => act('move-to-applications')); }
+for (const b of $$('#move-banner [data-action=move]')) b.addEventListener('click', (e) => moveToApplications(e.currentTarget));
 
 // ---------- Activity ----------
-const KIND_ICON={install:'download',update:'refresh',reinstall:'wrench',remove:'trash',settings:'sliders',check:'check',manager:'grid',error:'alert'};
-const FILTERS={all:()=>true,updates:a=>['install','update','reinstall','remove','manager'].includes(a.kind),settings:a=>a.kind==='settings',problems:a=>a.kind==='error'};
-let activityKey='';
-function renderActivity(){const items=state.activity.filter(FILTERS[filter]),key=filter+JSON.stringify(items.map(a=>a.at+a.message))+Math.floor(Date.now()/60000);if(key===activityKey)return;activityKey=key;
- $('clear-activity').disabled=!state.activity.length;
- $('activity').replaceChildren(...(items.length?items.map(a=>el('div',{class:'event '+a.kind},el('span',{class:'event-icon'},icon(KIND_ICON[a.kind]||'grid')),el('div',{class:'grow'},el('p',{},a.message),el('small',{class:'muted'},when(a.at))),a.app?el('img',{class:'event-app',src:'assets/'+(appOf(a.app)?.icon||'app-manager.svg'),alt:''}):null)):[el('div',{class:'empty'},icon('history'),el('p',{},filter==='all'?'Nothing yet. Installs, updates and settings changes will show up here.':'Nothing to show here.'))]));}
-for(const b of $$('#activity-filter button'))b.addEventListener('click',()=>{filter=b.dataset.filter;for(const x of $$('#activity-filter button'))x.setAttribute('aria-pressed',String(x===b));renderActivity();});
-$('clear-activity').addEventListener('click',async()=>{if(await confirmed({title:'Clear the activity history?',text:'This only clears the list. Nothing is installed or removed.',icon:'history',confirm:'Clear history'}))act('clear-activity');});
+const KIND_ICON = { install: 'download', update: 'refresh', reinstall: 'wrench', remove: 'trash', settings: 'sliders', check: 'check', manager: 'grid', account: 'key', error: 'alert' };
+const FILTERS = { all: () => true, changes: (a) => ['install', 'update', 'reinstall', 'remove', 'manager'].includes(a.kind), problems: (a) => a.kind === 'error' };
+let activityKey = '';
+function renderActivity() {
+  const items = state.activity.filter(FILTERS[filter]), key = filter + JSON.stringify(items.map((a) => a.at + a.message)) + Math.floor(Date.now() / 60000);
+  if (key === activityKey) return; activityKey = key;
+  $('clear-activity').disabled = !state.activity.length;
+  $('activity').replaceChildren(...(items.length ? items.map((a) => el('div', { class: 'event ' + a.kind }, el('span', { class: 'event-icon', html: svg(KIND_ICON[a.kind] || 'grid') }), el('div', { class: 'grow' }, el('p', {}, a.message), el('small', { class: 'muted' }, ago(a.at))))) : [el('p', { class: 'empty muted' }, filter === 'all' ? 'Nothing yet. Installs, updates and changes show up here.' : 'Nothing to show here.')]));
+}
+for (const b of $$('#activity-filter button')) b.addEventListener('click', () => { filter = b.dataset.filter; for (const x of $$('#activity-filter button')) x.setAttribute('aria-pressed', String(x === b)); renderActivity(); });
+$('clear-activity').addEventListener('click', async () => { if (await confirmed({ title: 'Clear the activity history?', text: 'This only clears the list. Nothing is installed or removed.', icon: 'history', confirm: 'Clear history' })) act('clear-activity'); });
 
-// ---------- App Manager's settings ----------
-function renderPreferences(){const p=state.preferences,m=state.manager;
- for(const sw of $$('[data-pref]'))sw.setAttribute('aria-checked',String(!!p[sw.dataset.pref]));
- for(const b of $$('[data-theme]'))b.setAttribute('aria-pressed',String(p.theme===b.dataset.theme));
- setText('background-label',state.platform==='darwin'?'Keep running in the menu bar':'Keep running in the system tray');
- setText('about-version','Version '+state.version+(state.build?' (build '+state.build+')':'')+' for '+(state.platform==='darwin'?'macOS':'Windows'));
- setText('self-text',m.location==='temporary'?'Move App Manager to Applications so it can keep itself up to date.':m.status==='downloading'?'Downloading the update… '+m.progress+'%':m.status==='installing'?'Installing. App Manager reopens by itself.':m.status==='error'?m.error:m.update?'Version '+short(m.latest.version)+' is ready. It installs in place and reopens App Manager.':state.checkedAt?'App Manager is up to date. Checked '+when(m.checkedAt||state.checkedAt).toLowerCase()+'.':'');
- $('self-text').classList.toggle('bad',m.status==='error');
- showIf('self-update',m.update&&m.status!=='installing');const b=$('self-update');if(!b.classList.contains('working'))b.disabled=m.status==='downloading';
- showIf('self-progress',m.status==='downloading');$('self-progress').firstElementChild.style.transform='scaleX('+(m.progress||0)/100+')';}
-for(const sw of $$('[data-pref]'))sw.addEventListener('click',()=>act('preference',sw.dataset.pref,!state.preferences[sw.dataset.pref]));
-for(const b of $$('[data-theme]'))b.addEventListener('click',()=>act('preference','theme',b.dataset.theme));
-$('self-update').addEventListener('click',e=>updateManager(e.currentTarget));
-$('open-downloads').addEventListener('click',()=>act('website','downloads'));
+// ---------- Settings and diagnostics ----------
+function renderSettingsPage() {
+  const p = state.preferences;
+  for (const b of $$('#theme button')) b.setAttribute('aria-pressed', String(p.theme === b.dataset.theme));
+  text('background-label', mac() ? 'Keep running in the menu bar' : 'Keep running in the system tray');
+  const d = state.device;
+  text('device-name', d && d.name ? d.name : 'This computer');
+  text('device-text', d ? (d.allowed ? 'Approved on devices.hngroup.org.uk' + (d.owner ? ' for ' + d.owner.displayName : '') + '.' : 'Not approved on devices.hngroup.org.uk.') + (d.offline ? ' Couldn’t check just now.' : '') : '');
+}
+for (const sw of $$('[data-pref]')) sw.addEventListener('click', () => act('preference', sw.dataset.pref, !state.preferences[sw.dataset.pref]));
+for (const b of $$('#theme button')) b.addEventListener('click', () => act('theme', b.dataset.theme));
+for (const b of $$('[data-site]')) b.addEventListener('click', () => act('website', b.dataset.site));
+$('run-check').addEventListener('click', (e) => busy(e.currentTarget, async () => {
+  const r = await act('diagnostics', true); if (!r) return;
+  const { check, text: all } = r.value;
+  $('checks').replaceChildren(...check.steps.map((s) => el('li', { class: s.ok ? 'ok' : 'bad' }, el('span', { html: svg(s.ok ? 'check' : 'x') }), el('div', {}, el('b', {}, s.name), el('small', { class: 'muted' }, s.detail)))));
+  $('log-tail').textContent = (all.split('— Recent log —')[1] || '').trim().split('\n').slice(-40).join('\n'); showIf('log-tail', true);
+  toast(check.ok ? 'Everything checked out.' : 'Something needs attention. Copy the diagnostics and send them to HN Group.', !check.ok);
+}));
+$('copy-diagnostics').addEventListener('click', async () => { if (await act('copy-diagnostics')) toast('Diagnostics copied. Paste them into a message to HN Group.'); });
+$('open-logs').addEventListener('click', () => act('open-logs'));
 
-// ---------- Your HN Group account ----------
-// Signed out → sign in through HN Group Auth in the browser; remembered → the six-digit PIN. Nothing else in the
-// window works until it's unlocked.
-const initials=name=>String(name||'').split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase()||'?';
-function avatarInto(node,acc){const key=(acc.avatar||'')+'|'+(acc.user?.displayName||'');if(node.dataset.key===key)return;node.dataset.key=key;node.replaceChildren(acc.avatar?el('img',{src:acc.avatar,alt:''}):document.createTextNode(initials(acc.user?.displayName)));}
-const pinInput=$('pin-input'),PIN_HINT='It unlocks as soon as you type the sixth digit.';let pinBusy=false,lastStatus=null;
-function paintPin(){const v=pinInput.value;$$('#pin span').forEach((s,i)=>{s.classList.toggle('filled',i<v.length);s.classList.toggle('next',i===Math.min(v.length,5));});}
-function renderAccount(){const acc=state.account,open=acc.status==='unlocked';
- showIf('account-screen',!open);showIf('layout',open);
- for(const s of $$('.account-step'))showIf(s,s.dataset.step===acc.status);
- const e=$('account-error');showIf(e,!!acc.error&&!open);setText(e.querySelector('p'),acc.error||'');
- setText('account-version','App Manager '+state.version);
- if(acc.user){setText('lock-name',acc.user.displayName);setText('lock-email',acc.user.email);setText('me-name',acc.user.displayName);setText('me-email',acc.user.jobTitle||acc.user.email);setText('settings-name',acc.user.displayName);setText('settings-email',acc.user.email);
-  for(const id of['lock-avatar','me-avatar','settings-avatar'])avatarInto($(id),acc);}
- // Arriving on the PIN: start fresh with the cursor in the boxes.
- if(acc.status==='locked'&&lastStatus!=='locked'){pinInput.value='';paintPin();setText('pin-status',PIN_HINT);$('pin-status').classList.remove('bad');requestAnimationFrame(()=>pinInput.focus());}
- if(open&&lastStatus&&lastStatus!=='unlocked')$('main').scrollTo(0,0);
- lastStatus=acc.status;}
-pinInput.addEventListener('input',async()=>{pinInput.value=pinInput.value.replace(/\D/g,'').slice(0,6);paintPin();const box=$('pin');box.classList.remove('wrong');
- if(pinInput.value.length<6||pinBusy)return;pinBusy=true;box.classList.add('busy');setText('pin-status','Checking your PIN…');$('pin-status').classList.remove('bad');
- try{await call('unlock',pinInput.value);setText('pin-status',PIN_HINT);}
- catch(e){void box.offsetWidth;box.classList.add('wrong');setText('pin-status',e.message);$('pin-status').classList.add('bad');}
- finally{pinInput.value='';pinBusy=false;box.classList.remove('busy');paintPin();if(state?.account.status==='locked')pinInput.focus();}});
-pinInput.addEventListener('focus',()=>$('pin').classList.add('focus'));pinInput.addEventListener('blur',()=>$('pin').classList.remove('focus'));
-$('pin').addEventListener('click',()=>pinInput.focus());
-$('sign-in').addEventListener('click',e=>busy(e.currentTarget,()=>act('sign-in')));
-$('sign-in-again').addEventListener('click',()=>act('sign-in'));
-$('sign-in-cancel').addEventListener('click',()=>act('sign-in-cancel'));
-$('switch-account').addEventListener('click',async()=>{if(await confirmed({title:'Sign in with another account?',text:'App Manager forgets '+(state.account.user?.displayName||'this account')+' on this computer. Installed apps aren’t touched.',icon:'key',confirm:'Use another account'}))act('sign-out');});
-for(const id of['lock','settings-lock'])$(id).addEventListener('click',()=>act('lock'));
-$('sign-out').addEventListener('click',async()=>{if(await confirmed({title:'Sign out of App Manager?',text:'Your account is forgotten on this computer, and you’ll need to sign in again with HN Group Auth. Installed apps aren’t touched.',icon:'key',tone:'danger',confirm:'Sign out'}))act('sign-out');});
-$('settings-account').addEventListener('click',()=>act('website','account'));
-$('open-devices').addEventListener('click',()=>act('website','devices'));
-
-// ---------- App Manager keeping itself up to date ----------
-async function updateManager(button){if(await confirmed({title:'Update App Manager to '+short(state.manager.latest.version)+'?',text:'It downloads and checks the update, then closes and reopens by itself. Your apps aren’t touched.',icon:'download',confirm:'Update and reopen'}))busy(button,()=>act('manager-update'));}
-async function moveManager(button){if(await confirmed({title:'Move App Manager to Applications?',text:'It copies itself into your Applications folder and reopens from there, so it can keep itself up to date. macOS may ask for your password.',icon:'folder',confirm:'Move and reopen'}))busy(button,()=>act('move-to-applications'));}
-$('self-check').addEventListener('click',e=>busy(e.currentTarget,async()=>{try{const update=await call('manager-check');toast(update?'App Manager '+short(state.manager.latest.version)+' is ready to install.':'App Manager is up to date.');}catch(err){toast(err.message,true);}}));
-for(const id of['self-move','move-now'])$(id).addEventListener('click',e=>moveManager(e.currentTarget));
-$('self-banner-update').addEventListener('click',e=>updateManager(e.currentTarget));
-function renderManagerBanners(){const m=state.manager;showIf('move-banner',m.location==='temporary');showIf('self-move',m.location==='temporary');
- showIf('self-banner',m.update&&m.location!=='temporary'&&!['installing'].includes(m.status));setText('self-banner-title',m.update?'App Manager '+short(m.latest.version)+' is ready':'');
- const d=state.device;if(d){setText('device-name',d.name||'This computer');setText('device-text',d.allowed?'Approved on devices.hngroup.org.uk'+(d.owner?' for '+d.owner.displayName:'')+'.':'Not approved on devices.hngroup.org.uk.');}}
+// ---------- Your account ----------
+const initials = (n) => String(n || '').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
+function avatar(node, acc) { const k = (acc.avatar || '') + '|' + (acc.user ? acc.user.displayName : ''); if (node.dataset.key === k) return; node.dataset.key = k; node.replaceChildren(acc.avatar ? el('img', { src: acc.avatar, alt: '' }) : document.createTextNode(initials(acc.user && acc.user.displayName))); }
+const pinInput = $('pin-input'), PIN_HINT = 'It unlocks as soon as you type the sixth digit.';
+function paintPin() { const v = pinInput.value; $$('#pin span').forEach((s, i) => { s.classList.toggle('filled', i < v.length); s.classList.toggle('next', i === Math.min(v.length, 5)); }); }
+function renderAccount() {
+  const acc = state.account, open = acc.status === 'unlocked';
+  showIf('gate', !open); showIf('shell', open);
+  for (const s of $$('.step')) showIf(s, s.dataset.step === acc.status);
+  showIf('gate-error', !!state.accountError && !open); text('gate-error', state.accountError || '');
+  text('gate-version', 'App Manager ' + state.version);
+  if (acc.user) {
+    for (const [id, v] of [['lock-name', acc.user.displayName], ['lock-email', acc.user.email], ['me-name', acc.user.displayName], ['me-sub', acc.user.jobTitle || acc.user.email], ['set-name', acc.user.displayName], ['set-email', acc.user.email]]) text(id, v);
+    for (const id of ['lock-avatar', 'me-avatar', 'set-avatar']) avatar($(id), acc);
+  }
+  if (acc.status === 'locked' && lastAccount !== 'locked') { pinInput.value = ''; paintPin(); text('pin-status', PIN_HINT); $('pin-status').classList.remove('bad'); requestAnimationFrame(() => pinInput.focus()); }
+  lastAccount = acc.status;
+}
+pinInput.addEventListener('input', async () => {
+  pinInput.value = pinInput.value.replace(/\D/g, '').slice(0, 6); paintPin();
+  const box = $('pin'); box.classList.remove('wrong');
+  if (pinInput.value.length < 6 || pinBusy) return;
+  pinBusy = true; box.classList.add('checking'); text('pin-status', 'Checking your PIN…'); $('pin-status').classList.remove('bad');
+  try { await call('unlock', pinInput.value); text('pin-status', PIN_HINT); }
+  catch (e) { void box.offsetWidth; box.classList.add('wrong'); text('pin-status', e.message); $('pin-status').classList.add('bad'); }
+  finally { pinInput.value = ''; pinBusy = false; box.classList.remove('checking'); paintPin(); if (state && state.account.status === 'locked') pinInput.focus(); }
+});
+pinInput.addEventListener('focus', () => $('pin').classList.add('focus'));
+pinInput.addEventListener('blur', () => $('pin').classList.remove('focus'));
+$('pin').addEventListener('click', () => pinInput.focus());
+$('sign-in').addEventListener('click', (e) => busy(e.currentTarget, () => act('sign-in')));
+$('sign-in-again').addEventListener('click', () => act('sign-in'));
+$('sign-in-cancel').addEventListener('click', () => act('sign-in-cancel'));
+$('switch-account').addEventListener('click', async () => { if (await confirmed({ title: 'Use another account?', text: 'App Manager forgets ' + ((state.account.user || {}).displayName || 'this account') + ' on this computer. Installed apps aren’t touched.', icon: 'key', confirm: 'Use another account' })) act('sign-out'); });
+for (const id of ['lock', 'set-lock']) $(id).addEventListener('click', () => act('lock'));
+$('sign-out').addEventListener('click', async () => { if (await confirmed({ title: 'Sign out of App Manager?', text: 'Your account is forgotten on this computer and you’ll need to sign in again. Installed apps aren’t touched.', icon: 'key', tone: 'danger', confirm: 'Sign out' })) act('sign-out'); });
 
 // ---------- The dock: what's happening now ----------
-function renderDock(){const op=state.operation,dock=$('dock');showIf(dock,!!op);if(!op)return;const a=appOf(op.id);
- $('dock-icon').src='assets/'+a.icon;
- setText('dock-title',{preparing:'Getting ready…',waiting:'Waiting for you to quit '+a.name,downloading:(op.kind==='install'?'Installing ':op.kind==='reinstall'?'Reinstalling ':'Updating ')+a.name,installing:op.kind==='uninstall'?'Removing '+a.name:'Installing '+a.name,removing:'Removing '+a.name}[op.phase]||a.name);
- setText('dock-text',op.phase==='waiting'?'It starts as soon as you quit it.':op.phase==='downloading'?mb(op.received)+' of '+mb(op.total)+(op.speed?' · '+mb(op.speed)+'/s':''):op.phase==='installing'?'Checking and installing…':'');
- const bar=$('dock-bar');bar.classList.toggle('indeterminate',op.phase!=='downloading');bar.firstElementChild.style.transform=op.phase==='downloading'&&op.total?'scaleX('+op.received/op.total+')':'';
- setText('dock-queue',state.queue.length?'Then: '+state.queue.map(j=>appOf(j.id)?.name).join(', '):'');
- showIf('dock-cancel',!!op.cancellable);}
-$('dock-cancel').addEventListener('click',()=>act('cancel',state.operation?.id));
+function renderDock() {
+  const j = state.manager.job; showIf('dock', !!j && state.account.status === 'unlocked'); if (!j) return;
+  const a = appOf(j.id);
+  $('dock-icon').src = 'assets/' + a.icon;
+  text('dock-title', j.phase === 'waiting' ? 'Waiting for you to quit ' + a.name : (j.kind === 'remove' ? 'Removing ' : j.kind === 'install' ? 'Installing ' : j.kind === 'reinstall' ? 'Reinstalling ' : 'Updating ') + a.name);
+  text('dock-text', phaseText(a, j));
+  const bar = $('dock-bar'); bar.classList.toggle('moving', j.phase !== 'downloading'); bar.firstElementChild.style.transform = j.phase === 'downloading' && j.total ? 'scaleX(' + j.received / j.total + ')' : '';
+  text('dock-next', state.manager.queue.length ? 'Then: ' + state.manager.queue.map((q) => appOf(q.id).name).join(', ') : '');
+  showIf('dock-cancel', !!j.cancellable);
+}
+$('dock-cancel').addEventListener('click', () => state.manager.job && act('cancel', state.manager.job.id));
 
 // ---------- Pages ----------
-function go(id){const pages=['overview','browser','network','activity','settings'];if(!pages.includes(id))return;if(page!==id){page=id;$('main').scrollTo(0,0);}if(['browser','network'].includes(id))loadSettings(id);render();}
-for(const b of $$('[data-page]'))b.addEventListener('click',()=>go(b.dataset.page));
-for(const b of $$('[data-go]'))b.addEventListener('click',()=>go(b.dataset.go));
-api.onNavigate(go);
-$('check').addEventListener('click',()=>{act('check');});
-$('update-all').addEventListener('click',e=>busy(e.currentTarget,()=>act('update-all')));
-$('error-dismiss').addEventListener('click',()=>showIf('error',false));
+function go(p, id) {
+  if (!['apps', 'app', 'updates', 'activity', 'settings'].includes(p)) p = 'apps';
+  if (p === 'app' && id) { if (appId !== id) shownApp = null; appId = id; }
+  if (p === 'app' && !appId) p = 'apps';
+  closeMenu();
+  if (page !== p) { page = p; $('main').scrollTo(0, 0); }
+  if (p === 'app') loadSettings(appId);
+  render();
+}
+for (const b of $$('[data-go]')) b.addEventListener('click', () => go(b.dataset.go));
+api.onGo((p) => (['browser', 'network'].includes(p) ? go('app', p) : go(p)));
+$('check').addEventListener('click', () => act('check'));
+$('update-all').addEventListener('click', (e) => busy(e.currentTarget, () => act('update-all')));
 
-// ---------- Keeping the page up to date ----------
-function render(){if(!state)return;
- document.body.dataset.platform=state.platform;
- renderAccount();renderManagerBanners();
- const pageId=['browser','network'].includes(page)?'app':page;
- for(const p of $$('[data-page-id]'))showIf(p,p.dataset.pageId===pageId);
- for(const b of $$('.nav')){if(b.dataset.page===page)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');}
- const updates=state.apps.filter(a=>a.update).length;showIf('nav-updates',updates>0);setText('nav-updates',updates);
- for(const a of state.apps){const dot=document.querySelector('[data-dot="'+a.id+'"]');dot.className='state-dot '+status(a).tone+(a.installed?'':' absent');}
- const ts=$('title-status');showIf(ts,state.checking||!!state.operation);setText(ts.lastElementChild,state.operation?'Working…':'Checking for updates…');
- showIf('self-card',state.manager.update);setText('self-card-text',state.manager.update?'Version '+short(state.manager.latest.version)+' is ready':'');
- setText('side-version','App Manager '+state.version);
- if(page==='overview')renderOverview();else if(pageId==='app')renderApp(page);else if(page==='activity')renderActivity();else if(page==='settings')renderPreferences();
- renderDock();}
-function receive(incoming){const before=state;state=incoming;
- // Reload an app's settings after it closes, installs or updates.
- for(const a of state.apps){const was=before?.apps.find(x=>x.id===a.id);if(forms[a.id]&&was&&(was.running!==a.running||was.installed?.version!==a.installed?.version))forms[a.id].schema=null;}
- if(['browser','network'].includes(page)&&!forms[page]?.schema)loadSettings(page);
- render();}
-setInterval(()=>{if(page==='activity')renderActivity();else if(page==='overview'&&state?.checkedAt)setText('checked',state.checking?'Checking downloads.hngroup.org.uk…':'Last checked '+when(state.checkedAt).toLowerCase());},30000);
+function render() {
+  if (!state) return;
+  document.body.dataset.platform = state.platform;
+  renderAccount();
+  for (const sw of $$('[data-pref]')) sw.setAttribute('aria-checked', String(!!state.preferences[sw.dataset.pref]));
+  for (const s of $$('[data-page]')) showIf(s, s.dataset.page === page);
+  for (const b of $$('.nav')) b.toggleAttribute('aria-current', b.dataset.go === page || (page === 'app' && b.dataset.go === 'apps'));
+  const updates = state.manager.apps.filter((a) => a.update).length, self = ['available', 'ready'].includes(state.updater.status);
+  showIf('count-apps', updates > 0); text('count-apps', updates);
+  showIf('count-updates', updates + (self ? 1 : 0) > 0); text('count-updates', updates + (self ? 1 : 0));
+  showIf('self-note', self); text('self-note-title', state.updater.status === 'ready' ? 'Restart to update' : 'App Manager update');
+  text('self-note-text', state.updater.latest ? 'Version ' + short(state.updater.latest.version) + (state.updater.status === 'ready' ? ' is ready' : ' is available') : '');
+  const busyText = state.manager.job ? 'Working…' : state.manager.checking ? 'Checking for updates…' : state.updater.status === 'downloading' ? 'Downloading App Manager…' : '';
+  showIf('busy-pill', !!busyText); text($('busy-pill').querySelector('b'), busyText);
+  text('side-version', 'App Manager ' + state.version);
+  if (page === 'apps') renderApps(); else if (page === 'app') renderApp(); else if (page === 'updates') renderUpdates(); else if (page === 'activity') renderActivity(); else renderSettingsPage();
+  renderDock();
+  paintIcons();
+}
+function receive(next) {
+  const before = state; state = next;
+  // Read an app's settings again once it closes, installs or updates.
+  for (const a of state.manager.apps) {
+    const was = before && before.manager.apps.find((x) => x.id === a.id);
+    if (forms[a.id] && was && (was.running !== a.running || (was.installed && was.installed.version) !== (a.installed && a.installed.version))) { forms[a.id].data = null; if (page === 'app' && appId === a.id) loadSettings(a.id, true); }
+  }
+  render();
+}
+setInterval(() => { if (state && (page === 'apps' || page === 'activity' || page === 'updates')) render(); }, 30000);
+paintIcons();
 api.onState(receive);
-call('state').then(s=>{if(!state)receive(s);}).catch(e=>toast(e.message,true));
+call('state').then((s) => { if (!state) receive(s); }).catch((e) => toast(e.message, true));

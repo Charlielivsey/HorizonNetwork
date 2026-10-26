@@ -1,11 +1,11 @@
 'use strict';
-// The window's only bridge to App Manager: a fixed list of requests, the state, page changes and questions.
-const{contextBridge,ipcRenderer}=require('electron');
-const REQUESTS=['state','sign-in','sign-in-cancel','unlock','lock','sign-out','manager-check','move-to-applications','check','enqueue','update-all','cancel','open','reveal','settings','save','preference','clear-activity','manager-update','website','dialog-answer'];
-const listen=(channel,callback)=>{const handler=(_event,value)=>callback(value);ipcRenderer.on(channel,handler);return()=>ipcRenderer.removeListener(channel,handler);};
-contextBridge.exposeInMainWorld('manager',Object.freeze({
- call:(method,...args)=>{if(!REQUESTS.includes(method))throw Error('Unknown request.');return ipcRenderer.invoke('manager:'+method,...args);},
- onState:callback=>listen('manager:state',callback),
- onNavigate:callback=>listen('manager:navigate',page=>callback(String(page))),
- onDialog:(open,close)=>{listen('manager:dialog',open);listen('manager:dialog-close',id=>close(String(id)));},
+// The window's only bridge to App Manager: one request call (the main process checks each request and who sent it),
+// the state, page changes and questions. No Node access and no tokens reach the window.
+const { contextBridge, ipcRenderer } = require('electron');
+const listen = (channel, fn) => { const h = (_e, v) => fn(v); ipcRenderer.on(channel, h); return () => ipcRenderer.removeListener(channel, h); };
+contextBridge.exposeInMainWorld('manager', Object.freeze({
+  call: (method, ...args) => ipcRenderer.invoke('am:call', String(method), ...args),
+  onState: (fn) => listen('am:state', fn),
+  onGo: (fn) => listen('am:go', (p) => fn(String(p))),
+  onDialog: (open, close) => { listen('am:dialog', open); listen('am:dialog-close', (id) => close(String(id))); },
 }));

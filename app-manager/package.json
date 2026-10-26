@@ -1,6 +1,6 @@
 {
  "name": "hn-group-app-manager",
- "version": "2.1.1",
+ "version": "3.0.0",
  "private": true,
  "description": "Install, update, repair and look after HN Group desktop apps",
  "author": "HN Group",
@@ -9,6 +9,7 @@
  "scripts": {
   "start": "electron .",
   "test": "node --test test/*.test.cjs",
+  "test:mac-swap": "node test/mac-swap.cjs",
   "test:desktop": "node test/desktop.cjs",
   "icons": "node scripts/icons.cjs",
   "build:mac": "electron-builder --mac --universal --publish never",
@@ -31,7 +32,8 @@
   },
   "files": [
    "src/**",
-   "!src/fake-system.cjs",
+   "!src/core/fake.cjs",
+   "!src/core/test-fixtures.cjs",
    "ui/**",
    "package.json"
   ],

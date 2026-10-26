@@ -1,47 +1,228 @@
 'use strict';
-const{test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),crypto=require('node:crypto');
-const release=require('../src/releases.cjs'),settings=require('../src/settings.cjs'),{System,uninstallPath,within}=require('../src/system.cjs');
-const digest=data=>crypto.createHash('sha256').update(data).digest('hex');
-function feed(){return{release:{version:'1.1.3-38',assets:{'windows-x64':{name:'HN-Browser-1.1.3-win-x64.exe',size:4,sha256:digest('good'),url:'/download/windows-x64'},'mac-arm64-zip':{name:'HN-Browser-1.1.3-mac-arm64.zip',size:4,sha256:digest('good'),url:'/download/mac-arm64-zip'}}},apps:{'secure-network':{version:'2.3.8-33',asset:{name:'HN-Secure-Network-2.3.8-macOS.zip',size:4,sha256:digest('good'),url:'/download/secure-network-mac'}},'secure-network-windows':{version:'1.0.1',build:2,asset:{name:'HN-Secure-Network-1.0.1-windows-x64.exe',size:4,sha256:digest('good'),url:'/download/secure-network-windows'}}}};}
-test('only the correct app, platform and fixed download route are accepted',()=>{const f=feed();assert.equal(release.asset(f,'browser','win32','x64').version,'1.1.3-38');assert.equal(release.asset(f,'browser','darwin','x64'),null);assert.equal(release.asset(f,'network','darwin','x64').version,'2.3.8-33');assert.equal(release.asset(f,'network','win32','x64').version,'1.0.1-2');f.release.assets['windows-x64'].url='https://evil.test/exe';assert.equal(release.asset(f,'browser','win32','x64'),null);});
-test('invalid hashes, sizes, names and versions are rejected',()=>{for(const patch of[{sha256:'nope'},{size:0},{size:Infinity},{size:release.MAX+1},{name:'HN-Secure-Network-1.1.3-win-x64.exe'}]){const f=feed();Object.assign(f.release.assets['windows-x64'],patch);assert.equal(release.asset(f,'browser','win32','x64'),null);}assert.equal(release.newer('1.1.3-39','1.1.3-38'),true);assert.equal(release.newer('1.1.3-38','1.2.0'),false);assert.equal(release.newer('1.0.0;cmd','0.1.0'),false);});
-test('download verifies bytes, rejects tampering and removes partial files',async()=>{const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-manager-test-'));try{const a=release.asset(feed(),'browser','win32','x64');const file=await release.download(a,dir,{fetcher:async()=>new Response('good')});assert.equal(fs.readFileSync(file,'utf8'),'good');fs.writeFileSync(file,'evil');await assert.rejects(release.verified(file,a),/verification/);await assert.rejects(release.download(a,dir,{fetcher:async()=>new Response('evil')}),/verification/);await assert.rejects(release.download(a,dir,{fetcher:async()=>new Response('too long')}),/larger/);assert.equal(fs.readdirSync(dir).filter(f=>f.endsWith('.part')).length,0);}finally{fs.rmSync(dir,{recursive:true,force:true});}});
-test('settings preserve future keys and account-related files without accepting arbitrary fields',async()=>{const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-manager-prefs-'));try{const file=path.join(dir,'preferences.json'),token=path.join(dir,'account.enc');fs.writeFileSync(file,JSON.stringify({futureFeature:123,theme:'daylight'}));fs.writeFileSync(token,'untouched encrypted credential');await settings.writeJSON(file,'browser','win32',{theme:'forest',reduceMotion:true});assert.deepEqual(JSON.parse(fs.readFileSync(file)),{futureFeature:123,theme:'forest',reduceMotion:true});assert.equal(fs.readFileSync(token,'utf8'),'untouched encrypted credential');assert.throws(()=>settings.validate('browser','win32',{account:'no'}));assert.throws(()=>settings.validate('browser','win32',{theme:'evil'}));assert.throws(()=>settings.validate('network','darwin',{sshUser:'root; rm -rf /'}));assert.equal(settings.values('browser','win32',{theme:'invalid'}).theme,'midnight-lavender');fs.unlinkSync(file);fs.symlinkSync(token,file);await assert.rejects(settings.writeJSON(file,'browser','win32',{theme:'rose'}),/Unsafe/);}finally{fs.rmSync(dir,{recursive:true,force:true});}});
-test('Windows uninstallation only uses an uninstaller inside the registered app directory',()=>{assert.equal(uninstallPath('"C:\\Users\\a\\App\\Uninstall HN Browser.exe" /allusers','C:\\Users\\a\\App'),'C:\\Users\\a\\App\\Uninstall HN Browser.exe');for(const cmd of['cmd.exe /c evil','"C:\\Windows\\Uninstall.exe"','"C:\\Users\\a\\App\\evil.exe"'])assert.throws(()=>uninstallPath(cmd,'C:\\Users\\a\\App'));assert.equal(within('/apps','/apps2/bad'),false);assert.equal(within('/apps','/apps/../etc'),false);});
-test('settings and removal refuse a running app before writing anything',async()=>{const system=new System({platform:'darwin'});system.detect=async()=>({path:'/Applications/HN Browser.app'});system.running=async()=>true;await assert.rejects(system.save('browser',{theme:'rose'}),/Quit HN Browser first/);await assert.rejects(system.uninstall('browser'),/Quit HN Browser first/);await assert.rejects(system.idle('unexpected'),/Choose an HN Group app/);});
+// App Manager's core, without a window: release records, checked downloads, settings, preferences, the queue
+// (waiting for an app to be quit, cancelling, failures), and App Manager's own updates.
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const crypto = require('node:crypto');
+const feed = require('../src/core/feed.cjs');
+const settings = require('../src/core/settings.cjs');
+const { Store } = require('../src/core/store.cjs');
+const { Manager } = require('../src/core/manager.cjs');
+const { Updater } = require('../src/core/updater.cjs');
+const { FakePlatform } = require('../src/core/fake.cjs');
+const { Log, clean } = require('../src/core/log.cjs');
+const { uninstaller } = require('../src/core/windows.cjs');
+const { scripts, bundleOf, temporary } = require('../src/core/macos.cjs');
 
-test('Windows process paths use one trailing separator even when registry locations include it',()=>{const{processPrefix}=require('../src/system.cjs');assert.equal(processPrefix('C:\\Users\\a\\Apps\\'),processPrefix('C:\\Users\\a\\Apps'));assert.equal(processPrefix('C:/Users/a/Apps/'),'C:\\Users\\a\\Apps\\');});
+const sha = (b) => crypto.createHash('sha256').update(b).digest('hex');
+const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'hn-manager-'));
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+async function until(fn, ms = 8000) { const end = Date.now() + ms; while (Date.now() < end) { if (await fn()) return; await wait(25); } throw Error('Timed out'); }
 
-test('App Manager keeps its preferences and activity between runs, and refuses unknown settings',()=>{const{Store}=require('../src/store.cjs'),dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-manager-store-'));
- try{const a=new Store(dir);assert.deepEqual(a.preferences,{theme:'system',autoCheck:true,notify:true,autoUpdate:false,autoUpdateManager:true,background:true,openAtLogin:false});
-  a.set('autoUpdate',true);a.set('theme','dark');a.log('update','HN Browser was updated to 1.1.4.','browser');
-  assert.throws(()=>a.set('theme','neon'));assert.throws(()=>a.set('shell','rm'));assert.throws(()=>a.set('autoUpdate','yes'));
-  const b=new Store(dir);assert.equal(b.preferences.autoUpdate,true);assert.equal(b.preferences.theme,'dark');assert.equal(b.activity[0].message,'HN Browser was updated to 1.1.4.');
-  for(let i=0;i<250;i++)b.log('check','Checked '+i);assert.equal(new Store(dir).activity.length,200,'the history is capped');
-  fs.writeFileSync(path.join(dir,'app-manager.json'),JSON.stringify({preferences:{theme:'evil',autoCheck:'no'},activity:[{at:'x',kind:'bad',message:1}]}));
-  const c=new Store(dir);assert.equal(c.preferences.theme,'system');assert.equal(c.preferences.autoCheck,true);assert.deepEqual(c.activity,[]);}
- finally{fs.rmSync(dir,{recursive:true,force:true});}});
+// A stand-in downloads service: the feed, and the files it lists.
+function service() {
+  const files = {}, add = (route, name, version, build) => { const data = Buffer.from(name + ' '.repeat(4096)); files[route] = data; return { version, build, publishedAt: '2026-10-25T10:00:00Z', asset: { name, size: data.length, sha256: sha(data), url: '/download/' + route } }; };
+  const browser = add('windows-x64', 'HN-Browser-1.1.6-win-x64.exe', '1.1.6', 41);
+  const value = { release: { version: '1.1.6-41', publishedAt: '2026-10-25T10:00:00Z', assets: { 'windows-x64': browser.asset } }, apps: { 'secure-network-windows': add('secure-network-windows', 'HN-Secure-Network-2.0.1-windows-x64.exe', '2.0.1', 4), 'app-manager-windows': add('app-manager-windows', 'HN-Group-App-Manager-3.1.0-win-x64.exe', '3.1.0', 9) } };
+  let down = false, slow = 0;
+  const fetcher = async (url, o = {}) => {
+    if (down) throw Error('offline');
+    const u = new URL(url);
+    if (u.pathname === '/api/releases') return Response.json(value);
+    const data = files[u.pathname.slice('/download/'.length)];
+    if (!data) return new Response('', { status: 404 });
+    if (!slow) return new Response(data);
+    const chunks = [data.subarray(0, 100), data.subarray(100)];
+    return new Response(new ReadableStream({ async pull(c) { if (o.signal && o.signal.aborted) return c.error(o.signal.reason); await wait(slow); const next = chunks.shift(); if (next) c.enqueue(next); else c.close(); } }));
+  };
+  return { value, fetcher, files, offline: (v) => { down = v; }, slow: (ms) => { slow = ms; } };
+}
+function setup() {
+  const dir = tmp(), log = new Log(dir), platform = new FakePlatform({ log, dir }), store = new Store(dir), svc = service();
+  const updater = new Updater({ platform, log, dir, version: '3.0.0', build: 7, arch: 'x64', fetcher: svc.fetcher });
+  const manager = new Manager({ platform, store, log, updater, dataDir: dir, arch: 'x64', fetcher: svc.fetcher });
+  return { dir, log, platform, store, svc, updater, manager, done: () => fs.rmSync(dir, { recursive: true, force: true }) };
+}
 
-test('a change waits until the app is quit, never stopping it, and can be cancelled',async()=>{const system=new System({platform:'darwin'});let open=true,checks=0,told=0;
- system.detect=async()=>({path:'/Applications/HN Browser.app'});system.running=async()=>{checks++;if(checks===3)open=false;return open;};
- await system.closed('browser',{every:5,onWait:()=>told++});assert.equal(told,1);assert.equal(checks,3);
- open=true;checks=-1000;const controller=new AbortController();const waiting=system.closed('browser',{every:20,signal:controller.signal});setTimeout(()=>controller.abort(),30);await assert.rejects(waiting,/Cancelled/);});
+test('release records: only the exact app, platform, name and route', () => {
+  const { value } = service();
+  assert.equal(feed.release(value, 'browser', 'win32', 'x64').version, '1.1.6-41');
+  assert.equal(feed.release(value, 'network', 'win32', 'x64').version, '2.0.1-4');
+  assert.equal(feed.release(value, 'manager', 'win32', 'x64').version, '3.1.0-9');
+  assert.equal(feed.release(value, 'browser', 'win32', 'arm64'), null);
+  assert.equal(feed.release(value, 'browser', 'linux', 'x64'), null);
+  for (const bad of [{ url: '/download/elsewhere' }, { name: 'evil.exe' }, { size: 0 }, { size: feed.MAX + 1 }, { sha256: 'x' }]) { const v = structuredClone(value); Object.assign(v.release.assets['windows-x64'], bad); assert.equal(feed.release(v, 'browser', 'win32', 'x64'), null, JSON.stringify(bad)); }
+  assert.ok(feed.newer('1.1.6-41', '1.1.6-40') && feed.newer('1.2.0', '1.1.9-99') && !feed.newer('1.1.6', '1.1.6') && !feed.newer('x', '1.0.0'));
+});
 
-test('App Manager updates itself only from its own checked download, swapping back if anything fails',async()=>{const{installSelf,bundleOf,scripts,targetOf,temporary}=require('../src/self-update.cjs');
- assert.equal(bundleOf('/Applications/HN Group App Manager.app/Contents/MacOS/HN Group App Manager'),'/Applications/HN Group App Manager.app');assert.equal(bundleOf('/usr/bin/node'),null);
- // A copy running from the disk image or Downloads (translocated) is installed into Applications instead.
- assert.equal(targetOf('/Users/a/Applications/HN Group App Manager.app'),'/Users/a/Applications/HN Group App Manager.app');
- for(const odd of['/Volumes/HN Group App Manager/HN Group App Manager.app','/private/var/folders/x/AppTranslocation/1/d/HN Group App Manager.app']){assert.ok(temporary(odd));assert.equal(targetOf(odd),'/Applications/HN Group App Manager.app');}
- const{swap,main}=scripts({pid:42,source:'/tmp/w/HN Group App Manager.app',target:'/Applications/HN Group App Manager.app',fallback:'/Volumes/x/HN Group App Manager.app',work:'/tmp/w'});
- assert.match(main,/kill -0 42/);assert.match(main,/with administrator privileges/);assert.match(main,/\[ -w '\/Applications' \]/,'an administrator is only asked for when the folder needs one');
- assert.match(main,/then \/usr\/bin\/open '\/Applications\/HN Group App Manager.app'; else \/usr\/bin\/open '\/Volumes\/x\/HN Group App Manager.app'; fi/,'it always reopens, the old copy if the swap failed');
- assert.match(swap,/then \/bin\/rm -rf .*manager-old.*else \[ -e .*manager-old.* \] && \/bin\/mv .*manager-old.* '\/Applications\/HN Group App Manager.app'/s,'the old copy is put back if the swap fails');
- assert.match(swap,/xattr -dr com.apple.quarantine/);
- const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-manager-self-'));
- try{const file=path.join(dir,'HN-Group-App-Manager-2.0.1-win-x64.exe');fs.writeFileSync(file,'good');const a={size:4,sha256:digest('good')};let launched=null,quit=false;
-  await installSelf({file,release:a,platform:'win32',launch:(f,args)=>{launched=[f,args];return{unref(){}};},quit:()=>{quit=true;}});
-  assert.deepEqual(launched,[file,['/S','--force-run']]);assert.ok(quit);
-  fs.writeFileSync(file,'evil');launched=null;await assert.rejects(installSelf({file,release:a,platform:'win32',launch:()=>{launched=true;},quit:()=>{}}),/verification/);assert.equal(launched,null,'a changed download never runs');}
- finally{fs.rmSync(dir,{recursive:true,force:true});}});
+test('downloads are checked, reused when complete, and never kept when wrong', async () => {
+  const dir = tmp(), svc = service();
+  try {
+    const r = feed.release(svc.value, 'browser', 'win32', 'x64');
+    const file = await feed.download(r, dir, { fetcher: svc.fetcher });
+    assert.ok(fs.readFileSync(file).equals(svc.files['windows-x64']));
+    svc.offline(true); assert.equal(await feed.download(r, dir, { fetcher: svc.fetcher }), file, 'a complete earlier download is reused'); svc.offline(false);
+    fs.writeFileSync(file, 'tampered');
+    await assert.rejects(feed.verify(file, r), /wrong size|checksum/);
+    svc.files['windows-x64'] = Buffer.alloc(svc.files['windows-x64'].length, 1);
+    await assert.rejects(feed.download(r, dir, { fetcher: svc.fetcher }), /checksum/);
+    assert.deepEqual(fs.readdirSync(dir), [], 'nothing wrong is left behind');
+    await assert.rejects(feed.download({ ...r, url: 'https://evil.example/x' }, dir, { fetcher: svc.fetcher }), /isn’t valid/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
 
-test('release dates are carried through for the app pages',()=>{const f=feed();f.release.publishedAt='2026-10-23T20:00:00Z';assert.equal(release.asset(f,'browser','win32','x64').publishedAt,'2026-10-23T20:00:00.000Z');f.release.publishedAt='nonsense';assert.equal(release.asset(f,'browser','win32','x64').publishedAt,null);});
+test('app settings: only known fields and values, unknown keys kept', async () => {
+  const dir = tmp(), file = path.join(dir, 'HN Browser', 'preferences.json');
+  try {
+    fs.mkdirSync(path.dirname(file)); fs.writeFileSync(file, JSON.stringify({ theme: 'forest', future: 1 }));
+    await settings.writeJSON(file, 'browser', 'win32', { theme: 'rose', saveHistory: false });
+    assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), { theme: 'rose', future: 1, saveHistory: false });
+    assert.throws(() => settings.validate('browser', 'win32', { vpnAutoConnect: true }), /can’t be changed/, 'the removed VPN auto-connect setting can’t be written');
+    assert.throws(() => settings.validate('browser', 'win32', { theme: 'neon' }), /valid value/);
+    assert.throws(() => settings.validate('network', 'darwin', { sshUser: 'root; rm -rf /' }), /valid value/);
+    assert.equal(settings.values('browser', 'win32', { autoLock: 15, theme: 'bogus' }).theme, 'midnight-lavender');
+    assert.ok(settings.describe('browser', 'win32').find((f) => f.key === 'autoLock').options.some((o) => o.label === 'Never'));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('App Manager’s preferences and history are kept and checked', () => {
+  const dir = tmp();
+  try {
+    const a = new Store(dir);
+    assert.deepEqual(a.preferences, { theme: 'system', autoCheck: true, autoUpdateApps: false, autoUpdateSelf: true, notify: true, background: true, openAtLogin: false });
+    a.set('theme', 'dark'); a.record('update', 'HN Browser was updated to 1.1.6.', 'browser');
+    assert.throws(() => a.set('theme', 'neon')); assert.throws(() => a.set('shell', true));
+    const b = new Store(dir); assert.equal(b.preferences.theme, 'dark'); assert.equal(b.activity[0].message, 'HN Browser was updated to 1.1.6.');
+    for (let i = 0; i < 250; i++) b.record('check', 'x'); assert.equal(new Store(dir).activity.length, 200);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('the log never keeps tokens, codes or PINs', () => {
+  assert.equal(clean('code=123456&state=abc token=' + 'a'.repeat(64)), 'code=…&state=… token=…');
+  assert.equal(clean('Bearer ' + 'f'.repeat(64)), '…');
+  const dir = tmp(); try { const l = new Log(dir); l.info('t', 'pin=246810 ok'); assert.match(l.tail().pop(), /pin=… ok/); } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('checking finds updates; a change for an open app waits until it’s quit, and can be cancelled', async () => {
+  const t = setup();
+  try {
+    await t.manager.check();
+    const s = t.manager.snapshot();
+    assert.equal(s.apps.find((a) => a.id === 'browser').update, true);
+    assert.equal(s.apps.find((a) => a.id === 'network').installed, null);
+    assert.equal(t.updater.state.status, 'available', 'App Manager’s own update was noticed');
+    // Open: it waits, never closes the app, and continues once it's quit.
+    t.platform.open.add('browser');
+    t.manager.enqueue('browser', 'update');
+    await until(() => t.manager.snapshot().job && t.manager.snapshot().job.phase === 'waiting');
+    await wait(300); assert.deepEqual(t.platform.events, [], 'nothing changes while it’s open');
+    t.platform.open.delete('browser');
+    await until(() => !t.manager.snapshot().job);
+    assert.deepEqual(t.platform.events, [{ install: 'browser', version: '1.1.6-41' }]);
+    assert.equal(t.manager.snapshot().apps.find((a) => a.id === 'browser').update, false);
+    assert.equal(t.store.activity[0].message, 'HN Browser was updated to 1.1.6.');
+    // Cancelled while waiting: nothing happens.
+    t.platform.open.add('browser');
+    t.manager.enqueue('browser', 'reinstall');
+    await until(() => t.manager.snapshot().job && t.manager.snapshot().job.phase === 'waiting');
+    t.manager.cancel('browser');
+    await until(() => !t.manager.snapshot().job);
+    assert.equal(t.platform.events.length, 1);
+    // Cancelled while downloading: nothing is installed and nothing is left behind.
+    t.platform.open.delete('browser'); t.svc.slow(400);
+    t.manager.enqueue('network', 'install');
+    await until(() => t.manager.snapshot().job && t.manager.snapshot().job.phase === 'downloading');
+    t.manager.cancel('network');
+    await until(() => !t.manager.snapshot().job);
+    assert.equal(t.platform.events.length, 1);
+    assert.deepEqual(fs.readdirSync(path.join(t.dir, 'downloads')).filter((n) => n.endsWith('.part')), []);
+    // Automatic updates skip apps that are open.
+    t.svc.slow(0); t.platform.apps.network = { path: 'C:\\SN', exe: 'C:\\SN\\x.exe', version: '2.0.0', build: 3 }; t.platform.open.add('network');
+    t.manager.enqueue('network', 'update', { auto: true });
+    await until(() => !t.manager.working);
+    assert.equal(t.platform.events.length, 1, 'an open app isn’t updated automatically');
+    // A failure is reported and recorded.
+    t.platform.open.delete('network'); t.platform.failNext = 'Windows blocked the installer.';
+    t.manager.enqueue('network', 'update');
+    await until(() => !t.manager.working);
+    assert.match(t.store.activity[0].message, /HN Secure Network: Windows blocked the installer\./);
+    assert.ok(t.log.tail().some((l) => l.includes('ERROR') && l.includes('Windows blocked')), 'and written to the log');
+    // Removing.
+    t.manager.enqueue('network', 'remove');
+    await until(() => !t.manager.working);
+    assert.deepEqual(t.platform.events.at(-1), { uninstall: 'network' });
+    assert.throws(() => t.manager.enqueue('browser', 'format-disk'), /isn’t something/);
+    assert.throws(() => t.manager.enqueue('../evil', 'install'), /Choose an HN Group app/);
+  } finally { t.done(); }
+});
+
+test('the guard can refuse changes (device not approved, account locked)', async () => {
+  const t = setup();
+  try {
+    await t.manager.check();
+    t.manager.guard = () => { throw Error('This computer isn’t approved.'); };
+    assert.throws(() => t.manager.enqueue('browser', 'update'), /isn’t approved/);
+    assert.equal(t.manager.snapshot().queue.length, 0);
+  } finally { t.done(); }
+});
+
+test('settings are read from and written to the app, only while it’s closed', async () => {
+  const t = setup();
+  try {
+    let s = await t.manager.readSettings('browser');
+    assert.equal(s.values.theme, 'midnight-lavender');
+    await t.manager.saveSettings('browser', { theme: 'forest' });
+    assert.equal(JSON.parse(fs.readFileSync(path.join(t.dir, 'HN Browser', 'preferences.json'), 'utf8')).theme, 'forest');
+    t.platform.open.add('browser');
+    await assert.rejects(t.manager.saveSettings('browser', { theme: 'rose' }), /Quit HN Browser first/);
+    await assert.rejects(t.manager.saveSettings('network', { theme: 'dark' }), /Install HN Secure Network first/);
+  } finally { t.done(); }
+});
+
+test('App Manager updates itself: download, check, ready, install (and survives a restart)', async () => {
+  const t = setup();
+  try {
+    await t.updater.check();
+    assert.equal(t.updater.state.status, 'available');
+    assert.equal(t.updater.state.latest.version, '3.1.0-9');
+    await t.updater.download();
+    assert.equal(t.updater.state.status, 'ready');
+    // A restart keeps the ready update.
+    const again = new Updater({ platform: t.platform, log: t.log, dir: t.dir, version: '3.0.0', build: 7, arch: 'x64', fetcher: t.svc.fetcher });
+    again.consider(t.svc.value);
+    assert.equal(again.state.status, 'ready');
+    await again.apply({ reopen: true });
+    assert.deepEqual(t.platform.events.at(-1), { selfUpdate: '3.1.0', reopen: true });
+    // Once it's the running version, it's up to date and the staged copy is forgotten.
+    const updated = new Updater({ platform: t.platform, log: t.log, dir: t.dir, version: '3.1.0', build: 9, arch: 'x64', fetcher: t.svc.fetcher });
+    updated.consider(t.svc.value);
+    assert.equal(updated.state.status, 'up-to-date');
+    assert.ok(!fs.existsSync(path.join(t.dir, 'updates', 'staged.json')));
+    // A tampered download is refused.
+    const fresh = setup();
+    try { fresh.svc.files['app-manager-windows'] = Buffer.alloc(fresh.svc.files['app-manager-windows'].length); await fresh.updater.check(); await assert.rejects(fresh.updater.download(), /checksum/); assert.equal(fresh.updater.state.status, 'error'); }
+    finally { fresh.done(); }
+    // Offline: an error with a message, not a hang.
+    t.svc.offline(true); const offline = await updated.check(); assert.equal(offline.status, 'error'); assert.match(offline.error, /can’t be reached/);
+  } finally { t.done(); }
+});
+
+test('Windows removal only uses an uninstaller inside the app’s own folder', () => {
+  assert.equal(uninstaller('"C:\\Apps\\HN\\Uninstall HN Browser.exe" /currentuser', 'C:\\Apps\\HN'), 'C:\\Apps\\HN\\Uninstall HN Browser.exe');
+  for (const cmd of ['cmd.exe /c evil', '"C:\\Windows\\Uninstall.exe"', '"C:\\Apps\\HN\\evil.exe"', null]) assert.equal(uninstaller(cmd, 'C:\\Apps\\HN'), null);
+});
+
+test('Mac update scripts: wait, swap with rollback, admin only when needed, always reopen', () => {
+  assert.equal(bundleOf('/Applications/HN Group App Manager.app/Contents/MacOS/HN Group App Manager'), '/Applications/HN Group App Manager.app');
+  assert.ok(temporary('/private/var/folders/x/AppTranslocation/y/d/HN Group App Manager.app') && temporary('/Volumes/HN/HN Group App Manager.app') && !temporary('/Applications/X.app'));
+  const s = scripts({ source: '/tmp/w/New.app', target: '/Applications/HN Group App Manager.app', work: '/tmp/w', pid: 42, reopen: true, fallback: '/Volumes/x/HN Group App Manager.app', cleanup: true });
+  assert.match(s.main, /kill -0 42/);
+  assert.match(s.main, /\[ -w '\/Applications' \]/);
+  assert.match(s.main, /with administrator privileges/);
+  assert.match(s.main, /else \/usr\/bin\/open '\/Volumes\/x\/HN Group App Manager.app'/);
+  assert.match(s.main, /rm -rf '\/tmp\/w'\nexit \$status/, 'the work folder is removed before exiting');
+  assert.match(s.swap, /then \/bin\/rm -rf .*hn-old.*else \[ -e .*hn-old.* \] && \/bin\/mv .*hn-old/s, 'the old copy comes back if the swap fails');
+});

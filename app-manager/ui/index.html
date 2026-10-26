@@ -5,198 +5,119 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>HN Group App Manager</title>
-<link rel="icon" href="assets/app-manager.svg">
 <link rel="stylesheet" href="style.css">
 <script src="app.js" defer></script>
 </head>
 <body>
-<!-- The title bar moves the window; macOS draws its buttons on the left, Windows on the right. -->
-<header class="titlebar">
- <img class="title-icon" src="assets/app-manager.svg" alt="">
- <span class="title-name">HN Group App Manager</span>
- <span class="title-status" id="title-status" hidden><i class="spinner"></i><span></span></span>
-</header>
+<header class="titlebar"><img src="assets/app-manager.svg" alt=""><span>HN Group App Manager</span><span class="busy-pill" id="busy-pill" hidden><i class="spin"></i><b></b></span></header>
 
-<!-- Before anything else: sign in with your HN Group account, or unlock it with your PIN -->
-<section class="account-screen" id="account-screen" hidden>
- <div class="account-art" aria-hidden="true">
-  <div class="orbit"><img src="assets/browser.svg" alt=""><img src="assets/secure-network.svg" alt=""><img src="assets/app-manager.svg" alt=""></div>
-  <p class="art-line">Install, update and look after your HN Group apps.</p>
- </div>
- <div class="account-panel">
-  <img class="wordmark only-light" src="assets/hn-group-wordmark.svg" alt="HN Group"><img class="wordmark only-dark" src="assets/hn-group-wordmark-white.svg" alt="HN Group">
-  <!-- Signed out -->
-  <div class="account-step" data-step="signed-out">
-   <p class="eyebrow">HN Group App Manager</p>
-   <h1>Sign in to App Manager</h1>
-   <p class="muted">Use your HN Group account. Your browser opens HN Group Auth, where you sign in with your password and six-digit PIN, and then you come straight back here.</p>
-   <button class="btn primary large" id="sign-in"><svg data-icon="key"></svg><span>Sign in with HN Group Auth</span></button>
-   <p class="small muted">App Manager remembers your account on this computer and asks for your PIN each time it opens. It never sees your password.</p>
+<!-- Sign in, or unlock with the PIN: nothing else shows until then -->
+<section class="gate" id="gate" hidden>
+ <div class="gate-art" aria-hidden="true"><div class="orbit"><img src="assets/browser.svg" alt=""><img src="assets/secure-network.svg" alt=""><img src="assets/app-manager.svg" alt=""></div><p>Install, update and look after your HN Group apps.</p></div>
+ <div class="gate-panel">
+  <img class="wordmark light-only" src="assets/hn-group-wordmark.svg" alt="HN Group"><img class="wordmark dark-only" src="assets/hn-group-wordmark-white.svg" alt="HN Group">
+  <div class="step" data-step="signed-out">
+   <p class="eyebrow">HN Group App Manager</p><h1>Sign in to App Manager</h1>
+   <p class="muted">Use your HN Group account. Your browser opens HN Group Auth, where you sign in with your password and PIN, and then you come straight back here.</p>
+   <button class="btn primary big" id="sign-in"><i data-icon="key"></i><span>Sign in with HN Group Auth</span></button>
+   <p class="small muted">Your account is remembered on this computer, and App Manager asks for your PIN each time it opens.</p>
   </div>
-  <!-- Finishing in the browser -->
-  <div class="account-step" data-step="waiting">
-   <p class="eyebrow">HN Group App Manager</p>
-   <h1><i class="spinner big"></i>Finish signing in in your browser</h1>
-   <p class="muted">Sign in on the HN Group Auth page that opened. App Manager carries on by itself as soon as you’re done.</p>
-   <div class="row"><button class="btn" id="sign-in-again"><svg data-icon="external"></svg><span>Open the sign-in page again</span></button><button class="btn" id="sign-in-cancel">Cancel</button></div>
+  <div class="step" data-step="waiting">
+   <p class="eyebrow">HN Group App Manager</p><h1><i class="spin big"></i>Finish signing in in your browser</h1>
+   <p class="muted">App Manager carries on by itself as soon as you’ve signed in on the HN Group Auth page.</p>
+   <div class="row"><button class="btn" id="sign-in-again"><i data-icon="external"></i><span>Open the sign-in page again</span></button><button class="btn" id="sign-in-cancel">Cancel</button></div>
   </div>
-  <!-- Remembered, locked: the PIN -->
-  <div class="account-step" data-step="locked">
-   <div class="who"><span class="avatar large" id="lock-avatar"></span><div><p class="eyebrow">Welcome back</p><h1 id="lock-name"></h1><p class="muted small" id="lock-email"></p></div></div>
+  <div class="step" data-step="locked">
+   <div class="who"><span class="avatar xl" id="lock-avatar"></span><div><p class="eyebrow">Welcome back</p><h1 id="lock-name"></h1><p class="muted small" id="lock-email"></p></div></div>
    <label class="pin-label" for="pin-input">Enter your six-digit HN Group PIN</label>
-   <div class="pin" id="pin" role="group" aria-label="PIN"><input id="pin-input" type="password" inputmode="numeric" autocomplete="one-time-code" maxlength="6" aria-label="Six-digit PIN"><span></span><span></span><span></span><span></span><span></span><span></span></div>
-   <p class="pin-status small muted" id="pin-status" role="status" aria-live="polite">It unlocks as soon as you type the sixth digit.</p>
-   <button class="link" id="switch-account">Not you? Sign in with another account</button>
+   <div class="pin" id="pin"><input id="pin-input" type="password" inputmode="numeric" autocomplete="one-time-code" maxlength="6" aria-label="Six-digit PIN"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+   <p class="small muted" id="pin-status" role="status" aria-live="polite"></p>
+   <button class="link" id="switch-account">Not you? Use another account</button>
   </div>
-  <div class="banner bad" id="account-error" hidden><svg data-icon="alert"></svg><div class="grow"><strong>Couldn’t sign in</strong><p></p></div></div>
-  <p class="side-version" id="account-version"></p>
+  <p class="banner bad" id="gate-error" hidden></p>
+  <p class="tiny muted" id="gate-version"></p>
  </div>
 </section>
 
-<div class="layout" id="layout">
+<div class="shell" id="shell" hidden>
  <nav class="side" aria-label="App Manager">
-  <img class="wordmark only-light" src="assets/hn-group-wordmark.svg" alt="HN Group"><img class="wordmark only-dark" src="assets/hn-group-wordmark-white.svg" alt="HN Group">
-  <button class="nav" data-page="overview"><svg data-icon="grid"></svg><span>Overview</span><b class="count" id="nav-updates" hidden></b></button>
-  <p class="menu-label">Apps</p>
-  <button class="nav app-nav" data-page="browser"><img src="assets/browser.svg" alt=""><span>HN Browser</span><i class="state-dot" data-dot="browser"></i></button>
-  <button class="nav app-nav" data-page="network"><img src="assets/secure-network.svg" alt=""><span>HN Secure Network</span><i class="state-dot" data-dot="network"></i></button>
-  <p class="menu-label">App Manager</p>
-  <button class="nav" data-page="activity"><svg data-icon="history"></svg><span>Activity</span></button>
-  <button class="nav" data-page="settings"><svg data-icon="settings"></svg><span>Settings</span></button>
-  <div class="spacer"></div>
-  <button class="self-card" id="self-card" data-go="settings" hidden><img src="assets/app-manager.svg" alt=""><span><strong>App Manager update</strong><small id="self-card-text"></small></span></button>
-  <div class="me" id="me"><span class="avatar" id="me-avatar"></span><span class="grow"><strong id="me-name"></strong><small id="me-email"></small></span><button class="icon-btn" id="lock" title="Lock App Manager" aria-label="Lock App Manager"><svg data-icon="lock"></svg></button></div>
-  <p class="side-version" id="side-version"></p>
+  <img class="wordmark light-only" src="assets/hn-group-wordmark.svg" alt="HN Group"><img class="wordmark dark-only" src="assets/hn-group-wordmark-white.svg" alt="HN Group">
+  <button class="nav" data-go="apps"><i data-icon="grid"></i><span>Apps</span><b class="count" id="count-apps" hidden></b></button>
+  <button class="nav" data-go="updates"><i data-icon="refresh"></i><span>Updates</span><b class="count" id="count-updates" hidden></b></button>
+  <button class="nav" data-go="activity"><i data-icon="history"></i><span>Activity</span></button>
+  <button class="nav" data-go="settings"><i data-icon="settings"></i><span>Settings</span></button>
+  <div class="grow"></div>
+  <button class="self-note" id="self-note" data-go="updates" hidden><img src="assets/app-manager.svg" alt=""><span><b id="self-note-title"></b><small id="self-note-text"></small></span></button>
+  <div class="me"><span class="avatar" id="me-avatar"></span><span class="grow"><b id="me-name"></b><small id="me-sub"></small></span><button class="icon-btn" id="lock" title="Lock App Manager" aria-label="Lock App Manager"><i data-icon="lock"></i></button></div>
+  <p class="tiny muted side-version" id="side-version"></p>
  </nav>
 
  <main class="main" id="main">
-  <!-- Overview -->
-  <section class="page" data-page-id="overview" hidden>
-   <div class="hero" id="hero">
-    <div class="hero-text">
-     <p class="eyebrow light">Your HN Group apps</p>
-     <h1 id="hero-title">Checking your apps…</h1>
-     <p id="hero-text">App Manager installs, updates and looks after HN Browser and HN Secure Network.</p>
-     <div class="row">
-      <button class="btn white" id="update-all" hidden><svg data-icon="download"></svg><span>Update all</span></button>
-      <button class="btn glass" id="check"><svg data-icon="refresh"></svg><span>Check for updates</span></button>
-     </div>
-     <p class="hero-meta" id="checked"></p>
-    </div>
-    <div class="hero-art" aria-hidden="true"><img src="assets/browser.svg" alt=""><img src="assets/secure-network.svg" alt=""><img src="assets/app-manager.svg" alt=""></div>
-   </div>
-   <div class="banner info" id="move-banner" hidden><svg data-icon="folder"></svg><div class="grow"><strong>Move App Manager to Applications</strong><p>It’s running from the download, so it can’t keep itself up to date. Move it once and it updates by itself from then on.</p></div><button class="btn small primary" id="move-now">Move to Applications</button></div>
-   <div class="banner info" id="self-banner" hidden><img src="assets/app-manager.svg" alt=""><div class="grow"><strong id="self-banner-title"></strong><p>It installs in place and reopens. Nothing to download by hand.</p></div><button class="btn small primary" id="self-banner-update">Update App Manager</button></div>
-   <div class="banner bad" id="error" hidden><svg data-icon="alert"></svg><div class="grow"><strong>That didn’t work</strong><p></p></div><button class="btn small" id="error-dismiss">Dismiss</button></div>
-   <div class="cards" id="cards"></div>
-   <div class="trust">
-    <div><svg data-icon="shield"></svg><strong>Checked before it runs</strong><p>Every download comes from downloads.hngroup.org.uk and is checked for its size and SHA-256 twice.</p></div>
-    <div><svg data-icon="key"></svg><strong>Your account stays yours</strong><p>App Manager never reads sign-ins, passwords, browsing data, SSH or VPN keys.</p></div>
-    <div><svg data-icon="clock"></svg><strong>Waits for you</strong><p>It never closes an app for you: changes start as soon as you quit it.</p></div>
-   </div>
+  <!-- Apps -->
+  <section class="page" data-page="apps">
+   <header class="head"><div><p class="eyebrow">Your HN Group apps</p><h1 id="apps-title">Apps</h1><p class="muted" id="apps-sub"></p></div>
+    <div class="row"><button class="btn" id="check"><i data-icon="refresh"></i><span>Check for updates</span></button><button class="btn primary" id="update-all" hidden><i data-icon="download"></i><span>Update all</span></button></div></header>
+   <p class="banner info" id="move-banner" hidden><i data-icon="folder"></i><span class="grow"><b>Move App Manager to Applications</b><br>It’s running from the download, so it can’t keep itself up to date there.</span><button class="btn small primary" data-action="move">Move to Applications</button></p>
+   <p class="banner bad" id="apps-error" hidden></p>
+   <div class="app-list" id="app-list"></div>
+   <div class="trust"><div><i data-icon="shield"></i><b>Checked before it runs</b><span>Every download comes from downloads.hngroup.org.uk and is checked twice.</span></div><div><i data-icon="clock"></i><b>Waits for you</b><span>App Manager never closes an app. Changes start when you quit it.</span></div><div><i data-icon="key"></i><b>Your data stays put</b><span>Accounts, settings and VPN set-up are always kept.</span></div></div>
   </section>
 
   <!-- One app -->
-  <section class="page app-page" data-page-id="app" hidden>
-   <div class="app-head">
-    <img class="app-icon large" id="app-icon" src="assets/browser.svg" alt="">
-    <div class="grow">
-     <p class="eyebrow" id="app-eyebrow">App</p>
-     <h1 id="app-name"></h1>
-     <p class="muted" id="app-tagline"></p>
-    </div>
-    <span class="pill" id="app-pill"></span>
-   </div>
-   <div class="app-actions" id="app-actions"></div>
+  <section class="page" data-page="app" hidden>
+   <button class="link back" data-go="apps"><i data-icon="back"></i>All apps</button>
+   <header class="app-head"><img class="app-icon xl" id="app-icon" alt=""><div class="grow"><p class="eyebrow" id="app-kind"></p><h1 id="app-name"></h1><p class="muted" id="app-tagline"></p></div><span class="pill" id="app-pill"></span></header>
+   <div class="row" id="app-actions"></div>
    <div class="progress-card" id="app-progress" hidden></div>
-   <div class="facts">
-    <div><small>Installed</small><strong id="fact-installed">—</strong><span id="fact-installed-note"></span></div>
-    <div><small>Latest release</small><strong id="fact-latest">—</strong><span id="fact-latest-note"></span></div>
-    <div><small>Status</small><strong id="fact-status">—</strong><span id="fact-status-note"></span></div>
-    <div><small>Location</small><strong id="fact-location" class="path">—</strong><span><button class="link" id="reveal" hidden>Show in folder</button></span></div>
-   </div>
-   <div class="card" id="app-settings">
-    <div class="card-head"><div><h2><svg data-icon="sliders"></svg>Settings</h2><p class="muted small" id="settings-note">Changes apply the next time the app opens.</p></div></div>
-    <div id="settings-body"></div>
-    <div class="save-bar" id="save-bar" hidden><span>You have unsaved changes.</span><button class="btn small" id="settings-discard">Discard</button><button class="btn small primary" id="settings-save">Save changes</button></div>
-   </div>
-   <div class="card">
-    <h2><svg data-icon="sparkle"></svg>What it does</h2>
-    <ul class="features" id="app-features"></ul>
-   </div>
-   <div class="card danger-zone" id="danger" hidden>
-    <div class="card-head"><div><h2><svg data-icon="trash"></svg>Remove from this computer</h2><p class="muted small" id="remove-text"></p></div><button class="btn danger" id="remove">Remove</button></div>
-   </div>
+   <dl class="facts" id="app-facts"></dl>
+   <section class="card" id="app-settings"><header class="card-head"><div><h2>Settings</h2><p class="muted small" id="settings-note"></p></div></header><div id="settings-body"></div>
+    <div class="save-bar" id="save-bar" hidden><span>Unsaved changes</span><button class="btn small" id="settings-discard">Discard</button><button class="btn small primary" id="settings-save">Save</button></div></section>
+   <section class="card danger" id="app-danger" hidden><header class="card-head"><div><h2>Remove from this computer</h2><p class="muted small" id="remove-text"></p></div><button class="btn danger" id="remove">Remove</button></header></section>
+  </section>
+
+  <!-- Updates -->
+  <section class="page" data-page="updates" hidden>
+   <header class="head"><div><p class="eyebrow">Updates</p><h1>Updates</h1><p class="muted">App Manager keeps itself up to date here, as well as your apps.</p></div></header>
+   <section class="card self" id="self-card">
+    <div class="self-top"><img src="assets/app-manager.svg" alt=""><div class="grow"><h2>HN Group App Manager</h2><p class="muted small" id="self-version"></p><p id="self-status"></p><div class="bar" id="self-bar" hidden><i></i></div></div><div class="row" id="self-actions"></div></div>
+   </section>
+   <section class="card"><h2>Your apps</h2><div id="updates-list"></div></section>
+   <section class="card"><h2>Automatic updates</h2>
+    <div class="toggle"><div><b>Keep App Manager up to date</b><small>New versions download by themselves and install when App Manager next restarts.</small></div><button class="switch" role="switch" data-pref="autoUpdateSelf" aria-label="Keep App Manager up to date"></button></div>
+    <div class="toggle"><div><b>Check for updates automatically</b><small>When App Manager opens and every four hours.</small></div><button class="switch" role="switch" data-pref="autoCheck" aria-label="Check for updates automatically"></button></div>
+    <div class="toggle"><div><b>Update my apps by themselves</b><small>Only apps that are closed. Apps that are open are left alone.</small></div><button class="switch" role="switch" data-pref="autoUpdateApps" aria-label="Update my apps by themselves"></button></div>
+   </section>
   </section>
 
   <!-- Activity -->
-  <section class="page" data-page-id="activity" hidden>
-   <header class="page-head"><div><p class="eyebrow">History</p><h1>Activity</h1><p class="muted">Everything App Manager has installed, updated, changed or removed on this computer.</p></div><button class="btn small" id="clear-activity">Clear history</button></header>
-   <div class="segmented" id="activity-filter" role="group" aria-label="Show"><button data-filter="all" aria-pressed="true">Everything</button><button data-filter="updates" aria-pressed="false">Installs and updates</button><button data-filter="settings" aria-pressed="false">Settings</button><button data-filter="problems" aria-pressed="false">Problems</button></div>
+  <section class="page" data-page="activity" hidden>
+   <header class="head"><div><p class="eyebrow">History</p><h1>Activity</h1><p class="muted">What App Manager has installed, updated, changed or removed on this computer.</p></div><button class="btn small" id="clear-activity">Clear history</button></header>
+   <div class="segmented" id="activity-filter"><button data-filter="all" aria-pressed="true">Everything</button><button data-filter="changes" aria-pressed="false">Installs and updates</button><button data-filter="problems" aria-pressed="false">Problems</button></div>
    <div class="timeline" id="activity"></div>
   </section>
 
   <!-- Settings -->
-  <section class="page" data-page-id="settings" hidden>
-   <header class="page-head"><div><p class="eyebrow">App Manager</p><h1>Settings</h1></div></header>
-   <div class="card about">
-    <img src="assets/app-manager.svg" alt="">
-    <div class="grow"><h2>HN Group App Manager</h2><p class="muted small" id="about-version"></p><p class="small" id="self-text"></p><div class="bar" id="self-progress" hidden><i></i></div></div>
-    <div class="row stack"><button class="btn primary" id="self-update" hidden><svg data-icon="download"></svg><span>Update App Manager</span></button><button class="btn" id="self-check"><svg data-icon="refresh"></svg><span>Check for App Manager updates</span></button><button class="btn" id="self-move" hidden><svg data-icon="folder"></svg><span>Move to Applications</span></button></div>
-   </div>
-   <div class="card">
-    <h2>Your HN Group account</h2>
-    <div class="account-row"><span class="avatar large" id="settings-avatar"></span><div class="grow"><strong id="settings-name"></strong><p class="muted small" id="settings-email"></p></div>
-     <div class="row"><button class="btn small" id="settings-lock"><svg data-icon="lock"></svg><span>Lock</span></button><button class="btn small" id="settings-account"><svg data-icon="external"></svg><span>Manage account</span></button><button class="btn small danger" id="sign-out">Sign out</button></div></div>
-    <p class="muted small">App Manager asks for your PIN each time it opens. Signing out forgets your account on this computer.</p>
-   </div>
-   <div class="card">
-    <h2>This computer</h2>
-    <div class="account-row"><span class="device-icon"><svg data-icon="shield"></svg></span><div class="grow"><strong id="device-name">Approved</strong><p class="muted small" id="device-text">Approved on devices.hngroup.org.uk.</p></div><button class="btn small" id="open-devices"><svg data-icon="external"></svg><span>Your devices</span></button></div>
-   </div>
-   <div class="card">
-    <h2>Appearance</h2>
-    <div class="segmented" role="group" aria-label="Appearance"><button data-theme="system">Match this computer</button><button data-theme="light">Light</button><button data-theme="dark">Dark</button></div>
-   </div>
-   <div class="card">
-    <h2>Updates</h2>
-    <div class="toggle"><div><strong>Check for updates automatically</strong><small>When App Manager opens and every six hours.</small></div><button class="switch" role="switch" data-pref="autoCheck" aria-label="Check for updates automatically"></button></div>
-    <div class="toggle"><div><strong>Tell me when updates are ready</strong><small>A notification, so you don’t have to open App Manager to find out.</small></div><button class="switch" role="switch" data-pref="notify" aria-label="Tell me when updates are ready"></button></div>
-    <div class="toggle"><div><strong>Keep App Manager up to date by itself</strong><small>Its own updates install while you’re not using it, and it reopens in the background.</small></div><button class="switch" role="switch" data-pref="autoUpdateManager" aria-label="Keep App Manager up to date by itself"></button></div>
-    <div class="toggle"><div><strong>Install app updates by themselves</strong><small>Only for apps that are closed. Apps that are open are left alone.</small></div><button class="switch" role="switch" data-pref="autoUpdate" aria-label="Install app updates by themselves"></button></div>
-   </div>
-   <div class="card">
-    <h2>In the background</h2>
-    <div class="toggle"><div><strong id="background-label">Keep running in the menu bar</strong><small>Closing the window keeps App Manager checking for updates.</small></div><button class="switch" role="switch" data-pref="background" aria-label="Keep running in the background"></button></div>
-    <div class="toggle"><div><strong>Open when I sign in</strong><small>It starts quietly in the background.</small></div><button class="switch" role="switch" data-pref="openAtLogin" aria-label="Open when I sign in"></button></div>
-   </div>
-   <div class="card">
-    <h2>Software downloads</h2>
-    <p class="muted small">All HN Group apps are also on downloads.hngroup.org.uk, if you ever want to install one by hand.</p>
-    <div class="row"><button class="btn small" id="open-downloads"><svg data-icon="external"></svg><span>Open Software downloads</span></button></div>
-   </div>
+  <section class="page" data-page="settings" hidden>
+   <header class="head"><div><p class="eyebrow">App Manager</p><h1>Settings</h1></div></header>
+   <section class="card"><h2>Your HN Group account</h2>
+    <div class="line"><span class="avatar l" id="set-avatar"></span><div class="grow"><b id="set-name"></b><p class="muted small" id="set-email"></p></div><div class="row"><button class="btn small" id="set-lock"><i data-icon="lock"></i><span>Lock</span></button><button class="btn small" data-site="account"><i data-icon="external"></i><span>Manage account</span></button><button class="btn small danger" id="sign-out">Sign out</button></div></div></section>
+   <section class="card"><h2>This computer</h2>
+    <div class="line"><span class="device-mark"><i data-icon="shield"></i></span><div class="grow"><b id="device-name"></b><p class="muted small" id="device-text"></p></div><button class="btn small" data-site="devices"><i data-icon="external"></i><span>Your devices</span></button></div></section>
+   <section class="card"><h2>Appearance</h2><div class="segmented" id="theme"><button data-theme="system">Match this computer</button><button data-theme="light">Light</button><button data-theme="dark">Dark</button></div></section>
+   <section class="card"><h2>In the background</h2>
+    <div class="toggle"><div><b id="background-label">Keep running in the menu bar</b><small>Closing the window keeps App Manager checking for updates.</small></div><button class="switch" role="switch" data-pref="background" aria-label="Keep running in the background"></button></div>
+    <div class="toggle"><div><b>Open when I sign in to this computer</b><small>It starts quietly in the background.</small></div><button class="switch" role="switch" data-pref="openAtLogin" aria-label="Open when I sign in"></button></div>
+    <div class="toggle"><div><b>Notifications</b><small>When updates are ready or something goes wrong.</small></div><button class="switch" role="switch" data-pref="notify" aria-label="Notifications"></button></div></section>
+   <section class="card"><h2>Diagnostics</h2><p class="muted small">If something doesn’t work, run the check and send HN Group the diagnostics. They include what App Manager did recently, never your password, PIN or sign-in.</p>
+    <div class="row"><button class="btn" id="run-check"><i data-icon="check"></i><span>Run a check</span></button><button class="btn" id="copy-diagnostics"><i data-icon="copy"></i><span>Copy diagnostics</span></button><button class="btn" id="open-logs"><i data-icon="folder"></i><span>Open the log folder</span></button></div>
+    <ul class="checks" id="checks"></ul><pre class="log" id="log-tail" hidden></pre></section>
   </section>
  </main>
 </div>
 
-<!-- What's happening now: one change at a time, with the next ones queued behind it -->
-<div class="dock" id="dock" role="status" aria-live="polite" hidden>
- <img class="dock-icon" id="dock-icon" src="assets/browser.svg" alt="">
- <div class="grow"><strong id="dock-title"></strong><span id="dock-text"></span><div class="bar" id="dock-bar"><i></i></div><small id="dock-queue"></small></div>
- <button class="btn small" id="dock-cancel">Cancel</button>
-</div>
-
-<!-- Questions: a card in the middle of the window over a dimmed page -->
-<div class="layer" id="layer" hidden>
- <div class="scrim"></div>
- <div class="sheet" id="dialog" role="alertdialog" aria-modal="true" aria-labelledby="dialog-title" aria-describedby="dialog-text">
-  <span class="sheet-icon" id="dialog-icon"><svg data-icon="alert"></svg></span>
-  <h2 id="dialog-title"></h2>
-  <p id="dialog-text"></p>
-  <p class="small muted" id="dialog-note" hidden></p>
-  <div class="sheet-actions" id="dialog-buttons"></div>
- </div>
-</div>
+<div class="dock" id="dock" role="status" aria-live="polite" hidden><img id="dock-icon" alt=""><div class="grow"><b id="dock-title"></b><span id="dock-text"></span><div class="bar" id="dock-bar"><i></i></div><small id="dock-next"></small></div><button class="btn small" id="dock-cancel">Cancel</button></div>
+<div class="menu" id="menu" role="menu" hidden></div>
+<div class="layer" id="layer" hidden><div class="scrim"></div><div class="sheet" id="sheet" role="alertdialog" aria-modal="true" aria-labelledby="sheet-title"><span class="sheet-icon" id="sheet-icon"></span><h2 id="sheet-title"></h2><p id="sheet-text"></p><p class="small muted" id="sheet-note" hidden></p><div class="row end" id="sheet-buttons"></div></div></div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 </body>
 </html>

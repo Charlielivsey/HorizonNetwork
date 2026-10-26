@@ -26,6 +26,10 @@ jobs:
         working-directory: app-manager
       - run: npm test
         working-directory: app-manager
+      - name: Test the Mac swap scripts on a real Mac
+        if: matrix.target == 'mac'
+        run: npm run test:mac-swap
+        working-directory: app-manager
       - run: npm run icons
         working-directory: app-manager
       - name: Record build number
@@ -38,6 +42,22 @@ jobs:
         working-directory: app-manager
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Self-check the built app on this computer
+        shell: bash
+        timeout-minutes: 10
+        run: |
+          if [ "${{ matrix.target }}" = mac ]; then
+            APP="dist/mac-universal/HN Group App Manager.app/Contents/MacOS/HN Group App Manager"
+          else
+            APP="dist/win-unpacked/HN Group App Manager.exe"
+          fi
+          OUT="$RUNNER_TEMP/self-check.json"
+          status=0
+          "$APP" "--self-check=$OUT" || status=$?
+          cat "$OUT"
+          node -e "const r=require(process.argv[1]);for(const s of r.steps||[])console.log((s.ok?'OK     ':'FAILED ')+s.name+': '+s.detail);if(!r.ok)process.exit(1)" "$OUT"
+          exit $status
+        working-directory: app-manager
       - uses: actions/upload-artifact@v4
         with:
           name: manager-${{ matrix.target }}
