@@ -67,13 +67,14 @@ function zipped(name, { escape = false } = {}) {
   fs.mkdirSync(path.join(app, 'Contents', 'MacOS'), { recursive: true });
   fs.writeFileSync(path.join(app, 'Contents', 'Info.plist'), '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>uk.org.hngroup.test</string><key>CFBundleShortVersionString</key><string>1.2.3</string><key>CFBundleExecutable</key><string>Test</string><key>CFBundlePackageType</key><string>APPL</string></dict></plist>\n');
   fs.copyFileSync('/usr/bin/true', path.join(app, 'Contents', 'MacOS', 'Test'));
-  const fw = path.join(app, 'Contents', 'Frameworks', 'Thing.framework');
+  const fw = path.join(app, 'Contents', 'Resources', 'Thing');
   fs.mkdirSync(path.join(fw, 'Versions', 'A', 'Resources'), { recursive: true });
   fs.writeFileSync(path.join(fw, 'Versions', 'A', 'Resources', 'x.txt'), 'x');
   fs.symlinkSync('A', path.join(fw, 'Versions', 'Current'));
   fs.symlinkSync('Versions/Current/Resources', path.join(fw, 'Resources'));
   if (escape) fs.symlinkSync('/etc', path.join(app, 'Contents', 'outside'));
-  assert.equal(spawnSync('/usr/bin/codesign', ['--force', '--deep', '-s', '-', app]).status, 0, 'ad-hoc sign');
+  // The escaping link is refused before the signature is checked, so that copy isn't signed.
+  if (!escape) { const sign = spawnSync('/usr/bin/codesign', ['--force', '-s', '-', app], { encoding: 'utf8' }); assert.equal(sign.status, 0, 'ad-hoc sign: ' + sign.stderr); }
   const zip = path.join(root, name + '.zip');
   assert.equal(spawnSync('/usr/bin/ditto', ['-c', '-k', '--keepParent', app, zip]).status, 0, 'zip');
   return zip;
@@ -83,7 +84,7 @@ test('unpacks a signed app with framework links from the temporary folder', { sk
   const { MacPlatform } = require('../src/core/macos.cjs');
   const p = new MacPlatform({ log: { info() {}, warn() {}, error() {} } });
   const r = await p.unpack(zipped('links'), 'uk.org.hngroup.test', '1.2.3-9');
-  assert.ok(fs.existsSync(path.join(r.source, 'Contents', 'Frameworks', 'Thing.framework', 'Resources', 'x.txt')));
+  assert.ok(fs.existsSync(path.join(r.source, 'Contents', 'Resources', 'Thing', 'Resources', 'x.txt')));
   fs.rmSync(r.work, { recursive: true, force: true });
   await assert.rejects(p.unpack(zipped('escape', { escape: true }), 'uk.org.hngroup.test', '1.2.3-9'), /unsafe link/);
 });
