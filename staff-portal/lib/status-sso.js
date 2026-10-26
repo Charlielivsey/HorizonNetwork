@@ -1,6 +1,7 @@
 'use strict';
 const resume = require('./resume');
 const network = require('./network-leadership');
+const storageAccess = require('./storage-access');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const STATUS_ORIGIN = 'https://status.hngroup.org.uk';
@@ -37,10 +38,12 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
   function identity(active) {
     const p=active.person;
     return {
-      id:p.id,displayName:p.displayName,email:(p.emails||[]).find(e=>e.primary)?.address||p.emails?.[0]?.address||store.loginName(p),
+      id:p.id,displayName:p.displayName,firstName:p.firstName||'',lastName:p.lastName||'',email:(p.emails||[]).find(e=>e.primary)?.address||p.emails?.[0]?.address||store.loginName(p),
       jobTitle:p.jobTitle||'',company:p.company||'',companies:[...new Set([p.company,...(p.otherRoles||[]).map(r=>r.company)].filter(Boolean))],avatarUrl:store.avatarFile(p)?'/api/avatar':null,
       ...(p.account.passwordTemporary?{passwordChangeRequired:true,passwordMinLength:store.meView(p).passwordMinLength}:{}),
-      ...(!store.hasCode(p)?{codeSetupRequired:true}:{}),statusAdminAllowed:allowed(active,store),ownerAccess:store.hasOwnerAccess(p)&&!active.data.impersonatorId
+      ...(!store.hasCode(p)?{codeSetupRequired:true}:{}),statusAdminAllowed:allowed(active,store),ownerAccess:store.hasOwnerAccess(p)&&!active.data.impersonatorId,
+      // Who may open other people's document storage on docs.hngroup.org.uk (never while logged in as someone else).
+      ...(active.data.impersonatorId?{storageAccess:false,storageGrants:[]}:storageAccess.forIdentity(p))
     };
   }
   // What HN Browser's settings show and let people change about themselves.

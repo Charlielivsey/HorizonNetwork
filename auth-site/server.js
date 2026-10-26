@@ -16,7 +16,6 @@ const CLIENTS = {
   support: { name: 'HN Group Support administration', callback: 'https://support.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage this website.' },
   clients: { name: 'HN Group Clients administration', callback: 'https://clients.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage this website.' },
   careers: { name: 'HN Group Careers administration', callback: 'https://careers.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage this website.' },
-  docs: { name: 'HN Group Docs administration', callback: 'https://docs.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage this website.' },
   news: { name: 'HN Group News', callback: 'https://news.hngroup.org.uk/auth/callback', allowed: user => !!(user.statusAdminAllowed || user.ownerAccess || (Array.isArray(user.companies) ? user.companies : [user.company]).includes('HN Group')), denied: 'Only staff with a role at HN Group can manage HN Group News.' },
   network: { name: 'Horizon Network website configuration', callback: 'https://horizon-network.co.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can configure Horizon Network.' },
   status: { name: 'Status administration', callback: 'https://status.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage status.' },
@@ -28,7 +27,7 @@ const CLIENTS = {
   investors: { name: 'HN Group Investors', callback: 'https://investors.hngroup.org.uk/auth/callback', allowed: user => !!user.ownerAccess || (Array.isArray(user.companies) ? user.companies : [user.company]).includes('HN Group'), denied: 'Only staff with a role at HN Group can sign in to the investors website.' },
   vpn: { name: 'HN Group VPN', callback: 'https://vpn.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use the HN Group VPN.' },
   devices: { name: 'HN Group Devices', callback: 'https://devices.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use HN Group Devices.' },
-  documents: { name: 'HN Group Documents', callback: 'https://documents.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use HN Group Documents.' },
+  docs: { name: 'HN Group Docs', callback: 'https://docs.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use HN Group Docs.' },
 };
 const HEX = /^[a-f0-9]{64}$/;
 const COOKIE = '__Host-hn_auth_session', FLOW = '__Host-hn_auth_flow', REMEMBER = '__Host-hn_auth_resume';

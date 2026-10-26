@@ -33,6 +33,7 @@ const mentoring = require("./mentoring");
 const oncall = require("./oncall");
 const security = require("./security");
 const enquiries = require("./enquiries");
+const storageAccess = require("./storage-access");
 const retention = require("./retention");
 const rotas = require("./rotas");
 const stafffiles = require("./stafffiles");
@@ -167,6 +168,28 @@ async function handle(req, res, pathname, session) {
       if (e.assigneeId && e.assigneeId !== was && e.assigneeId !== me.id && notify) notify([e.assigneeId], { type: "info", title: `${me.displayName} passed you a website enquiry from ${e.name}`, link: "/enquiries" }, me);
       logEvent(req, session, "enquiry-updated", { target: e.name, detail: enquiries.STATUSES[e.status] });
       return sendJson(res, 200, { enquiry: enquiries.view(e) }), true;
+    }
+  }
+
+  // ----- Document storage on docs.hngroup.org.uk: who can open whose private storage -----
+  if (pathname.startsWith("/api/document-storage")) {
+    // Everyone sees the storage they've been given; managing access needs the permission.
+    if (method === "GET" && pathname === "/api/document-storage") {
+      const mine = storageAccess.forIdentity(me);
+      if (!can(storageAccess.ACCESS)) return sendJson(res, 200, { manage: false, myGrants: mine.storageGrants }), true;
+      return sendJson(res, 200, { manage: true, myGrants: mine.storageGrants, people: storageAccess.people(), grants: storageAccess.list() }), true;
+    }
+    if (!can(storageAccess.ACCESS)) throw httpError(403, "You don't have access to staff document storage.");
+    if (method === "POST" && pathname === "/api/document-storage/grants") {
+      const g = storageAccess.add(await readJsonBody(req), me);
+      logEvent(req, session, "storage-access-granted", { target: g.granteeName, detail: g.ownerName + "'s storage until " + g.until.slice(0, 10) + (g.reason ? " (" + g.reason + ")" : "") });
+      if (notify) notify([g.granteeId], { type: "info", title: `${me.displayName} gave you access to ${g.ownerName}'s document storage`, link: "/document-storage" }, me);
+      return sendJson(res, 201, { grant: g }), true;
+    }
+    if ((m = /^\/api\/document-storage\/grants\/([a-f0-9]{16})\/delete$/.exec(pathname)) && method === "POST") {
+      const g = storageAccess.remove(m[1]);
+      logEvent(req, session, "storage-access-removed", { target: g.granteeName, detail: g.ownerName + "'s storage" });
+      return sendJson(res, 200, { ok: true }), true;
     }
   }
 

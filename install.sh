@@ -91,7 +91,7 @@ fi
 changed status-site/ && run 'Status' bash "$ROOT/status-site/install.sh" "$EMAIL"
 changed horizon-network-site/ && run 'Horizon Network (+ horizonetwork.com)' bash "$ROOT/horizon-network-site/install.sh" "$EMAIL"
 changed wiki-site/ && run 'Wiki' bash "$ROOT/wiki-site/install.sh" "$EMAIL"
-for site in media holding development support clients careers docs news; do
+for site in media holding development support clients careers news; do
     changed "$site-site/" website-suite/ && run "$site" bash "$ROOT/$site-site/install.sh" "$EMAIL"
 done
 changed horizon-advertising/ && run 'Horizon Advertising' bash "$ROOT/horizon-advertising/install.sh" "$EMAIL"
@@ -100,7 +100,7 @@ changed branding-site/ && run 'Brand centre (branding.hngroup.org.uk)' bash "$RO
 changed companies-site/ && run 'Company register (companies.hngroup.org.uk)' bash "$ROOT/companies-site/install.sh" "$EMAIL"
 changed accounts-site/ && run 'HN Account (accounts.hngroup.org.uk)' bash "$ROOT/accounts-site/install.sh" "$EMAIL"
 changed devices-site/ && run 'Devices (devices.hngroup.org.uk)' bash "$ROOT/devices-site/install.sh" "$EMAIL"
-changed documents-site/ && run 'Documents (documents.hngroup.org.uk)' bash "$ROOT/documents-site/install.sh" "$EMAIL"
+changed docs-site/ && run 'HN Group Docs (docs.hngroup.org.uk)' bash "$ROOT/docs-site/install.sh" "$EMAIL"
 changed investors-site/ && run 'Investors (investors.hngroup.org.uk)' bash "$ROOT/investors-site/install.sh" "$EMAIL"
 changed vpn-site/ && run 'VPN (vpn.hngroup.org.uk + WireGuard)' bash "$ROOT/vpn-site/install.sh" "$EMAIL"
 changed downloads-site/ && run 'Downloads (downloads.hngroup.org.uk)' bash "$ROOT/downloads-site/install.sh" "$EMAIL"

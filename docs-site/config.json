@@ -1,9 +1,0 @@
-{
-  "id": "docs",
-  "domain": "docs.hngroup.org.uk",
-  "port": 4500,
-  "kind": "docs",
-  "name": "HN Group Docs",
-  "logo": "hn-group-wordmark",
-  "legal": "HN Group Limited"
-}

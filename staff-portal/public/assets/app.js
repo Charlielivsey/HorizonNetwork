@@ -369,6 +369,7 @@
             label: "Workplace", items: [
                 { title: "Announcements", desc: "Group-wide news and updates", href: "/announcements", icon: "bell", badge: "unreadAnnouncements" },
                 { title: "Documents & Policies", desc: "Handbooks, policies, forms and templates", href: "/documents", icon: "file", badge: "pendingAcks" },
+                { title: "Document storage", desc: "Private storage on HN Group Docs and who can open it", href: "/document-storage", icon: "lock" },
                 { title: "Calendar", desc: "Events, bank holidays and celebrations", href: "/calendar", icon: "calendar" },
                 { title: "Polls & surveys", desc: "Have your say", href: "/polls", icon: "chart", badge: "openPolls" },
                 { title: "Ideas", desc: "Suggest improvements and vote", href: "/ideas", icon: "flag", badge: "newIdeas" },
@@ -614,6 +615,7 @@
         "/mentoring": viewMentoring,
         "/on-call": viewOnCall,
         "/enquiries": viewEnquiries,
+        "/document-storage": viewDocumentStorage,
         "/ideas": viewIdeas,
         "/team": viewTeam,
         "/reports": viewReports,
@@ -669,6 +671,7 @@
         "/mentoring": "users",
         "/on-call": "phone",
         "/enquiries": "mail",
+        "/document-storage": "lock",
         "/ideas": "flag",
         "/team": "building",
         "/reports": "chart",
@@ -9964,6 +9967,73 @@
             if (input.value.trim()) save({ note: input.value });
         });
         drawList();
+    }
+
+    // ================= Document storage (private storage on docs.hngroup.org.uk) =================
+    // Everyone sees the storage they've been given access to. People with "Access staff document storage" (Super
+    // Admin and the system owner have it) can open anyone's storage and give individuals access for a while.
+
+    async function viewDocumentStorage(root, current) {
+        let d = await api("/api/document-storage");
+        if (!current()) return;
+        const DOCS = "https://docs.hngroup.org.uk";
+        const day = function (iso) { return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric" }).format(new Date(iso)); };
+        const inDays = function (n) { const t = new Date(Date.now() + n * 86400000); return t.toISOString().slice(0, 10); };
+        function draw() {
+            const mine = '<section class="panel"><h2 class="panel-title">Storage you can open</h2>' +
+                (d.myGrants.length ? '<div class="table-card flat"><table class="table"><thead><tr><th>Whose storage</th><th>Until</th><th class="col-actions"></th></tr></thead><tbody>' +
+                    d.myGrants.map(function (g) { return "<tr><td>" + esc(g.name) + "</td><td>" + esc(day(g.until)) + '</td><td class="col-actions"><a class="btn btn-ghost btn-small" href="' + DOCS + "/storage/" + encodeURIComponent(g.personId) + '" target="_blank" rel="noopener">Open ↗</a></td></tr>'; }).join("") + "</tbody></table></div>"
+                    : '<p class="muted">' + (d.manage ? "You can open anyone’s storage from the list below." : "Nobody has given you access to anyone else’s storage. Your own storage is at " + '<a href="' + DOCS + '/storage" target="_blank" rel="noopener">docs.hngroup.org.uk</a>.') + "</p>") + "</section>";
+            if (!d.manage) { root.innerHTML = head + mine; return; }
+            const options = function (sel) { return '<option value="">Choose…</option>' + d.people.map(function (p) { return '<option value="' + esc(p.id) + '"' + (p.id === sel ? " selected" : "") + ">" + esc(p.displayName) + (p.jobTitle ? " – " + esc(p.jobTitle) : "") + "</option>"; }).join(""); };
+            root.innerHTML = head + (d.myGrants.length ? mine : "") +
+                '<section class="panel"><div class="panel-head"><h2 class="panel-title">Everyone’s storage</h2><label class="search">' + icon("search") + '<input type="search" id="ds-search" placeholder="Search staff"></label></div>' +
+                '<p class="muted small">Opening someone’s storage shows their private documents and files, view only. Every visit is recorded.</p>' +
+                '<div class="table-card flat"><table class="table"><thead><tr><th>Name</th><th>Job title</th><th>Company</th><th class="col-actions"></th></tr></thead><tbody id="ds-people"></tbody></table></div></section>' +
+                '<section class="panel" id="ds-give"><h2 class="panel-title">Give someone access to one person’s storage</h2>' +
+                '<p class="muted small">For temporary access, for example while someone covers for a colleague. It ends by itself on the date you choose, or remove it below.</p>' +
+                '<form id="ds-form" class="grid-2">' +
+                '<div><label for="ds-grantee">Who gets access</label><select id="ds-grantee" required>' + options("") + "</select></div>" +
+                '<div><label for="ds-owner">Whose storage they can open</label><select id="ds-owner" required>' + options(state.dsOwner || "") + "</select></div>" +
+                '<div><label for="ds-until">Until the end of</label><input type="date" id="ds-until" required min="' + inDays(0) + '" max="' + inDays(365) + '" value="' + inDays(7) + '"></div>' +
+                '<div><label for="ds-reason">Reason <span class="muted small">(optional)</span></label><input type="text" id="ds-reason" maxlength="300" placeholder="e.g. Covering while they’re on leave"></div>' +
+                '<div class="form-actions"><button type="submit" class="btn btn-primary">' + icon("lock") + "Give access</button></div></form>" +
+                '<h3 class="detail-head">Access given</h3>' +
+                (d.grants.length ? '<div class="table-card flat"><table class="table"><thead><tr><th>Who</th><th>Can open</th><th>Until</th><th>Given by</th><th class="col-actions"></th></tr></thead><tbody>' +
+                    d.grants.map(function (g) {
+                        return "<tr><td>" + esc(g.granteeName) + "</td><td>" + esc(g.ownerName) + "’s storage" + (g.reason ? '<div class="muted small">' + esc(g.reason) + "</div>" : "") + "</td><td>" + esc(day(g.until)) + (g.active ? "" : ' <span class="badge">Ended</span>') + "</td><td>" + esc(g.grantedByName) + '</td><td class="col-actions"><button type="button" class="btn btn-ghost btn-small" data-remove="' + esc(g.id) + '">Remove</button></td></tr>';
+                    }).join("") + "</tbody></table></div>" : '<p class="muted">Nobody has been given individual access.</p>') + "</section>";
+            drawPeople();
+        }
+        const head = '<div class="page-head"><div><h1>Document storage</h1><p class="muted">Everyone has private storage on <a href="' + DOCS + '" target="_blank" rel="noopener">HN Group Docs</a> that nobody else can open, except people with the “Access staff document storage” permission and anyone given access below.</p></div></div>';
+        function drawPeople() {
+            const q = ($("#ds-search") ? $("#ds-search").value : "").trim().toLowerCase();
+            const list = d.people.filter(function (p) { return !q || [p.displayName, p.jobTitle, p.company].join(" ").toLowerCase().indexOf(q) !== -1; });
+            $("#ds-people").innerHTML = list.map(function (p) {
+                return "<tr><td>" + esc(p.displayName) + "</td><td>" + esc(p.jobTitle) + "</td><td>" + esc(p.company) + '</td><td class="col-actions"><a class="btn btn-ghost btn-small" href="' + esc(p.storageUrl) + '" target="_blank" rel="noopener">Open storage ↗</a> <button type="button" class="btn btn-ghost btn-small" data-give="' + esc(p.id) + '">Give access…</button></td></tr>';
+            }).join("") || '<tr><td colspan="4" class="muted">Nobody matches.</td></tr>';
+        }
+        async function reload() { d = await api("/api/document-storage"); if (current()) draw(); }
+        root.addEventListener("input", function (ev) { if (ev.target.id === "ds-search") drawPeople(); });
+        root.addEventListener("click", async function (ev) {
+            const give = ev.target.closest("[data-give]");
+            if (give) { $("#ds-owner").value = give.dataset.give; $("#ds-give").scrollIntoView({ behavior: "smooth", block: "start" }); $("#ds-grantee").focus(); return; }
+            const rm = ev.target.closest("[data-remove]");
+            if (rm && await confirmDialog({ title: "Remove this access?", message: "They won’t be able to open that storage any more (within a minute).", confirmLabel: "Remove", danger: true })) {
+                try { await api("/api/document-storage/grants/" + rm.dataset.remove + "/delete", {}); toast("Access removed."); reload(); } catch (err) { toast(err.message); }
+            }
+        });
+        root.addEventListener("submit", async function (ev) {
+            if (ev.target.id !== "ds-form") return;
+            ev.preventDefault();
+            const until = $("#ds-until").value;
+            try {
+                await api("/api/document-storage/grants", { granteeId: $("#ds-grantee").value, ownerId: $("#ds-owner").value, until: until ? until + "T23:59:59" : "", reason: $("#ds-reason").value });
+                toast("Access given.");
+                reload();
+            } catch (err) { toast(err.message); }
+        });
+        draw();
     }
 
     start();

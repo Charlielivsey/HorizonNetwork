@@ -126,6 +126,12 @@ function init(dir) {
     }
     settings.enquiriesPermissionAdded = true;
   }
+  if (!settings.storageAccessPermissionAdded) {
+    // Document storage (the user's request, 26 October 2026): Super Admin can open everyone's storage.
+    const role = settings.roles.find((r) => r.name.toLowerCase() === "super admin");
+    if (role && !role.permissions.includes(STORAGE_ACCESS)) role.permissions.push(STORAGE_ACCESS);
+    settings.storageAccessPermissionAdded = true;
+  }
   writeJson(settingsFile, settings);
 }
 
@@ -147,12 +153,14 @@ const PERMISSIONS = [
   { key: "recruitment.manage", name: "Recruitment", description: "Post job vacancies, track applicants and hire them." },
   { key: "enquiries.manage", name: "Website enquiries", description: "Read and answer messages sent from the contact form on hngroup.org.uk." },
   { key: "reports.view", name: "Activity reports", description: "See the monthly activity reports (payroll figures only for people who can run payroll)." },
+  { key: "storage.access", name: "Access staff document storage", description: "Open anyone's private storage on docs.hngroup.org.uk (view only) and give people access to someone's storage for a while. Only people who already have it can give it out." },
   { key: "system.admin", name: "System Admin", description: "Open System Admin with the PIN: sessions, log in as, backups and the full activity log. Only people who already have it can give it out." },
 ];
 const SYSTEM_ADMIN = "system.admin";
 const PAYROLL = "payroll.manage";
 // Permissions only someone who already has them can hand out.
-const GUARDED_PERMISSIONS = [SYSTEM_ADMIN, PAYROLL];
+const STORAGE_ACCESS = "storage.access";
+const GUARDED_PERMISSIONS = [SYSTEM_ADMIN, PAYROLL, STORAGE_ACCESS];
 const PERMISSION_KEYS = PERMISSIONS.map((p) => p.key);
 
 // First run with roles: create sensible defaults, and give anyone who had access through their

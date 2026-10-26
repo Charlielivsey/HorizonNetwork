@@ -10,7 +10,6 @@ Each website has its own configuration, original logo assets, Auth client, PM2 p
 | Support | support.hngroup.org.uk | hn-support | 4200 |
 | Clients | clients.hngroup.org.uk | hn-clients | 4300 |
 | Careers | careers.hngroup.org.uk | hn-careers | 4400 |
-| Docs | docs.hngroup.org.uk | hn-docs | 4500 |
 | News | news.hngroup.org.uk | hn-news | 4600 |
 
 ## Install

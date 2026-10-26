@@ -1,10 +1,11 @@
 'use strict';
-// HN Group Documents in the browser: the documents library (filtered by company, type and author), the templates for
-// each company, starting a new document, and the page editor, which saves by itself as you type. Everything shown is
+// HN Group Docs in the browser: shared documents, your private storage (documents and uploaded files), someone
+// else's storage when the staff portal lets you in (view only), the templates for each company, starting a new
+// document, and the page editor, which saves by itself as you type. Everything shown is
 // built as elements (never from text the server didn't clean); document bodies are cleaned again on the server.
 (() => {
   const $ = (id) => document.getElementById(id);
-  const S = { me: null, companies: [], templates: [], counts: {}, filter: { company: '', template: '', q: '', mine: false }, doc: null };
+  const S = { me: null, companies: [], templates: [], counts: {}, filter: { company: '', template: '', q: '' }, scope: 'shared', person: null, doc: null, back: '/' };
   const company = (id) => S.companies.find((c) => c.id === id) || S.companies[0];
   const template = (id) => S.templates.find((t) => t.id === id) || S.templates[S.templates.length - 1];
   const logo = (c, white) => '/assets/brand/' + c.logo + (white ? '-white' : '') + '.svg';
@@ -70,18 +71,22 @@
   window.addEventListener('popstate', () => route());
   async function route() {
     if (S.doc && (dirty || saving)) await saveNow();
-    const p = location.pathname, m = /^\/doc\/([0-9a-f-]{36})$/.exec(p);
+    const p = location.pathname, m = /^\/doc\/([0-9a-f-]{36})$/.exec(p), other = /^\/storage\/([A-Za-z0-9_-]{1,64})$/.exec(p);
     for (const v of ['view-library', 'view-templates', 'view-editor']) $(v).hidden = true;
     for (const a of document.querySelectorAll('.tabs a')) a.removeAttribute('aria-current');
     if (m) return openDoc(m[1]);
-    S.doc = null;
+    S.doc = null; document.title = 'HN Group Docs';
     const params = new URLSearchParams(location.search);
     S.filter.company = S.companies.some((c) => c.id === params.get('company')) ? params.get('company') : '';
-    if (p === '/templates') { document.querySelector('[data-tab=templates]').setAttribute('aria-current', 'page'); return showTemplates(); }
-    document.querySelector('[data-tab=library]').setAttribute('aria-current', 'page');
+    if (p === '/templates') { tab('templates'); return showTemplates(); }
+    S.scope = other && other[1] !== S.me.id ? 'person' : p.startsWith('/storage') ? 'mine' : 'shared';
+    S.person = S.scope === 'person' ? other[1] : null;
+    S.back = location.pathname + location.search;
+    if (S.scope !== 'person') tab(S.scope);
     showLibrary();
     if (p === '/new') openNew({ company: params.get('company'), template: params.get('template') });
   }
+  const tab = (name) => { const a = document.querySelector('[data-tab=' + name + ']'); if (a) a.setAttribute('aria-current', 'page'); };
 
   // ---------- Company filter ----------
   function chips(container, selected, withAll, onPick) {
@@ -106,35 +111,121 @@
   let listTimer, listSeq = 0;
   async function showLibrary() {
     $('view-library').hidden = false;
-    $('search').value = S.filter.q; $('type-filter').value = S.filter.template; $('mine-filter').checked = S.filter.mine;
+    $('search').value = S.filter.q;
+    const files = $('type-filter').querySelector('option[value=files]');
+    files.hidden = S.scope === 'shared';
+    if (S.scope === 'shared' && S.filter.template === 'files') S.filter.template = '';
+    $('type-filter').value = S.filter.template;
+    $('upload-button').hidden = S.scope !== 'mine';
     await loadDocuments();
+  }
+  const size = (n) => n < 1024 ? n + ' bytes' : n < 1048576 ? Math.round(n / 1024) + ' KB' : (n / 1048576).toFixed(1) + ' MB';
+  const kindOf = (f) => /pdf/.test(f.mime) ? 'PDF' : /^image\//.test(f.mime) ? 'Picture' : /word/.test(f.mime) ? 'Word' : /sheet|excel|csv/.test(f.mime) ? 'Spreadsheet' : /presentation|powerpoint/.test(f.mime) ? 'Slides' : 'Text';
+  function fileRow(f, own) {
+    const open = el('a', { class: 'file-name', href: '/api/files/' + f.id, target: '_blank', rel: 'noopener' }, el('span', { class: 'file-icon', 'aria-hidden': 'true', text: ((f.name.match(/\.([a-z0-9]{1,4})$/i) || [])[1] || 'file').toUpperCase() }), el('span', { text: f.name }));
+    const c = f.company ? company(f.company) : null;
+    return el('div', { class: 'file-row', role: 'listitem' }, open,
+      el('span', { class: 'file-meta', text: kindOf(f) + ' · ' + size(f.size) + (c ? ' · ' + c.name : '') + ' · ' + ago(f.updatedAt) }),
+      el('span', { class: 'file-actions' },
+        el('a', { class: 'btn small ghost', href: '/api/files/' + f.id + '?download=1', text: 'Download' }),
+        own ? el('button', { type: 'button', class: 'btn small ghost', text: 'Rename', onclick: () => renameFile(f) }) : null,
+        own ? el('button', { type: 'button', class: 'btn small ghost danger-text', text: 'Delete', onclick: () => deleteFile(f) }) : null));
   }
   async function loadDocuments() {
     const seq = ++listSeq, f = S.filter;
-    const params = new URLSearchParams({ ...(f.company && { company: f.company }), ...(f.template && { template: f.template }), ...(f.q && { q: f.q }), ...(f.mine && { mine: '1' }) });
     let r;
-    try { r = await api('GET', '/api/documents?' + params); } catch (e) { toast(e.message, true); return; }
+    try {
+      if (S.scope === 'person') r = await api('GET', '/api/storage/' + encodeURIComponent(S.person));
+      else r = await api('GET', '/api/documents?' + new URLSearchParams({ scope: S.scope, ...(f.company && { company: f.company }), ...(f.template && { template: f.template }), ...(f.q && { q: f.q }) }));
+    } catch (e) {
+      if (seq !== listSeq) return;
+      $('library-title').textContent = 'Storage not available'; $('library-count').textContent = '';
+      $('doc-list').replaceChildren(); $('files').hidden = true; $('library-companies').replaceChildren();
+      $('storage-note').textContent = e.message; $('storage-note').hidden = false; $('doc-empty').hidden = true; return;
+    }
     if (seq !== listSeq) return;
-    S.counts = r.counts;
+    let docs = r.documents, files = r.files || [];
+    if (S.scope === 'person') {
+      // Someone else's storage: filter here (the server sends all of it, view only).
+      const terms = f.q.toLowerCase().split(/\s+/).filter(Boolean);
+      const hit = (t) => terms.every((x) => t.toLowerCase().includes(x));
+      docs = docs.filter((d) => (!f.company || d.company === f.company) && (!f.template || d.template === f.template) && hit(d.title));
+      files = files.filter((x) => (!f.company || x.company === f.company) && (!f.template || f.template === 'files') && hit(x.name));
+      S.counts = {}; for (const x of [...r.documents, ...r.files]) if (x.company) S.counts[x.company] = (S.counts[x.company] || 0) + 1;
+      if (f.template === 'files') docs = [];
+    } else S.counts = r.counts;
+    const title = S.scope === 'shared' ? 'Shared documents' : S.scope === 'mine' ? 'My storage' : r.person.name + '’s storage';
+    $('library-title').textContent = title; document.title = title + ' · HN Group Docs';
+    $('library-eyebrow').textContent = S.scope === 'person' ? 'HN Group · View only' : S.scope === 'mine' ? 'HN Group · Private to you' : 'HN Group · Staff only';
+    const note = S.scope === 'mine' ? 'Only you can see what’s here. Documents you share with staff move to Shared.'
+      : S.scope === 'person' ? 'You can open and download what’s here but not change it. ' + (r.access === 'grant' && r.until ? 'Your access ends on ' + new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(r.until)) + '. ' : '') + 'Opening it is recorded.' : '';
+    $('storage-note').textContent = note; $('storage-note').hidden = !note;
+    otherStorage();
     chips($('library-companies'), f.company, true, (id) => { setCompanyParam(id); loadDocuments(); });
-    const filtered = f.company || f.template || f.q || f.mine;
-    $('library-count').textContent = r.documents.length === 1 ? '1 document' : r.documents.length + ' documents' + (filtered ? ' match' : '');
-    $('doc-list').replaceChildren(...r.documents.map((d, i) => {
+    const filtered = f.company || f.template || f.q;
+    const n = docs.length + files.length;
+    $('library-count').textContent = (n === 1 ? '1 item' : n + ' items') + (filtered ? ' match' : '');
+    $('doc-list').replaceChildren(...docs.map((d, i) => {
       const c = company(d.company), t = template(d.template);
-      const card = el('a', { class: 'doc-card', href: '/doc/' + d.id, 'data-link': true, style: null },
+      const card = el('a', { class: 'doc-card', href: '/doc/' + d.id, 'data-link': true },
         paper(c, t, d.title),
         el('div', { class: 'card-body' }, el('h3', { text: d.title }),
-          el('div', { class: 'card-meta' }, el('span', { class: 'tag ' + d.status, text: d.status === 'final' ? 'Final' : 'Draft' }), d.sharing === 'private' ? el('span', { class: 'tag private', text: 'Only me' }) : null, el('span', { text: t.name + ' · ' + c.name })),
+          el('div', { class: 'card-meta' }, el('span', { class: 'tag ' + d.status, text: d.status === 'final' ? 'Final' : 'Draft' }), el('span', { text: t.name + ' · ' + c.name })),
           el('div', { class: 'card-meta' }, el('span', { text: 'Edited ' + ago(d.updatedAt) + ' by ' + d.updatedBy }))));
       card.style.animationDelay = Math.min(i, 12) * 25 + 'ms';
       return card;
     }));
-    $('doc-empty').hidden = r.documents.length > 0;
-    $('doc-empty-text').textContent = filtered ? 'Nothing matches these filters. Try another company or search, or start a new document.' : 'Start one from a template: choose New document.';
+    $('files').hidden = !files.length;
+    $('file-list').replaceChildren(...files.map((x) => fileRow(x, S.scope === 'mine')));
+    $('doc-empty').hidden = n > 0;
+    $('doc-empty').querySelector('h2').textContent = S.scope === 'mine' ? 'Your storage is empty' : S.scope === 'person' ? 'Nothing in this storage' : 'No shared documents yet';
+    $('doc-empty').querySelector('[data-new]').hidden = S.scope === 'person';
+    $('doc-empty-text').textContent = filtered ? 'Nothing matches these filters.' : S.scope === 'mine' ? 'Start a document from a template, or upload files. Only you can see them.' : S.scope === 'person' ? 'There are no private documents or files here.' : 'Start one from a template and choose Shared with staff.';
   }
+  // Storage you've been given access to in the staff portal.
+  function otherStorage() {
+    const grants = (S.me.storageGrants || []).filter((g) => g.personId !== S.me.id);
+    const box = $('other-storage');
+    box.hidden = S.scope !== 'mine' || (!grants.length && !S.me.storageAccess);
+    box.replaceChildren(el('strong', { text: 'Other people’s storage' }),
+      ...grants.map((g) => el('a', { class: 'chip', href: '/storage/' + encodeURIComponent(g.personId), 'data-link': true }, el('span', { text: g.name || 'Staff member' }), el('span', { class: 'n', text: 'until ' + new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(new Date(g.until)) }))),
+      S.me.storageAccess ? el('span', { class: 'muted small', text: 'You can open anyone’s storage from Document storage in the staff portal.' }) : null,
+      S.me.storageAccess ? el('a', { class: 'btn small', href: 'https://staff.hngroup.org.uk/document-storage', text: 'Open the staff portal' }) : null);
+  }
+  async function renameFile(f) {
+    const name = await ask({ title: 'Rename file', ok: 'Rename', input: { label: 'Name', value: f.name } });
+    if (!name) return;
+    try { await api('PUT', '/api/files/' + f.id, { name }); loadDocuments(); } catch (e) { toast(e.message, true); }
+  }
+  async function deleteFile(f) {
+    if (!(await ask({ title: 'Delete “' + f.name + '”?', text: 'It will be removed from your storage. This can’t be undone.', ok: 'Delete file', danger: true }))) return;
+    try { await api('DELETE', '/api/files/' + f.id); toast('File deleted.'); loadDocuments(); } catch (e) { toast(e.message, true); }
+  }
+  async function upload(list) {
+    if (S.scope !== 'mine') return;
+    let done = 0;
+    for (const file of list) {
+      toast('Uploading ' + file.name + '…');
+      try {
+        const r = await fetch('/api/files', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/octet-stream', 'X-File-Name': encodeURIComponent(file.name), 'X-Company': S.filter.company || '' }, body: file });
+        const v = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(v.error || 'That file couldn’t be uploaded.');
+        done++;
+      } catch (e) { toast(file.name + ': ' + e.message, true); await new Promise((res) => setTimeout(res, 1600)); }
+    }
+    if (done) toast(done === 1 ? 'File added to your storage.' : done + ' files added to your storage.');
+    loadDocuments();
+  }
+  $('upload-button').addEventListener('click', () => $('upload-input').click());
+  $('upload-input').addEventListener('change', () => { const files = [...$('upload-input').files]; $('upload-input').value = ''; upload(files); });
+  let dragDepth = 0;
+  const dragging = (e) => S.scope === 'mine' && !$('view-library').hidden && e.dataTransfer && [...e.dataTransfer.types].includes('Files');
+  document.addEventListener('dragenter', (e) => { if (!dragging(e)) return; e.preventDefault(); dragDepth++; $('drop').hidden = false; });
+  document.addEventListener('dragover', (e) => { if (dragging(e)) e.preventDefault(); });
+  document.addEventListener('dragleave', (e) => { if (!dragging(e)) return; if (--dragDepth <= 0) { dragDepth = 0; $('drop').hidden = true; } });
+  document.addEventListener('drop', (e) => { if (!dragging(e)) return; e.preventDefault(); dragDepth = 0; $('drop').hidden = true; upload([...e.dataTransfer.files]); });
   $('search').addEventListener('input', () => { clearTimeout(listTimer); listTimer = setTimeout(() => { S.filter.q = $('search').value.trim(); loadDocuments(); }, 220); });
   $('type-filter').addEventListener('change', () => { S.filter.template = $('type-filter').value; loadDocuments(); });
-  $('mine-filter').addEventListener('change', () => { S.filter.mine = $('mine-filter').checked; loadDocuments(); });
 
   // ---------- Templates ----------
   function showTemplates() {
@@ -154,9 +245,11 @@
     const tSel = S.templates.some((t) => t.id === tid) ? tid : 'letter';
     $('new-companies').replaceChildren(...S.companies.map((c) => el('label', { class: 'option' }, el('input', { type: 'radio', name: 'company', value: c.id, checked: c.id === cSel }),
       el('span', { class: 'logo' }, el('img', { src: logo(c), alt: '' })), el('strong', { text: c.name }))));
-    $('new-templates').replaceChildren(...S.templates.map((t) => el('label', { class: 'option' }, el('input', { type: 'radio', name: 'template', value: t.id, checked: t.id === tSel }),
-      el('strong', { text: t.name }), el('small', { text: t.blurb }))));
-    $('new-name').value = ''; $('new-sharing').value = 'staff'; $('new-error').hidden = true; $('new-create').disabled = false;
+    const groups = [...new Set(S.templates.map((t) => t.group))];
+    $('new-templates').replaceChildren(...groups.flatMap((g) => [el('p', { class: 'pick-group', text: g }),
+      ...S.templates.filter((t) => t.group === g).map((t) => el('label', { class: 'option' }, el('input', { type: 'radio', name: 'template', value: t.id, checked: t.id === tSel }),
+        el('strong', { text: t.name }), el('small', { text: t.blurb })))]));
+    $('new-name').value = ''; $('new-sharing').value = S.scope === 'shared' && location.pathname === '/' ? 'staff' : 'private'; $('new-error').hidden = true; $('new-create').disabled = false;
     showLayer('new-dialog');
     $('new-dialog').querySelector('input[name=company]:checked').focus();
   }
@@ -184,9 +277,13 @@
     let r;
     try { r = await api('GET', '/api/documents/' + id); } catch (e) { $('view-editor').hidden = true; toast(e.message, true); go('/', true); return; }
     S.doc = r.document; dirty = false; patch = {};
-    document.title = S.doc.title + ' · HN Group Documents';
+    document.title = S.doc.title + ' · HN Group Docs';
+    // Back to where it was opened from (or where it lives).
+    const from = S.back && S.back !== location.pathname ? S.back : S.doc.mine && S.doc.sharing === 'private' ? '/storage' : !S.doc.mine && S.doc.sharing === 'private' ? '/storage/' + S.doc.ownerId : '/';
+    $('doc-back').setAttribute('href', from);
+    $('doc-back').textContent = '← ' + (from.startsWith('/storage/') ? 'Their storage' : from.startsWith('/storage') ? 'My storage' : from.startsWith('/templates') ? 'Templates' : 'Shared');
     drawSheet(true);
-    sheet.hidden = false; state('Saved');
+    sheet.hidden = false; state(S.doc.readOnly ? '' : 'Saved');
   }
   // Single-line fields don't take new lines; every field takes pasted text as plain text.
   function plainField(node, multiline) {
@@ -224,7 +321,7 @@
     drawBranding();
     sheet.classList.toggle('subject', t.title === 'subject');
     if (content) {
-      const letter = t.id === 'letter';
+      const letter = t.layout === 'letter';
       $('letter-block').hidden = !letter;
       $('details').hidden = letter || !t.head.length;
       $('head-left').replaceChildren(); $('head-right').replaceChildren(); $('head-rows').replaceChildren();
@@ -240,17 +337,34 @@
       body.innerHTML = d.body; // cleaned by the server
       markEmpty();
     }
+    drawHistory();
     drawControls();
   }
+  // Policies: the version history, recorded by the server each time a changed policy is marked final.
+  function drawHistory() {
+    const d = S.doc, t = template(d.template), list = d.history || [];
+    $('history').hidden = !t.versions;
+    if (!t.versions) return;
+    $('history-hint').textContent = list.length ? '' : 'Mark this policy as final to record version ' + ((d.fields && d.fields.version) || '1.0') + '. After that, each time it’s changed and marked final again, the version number goes up and the changes are listed here.';
+    $('history-hint').hidden = !!list.length;
+    $('history-rows').replaceChildren(...list.slice().reverse().map((h) => el('tr', {}, el('td', { text: h.version }), el('td', { text: h.date }), el('td', { text: h.by }),
+      el('td', {}, el('ul', {}, ...h.changes.map((c) => el('li', { text: c })))))));
+  }
   function drawControls() {
-    const d = S.doc, final = d.status === 'final';
-    sheet.classList.toggle('final', final);
-    for (const n of sheet.querySelectorAll('[contenteditable]')) n.setAttribute('contenteditable', final ? 'false' : 'true');
-    $('toolbar').classList.toggle('off', final);
-    $('final-note').hidden = !final;
+    const d = S.doc, final = d.status === 'final', locked = final || d.readOnly;
+    sheet.classList.toggle('final', locked);
+    for (const n of sheet.querySelectorAll('[contenteditable]')) n.setAttribute('contenteditable', locked ? 'false' : 'true');
+    $('toolbar').classList.toggle('off', locked);
+    $('toolbar').hidden = !!d.readOnly;
+    $('final-note').hidden = !final || d.readOnly;
+    $('readonly-note').hidden = !d.readOnly;
+    $('readonly-note').textContent = d.readOnly ? 'This document is in ' + d.owner + '’s private storage. You can read and print it, but not change it. Opening it is recorded.' : '';
+    for (const id of ['doc-status', 'doc-company', 'doc-sharing', 'doc-more']) ($(id).closest('label') || $(id)).hidden = !!d.readOnly;
     $('doc-status').textContent = final ? 'Back to draft' : 'Mark as final';
-    $('doc-sharing').value = d.sharing; $('doc-sharing').disabled = !d.canManage;
-    $('doc-sharing').title = d.canManage ? '' : 'Only the author can change who sees this document.';
+    $('doc-sharing').value = d.sharing;
+    $('doc-sharing').querySelector('option[value=private]').disabled = !d.mine;
+    $('doc-sharing').disabled = !(d.mine || S.me.admin);
+    $('doc-sharing').title = d.mine || S.me.admin ? '' : 'Only the author can move this document.';
     $('doc-delete').hidden = !d.canManage;
   }
   plainField(titleEl, false);
@@ -272,7 +386,18 @@
     patch = {}; dirty = false;
     try {
       const r = await api('PUT', '/api/documents/' + doc.id, sent);
-      if (S.doc && S.doc.id === doc.id) { Object.assign(S.doc, { version: r.document.version, status: r.document.status, sharing: r.document.sharing, company: r.document.company, title: r.document.title, updatedAt: r.document.updatedAt }); document.title = S.doc.title + ' · HN Group Documents'; }
+      if (S.doc && S.doc.id === doc.id) {
+        const versionsBefore = (S.doc.history || []).length;
+        Object.assign(S.doc, { version: r.document.version, status: r.document.status, sharing: r.document.sharing, company: r.document.company, title: r.document.title, updatedAt: r.document.updatedAt, history: r.document.history, canManage: r.document.canManage });
+        document.title = S.doc.title + ' · HN Group Docs';
+        // A policy marked final may have a new version number and history entry.
+        if ((r.document.history || []).length !== versionsBefore) {
+          const v = sheet.querySelector('.field[data-key=version]');
+          if (v) v.textContent = r.document.fields.version;
+          S.doc.fields = r.document.fields; drawHistory(); markEmpty();
+          toast('Version ' + r.document.fields.version + ' recorded.');
+        }
+      }
       state(dirty ? 'Unsaved changes' : 'Saved');
     } catch (e) {
       dirty = true;
@@ -292,7 +417,7 @@
   window.addEventListener('beforeunload', (e) => { if (S.doc && (dirty || saving)) { e.preventDefault(); e.returnValue = ''; saveNow(); } });
 
   $('doc-company').addEventListener('change', () => { S.doc.company = $('doc-company').value; patch.company = S.doc.company; drawBranding(); saveNow(); });
-  $('doc-sharing').addEventListener('change', () => { patch.sharing = $('doc-sharing').value; S.doc.sharing = patch.sharing; saveNow().then(() => toast(S.doc.sharing === 'private' ? 'Only you can see this document now.' : 'All staff can see this document now.')); });
+  $('doc-sharing').addEventListener('change', () => { patch.sharing = $('doc-sharing').value; S.doc.sharing = patch.sharing; saveNow().then(() => toast(S.doc.sharing === 'private' ? 'Moved to your private storage. Only you can see it now.' : 'Shared with staff. Everyone can see and edit it now.')); });
   $('doc-status').addEventListener('click', () => { S.doc.status = S.doc.status === 'final' ? 'draft' : 'final'; patch.status = S.doc.status; drawControls(); saveNow(); });
   $('doc-print').addEventListener('click', async () => { await saveNow(); window.print(); });
   // The "…" menu.
@@ -381,7 +506,11 @@
     try { me = await api('GET', '/api/me'); } catch (e) { $('loading').textContent = e.message; return; }
     Object.assign(S, { me: me.user, companies: me.companies, templates: me.templates, counts: me.counts });
     $('who').hidden = false; $('who-name').textContent = me.user.name; $('who-avatar').textContent = initials(me.user.name);
-    $('type-filter').append(...S.templates.map((t) => el('option', { value: t.id, text: t.name })));
+    if (me.user.picture) {
+      $('who-photo').addEventListener('load', () => { $('who-photo').hidden = false; $('who-avatar').hidden = true; }, { once: true });
+      $('who-photo').src = '/api/avatar';
+    }
+    $('type-filter').append(...S.templates.map((t) => el('option', { value: t.id, text: t.name })), el('option', { value: 'files', text: 'Files' }));
     $('doc-company').replaceChildren(...S.companies.map((c) => el('option', { value: c.id, text: c.name })));
     $('loading').hidden = true;
     route();

@@ -1,4 +1,4 @@
-/* HN Group Documents: the HN Group design (Plus Jakarta Sans, HN palette and stripe, purple actions, rounded cards),
+/* HN Group Docs: the HN Group design (Plus Jakarta Sans, HN palette and stripe, purple actions, rounded cards),
    light and dark, with gentle motion that reduce motion turns off. The document itself is always a white A4 page so
    it looks the same on screen, printed and as a PDF. */
 @font-face{font-family:"Plus Jakarta Sans";src:url(fonts/plus-jakarta-sans.woff2) format("woff2");font-weight:200 800;font-display:swap}
@@ -81,7 +81,7 @@ main{width:min(1240px,100% - 32px);margin:0 auto;padding-bottom:60px}
 .paper{position:relative;height:150px;margin:14px 14px 0;background:#fff;border-radius:8px 8px 0 0;border:1px solid #e8e5ef;border-bottom:0;padding:14px 16px 0;overflow:hidden;color:#1B1A21}
 .paper::after{content:"";position:absolute;left:16px;right:16px;top:44px;height:2px;background:var(--stripe)}
 .paper img{height:20px;width:auto;max-width:110px;object-fit:contain;object-position:left}
-.paper .p-label{position:absolute;right:16px;top:16px;font-size:9px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#5514B4}
+.paper .p-label{position:absolute;right:16px;top:16px;max-width:52%;text-align:right;line-height:1.25;font-size:9px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#5514B4}
 .paper .p-title{margin-top:26px;font-weight:800;font-size:13px;line-height:1.3;letter-spacing:-.01em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .paper .p-lines{margin-top:10px;display:grid;gap:6px}
 .paper .p-lines i{display:block;height:5px;border-radius:3px;background:#ECE9F2}
@@ -191,6 +191,38 @@ legend{font-weight:800;font-size:13px;margin-bottom:8px;color:var(--muted);text-
 .message{display:grid;place-items:center;padding:60px 0}
 .message .card{max-width:560px;background:var(--surface);border:1px solid var(--border);border-radius:20px;box-shadow:var(--shadow);padding:26px 28px;display:grid;gap:12px;animation:rise .4s var(--out) both}
 .message h1{font-size:26px;font-weight:800;letter-spacing:-.02em}
+
+
+/* Profile picture, storage, files and policy versions */
+img.avatar.photo{object-fit:cover;background:var(--surface2);padding:0}
+.storage-note{margin:-6px 0 18px;padding:11px 16px;border-radius:14px;background:var(--accent-soft);color:var(--accent);font-size:14px;font-weight:600}
+.other-storage{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 20px;padding:14px 16px;border:1px solid var(--border);border-radius:16px;background:var(--surface)}
+.other-storage strong{font-size:14px;margin-right:4px}
+.other-storage .chip{text-decoration:none;height:36px}
+.section-title{font-size:18px;font-weight:800;margin:30px 0 12px}
+.file-list{display:grid;gap:8px}
+.file-row{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) auto;align-items:center;gap:14px;padding:10px 12px 10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:14px;animation:pop .3s var(--out) both}
+.file-name{display:flex;align-items:center;gap:12px;min-width:0;color:var(--text);text-decoration:none;font-weight:700}
+.file-name span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-name:hover span:last-child{color:var(--accent);text-decoration:underline}
+.file-icon{flex:none;width:38px;height:38px;border-radius:10px;display:grid;place-items:center;font-size:10.5px;font-weight:800;letter-spacing:.04em;color:#fff;background:linear-gradient(135deg,#6A1FD8,var(--teal))}
+.file-meta{font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-actions{display:flex;gap:2px}
+.drop{position:fixed;inset:12px;z-index:40;border:3px dashed var(--accent);border-radius:24px;background:color-mix(in srgb,var(--bg) 82%,transparent);display:grid;place-items:center;pointer-events:none;animation:fade .15s both}
+.drop p{font-size:22px;font-weight:800;color:var(--accent)}
+.pick-group{grid-column:1/-1;font-size:12px;font-weight:800;color:var(--muted);margin:6px 0 -2px;text-transform:uppercase;letter-spacing:.08em}
+.readonly-note{background:var(--accent-soft);color:var(--accent)}
+.history{margin:0 0 8mm}
+.history h2{font-size:10pt;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#5E6070;margin:0 0 2mm}
+.history-hint{font-size:9pt;color:#6E6F7E;margin:0 0 2mm}
+.history table{width:100%;border-collapse:collapse;font-size:9pt}
+.history th{text-align:left;color:#5E6070;font-weight:700;padding:1.4mm 3mm 1.4mm 0;border-bottom:1px solid #DCD7E6}
+.history td{padding:1.6mm 3mm 1.6mm 0;border-bottom:1px solid #ECE9F2;vertical-align:top}
+.history td:first-child{font-weight:800;white-space:nowrap}
+.history td:nth-child(2),.history td:nth-child(3){white-space:nowrap}
+.history ul{margin:0;padding-left:4mm}
+@media (max-width:900px){.file-row{grid-template-columns:1fr auto}.file-meta{grid-column:1/-1;grid-row:2}}
+@media print{.history-hint{display:none}}
 
 @media (max-width:900px){
  .top-inner{flex-wrap:wrap;padding:10px 0}

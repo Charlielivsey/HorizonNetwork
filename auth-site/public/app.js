@@ -11,7 +11,6 @@ const APPS = {
   support: { name: 'HN Group Support administration', short: 'HN Group Support', allowed: user => user.statusAdminAllowed, granted: 'You can manage this website.', restricted: 'Only the system owner and Super Admin members can manage this website.' },
   clients: { name: 'HN Group Clients administration', short: 'HN Group Clients', allowed: user => user.statusAdminAllowed, granted: 'You can manage this website.', restricted: 'Only the system owner and Super Admin members can manage this website.' },
   careers: { name: 'HN Group Careers administration', short: 'HN Group Careers', allowed: user => user.statusAdminAllowed, granted: 'You can manage this website.', restricted: 'Only the system owner and Super Admin members can manage this website.' },
-  docs: { name: 'HN Group Docs administration', short: 'HN Group Docs', allowed: user => user.statusAdminAllowed, granted: 'You can manage this website.', restricted: 'Only the system owner and Super Admin members can manage this website.' },
   news: { name: 'HN Group News', short: 'HN Group News', allowed: user => !!(user.statusAdminAllowed || user.ownerAccess || (Array.isArray(user.companies) ? user.companies : [user.company]).includes('HN Group')), granted: 'You can write and publish news for every HN Group website.', restricted: 'Only staff with a role at HN Group can manage HN Group News.' },
   network: { name: 'Horizon Network website configuration', short: 'Horizon Network configuration', allowed: user => user.statusAdminAllowed, granted: 'You can manage the Horizon Network website and maintenance mode.', restricted: 'Only the system owner and Super Admin members can configure Horizon Network.' },
   status: { name: 'Status administration', short: 'Status', allowed: user => user.statusAdminAllowed,
@@ -26,7 +25,7 @@ const APPS = {
   investors: { name: 'HN Group Investors', short: 'the investors website', allowed: user => !!user.ownerAccess || (Array.isArray(user.companies) ? user.companies : [user.company]).includes('HN Group'), granted: 'You can manage investors, valuations and investor news.', restricted: 'Only staff with a role at HN Group can sign in to the investors website.' },
   vpn: { name: 'HN Group VPN', short: 'the VPN', allowed: () => true, granted: 'You can use the HN Group VPN.', restricted: '' },
   devices: { name: 'HN Group Devices', short: 'HN Group Devices', allowed: () => true, granted: 'You can add and manage your computers.', restricted: '' },
-  documents: { name: 'HN Group Documents', short: 'HN Group Documents', allowed: () => true, granted: 'You can write and print company documents.', restricted: '' },
+  docs: { name: 'HN Group Docs', short: 'HN Group Docs', allowed: () => true, granted: 'You can write and print company documents.', restricted: '' },
   'app-manager': { name: 'HN Group App Manager', short: 'App Manager', allowed: () => true, granted: 'Your HN account is ready for App Manager.', restricted: '' },
 };
 const app = Object.prototype.hasOwnProperty.call(APPS, client) ? APPS[client] : null;

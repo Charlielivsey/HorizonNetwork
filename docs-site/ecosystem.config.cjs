@@ -1,1 +1,1 @@
-module.exports={apps:[{name:'hn-docs',script:'/opt/hn-docs/server.js',cwd:'/opt/hn-docs',instances:1,exec_mode:'fork',autorestart:true,max_memory_restart:'256M',env:{NODE_ENV:'production',PORT:4500,DATA_DIR:'/var/lib/hn-docs'}}]};
+module.exports={apps:[{name:'hn-docs',script:'/opt/hn-docs/server.js',cwd:'/opt/hn-docs',instances:1,exec_mode:'fork',autorestart:true,max_memory_restart:'256M',env:{NODE_ENV:'production',HOST:'127.0.0.1',PORT:4500,DOCS_DATA_DIR:'/var/lib/hn-docs',DOCS_PUBLIC_DIR:'/opt/hn-docs/public'}}]};

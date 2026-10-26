@@ -5,21 +5,21 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#5514B4">
-<title>HN Group Documents</title>
+<title>HN Group Docs</title>
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="/assets/fonts/plus-jakarta-sans.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/assets/documents.css?v=1">
-<script src="/assets/documents.js?v=1" defer></script>
+<link rel="stylesheet" href="/assets/documents.css?v=2">
+<script src="/assets/documents.js?v=2" defer></script>
 </head>
 <body>
 <div class="stripe" aria-hidden="true"></div>
 <header class="top">
  <div class="top-inner">
-  <a class="brand" href="/" data-link><img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="92" height="32"><img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="92" height="32"><span class="brand-name">Documents</span></a>
-  <nav class="tabs" aria-label="Sections"><a href="/" data-link data-tab="library">Documents</a><a href="/templates" data-link data-tab="templates">Templates</a></nav>
+  <a class="brand" href="/" data-link><img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="92" height="32"><img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="92" height="32"><span class="brand-name">Docs</span></a>
+  <nav class="tabs" aria-label="Sections"><a href="/" data-link data-tab="shared">Shared</a><a href="/storage" data-link data-tab="mine">My storage</a><a href="/templates" data-link data-tab="templates">Templates</a></nav>
   <div class="top-actions">
    <button class="btn primary" type="button" id="new-button"><span aria-hidden="true">+</span> New document</button>
-   <div class="who" id="who" hidden><span class="avatar" id="who-avatar" aria-hidden="true"></span><span class="who-name" id="who-name"></span><form method="post" action="/auth/logout"><button class="btn small ghost" type="submit">Sign out</button></form></div>
+   <div class="who" id="who" hidden><span class="avatar" id="who-avatar" aria-hidden="true"></span><img class="avatar photo" id="who-photo" alt="" hidden><span class="who-name" id="who-name"></span><form method="post" action="/auth/logout"><button class="btn small ghost" type="submit">Sign out</button></form></div>
   </div>
  </div>
 </header>
@@ -30,15 +30,19 @@
  <!-- Documents -->
  <section class="view" id="view-library" hidden>
   <div class="page-head">
-   <div><p class="eyebrow">HN Group · Staff only</p><h1>Documents</h1><p class="muted" id="library-count"></p></div>
+   <div><p class="eyebrow" id="library-eyebrow">HN Group · Staff only</p><h1 id="library-title">Shared documents</h1><p class="muted" id="library-count"></p></div>
    <div class="search-row">
-    <label class="search"><span class="sr">Search documents</span><input type="search" id="search" placeholder="Search by title or author" autocomplete="off"></label>
+    <label class="search"><span class="sr">Search</span><input type="search" id="search" placeholder="Search by title or author" autocomplete="off"></label>
     <label class="select"><span class="sr">Type</span><select id="type-filter"><option value="">All types</option></select></label>
-    <label class="toggle"><input type="checkbox" id="mine-filter"><span>Only mine</span></label>
+    <button class="btn" type="button" id="upload-button" hidden>Upload files</button><input type="file" id="upload-input" multiple hidden>
    </div>
   </div>
+  <p class="storage-note" id="storage-note" hidden></p>
+  <div class="other-storage" id="other-storage" hidden></div>
   <div class="companies" id="library-companies" role="radiogroup" aria-label="Filter by company"></div>
   <div class="grid docs" id="doc-list"></div>
+  <section class="files" id="files" hidden><h2 class="section-title">Files</h2><div class="file-list" id="file-list" role="list"></div></section>
+  <div class="drop" id="drop" hidden><p>Drop files to add them to your storage</p></div>
   <div class="empty" id="doc-empty" hidden><h2>No documents yet</h2><p class="muted" id="doc-empty-text">Start one from a template.</p><button class="btn primary" type="button" data-new>New document</button></div>
  </section>
 
@@ -53,11 +57,11 @@
  <section class="view editor" id="view-editor" hidden>
   <div class="editor-bar">
    <div class="bar-row">
-    <a class="btn small ghost" href="/" data-link>← Documents</a>
+    <a class="btn small ghost" href="/" data-link id="doc-back">← Documents</a>
     <span class="save-state" id="save-state" aria-live="polite"></span>
     <span class="spacer"></span>
     <label class="select small"><span class="sr">Company</span><select id="doc-company"></select></label>
-    <label class="select small"><span class="sr">Who can see it</span><select id="doc-sharing"><option value="staff">All staff</option><option value="private">Only me</option></select></label>
+    <label class="select small"><span class="sr">Who can see it</span><select id="doc-sharing"><option value="private">My storage (private)</option><option value="staff">Shared with staff</option></select></label>
     <button class="btn small" type="button" id="doc-status"></button>
     <button class="btn small primary" type="button" id="doc-print">Print or save as PDF</button>
     <button class="btn small icon" type="button" id="doc-more" aria-haspopup="menu" aria-expanded="false" aria-label="More">⋯</button>
@@ -86,6 +90,7 @@
     <button type="button" data-cmd="undo" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
     <button type="button" data-cmd="redo" title="Redo" aria-label="Redo">↷</button>
    </div>
+   <p class="final-note readonly-note" id="readonly-note" hidden></p>
    <p class="final-note" id="final-note" hidden>This document is final, so it can’t be edited. Choose <strong>Back to draft</strong> to change it.</p>
   </div>
   <div class="desk">
@@ -95,6 +100,7 @@
     <div class="letter-block" id="letter-block" hidden><div class="letter-left" id="head-left"></div><div class="letter-right" id="head-right"></div></div>
     <h1 class="doc-title" id="doc-title" contenteditable="true" spellcheck="true"></h1>
     <table class="details" id="details" hidden><tbody id="head-rows"></tbody></table>
+    <section class="history" id="history" hidden><h2>Version history</h2><p class="history-hint" id="history-hint"></p><table><thead><tr><th>Version</th><th>Date</th><th>By</th><th>Changes</th></tr></thead><tbody id="history-rows"></tbody></table></section>
     <div class="doc-body" id="doc-body" contenteditable="true" spellcheck="true" aria-label="Document text"></div>
     <div class="sign-off" id="sign-off" hidden></div>
     <footer class="sheet-foot" id="sheet-foot"></footer>
@@ -112,7 +118,7 @@
    <fieldset><legend>Template</legend><div class="pick templates-pick" id="new-templates"></div></fieldset>
    <div class="row-2">
     <label class="field-label">Title<input type="text" id="new-name" maxlength="160" placeholder="You can change it later" autocomplete="off"></label>
-    <label class="field-label">Who can see it<select id="new-sharing"><option value="staff">All staff</option><option value="private">Only me</option></select></label>
+    <label class="field-label">Where it goes<select id="new-sharing"><option value="private">My storage (private)</option><option value="staff">Shared with staff</option></select></label>
    </div>
    <p class="form-error" id="new-error" role="alert" hidden></p>
    <div class="dialog-actions"><button class="btn ghost" type="button" data-close>Cancel</button><button class="btn primary" type="submit" id="new-create">Create document</button></div>

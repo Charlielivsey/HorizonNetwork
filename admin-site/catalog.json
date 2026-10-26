@@ -139,12 +139,12 @@
     ]
   },
   {
-    "id": "documents",
-    "name": "HN Group Documents",
-    "process": "hn-documents",
-    "port": 5500,
+    "id": "docs",
+    "name": "HN Group Docs",
+    "process": "hn-docs",
+    "port": 4500,
     "hosts": [
-      "documents.hngroup.org.uk"
+      "docs.hngroup.org.uk"
     ]
   },
   {
@@ -199,15 +199,6 @@
     "port": 4400,
     "hosts": [
       "careers.hngroup.org.uk"
-    ]
-  },
-  {
-    "id": "docs",
-    "name": "Documentation",
-    "process": "hn-docs",
-    "port": 4500,
-    "hosts": [
-      "docs.hngroup.org.uk"
     ]
   },
   {

@@ -20,11 +20,10 @@ const SITES=[
  ['https://support.hngroup.org.uk/',['support','hn support','hn group support']],
  ['https://clients.hngroup.org.uk/',['clients','client portal','clients portal','hn group clients']],
  ['https://careers.hngroup.org.uk/',['careers','hn careers','hn group careers']],
- ['https://docs.hngroup.org.uk/',['docs','documentation','hn docs','hn group docs']],
  ['https://news.hngroup.org.uk/',['news','hn news','hn group news']],
  ['https://accounts.hngroup.org.uk/',['hn account','my account','hn group account','account settings','accounts']],
  ['https://devices.hngroup.org.uk/',['hn group devices','hn devices','my devices','device approval','devices']],
- ['https://documents.hngroup.org.uk/',['hn group documents','hn documents','documents','letterhead','company letterhead','document templates']],
+ ['https://docs.hngroup.org.uk/',['hn group docs','hn docs','docs','documentation','hn group documents','documents','letterhead','company letterhead','document templates','my storage']],
  ['https://investors.hngroup.org.uk/',['investors','hn investors','hn group investors','investor relations','investor portal']],
  ['https://downloads.hngroup.org.uk/',['downloads','hn downloads','hn group downloads','hn browser','browser download']]
 ];
