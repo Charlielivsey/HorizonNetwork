@@ -1,11 +1,11 @@
 {
- "tag": "app-manager-v2.1.1-7",
- "version": "2.1.1",
- "build": 7,
- "publishedAt": "2026-10-25T18:57:54.561Z",
+ "tag": "app-manager-v3.0.0-10",
+ "version": "3.0.0",
+ "build": 10,
+ "publishedAt": "2026-10-26T00:38:08.244Z",
  "asset": {
-  "name": "HN-Group-App-Manager-2.1.1-win-x64.exe",
-  "size": 112092806,
-  "sha256": "6e677f973daa384d32e657e5e8350e2db8a15c2b80be1cd8dc2c479911405585"
+  "name": "HN-Group-App-Manager-3.0.0-win-x64.exe",
+  "size": 112097672,
+  "sha256": "3c9deefabfd89a5c594e4aadf8b1bbbb448edb09604f963eeb14484a181a29e7"
  }
 }
