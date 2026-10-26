@@ -5,17 +5,15 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { createAuth, STATUS_ORIGIN } = require('./auth');
 const auth = createAuth();
+const { reconcile } = require('./catalog.cjs');
 const DATA = process.env.DATA_DIR || path.join(__dirname, 'data');
 fs.mkdirSync(DATA, { recursive: true, mode: 0o700 });
 const file = path.join(DATA, 'status.json');
-let db = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {
-  services: [
-    { id: crypto.randomUUID(), name: 'HN Group website', url: 'https://hngroup.org.uk', override: 'auto', checks: [], days: {} },
-    { id: crypto.randomUUID(), name: 'Staff portal', url: 'https://staff.hngroup.org.uk', override: 'auto', checks: [], days: {} }
-  ], incidents: []
-};
+let db = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : { services: [], incidents: [] };
+const catalogueChanged = reconcile(db);
 const states = ['operational', 'degraded', 'outage', 'maintenance'];
 function save() { fs.writeFileSync(file + '.tmp', JSON.stringify(db), { mode: 0o600 }); fs.renameSync(file + '.tmp', file); }
+if (catalogueChanged) save();
 function effective(s) {
   if (s.override !== 'auto') return s.override;
   const last = s.checks.at(-1);

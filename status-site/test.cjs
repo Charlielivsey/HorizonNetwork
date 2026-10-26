@@ -17,6 +17,11 @@ test('protected management, real checks, incidents and persistent history', asyn
   await new Promise(r => authServer.listen(0, '127.0.0.1', r));
   const authBase = `http://127.0.0.1:${authServer.address().port}`;
   process.env.AUTH_BACKEND = authBase;
+  // Seeded production monitors are deterministic fixtures; never contact live websites in tests.
+  const originalFetch = global.fetch;
+  const seededURLs = new Set(require('./catalog.cjs').websites().map(site => new URL(site.url).href));
+  global.fetch = (input, options) => seededURLs.has(new URL(input).href)
+    ? Promise.resolve(new Response('', {status: 200})) : originalFetch(input, options);
   const { server, checkAll } = require('./server');
   let healthy = true;
   const target = http.createServer((req, res) => { res.writeHead(healthy ? 200 : 503); res.end(); });
@@ -45,6 +50,9 @@ test('protected management, real checks, incidents and persistent history', asyn
     return { code: r.status, data: await r.json() };
   };
   try {
+    const initial = (await request('/api/status', null, false)).data;
+    assert.equal(initial.services.length, seededURLs.size);
+    assert.ok(initial.services.every(s => s.status === 'unknown' && s.uptime === null));
     assert.equal((await request('/api/admin', null, false)).code, 401);
     const direct = await fetch(base + '/admin', { redirect: 'manual' });
     assert.equal(direct.headers.get('location'), '/auth/login');
@@ -170,6 +178,7 @@ test('protected management, real checks, incidents and persistent history', asyn
     assert.equal(loginNext('//example.com/'), null);
     assert.equal(loginNext('/status-admin/authorize?state=' + 'a'.repeat(64)), '/status-admin/authorize?state=' + 'a'.repeat(64));
   } finally {
+    global.fetch = originalFetch;
     await new Promise(r => setTimeout(r, 30));
     await new Promise(r => server.close(r));
     await new Promise(r => target.close(r));
