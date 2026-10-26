@@ -224,6 +224,25 @@ img.avatar.photo{object-fit:cover;background:var(--surface2);padding:0}
 @media (max-width:900px){.file-row{grid-template-columns:1fr auto}.file-meta{grid-column:1/-1;grid-row:2}}
 @media print{.history-hint{display:none}}
 
+
+/* Private & confidential, protection, selecting several items */
+.confidential-mark{margin:-5mm 0 6mm;text-align:center;font-size:8pt;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#B4234F}
+.pill{display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:999px;font-size:12px;font-weight:800}
+.pill.confidential,.tag.confidential{background:var(--bad-soft);color:var(--bad);border-color:transparent}
+.pill.protected,.tag.protected{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+.check-label{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;margin-top:12px;border:1.5px solid var(--border);border-radius:14px;background:var(--surface2);cursor:pointer}
+.check-label input{width:18px;height:18px;margin-top:2px;accent-color:var(--purple);flex:none}
+.check-label span{display:grid;gap:2px}.check-label small{color:var(--muted);font-size:13px;line-height:1.45}
+.check-label:has(input:disabled){cursor:default;opacity:.8}
+.selecting{position:relative;cursor:pointer}
+.doc-card.selecting .select-box{position:absolute;top:6px;left:6px;z-index:2}
+.file-row.selecting{grid-template-columns:auto minmax(0,1.4fr) minmax(0,1fr) auto}
+.select-box{width:20px;height:20px;accent-color:var(--purple);cursor:pointer}
+.select-box:disabled{cursor:not-allowed;opacity:.4}
+.picked{border-color:var(--accent)!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 25%,transparent)}
+.bulk-bar{position:sticky;bottom:16px;z-index:15;margin-top:22px;display:flex;align-items:center;gap:10px;padding:10px 12px 10px 18px;border-radius:16px;background:var(--surface);border:1px solid var(--border);box-shadow:0 18px 40px -16px #1c213566;font-weight:700;animation:pop .2s var(--out) both}
+@media print{.confidential-mark{margin:-4mm 0 5mm}}
+
 @media (max-width:900px){
  .top-inner{flex-wrap:wrap;padding:10px 0}
  .tabs{order:3;width:100%;margin:0}

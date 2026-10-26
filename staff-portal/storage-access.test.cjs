@@ -28,6 +28,9 @@ test('document storage: permission, Super Admin, timed grants and the Auth profi
     assert.match(err({ granteeId: alex.id, ownerId: jo.id, until: new Date(Date.now() + 400 * 86400000).toISOString() }), /a year/);
     const g = access.add({ granteeId: alex.id, ownerId: jo.id, until: new Date(Date.now() + 2 * 86400000).toISOString(), reason: 'Covering' }, sam);
     assert.equal(g.ownerName, 'Jo Smith');
+    assert.equal(access.canOpen(alex, jo.id), true, 'a grant opens that one person’s storage');
+    assert.equal(access.canOpen(alex, sam.id), false);
+    assert.equal(access.canOpen(sam, alex.id), true, 'the permission opens anyone’s');
     let id = access.forIdentity(alex);
     assert.equal(id.storageAccess, false);
     assert.deepEqual(id.storageGrants.map((x) => [x.personId, x.name]), [[jo.id, 'Jo Smith']]);
@@ -35,6 +38,7 @@ test('document storage: permission, Super Admin, timed grants and the Auth profi
     access.add({ granteeId: alex.id, ownerId: jo.id, until: new Date(Date.now() + 5 * 86400000).toISOString() }, sam);
     assert.equal(access.list().filter((x) => x.granteeId === alex.id).length, 1);
     access.remove(access.list()[0].id);
+    assert.equal(access.canOpen(alex, jo.id), false, 'removed access stops at once');
     assert.deepEqual(access.forIdentity(alex).storageGrants, []);
     const saved = JSON.parse(fs.readFileSync(path.join(dir, 'storage-access.json'), 'utf8'));
     assert.equal(saved.grants.length, 0);

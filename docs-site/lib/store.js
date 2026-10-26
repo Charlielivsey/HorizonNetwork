@@ -111,7 +111,8 @@ const canManage = (d, user) => d.ownerId === user.id || (user.admin && d.sharing
 function view(d, user, full) {
   const v = { kind: 'document', id: d.id, title: d.title, company: d.company, template: d.template, status: d.status, sharing: d.sharing, version: d.version,
     owner: d.owner, ownerId: d.ownerId, createdAt: d.createdAt, updatedAt: d.updatedAt, updatedBy: d.updatedBy, mine: d.ownerId === user.id,
-    readOnly: !canEdit(d, user), canManage: canManage(d, user) };
+    readOnly: !canEdit(d, user), canManage: canManage(d, user), confidential: !!d.confidential, protected: !!d.protected,
+    canDelete: canManage(d, user) && !d.protected };
   if (full) { v.fields = d.fields; v.body = d.body; v.history = (d.policy && d.policy.history) || []; }
   return v;
 }
@@ -167,6 +168,7 @@ function create(user, input) {
   const start = catalog.start(t, c, user);
   const d = { id: crypto.randomUUID(), title: plain(input.title, 160) || start.title || (t.id === 'blank' ? 'Untitled document' : t.name), company: c.id, template: t.id,
     fields: start.fields, body: sanitize(start.body), status: 'draft', sharing: input.sharing === 'staff' ? 'staff' : 'private', version: 1,
+    confidential: input.confidential === true || (input.confidential === undefined && !!t.confidential), protected: false,
     owner: user.displayName, ownerId: user.id, ownerEmail: user.email, createdAt: now(), updatedAt: now(), updatedBy: user.displayName };
   data.documents[d.id] = d;
   audit(user, 'created', d); save();
@@ -187,6 +189,17 @@ function update(id, user, input) {
     if (d.ownerId !== user.id && !user.admin) throw fail(403, 'Only the author can move this document.');
     if (input.sharing === 'private' && d.ownerId !== user.id) throw fail(403, 'Only the author can move a document into their private storage.');
     d.sharing = input.sharing; audit(user, input.sharing === 'private' ? 'moved to private storage' : 'shared with staff', d);
+  }
+  // "Private & confidential" is marked on every page; anyone who can edit the document can change it.
+  if (input.confidential !== undefined && !!input.confidential !== !!d.confidential) {
+    d.confidential = !!input.confidential; audit(user, d.confidential ? 'marked private & confidential' : 'unmarked private & confidential', d);
+  }
+  // Protection from deletion is switched on in the document's settings by its author (or an owner-level/Super Admin
+  // account for shared documents) and can never be switched off.
+  if (input.protected !== undefined && !!input.protected !== !!d.protected) {
+    if (!input.protected) throw fail(403, 'This document is protected from deletion, and that can’t be undone.');
+    if (!canManage(d, user)) throw fail(403, 'Only the author can protect this document from deletion.');
+    d.protected = true; d.protectedBy = user.displayName; d.protectedAt = now(); audit(user, 'protected from deletion', d);
   }
   if (input.status !== undefined && input.status !== d.status) {
     if (!STATUSES.includes(input.status)) throw fail(400, 'Unknown status.');
@@ -253,7 +266,7 @@ function duplicate(id, user) {
   const s = get(id, user);
   const d = { ...JSON.parse(JSON.stringify(s)), id: crypto.randomUUID(), title: (s.title + ' (copy)').slice(0, 160), status: 'draft', version: 1,
     sharing: s.sharing === 'staff' && canEdit(s, user) ? s.sharing : 'private', owner: user.displayName, ownerId: user.id, ownerEmail: user.email, createdAt: now(), updatedAt: now(), updatedBy: user.displayName };
-  delete d.policy;
+  delete d.policy; d.protected = false; delete d.protectedBy; delete d.protectedAt;
   data.documents[d.id] = d;
   audit(user, 'duplicated', d); save();
   return view(d, user, true);
@@ -261,9 +274,31 @@ function duplicate(id, user) {
 
 function remove(id, user) {
   const d = get(id, user);
+  if (d.protected) throw fail(403, 'This document is protected and can never be deleted.');
   if (!canManage(d, user)) throw fail(403, 'Only the author can delete this document.');
   delete data.documents[id];
   audit(user, 'deleted', d); save();
+}
+// Deletes several documents and files at once. Anything protected, or that this person can't delete, is left
+// alone and listed with the reason.
+function removeMany(user, input) {
+  const ids = (v) => (Array.isArray(v) ? v : []).filter((x) => typeof x === 'string').slice(0, 500);
+  const deleted = { documents: 0, files: 0 }, skipped = [];
+  for (const id of ids(input.documents)) {
+    const d = data.documents[id];
+    if (!d || !canSee(d, user)) { skipped.push({ id, reason: 'Not found.' }); continue; }
+    if (d.protected) { skipped.push({ id, title: d.title, reason: 'Protected from deletion.' }); continue; }
+    if (!canManage(d, user)) { skipped.push({ id, title: d.title, reason: 'Only the author can delete it.' }); continue; }
+    delete data.documents[id]; audit(user, 'deleted', d, { bulk: true }); deleted.documents++;
+  }
+  for (const id of ids(input.files)) {
+    const f = data.files[id];
+    if (!f || !storageAllowed(user, f.ownerId)) { skipped.push({ id, reason: 'Not found.' }); continue; }
+    if (f.ownerId !== user.id) { skipped.push({ id, title: f.name, reason: 'Only the owner can delete it.' }); continue; }
+    delete data.files[id]; fs.rmSync(blobPath(id), { force: true }); audit(user, 'deleted', f, { bulk: true }); deleted.files++;
+  }
+  save();
+  return { deleted, skipped };
 }
 
 // Counts per company for the filter, in the given scope.
@@ -358,5 +393,5 @@ function session(token) { const s = data.sessions[hash(token || '')]; if (!s || 
 function updateSession(token, patch) { const s = session(token); if (s) { Object.assign(s, patch); save(); } }
 function endSession(token) { if (token && data.sessions[hash(token)]) { delete data.sessions[hash(token)]; save(); } }
 
-module.exports = { init, list, storage, get, view, create, update, duplicate, remove, counts, addFile, readFile, updateFile, removeFile, notePerson, person, setAvatar, avatar,
+module.exports = { init, list, storage, get, view, create, update, duplicate, remove, removeMany, counts, addFile, readFile, updateFile, removeFile, notePerson, person, setAvatar, avatar,
   createSession, session, updateSession, endSession, sections, describeChanges, nextVersion };

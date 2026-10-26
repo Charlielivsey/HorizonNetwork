@@ -1,4 +1,18 @@
 [
-  { "id": "merger-agreement-2026", "ownerEmail": "charlie.livsey@hngroup.org.uk", "file": "hn-group-merger-agreement.pdf", "name": "HN Group merger agreement.pdf", "company": "hn-group",
-    "note": "The user's request (26 October 2026): put the merger agreement in their private storage." }
+  {
+    "id": "merger-agreement-2026",
+    "ownerEmail": "charlie.livsey@hngroup.org.uk",
+    "file": "hn-group-merger-agreement.pdf",
+    "name": "HN Group merger agreement.pdf",
+    "company": "hn-group",
+    "note": "The user's request (26 October 2026): put the merger agreement in their private storage."
+  },
+  {
+    "id": "merger-agreement-2026-catnap",
+    "ownerEmail": "catnap@hngroup.org.uk",
+    "file": "hn-group-merger-agreement.pdf",
+    "name": "HN Group merger agreement.pdf",
+    "company": "hn-group",
+    "note": "The user's request (26 October 2026): the merger agreement in catnap@hngroup.org.uk's private storage too."
+  }
 ]

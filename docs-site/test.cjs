@@ -80,6 +80,7 @@ test('HN Group Docs: sign-in, storage, files, access, templates, filters, editin
   const authServer = http.createServer((req, res) => {
     let body = ''; req.on('data', (c) => { body += c; }); req.on('end', () => {
       const data = JSON.parse(body || '{}'), send = (status, value) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(value)); };
+      if (req.url === '/api/auth/staff-directory') return req.headers.authorization === 'Bearer ' + secret ? send(200, { people: Object.values(people).map((p) => ({ id: p.id, displayName: p.displayName, jobTitle: p.jobTitle, company: 'HN Group' })) }) : send(401, { error: 'No.' });
       if (req.headers.authorization !== 'Bearer ' + secret || data.client_id !== 'docs') return send(401, { error: 'No.' });
       if (req.url === '/api/sso/exchange') { const g = codes.get(data.code); codes.delete(data.code); if (!g || g.state !== data.state) return send(401, { error: 'Expired.' }); const s = hex(); sessions.set(s, g.who); return send(200, { session: s, expires: Date.now() + 3600000, user: people[g.who] }); }
       if (req.url === '/api/sso/session') { const who = sessions.get(data.session); return who ? send(200, { session: data.session, user: people[who] }) : send(401, { error: 'Expired.' }); }
@@ -89,7 +90,7 @@ test('HN Group Docs: sign-in, storage, files, access, templates, filters, editin
   });
   await new Promise((r) => authServer.listen(0, '127.0.0.1', r));
   const port = await freePort(), SITE = 'http://127.0.0.1:' + port;
-  const env = { ...process.env, PORT: String(port), HOST: '127.0.0.1', DOCS_DATA_DIR: path.join(dir, 'data'), DOCS_SEED_DIR: seedDir, DOCS_ORIGIN: SITE, AUTH_ORIGIN: 'https://auth.example', AUTH_BACKEND: 'http://127.0.0.1:' + authServer.address().port, STATUS_SSO_SECRET_FILE: path.join(dir, 'secret') };
+  const env = { ...process.env, PORT: String(port), HOST: '127.0.0.1', DOCS_DATA_DIR: path.join(dir, 'data'), DOCS_SEED_DIR: seedDir, DOCS_ORIGIN: SITE, AUTH_ORIGIN: 'https://auth.example', AUTH_BACKEND: 'http://127.0.0.1:' + authServer.address().port, STAFF_BACKEND: 'http://127.0.0.1:' + authServer.address().port, STATUS_SSO_SECRET_FILE: path.join(dir, 'secret') };
   let child = spawn(process.execPath, [path.join(__dirname, 'server.js')], { env, stdio: ['ignore', 'ignore', 'inherit'] });
   const call = async (p, o = {}) => {
     const headers = { ...(o.json ? { 'Content-Type': 'application/json' } : {}), ...(o.cookie ? { cookie: o.cookie } : {}), ...(o.origin === false ? {} : typeof o.origin === 'string' ? { origin: o.origin } : o.method && o.method !== 'GET' || o.json ? { origin: SITE } : {}), ...(o.headers || {}) };
@@ -237,6 +238,53 @@ test('HN Group Docs: sign-in, storage, files, access, templates, filters, editin
     assert.equal((await call('/api/documents/' + report.id, { cookie: owner.cookie, method: 'DELETE' })).status, 200);
     assert.equal((await call('/api/documents/' + report.id, { cookie: sam.cookie })).status, 404);
 
+    // Private & confidential, permanent protection from deletion, and deleting several things at once.
+    r = await call('/api/documents', { cookie: alex.cookie, json: { company: 'hn-group', template: 'termination' } });
+    const hr = r.body.document;
+    assert.equal(hr.confidential, true, 'termination letters start private & confidential');
+    r = await call('/api/documents', { cookie: alex.cookie, json: { company: 'hn-group', template: 'memo', title: 'Keep forever', confidential: true } });
+    let keep = r.body.document; assert.equal(keep.confidential, true); assert.equal(keep.canDelete, true);
+    r = await call('/api/documents/' + keep.id, { cookie: alex.cookie, method: 'PUT', json: { version: keep.version, confidential: false } }); keep = r.body.document;
+    assert.equal(keep.confidential, false);
+    r = await call('/api/documents/' + keep.id, { cookie: alex.cookie, method: 'PUT', json: { version: keep.version, protected: true } }); keep = r.body.document;
+    assert.equal(keep.protected, true); assert.equal(keep.canDelete, false);
+    assert.equal((await call('/api/documents/' + keep.id, { cookie: alex.cookie, method: 'PUT', json: { version: keep.version, protected: false } })).status, 403, 'protection can’t be undone');
+    assert.equal((await call('/api/documents/' + keep.id, { cookie: alex.cookie, method: 'DELETE' })).status, 403);
+    assert.equal((await call('/api/documents/' + keep.id, { cookie: owner.cookie, method: 'DELETE' })).status, 403, 'not even an owner-level account can delete it');
+    const sharedOfSam = made.find((d) => d.template === 'minutes' && d.company === 'hn-group');
+    r = await call('/api/delete-many', { cookie: alex.cookie, json: { documents: [hr.id, keep.id, sharedOfSam.id, 'nope'], files: [file.id] } });
+    assert.deepEqual(r.body.deleted, { documents: 1, files: 1 });
+    assert.deepEqual(r.body.skipped.map((x) => x.reason).sort(), ['Not found.', 'Only the author can delete it.', 'Protected from deletion.']);
+    assert.equal((await call('/api/documents/' + keep.id, { cookie: alex.cookie })).status, 200);
+    assert.equal((await call('/api/documents/' + hr.id, { cookie: alex.cookie })).status, 404);
+
+    // Download PDF: made on the server, with the fonts embedded, page numbers and no website address.
+    r = await call('/api/documents/' + termination.id + '/pdf', { cookie: sam.cookie });
+    assert.equal(r.status, 200); assert.equal(r.headers.get('content-type'), 'application/pdf');
+    assert.match(r.headers.get('content-disposition'), /^attachment; filename="Termination%20letter%20for%20HN%20Group.pdf"/);
+    const pdfText = r.body.toString('latin1');
+    assert.ok(pdfText.startsWith('%PDF-1.7') && pdfText.trimEnd().endsWith('%%EOF'));
+    assert.match(pdfText, /PlusJakartaSans-Regular/); assert.match(pdfText, /\/Subtype \/Image/);
+    assert.equal((await call('/api/documents/' + secretDoc.id + '/pdf', { cookie: sam3.cookie })).status, 404, 'PDFs follow the same access rules');
+
+    // Staff storage: everyone for people allowed to open any storage, only their grants for others.
+    r = await call('/api/people', { cookie: owner.cookie });
+    assert.equal(r.body.all, true); assert.deepEqual(r.body.people.map((p) => p.id).sort(), ['p-alex', 'p-sam']);
+    people.sam.storageGrants = [{ personId: 'p-alex', name: 'Alex Jones', until: later(1) }];
+    const sam4 = await signIn('sam');
+    r = await call('/api/people', { cookie: sam4.cookie });
+    assert.equal(r.body.all, false); assert.deepEqual(r.body.people.map((p) => p.id), ['p-alex']);
+
+    // The staff portal's view of someone's storage: loopback with the service secret only, never through nginx.
+    const svc = (p, headers) => call(p, { headers: { authorization: 'Bearer ' + secret, ...(headers || {}) } });
+    assert.equal((await call('/api/service/storage/p-alex')).status, 404);
+    assert.equal((await svc('/api/service/storage/p-alex', { 'x-real-ip': '203.0.113.9' })).status, 404, 'refused when it came through nginx');
+    r = await svc('/api/service/storage/p-alex?by=Portal%20Person&byId=p-x');
+    assert.equal(r.status, 200); assert.deepEqual(r.body.documents.map((d) => d.title).sort(), ['Alex private notes', 'Keep forever']);
+    r = await svc('/api/service/documents/' + secretDoc.id + '/pdf?by=Portal%20Person&byId=p-x');
+    assert.equal(r.status, 200); assert.ok(r.body.subarray(0, 5).toString() === '%PDF-');
+    assert.equal((await svc('/api/service/documents/' + termination.id + '?by=x')).status, 404, 'only private storage');
+
     // Everything survives a restart, the seed isn't added twice, and sign-out needs the site's own origin.
     child.kill(); await new Promise((res) => child.once('exit', res));
     child = spawn(process.execPath, [path.join(__dirname, 'server.js')], { env, stdio: ['ignore', 'ignore', 'inherit'] });
@@ -246,6 +294,7 @@ test('HN Group Docs: sign-in, storage, files, access, templates, filters, editin
     assert.equal(r.status, 302); assert.equal((await call('/api/me', { cookie: alex.cookie })).status, 401);
     const saved = JSON.parse(fs.readFileSync(path.join(dir, 'data', 'documents.json'), 'utf8'));
     assert.ok(saved.audit.some((a) => a.action === 'opened storage' && a.of === 'p-alex' && a.byId === 'p-owner'), 'storage visits are logged');
+    assert.ok(saved.audit.some((a) => a.action === 'opened storage' && a.by === 'Portal Person (staff portal)'), 'visits from the staff portal are logged');
     assert.ok(!JSON.stringify(saved.sessions).includes(sam.cookie.split('=')[1]), 'only hashes of sign-in tokens are kept');
   } finally {
     child.kill(); authServer.close();

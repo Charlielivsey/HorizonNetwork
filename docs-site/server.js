@@ -9,6 +9,8 @@ const path = require('node:path');
 const store = require('./lib/store');
 const catalog = require('./lib/catalog');
 const { createAuth } = require('./lib/auth');
+const { renderDocument } = require('./lib/pdf');
+const crypto = require('node:crypto');
 
 const PUBLIC = process.env.DOCS_PUBLIC_DIR || path.join(__dirname, 'public');
 const DATA_DIR = process.env.DOCS_DATA_DIR || '/var/lib/hn-docs';
@@ -38,6 +40,56 @@ function showPage(res, status, title, text, cookies, action) {
   res.end('<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex, nofollow"><title>' + esc(title) + ' · HN Group Docs</title><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/assets/documents.css?v=1"></head><body class="plain">' +
     '<div class="stripe" aria-hidden="true"></div><header class="top"><div class="top-inner"><a class="brand" href="/"><img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="92" height="32"><img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="92" height="32"><span class="brand-name">Docs</span></a></div></header>' +
     '<main class="message"><section class="card"><p class="eyebrow">HN Group Docs</p><h1>' + esc(title) + '</h1><p class="muted">' + esc(text) + '</p><p><a class="btn primary" href="' + esc(href) + '">' + esc(label) + '</a></p></section></main></body></html>');
+}
+
+const STAFF_BACKEND = process.env.STAFF_BACKEND || 'http://127.0.0.1:3250';
+const SECRET_FILE = process.env.STATUS_SSO_SECRET_FILE || '/var/lib/hn-status-sso/secret';
+const secret = () => { try { const v = fs.readFileSync(SECRET_FILE, 'utf8').trim(); return /^[a-f0-9]{64}$/.test(v) ? v : ''; } catch { return ''; } };
+// Everyone on the staff list (names and job titles), for people allowed to open anyone's storage. Cached a minute.
+let directory = { at: 0, people: [] };
+async function staffDirectory() {
+  if (Date.now() - directory.at < 60000) return directory.people;
+  const key = secret();
+  if (!key) throw fail(503, 'The staff list isn’t available on this server.');
+  let response;
+  try { response = await fetch(STAFF_BACKEND + '/api/auth/staff-directory', { method: 'POST', headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' }, body: '{}', signal: AbortSignal.timeout(5000), redirect: 'error' }); }
+  catch { throw fail(503, 'The staff list is unavailable. Please try again shortly.'); }
+  const value = await response.json().catch(() => ({}));
+  if (!response.ok || !Array.isArray(value.people)) throw fail(503, 'The staff list is unavailable. Please try again shortly.');
+  directory = { at: Date.now(), people: value.people.slice(0, 5000).map((p) => ({ id: String(p.id), name: String(p.displayName || ''), jobTitle: String(p.jobTitle || ''), company: String(p.company || '') })) };
+  return directory.people;
+}
+
+// The staff portal shows people's storage on its Document storage page. It asks over loopback with the shared service
+// secret (never through nginx), naming the member of staff looking, who the portal has already checked.
+function serviceAllowed(req) {
+  const key = secret(), given = String(req.headers.authorization || '').replace(/^Bearer /, '');
+  if (!key || req.headers['x-real-ip'] || given.length !== key.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(given), Buffer.from(key));
+}
+async function service(req, res, url) {
+  if (req.method !== 'GET' || !serviceAllowed(req)) throw fail(404, 'Not found.');
+  const viewer = { id: 'portal:' + String(url.searchParams.get('byId') || '').slice(0, 64), displayName: String(url.searchParams.get('by') || 'Staff portal').slice(0, 120) + ' (staff portal)', email: '', storageAccess: true, storageGrants: [] };
+  let m = /^\/api\/service\/storage\/([A-Za-z0-9_-]{1,64})$/.exec(url.pathname);
+  if (m) return send(res, 200, store.storage(m[1], viewer));
+  m = /^\/api\/service\/documents\/([0-9a-f-]{36})(\/pdf)?$/.exec(url.pathname);
+  if (m && UUID.test(m[1])) {
+    const d = store.get(m[1], viewer);
+    if (d.sharing !== 'private') throw fail(404, 'Not found.');
+    return m[2] ? sendPdf(res, store.view(d, viewer, true)) : send(res, 200, { document: store.view(d, viewer, true) });
+  }
+  m = /^\/api\/service\/files\/([0-9a-f-]{36})$/.exec(url.pathname);
+  if (m && UUID.test(m[1])) { const { file, bytes } = store.readFile(m[1], viewer); return sendFile(res, file, bytes, url.searchParams.get('download') === '1'); }
+  throw fail(404, 'Not found.');
+}
+
+// A document as a PDF download (made here, so no print dialog is involved).
+function sendPdf(res, d) {
+  const bytes = renderDocument(d, catalog.company(d.company), catalog.template(d.template));
+  const name = (String(d.title || 'Document').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').trim() || 'Document') + '.pdf', encoded = encodeURIComponent(name);
+  res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Length': bytes.length, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff',
+    'Content-Disposition': 'attachment; filename="' + encoded + '"; filename*=UTF-8\'\'' + encoded });
+  res.end(bytes);
 }
 
 // The raw bytes of an upload (up to 25 MB).
@@ -78,7 +130,9 @@ async function api(req, res, url) {
     return send(res, 200, { ...store.list(user, { scope, company: q.get('company') || '', template: q.get('template') || '', q: q.get('q') || '' }), counts: store.counts(user, scope) });
   }
   if (route === '/api/documents' && method === 'POST') return send(res, 201, { document: store.create(user, await json(req)) });
-  let m = /^\/api\/documents\/([0-9a-f-]{36})(\/duplicate)?$/.exec(route);
+  let m = /^\/api\/documents\/([0-9a-f-]{36})\/pdf$/.exec(route);
+  if (m && UUID.test(m[1]) && method === 'GET') return sendPdf(res, store.view(store.get(m[1], user), user, true));
+  m = /^\/api\/documents\/([0-9a-f-]{36})(\/duplicate)?$/.exec(route);
   if (m && UUID.test(m[1])) {
     if (m[2] && method === 'POST') return send(res, 201, { document: store.duplicate(m[1], user) });
     if (m[2]) throw fail(405, 'Not allowed.');
@@ -86,9 +140,22 @@ async function api(req, res, url) {
     if (method === 'PUT') return send(res, 200, { document: store.update(m[1], user, await json(req)) });
     if (method === 'DELETE') { store.remove(m[1], user); return send(res, 200, { ok: true }); }
   }
+  // Everyone's storage, for people allowed to open it (the permission, Super Admin or the owner); people with an
+  // individual grant see just the storage they've been given.
+  if (route === '/api/people' && method === 'GET') {
+    const grants = (user.storageGrants || []).map((g) => ({ id: g.personId, name: g.name, until: g.until }));
+    if (!user.storageAccess) return send(res, 200, { all: false, people: grants });
+    return send(res, 200, { all: true, people: (await staffDirectory()).filter((p) => p.id !== user.id) });
+  }
+  if (route === '/api/delete-many' && method === 'POST') return send(res, 200, store.removeMany(user, await json(req)));
   // Someone's private storage (your own, or someone else's when the staff portal allows it).
   m = /^\/api\/storage\/([A-Za-z0-9_-]{1,64})$/.exec(route);
-  if (m && method === 'GET') return send(res, 200, store.storage(m[1], user));
+  if (m && method === 'GET') {
+    const r = store.storage(m[1], user);
+    // Someone who hasn't signed in to Docs yet: their name comes from the staff list.
+    if (!r.person.signedIn && user.storageAccess) { try { const p = (await staffDirectory()).find((x) => x.id === m[1]); if (p) Object.assign(r.person, { name: p.name, jobTitle: p.jobTitle }); } catch {} }
+    return send(res, 200, r);
+  }
   if (route === '/api/files' && method === 'POST') {
     let name = '';
     try { name = decodeURIComponent(String(req.headers['x-file-name'] || '')); } catch { throw fail(400, 'The file name isn’t valid.'); }
@@ -117,7 +184,7 @@ function serveFile(res, rel, cache) {
 }
 // The pages of the app (one page drawn by documents.js): shared documents, your storage, someone else's storage
 // (when allowed), templates and the editor.
-const APP_ROUTES = /^\/(?:|new|templates|storage|storage\/[A-Za-z0-9_-]{1,64}|doc\/[0-9a-f-]{36})$/;
+const APP_ROUTES = /^\/(?:|new|templates|people|storage|storage\/[A-Za-z0-9_-]{1,64}|doc\/[0-9a-f-]{36})$/;
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
@@ -125,6 +192,7 @@ const server = http.createServer(async (req, res) => {
   try {
     if (route === '/healthz') return send(res, 200, { ok: true });
     if (route.startsWith('/auth/') && await auth.handle(req, res, url, showPage)) return;
+    if (route.startsWith('/api/service/')) return await service(req, res, url);
     if (route.startsWith('/api/')) return await api(req, res, url);
     if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, { error: 'Not allowed.' });
     if (PUBLIC_FILES.has(route) && serveFile(res, route, 'public, max-age=300')) return;

@@ -179,6 +179,23 @@ async function handle(req, res, pathname, session) {
       if (!can(storageAccess.ACCESS)) return sendJson(res, 200, { manage: false, myGrants: mine.storageGrants }), true;
       return sendJson(res, 200, { manage: true, myGrants: mine.storageGrants, people: storageAccess.people(), grants: storageAccess.list() }), true;
     }
+    // Someone's storage, shown on this page: their private documents (as PDFs) and files, read only. Docs records the visit.
+    if ((m = /^\/api\/document-storage\/people\/([A-Za-z0-9_-]{1,64})(?:\/(documents|files)\/([0-9a-f-]{36})(\/pdf)?)?$/.exec(pathname)) && method === "GET") {
+      if (!storageAccess.canOpen(me, m[1])) throw httpError(403, "You don't have access to this person's storage.");
+      const listing = await storageAccess.storageOf(m[1], me);
+      if (!m[2]) {
+        const p = store.getPerson(m[1]);
+        if (p) listing.person = { ...listing.person, name: p.displayName, jobTitle: p.jobTitle || "" };
+        return sendJson(res, 200, listing), true;
+      }
+      const owned = (m[2] === "documents" ? listing.documents : listing.files).some((x) => x.id === m[3]);
+      if (!owned || (m[2] === "documents" && !m[4])) throw httpError(404, "That isn't in their storage.");
+      const r = await storageAccess.fromDocs("/api/service/" + m[2] + "/" + m[3] + (m[4] ? "/pdf" : ""), me, m[2] === "files" && new URL(req.url, "http://x").searchParams.get("download") === "1" ? { download: "1" } : {});
+      res.writeHead(200, { "Content-Type": r.type, "Content-Length": r.body.length, "Content-Disposition": r.disposition, "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox" });
+      res.end(r.body);
+      return true;
+    }
     if (!can(storageAccess.ACCESS)) throw httpError(403, "You don't have access to staff document storage.");
     if (method === "POST" && pathname === "/api/document-storage/grants") {
       const g = storageAccess.add(await readJsonBody(req), me);

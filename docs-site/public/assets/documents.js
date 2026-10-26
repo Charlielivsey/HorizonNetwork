@@ -38,8 +38,9 @@
   // ---------- Dialogs (in the HN design; the safe choice has focus, Escape cancels) ----------
   const layer = $('layer');
   let closeAsk = null, lastFocus = null;
-  function showLayer(which) { lastFocus = document.activeElement; layer.hidden = false; for (const id of ['new-dialog', 'ask']) $(id).hidden = id !== which; }
-  function hideLayer() { layer.hidden = true; $('new-dialog').hidden = true; $('ask').hidden = true; if (lastFocus && lastFocus.focus) lastFocus.focus(); }
+  const DIALOGS = ['new-dialog', 'settings-dialog', 'ask'];
+  function showLayer(which) { lastFocus = document.activeElement; layer.hidden = false; for (const id of DIALOGS) $(id).hidden = id !== which; }
+  function hideLayer() { layer.hidden = true; for (const id of DIALOGS) $(id).hidden = true; if (lastFocus && lastFocus.focus) lastFocus.focus(); }
   function ask({ title, text, ok, danger, input }) {
     return new Promise((resolve) => {
       $('ask-title').textContent = title; $('ask-text').textContent = text || ''; $('ask-text').hidden = !text;
@@ -54,9 +55,9 @@
   $('ask-ok').addEventListener('click', () => closeAsk && closeAsk($('ask-field').hidden ? true : $('ask-input').value));
   $('ask-cancel').addEventListener('click', () => closeAsk && closeAsk(null));
   $('ask-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('ask-ok').click(); } });
-  layer.addEventListener('mousedown', (e) => { if (e.target === layer) { if (closeAsk) closeAsk(null); else closeNew(); } });
+  layer.addEventListener('mousedown', (e) => { if (e.target === layer) { if (closeAsk) closeAsk(null); else if (!$('settings-dialog').hidden) hideLayer(); else closeNew(); } });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { if (closeAsk) closeAsk(null); else if (!$('new-dialog').hidden) closeNew(); else closeMenu(); }
+    if (e.key === 'Escape') { if (closeAsk) closeAsk(null); else if (!$('settings-dialog').hidden) hideLayer(); else if (!$('new-dialog').hidden) closeNew(); else if (S.selecting) endSelect(); else closeMenu(); }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && S.doc) { e.preventDefault(); saveNow(); }
   });
   for (const b of document.querySelectorAll('[data-close]')) b.addEventListener('click', () => closeNew());
@@ -72,13 +73,14 @@
   async function route() {
     if (S.doc && (dirty || saving)) await saveNow();
     const p = location.pathname, m = /^\/doc\/([0-9a-f-]{36})$/.exec(p), other = /^\/storage\/([A-Za-z0-9_-]{1,64})$/.exec(p);
-    for (const v of ['view-library', 'view-templates', 'view-editor']) $(v).hidden = true;
+    for (const v of ['view-library', 'view-templates', 'view-people', 'view-editor']) $(v).hidden = true;
     for (const a of document.querySelectorAll('.tabs a')) a.removeAttribute('aria-current');
     if (m) return openDoc(m[1]);
     S.doc = null; document.title = 'HN Group Docs';
     const params = new URLSearchParams(location.search);
     S.filter.company = S.companies.some((c) => c.id === params.get('company')) ? params.get('company') : '';
     if (p === '/templates') { tab('templates'); return showTemplates(); }
+    if (p === '/people') { tab('people'); return showPeople(); }
     S.scope = other && other[1] !== S.me.id ? 'person' : p.startsWith('/storage') ? 'mine' : 'shared';
     S.person = S.scope === 'person' ? other[1] : null;
     S.back = location.pathname + location.search;
@@ -170,13 +172,16 @@
       const card = el('a', { class: 'doc-card', href: '/doc/' + d.id, 'data-link': true },
         paper(c, t, d.title),
         el('div', { class: 'card-body' }, el('h3', { text: d.title }),
-          el('div', { class: 'card-meta' }, el('span', { class: 'tag ' + d.status, text: d.status === 'final' ? 'Final' : 'Draft' }), el('span', { text: t.name + ' · ' + c.name })),
+          el('div', { class: 'card-meta' }, el('span', { class: 'tag ' + d.status, text: d.status === 'final' ? 'Final' : 'Draft' }), d.confidential ? el('span', { class: 'tag confidential', text: 'Confidential' }) : null, d.protected ? el('span', { class: 'tag protected', text: 'Protected' }) : null, el('span', { text: t.name + ' · ' + c.name })),
           el('div', { class: 'card-meta' }, el('span', { text: 'Edited ' + ago(d.updatedAt) + ' by ' + d.updatedBy }))));
       card.style.animationDelay = Math.min(i, 12) * 25 + 'ms';
+      selectable(card, 'documents', d.id, d.canDelete, d.protected ? 'Protected from deletion' : 'Only the author can delete it');
       return card;
     }));
     $('files').hidden = !files.length;
-    $('file-list').replaceChildren(...files.map((x) => fileRow(x, S.scope === 'mine')));
+    $('file-list').replaceChildren(...files.map((x) => { const row = fileRow(x, S.scope === 'mine'); selectable(row, 'files', x.id, x.canManage, 'Only the owner can delete it'); return row; }));
+    S.visible = { documents: docs.filter((d) => d.canDelete).map((d) => d.id), files: files.filter((x) => x.canManage).map((x) => x.id) };
+    drawBulk();
     $('doc-empty').hidden = n > 0;
     $('doc-empty').querySelector('h2').textContent = S.scope === 'mine' ? 'Your storage is empty' : S.scope === 'person' ? 'Nothing in this storage' : 'No shared documents yet';
     $('doc-empty').querySelector('[data-new]').hidden = S.scope === 'person';
@@ -189,9 +194,45 @@
     box.hidden = S.scope !== 'mine' || (!grants.length && !S.me.storageAccess);
     box.replaceChildren(el('strong', { text: 'Other people’s storage' }),
       ...grants.map((g) => el('a', { class: 'chip', href: '/storage/' + encodeURIComponent(g.personId), 'data-link': true }, el('span', { text: g.name || 'Staff member' }), el('span', { class: 'n', text: 'until ' + new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(new Date(g.until)) }))),
-      S.me.storageAccess ? el('span', { class: 'muted small', text: 'You can open anyone’s storage from Document storage in the staff portal.' }) : null,
-      S.me.storageAccess ? el('a', { class: 'btn small', href: 'https://staff.hngroup.org.uk/document-storage', text: 'Open the staff portal' }) : null);
+      S.me.storageAccess ? el('span', { class: 'muted small', text: 'You can open anyone’s storage.' }) : null,
+      S.me.storageAccess ? el('a', { class: 'btn small', href: '/people', 'data-link': true, text: 'Staff storage' }) : null);
   }
+  // ---------- Selecting several items to delete at once ----------
+  S.selected = { documents: new Set(), files: new Set() };
+  function selectable(node, kind, id, allowed, why) {
+    if (!S.selecting) return;
+    node.classList.add('selecting');
+    const box = el('input', { type: 'checkbox', class: 'select-box', 'aria-label': allowed ? 'Select' : why, title: allowed ? '' : why, disabled: !allowed });
+    box.checked = S.selected[kind].has(id);
+    node.classList.toggle('picked', box.checked);
+    box.addEventListener('click', (e) => e.stopPropagation());
+    box.addEventListener('change', () => { if (box.checked) S.selected[kind].add(id); else S.selected[kind].delete(id); node.classList.toggle('picked', box.checked); drawBulk(); });
+    node.addEventListener('click', (e) => { if (!S.selecting || e.target.closest('.file-actions')) return; e.preventDefault(); e.stopImmediatePropagation(); if (allowed) { box.checked = !box.checked; box.dispatchEvent(new Event('change')); } }, true);
+    node.prepend(box);
+  }
+  function drawBulk() {
+    const n = S.selected.documents.size + S.selected.files.size;
+    $('bulk-bar').hidden = !S.selecting;
+    $('select-button').hidden = S.scope === 'person' || S.selecting;
+    $('bulk-count').textContent = n ? n + ' selected' : 'Choose what to delete';
+    $('bulk-delete').disabled = !n;
+    $('bulk-delete').textContent = n ? 'Delete ' + n : 'Delete selected';
+  }
+  function endSelect() { S.selecting = false; S.selected.documents.clear(); S.selected.files.clear(); loadDocuments(); }
+  $('select-button').addEventListener('click', () => { S.selecting = true; loadDocuments(); });
+  $('bulk-cancel').addEventListener('click', endSelect);
+  $('bulk-all').addEventListener('click', () => { for (const id of S.visible.documents) S.selected.documents.add(id); for (const id of S.visible.files) S.selected.files.add(id); loadDocuments(); });
+  $('bulk-delete').addEventListener('click', async () => {
+    const n = S.selected.documents.size + S.selected.files.size;
+    if (!n || !(await ask({ title: 'Delete ' + n + (n === 1 ? ' item' : ' items') + '?', text: 'They’ll be removed for everyone. This can’t be undone.', ok: 'Delete ' + n, danger: true }))) return;
+    try {
+      const r = await api('POST', '/api/delete-many', { documents: [...S.selected.documents], files: [...S.selected.files] });
+      const done = r.deleted.documents + r.deleted.files;
+      toast(done + (done === 1 ? ' item' : ' items') + ' deleted' + (r.skipped.length ? '. ' + r.skipped.length + ' left alone (protected or not yours).' : '.'), !!r.skipped.length);
+    } catch (e) { toast(e.message, true); }
+    endSelect();
+  });
+
   async function renameFile(f) {
     const name = await ask({ title: 'Rename file', ok: 'Rename', input: { label: 'Name', value: f.name } });
     if (!name) return;
@@ -227,6 +268,27 @@
   $('search').addEventListener('input', () => { clearTimeout(listTimer); listTimer = setTimeout(() => { S.filter.q = $('search').value.trim(); loadDocuments(); }, 220); });
   $('type-filter').addEventListener('change', () => { S.filter.template = $('type-filter').value; loadDocuments(); });
 
+  // ---------- Staff storage ----------
+  let people = null;
+  async function showPeople() {
+    $('view-people').hidden = false; document.title = 'Staff storage · HN Group Docs';
+    try { people = await api('GET', '/api/people'); } catch (e) { $('people-note').textContent = e.message; $('people-list').replaceChildren(); return; }
+    $('people-note').textContent = people.all ? 'Open anyone’s private storage to read and download what’s there. You can’t change or delete anything, and every visit is recorded.' : 'Storage you’ve been given access to in the staff portal, until the date shown. Every visit is recorded.';
+    drawPeople();
+  }
+  function drawPeople() {
+    if (!people) return;
+    const q = $('people-search').value.trim().toLowerCase();
+    const list = people.people.filter((p) => !q || [p.name, p.jobTitle, p.company].join(' ').toLowerCase().includes(q));
+    $('people-list').replaceChildren(...list.map((p) => el('a', { class: 'file-row person-row', role: 'listitem', href: '/storage/' + encodeURIComponent(p.id), 'data-link': true },
+      el('span', { class: 'file-name' }, el('span', { class: 'file-icon', 'aria-hidden': 'true', text: initials(p.name) }), el('span', { text: p.name })),
+      el('span', { class: 'file-meta', text: p.until ? 'Until ' + new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(p.until)) : [p.jobTitle, p.company].filter(Boolean).join(' · ') }),
+      el('span', { class: 'file-actions' }, el('span', { class: 'btn small', text: 'Open storage' })))));
+    $('people-empty').hidden = list.length > 0;
+    $('people-empty-text').textContent = q ? 'Nobody matches that search.' : 'Nobody has given you access to anyone’s storage.';
+  }
+  $('people-search').addEventListener('input', drawPeople);
+
   // ---------- Templates ----------
   function showTemplates() {
     $('view-templates').hidden = false;
@@ -249,10 +311,13 @@
     $('new-templates').replaceChildren(...groups.flatMap((g) => [el('p', { class: 'pick-group', text: g }),
       ...S.templates.filter((t) => t.group === g).map((t) => el('label', { class: 'option' }, el('input', { type: 'radio', name: 'template', value: t.id, checked: t.id === tSel }),
         el('strong', { text: t.name }), el('small', { text: t.blurb })))]));
+    $('new-confidential').checked = !!template(tSel).confidential;
     $('new-name').value = ''; $('new-sharing').value = S.scope === 'shared' && location.pathname === '/' ? 'staff' : 'private'; $('new-error').hidden = true; $('new-create').disabled = false;
     showLayer('new-dialog');
     $('new-dialog').querySelector('input[name=company]:checked').focus();
   }
+  // Choosing a template sets its usual marking (termination and resignation letters start private & confidential).
+  $('new-templates').addEventListener('change', (e) => { if (e.target.name === 'template') $('new-confidential').checked = !!template(e.target.value).confidential; });
   function closeNew() { if ($('new-dialog').hidden) return; hideLayer(); if (location.pathname === '/new') history.replaceState({}, '', '/'); }
   $('new-button').addEventListener('click', () => openNew({ company: S.filter.company }));
   document.addEventListener('click', (e) => { if (e.target.closest('[data-new]')) openNew({ company: S.filter.company }); });
@@ -261,7 +326,7 @@
     const f = new FormData($('new-form'));
     $('new-create').disabled = true;
     try {
-      const r = await api('POST', '/api/documents', { company: f.get('company'), template: f.get('template'), title: $('new-name').value, sharing: $('new-sharing').value });
+      const r = await api('POST', '/api/documents', { company: f.get('company'), template: f.get('template'), title: $('new-name').value, sharing: $('new-sharing').value, confidential: $('new-confidential').checked });
       hideLayer(); go('/doc/' + r.document.id);
     } catch (err) { $('new-error').textContent = err.message; $('new-error').hidden = false; $('new-create').disabled = false; }
   });
@@ -304,14 +369,14 @@
   function drawBranding() {
     const c = company(S.doc.company), t = template(S.doc.template);
     $('sheet-logo').src = logo(c); $('sheet-logo').alt = c.name;
-    $('sheet-label').textContent = t.label; $('sheet-site').textContent = c.website;
+    $('sheet-label').textContent = t.label;
     const legal = c.note && c.note.includes(c.legal) ? c.note : c.legal + (c.note ? ' · ' + c.note : '');
-    $('sheet-foot').replaceChildren(el('span', { text: legal }), el('span', { text: c.website }));
+    $('sheet-foot').replaceChildren(el('span', { text: legal }));
     // Printed pages carry the company footer and page numbers in the page margin (Chrome, Edge and HN Browser).
     const q = (v) => '"' + String(v).replace(/[\\"]/g, '\\$&').replace(/[\n\r]/g, ' ') + '"';
     try {
-      printSheet.replaceSync('@page { @bottom-left { content: ' + q(legal) + '; font: 7.5pt "Plus Jakarta Sans", sans-serif; color: #6E6F7E; vertical-align: top; padding-top: 4mm } ' +
-        '@bottom-right { content: ' + q(c.website + ' · Page ') + ' counter(page) " of " counter(pages); font: 7.5pt "Plus Jakarta Sans", sans-serif; color: #6E6F7E; vertical-align: top; padding-top: 4mm } }');
+      printSheet.replaceSync('@page { ' + (S.doc.confidential ? '@top-center { content: "PRIVATE & CONFIDENTIAL"; font: 800 7.5pt "Plus Jakarta Sans", sans-serif; letter-spacing: .14em; color: #B4234F; vertical-align: bottom; padding-bottom: 3mm } ' : '') + '@bottom-left { content: ' + q(legal) + '; font: 7.5pt "Plus Jakarta Sans", sans-serif; color: #6E6F7E; vertical-align: top; padding-top: 4mm } ' +
+        '@bottom-right { content: "Page " counter(page) " of " counter(pages); font: 7.5pt "Plus Jakarta Sans", sans-serif; color: #6E6F7E; vertical-align: top; padding-top: 4mm } }');
       if (!document.adoptedStyleSheets.includes(printSheet)) document.adoptedStyleSheets = [...document.adoptedStyleSheets, printSheet];
     } catch {}
     $('doc-company').value = c.id;
@@ -365,8 +430,35 @@
     $('doc-sharing').querySelector('option[value=private]').disabled = !d.mine;
     $('doc-sharing').disabled = !(d.mine || S.me.admin);
     $('doc-sharing').title = d.mine || S.me.admin ? '' : 'Only the author can move this document.';
-    $('doc-delete').hidden = !d.canManage;
+    $('doc-delete').hidden = !d.canManage || d.protected;
+    $('confidential-mark').hidden = !d.confidential;
+    $('confidential-pill').hidden = !d.confidential;
+    $('protected-pill').hidden = !d.protected;
+    $('doc-settings').hidden = !!d.readOnly;
+    drawBranding();
   }
+  // Document settings: Private & confidential, and protection from deletion (permanent, author only).
+  function openSettings() {
+    const d = S.doc;
+    $('set-confidential').checked = !!d.confidential;
+    $('set-protected').checked = !!d.protected;
+    $('set-protected').disabled = !!d.protected || !d.canManage;
+    $('set-protected-text').textContent = d.protected ? 'This document is protected: it can never be deleted.' : d.canManage ? 'Nobody, including you, will ever be able to delete this document. This can’t be undone.' : 'Only the author can protect this document from deletion.';
+    $('settings-error').hidden = true;
+    showLayer('settings-dialog'); $('set-confidential').focus();
+  }
+  $('settings-cancel').addEventListener('click', () => hideLayer());
+  $('settings-save').addEventListener('click', async () => {
+    const d = S.doc, confidential = $('set-confidential').checked, protect = $('set-protected').checked && !d.protected;
+    hideLayer();
+    if (protect && !(await ask({ title: 'Protect “' + d.title + '” from deletion?', text: 'Nobody will ever be able to delete it, including you. This can’t be undone.', ok: 'Protect it' }))) return;
+    if (confidential !== !!d.confidential) patch.confidential = confidential;
+    if (protect) patch.protected = true;
+    if (!Object.keys(patch).length) return;
+    await saveNow();
+    drawControls();
+    toast(protect ? 'Protected: this document can never be deleted.' : confidential ? 'Marked private & confidential.' : 'No longer marked private & confidential.');
+  });
   plainField(titleEl, false);
   body.addEventListener('input', () => changed());
 
@@ -388,7 +480,7 @@
       const r = await api('PUT', '/api/documents/' + doc.id, sent);
       if (S.doc && S.doc.id === doc.id) {
         const versionsBefore = (S.doc.history || []).length;
-        Object.assign(S.doc, { version: r.document.version, status: r.document.status, sharing: r.document.sharing, company: r.document.company, title: r.document.title, updatedAt: r.document.updatedAt, history: r.document.history, canManage: r.document.canManage });
+        Object.assign(S.doc, { version: r.document.version, status: r.document.status, sharing: r.document.sharing, company: r.document.company, title: r.document.title, updatedAt: r.document.updatedAt, history: r.document.history, canManage: r.document.canManage, confidential: r.document.confidential, protected: r.document.protected });
         document.title = S.doc.title + ' · HN Group Docs';
         // A policy marked final may have a new version number and history entry.
         if ((r.document.history || []).length !== versionsBefore) {
@@ -419,8 +511,16 @@
   $('doc-company').addEventListener('change', () => { S.doc.company = $('doc-company').value; patch.company = S.doc.company; drawBranding(); saveNow(); });
   $('doc-sharing').addEventListener('change', () => { patch.sharing = $('doc-sharing').value; S.doc.sharing = patch.sharing; saveNow().then(() => toast(S.doc.sharing === 'private' ? 'Moved to your private storage. Only you can see it now.' : 'Shared with staff. Everyone can see and edit it now.')); });
   $('doc-status').addEventListener('click', () => { S.doc.status = S.doc.status === 'final' ? 'draft' : 'final'; patch.status = S.doc.status; drawControls(); saveNow(); });
-  $('doc-print').addEventListener('click', async () => { await saveNow(); window.print(); });
+  // Download PDF: the server makes the PDF (no print dialog, so the browser adds nothing to it).
+  $('doc-pdf').addEventListener('click', async (e) => {
+    e.preventDefault();
+    await saveNow();
+    const a = el('a', { href: '/api/documents/' + S.doc.id + '/pdf', download: '' });
+    document.body.append(a); a.click(); a.remove();
+    toast('Downloading “' + S.doc.title + '.pdf”…');
+  });
   // The "…" menu.
+  $('doc-settings').addEventListener('click', () => { closeMenu(); openSettings(); });
   function closeMenu() { $('doc-menu').hidden = true; $('doc-more').setAttribute('aria-expanded', 'false'); }
   $('doc-more').addEventListener('click', (e) => { e.stopPropagation(); const open = $('doc-menu').hidden; $('doc-menu').hidden = !open; $('doc-more').setAttribute('aria-expanded', String(open)); if (open) $('doc-menu').querySelector('button:not([hidden])').focus(); });
   document.addEventListener('click', (e) => { if (!e.target.closest('#doc-menu')) closeMenu(); });
@@ -510,6 +610,7 @@
       $('who-photo').addEventListener('load', () => { $('who-photo').hidden = false; $('who-avatar').hidden = true; }, { once: true });
       $('who-photo').src = '/api/avatar';
     }
+    $('people-tab').hidden = !(me.user.storageAccess || (me.user.storageGrants || []).length);
     $('type-filter').append(...S.templates.map((t) => el('option', { value: t.id, text: t.name })), el('option', { value: 'files', text: 'Files' }));
     $('doc-company').replaceChildren(...S.companies.map((c) => el('option', { value: c.id, text: c.name })));
     $('loading').hidden = true;

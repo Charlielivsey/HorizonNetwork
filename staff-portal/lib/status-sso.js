@@ -69,7 +69,7 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       logEvent(req, session, 'status-admin-sign-in');
       redirect(res, `${STATUS_ORIGIN}/auth/callback?code=${code}&state=${state}`); return true;
     }
-    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/password', '/api/auth/code', '/api/auth/network-leadership', '/api/auth/network-avatar', '/api/auth/account-status', '/api/auth/vpn-pin', '/api/auth/accounts-session', '/api/auth/browser-issue', '/api/auth/browser-profile', '/api/auth/browser-avatar', '/api/auth/browser-offer', '/api/auth/browser-logout', '/api/auth/browser-unlock', '/api/auth/browser-lock', '/api/auth/browser-account', '/api/auth/browser-account-update', '/api/auth/browser-account-status', '/api/auth/browser-account-photo'].includes(pathname)) return false;
+    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/password', '/api/auth/code', '/api/auth/network-leadership', '/api/auth/network-avatar', '/api/auth/account-status', '/api/auth/staff-directory', '/api/auth/vpn-pin', '/api/auth/accounts-session', '/api/auth/browser-issue', '/api/auth/browser-profile', '/api/auth/browser-avatar', '/api/auth/browser-offer', '/api/auth/browser-logout', '/api/auth/browser-unlock', '/api/auth/browser-lock', '/api/auth/browser-account', '/api/auth/browser-account-update', '/api/auth/browser-account-status', '/api/auth/browser-account-photo'].includes(pathname)) return false;
     if (req.method !== 'POST') { sendJson(res, 405, { error: 'Method not allowed.' }); return true; }
     if (!credentials(req)) { sendJson(res, 401, { error: 'Status integration not authenticated.' }); return true; }
     const body = await readJsonBody(req, pathname === '/api/auth/browser-account-photo' ? 2 * 1024 * 1024 : undefined);
@@ -116,6 +116,12 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       const accounts = {};
       for (const id of ids) { const p = store.getPerson(id); accounts[id] = !!(p && p.account && p.account.enabled); }
       sendJson(res, 200, { accounts }); return true;
+    }
+    // HN Group Docs lists everyone's storage for people allowed to open it (names and job titles of enabled staff only).
+    if (pathname === '/api/auth/staff-directory') {
+      const people = store.employees().filter((p) => p.account && p.account.enabled).map((p) => ({ id: p.id, displayName: p.displayName, jobTitle: p.jobTitle || '', company: p.company || '' }))
+        .sort((a, b) => a.displayName.localeCompare(b.displayName));
+      sendJson(res, 200, { people }); return true;
     }
     // HN Secure Network asks for the PIN before connecting the VPN (checked through vpn.hngroup.org.uk).
     if (pathname === '/api/auth/vpn-pin') {

@@ -1436,6 +1436,7 @@
                             ? '<button type="button" class="menu-item compact" data-act="disable">' + icon("ban") + "<span>Disable login</span></button>"
                             : '<button type="button" class="menu-item compact" data-act="enable">' + icon("check") + "<span>Enable login</span></button>");
                     }
+                    if (e.account && can("storage.access")) actions.push('<a class="menu-item compact" href="/document-storage?view=' + encodeURIComponent(e.id) + '" data-link>' + icon("lock") + "<span>Document storage</span></a>");
                     actions.push('<div class="menu-sep"></div><button type="button" class="menu-item compact danger" data-act="delete">' + icon("trash") + "<span>Delete employee</span></button>");
                 }
                 return '<tr data-id="' + e.id + '">' +
@@ -9979,14 +9980,41 @@
         const DOCS = "https://docs.hngroup.org.uk";
         const day = function (iso) { return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric" }).format(new Date(iso)); };
         const inDays = function (n) { const t = new Date(Date.now() + n * 86400000); return t.toISOString().slice(0, 10); };
+        let viewing = new URLSearchParams(window.location.search).get("view"), viewData = null, viewError = "";
+        const size = function (b) { return b < 1024 ? b + " bytes" : b < 1048576 ? Math.round(b / 1024) + " KB" : (b / 1048576).toFixed(1) + " MB"; };
+        // Someone's storage, shown here: their private documents (download as PDF) and files. View only; Docs records it.
+        function viewer() {
+            if (!viewing) return "";
+            if (!viewData) return '<section class="panel" id="ds-viewer"><p class="muted">' + (viewError ? esc(viewError) : "Opening their storage…") + '</p><button type="button" class="btn btn-ghost btn-small" data-close-view>Close</button></section>';
+            const base = "/api/document-storage/people/" + encodeURIComponent(viewing);
+            const p = viewData.person, docs = viewData.documents, files = viewData.files;
+            return '<section class="panel" id="ds-viewer"><div class="panel-head"><div><h2 class="panel-title">' + esc(p.name) + "’s storage</h2>" +
+                '<p class="muted small">' + (p.jobTitle ? esc(p.jobTitle) + " · " : "") + "View only. Opening and downloading are recorded on HN Group Docs.</p></div>" +
+                '<div class="ds-view-actions"><a class="btn btn-ghost btn-small" href="' + DOCS + "/storage/" + encodeURIComponent(viewing) + '" target="_blank" rel="noopener">Open in HN Group Docs ↗</a><button type="button" class="btn btn-ghost btn-small" data-close-view>Close</button></div></div>' +
+                '<h3 class="detail-head">Documents</h3>' +
+                (docs.length ? '<div class="table-card flat"><table class="table"><thead><tr><th>Title</th><th>Status</th><th>Last edited</th><th class="col-actions"></th></tr></thead><tbody>' +
+                    docs.map(function (x) { return "<tr><td>" + esc(x.title) + (x.confidential ? ' <span class="badge badge-red">Confidential</span>' : "") + "</td><td>" + (x.status === "final" ? "Final" : "Draft") + "</td><td>" + esc(fmtDateTime(new Date(x.updatedAt).toISOString())) + '</td><td class="col-actions"><a class="btn btn-ghost btn-small" href="' + base + "/documents/" + x.id + '/pdf">Download PDF</a></td></tr>'; }).join("") + "</tbody></table></div>"
+                    : '<p class="muted">No private documents.</p>') +
+                '<h3 class="detail-head">Files</h3>' +
+                (files.length ? '<div class="table-card flat"><table class="table"><thead><tr><th>Name</th><th>Size</th><th>Added</th><th class="col-actions"></th></tr></thead><tbody>' +
+                    files.map(function (f) { return "<tr><td>" + esc(f.name) + "</td><td>" + esc(size(f.size)) + "</td><td>" + esc(fmtDateTime(new Date(f.createdAt).toISOString())) + '</td><td class="col-actions"><a class="btn btn-ghost btn-small" href="' + base + "/files/" + f.id + '" target="_blank" rel="noopener">Open</a> <a class="btn btn-ghost btn-small" href="' + base + "/files/" + f.id + '?download=1">Download</a></td></tr>'; }).join("") + "</tbody></table></div>"
+                    : '<p class="muted">No files.</p>') + "</section>";
+        }
+        async function openView(id) {
+            viewing = id; viewData = null; viewError = "";
+            history.replaceState({}, "", "/document-storage?view=" + encodeURIComponent(id));
+            draw(); if ($("#ds-viewer")) $("#ds-viewer").scrollIntoView({ behavior: "smooth", block: "start" });
+            try { viewData = await api("/api/document-storage/people/" + encodeURIComponent(id)); } catch (err) { viewError = err.message; }
+            if (current() && viewing === id) draw();
+        }
         function draw() {
             const mine = '<section class="panel"><h2 class="panel-title">Storage you can open</h2>' +
                 (d.myGrants.length ? '<div class="table-card flat"><table class="table"><thead><tr><th>Whose storage</th><th>Until</th><th class="col-actions"></th></tr></thead><tbody>' +
-                    d.myGrants.map(function (g) { return "<tr><td>" + esc(g.name) + "</td><td>" + esc(day(g.until)) + '</td><td class="col-actions"><a class="btn btn-ghost btn-small" href="' + DOCS + "/storage/" + encodeURIComponent(g.personId) + '" target="_blank" rel="noopener">Open ↗</a></td></tr>'; }).join("") + "</tbody></table></div>"
+                    d.myGrants.map(function (g) { return "<tr><td>" + esc(g.name) + "</td><td>" + esc(day(g.until)) + '</td><td class="col-actions"><button type="button" class="btn btn-ghost btn-small" data-view="' + esc(g.personId) + '">View documents</button></td></tr>'; }).join("") + "</tbody></table></div>"
                     : '<p class="muted">' + (d.manage ? "You can open anyone’s storage from the list below." : "Nobody has given you access to anyone else’s storage. Your own storage is at " + '<a href="' + DOCS + '/storage" target="_blank" rel="noopener">docs.hngroup.org.uk</a>.') + "</p>") + "</section>";
-            if (!d.manage) { root.innerHTML = head + mine; return; }
+            if (!d.manage) { root.innerHTML = head + viewer() + mine; return; }
             const options = function (sel) { return '<option value="">Choose…</option>' + d.people.map(function (p) { return '<option value="' + esc(p.id) + '"' + (p.id === sel ? " selected" : "") + ">" + esc(p.displayName) + (p.jobTitle ? " – " + esc(p.jobTitle) : "") + "</option>"; }).join(""); };
-            root.innerHTML = head + (d.myGrants.length ? mine : "") +
+            root.innerHTML = head + viewer() + (d.myGrants.length ? mine : "") +
                 '<section class="panel"><div class="panel-head"><h2 class="panel-title">Everyone’s storage</h2><label class="search">' + icon("search") + '<input type="search" id="ds-search" placeholder="Search staff"></label></div>' +
                 '<p class="muted small">Opening someone’s storage shows their private documents and files, view only. Every visit is recorded.</p>' +
                 '<div class="table-card flat"><table class="table"><thead><tr><th>Name</th><th>Job title</th><th>Company</th><th class="col-actions"></th></tr></thead><tbody id="ds-people"></tbody></table></div></section>' +
@@ -10010,12 +10038,15 @@
             const q = ($("#ds-search") ? $("#ds-search").value : "").trim().toLowerCase();
             const list = d.people.filter(function (p) { return !q || [p.displayName, p.jobTitle, p.company].join(" ").toLowerCase().indexOf(q) !== -1; });
             $("#ds-people").innerHTML = list.map(function (p) {
-                return "<tr><td>" + esc(p.displayName) + "</td><td>" + esc(p.jobTitle) + "</td><td>" + esc(p.company) + '</td><td class="col-actions"><a class="btn btn-ghost btn-small" href="' + esc(p.storageUrl) + '" target="_blank" rel="noopener">Open storage ↗</a> <button type="button" class="btn btn-ghost btn-small" data-give="' + esc(p.id) + '">Give access…</button></td></tr>';
+                return "<tr><td>" + esc(p.displayName) + "</td><td>" + esc(p.jobTitle) + "</td><td>" + esc(p.company) + '</td><td class="col-actions"><button type="button" class="btn btn-ghost btn-small" data-view="' + esc(p.id) + '">View documents</button> <button type="button" class="btn btn-ghost btn-small" data-give="' + esc(p.id) + '">Give access…</button></td></tr>';
             }).join("") || '<tr><td colspan="4" class="muted">Nobody matches.</td></tr>';
         }
         async function reload() { d = await api("/api/document-storage"); if (current()) draw(); }
         root.addEventListener("input", function (ev) { if (ev.target.id === "ds-search") drawPeople(); });
         root.addEventListener("click", async function (ev) {
+            const view = ev.target.closest("[data-view]");
+            if (view) return openView(view.dataset.view);
+            if (ev.target.closest("[data-close-view]")) { viewing = null; viewData = null; history.replaceState({}, "", "/document-storage"); return draw(); }
             const give = ev.target.closest("[data-give]");
             if (give) { $("#ds-owner").value = give.dataset.give; $("#ds-give").scrollIntoView({ behavior: "smooth", block: "start" }); $("#ds-grantee").focus(); return; }
             const rm = ev.target.closest("[data-remove]");
@@ -10033,7 +10064,7 @@
                 reload();
             } catch (err) { toast(err.message); }
         });
-        draw();
+        if (viewing) openView(viewing); else draw();
     }
 
     start();

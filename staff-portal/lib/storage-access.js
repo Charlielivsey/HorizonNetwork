@@ -5,12 +5,16 @@
 // that's removed or runs out stops working within a minute. Stored in DATA_DIR/storage-access.json.
 
 const crypto = require("crypto");
+const fs = require("fs");
 const store = require("./store");
 const datafile = require("./datafile");
 
 const ACCESS = "storage.access";
 const DOCS = "https://docs.hngroup.org.uk";
 const MAX_DAYS = 365;
+// HN Group Docs on this server, asked over loopback with the shared service secret.
+const DOCS_BACKEND = process.env.DOCS_BACKEND || "http://127.0.0.1:4500";
+const SECRET_FILE = process.env.STATUS_SSO_SECRET_FILE || "/var/lib/hn-status-sso/secret";
 let db;
 
 function init(dataDir) {
@@ -78,4 +82,30 @@ function people() {
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
 }
 
-module.exports = { ACCESS, init, canAccessAll, forIdentity, list, add, remove, people };
+// May `me` look in `ownerId`'s storage? (The permission, or a grant to that person that hasn't ended.)
+function canOpen(me, ownerId) {
+  if (canAccessAll(me)) return true;
+  return !!db && db.data.grants.some((g) => g.granteeId === me.id && g.ownerId === ownerId && live(g));
+}
+
+// Asks HN Group Docs for someone's storage, a document's PDF or a file, naming who is looking (Docs records it).
+async function fromDocs(path, me, query = {}) {
+  let secret = "";
+  try { secret = fs.readFileSync(SECRET_FILE, "utf8").trim(); } catch {}
+  if (!/^[a-f0-9]{64}$/.test(secret)) throw Object.assign(new Error("HN Group Docs isn't connected on this server."), { status: 503 });
+  const qs = new URLSearchParams({ by: me.displayName, byId: me.id, ...query });
+  let response;
+  try { response = await fetch(DOCS_BACKEND + path + "?" + qs, { headers: { Authorization: "Bearer " + secret }, signal: AbortSignal.timeout(20000), redirect: "error" }); }
+  catch { throw Object.assign(new Error("HN Group Docs is unavailable. Please try again shortly."), { status: 503 }); }
+  if (!response.ok) {
+    const v = await response.json().catch(() => ({}));
+    throw Object.assign(new Error(v.error || "HN Group Docs couldn't open that."), { status: response.status === 404 ? 404 : 502 });
+  }
+  return { type: response.headers.get("content-type") || "", disposition: response.headers.get("content-disposition") || "", body: Buffer.from(await response.arrayBuffer()) };
+}
+async function storageOf(ownerId, me) {
+  const r = await fromDocs("/api/service/storage/" + encodeURIComponent(ownerId), me);
+  return JSON.parse(r.body.toString("utf8"));
+}
+
+module.exports = { ACCESS, init, canAccessAll, canOpen, forIdentity, list, add, remove, people, fromDocs, storageOf };
