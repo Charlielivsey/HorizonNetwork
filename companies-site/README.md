@@ -22,6 +22,8 @@ Customers and staff stay signed in (across refreshes, restarts and updates) unti
 ## Generated filings
 Recording a company's incorporation date files an **Incorporation** filing, recording an officer with an appointment date files an **Appointment** filing, and recording a person with significant control with a notified date files a **PSC notification** filing, each with a generated PDF. Changing a company's registered name also keeps the old name and files a **Change of name**. Each is created once.
 
+Staff can **backdate (or correct) a company's incorporation date** from its administration page (Incorporation date panel): the date can't be in the future; the Incorporation filing and its PDF move to the new date; by default, officers and persons with significant control recorded on the old date (or before the new one) move too, with their filings; and the change and its reason go in the activity log. Editing the date in the company details form also moves the Incorporation filing.
+
 A new company has to be added with its first officer and first person with significant control; if their dates are left blank, the incorporation date is used.
 
 ## Data

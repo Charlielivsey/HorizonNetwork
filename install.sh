@@ -100,6 +100,7 @@ changed branding-site/ && run 'Brand centre (branding.hngroup.org.uk)' bash "$RO
 changed companies-site/ && run 'Company register (companies.hngroup.org.uk)' bash "$ROOT/companies-site/install.sh" "$EMAIL"
 changed accounts-site/ && run 'HN Account (accounts.hngroup.org.uk)' bash "$ROOT/accounts-site/install.sh" "$EMAIL"
 changed devices-site/ && run 'Devices (devices.hngroup.org.uk)' bash "$ROOT/devices-site/install.sh" "$EMAIL"
+changed documents-site/ && run 'Documents (documents.hngroup.org.uk)' bash "$ROOT/documents-site/install.sh" "$EMAIL"
 changed investors-site/ && run 'Investors (investors.hngroup.org.uk)' bash "$ROOT/investors-site/install.sh" "$EMAIL"
 changed vpn-site/ && run 'VPN (vpn.hngroup.org.uk + WireGuard)' bash "$ROOT/vpn-site/install.sh" "$EMAIL"
 changed downloads-site/ && run 'Downloads (downloads.hngroup.org.uk)' bash "$ROOT/downloads-site/install.sh" "$EMAIL"

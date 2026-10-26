@@ -297,7 +297,7 @@ function saveCompany(slug, input, actor, opts) {
     c.slug = s;
   }
   const text = (k, max) => { c[k] = String(input[k] == null ? '' : input[k]).trim().slice(0, max); };
-  const oldName = existing ? c.legalName : '', oldStatus = existing ? c.status : '';
+  const oldName = existing ? c.legalName : '', oldStatus = existing ? c.status : '', oldIncorporated = existing ? c.incorporated : '';
   c.legalName = legalName;
   text('name', 120); if (!c.name) c.name = legalName;
   text('number', 20); text('type', 80); text('incorporated', 10); text('dissolved', 10); text('registeredOffice', 300);
@@ -311,6 +311,9 @@ function saveCompany(slug, input, actor, opts) {
   c.hidden = input.hidden === 'on' || input.hidden === true;
   c.updatedAt = now();
   if (!existing) { c.officers.push({ id: id(), ...firstOfficer }); c.psc.push({ id: id(), ...firstPsc }); db.companies.push(c); }
+  // Editing the date in the details form moves the Incorporation filing with it (officers and persons with
+  // significant control are only moved by Change incorporation date).
+  if (existing && oldIncorporated && c.incorporated && c.incorporated !== oldIncorporated) { const date = c.incorporated; c.incorporated = oldIncorporated; moveIncorporation(c, date, { records: false }); }
   if (existing && oldName && oldName !== legalName) recordNameChange(c, oldName);
   // Recording a status for the first time isn't a change, so only a change from one status to another is filed.
   if (existing && oldStatus && oldStatus !== c.status) recordStatusChange(c, oldStatus);
@@ -479,19 +482,51 @@ function backdateIncorporations(dates) {
     const c = byName(name);
     if (!c) { audit('system', 'company.backdate-missing', name + ' is not on the register'); continue; }
     const old = c.incorporated;
-    c.incorporated = date;
-    if (c.incorporationFiling && db.filings.some((f) => f.id === c.incorporationFiling)) redateFiling(c.incorporationFiling, date, 'Incorporated on');
-    else c.incorporationFiling = '';
-    const move = (when) => when && (when === old || when < date);
-    for (const o of c.officers) if (move(o.appointed)) { o.appointed = date; if (o.appointmentFiling) redateFiling(o.appointmentFiling, date, 'Appointed on'); }
-    for (const p of c.psc || []) if (move(p.notified)) {
-      const since = p.kind !== 'Individual' ? incorporatedOn(p.name) : '';
-      p.notified = since > date ? since : date;
-      if (p.notificationFiling) redateFiling(p.notificationFiling, p.notified, 'Notified on');
-    }
-    generateFilings(c);
+    moveIncorporation(c, date, { records: true, incorporatedOn });
     audit('system', 'company.backdate', c.slug + ' incorporated ' + (old || 'not recorded') + ' → ' + date);
   }
+}
+// Moves one company's incorporation date, its Incorporation filing (or files one) and, with `records`, the officers
+// and persons with significant control recorded on the old date or before the new one. Returns how many moved.
+function moveIncorporation(c, date, { records = true, incorporatedOn } = {}) {
+  const since = incorporatedOn || ((n) => (db.companies.find((x) => x.legalName.trim().toLowerCase() === String(n).trim().toLowerCase()) || {}).incorporated || '');
+  const old = c.incorporated;
+  let moved = 0;
+  c.incorporated = date;
+  if (c.incorporationFiling && db.filings.some((f) => f.id === c.incorporationFiling)) redateFiling(c.incorporationFiling, date, 'Incorporated on');
+  else c.incorporationFiling = '';
+  if (records) {
+    const move = (when) => when && (when === old || when < date);
+    for (const o of c.officers) if (move(o.appointed)) { o.appointed = date; moved++; if (o.appointmentFiling) redateFiling(o.appointmentFiling, date, 'Appointed on'); }
+    for (const p of c.psc || []) if (move(p.notified)) {
+      const from = p.kind !== 'Individual' ? since(p.name) : '';
+      p.notified = from > date ? from : date; moved++;
+      if (p.notificationFiling) redateFiling(p.notificationFiling, p.notified, 'Notified on');
+    }
+  }
+  generateFilings(c);
+  c.updatedAt = now();
+  return moved;
+}
+// Staff change (usually backdate) a company's incorporation date when it was recorded wrongly or late. The
+// Incorporation filing moves with it; officers and persons with significant control recorded on the old date, or
+// before the new one, move too unless staff untick that. Recorded in the activity log with the reason.
+function changeIncorporation(slug, input, actor) {
+  const c = company(slug);
+  if (!c) throw Object.assign(new Error('That company isn’t on the register.'), { status: 404 });
+  const date = d(input.date);
+  const bad = (m) => Object.assign(new Error(m), { status: 400 });
+  if (!date || Number.isNaN(Date.parse(date + 'T00:00:00Z')) || new Date(date + 'T00:00:00Z').toISOString().slice(0, 10) !== date) throw bad('Enter a real date, for example 21/04/2025.');
+  if (date > now().slice(0, 10)) throw bad('The incorporation date can’t be in the future.');
+  if (date < '1800-01-01') throw bad('Enter a date after 1800.');
+  if (c.dissolved && date > c.dissolved) throw bad('The incorporation date must be before the date the company was dissolved.');
+  if (date === c.incorporated) throw bad('That’s already the incorporation date.');
+  const old = c.incorporated;
+  const moved = moveIncorporation(c, date, { records: input.moveRecords === true || input.moveRecords === 'on' });
+  const reason = t(input.reason, 200);
+  audit(actor, 'company.incorporation-date', c.slug + ' incorporated ' + (old || 'not recorded') + ' → ' + date + (moved ? ', ' + moved + ' officer/PSC dates moved' : '') + (reason ? ' (' + reason + ')' : ''));
+  save();
+  return { company: c, old, date, moved };
 }
 // A change to the registered name keeps the old name and files a change of name automatically.
 function recordNameChange(c, oldName) {
@@ -950,7 +985,7 @@ module.exports = {
   publicFeed,
   init, STATUSES, votingPower, shareClasses, classesOf, CLASS_C_CONTROL, CONTROL_VOTES, FILING_CATEGORIES, OFFICER_ROLES, PSC_KINDS, REQUEST_KINDS, CHANGE_TYPES,
   canManage, managedCompanies, groupOf, groupReport, addApplication, addManager, removeManager,
-  companies, company, children, search, saveCompany, deleteCompany, saveItem, deleteItem,
+  companies, company, children, search, saveCompany, changeIncorporation, deleteCompany, saveItem, deleteItem,
   filings, filing, addFiling, deleteFiling, filePath,
   customer, customerByEmail, createCustomer, checkPassword, changePassword, touchLogin, setCustomerDisabled,
   addRequest, request, replyRequest, addSubmission, submission, decideSubmission,

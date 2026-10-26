@@ -139,6 +139,15 @@
     ]
   },
   {
+    "id": "documents",
+    "name": "HN Group Documents",
+    "process": "hn-documents",
+    "port": 5500,
+    "hosts": [
+      "documents.hngroup.org.uk"
+    ]
+  },
+  {
     "id": "media",
     "name": "Horizon Media Group",
     "process": "hn-media",

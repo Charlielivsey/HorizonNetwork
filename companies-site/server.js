@@ -521,10 +521,21 @@ function adminCompany(res, ctx, c, flash) {
   const list = store.filings(c.slug);
   page(res, ctx, { title: 'Edit ' + c.legalName, noindex: true, flash,
     body: '<p><a href="/admin">← Administration</a></p><h1 class="page-title">' + esc(c.legalName) + '</h1><p><a href="/company/' + esc(c.slug) + '">View the public record →</a></p>' +
-      '<section class="panel"><h2>Company details</h2>' + companyForm(c, ctx) + '</section>' + managersPanel(c, ctx) + itemForms(c, ctx, 'officers') + itemForms(c, ctx, 'psc') + itemForms(c, ctx, 'charges') +
+      '<section class="panel"><h2>Company details</h2>' + companyForm(c, ctx) + '</section>' + incorporationPanel(c, ctx) + managersPanel(c, ctx) + itemForms(c, ctx, 'officers') + itemForms(c, ctx, 'psc') + itemForms(c, ctx, 'charges') +
       '<section class="panel"><h2>Filing history</h2>' + (list.length ? '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Description</th><th>Document</th><th></th></tr></thead><tbody>' + list.map((f) => '<tr><td>' + esc(fmt(f.date)) + '</td><td>' + esc(f.category) + '</td><td>' + esc(f.description) + (f.source === 'customer' ? ' <span class="muted small">(customer submission)</span>' : '') + '</td><td>' + (f.file ? '<a href="/document/' + f.id + '" target="_blank" rel="noopener">PDF</a>' : '—') + '</td><td><form method="post" action="/admin/filing/' + f.id + '/delete">' + csrfField(ctx.staffUser.csrf) + '<button class="link danger-text" type="submit" data-confirm="Delete this filing and its document?">Delete</button></form></td></tr>').join('') + '</tbody></table></div>' : '<p class="muted">No filings yet.</p>') +
       '<details class="item add"><summary>Add a filing</summary><form method="post" action="/admin/company/' + esc(c.slug) + '/filings" class="form grid-form" enctype="multipart/form-data">' + csrfField(ctx.staffUser.csrf) + field('Date', 'date', new Date().toISOString().slice(0, 10), { type: 'date' }) + select('Type', 'category', store.FILING_CATEGORIES, 'Other') + field('Description', 'description', '', { required: true, max: 300 }) + fileField('Document', '', false) + '<div class="form-actions"><button class="button small" type="submit">Add filing</button></div></form></details></section>' +
       '<section class="panel danger-zone"><h2>Delete company</h2><p class="muted">This removes the company, its people, charges and all its filings from the register. It can’t be undone.</p><form method="post" action="/admin/company/' + esc(c.slug) + '/delete">' + csrfField(ctx.staffUser.csrf) + '<button class="button danger" type="submit" data-confirm="Delete ' + esc(c.legalName) + ' and all its records?">Delete company</button></form></section>' });
+}
+
+// Change (usually backdate) the incorporation date. The Incorporation filing moves with it, and so can the officers
+// and persons with significant control recorded on the old date or before the new one.
+function incorporationPanel(c, ctx) {
+  return '<section class="panel" id="incorporation"><h2>Incorporation date</h2><p>' + (c.incorporated ? 'Incorporated on <strong>' + esc(fmt(c.incorporated)) + '</strong>.' : 'No incorporation date is recorded yet.') + '</p>' +
+    '<p class="muted">Backdate the incorporation date if the company started earlier than recorded, or correct it if it was entered wrongly. The Incorporation filing and its PDF move to the new date.</p>' +
+    '<form method="post" action="/admin/company/' + esc(c.slug) + '/incorporation" class="form grid-form">' + csrfField(ctx.staffUser.csrf) +
+    field('New incorporation date', 'date', '', { type: 'date', required: true, hint: 'It can’t be in the future.' }) + field('Reason', 'reason', '', { max: 200, hint: 'Optional. Kept in the activity log, for example: Incorporated earlier than first recorded.' }) +
+    '<div class="check wide"><input type="checkbox" id="move-records" name="moveRecords" checked><label for="move-records">Also move officers and persons with significant control recorded on the old date, or before the new date, to the new date (with their filings)</label></div>' +
+    '<div class="form-actions"><button class="button" type="submit" data-confirm="Change ' + esc(c.legalName) + '’s incorporation date? Its filings will be updated.">Change incorporation date</button></div></form></section>';
 }
 
 // Customer accounts that manage the company. Managing a company also covers its subsidiaries.
@@ -829,7 +840,7 @@ async function route(req, res) {
       try { const c = store.saveCompany('', fields, actor, { officer, psc }); return redirect(res, '/admin/company/' + c.slug); }
       catch (e) { if (e.status !== 400) throw e; return addPage({ company: { ...fields, sic: String(fields.sic || '').split('\n'), divisions: String(fields.divisions || '').split('\n'), hidden: fields.hidden === 'on' }, officer, psc }, { error: true, text: e.message }); }
     }
-    m = /^\/admin\/company\/([a-z0-9-]+)(?:\/(officers|psc|charges|filings|managers|delete))?(?:\/([a-f0-9]{24}))?(\/delete)?$/.exec(p);
+    m = /^\/admin\/company\/([a-z0-9-]+)(?:\/(officers|psc|charges|filings|managers|incorporation|delete))?(?:\/([a-f0-9]{24}))?(\/delete)?$/.exec(p);
     if (m) {
       const c = store.company(m[1]);
       if (!c) return messagePage(res, ctx, 404, 'Company not found', 'That company isn’t on the register.');
@@ -837,6 +848,7 @@ async function route(req, res) {
       if (req.method === 'POST') {
         try {
           if (!m[2]) { store.saveCompany(c.slug, fields, actor); return adminCompany(res, ctx, c, { text: 'Company details saved.' }); }
+          if (m[2] === 'incorporation') { const r = store.changeIncorporation(c.slug, fields, actor); return adminCompany(res, ctx, c, { text: 'Incorporation date changed to ' + fmt(r.date) + (r.old ? ' (was ' + fmt(r.old) + ')' : '') + '. The Incorporation filing has been updated' + (r.moved ? ', and ' + r.moved + (r.moved === 1 ? ' officer or person with significant control was' : ' officers and persons with significant control were') + ' moved to the new date' : '') + '.' }); }
           if (m[2] === 'delete') { store.deleteCompany(c.slug, actor); return adminHome(res, ctx, { text: c.legalName + ' has been deleted.' }); }
           if (m[2] === 'managers') { if (m[4]) store.removeManager(c.slug, m[3], actor); else store.addManager(c.slug, fields.email, actor); return adminCompany(res, ctx, c, { text: m[4] ? 'Manager removed.' : 'Manager added.' }); }
           if (m[2] === 'filings') { store.addFiling(c.slug, fields, file, actor); return adminCompany(res, ctx, c, { text: 'Filing added.' }); }

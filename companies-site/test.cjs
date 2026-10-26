@@ -551,3 +551,39 @@ test('company register: one-off reset deletes every company, keeps accounts and 
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('company register: staff change (backdate) an incorporation date with its filings', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-companies-backdate-'));
+  const store = path.join(__dirname, 'lib', 'store.js');
+  delete require.cache[require.resolve(store)];
+  process.env.COMPANIES_GROUP_UPDATES = 'off';
+  try {
+    const s = require(store); s.init(dir);
+    const c = s.saveCompany('', { legalName: 'Backdate Limited', incorporated: '2026-06-01' }, 't', { officer: { name: 'Olive Officer', role: 'Director' }, psc: { name: 'Olive Officer', kind: 'Individual', share: '100' } });
+    s.saveItem(c.slug, 'officers', '', { name: 'Later Director', role: 'Director', appointed: '2026-08-01' }, 't');
+    const err = (input) => { try { s.changeIncorporation(c.slug, input, 't'); } catch (e) { return e.message; } return ''; };
+    assert.match(err({ date: '2999-01-01' }), /future/);
+    assert.match(err({ date: '2026-02-30' }), /real date/);
+    assert.match(err({ date: '2026-06-01' }), /already/);
+    const r = s.changeIncorporation(c.slug, { date: '2025-04-21', reason: 'Started earlier', moveRecords: 'on' }, 'staff:test');
+    assert.equal(r.moved, 2, 'the first officer and PSC move with it');
+    const now = s.company(c.slug);
+    assert.equal(now.incorporated, '2025-04-21');
+    assert.equal(now.officers.find((o) => o.name === 'Olive Officer').appointed, '2025-04-21');
+    assert.equal(now.officers.find((o) => o.name === 'Later Director').appointed, '2026-08-01', 'later appointments stay');
+    assert.equal(now.psc[0].notified, '2025-04-21');
+    const inc = s.filing(now.incorporationFiling);
+    assert.equal(inc.date, '2025-04-21');
+    assert.ok(inc.doc.rows.some(([k, v]) => k === 'Incorporated on' && v === '21 April 2025'), 'the document shows the new date');
+    assert.equal(s.filings(c.slug).filter((f) => f.category === 'Incorporation').length, 1, 'no second Incorporation filing');
+    assert.ok(s.db.audit.some((a) => a.action === 'company.incorporation-date' && a.detail.includes('Started earlier')));
+    // Without moving records, only the date and filing move; editing it in the details form does the same.
+    s.changeIncorporation(c.slug, { date: '2025-01-10' }, 't');
+    assert.equal(s.company(c.slug).officers.find((o) => o.name === 'Olive Officer').appointed, '2025-04-21');
+    s.saveCompany(c.slug, { ...s.company(c.slug), sic: '', divisions: '', incorporated: '2024-12-01' }, 't');
+    assert.equal(s.filing(s.company(c.slug).incorporationFiling).date, '2024-12-01');
+  } finally {
+    delete process.env.COMPANIES_GROUP_UPDATES;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

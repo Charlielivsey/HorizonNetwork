@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#5514B4">
+<title>HN Group Documents</title>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="/assets/fonts/plus-jakarta-sans.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/documents.css?v=1">
+<script src="/assets/documents.js?v=1" defer></script>
+</head>
+<body>
+<div class="stripe" aria-hidden="true"></div>
+<header class="top">
+ <div class="top-inner">
+  <a class="brand" href="/" data-link><img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="92" height="32"><img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="92" height="32"><span class="brand-name">Documents</span></a>
+  <nav class="tabs" aria-label="Sections"><a href="/" data-link data-tab="library">Documents</a><a href="/templates" data-link data-tab="templates">Templates</a></nav>
+  <div class="top-actions">
+   <button class="btn primary" type="button" id="new-button"><span aria-hidden="true">+</span> New document</button>
+   <div class="who" id="who" hidden><span class="avatar" id="who-avatar" aria-hidden="true"></span><span class="who-name" id="who-name"></span><form method="post" action="/auth/logout"><button class="btn small ghost" type="submit">Sign out</button></form></div>
+  </div>
+ </div>
+</header>
+
+<main id="main">
+ <p class="loading" id="loading">Loading…</p>
+
+ <!-- Documents -->
+ <section class="view" id="view-library" hidden>
+  <div class="page-head">
+   <div><p class="eyebrow">HN Group · Staff only</p><h1>Documents</h1><p class="muted" id="library-count"></p></div>
+   <div class="search-row">
+    <label class="search"><span class="sr">Search documents</span><input type="search" id="search" placeholder="Search by title or author" autocomplete="off"></label>
+    <label class="select"><span class="sr">Type</span><select id="type-filter"><option value="">All types</option></select></label>
+    <label class="toggle"><input type="checkbox" id="mine-filter"><span>Only mine</span></label>
+   </div>
+  </div>
+  <div class="companies" id="library-companies" role="radiogroup" aria-label="Filter by company"></div>
+  <div class="grid docs" id="doc-list"></div>
+  <div class="empty" id="doc-empty" hidden><h2>No documents yet</h2><p class="muted" id="doc-empty-text">Start one from a template.</p><button class="btn primary" type="button" data-new>New document</button></div>
+ </section>
+
+ <!-- Templates -->
+ <section class="view" id="view-templates" hidden>
+  <div class="page-head"><div><p class="eyebrow">HN Group · Staff only</p><h1>Templates</h1><p class="muted">Every template is ready for each company’s letterhead. Choose one to start a document.</p></div></div>
+  <div class="companies" id="template-companies" role="radiogroup" aria-label="Filter by company"></div>
+  <div id="template-list"></div>
+ </section>
+
+ <!-- Editor -->
+ <section class="view editor" id="view-editor" hidden>
+  <div class="editor-bar">
+   <div class="bar-row">
+    <a class="btn small ghost" href="/" data-link>← Documents</a>
+    <span class="save-state" id="save-state" aria-live="polite"></span>
+    <span class="spacer"></span>
+    <label class="select small"><span class="sr">Company</span><select id="doc-company"></select></label>
+    <label class="select small"><span class="sr">Who can see it</span><select id="doc-sharing"><option value="staff">All staff</option><option value="private">Only me</option></select></label>
+    <button class="btn small" type="button" id="doc-status"></button>
+    <button class="btn small primary" type="button" id="doc-print">Print or save as PDF</button>
+    <button class="btn small icon" type="button" id="doc-more" aria-haspopup="menu" aria-expanded="false" aria-label="More">⋯</button>
+    <div class="menu" id="doc-menu" role="menu" hidden><button type="button" role="menuitem" id="doc-duplicate">Duplicate</button><button type="button" role="menuitem" class="danger-text" id="doc-delete">Delete…</button></div>
+   </div>
+   <div class="toolbar" id="toolbar" role="toolbar" aria-label="Formatting">
+    <label class="select small"><span class="sr">Text style</span><select id="block-style"><option value="p">Normal text</option><option value="h1">Heading 1</option><option value="h2">Heading 2</option><option value="h3">Heading 3</option><option value="blockquote">Quote</option></select></label>
+    <span class="sep"></span>
+    <button type="button" data-cmd="bold" title="Bold (Ctrl+B)" aria-label="Bold"><b>B</b></button>
+    <button type="button" data-cmd="italic" title="Italic (Ctrl+I)" aria-label="Italic"><i>I</i></button>
+    <button type="button" data-cmd="underline" title="Underline (Ctrl+U)" aria-label="Underline"><u>U</u></button>
+    <button type="button" data-cmd="strikeThrough" title="Strikethrough" aria-label="Strikethrough"><s>S</s></button>
+    <span class="sep"></span>
+    <button type="button" data-cmd="insertUnorderedList" title="Bulleted list" aria-label="Bulleted list">•≡</button>
+    <button type="button" data-cmd="insertOrderedList" title="Numbered list" aria-label="Numbered list">1≡</button>
+    <span class="sep"></span>
+    <button type="button" data-cmd="justifyLeft" title="Align left" aria-label="Align left">⇤</button>
+    <button type="button" data-cmd="justifyCenter" title="Centre" aria-label="Centre">↔</button>
+    <button type="button" data-cmd="justifyRight" title="Align right" aria-label="Align right">⇥</button>
+    <span class="sep"></span>
+    <button type="button" data-action="link" title="Link" aria-label="Link">Link</button>
+    <button type="button" data-action="table" title="Table" aria-label="Insert a table">▦</button>
+    <button type="button" data-action="rule" title="Line" aria-label="Insert a line">―</button>
+    <button type="button" data-cmd="removeFormat" title="Clear formatting" aria-label="Clear formatting">⌫</button>
+    <span class="sep"></span>
+    <button type="button" data-cmd="undo" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
+    <button type="button" data-cmd="redo" title="Redo" aria-label="Redo">↷</button>
+   </div>
+   <p class="final-note" id="final-note" hidden>This document is final, so it can’t be edited. Choose <strong>Back to draft</strong> to change it.</p>
+  </div>
+  <div class="desk">
+   <article class="sheet" id="sheet" aria-label="Document">
+    <header class="sheet-head"><img class="sheet-logo" id="sheet-logo" alt=""><div class="sheet-meta"><span class="sheet-label" id="sheet-label"></span><span class="sheet-site" id="sheet-site"></span></div></header>
+    <div class="sheet-stripe" aria-hidden="true"></div>
+    <div class="letter-block" id="letter-block" hidden><div class="letter-left" id="head-left"></div><div class="letter-right" id="head-right"></div></div>
+    <h1 class="doc-title" id="doc-title" contenteditable="true" spellcheck="true"></h1>
+    <table class="details" id="details" hidden><tbody id="head-rows"></tbody></table>
+    <div class="doc-body" id="doc-body" contenteditable="true" spellcheck="true" aria-label="Document text"></div>
+    <div class="sign-off" id="sign-off" hidden></div>
+    <footer class="sheet-foot" id="sheet-foot"></footer>
+   </article>
+  </div>
+ </section>
+</main>
+
+<!-- New document -->
+<div class="layer" id="layer" hidden>
+ <section class="sheet-dialog" id="new-dialog" role="dialog" aria-modal="true" aria-labelledby="new-title" hidden>
+  <header class="dialog-head"><h2 id="new-title">New document</h2><button class="btn small ghost icon" type="button" data-close aria-label="Close">✕</button></header>
+  <form id="new-form">
+   <fieldset><legend>Company</legend><div class="pick companies-pick" id="new-companies"></div></fieldset>
+   <fieldset><legend>Template</legend><div class="pick templates-pick" id="new-templates"></div></fieldset>
+   <div class="row-2">
+    <label class="field-label">Title<input type="text" id="new-name" maxlength="160" placeholder="You can change it later" autocomplete="off"></label>
+    <label class="field-label">Who can see it<select id="new-sharing"><option value="staff">All staff</option><option value="private">Only me</option></select></label>
+   </div>
+   <p class="form-error" id="new-error" role="alert" hidden></p>
+   <div class="dialog-actions"><button class="btn ghost" type="button" data-close>Cancel</button><button class="btn primary" type="submit" id="new-create">Create document</button></div>
+  </form>
+ </section>
+ <section class="sheet-dialog small" id="ask" role="dialog" aria-modal="true" aria-labelledby="ask-title" hidden>
+  <h2 id="ask-title"></h2><p class="muted" id="ask-text"></p>
+  <label class="field-label" id="ask-field" hidden><span id="ask-field-label"></span><input type="text" id="ask-input" autocomplete="off"></label>
+  <div class="dialog-actions"><button class="btn ghost" type="button" id="ask-cancel">Cancel</button><button class="btn primary" type="button" id="ask-ok"></button></div>
+ </section>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>

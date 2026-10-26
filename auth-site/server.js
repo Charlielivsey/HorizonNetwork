@@ -28,6 +28,7 @@ const CLIENTS = {
   investors: { name: 'HN Group Investors', callback: 'https://investors.hngroup.org.uk/auth/callback', allowed: user => !!user.ownerAccess || (Array.isArray(user.companies) ? user.companies : [user.company]).includes('HN Group'), denied: 'Only staff with a role at HN Group can sign in to the investors website.' },
   vpn: { name: 'HN Group VPN', callback: 'https://vpn.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use the HN Group VPN.' },
   devices: { name: 'HN Group Devices', callback: 'https://devices.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use HN Group Devices.' },
+  documents: { name: 'HN Group Documents', callback: 'https://documents.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use HN Group Documents.' },
 };
 const HEX = /^[a-f0-9]{64}$/;
 const COOKIE = '__Host-hn_auth_session', FLOW = '__Host-hn_auth_flow', REMEMBER = '__Host-hn_auth_resume';
