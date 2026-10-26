@@ -61,6 +61,33 @@ test('replaces an installed copy after its process ends, then cleans up', { skip
   assert.equal(fs.existsSync(s.work), false, 'work folder removed');
 });
 
+// A signed app with framework-style links, zipped as the release builds are, and checked by the real unpack.
+function zipped(name, { escape = false } = {}) {
+  const dir = path.join(root, name), app = path.join(dir, 'Test.app');
+  fs.mkdirSync(path.join(app, 'Contents', 'MacOS'), { recursive: true });
+  fs.writeFileSync(path.join(app, 'Contents', 'Info.plist'), '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>uk.org.hngroup.test</string><key>CFBundleShortVersionString</key><string>1.2.3</string><key>CFBundleExecutable</key><string>Test</string><key>CFBundlePackageType</key><string>APPL</string></dict></plist>\n');
+  fs.copyFileSync('/usr/bin/true', path.join(app, 'Contents', 'MacOS', 'Test'));
+  const fw = path.join(app, 'Contents', 'Frameworks', 'Thing.framework');
+  fs.mkdirSync(path.join(fw, 'Versions', 'A', 'Resources'), { recursive: true });
+  fs.writeFileSync(path.join(fw, 'Versions', 'A', 'Resources', 'x.txt'), 'x');
+  fs.symlinkSync('A', path.join(fw, 'Versions', 'Current'));
+  fs.symlinkSync('Versions/Current/Resources', path.join(fw, 'Resources'));
+  if (escape) fs.symlinkSync('/etc', path.join(app, 'Contents', 'outside'));
+  assert.equal(spawnSync('/usr/bin/codesign', ['--force', '--deep', '-s', '-', app]).status, 0, 'ad-hoc sign');
+  const zip = path.join(root, name + '.zip');
+  assert.equal(spawnSync('/usr/bin/ditto', ['-c', '-k', '--keepParent', app, zip]).status, 0, 'zip');
+  return zip;
+}
+
+test('unpacks a signed app with framework links from the temporary folder', { skip: !mac }, async () => {
+  const { MacPlatform } = require('../src/core/macos.cjs');
+  const p = new MacPlatform({ log: { info() {}, warn() {}, error() {} } });
+  const r = await p.unpack(zipped('links'), 'uk.org.hngroup.test', '1.2.3-9');
+  assert.ok(fs.existsSync(path.join(r.source, 'Contents', 'Frameworks', 'Thing.framework', 'Resources', 'x.txt')));
+  fs.rmSync(r.work, { recursive: true, force: true });
+  await assert.rejects(p.unpack(zipped('escape', { escape: true }), 'uk.org.hngroup.test', '1.2.3-9'), /unsafe link/);
+});
+
 test('a failed copy leaves the installed app as it was', { skip: !mac }, () => {
   const apps = path.join(root, 'fail'); fs.mkdirSync(apps);
   const target = bundle(path.join(apps, 'Test.app'), '1.0.0');

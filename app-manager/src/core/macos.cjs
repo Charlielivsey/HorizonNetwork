@@ -98,7 +98,10 @@ class MacPlatform {
       const apps = (await fs.promises.readdir(work)).filter((n) => n.endsWith('.app'));
       if (apps.length !== 1) throw fail('The download should contain exactly one app.');
       const source = path.join(work, apps[0]);
-      const walk = async (dir) => { for (const item of await fs.promises.readdir(dir, { withFileTypes: true })) { const p = path.join(dir, item.name); if (item.isSymbolicLink()) { const real = await fs.promises.realpath(p).catch(() => ''); if (!real.startsWith(source + path.sep) && real !== source) throw fail('The download contains an unsafe link, so it wasn’t used.'); } else if (item.isDirectory()) await walk(p); } };
+      // Links (Electron's frameworks have several) must stay inside the app. The temporary folder is itself behind a
+      // link on a Mac (/var → /private/var), so compare against the app's resolved path.
+      const inside = await fs.promises.realpath(source);
+      const walk = async (dir) => { for (const item of await fs.promises.readdir(dir, { withFileTypes: true })) { const p = path.join(dir, item.name); if (item.isSymbolicLink()) { const real = await fs.promises.realpath(p).catch(() => ''); if (!real.startsWith(inside + path.sep) && real !== inside) throw fail('The download contains an unsafe link, so it wasn’t used.'); } else if (item.isDirectory()) await walk(p); } };
       await walk(source);
       const info = await this.plist(source);
       if (info.CFBundleIdentifier !== bundleId) throw fail('The download is a different app, so it wasn’t used.');
