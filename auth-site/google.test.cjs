@@ -47,7 +47,8 @@ test('Sign in with Google: optional, PIN still required, never remembered', asyn
     // Not set up: hidden.
     assert.deepEqual(await (await fetch(base + '/api/google')).json(), { enabled: false });
     assert.equal((await post('/api/google/start', { mode: 'login' })).status, 404);
-    fs.writeFileSync(googleFile, JSON.stringify({ client_id: 'test-client.apps.googleusercontent.com', client_secret: 'test-secret-123' }));
+    // The file Google Cloud Console downloads works as it is.
+    fs.writeFileSync(googleFile, JSON.stringify({ web: { client_id: 'test-client.apps.googleusercontent.com', project_id: 'hn-group-auth', client_secret: 'test-secret-123', redirect_uris: ['https://auth.hngroup.org.uk/google/callback'] } }));
     assert.deepEqual(await (await fetch(base + '/api/google')).json(), { enabled: true });
     // Not turned on yet: Google sign-in is refused.
     let g = await viaGoogle(await post('/api/google/start', { mode: 'login', next: '/' }), '', me);

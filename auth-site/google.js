@@ -12,7 +12,8 @@
 //
 // Set-up (owner): create a Google Cloud OAuth client of type "Web application" with the authorised redirect URI
 // https://auth.hngroup.org.uk/google/callback, and save {"client_id":"…","client_secret":"…"} as
-// /var/lib/hn-auth/google-oauth.json (root only). It's read when needed, so no restart; without it the option is hidden.
+// /var/lib/hn-auth/google-oauth.json (root only), or save the client's downloaded JSON file there as it is. It's read when
+// needed, so no restart; without it the option is hidden.
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
@@ -35,8 +36,10 @@ function createGoogle({ origin, staff, send, profile, entryFor, setCookie, cooki
     if (cached && cached.mtimeMs === stat.mtimeMs) return cached.value;
     let value = null;
     try {
-      const v = JSON.parse(fs.readFileSync(file, 'utf8'));
-      if (/^[\w.-]+\.apps\.googleusercontent\.com$/.test(v.client_id || '') && typeof v.client_secret === 'string' && v.client_secret.length >= 8) value = { id: v.client_id, secret: v.client_secret };
+      // Either {"client_id","client_secret"} or the JSON file Google Cloud Console downloads ({"web":{…}}).
+      const raw = JSON.parse(fs.readFileSync(file, 'utf8')), v = raw && raw.web && typeof raw.web === 'object' ? raw.web : raw;
+      const id = String(v.client_id || '').trim(), secret = String(v.client_secret || '').trim();
+      if (/^[\w.-]+\.apps\.googleusercontent\.com$/.test(id) && secret.length >= 8) value = { id, secret };
     } catch {}
     cached = { mtimeMs: stat.mtimeMs, value };
     return value;
