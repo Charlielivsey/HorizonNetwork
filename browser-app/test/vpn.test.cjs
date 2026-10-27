@@ -1,6 +1,6 @@
 'use strict';
 const{test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),crypto=require('node:crypto');
-const{VPN,FakeController,WindowsController,keyPair,SERVER}=require('../src/vpn.cjs');
+const{VPN,FakeController,WindowsController,LinuxController,controllerFor,keyPair,SERVER}=require('../src/vpn.cjs');
 const memoryVault=()=>{let value=null;return{save:v=>{value=v;},load:()=>value,clear:()=>{value=null;},get value(){return value;}};};
 // A stand-in for vpn.hngroup.org.uk: app sign-in exchange, account, devices and sign-out.
 function fakeService(){const s={codes:new Map(),devices:[],tokens:new Set(),headers:[]};
@@ -76,3 +76,37 @@ test('a computer set up for the earlier split tunnel is offered an update to the
 });
 
 test('Windows configuration updates reuse the protected private key without exposing it or using another device slot',()=>{const w=new WindowsController(),script=w.setupScript('C:\\Temp\\template.conf',{reuseKey:true});assert.ok(script.includes("(?m)^PrivateKey\\s*=\\s*(\\S+)"));assert.match(script,/Get-Content -Raw -LiteralPath 'C:\\ProgramData\\HN Group\\VPN\\hn-vpn\.conf'/);assert.match(script,/\$template\.Replace/);assert.ok(!script.includes('Write-Host'));});
+
+// A stand-in for NetworkManager's nmcli, keeping its connections in a JSON file.
+function fakeNmcli(dir){
+ const file=path.join(dir,'nmcli'),state=path.join(dir,'nm.json');fs.writeFileSync(state,JSON.stringify({connections:[],calls:[]}));
+ fs.writeFileSync(file,'#!'+process.execPath+'\n'+`const fs=require('fs'),crypto=require('crypto'),f=${JSON.stringify(state)},s=JSON.parse(fs.readFileSync(f,'utf8')),a=process.argv.slice(2);s.calls.push(a);const save=()=>fs.writeFileSync(f,JSON.stringify(s));
+const find=u=>s.connections.find(c=>c.uuid===u);
+if(a[0]==='-t'){const active=a.includes('--active');process.stdout.write(s.connections.filter(c=>!active||c.up).map(c=>c.uuid+':'+c.name+':wireguard\\n').join(''));}
+else if(a[0]==='--show-secrets'){const c=find(a.at(-1));process.stdout.write(c&&c.owner?c.key+'\\n':'');}
+else if(a[1]==='import'){if(process.env.NM_DENY){process.stderr.write('Error: failed to import: Insufficient privileges.\\n');save();process.exit(1);}const conf=fs.readFileSync(a.at(-1),'utf8');s.connections.push({uuid:crypto.randomUUID(),name:require('path').basename(a.at(-1),'.conf'),key:/PrivateKey = (\\S+)/.exec(conf)[1],config:conf,up:false});}
+else if(a[1]==='modify'){const c=find(a[3]);c.autoconnect=a[5];c.owner=a[7];}
+else if(a[1]==='delete'){s.connections=s.connections.filter(c=>c.uuid!==a[3]);}
+else if(a[3]==='up'){find(a[5]).up=true;}else if(a[3]==='down'){find(a[5]).up=false;}
+save();`,{mode:0o755});
+ return{file,read:()=>JSON.parse(fs.readFileSync(state,'utf8'))};}
+
+test('Linux: NetworkManager connection set-up, key reuse, connect and remove',async t=>{
+ if(process.platform==='win32')return t.skip('needs a POSIX shell');
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-nm-test-')),nm=fakeNmcli(dir),c=new LinuxController({nmcli:nm.file,user:'sam'});
+ try{
+  assert.equal(c.tools(),true);assert.equal(await c.ready(),false);
+  const key=keyPair().privateKey;await c.install('[Interface]\nPrivateKey = '+key+'\n[Peer]\nAllowedIPs = 0.0.0.0/0, ::/0\n');
+  let s=nm.read();assert.equal(s.connections.length,1);assert.equal(s.connections[0].name,'hn-vpn');assert.equal(s.connections[0].owner,'user:sam');assert.equal(s.connections[0].autoconnect,'no');
+  assert.ok(!s.calls.some(a=>a.join(' ').includes(key)),'the private key is never on a command line');
+  assert.equal(await c.ready(),true);await c.up();assert.equal(await c.status(),true);
+  // Updating the configuration keeps this computer's key and swaps the connection, staying connected.
+  await c.install('[Interface]\nPrivateKey = <this device’s private key>\nDNS = 1.1.1.1\n',{reuseKey:true});
+  s=nm.read();assert.equal(s.connections.length,1);assert.equal(s.connections[0].key,key);assert.match(s.connections[0].config,/DNS = 1\.1\.1\.1/);assert.equal(s.connections[0].up,true);
+  // A refused import keeps the old connection.
+  process.env.NM_DENY='1';await assert.rejects(c.install('[Interface]\nPrivateKey = <this device’s private key>\n',{reuseKey:true}),/didn’t allow/);delete process.env.NM_DENY;
+  assert.equal(nm.read().connections.length,1);assert.equal(await c.status(),true);
+  await c.down();assert.equal(await c.status(),false);await c.remove();assert.equal(await c.ready(),false);
+  assert.equal(controllerFor('linux').constructor.name,'LinuxController');
+ }finally{delete process.env.NM_DENY;fs.rmSync(dir,{recursive:true,force:true});}
+});

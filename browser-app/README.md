@@ -2,6 +2,26 @@
 
 HN Browser for macOS Apple silicon and Windows x64, rebuilt around a compact chrome renderer and a live workspace overlay. Intel Macs remain unsupported.
 
+## Linux (Bazzite) — 1.2.0
+
+HN Browser 1.2.0 also runs on Linux x64 as an AppImage (`HN-Browser-<version>-linux-x86_64.AppImage`), built for
+Bazzite (the user's request, 27 October 2026: "develop all 3 apps for Bazzite") and working on Fedora and other
+desktops. Everything is the same as on Mac and Windows, with these Linux parts:
+
+- **Install:** download it from downloads.hngroup.org.uk, allow it to run as a program, and open it — or install it
+  with HN Group App Manager, which puts it in `~/Applications` and your app menu. Data lives in `~/.config/HN Browser`.
+- **Account:** remembered with the desktop's keyring (KWallet on KDE, GNOME Keyring on GNOME; the Secret Service on
+  other desktops such as Gaming Mode). Without a keyring the account isn't remembered (never stored in plain text).
+- **HN VPN:** a NetworkManager WireGuard connection called `hn-vpn` (`LinuxController` in `src/vpn.cjs`): setting up
+  imports it (the desktop may ask for your password once), makes it your own and never auto-connecting, and keeps the
+  key in NetworkManager's root-only store; connecting needs no prompt. Updating the configuration keeps this
+  computer's key, and a refused import keeps the old connection.
+- **Updates:** in place, like the Mac: the verified AppImage replaces the running one (same file name, so shortcuts
+  keep working) after HN Browser quits, then it reopens (`src/appimage.cjs`, identical in all three apps).
+- **Sandbox:** Chromium's sandbox stays on (`appImage.executableArgs: []`); the AppImage's launcher only turns it off
+  on systems without user namespaces, which Bazzite has.
+- **Quitting** turns the VPN off unless HN Secure Network (`hn-secure-network`) is running, as on Mac and Windows.
+
 ## What changed in 1.0
 
 - New tab rail, address bar, workspace navigation, settings, collections, downloads, VPN and start page. The HN stripe stays; no bookmarks bar.

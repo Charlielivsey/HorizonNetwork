@@ -1,18 +1,21 @@
 {
   "name": "hn-secure-network-windows",
-  "version": "2.0.1",
+  "version": "2.1.0",
+  "productName": "HN Secure Network",
   "private": true,
-  "description": "HN Secure Network for Windows: the HN Group VPN (connect with your PIN) and SSH sessions to the HN Group server in their own terminal window",
+  "description": "HN Secure Network for Windows and Linux: the HN Group VPN (connect with your PIN) and SSH sessions to the HN Group server in their own terminal window",
   "author": "HN Group",
   "license": "UNLICENSED",
   "main": "src/main.cjs",
+  "desktopName": "hn-secure-network.desktop",
   "scripts": {
     "start": "electron .",
     "test": "node --test test/*.test.cjs",
-    "test:desktop": "node test/desktop.cjs && node test/device-desktop.cjs",
+    "test:desktop": "node test/desktop.cjs && node test/device-desktop.cjs && node test/linux-desktop.cjs",
     "icons": "node scripts/icons.cjs",
     "build:win": "electron-builder --win --x64 --publish never",
-    "ssh-helper": "node scripts/ssh-helper.cjs"
+    "ssh-helper": "node scripts/ssh-helper.cjs",
+    "build:linux": "electron-builder --linux AppImage --x64 --publish never"
   },
   "devDependencies": {
     "@resvg/resvg-js": "2.6.2",
@@ -48,7 +51,16 @@
           ]
         }
       ],
-      "icon": "build/icon.ico"
+      "icon": "build/icon.ico",
+      "extraResources": [
+        {
+          "from": "build/ssh",
+          "to": "ssh",
+          "filter": [
+            "HN Secure Network SSH.exe"
+          ]
+        }
+      ]
     },
     "nsis": {
       "oneClick": true,
@@ -60,15 +72,29 @@
       "deleteAppDataOnUninstall": false
     },
     "npmRebuild": false,
-    "extraResources": [
-      {
-        "from": "build/ssh",
-        "to": "ssh",
-        "filter": [
-          "HN Secure Network SSH.exe"
-        ]
-      }
-    ]
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Network",
+      "icon": "build/icon.png",
+      "executableName": "hn-secure-network",
+      "synopsis": "The HN Group VPN and SSH",
+      "description": "The HN Group VPN (connect with your PIN) and SSH sessions to the HN Group server in their own terminal window.",
+      "desktop": {
+        "entry": {
+          "Name": "HN Secure Network",
+          "Categories": "Network;Security;",
+          "Keywords": "HN;VPN;WireGuard;SSH;"
+        }
+      },
+      "syncDesktopName": true
+    },
+    "appImage": {
+      "artifactName": "HN-Secure-Network-${version}-linux-x86_64.AppImage",
+      "executableArgs": []
+    },
+    "publish": []
   },
   "engines": {
     "node": ">=22.12.0"

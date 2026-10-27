@@ -1,11 +1,13 @@
 {
  "name": "hn-group-app-manager",
- "version": "3.0.0",
+ "version": "3.1.0",
+ "productName": "HN Group App Manager",
  "private": true,
- "description": "Install, update, repair and look after HN Group desktop apps",
+ "description": "Install, update, repair and look after HN Group desktop apps on macOS, Windows and Linux",
  "author": "HN Group",
  "license": "UNLICENSED",
  "main": "src/main.cjs",
+ "desktopName": "hn-group-app-manager.desktop",
  "scripts": {
   "start": "electron .",
   "test": "node --test test/*.test.cjs",
@@ -13,7 +15,8 @@
   "test:desktop": "node test/desktop.cjs",
   "icons": "node scripts/icons.cjs",
   "build:mac": "electron-builder --mac --universal --publish never",
-  "build:win": "electron-builder --win --x64 --publish never"
+  "build:win": "electron-builder --win --x64 --publish never",
+  "build:linux": "electron-builder --linux AppImage --x64 --publish never"
  },
  "devDependencies": {
   "electron": "44.9.0",
@@ -61,6 +64,29 @@
    "deleteAppDataOnUninstall": false
   },
   "npmRebuild": false,
-  "afterPack": "scripts/after-pack.cjs"
+  "afterPack": "scripts/after-pack.cjs",
+  "linux": {
+   "target": [
+    "AppImage"
+   ],
+   "category": "Utility",
+   "icon": "build/icon.png",
+   "executableName": "hn-group-app-manager",
+   "synopsis": "Install and update HN Group apps",
+   "description": "Install, update and look after HN Browser and HN Secure Network.",
+   "desktop": {
+    "entry": {
+     "Name": "HN Group App Manager",
+     "Categories": "Utility;System;",
+     "Keywords": "HN;Apps;Updates;"
+    }
+   },
+   "syncDesktopName": true
+  },
+  "appImage": {
+   "artifactName": "HN-Group-App-Manager-${version}-linux-x86_64.AppImage",
+   "executableArgs": []
+  },
+  "publish": []
  }
 }

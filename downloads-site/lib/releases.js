@@ -3,9 +3,9 @@ const fs=require('node:fs'),path=require('node:path');
 const REPO='Charlielivsey/HorizonNetwork',BASE='https://github.com/'+REPO+'/releases/download/';
 function readRelease(release){
  if(!release||release.draft||!/^browser-v\d+\.\d+\.\d+-\d+$/.test(release.tag_name))return null;
- // DMGs and the Windows installer are for people; the Mac zips let HN Browser update itself in place.
- const platforms={'mac-arm64':/-mac-arm64\.dmg$/,'windows-x64':/-win-x64\.exe$/,'mac-arm64-zip':/-mac-arm64\.zip$/};
- const assets={};for(const[id,pattern]of Object.entries(platforms)){const a=(release.assets||[]).find(a=>pattern.test(a.name)&&/^HN-Browser-[0-9A-Za-z.\-]+$/.test(a.name)&&a.browser_download_url?.startsWith(BASE+release.tag_name+'/'));if(a)assets[id]={name:a.name,url:a.browser_download_url,size:a.size,sha256:/^sha256:[a-f0-9]{64}$/.test(a.digest||'')?a.digest.slice(7):null};}
+ // DMGs, the Windows installer and the Linux AppImage are for people; the Mac zips let HN Browser update itself in place.
+ const platforms={'mac-arm64':/-mac-arm64\.dmg$/,'windows-x64':/-win-x64\.exe$/,'mac-arm64-zip':/-mac-arm64\.zip$/,'linux-x64':/-linux-x86_64\.AppImage$/};
+ const assets={};for(const[id,pattern]of Object.entries(platforms)){const a=(release.assets||[]).find(a=>pattern.test(a.name)&&/^HN-Browser-[0-9A-Za-z._\-]+$/.test(a.name)&&a.browser_download_url?.startsWith(BASE+release.tag_name+'/'));if(a)assets[id]={name:a.name,url:a.browser_download_url,size:a.size,sha256:/^sha256:[a-f0-9]{64}$/.test(a.digest||'')?a.digest.slice(7):null};}
  return Object.keys(assets).length?{version:release.tag_name.replace(/^browser-v/,''),publishedAt:release.published_at,assets}:null;
 }
 // CI records each browser release in downloads-site/release.json (version, file names, sizes, SHA-256),

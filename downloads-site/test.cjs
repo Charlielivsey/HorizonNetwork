@@ -37,4 +37,15 @@ test('HN Secure Network for Windows is offered only from a genuine Windows recor
   const a=createApp(path.join(dir,'data'),{kind:'windows',bundled:path.join(dir,'none'),fetcher:async url=>{assert.match(url,/secure-network-windows\.json$/);return Response.json(record('1.0.0',4));}});await a.refresh();assert.equal(a.current.build,4);
  }finally{fs.rmSync(dir,{recursive:true,force:true});}});
 
-test('App Manager offers only the matching verified Mac and Windows installers',()=>{const{readApp}=require('./lib/apps');for(const[kind,suffix]of[['manager-mac','mac-universal.zip'],['manager-windows','win-x64.exe']]){const record={tag:'app-manager-v1.0.0-1',asset:{name:'HN-Group-App-Manager-1.0.0-'+suffix,size:500,sha256:'a'.repeat(64)}};assert.equal(readApp(record,kind).version,'1.0.0-1');assert.equal(readApp({...record,tag:'browser-v1.0.0-1'},kind),null);assert.equal(readApp({...record,asset:{...record.asset,sha256:'bad'}},kind),null);assert.equal(readApp(record,kind==='manager-mac'?'manager-windows':'manager-mac'),null);}});
+test('App Manager offers only the matching verified Mac and Windows installers',()=>{const{readApp}=require('./lib/apps');for(const[kind,suffix]of[['manager-mac','mac-universal.zip'],['manager-windows','win-x64.exe'],['manager-linux','linux-x86_64.AppImage']]){const record={tag:'app-manager-v1.0.0-1',asset:{name:'HN-Group-App-Manager-1.0.0-'+suffix,size:500,sha256:'a'.repeat(64)}};assert.equal(readApp(record,kind).version,'1.0.0-1');assert.equal(readApp({...record,tag:'browser-v1.0.0-1'},kind),null);assert.equal(readApp({...record,asset:{...record.asset,sha256:'bad'}},kind),null);assert.equal(readApp(record,kind==='manager-mac'?'manager-windows':'manager-mac'),null);}});
+
+test('Linux: HN Secure Network’s AppImage comes only from a genuine Linux record, and HN Browser’s from its release',()=>{
+ const{readApp}=require('./lib/apps'),{readRelease}=require('./lib/releases');
+ const rec={tag:'secure-network-linux-v2.1.0-5',asset:{name:'HN-Secure-Network-2.1.0-linux-x86_64.AppImage',size:5000,sha256:'c'.repeat(64)}};
+ assert.equal(readApp(rec,'linux').asset.url,'https://github.com/Charlielivsey/HorizonNetwork/releases/download/secure-network-linux-v2.1.0-5/HN-Secure-Network-2.1.0-linux-x86_64.AppImage');
+ assert.equal(readApp(rec,'windows'),null);assert.equal(readApp({...rec,tag:'secure-network-windows-v2.1.0-5'},'linux'),null);
+ assert.equal(readApp({...rec,asset:{...rec.asset,name:'HN-Secure-Network-2.1.0-windows-x64.exe'}},'linux'),null);
+ const base='https://github.com/Charlielivsey/HorizonNetwork/releases/download/browser-v1.2.0-50/';
+ const r=readRelease({tag_name:'browser-v1.2.0-50',assets:[{name:'HN-Browser-1.2.0-linux-x86_64.AppImage',browser_download_url:base+'HN-Browser-1.2.0-linux-x86_64.AppImage',size:9,digest:'sha256:'+'d'.repeat(64)}]});
+ assert.equal(r.assets['linux-x64'].name,'HN-Browser-1.2.0-linux-x86_64.AppImage');
+});

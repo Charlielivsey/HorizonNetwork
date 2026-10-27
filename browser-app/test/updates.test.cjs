@@ -18,3 +18,18 @@ test('the Mac in-place swap waits for HN Browser to close, swaps the app safely 
  const s=swapScript({pid:4321,bundle:"/Applications/HN Browser.app",app:"/tmp/x/HN Browser.app",work:"/tmp/x"});
  assert.match(s,/kill -0 4321/);assert.match(s,/mv '\/Applications\/HN Browser\.app' '\/Applications\/HN Browser\.app\.old' && mv '\/tmp\/x\/HN Browser\.app' '\/Applications\/HN Browser\.app'/);assert.match(s,/with administrator privileges/);assert.match(s,/\/usr\/bin\/open '\/Applications\/HN Browser\.app'/);
 });
+
+test('Linux updates from the AppImage, swapped in place under the same name and reopened',()=>{
+ const{swapScript:linuxScript,currentAppImage,isAppImage,setAutostart,autostartEnabled}=require('../src/appimage.cjs');
+ const appimage={url:'/download/linux-x64',name:'HN-Browser-0.2.0-linux-x86_64.AppImage',size:10,sha256:'d'.repeat(64)};
+ const chosen=installer({version:'0.2.0-4',assets:{'linux-x64':appimage}},'linux','x64','0.1.0-2');assert.equal(chosen.kind,'appimage');assert.equal(chosen.url,'https://downloads.hngroup.org.uk/download/linux-x64');
+ assert.throws(()=>installer({version:'0.2.0-4',assets:{'linux-x64':{...appimage,name:'evil.AppImage'}}},'linux','x64','0.1.0-2'));
+ assert.equal(installer({version:'0.2.0-4',assets:{'linux-x64':appimage}},'linux','arm64','0.1.0-2'),null);
+ assert.throws(()=>currentAppImage('HN Browser',{}),/HN Browser isn’t running from its AppImage/);
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-appimage-'));
+ try{const fake=path.join(dir,'x');fs.writeFileSync(fake,Buffer.concat([Buffer.from([0x7f,0x45,0x4c,0x46,2,1,1,0,0x41,0x49,2]),Buffer.alloc(20)]));assert.equal(isAppImage(fake),true);fs.writeFileSync(fake,'#!/bin/sh\n');assert.equal(isAppImage(fake),false);
+  setAutostart(true,{id:'hn-browser',name:'HN Browser',exec:'/home/sam/Apps/HN Browser.AppImage',args:['--hidden'],config:dir});const entry=fs.readFileSync(path.join(dir,'autostart','hn-browser.desktop'),'utf8');assert.match(entry,/^Exec="\/home\/sam\/Apps\/HN Browser\.AppImage" --hidden$/m);assert.equal(autostartEnabled('hn-browser',{config:dir}),true);
+  setAutostart(false,{id:'hn-browser',name:'HN Browser',config:dir});assert.equal(autostartEnabled('hn-browser',{config:dir}),false);}finally{fs.rmSync(dir,{recursive:true,force:true});}
+ const s=linuxScript({pid:4321,target:'/home/sam/Applications/HN Browser.AppImage',source:'/tmp/w/HN-Browser.AppImage',work:'/tmp/w'});
+ assert.match(s,/kill -0 4321/);assert.match(s,/mv -f '\/home\/sam\/Applications\/\.HN Browser\.AppImage\.hn-update' '\/home\/sam\/Applications\/HN Browser\.AppImage'/);assert.match(s,/unset APPIMAGE APPDIR/);assert.match(s,/nohup '\/home\/sam\/Applications\/HN Browser\.AppImage'/);
+});

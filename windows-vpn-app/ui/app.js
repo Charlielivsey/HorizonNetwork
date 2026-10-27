@@ -1,5 +1,5 @@
 'use strict';
-// HN Secure Network for Windows: the page is built once (index.html) and kept up to date from the state the
+// HN Secure Network for Windows and Linux: the page is built once (index.html) and kept up to date from the state the
 // main process sends, so nothing is redrawn while you type and animations only play when something changes.
 const api=window.secureNetwork;
 const $=id=>document.getElementById(id),$$=(selector,root=document)=>[...root.querySelectorAll(selector)];
@@ -46,6 +46,12 @@ const when=iso=>{const d=new Date(iso);return isNaN(d)?'':d.toLocaleString('en-G
 const ago=iso=>{const d=new Date(iso);if(!iso||isNaN(d))return'Never connected';const s=(Date.now()-d)/1000;return s<90?'Just now':s<3600?Math.round(s/60)+' min ago':s<86400?Math.round(s/3600)+' h ago':when(iso);};
 const duration=ms=>{const s=Math.max(0,Math.floor(ms/1000)),hh=Math.floor(s/3600),mm=Math.floor(s%3600/60),ss=s%60;return(hh?hh+':'+String(mm).padStart(2,'0'):mm)+':'+String(ss).padStart(2,'0');};
 const reduced=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
+// Linux says "computer" where Windows says "PC"; the page's own words for Linux are in data-linux attributes.
+const linux=()=>state?.platform==='linux',pc=()=>linux()?'computer':'PC';
+let platformShown=null;
+function showPlatform(){const p=state?.platform||'win32';if(p===platformShown)return;platformShown=p;document.body.dataset.platform=p;
+ for(const n of $$('[data-linux]')){if(n.dataset.windows===undefined)n.dataset.windows=n.textContent;setText(n,p==='linux'?n.dataset.linux:n.dataset.windows);}
+ for(const n of $$('[data-linux-label]')){if(n.dataset.windowsLabel===undefined)n.dataset.windowsLabel=n.getAttribute('aria-label');n.setAttribute('aria-label',p==='linux'?n.dataset.linuxLabel:n.dataset.windowsLabel);}}
 function toast(message,bad=true){const t=$('toast');t.textContent=message;t.className='toast'+(bad?' bad':'');t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.hidden=true;},7000);}
 async function act(name,data,{quiet=false}={}){const r=await api.action(name,data);if(r?.error){if(!quiet)toast(r.error);return null;}return r?.result??true;}
 // Buttons show a spinner while their action runs.
@@ -115,9 +121,9 @@ for(const b of $$('[data-open]'))b.addEventListener('click',()=>act('open',b.dat
 for(const b of $$('[data-go]'))b.addEventListener('click',()=>go(b.dataset.go));
 for(const b of $$('.nav'))b.addEventListener('click',()=>go(b.dataset.page));
 $('side-status').addEventListener('click',()=>go('connection'));$('side-user').addEventListener('click',()=>go('profile'));$('side-update').addEventListener('click',()=>go('settings'));
-const signOut=()=>confirmThen({title:'Sign out of HN Secure Network?',text:'Signing out disconnects and removes this PC from the VPN. You can sign in and set it up again at any time.',confirm:'Sign out',danger:true,icon:'signout',tone:'danger'},()=>act('sign-out'));
+const signOut=()=>confirmThen({title:'Sign out of HN Secure Network?',text:'Signing out disconnects and removes this '+pc()+' from the VPN. You can sign in and set it up again at any time.',confirm:'Sign out',danger:true,icon:'signout',tone:'danger'},()=>act('sign-out'));
 $('sign-out').addEventListener('click',signOut);$('setup-sign-out').addEventListener('click',signOut);
-$('remove').addEventListener('click',e=>{const b=e.currentTarget;confirmThen({title:'Remove this PC from the HN VPN?',text:'It disconnects and this PC’s VPN key is deleted. You can set it up again at any time.',confirm:'Remove this PC',danger:true,icon:'trash',tone:'danger'},()=>busy(b,()=>act('remove')));});
+$('remove').addEventListener('click',e=>{const b=e.currentTarget;confirmThen({title:'Remove this '+pc()+' from the HN VPN?',text:'It disconnects and this '+pc()+'’s VPN key is deleted. You can set it up again at any time.',confirm:'Remove this '+pc(),danger:true,icon:'trash',tone:'danger'},()=>busy(b,()=>act('remove')));});
 for(const b of $$('[data-pref]'))b.addEventListener('click',()=>act('preference',{key:b.dataset.pref,value:!state.prefs[b.dataset.pref]}));
 for(const b of $$('[data-theme]'))b.addEventListener('click',()=>act('preference',{key:'theme',value:b.dataset.theme}));
 $('update-button').addEventListener('click',e=>{const u=state.update||{};busy(e.currentTarget,()=>act(u.status==='available'?'download-update':u.status==='ready'?'install-update':'check-update'));});
@@ -130,7 +136,7 @@ sshUser.addEventListener('input',()=>{usernameDraft=sshUser.value;sizeUser();for
 for(const input of[sshUser,sshPassword])input.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();openSSH();}});
 $('ssh-open').addEventListener('click',openSSH);
 async function openSSH(){
- const v=state?.vpn;if(!v?.ready)return toast('Set up the VPN on this PC first.');
+ const v=state?.vpn;if(!v?.ready)return toast('Set up the VPN on this '+pc()+' first.');
  const username=sshUser.value.trim()||'root',password=sshPassword.value;
  if(!/^[a-z_][a-z0-9_.-]{0,31}$/i.test(username)){toast('Enter a valid server username.');sshUser.focus();return;}
  if(!password){toast('Enter your server password.');sshPassword.focus();return;}
@@ -148,7 +154,7 @@ function drawProfile(){
  const p=profile;showIf('profile-loading',!p);setText('profile-loading',profileLoading?'Loading your profile…':'Your profile couldn’t be loaded.');
  for(const id of['card-sessions','card-devices','card-activity'])showIf(id,!!p);if(!p)return;
  $('sessions').replaceChildren(...(p.sessions.length?p.sessions.map(s=>el('div',{class:'item'},el('span',{class:'icon'},icon(s.kind==='web'?'web':'laptop')),
-  el('div',{class:'grow'},el('strong',{},(s.client||'Website')+(s.appVersion?' '+s.appVersion:'')+(s.current?' · this PC':'')),el('small',{},'Signed in '+when(s.createdAt)+(s.lastUsedAt?' · last used '+when(s.lastUsedAt):''))),
+  el('div',{class:'grow'},el('strong',{},(s.client||'Website')+(s.appVersion?' '+s.appVersion:'')+(s.current?' · this '+pc():'')),el('small',{},'Signed in '+when(s.createdAt)+(s.lastUsedAt?' · last used '+when(s.lastUsedAt):''))),
   s.current?el('span',{class:'tag good'},'Current'):el('button',{class:'btn small',onclick:e=>{const b=e.currentTarget;confirmThen({title:'Sign out of that device?',text:(s.client||'The website')+' will need to sign in again.',confirm:'Sign out',danger:true,icon:'signout',tone:'danger'},()=>busy(b,async()=>{if(await act('end-session',s.id)){toast('Signed out of that device.',false);loadProfile();}}));}},'Sign out'))):[el('p',{class:'empty'},'No sign-ins.')]));
  $('devices').replaceChildren(...(p.devices.length?p.devices.map(d=>el('div',{class:'item'},el('span',{class:'icon'},icon(/phone|iphone|android/i.test(d.name)?'phone':'laptop')),el('div',{class:'grow'},el('strong',{},d.name),el('small',{},d.address+(d.lastHandshake?' · '+ago(d.lastHandshake):''))),
   el('span',{class:'tag'+(d.connected?' good':'')},d.connected?'Connected':d.lastHandshake?'Not connected':'Never connected'))):[el('p',{class:'empty'},'No devices yet.')]));
@@ -156,7 +162,7 @@ function drawProfile(){
 
 // ---------- Keeping the page up to date ----------
 function stage(){const v=state.vpn;return!v.signedIn?'welcome':(!v.ready||v.removed)?'setup':'app';}
-function render(){if(!state)return;const v=state.vpn,s=stage();
+function render(){if(!state)return;showPlatform();const v=state.vpn,s=stage();
  if(s!==view){view=s;document.body.dataset.view=s;for(const id of['welcome','setup','app'])showIf('view-'+id,id===s);if(s!=='app'){profile=null;drawProfile();}}
  const ts=$('title-status');showIf(ts,s==='app');ts.classList.toggle('on',v.connected);setText(ts.lastElementChild,v.connected?'Protected':'Not connected');
  // The person's name and picture, wherever they appear.
@@ -171,11 +177,11 @@ function renderWelcome(v){
 function renderSetup(v){
  const tools=v.tools,ready=v.ready&&!v.removed,full=!ready&&v.devices>=v.limit,setting=v.busy==='setting-up';
  setText('setup-who','Signed in as '+(v.user?.displayName||''));
- setText('setup-lede',v.removed?'This PC was removed from the VPN on the website. Set it up again to connect.':'Three quick steps. Windows will ask for permission once while setting up.');
+ setText('setup-lede',v.removed?'This '+pc()+' was removed from the VPN on the website. Set it up again to connect.':linux()?'Three quick steps. Your computer may ask for your password once while setting up.':'Three quick steps. Windows will ask for permission once while setting up.');
  $('step-tools').className='step'+(tools?' done':' active');$('step-setup').className='step'+(ready?' done':tools?' active':'');
- const install=$('install-tools');showIf(install,!tools);install.disabled=state.toolsBusy;install.classList.toggle('working',state.toolsBusy);setText(install,state.toolsBusy?'Installing…':'Install');
+ const install=$('install-tools');showIf(install,!tools);install.disabled=state.toolsBusy;install.classList.toggle('working',state.toolsBusy);setText(install,state.toolsBusy?(linux()?'Checking…':'Installing…'):linux()?'Get NetworkManager':'Install');
  const setUp=$('set-up');showIf(setUp,tools);setUp.disabled=setting||full;setUp.classList.toggle('working',setting);setText(setUp,setting?'Setting up…':'Set up');
- setText('setup-devices','Registers this PC with a key made here; it never leaves this PC. '+v.devices+' of '+v.limit+' devices used.');
+ setText('setup-devices','Registers this '+pc()+' with a key made here; it never leaves this '+pc()+'. '+v.devices+' of '+v.limit+' devices used.');
  showIf('tools-hint',state.toolsBusy);showIf('setup-limit',full);
  setText($('setup-error').querySelector('p'),v.error);showIf('setup-error',!!v.error);}
 
@@ -191,32 +197,32 @@ function renderApp(v){
   $('hero').classList.toggle('on',on);$('power').classList.toggle('busy',working);$('power').disabled=working;$('power').setAttribute('aria-label',on?'Disconnect':'Connect');
   $('hero').querySelector('.pill .dot').classList.toggle('on',on);setText('hero-pill',on?'Protected':'Not protected');
   setText('hero-title',v.busy==='connecting'?'Connecting…':v.busy==='disconnecting'?'Disconnecting…':on?'You’re protected':'You’re not connected');
-  setText('hero-text',on?'All of this PC’s internet traffic is encrypted and going through HN Group’s UK server.':'Connect to send this PC’s internet traffic through HN Group’s private VPN. You’ll be asked for your PIN.');
+  setText('hero-text',on?'All of this '+pc()+'’s internet traffic is encrypted and going through HN Group’s UK server.':'Connect to send this '+pc()+'’s internet traffic through HN Group’s private VPN. You’ll be asked for your PIN.');
   showIf('hero-meta',on&&!!state.connectedAt);tick();
   const t=$('toggle');if(!t.classList.contains('working')){setText(t,on?'Disconnect':'Connect');t.disabled=working;}
   setText('tile-ip',v.publicIp||(on?'Checking…':'—'));note('tile-ip-note',on?(v.viaVpn?'HN Group VPN address':'Checking the route…'):'Connect to use the VPN address',on&&v.viaVpn?'good':'');
   setText('tile-place',on?'United Kingdom':'Your own connection');note('tile-place-note',on?'HN Group’s UK server':'Not through the VPN',on?'good':'');
   setText('tile-server',v.server);note('tile-server-note',on?(v.reachable?'Reachable for SSH':v.reachable===false?'Not answering':'Checking…'):'Connect to reach it',on?(v.reachable?'good':v.reachable===false?'bad':''):'');
-  setText('tile-pc',v.device?.name||state.hostname);note('tile-pc-note',v.device?.address?v.device.address+' · its key never leaves this PC':'Its key never leaves this PC','');}
+  setText('tile-pc',v.device?.name||state.hostname);note('tile-pc-note',v.device?.address?v.device.address+' · its key never leaves this '+pc():'Its key never leaves this '+pc(),'');}
  if(page==='ssh'){
   const ssh=state.ssh;if(usernameDraft===null&&document.activeElement!==sshUser&&sshUser.value!==ssh.username){sshUser.value=ssh.username;sizeUser();}
   for(const n of $$('.ssh-as'))setText(n,sshUser.value.trim()||'root');for(const n of $$('.ssh-host'))setText(n,ssh.host);
   const pill=$('ssh-pill');pill.querySelector('.dot').classList.toggle('on',!!(on&&v.reachable));setText(pill.lastElementChild,!on?'VPN off':v.reachable?'Online':v.reachable===false?'Not answering':'Checking');
-  setText($('ssh-open').querySelector('span'),on?'Open in a terminal window':'Connect and open');setText('ssh-note',on?'Opens in its own terminal window':'You’ll be asked for your PIN to connect first');
+  setText($('ssh-open').querySelector('span'),on?'Open in a terminal window':'Connect and open');setText('ssh-note',on?(linux()&&state.terminal?'Opens in '+state.terminal:'Opens in its own terminal window'):'You’ll be asked for your PIN to connect first');
   const last=ssh.last,status=$('ssh-status');showIf(status,!!last&&Date.now()-last.at<10*60000);
   if(last){status.className='console-status '+last.status;setText(status,last.status==='connecting'?'Signing in to the server in the SSH window…':last.status==='open'?'Signed in. The session is open in its own window.':last.error);}
-  setText('ssh-fingerprint',ssh.fingerprint?'Server identity confirmed on this PC: '+ssh.fingerprint:'The server’s identity hasn’t been confirmed on this PC yet. You’ll be asked to check it the first time.');}
+  setText('ssh-fingerprint',ssh.fingerprint?'Server identity confirmed on this '+pc()+': '+ssh.fingerprint:'The server’s identity hasn’t been confirmed on this '+pc()+' yet. You’ll be asked to check it the first time.');}
  if(page==='profile'){setText('profile-devices',(profile?profile.devices.length:v.devices)+' of '+v.limit+' devices');showIf('profile-admin',!!v.user?.admin);}
  if(page==='settings'){
-  setText('version','Version '+state.version+(state.build?' (build '+state.build+')':'')+' for Windows');
+  setText('version','Version '+state.version+(state.build?' (build '+state.build+')':'')+(linux()?' for Linux':' for Windows'));
   const b=$('update-button');if(!b.classList.contains('working')){setText(b,u.status==='available'?'Download update':u.status==='ready'?'Install and restart':u.status==='checking'?'Checking…':u.status==='downloading'?'Downloading…':'Check for updates');b.classList.toggle('primary',['available','ready'].includes(u.status));b.disabled=['checking','downloading'].includes(u.status);}
   const text={checking:'Checking for updates…',current:'You have the latest version.',available:'Version '+(u.latest||'')+' is available.',downloading:'Downloading the update… '+(u.progress||0)+'%',ready:'The update is ready. Installing restarts HN Secure Network.',error:u.error||'Couldn’t check for updates.'}[u.status]||'';
   setText('update-text',text);showIf('update-text',!!text);$('update-text').classList.toggle('bad',u.status==='error');
   showIf('update-progress',u.status==='downloading');$('update-progress').firstElementChild.style.transform='scaleX('+((u.progress||0)/100)+')';
   for(const sw of $$('[data-pref]'))sw.setAttribute('aria-checked',String(!!state.prefs[sw.dataset.pref]));
   for(const t of $$('[data-theme]'))t.setAttribute('aria-pressed',String(state.prefs.theme===t.dataset.theme));
-  setText('pc-text',(v.device?v.device.name+' · '+v.device.address:state.hostname)+'. WireGuard for Windows carries the connection; its configuration can only be read by administrators.');
-  setText('account-text','Signed in as '+(v.user?.email||'')+'. Signing out disconnects and removes this PC from the VPN.');
+  setText('pc-text',(v.device?v.device.name+' · '+v.device.address:state.hostname)+(linux()?'. NetworkManager’s WireGuard carries the connection; its key is kept in NetworkManager’s protected store.':'. WireGuard for Windows carries the connection; its configuration can only be read by administrators.'));
+  setText('account-text','Signed in as '+(v.user?.email||'')+'. Signing out disconnects and removes this '+pc()+' from the VPN.');
   for(const btn of $$('[data-action=set-up],#remove'))if(!btn.classList.contains('working'))btn.disabled=!!v.busy;}}
 function note(id,text,cls){const n=$(id);setText(n,text);n.className='note'+(cls?' '+cls:'');}
 function tick(){if(state?.connectedAt)setText('elapsed',duration(Date.now()-state.connectedAt));}
@@ -225,7 +231,7 @@ setInterval(tick,1000);
 async function receive(incoming){state=incoming;const v=state.vpn;
  if(v.error&&v.error!==lastError&&stage()==='app')toast(v.error);lastError=v.error||'';
  if(state.avatarTag!==avatarTag){avatarTag=state.avatarTag;avatarData=null;if(avatarTag){const data=await act('avatar',undefined,{quiet:true});if(typeof data==='string'&&data.startsWith('data:image/'))avatarData=data;}}
- // A PIN left open is put away if the VPN came on another way or this PC can no longer connect.
+ // A PIN left open is put away if the VPN came on another way or this computer can no longer connect.
  if(current?.kind==='pin'&&!current.checking&&!current.ssh&&(v.connected||!v.ready))next();
  render();}
 api.subscribe(receive);

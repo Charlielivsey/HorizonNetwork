@@ -40,6 +40,8 @@ const mb = (b) => (b / 1048576).toFixed(b >= 104857600 ? 0 : 1) + ' MB';
 const day = (iso) => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }); };
 const ago = (at) => { const d = new Date(at); if (isNaN(d)) return ''; const s = (Date.now() - d) / 1000; if (s < 60) return 'just now'; if (s < 3600) return Math.round(s / 60) + ' min ago'; return (new Date().toDateString() === d.toDateString() ? 'today' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })) + ' at ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); };
 const mac = () => state && state.platform === 'darwin';
+const linux = () => state && state.platform === 'linux';
+const here = () => (mac() ? 'Mac' : linux() ? 'computer' : 'PC');
 function toast(message, bad = false) { const t = $('toast'); t.textContent = message; t.className = 'toast' + (bad ? ' bad' : ''); t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 6000); }
 async function call(method, ...args) { const r = await api.call(method, ...args); if (!r || !r.ok) throw Error((r && r.error) || 'Something went wrong.'); return r.value; }
 async function act(method, ...args) { try { return { value: await call(method, ...args) }; } catch (e) { toast(e.message, true); return null; } }
@@ -114,11 +116,11 @@ async function perform(id, kind, button) {
   const queueIt = async () => { const r = await act('enqueue', id, kind); return !!r; };
   if (kind === 'open') return act('open', id);
   if (kind === 'cancel') return act('cancel', id);
-  if (kind === 'install') { if (await confirmed({ title: 'Install ' + a.name + ' ' + short(a.latest.version) + '?', text: mac() ? 'It goes in your Applications folder once its download is checked. macOS may ask for your password.' : 'Its installer runs quietly once the download is checked.', icon: 'download', confirm: 'Install' })) await queueIt(); return; }
-  if (kind === 'reinstall') { if (await confirmed({ title: 'Reinstall ' + a.name + '?', text: 'A fresh, checked copy of version ' + short(a.latest.version) + ' replaces the one on this ' + (mac() ? 'Mac' : 'PC') + '. Your account, settings and data are kept.', icon: 'wrench', confirm: 'Reinstall' })) await queueIt(); return; }
+  if (kind === 'install') { if (await confirmed({ title: 'Install ' + a.name + ' ' + short(a.latest.version) + '?', text: mac() ? 'It goes in your Applications folder once its download is checked. macOS may ask for your password.' : linux() ? 'It goes in the Applications folder in your home folder and in your app menu, once its download is checked.' : 'Its installer runs quietly once the download is checked.', icon: 'download', confirm: 'Install' })) await queueIt(); return; }
+  if (kind === 'reinstall') { if (await confirmed({ title: 'Reinstall ' + a.name + '?', text: 'A fresh, checked copy of version ' + short(a.latest.version) + ' replaces the one on this ' + here() + '. Your account, settings and data are kept.', icon: 'wrench', confirm: 'Reinstall' })) await queueIt(); return; }
   if (kind === 'update') { if (await queueIt() && a.running) toast(a.name + ' updates as soon as you quit it.'); return; }
   if (kind === 'remove') {
-    if (!await confirmed({ title: 'Remove ' + a.name + '?', text: (mac() ? 'It moves to the Bin.' : 'Its uninstaller runs.') + ' Your account, settings and data stay on this computer, so reinstalling picks up where you left off.', note: a.id === 'network' ? 'Disconnect the VPN first. WireGuard and this computer’s VPN set-up are kept.' : '', icon: 'trash', tone: 'danger', confirm: 'Remove' })) return;
+    if (!await confirmed({ title: 'Remove ' + a.name + '?', text: (mac() ? 'It moves to the Bin.' : linux() ? 'It moves to the Bin and leaves your app menu.' : 'Its uninstaller runs.') + ' Your account, settings and data stay on this computer, so reinstalling picks up where you left off.', note: a.id === 'network' ? 'Disconnect the VPN first. WireGuard and this computer’s VPN set-up are kept.' : '', icon: 'trash', tone: 'danger', confirm: 'Remove' })) return;
     if (await queueIt() && a.running) toast(a.name + ' is removed as soon as you quit it.');
   }
 }
@@ -151,6 +153,7 @@ function renderApps() {
   showIf('update-all', updates.length > 1 || (updates.length === 1 && !m.job)); text($('update-all').querySelector('span'), updates.length > 1 ? 'Update all (' + updates.length + ')' : 'Update');
   showIf('apps-error', !!m.error); text('apps-error', m.error || '');
   showIf('move-banner', state.updater.location === 'temporary');
+  if (linux()) { text('move-title', 'Install App Manager'); text('move-text', 'It’s running from your download, so it isn’t in your app menu and can’t keep itself up to date there.'); text('move-button', 'Install'); }
   for (const a of apps) {
     let r = rows[a.id];
     if (!r) {
@@ -184,7 +187,7 @@ function renderApp() {
   const fk = JSON.stringify(facts);
   if ($('app-facts').dataset.key !== fk) { $('app-facts').dataset.key = fk; $('app-facts').replaceChildren(...facts.map(([k, v, n]) => el('div', {}, el('dt', {}, k), el('dd', { class: k === 'Location' ? 'path' : '' }, v), n ? el('small', { class: 'muted' }, n) : null))); }
   showIf('app-danger', !!a.installed);
-  text('remove-text', mac() ? 'Moves ' + a.name + ' to the Bin. Your account, settings and data are kept.' : 'Runs ' + a.name + '’s uninstaller. Your account, settings and data are kept.');
+  text('remove-text', mac() ? 'Moves ' + a.name + ' to the Bin. Your account, settings and data are kept.' : linux() ? 'Moves ' + a.name + ' to the Bin and takes it out of your app menu. Your account, settings and data are kept.' : 'Runs ' + a.name + '’s uninstaller. Your account, settings and data are kept.');
   renderSettings(a);
 }
 async function loadSettings(id, force) {
@@ -230,7 +233,7 @@ $('remove').addEventListener('click', (e) => busy(e.currentTarget, () => perform
 // ---------- Updates ----------
 function renderUpdates() {
   const u = state.updater, latest = u.latest ? short(u.latest.version) : '';
-  text('self-version', 'Version ' + state.version + (state.build ? ' (build ' + state.build + ')' : '') + ' for ' + (mac() ? 'macOS' : 'Windows'));
+  text('self-version', 'Version ' + state.version + (state.build ? ' (build ' + state.build + ')' : '') + ' for ' + (mac() ? 'macOS' : linux() ? 'Linux' : 'Windows'));
   const msg = { idle: 'Not checked yet.', checking: 'Checking for updates…', 'up-to-date': 'App Manager is up to date' + (u.checkedAt ? ' (checked ' + ago(u.checkedAt) + ').' : '.'), available: 'Version ' + latest + ' is available.', downloading: 'Downloading version ' + latest + '… ' + u.progress + '%', ready: 'Version ' + latest + ' is ready to install.' + (state.preferences.autoUpdateSelf ? ' It installs when App Manager next restarts, or now.' : ''), installing: 'Installing. App Manager reopens by itself.', error: u.error || 'The update didn’t work.', unsupported: 'This copy of App Manager can’t update itself (it isn’t an installed copy).' }[u.status] || '';
   text('self-status', msg); $('self-status').className = u.status === 'error' ? 'bad' : u.status === 'ready' ? 'good' : '';
   showIf('self-bar', u.status === 'downloading'); $('self-bar').firstElementChild.style.transform = 'scaleX(' + (u.progress || 0) / 100 + ')';
@@ -238,7 +241,7 @@ function renderUpdates() {
   if ($('self-actions').dataset.key !== key) {
     $('self-actions').dataset.key = key;
     const b = [];
-    if (u.location === 'temporary') b.push(el('button', { class: 'btn primary', 'data-action': 'move', onclick: (e) => moveToApplications(e.currentTarget) }, icon('folder'), el('span', {}, 'Move to Applications')));
+    if (u.location === 'temporary') b.push(el('button', { class: 'btn primary', 'data-action': 'move', onclick: (e) => moveToApplications(e.currentTarget) }, icon('folder'), el('span', {}, linux() ? 'Install App Manager' : 'Move to Applications')));
     if (u.status === 'available' || (u.status === 'error' && u.latest)) b.push(el('button', { class: 'btn primary', id: 'self-download', onclick: (e) => busy(e.currentTarget, () => act('self-download')) }, icon('download'), el('span', {}, u.status === 'error' ? 'Try again' : 'Download update')));
     if (u.status === 'ready') b.push(el('button', { class: 'btn primary', id: 'self-install', onclick: (e) => restart(e.currentTarget) }, icon('refresh'), el('span', {}, 'Restart to update')));
     if (!['downloading', 'installing', 'checking'].includes(u.status)) b.push(el('button', { class: 'btn', id: 'self-check', onclick: (e) => busy(e.currentTarget, async () => { const r = await act('self-check'); if (r && r.value.status === 'up-to-date') toast('App Manager is up to date.'); }) }, icon('refresh'), el('span', {}, 'Check now')));
@@ -253,7 +256,11 @@ function renderUpdates() {
   }
 }
 async function restart(button) { if (await confirmed({ title: 'Restart to update App Manager?', text: 'App Manager closes, installs version ' + short(state.updater.latest.version) + ' and opens again. Your apps aren’t touched.' + (mac() ? ' macOS may ask for your password.' : ''), icon: 'refresh', confirm: 'Restart and update' })) busy(button, () => act('self-install')); }
-async function moveToApplications(button) { if (await confirmed({ title: 'Move App Manager to Applications?', text: 'It copies itself to your Applications folder and reopens from there, so it can keep itself up to date. macOS may ask for your password.', icon: 'folder', confirm: 'Move and reopen' })) busy(button, () => act('move-to-applications')); }
+async function moveToApplications(button) {
+  const spec = linux() ? { title: 'Install App Manager?', text: 'It copies itself to the Applications folder in your home folder, adds itself to your app menu and reopens from there, so it can keep itself up to date.', confirm: 'Install and reopen' }
+    : { title: 'Move App Manager to Applications?', text: 'It copies itself to your Applications folder and reopens from there, so it can keep itself up to date. macOS may ask for your password.', confirm: 'Move and reopen' };
+  if (await confirmed({ ...spec, icon: 'folder' })) busy(button, () => act('move-to-applications'));
+}
 for (const b of $$('#move-banner [data-action=move]')) b.addEventListener('click', (e) => moveToApplications(e.currentTarget));
 
 // ---------- Activity ----------

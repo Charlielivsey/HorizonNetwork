@@ -3,6 +3,29 @@
 The desktop app that installs, updates, repairs and looks after HN Browser and HN Secure Network, for macOS
 (Apple silicon and Intel; HN Browser itself needs Apple silicon) and Windows 10/11 x64.
 
+## Linux (Bazzite) — 3.1.0
+
+App Manager 3.1.0 also runs on Linux x64 as an AppImage (`HN-Group-App-Manager-<version>-linux-x86_64.AppImage`),
+built for Bazzite (the user's request, 27 October 2026) and working on Fedora and other desktops
+(`src/core/linux.cjs`):
+
+- **Installing** puts the checked AppImage in `~/Applications` under a fixed name (`HN-Browser.AppImage`,
+  `HN-Secure-Network.AppImage`) in one step, and adds it to the app menu (`~/.local/share/applications/<id>.desktop`
+  with its icon). Copies kept in `~/AppImages` or `~/.local/bin` (also with the version in the name) are found too.
+- **Versions** come from App Manager's own record (`linux-apps.json`), the release's SHA-256 (so an app that updated
+  itself is recognised), the file name, or the AppImage's desktop entry, read without running the app.
+- **Open apps** are found from `/proc` (the AppImage's runtime, or a process started from it); changes wait until
+  they're quit, as on Mac and Windows.
+- **Removing** moves the AppImage to the Bin (restorable) and takes it out of the app menu; HN Secure Network's
+  autostart entry goes too. `~/.config/<app>` is never touched.
+- **Settings** go to the apps' own `~/.config/HN Browser` and `~/.config/HN Secure Network`; turning on HN Secure
+  Network's "Open when I sign in" also writes its autostart entry.
+- **Itself:** run from a download, it offers **Install** (copies itself to `~/Applications`, adds itself to the menu
+  and reopens); its own updates are staged, verified and swapped in after it quits. "Open at sign-in" is
+  `~/.config/autostart/hn-group-app-manager.desktop`.
+- **Tests:** `test/linux.test.cjs` (pretend home folder). CI builds the AppImage on Ubuntu alongside Mac and Windows,
+  self-checks it under Xvfb, and the publish step records `downloads-site/app-manager-linux.json`.
+
 Version 3.0.0 is a rebuild from scratch (the user's request, 26 October 2026: "completely rebuild the app manager
 from scratch. it is buggy and doesnt work right. it also needs to have its own in app updates"). Only the shared
 pieces were kept: HN Group sign-in (`src/account.cjs`, `src/vault.cjs`) and the device check (`src/device*.cjs`,

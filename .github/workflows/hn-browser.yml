@@ -18,6 +18,7 @@ jobs:
         include:
           - {os: macos-14, platform: mac, arch: arm64}
           - {os: windows-latest, platform: win, arch: x64}
+          - {os: ubuntu-latest, platform: linux, arch: x64}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -44,6 +45,7 @@ jobs:
             browser-app/dist/*.dmg
             browser-app/dist/*.zip
             browser-app/dist/*.exe
+            browser-app/dist/*.AppImage
           if-no-files-found: error
   publish:
     needs: build
@@ -64,9 +66,9 @@ jobs:
           sha256sum HN-Browser-* > SHA256SUMS.txt
           # release.json lets downloads.hngroup.org.uk (and so the in-app updater) find this release without
           # GitHub's rate-limited API: it's attached to the release and committed to downloads-site/release.json.
-          TAG="$TAG" node -e "const fs=require('fs'),crypto=require('crypto');const ids={'mac-arm64':/-mac-arm64\.dmg$/,'windows-x64':/-win-x64\.exe$/,'mac-arm64-zip':/-mac-arm64\.zip$/};const assets={};for(const name of fs.readdirSync('.').filter(f=>f.startsWith('HN-Browser-')))for(const[id,re]of Object.entries(ids))if(re.test(name)){const data=fs.readFileSync(name);assets[id]={name,size:data.length,sha256:crypto.createHash('sha256').update(data).digest('hex')};}if(!assets['mac-arm64']||!assets['windows-x64'])throw Error('Missing installers');fs.writeFileSync('release.json',JSON.stringify({tag:process.env.TAG,publishedAt:new Date().toISOString(),assets},null,1));"
+          TAG="$TAG" node -e "const fs=require('fs'),crypto=require('crypto');const ids={'mac-arm64':/-mac-arm64\.dmg$/,'windows-x64':/-win-x64\.exe$/,'mac-arm64-zip':/-mac-arm64\.zip$/,'linux-x64':/-linux-x86_64\.AppImage$/};const assets={};for(const name of fs.readdirSync('.').filter(f=>f.startsWith('HN-Browser-')))for(const[id,re]of Object.entries(ids))if(re.test(name)){const data=fs.readFileSync(name);assets[id]={name,size:data.length,sha256:crypto.createHash('sha256').update(data).digest('hex')};}if(!assets['mac-arm64']||!assets['windows-x64']||!assets['linux-x64'])throw Error('Missing installers');fs.writeFileSync('release.json',JSON.stringify({tag:process.env.TAG,publishedAt:new Date().toISOString(),assets},null,1));"
           cat release.json
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "HN Browser $VERSION · preview build ${{ github.run_number }}" --prerelease --notes 'HN Browser 1.0: rebuilt workspace and start page, synchronized live themes, SSH terminal for the HN server through HN VPN, connection diagnostics, draggable tabs and preserved account, profile, settings, history, bookmarks, downloads and in-place updates. macOS Apple silicon and Windows x64 only. Preview builds are not developer-signed or notarised. Real WireGuard control needs platform validation.' HN-Browser-* SHA256SUMS.txt release.json
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "HN Browser $VERSION · preview build ${{ github.run_number }}" --prerelease --notes 'HN Browser 1.0: rebuilt workspace and start page, synchronized live themes, SSH terminal for the HN server through HN VPN, connection diagnostics, draggable tabs and preserved account, profile, settings, history, bookmarks, downloads and in-place updates. macOS Apple silicon, Windows x64 and Linux x64 (AppImage, for Bazzite, Fedora and other desktops). Preview builds are not developer-signed or notarised. Real WireGuard control needs platform validation.' HN-Browser-* SHA256SUMS.txt release.json
       - name: Record the release for downloads.hngroup.org.uk
         run: |
           cp installers/release.json downloads-site/release.json

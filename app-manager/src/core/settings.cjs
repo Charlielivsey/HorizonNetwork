@@ -33,6 +33,11 @@ const NETWORK_WINDOWS = {
   launchAtLogin: bool('Startup', 'Open when I sign in to Windows', true, 'It waits in the system tray.'),
   connectOnLaunch: bool('Startup', 'Ask to connect when it opens', false, 'It opens on your PIN, so connecting takes one step.'),
 };
+const NETWORK_LINUX = {
+  theme: choice('Appearance', 'Appearance', ['system', 'light', 'dark'], 'system'),
+  launchAtLogin: bool('Startup', 'Open when I sign in', true, 'It waits in the system tray.'),
+  connectOnLaunch: bool('Startup', 'Ask to connect when it opens', false, 'It opens on your PIN, so connecting takes one step.'),
+};
 const NETWORK_MAC = {
   launchAtLogin: bool('Startup', 'Open when I log in', false, 'Needs HN Secure Network 2.4.1 or later.'),
   sshUser: { type: 'text', group: 'SSH', label: 'Server username', hint: 'Filled in on the SSH page. You still type the password each time.', default: 'root' },
@@ -41,7 +46,7 @@ const LABELS = { 'midnight-lavender': 'Midnight Lavender', daylight: 'Daylight',
 
 function schema(id, platform) {
   if (id === 'browser') return BROWSER;
-  if (id === 'network') return platform === 'darwin' ? NETWORK_MAC : NETWORK_WINDOWS;
+  if (id === 'network') return platform === 'darwin' ? NETWORK_MAC : platform === 'linux' ? NETWORK_LINUX : NETWORK_WINDOWS;
   throw Object.assign(Error('Unknown app.'), { status: 400 });
 }
 function validate(id, platform, patch) {

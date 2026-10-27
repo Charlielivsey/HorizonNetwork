@@ -1,16 +1,17 @@
 'use strict';
-// Other HN Group apps on the downloads page: HN Secure Network (the HN Group VPN and SSH app) for Mac
-// and for Windows. Each is built by its own GitHub workflow (.github/workflows/mac-vpn-app.yml and
-// windows-vpn-app.yml), published as a GitHub preview release of the fixed repository and recorded in
-// downloads-site/secure-network.json or secure-network-windows.json. Newest wins between GitHub and the
-// installed copy.
+// Other HN Group apps on the downloads page: HN Secure Network (the HN Group VPN and SSH app) for Mac, Windows
+// and Linux, and HN Group App Manager. Each is built by its own GitHub workflow (.github/workflows/mac-vpn-app.yml,
+// windows-vpn-app.yml, secure-network-linux.yml and app-manager.yml), published as a GitHub preview release of the
+// fixed repository and recorded in downloads-site/<kind's file>. Newest wins between GitHub and the installed copy.
 const fs=require('node:fs'),path=require('node:path'),{newer}=require('./releases');
 const REPO='Charlielivsey/HorizonNetwork',BASE='https://github.com/'+REPO+'/releases/download/',RAW='https://raw.githubusercontent.com/'+REPO+'/claude/confident-volta-gxjboo/downloads-site/';
 const KINDS={
  'manager-mac':{file:'app-manager-mac.json',tag:/^app-manager-v(\d+\.\d+\.\d+)-(\d+)$/,asset:v=>'HN-Group-App-Manager-'+v+'-mac-universal.zip'},
  'manager-windows':{file:'app-manager-windows.json',tag:/^app-manager-v(\d+\.\d+\.\d+)-(\d+)$/,asset:v=>'HN-Group-App-Manager-'+v+'-win-x64.exe'},
+ 'manager-linux':{file:'app-manager-linux.json',tag:/^app-manager-v(\d+\.\d+\.\d+)-(\d+)$/,asset:v=>'HN-Group-App-Manager-'+v+'-linux-x86_64.AppImage'},
  mac:{file:'secure-network.json',tag:/^secure-network-v(\d+\.\d+\.\d+)-(\d+)$/,asset:v=>'HN-Secure-Network-'+v+'-macOS.zip'},
  windows:{file:'secure-network-windows.json',tag:/^secure-network-windows-v(\d+\.\d+\.\d+)-(\d+)$/,asset:v=>'HN-Secure-Network-'+v+'-windows-x64.exe'},
+ linux:{file:'secure-network-linux.json',tag:/^secure-network-linux-v(\d+\.\d+\.\d+)-(\d+)$/,asset:v=>'HN-Secure-Network-'+v+'-linux-x86_64.AppImage'},
 };
 // Only a genuine record: the right tag, the matching file name, a sensible size and a SHA-256.
 function readApp(m,kind='mac'){

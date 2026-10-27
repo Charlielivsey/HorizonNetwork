@@ -6,7 +6,8 @@
 // The identity (a random id and secret) is made once and kept in a folder every HN app on this computer shares:
 //   macOS   ~/Library/Application Support/HN Group/Device/device.json
 //   Windows %APPDATA%\HN Group\Device\device.json
-// The server also gets a fingerprint of the computer's hardware id (IOPlatformUUID / MachineGuid), so a copied
+//   Linux   ~/.config/hn-group/device/device.json
+// The server also gets a fingerprint of the computer's hardware id (IOPlatformUUID / MachineGuid / machine-id), so a copied
 // identity on other hardware isn't trusted. The last answer is kept in status.json, so an approved computer keeps
 // working for a while (trustFor, 7 days) when devices.hngroup.org.uk can't be reached.
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),crypto=require('node:crypto'),{execFile}=require('node:child_process');
@@ -28,7 +29,10 @@ async function machineId(platform=process.platform){
  return crypto.createHash('sha256').update('hn-group-device:'+raw.trim().toUpperCase()).digest('hex');}
 function readJSON(file){try{const v=JSON.parse(fs.readFileSync(file,'utf8'));return v&&typeof v==='object'?v:null;}catch{return null;}}
 function writeJSON(file,value){fs.mkdirSync(path.dirname(file),{recursive:true,mode:0o700});const tmp=file+'.'+crypto.randomUUID();fs.writeFileSync(tmp,JSON.stringify(value,null,1),{mode:0o600});fs.renameSync(tmp,file);}
-function osName(platform=process.platform){const r=os.release();if(platform==='darwin'){const major=Number(r.split('.')[0]);return'macOS '+(major>=20?major-9:'10.'+(major-4));}if(platform==='win32')return Number(r.split('.')[2])>=22000?'Windows 11':'Windows 10';return'Linux';}
+function osName(platform=process.platform){const r=os.release();if(platform==='darwin'){const major=Number(r.split('.')[0]);return'macOS '+(major>=20?major-9:'10.'+(major-4));}if(platform==='win32')return Number(r.split('.')[2])>=22000?'Windows 11':'Windows 10';
+ // Linux: the distribution's own name, such as "Bazzite 42" or "Fedora Linux 42".
+ if(platform==='linux'){try{const v=Object.fromEntries(fs.readFileSync('/etc/os-release','utf8').split('\n').map(l=>/^([A-Z_]+)=("?)(.*)\2$/.exec(l.trim())).filter(Boolean).map(m=>[m[1],m[3]]));const n=String(v.NAME||'').replace(/[^\w .+()-]/g,'').trim().slice(0,40);if(n)return(n+(v.VERSION_ID?' '+String(v.VERSION_ID).replace(/[^\w.]/g,'').slice(0,12):'')).trim();}catch{}}
+ return'Linux';}
 // The computer's own name, as people know it (on a Mac, its sharing name).
 async function computerName(platform=process.platform){if(platform==='darwin'){const n=(await run('/usr/sbin/scutil',['--get','ComputerName'])).trim();if(n)return n;}return os.hostname().replace(/\.local$/,'');}
 

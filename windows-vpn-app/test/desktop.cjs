@@ -3,9 +3,12 @@
 // up this PC, connect and disconnect, SSH, profile, settings, an update, and sign out. The VPN service,
 // downloads site and OS storage are test stand-ins; the WireGuard connection lives in memory.
 //   xvfb-run -a node test/desktop.cjs      (screenshots: windows-vpn-app/screenshots/)
+// test/linux-desktop.cjs runs the same test as the Linux app (HN_TEST_PLATFORM=linux): "computer" wording, SSH through the
+// real OpenSSH client in the desktop's terminal (here, pipes), and AppImage updates. Its screenshots start with linux-.
 const{Server,utils}=require('ssh2');
 const{_electron:electron}=require('playwright'),assert=require('node:assert/strict'),path=require('node:path'),fs=require('node:fs'),os=require('node:os'),crypto=require('node:crypto');
-const pkg=require('../package.json'),shots=path.join(__dirname,'..','screenshots');
+const pkg=require('../package.json'),shots=path.join(__dirname,'..','screenshots'),PLATFORM=process.env.HN_TEST_PLATFORM==='linux'?'linux':'win32',LINUX=PLATFORM==='linux';
+const RELEASE=LINUX?{key:'secure-network-linux',file:'HN-Secure-Network-'+pkg.version+'-linux-x86_64.AppImage'}:{key:'secure-network-windows',file:'HN-Secure-Network-'+pkg.version+'-windows-x64.exe'};
 (async()=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-secure-network-')),profileDir=path.join(dir,'profile'),fixture=path.join(dir,'fixture'),key=crypto.randomBytes(32).toString('hex'),token='c'.repeat(64);
  const installer=Buffer.from('HN Secure Network test installer '.repeat(64)),sha=crypto.createHash('sha256').update(installer).digest('hex');
@@ -32,8 +35,8 @@ global.fetch=async(url,options={})=>{const u=new URL(url),method=options.method|
   if(u.pathname==='/api/sign-out')return Response.json({ok:true});
   return Response.json({error:'Not found'},{status:404});}
  if(u.origin==='https://downloads.hngroup.org.uk'){
-  if(u.pathname==='/api/releases')return Response.json({release:null,apps:{'secure-network-windows':{version:'${pkg.version}',build:999,publishedAt:'2026-10-22T10:00:00Z',asset:{name:'HN-Secure-Network-${pkg.version}-windows-x64.exe',size:installer.length,sha256:'${sha}',url:'/download/secure-network-windows'}}}});
-  if(u.pathname==='/download/secure-network-windows')return new Response(installer);}
+  if(u.pathname==='/api/releases')return Response.json({release:null,apps:{'${RELEASE.key}':{version:'${pkg.version}',build:999,publishedAt:'2026-10-22T10:00:00Z',asset:{name:'${RELEASE.file}',size:installer.length,sha256:'${sha}',url:'/download/${RELEASE.key}'}}}});
+  if(u.pathname==='/download/${RELEASE.key}')return new Response(installer);}
  return new Response('',{status:404});};
 require(${JSON.stringify(path.resolve(__dirname,'../src/main.cjs'))});`);
  let app,sshServer;
@@ -41,14 +44,14 @@ require(${JSON.stringify(path.resolve(__dirname,'../src/main.cjs'))});`);
   // A real SSH server on this computer stands in for the HN Group server.
   const sshAuth=[];sshServer=new Server({hostKeys:[utils.generateKeyPairSync('ed25519').private]},client=>{
    client.on('authentication',ctx=>{sshAuth.push(ctx.method);if(ctx.method==='password'&&ctx.username==='charlie'&&ctx.password==='server-pass-582')ctx.accept();else ctx.reject(['password']);});
-   client.on('ready',()=>client.on('session',accept=>{const session=accept();session.on('pty',a=>a?.());session.on('window-change',a=>a?.());session.on('shell',acceptShell=>{const stream=acceptShell();stream.write('Welcome to the HN Group server\r\n$ ');stream.on('data',d=>stream.write(d));});}));
+   client.on('ready',()=>client.on('session',accept=>{const session=accept();session.on('pty',a=>a?.());session.on('window-change',a=>a?.());session.on('env',a=>a?.());session.on('shell',acceptShell=>{const stream=acceptShell();stream.write('Welcome to the HN Group server\r\n$ ');stream.on('data',d=>stream.write(d));});}));
    client.on('error',()=>{});});
   await new Promise(r=>sshServer.listen(0,'127.0.0.1',r));
-  app=await electron.launch({executablePath:require('electron'),args:[...((process.getuid?.()===0||process.env.CI)?['--no-sandbox']:[]),fixture],env:{...process.env,HN_SECURE_NETWORK_TEST:'1',HN_SECURE_NETWORK_FAKE_VPN:'1',HN_SECURE_NETWORK_PROFILE:profileDir,HN_SECURE_NETWORK_SSH_PORT:String(sshServer.address().port)}});
+  app=await electron.launch({executablePath:require('electron'),args:[...((process.getuid?.()===0||process.env.CI)?['--no-sandbox']:[]),fixture],env:{...process.env,HN_SECURE_NETWORK_TEST:'1',HN_SECURE_NETWORK_FAKE_VPN:'1',HN_SECURE_NETWORK_PROFILE:profileDir,HN_SECURE_NETWORK_SSH_PORT:String(sshServer.address().port),HN_SECURE_NETWORK_PLATFORM:PLATFORM}});
   const page=await app.firstWindow();page.setDefaultTimeout(20000);
   const step=name=>console.log('· '+name);
   const test=(fn,arg)=>app.evaluate(fn,arg);
-  const shot=async name=>{await page.evaluate(()=>{document.getElementById('toast').hidden=true;});for(const scheme of ['light','dark']){await page.emulateMedia({colorScheme:scheme});await page.waitForTimeout(450);await page.screenshot({path:path.join(shots,name+'-'+scheme+'.png')});}await page.emulateMedia({colorScheme:'light'});};
+  const shot=async name=>{await page.evaluate(()=>{document.getElementById('toast').hidden=true;});for(const scheme of ['light','dark']){await page.emulateMedia({colorScheme:scheme});await page.waitForTimeout(450);await page.screenshot({path:path.join(shots,(LINUX?'linux-':'')+name+'-'+scheme+'.png')});}await page.emulateMedia({colorScheme:'light'});};
   const typePin=async pin=>{await page.locator('#pin').waitFor();await page.waitForFunction(()=>document.activeElement?.id==='pin-input');await page.keyboard.type(pin,{delay:40});};
   const terminal=n=>test((_e,n)=>{const t=global.__secureNetworkTest.log.filter(x=>x.terminal)[n]?.terminal;return t?t.output:null;},n);
   // Welcome: sign in with HN Group Auth through the loopback callback, like the default browser does.
@@ -61,7 +64,10 @@ require(${JSON.stringify(path.resolve(__dirname,'../src/main.cjs'))});`);
   assert.equal(done.status,200);assert.match(await done.text(),/HN VPN is ready in HN Secure Network/);
   step('set up');
   // Set up this PC: a key made here, registered, configuration installed.
-  await page.locator('#set-up').waitFor({state:'visible'});await page.waitForTimeout(500);await shot('setup');
+  await page.locator('#set-up').waitFor({state:'visible'});
+  // Each platform's own words: "computer" and NetworkManager on Linux, "PC" and WireGuard for Windows on Windows.
+  await page.getByText(LINUX?'Let’s get this computer ready':'Let’s get this PC ready').waitFor();await page.getByText(LINUX?'WireGuard in NetworkManager':'Install WireGuard for Windows').waitFor();
+  await page.waitForTimeout(500);await shot('setup');
   await page.locator('#set-up').click();
   await page.locator('#power').waitFor({state:'visible'});
   const fetched=await test(()=>global.__fixtureLog);
@@ -106,7 +112,7 @@ require(${JSON.stringify(path.resolve(__dirname,'../src/main.cjs'))});`);
   step('wrong password');
   // A wrong password is refused in the SSH window and reported in the app; the identity isn't asked again.
   await page.locator('#ssh-password').fill('not-the-password');await page.locator('#ssh-open').click();
-  await page.locator('#ssh-status.error',{hasText:'didn’t accept that username and password'}).waitFor();
+  await page.locator('#ssh-status.error',{hasText:LINUX?'didn’t accept the sign-in':'didn’t accept that username and password'}).waitFor();
   assert.equal(await page.locator('#dialog').isVisible(),false);
   step('profile');
   // Profile.
@@ -117,10 +123,12 @@ require(${JSON.stringify(path.resolve(__dirname,'../src/main.cjs'))});`);
   // Settings: preferences and an update, verified before it installs.
   await page.locator('[data-page=settings]').click();await page.locator('[data-pref=connectOnLaunch]').click();
   await page.waitForFunction(()=>window.secureNetwork.state().then(s=>s.prefs.connectOnLaunch===true));
+  await page.locator('#version',{hasText:LINUX?'for Linux':'for Windows'}).waitFor();await page.getByText(LINUX?'Open when I sign in':'Open when I sign in to Windows',{exact:true}).waitFor();
   await page.locator('#update-button').click();await page.locator('#update-button',{hasText:'Download update'}).waitFor();await page.waitForTimeout(300);await shot('settings');
   await page.locator('#update-button').click();await page.locator('#update-button',{hasText:'Install and restart'}).waitFor();await page.locator('#update-button').click();
   await page.waitForFunction(()=>new Promise(r=>setTimeout(()=>r(true),300)));
   assert.ok((await test(()=>global.__secureNetworkTest.log.some(x=>x.install))),'the verified installer would run');
+  assert.ok((await test(()=>global.__secureNetworkTest.log.find(x=>x.install).install)).endsWith(RELEASE.file),'this platform’s own release');
   step('ssh while disconnected');
   // Disconnect, then SSH while disconnected asks for the PIN first and connects.
   await page.locator('[data-page=connection]').click();await page.locator('#toggle',{hasText:'Disconnect'}).click();await page.locator('#hero-title',{hasText:'You’re not connected'}).waitFor();
@@ -140,6 +148,6 @@ require(${JSON.stringify(path.resolve(__dirname,'../src/main.cjs'))});`);
   assert.ok(!fs.existsSync(path.join(profileDir,'vpn.enc')),'and the saved sign-in');
   assert.deepEqual(await test(()=>global.__nativeDialogs),[],'no plain Windows boxes');
   await test(()=>{for(const x of global.__secureNetworkTest.log)if(x.terminal)x.terminal.child.kill();});
-  console.log('Secure Network desktop passed: sign-in, setup, PIN before every connection, SSH in its own window, profile, settings, verified update and sign-out. Screenshots in windows-vpn-app/screenshots.');
+  console.log((LINUX?'Linux':'Windows')+' Secure Network desktop passed: sign-in, setup, PIN before every connection, SSH in its own window, profile, settings, verified update and sign-out. Screenshots in windows-vpn-app/screenshots.');
  }finally{await app?.evaluate(({app})=>{for(const x of global.__secureNetworkTest?.log||[])if(x.terminal)x.terminal.child.kill();setTimeout(()=>app.exit(0),50);}).catch(()=>{});await app?.close().catch(()=>{});sshServer?.close();fs.rmSync(dir,{recursive:true,force:true});}
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -84,12 +84,51 @@ class WindowsController{
  async remove(){if(await this.ready())await this.elevated('& '+psQuote(this.exe)+' /uninstalltunnelservice hn-vpn | Out-Null\r\nRemove-Item -Force -LiteralPath '+psQuote(path.win32.join(this.dir,'hn-vpn.conf'))+' -ErrorAction SilentlyContinue');}
 }
 
+// Linux (Bazzite, Fedora and other NetworkManager desktops): the connection is a NetworkManager WireGuard
+// connection called hn-vpn. Setting up imports it (the desktop asks for an administrator's password if
+// NetworkManager needs one) and makes it this user's own, so connecting and disconnecting need no prompt.
+// NetworkManager keeps the private key in its root-only connection store.
+class LinuxController{
+ constructor({nmcli,user=os.userInfo().username}={}){this.nmcli=nmcli||['/usr/bin/nmcli','/bin/nmcli','/usr/local/bin/nmcli'].find(f=>fs.existsSync(f))||'/usr/bin/nmcli';this.name='hn-vpn';this.user=user;this.supported=true;this.toolsName='NetworkManager';}
+ tools(){try{fs.accessSync(this.nmcli,fs.constants.X_OK);return true;}catch{return false;}}
+ nm(args,timeout){return run(this.nmcli,args,{timeout});}
+ // Every NetworkManager connection called hn-vpn (an import never replaces one, so there could be several).
+ async ids(active=false){const r=await this.nm(['-t','-f','UUID,NAME,TYPE','connection','show',...(active?['--active']:[])]);if(r.code!==0)return[];return r.output.split(/\r?\n/).map(l=>l.split(':')).filter(p=>p.length===3&&p[1]===this.name&&p[2]==='wireguard').map(p=>p[0]).filter(u=>/^[0-9a-f-]{36}$/i.test(u));}
+ async ready(){return(await this.ids()).length>0;}
+ async status(){return(await this.ids(true)).length>0;}
+ // NetworkManager only shows the last handshake to root; the VPN website's record is used instead.
+ async handshake(){return null;}
+ async up(){const[id]=await this.ids();if(!id)throw Error('Set up the HN VPN on this computer first.');const r=await this.nm(['--wait','45','connection','up','uuid',id],60000);if(r.code!==0)throw Error('The VPN couldn’t connect. '+lastLine(r.output));}
+ async down(){for(const id of await this.ids(true)){const r=await this.nm(['--wait','30','connection','down','uuid',id],60000);if(r.code!==0&&await this.status())throw Error('The VPN couldn’t disconnect. '+lastLine(r.output));}}
+ async remove(){for(const id of await this.ids())await this.nm(['connection','delete','uuid',id],60000);}
+ // The private key of the connection already set up here (only its owner may read it).
+ async key(){const[id]=await this.ids();if(!id)return'';const r=await this.nm(['--show-secrets','-g','wireguard.private-key','connection','show','uuid',id]);const k=r.output.trim();return r.code===0&&/^[A-Za-z0-9+/]{43}=$/.test(k)?k:'';}
+ async install(config,{reuseKey=false}={}){
+  if(!/^[a-z_][a-z0-9_.-]{0,31}$/i.test(this.user))throw Error('This user name can’t be used for the VPN.');
+  if(reuseKey){const k=await this.key();if(!k)throw Error('The old VPN key is unavailable. Remove and set up this computer again.');config=config.split(PLACEHOLDER).join(k);}
+  // The file name becomes the connection's (and its network interface's) name.
+  const base=process.env.XDG_RUNTIME_DIR&&fs.existsSync(process.env.XDG_RUNTIME_DIR)?process.env.XDG_RUNTIME_DIR:os.tmpdir(),dir=fs.mkdtempSync(path.join(base,'hn-vpn-'));
+  try{
+   const conf=path.join(dir,this.name+'.conf');fs.writeFileSync(conf,config,{mode:0o600});
+   // The new connection is added before the old one is deleted, so a failed or cancelled setup keeps the old one.
+   const old=await this.ids(),wasUp=await this.status();if(wasUp)await this.down().catch(()=>{});
+   const r=await this.nm(['connection','import','type','wireguard','file',conf],300000);
+   if(r.code!==0){if(wasUp)await this.up().catch(()=>{});throw Error(/not authori[sz]ed|insufficient privileges|permission/i.test(r.output)?'NetworkManager didn’t allow the change. Approve the password prompt to set up the VPN.':'Setup didn’t finish. '+lastLine(r.output));}
+   const id=(await this.ids()).find(u=>!old.includes(u));if(!id)throw Error('Setup didn’t finish. NetworkManager didn’t keep the connection.');
+   for(const u of old)await this.nm(['connection','delete','uuid',u],60000);
+   // Never starts by itself (HN apps only connect when asked); this user's own, so it connects without a prompt.
+   await this.nm(['connection','modify','uuid',id,'connection.autoconnect','no','connection.permissions','user:'+this.user],120000);
+   if(wasUp)await this.nm(['--wait','45','connection','up','uuid',id],60000);
+  }finally{fs.rmSync(dir,{recursive:true,force:true});}
+ }
+}
+
 class UnsupportedController{constructor(){this.supported=false;this.toolsName='';}tools(){return false;}async ready(){return false;}async status(){return false;}async up(){throw Error('The HN VPN can’t be controlled on this computer.');}async down(){}async remove(){}async install(){throw Error('The HN VPN can’t be set up on this computer.');}}
 
 // For desktop tests only: a connection that lives in memory.
 class FakeController{constructor(){this.supported=true;this.toolsName='WireGuard';this.installed=null;this.on=false;}tools(){return true;}async ready(){return!!this.installed;}async status(){return this.on;}async up(){if(!this.installed)throw Error('Not set up.');this.on=true;}async down(){this.on=false;}async remove(){this.installed=null;this.on=false;}async install(config,{reuseKey=false}={}){if(reuseKey){const key=/PrivateKey = (\S+)/.exec(this.installed||'')?.[1];if(!key)throw Error('The previous VPN key is missing.');config=config.split(PLACEHOLDER).join(key);}this.installed=config;}}
 
-function controllerFor(platform,options){return platform==='darwin'?new MacController(options):platform==='win32'?new WindowsController(options):new UnsupportedController();}
+function controllerFor(platform,options){return platform==='darwin'?new MacController(options):platform==='win32'?new WindowsController(options):platform==='linux'?new LinuxController(options):new UnsupportedController();}
 
 class VPN{
  // client/appName/deviceName let HN Secure Network for Windows share this file with HN Browser.
@@ -152,4 +191,4 @@ class VPN{
 // Whether the HN Group server answers through the VPN (its SSH port).
 function reachable(host=SERVER,port=22,timeout=3000){return new Promise(resolve=>{const socket=net.connect({host,port});const done=value=>{socket.destroy();resolve(value);};socket.setTimeout(timeout,()=>done(false));socket.once('connect',()=>done(true));socket.once('error',()=>done(false));});}
 
-module.exports={VPN,MacController,WindowsController,UnsupportedController,FakeController,controllerFor,keyPair,reachable,ORIGIN,SERVER};
+module.exports={VPN,MacController,WindowsController,LinuxController,UnsupportedController,FakeController,controllerFor,keyPair,reachable,ORIGIN,SERVER};

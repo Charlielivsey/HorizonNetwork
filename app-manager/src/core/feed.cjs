@@ -22,27 +22,28 @@ const short = (v) => String(v || '').split('-')[0];
 
 // The release for one app on this computer, or null.
 function release(feed, id, platform, arch) {
-  const mac = platform === 'darwin', win = platform === 'win32' && arch === 'x64';
-  if (!mac && !win) return null;
+  const mac = platform === 'darwin', win = platform === 'win32' && arch === 'x64', linux = platform === 'linux' && arch === 'x64';
+  if (!mac && !win && !linux) return null;
+  const os = mac ? 'mac' : win ? 'windows' : 'linux';
   let version, asset, route, name, publishedAt = null;
   if (id === 'browser') {
     if (mac && arch !== 'arm64') return null;
     const r = feed && feed.release;
     version = r && r.version;
     if (!parts(version)) return null;
-    route = mac ? 'mac-arm64-zip' : 'windows-x64';
+    route = { mac: 'mac-arm64-zip', windows: 'windows-x64', linux: 'linux-x64' }[os];
     asset = r.assets && r.assets[route];
-    name = 'HN-Browser-' + short(version) + (mac ? '-mac-arm64.zip' : '-win-x64.exe');
+    name = 'HN-Browser-' + short(version) + { mac: '-mac-arm64.zip', windows: '-win-x64.exe', linux: '-linux-x86_64.AppImage' }[os];
     publishedAt = r.publishedAt;
   } else if (id === 'network' || id === 'manager') {
-    const key = id === 'network' ? (mac ? 'secure-network' : 'secure-network-windows') : (mac ? 'app-manager-mac' : 'app-manager-windows');
+    const key = id === 'network' ? { mac: 'secure-network', windows: 'secure-network-windows', linux: 'secure-network-linux' }[os] : 'app-manager-' + os;
     const a = feed && feed.apps && feed.apps[key];
     version = a && a.version;
     const build = a && a.build ? a.build : 0;
     if (!parts(version) || !Number.isSafeInteger(build) || build < 0) return null;
     if (build && !version.includes('-')) version += '-' + build;
-    route = id === 'network' ? (mac ? 'secure-network-mac' : 'secure-network-windows') : key;
-    name = (id === 'network' ? 'HN-Secure-Network-' : 'HN-Group-App-Manager-') + short(version) + (id === 'network' ? (mac ? '-macOS.zip' : '-windows-x64.exe') : (mac ? '-mac-universal.zip' : '-win-x64.exe'));
+    route = id === 'network' && mac ? 'secure-network-mac' : key;
+    name = (id === 'network' ? 'HN-Secure-Network-' : 'HN-Group-App-Manager-') + short(version) + (id === 'network' ? { mac: '-macOS.zip', windows: '-windows-x64.exe', linux: '-linux-x86_64.AppImage' }[os] : { mac: '-mac-universal.zip', windows: '-win-x64.exe', linux: '-linux-x86_64.AppImage' }[os]);
     asset = a.asset;
     publishedAt = a.publishedAt;
   } else return null;

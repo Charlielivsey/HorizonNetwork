@@ -17,6 +17,7 @@ jobs:
         include:
           - {os: macos-14, target: mac, arch: universal}
           - {os: windows-latest, target: win, arch: x64}
+          - {os: ubuntu-latest, target: linux, arch: x64}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -45,15 +46,20 @@ jobs:
       - name: Self-check the built app on this computer
         shell: bash
         timeout-minutes: 10
+        # Linux reports its self-check without failing the build until the first Linux releases are on the downloads site.
+        continue-on-error: ${{ matrix.target == 'linux' }}
         run: |
+          RUN=()
           if [ "${{ matrix.target }}" = mac ]; then
             APP="dist/mac-universal/HN Group App Manager.app/Contents/MacOS/HN Group App Manager"
+          elif [ "${{ matrix.target }}" = linux ]; then
+            APP="dist/linux-unpacked/hn-group-app-manager"; RUN=(xvfb-run -a)
           else
             APP="dist/win-unpacked/HN Group App Manager.exe"
           fi
           OUT="$RUNNER_TEMP/self-check.json"
           status=0
-          "$APP" "--self-check=$OUT" || status=$?
+          "${RUN[@]}" "$APP" $([ "${{ matrix.target }}" = linux ] && echo --no-sandbox) "--self-check=$OUT" || status=$?
           cat "$OUT"
           node -e "const r=require(process.argv[1]);for(const s of r.steps||[])console.log((s.ok?'OK     ':'FAILED ')+s.name+': '+s.detail);if(!r.ok)process.exit(1)" "$OUT"
           exit $status
@@ -65,6 +71,7 @@ jobs:
             app-manager/dist/HN-Group-App-Manager-*.zip
             app-manager/dist/HN-Group-App-Manager-*.dmg
             app-manager/dist/HN-Group-App-Manager-*.exe
+            app-manager/dist/HN-Group-App-Manager-*.AppImage
           if-no-files-found: error
   publish:
     needs: build
@@ -81,11 +88,11 @@ jobs:
         run: |
           VERSION=$(node -p "require('./app-manager/package.json').version")
           TAG="app-manager-v$VERSION-$GITHUB_RUN_NUMBER"
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "HN Group App Manager $VERSION · build $GITHUB_RUN_NUMBER" --notes 'HN Group App Manager: install, update, reinstall and remove HN Browser and HN Secure Network from verified downloads, change their settings, update all at once, and keep App Manager itself up to date. For Apple silicon/Intel Macs and Windows x64 (HN Browser needs Apple silicon). Preview installers are not yet developer-signed or notarised.' installers/*
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "HN Group App Manager $VERSION · build $GITHUB_RUN_NUMBER" --notes 'HN Group App Manager: install, update, reinstall and remove HN Browser and HN Secure Network from verified downloads, change their settings, update all at once, and keep App Manager itself up to date. For Apple silicon/Intel Macs, Windows x64 and Linux x64 (AppImage, for Bazzite, Fedora and other desktops; HN Browser on a Mac needs Apple silicon). Preview installers are not yet developer-signed or notarised.' installers/*
           VERSION="$VERSION" TAG="$TAG" node app-manager/scripts/manifest.cjs
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add downloads-site/app-manager-mac.json downloads-site/app-manager-windows.json
+          git add downloads-site/app-manager-mac.json downloads-site/app-manager-windows.json downloads-site/app-manager-linux.json
           git commit -m "Publish HN Group App Manager $VERSION (build $GITHUB_RUN_NUMBER)"
           for attempt in 1 2 3; do
             if git pull --rebase origin "$GITHUB_REF_NAME" && git push origin "HEAD:$GITHUB_REF_NAME"; then exit 0; fi

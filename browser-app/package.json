@@ -1,11 +1,13 @@
 {
   "name": "hn-group-browser",
-  "version": "1.1.8",
+  "version": "1.2.0",
+  "productName": "HN Browser",
   "private": true,
-  "description": "HN Browser \u2014 a Chromium-powered browser with HN Group account sign-in",
+  "description": "HN Browser — a Chromium-powered browser with HN Group account sign-in, for macOS, Windows and Linux",
   "author": "HN Group",
   "license": "UNLICENSED",
   "main": "src/main.cjs",
+  "desktopName": "hn-browser.desktop",
   "scripts": {
     "start": "electron .",
     "test": "node --test test/*.test.cjs",
@@ -15,7 +17,8 @@
     "build:mac": "electron-builder --mac --publish never",
     "build:win": "electron-builder --win --publish never",
     "postinstall": "node scripts/vendor.cjs",
-    "test:visual": "HN_BROWSER_VISUAL_MATRIX=1 node test/rebuild-desktop.cjs"
+    "test:visual": "HN_BROWSER_VISUAL_MATRIX=1 node test/rebuild-desktop.cjs",
+    "build:linux": "electron-builder --linux AppImage --x64 --publish never"
   },
   "devDependencies": {
     "@resvg/resvg-js": "2.6.2",
@@ -62,8 +65,31 @@
       "createDesktopShortcut": true,
       "deleteAppDataOnUninstall": false
     },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Network",
+      "icon": "build/icon.png",
+      "executableName": "hn-browser",
+      "synopsis": "The HN Group web browser",
+      "description": "A Chromium-powered browser with HN Group account sign-in, the HN VPN and SSH to the HN Group server.",
+      "desktop": {
+        "entry": {
+          "Name": "HN Browser",
+          "Keywords": "HN;Browser;Web;Internet;",
+          "Categories": "Network;WebBrowser;"
+        }
+      },
+      "syncDesktopName": true
+    },
+    "appImage": {
+      "artifactName": "HN-Browser-${version}-linux-x86_64.AppImage",
+      "executableArgs": []
+    },
     "npmRebuild": false,
-    "afterPack": "scripts/after-pack.cjs"
+    "afterPack": "scripts/after-pack.cjs",
+    "publish": []
   },
   "engines": {
     "node": ">=22.12.0"

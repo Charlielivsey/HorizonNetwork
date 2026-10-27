@@ -5,6 +5,34 @@ connects this PC to HN Group's server over the VPN: all of the PC's internet tra
 and the server is 10.88.0.1 inside it. It also opens SSH sessions to that server in their own terminal
 window, like the Mac app opens Terminal.
 
+## HN Secure Network for Linux (Bazzite) — 2.1.0
+
+The same app also runs on Linux x64 as an AppImage (`HN-Secure-Network-<version>-linux-x86_64.AppImage`), built for
+Bazzite (the user's request, 27 October 2026) and working on Fedora and other NetworkManager desktops. Same window,
+same PIN before every connection; the Linux parts:
+
+- **Wording:** "computer" instead of "PC", "Match the system", "Open when I sign in" (`data-linux` attributes in
+  `ui/index.html`, `pc()` in `ui/app.js`, from the state's `platform`).
+- **VPN:** NetworkManager's built-in WireGuard (`LinuxController` in the shared `src/vpn.cjs`): the first step is ticked
+  when NetworkManager is there; setting up imports the `hn-vpn` connection (your password at most once) and makes it
+  your own, so connecting needs no prompt. Devices are named "<hostname> (Linux)".
+- **SSH** (`src/linux-ssh.cjs`): opens in the desktop's own terminal (Konsole on KDE, Ptyxis/Console/GNOME Terminal
+  on GNOME, then Xfce, MATE, Tilix, Alacritty, kitty, foot, WezTerm, xterm) running the system's OpenSSH with
+  `-F /dev/null`, `PubkeyAuthentication=no`, `IdentityAgent=none`, `IdentityFile=none`: password only, never keys,
+  agents or ~/.ssh/config. The server's key is fetched with `ssh-keyscan`, its SHA-256 fingerprint confirmed in the
+  app the first time and then pinned (`StrictHostKeyChecking=yes` with a known-hosts file for that one key); a
+  changed key is refused before any window opens. The password goes to ssh once through a self-deleting
+  `SSH_ASKPASS` file in your private runtime folder (`$XDG_RUNTIME_DIR`, memory-backed), never a command line; it's
+  deleted after two minutes even if unused. The app follows the session (signed in via ssh's `LocalCommand`, or how
+  it ended). Needs `openssh-clients` (included in Bazzite and Fedora).
+- **Open when I sign in:** `~/.config/autostart/hn-secure-network.desktop` (AppImage only).
+- **Updates:** from `apps['secure-network-linux']` on downloads.hngroup.org.uk, verified, then the AppImage is swapped
+  in place after the app quits and reopened (`src/appimage.cjs`).
+- **Build:** `.github/workflows/secure-network-linux.yml` runs `npm test`, builds the AppImage on Ubuntu, publishes a
+  `secure-network-linux-vX.Y.Z-N` release and commits `downloads-site/secure-network-linux.json`.
+- **Tests:** `test/linux-ssh.test.cjs` drives the real OpenSSH client against a local SSH server (skipped without
+  OpenSSH); `test/linux-desktop.cjs` runs the whole desktop journey as the Linux app (screenshots `screenshots/linux-*`).
+
 Version 2.0.0 is a rebuild from the ground up (the user's request, 23 October 2026: "completely rebuild
 it"): a new interface that is built once and updated in place, every question asked in the window in the
 HN Group design (never a plain Windows box), the PIN before every connection, and SSH in a terminal window.

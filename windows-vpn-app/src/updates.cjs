@@ -1,22 +1,25 @@
 'use strict';
-// Updates for HN Secure Network on Windows, from downloads.hngroup.org.uk: the same installer the
-// downloads page offers, checked for size and SHA-256 before it runs silently and reopens the app.
+// Updates for HN Secure Network on Windows and Linux, from downloads.hngroup.org.uk: the same installer (Windows) or
+// AppImage (Linux) the downloads page offers, checked for size and SHA-256 before it's used. Windows runs the installer
+// silently; Linux swaps the AppImage in place (src/appimage.cjs). Either way the app reopens.
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const ORIGIN='https://downloads.hngroup.org.uk',MAX_BYTES=400*1024*1024;
 const parse=value=>{const m=/^(\d+)\.(\d+)\.(\d+)$/.exec(value||'');return m?m.slice(1).map(Number):null;};
 // Newer version, or the same version with a later build.
 function newer(candidate,current){const a=parse(candidate?.version),b=parse(current?.version);if(!a||!b)return false;for(let i=0;i<3;i++)if(a[i]!==b[i])return a[i]>b[i];return(Number(candidate.build)||0)>(Number(current.build)||0);}
+// Each platform's record on the downloads site and its file.
+const KINDS={win32:{key:'secure-network-windows',file:v=>'HN-Secure-Network-'+v+'-windows-x64.exe'},linux:{key:'secure-network-linux',file:v=>'HN-Secure-Network-'+v+'-linux-x86_64.AppImage'}};
 // The installer to update with, if the downloads site has a newer genuine one.
-function installer(app,current){
- if(!app||!newer(app,current))return null;const a=app.asset||{};
- if(a.url!=='/download/secure-network-windows'||a.name!=='HN-Secure-Network-'+app.version+'-windows-x64.exe'||!/^[a-f0-9]{64}$/.test(a.sha256||'')||!Number.isSafeInteger(a.size)||a.size<1||a.size>MAX_BYTES)throw Error('The update information could not be verified.');
+function installer(app,current,platform='win32'){
+ const k=KINDS[platform];if(!k||!app||!newer(app,current))return null;const a=app.asset||{};
+ if(a.url!=='/download/'+k.key||a.name!==k.file(app.version)||!/^[a-f0-9]{64}$/.test(a.sha256||'')||!Number.isSafeInteger(a.size)||a.size<1||a.size>MAX_BYTES)throw Error('The update information could not be verified.');
  return{name:a.name,size:a.size,sha256:a.sha256,url:ORIGIN+a.url,version:app.version,build:Number(app.build)||0};
 }
 class Updates{
- constructor({dir,current,changed=()=>{},fetcher=fetch}){Object.assign(this,{dir,current,changed,fetcher});this.state={status:'idle',progress:0,error:null,latest:null};this.asset=null;this.file=null;this.busy=false;}
+ constructor({dir,current,changed=()=>{},fetcher=fetch,platform=process.platform}){Object.assign(this,{dir,current,changed,fetcher,platform});this.state={status:'idle',progress:0,error:null,latest:null};this.asset=null;this.file=null;this.busy=false;}
  emit(patch){this.state={...this.state,...patch};this.changed(this.state);}
  async check(){if(this.busy||this.state.status==='ready')return this.state;this.busy=true;this.emit({status:'checking',error:null});
-  try{const r=await this.fetcher(ORIGIN+'/api/releases',{signal:AbortSignal.timeout(15000),redirect:'error'});if(!r.ok)throw Error('Couldn’t check for updates. Try again later.');const data=await r.json();this.asset=installer(data.apps?.['secure-network-windows'],this.current);this.emit({status:this.asset?'available':'current',latest:this.asset?this.asset.version+' (build '+this.asset.build+')':null,progress:0});}
+  try{const r=await this.fetcher(ORIGIN+'/api/releases',{signal:AbortSignal.timeout(15000),redirect:'error'});if(!r.ok)throw Error('Couldn’t check for updates. Try again later.');const data=await r.json();this.asset=KINDS[this.platform]?installer(data.apps?.[KINDS[this.platform].key],this.current,this.platform):null;this.emit({status:this.asset?'available':'current',latest:this.asset?this.asset.version+' (build '+this.asset.build+')':null,progress:0});}
   catch(e){this.emit({status:'error',error:e.message});}finally{this.busy=false;}return this.state;}
  async download(){if(this.busy||!this.asset)return;this.busy=true;this.emit({status:'downloading',progress:0,error:null});let temporary;
   try{const asset=this.asset;fs.mkdirSync(this.dir,{recursive:true,mode:0o700});temporary=path.join(this.dir,crypto.randomUUID()+'.partial');
@@ -29,4 +32,4 @@ class Updates{
  // Checks the downloaded installer again just before it runs.
  async verifiedFile(){if(!this.file||this.state.status!=='ready')throw Error('Download the update first.');const hash=crypto.createHash('sha256');let size=0;for await(const chunk of fs.createReadStream(this.file)){hash.update(chunk);size+=chunk.length;}if(size!==this.asset.size||hash.digest('hex')!==this.asset.sha256){this.file=null;this.emit({status:'error',error:'The installer changed. Download the update again.'});throw Error(this.state.error);}return this.file;}
 }
-module.exports={Updates,newer,installer,ORIGIN};
+module.exports={Updates,newer,installer,ORIGIN,KINDS};

@@ -38,9 +38,9 @@ class Manager extends EventEmitter {
     await Promise.all(IDS.map(async (id) => {
       const s = this.state.apps[id];
       try {
-        const installed = s.available ? await within(this.platform.find(id), 30000, 'Looking for ' + s.name + ' took too long.') : null;
-        const running = installed ? await within(this.platform.running(installed), 15000, 'Checking whether ' + s.name + ' is open took too long.') : false;
         const latest = this.feed && s.available ? release(this.feed, id, this.platform.name, this.arch) : s.latest;
+        const installed = s.available ? await within(this.platform.find(id, { latest }), 60000, 'Looking for ' + s.name + ' took too long.') : null;
+        const running = installed ? await within(this.platform.running(installed), 15000, 'Checking whether ' + s.name + ' is open took too long.') : false;
         Object.assign(s, { installed, running, latest, error: null, update: !!installed && !!latest && newer(latest.version, installed.version + (installed.build ? '-' + installed.build : '')) });
       } catch (e) { this.log.warn('apps', s.name + ': ' + e.message); s.error = e.message; }
     }));
@@ -101,13 +101,13 @@ class Manager extends EventEmitter {
   async run(job) {
     const a = APPS[job.id], signal = job.controller.signal;
     const phase = (p, extra) => { Object.assign(job, { phase: p }, extra || {}); this.changed(); };
-    let installed = await this.platform.find(job.id);
+    let installed = await this.platform.find(job.id, { latest: this.state.apps[job.id].latest });
     // Never close another app: wait until the person quits it. Automatic updates skip apps that are open.
     if (installed && await this.platform.running(installed)) {
       if (job.auto) { this.log.info('job', a.name + ' is open, so its automatic update waits for next time'); return; }
       phase('waiting');
       this.log.info('job', 'Waiting for ' + a.name + ' to be quit');
-      while (installed && await this.platform.running(installed)) { await sleep(2000, signal); installed = await this.platform.find(job.id); }
+      while (installed && await this.platform.running(installed)) { await sleep(2000, signal); installed = await this.platform.find(job.id, { latest: this.state.apps[job.id].latest }); }
     }
     if (job.kind === 'remove') {
       if (!installed) throw fail(a.name + ' isn’t installed.');
@@ -151,6 +151,7 @@ class Manager extends EventEmitter {
     const checked = settings.validate(id, this.platform.name, patch);
     const file = this.platform.preferencesFile(id);
     if (file) await settings.writeJSON(file, id, this.platform.name, checked); else await this.platform.writeNative(id, installed, checked);
+    if (this.platform.afterSettings) await this.platform.afterSettings(id, installed, checked);
     this.store.record('settings', a.name + ' settings changed: ' + Object.keys(checked).length + ' setting' + (Object.keys(checked).length === 1 ? '' : 's') + '. They apply when it next opens.', id);
     this.log.info('settings', 'Saved ' + Object.keys(checked).join(', ') + ' for ' + a.name);
   }

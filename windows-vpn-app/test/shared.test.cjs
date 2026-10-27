@@ -9,6 +9,9 @@ test('the device check is identical in HN Browser, HN Secure Network and HN Grou
  for(const file of['src/device.cjs','src/device-gate.cjs','src/device-preload.cjs','ui/device.html','ui/device.js','ui/device.css'])for(const other of['browser-app','app-manager'])
   assert.equal(fs.readFileSync(path.join(__dirname,'..',file),'utf8'),fs.readFileSync(path.join(__dirname,'..','..',other,file),'utf8'),file+' differs from '+other+'/'+file);
 });
+test('the Linux AppImage helpers are identical in HN Browser, HN Secure Network and HN Group App Manager',()=>{
+ for(const other of['browser-app','app-manager'])assert.equal(fs.readFileSync(path.join(__dirname,'..','src','appimage.cjs'),'utf8'),fs.readFileSync(path.join(__dirname,'..','..',other,'src','appimage.cjs'),'utf8'),'src/appimage.cjs differs from '+other+'/src/appimage.cjs');
+});
 test('sign-ins are labelled HN Secure Network, devices are named after this PC, and the PIN is checked by the server',async()=>{
  const{VPN,FakeController}=require('../src/vpn.cjs'),os=require('node:os');const calls=[];let saved=null;
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-sn-shared-'));

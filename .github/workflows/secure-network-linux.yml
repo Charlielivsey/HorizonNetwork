@@ -1,0 +1,76 @@
+name: Build HN Secure Network for Linux
+# Builds the Linux AppImage (Bazzite, Fedora and other x64 desktops) from windows-vpn-app and publishes it for
+# downloads.hngroup.org.uk and the in-app updater. Tests run before pushing (npm test and npm run test:desktop in
+# windows-vpn-app, which include the Linux app); GitHub runs the unit tests again, then builds and publishes.
+on:
+  push:
+    branches: [claude/confident-volta-gxjboo]
+    paths: ['windows-vpn-app/**', '.github/workflows/secure-network-linux.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: secure-network-linux-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '24', cache: npm, cache-dependency-path: windows-vpn-app/package-lock.json}
+      - run: npm ci
+        working-directory: windows-vpn-app
+      - run: npm test
+        working-directory: windows-vpn-app
+      - run: npm run icons
+        working-directory: windows-vpn-app
+      - name: Record the build number
+        run: node -e "require('fs').writeFileSync('src/build.json', JSON.stringify({build:Number(process.env.GITHUB_RUN_NUMBER)}))"
+        working-directory: windows-vpn-app
+      - name: Build the AppImage
+        run: npx electron-builder --linux AppImage --x64 --publish never -c.buildVersion=${{ github.run_number }}
+        working-directory: windows-vpn-app
+      - name: Check the AppImage
+        run: |
+          FILE="dist/HN-Secure-Network-$(node -p "require('./package.json').version")-linux-x86_64.AppImage"
+          test -x "$FILE"
+          # An AppImage (type 2) starts with an ELF header and "AI" 2 at byte 8.
+          test "$(head -c 11 "$FILE" | tail -c 3 | od -An -tx1 | tr -d ' \n')" = "414902"
+          test -f dist/linux-unpacked/hn-secure-network
+        working-directory: windows-vpn-app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: secure-network-linux
+          path: windows-vpn-app/dist/HN-Secure-Network-*-linux-x86_64.AppImage
+          if-no-files-found: error
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: {name: secure-network-linux, path: installer}
+      - name: Publish the AppImage
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(node -p "require('./windows-vpn-app/package.json').version")
+          TAG="secure-network-linux-v$VERSION-$GITHUB_RUN_NUMBER"; NAME="HN-Secure-Network-$VERSION-linux-x86_64.AppImage"
+          test -f "installer/$NAME"
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "HN Secure Network $VERSION for Linux · build $GITHUB_RUN_NUMBER" --notes 'HN Secure Network for Linux (x64 AppImage, for Bazzite, Fedora and other desktops with NetworkManager): the HN Group VPN (connect with your PIN) and SSH sessions to the HN Group server in your desktop’s own terminal. For HN Group staff; sign in with your HN Group account. It keeps itself up to date. Make it executable (chmod +x) or install it with HN Group App Manager.' "installer/$NAME"
+          # downloads.hngroup.org.uk (and so the in-app updater) finds this build from this record.
+          TAG="$TAG" NAME="$NAME" VERSION="$VERSION" node -e "const fs=require('fs'),crypto=require('crypto');const data=fs.readFileSync('installer/'+process.env.NAME);fs.writeFileSync('downloads-site/secure-network-linux.json',JSON.stringify({tag:process.env.TAG,version:process.env.VERSION,build:Number(process.env.GITHUB_RUN_NUMBER),publishedAt:new Date().toISOString(),asset:{name:process.env.NAME,size:data.length,sha256:crypto.createHash('sha256').update(data).digest('hex')}},null,1));"
+          cat downloads-site/secure-network-linux.json
+      - name: Record the build for downloads.hngroup.org.uk
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add downloads-site/secure-network-linux.json
+          git commit -m "Publish HN Secure Network for Linux $(node -p "require('./downloads-site/secure-network-linux.json').version") (build $GITHUB_RUN_NUMBER, ${GITHUB_SHA::7})"
+          for attempt in 1 2 3; do
+            git pull --rebase origin "$GITHUB_REF_NAME" && git push origin "HEAD:$GITHUB_REF_NAME" && break
+            sleep 5
+          done

@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="app.css">
 </head>
 <body data-view="loading">
-<!-- The window's own title bar: drag it to move the window; Windows draws its buttons on the right. -->
+<!-- The window's own title bar: drag it to move the window; Windows and Linux draw their buttons on the right. -->
 <header class="titlebar">
  <img class="title-icon" src="assets/tray.png" alt="">
  <span class="title-name">HN Secure Network</span>
@@ -27,7 +27,7 @@
    <div class="stack" data-mode="idle">
     <p class="eyebrow">HN Secure Network</p>
     <h1>Welcome back.</h1>
-    <p class="lede">Send all of this PC’s internet traffic through HN Group’s private VPN, and open SSH sessions to the HN Group server in their own terminal window.</p>
+    <p class="lede" data-linux="Send all of this computer’s internet traffic through HN Group’s private VPN, and open SSH sessions to the HN Group server in their own terminal window.">Send all of this PC’s internet traffic through HN Group’s private VPN, and open SSH sessions to the HN Group server in their own terminal window.</p>
     <div class="row"><button class="btn primary large" id="sign-in">Sign in with HN Group Auth<svg data-icon="arrow"></svg></button></div>
     <p class="hint">Your browser opens HN Group Auth. You’ll need your password and six-digit PIN.</p>
    </div>
@@ -46,19 +46,19 @@
  <section class="view split" id="view-setup" hidden>
   <aside class="brand-pane">
    <img class="wordmark" src="assets/hn-group-wordmark-white.svg" alt="HN Group">
-   <div class="art"><div class="shield"><svg data-icon="laptop"></svg></div><h2>Three quick steps.</h2><p class="sub">Windows asks for permission once.</p></div>
+   <div class="art"><div class="shield"><svg data-icon="laptop"></svg></div><h2>Three quick steps.</h2><p class="sub" data-linux="Your password, at most once.">Windows asks for permission once.</p></div>
    <div class="staff"><svg data-icon="check"></svg>For HN Group staff</div>
   </aside>
   <main class="content-pane">
    <p class="eyebrow" id="setup-who">Signed in</p>
-   <h1>Let’s get this PC ready</h1>
+   <h1 data-linux="Let’s get this computer ready">Let’s get this PC ready</h1>
    <p class="lede" id="setup-lede">Windows will ask for permission once while setting up.</p>
    <div class="steps">
-    <div class="step" id="step-tools"><span class="num"><b>1</b><svg data-icon="check"></svg></span><div><h3>Install WireGuard for Windows</h3><p>The open-source VPN that carries the connection. Its official installer is checked before it runs.</p></div><button class="btn primary small" id="install-tools">Install</button></div>
-    <div class="step" id="step-setup"><span class="num"><b>2</b><svg data-icon="check"></svg></span><div><h3>Set up this PC</h3><p id="setup-devices">Registers this PC with a key made here; it never leaves this PC.</p></div><button class="btn primary small" id="set-up">Set up</button></div>
+    <div class="step" id="step-tools"><span class="num"><b>1</b><svg data-icon="check"></svg></span><div><h3 data-linux="WireGuard in NetworkManager">Install WireGuard for Windows</h3><p data-linux="The open-source VPN that carries the connection, built into NetworkManager on Bazzite and Fedora.">The open-source VPN that carries the connection. Its official installer is checked before it runs.</p></div><button class="btn primary small" id="install-tools">Install</button></div>
+    <div class="step" id="step-setup"><span class="num"><b>2</b><svg data-icon="check"></svg></span><div><h3 data-linux="Set up this computer">Set up this PC</h3><p id="setup-devices">Registers this PC with a key made here; it never leaves this PC.</p></div><button class="btn primary small" id="set-up">Set up</button></div>
     <div class="step" id="step-connect"><span class="num"><b>3</b><svg data-icon="check"></svg></span><div><h3>Connect with your PIN</h3><p>Turn the VPN on with one click and your six-digit HN Group PIN.</p></div></div>
    </div>
-   <p class="hint" id="tools-hint" hidden>Approve the Windows prompt to let WireGuard install. This can take a minute.</p>
+   <p class="hint" id="tools-hint" hidden data-linux="Checking for NetworkManager…">Approve the Windows prompt to let WireGuard install. This can take a minute.</p>
    <div class="banner warn" id="setup-limit" hidden><svg data-icon="devices"></svg><div class="grow"><strong>You’ve used all your devices</strong><p>Remove one on the VPN website first.</p></div><button class="btn small" data-open="devices">Open the website</button></div>
    <div class="banner bad" id="setup-error" hidden><svg data-icon="alert"></svg><div class="grow"><strong>That didn’t work</strong><p></p></div></div>
    <div class="row"><button class="btn ghost small" id="setup-sign-out">Sign out</button></div>
@@ -83,8 +83,8 @@
    <!-- Connection -->
    <section class="page" data-page-id="connection" hidden>
     <header><p class="eyebrow" id="today"></p><h1 id="greeting">Hello</h1></header>
-    <div class="banner warn" id="banner-outdated" hidden><svg data-icon="refresh"></svg><div class="grow"><strong>Finish updating this PC’s VPN</strong><p>HN Group changed how the VPN works. Update this PC’s connection to keep using it (Windows asks once).</p></div><button class="btn small" data-action="set-up">Update</button></div>
-    <div class="banner warn" id="banner-shared" hidden><svg data-icon="user"></svg><div class="grow"><strong>This PC is set up for another HN account</strong><p>Set it up for your account to see its details here.</p></div><button class="btn small" data-action="set-up">Set up</button></div>
+    <div class="banner warn" id="banner-outdated" hidden><svg data-icon="refresh"></svg><div class="grow"><strong data-linux="Finish updating this computer’s VPN">Finish updating this PC’s VPN</strong><p data-linux="HN Group changed how the VPN works. Update this computer’s connection to keep using it.">HN Group changed how the VPN works. Update this PC’s connection to keep using it (Windows asks once).</p></div><button class="btn small" data-action="set-up">Update</button></div>
+    <div class="banner warn" id="banner-shared" hidden><svg data-icon="user"></svg><div class="grow"><strong data-linux="This computer is set up for another HN account">This PC is set up for another HN account</strong><p>Set it up for your account to see its details here.</p></div><button class="btn small" data-action="set-up">Set up</button></div>
     <div class="hero" id="hero">
      <button class="power" id="power" aria-label="Connect"><span class="halo"></span><span class="ring"></span><span class="core"><svg data-icon="power"></svg></span></button>
      <div class="hero-text">
@@ -100,7 +100,7 @@
      <div class="tile"><span class="icon"><svg data-icon="globe"></svg></span><div><small>Your traffic appears as</small><strong id="tile-ip">—</strong><span class="note" id="tile-ip-note">Connect to use the VPN address</span></div></div>
      <div class="tile"><span class="icon"><svg data-icon="pin"></svg></span><div><small>Location</small><strong id="tile-place">Your own connection</strong><span class="note" id="tile-place-note">Not through the VPN</span></div></div>
      <div class="tile"><span class="icon"><svg data-icon="server"></svg></span><div><small>HN Group server</small><strong id="tile-server">10.88.0.1</strong><span class="note" id="tile-server-note">Connect to reach it</span></div></div>
-     <div class="tile"><span class="icon"><svg data-icon="laptop"></svg></span><div><small>This PC</small><strong id="tile-pc">—</strong><span class="note" id="tile-pc-note">Its key never leaves this PC</span></div></div>
+     <div class="tile"><span class="icon"><svg data-icon="laptop"></svg></span><div><small data-linux="This computer">This PC</small><strong id="tile-pc">—</strong><span class="note" id="tile-pc-note">Its key never leaves this PC</span></div></div>
     </div>
    </section>
 
@@ -113,14 +113,14 @@
       <p class="dim">HN Secure Network · encrypted session through the HN Group VPN</p>
       <label class="prompt" for="ssh-user"><span class="ok">➜</span> ssh <input id="ssh-user" class="inline" spellcheck="false" autocomplete="off" aria-label="Server username" size="4"><span class="host">@<span class="ssh-host">10.88.0.1</span></span></label>
       <label class="password" for="ssh-password"><span class="dim"><span class="ssh-as">root</span>@<span class="ssh-host">10.88.0.1</span>’s password:</span><input id="ssh-password" class="inline secret" type="password" autocomplete="off" aria-label="Server password"></label>
-      <div class="row"><button class="btn primary" id="ssh-open"><svg data-icon="terminal"></svg><span>Open in a terminal window</span></button><span class="console-note" id="ssh-note">Opens in Windows Terminal</span></div>
+      <div class="row"><button class="btn primary" id="ssh-open"><svg data-icon="terminal"></svg><span>Open in a terminal window</span></button><span class="console-note" id="ssh-note">Opens in its own terminal window</span></div>
       <p class="console-status" id="ssh-status" hidden></p>
      </div>
     </div>
     <div class="chips"><span class="chip"><svg data-icon="shield"></svg>Encrypted through the VPN</span><span class="chip"><svg data-icon="key"></svg>Password only, never saved</span><span class="chip"><svg data-icon="check"></svg>Server identity remembered</span></div>
     <div class="card">
      <h2><svg data-icon="key"></svg>How it works</h2>
-     <p class="muted small">Your password is typed here and handed once to the SSH window that opens; it is never saved or put on a command line. SSH keys on this PC are never read or offered. The first time, HN Secure Network shows the server’s fingerprint for you to check; after that it refuses to connect if the server’s identity ever changes.</p>
+     <p class="muted small" data-linux="Your password is typed here and handed once to the terminal that opens; it is never saved or put on a command line. SSH keys, agents and your SSH settings on this computer are never read or offered. The first time, HN Secure Network shows the server’s fingerprint for you to check; after that it refuses to connect if the server’s identity ever changes.">Your password is typed here and handed once to the SSH window that opens; it is never saved or put on a command line. SSH keys on this PC are never read or offered. The first time, HN Secure Network shows the server’s fingerprint for you to check; after that it refuses to connect if the server’s identity ever changes.</p>
      <p class="small fingerprint" id="ssh-fingerprint">The server’s identity hasn’t been confirmed on this PC yet.</p>
     </div>
    </section>
@@ -146,17 +146,17 @@
     </div>
     <div class="card">
      <h2>Startup</h2>
-     <div class="toggle"><div><strong>Open when I sign in to Windows</strong><small>HN Secure Network waits in the system tray.</small></div><button class="switch" role="switch" data-pref="launchAtLogin" aria-label="Open when I sign in to Windows"></button></div>
+     <div class="toggle"><div><strong data-linux="Open when I sign in">Open when I sign in to Windows</strong><small>HN Secure Network waits in the system tray.</small></div><button class="switch" role="switch" data-pref="launchAtLogin" aria-label="Open when I sign in to Windows" data-linux-label="Open when I sign in"></button></div>
      <div class="toggle"><div><strong>Ask to connect when the app opens</strong><small>Opens straight on your PIN, so connecting takes one step.</small></div><button class="switch" role="switch" data-pref="connectOnLaunch" aria-label="Ask to connect when the app opens"></button></div>
     </div>
     <div class="card">
      <h2>Appearance</h2>
-     <div class="segmented" role="group" aria-label="Appearance"><button data-theme="system">Match Windows</button><button data-theme="light">Light</button><button data-theme="dark">Dark</button></div>
+     <div class="segmented" role="group" aria-label="Appearance"><button data-theme="system" data-linux="Match the system">Match Windows</button><button data-theme="light">Light</button><button data-theme="dark">Dark</button></div>
     </div>
     <div class="card">
-     <h2>This PC</h2>
+     <h2 data-linux="This computer">This PC</h2>
      <p class="muted small" id="pc-text"></p>
-     <div class="row"><button class="btn small" data-action="set-up"><svg data-icon="refresh"></svg>Reinstall the VPN configuration</button><button class="btn small danger" id="remove">Remove this PC from the VPN</button></div>
+     <div class="row"><button class="btn small" data-action="set-up"><svg data-icon="refresh"></svg>Reinstall the VPN configuration</button><button class="btn small danger" id="remove" data-linux="Remove this computer from the VPN">Remove this PC from the VPN</button></div>
     </div>
     <div class="card">
      <h2>Account</h2>

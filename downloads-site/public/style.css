@@ -2,3 +2,6 @@
 
 .app-section{background:#efe8f8;padding-top:55px}.app-section .download-grid{grid-template-columns:repeat(2,minmax(0,380px));justify-content:center}.app-notes{background:transparent}
 @media(max-width:760px){.app-section .download-grid{grid-template-columns:1fr}}
+.download-grid.three,.app-section .download-grid.three{grid-template-columns:repeat(3,minmax(0,360px))}.linux-icon{font-family:ui-monospace,"DejaVu Sans Mono",Menlo,monospace;font-weight:700;font-size:30px;letter-spacing:-1px;height:36px;display:flex;align-items:center}
+@media(max-width:1100px){.download-grid.three,.app-section .download-grid.three{grid-template-columns:repeat(2,minmax(0,380px))}}
+@media(max-width:760px){.download-grid.three,.app-section .download-grid.three{grid-template-columns:1fr}}

@@ -11,4 +11,6 @@ const root=path.join(__dirname,'..'),png=(svg,size)=>new Resvg(svg,{fitTo:{mode:
  // macOS: a black template image (the system colours it). Windows: HN purple.
  for(const[name,size]of[['trayTemplate.png',16],['trayTemplate@2x.png',32]])fs.writeFileSync(path.join(root,'ui','assets',name),png(tray.replaceAll('COLOR','#000'),size));
  fs.writeFileSync(path.join(root,'ui','assets','tray.png'),png(tray.replaceAll('COLOR','#7B3FF2'),32));
+ // Linux: the window icon (taskbars there show it large).
+ fs.writeFileSync(path.join(root,'ui','assets','app-icon.png'),png(icon,256));
 })().catch(e=>{console.error(e);process.exit(1);});

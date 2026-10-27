@@ -1,7 +1,8 @@
 'use strict';
 // Installs a verified update in place, like HN Secure Network: on a Mac the new app (from the release's
 // zip) is checked and swapped in for this one after HN Browser closes, then reopened; on Windows the
-// installer runs silently and reopens HN Browser. Browser data is kept either way.
+// installer runs silently and reopens HN Browser; on Linux the new AppImage replaces this one (same file
+// name, so shortcuts keep working) after HN Browser closes, then opens. Browser data is kept either way.
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),{execFile,spawn}=require('node:child_process');
 const BUNDLE_ID='uk.org.hngroup.browser';
 const run=(file,args)=>new Promise(resolve=>execFile(file,args,{timeout:120000},(error,stdout,stderr)=>resolve({code:error?(typeof error.code==='number'?error.code:-1):0,out:String(stdout||'').trim(),err:String(stderr||'').trim()})));
@@ -38,4 +39,7 @@ async function installMac(zip,expectedVersion,{pid=process.pid,exe=process.execP
  spawn('/bin/bash',[script],{detached:true,stdio:'ignore'}).unref();
 }
 function installWindows(exe){spawn(exe,['/S','--force-run'],{detached:true,stdio:'ignore',windowsHide:true}).unref();}
-module.exports={installMac,installWindows,swapScript,currentBundle,BUNDLE_ID};
+// Linux: the shared AppImage swap (src/appimage.cjs).
+const appimage=require('./appimage.cjs');
+async function installLinux(file,{pid=process.pid,env=process.env}={}){appimage.installUpdate(file,{appName:'HN Browser',pid,env});}
+module.exports={installMac,installWindows,installLinux,swapScript,currentBundle,BUNDLE_ID};

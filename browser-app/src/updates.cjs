@@ -4,14 +4,14 @@ const ORIGIN='https://downloads.hngroup.org.uk',MAX_BYTES=400*1024*1024;
 function version(value){const m=/^(\d+)\.(\d+)\.(\d+)(?:-(\d+))?$/.exec(value||'');return m?m.slice(1).map(n=>Number(n||0)):null;}
 function newer(candidate,current){const a=version(candidate),b=version(current);if(!a||!b)return false;for(let i=0;i<4;i++)if(a[i]!==b[i])return a[i]>b[i];return false;}
 // The file to update with: on a Mac the app zip (swapped in place, no disk image), falling back to the
-// DMG for releases without one; on Windows the installer (run silently).
+// DMG for releases without one; on Windows the installer (run silently); on Linux the AppImage (swapped in place).
 function installer(release,platform,arch,current){
- const base=platform==='darwin'&&arch==='arm64'?'mac-arm64':platform==='win32'&&arch==='x64'?'windows-x64':null;
+ const base=platform==='darwin'&&arch==='arm64'?'mac-arm64':platform==='win32'&&arch==='x64'?'windows-x64':platform==='linux'&&arch==='x64'?'linux-x64':null;
  if(!base||!newer(release?.version,current))return null;
  const zip=base==='mac-arm64'&&release?.assets?.['mac-arm64-zip'],id=zip?'mac-arm64-zip':base,asset=release?.assets?.[id];if(!asset)return null;
- const v=version(release.version),suffix=id==='mac-arm64-zip'?'mac-arm64.zip':id==='mac-arm64'?'mac-arm64.dmg':'win-x64.exe';
+ const v=version(release.version),suffix={'mac-arm64-zip':'mac-arm64.zip','mac-arm64':'mac-arm64.dmg','windows-x64':'win-x64.exe','linux-x64':'linux-x86_64.AppImage'}[id];
  if(asset.url!=='/download/'+id||asset.name!=='HN-Browser-'+v.slice(0,3).join('.')+'-'+suffix||!/^[a-f0-9]{64}$/.test(asset.sha256)||!Number.isSafeInteger(asset.size)||asset.size<1||asset.size>MAX_BYTES)throw Error('The update information could not be verified.');
- return{...asset,kind:id==='mac-arm64-zip'?'zip':id==='mac-arm64'?'dmg':'exe',version:release.version,url:ORIGIN+asset.url};
+ return{...asset,kind:{'mac-arm64-zip':'zip','mac-arm64':'dmg','windows-x64':'exe','linux-x64':'appimage'}[id],version:release.version,url:ORIGIN+asset.url};
 }
 class Updates{
  constructor({dir,current,platform=process.platform,arch=process.arch,changed=()=>{},fetcher=fetch}){Object.assign(this,{dir,current,platform,arch,changed,fetcher});this.state={status:'idle',current,progress:0};this.asset=null;this.file=null;this.busy=false;}

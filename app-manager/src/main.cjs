@@ -21,10 +21,13 @@ const { Account, AUTH } = require('./account.cjs');
 const { Vault } = require('./vault.cjs');
 const { Device, testFetcher } = require('./device.cjs');
 const { createDeviceGate } = require('./device-gate.cjs');
+const appimage = require('./appimage.cjs');
 
 // ---------- Setting up ----------
 // Desktop tests only (never in an installed copy): a temporary profile, a pretend Windows PC and local fixtures.
 const TEST = !app.isPackaged && process.env.HN_MANAGER_TEST === '1';
+// Linux desktops other than KDE and GNOME (such as Bazzite's Gaming Mode) keep the account in the Secret Service.
+if (process.platform === 'linux' && app.isPackaged && !/KDE|GNOME|Unity|XFCE|Cinnamon|MATE|Pantheon|Budgie/i.test(process.env.XDG_CURRENT_DESKTOP || '') && !app.commandLine.hasSwitch('password-store')) app.commandLine.appendSwitch('password-store', 'gnome-libsecret');
 if (TEST && process.env.HN_MANAGER_TEST_PROFILE) app.setPath('userData', process.env.HN_MANAGER_TEST_PROFILE);
 const DATA = app.getPath('userData');
 const log = new Log(DATA, { echo: !app.isPackaged && !TEST });
@@ -38,6 +41,7 @@ function makePlatform() {
   if (TEST) return new (require('./core/fake.cjs').FakePlatform)({ log, dir: path.join(DATA, 'roaming') });
   if (process.platform === 'darwin') return new (require('./core/macos.cjs').MacPlatform)({ log, packaged: app.isPackaged });
   if (process.platform === 'win32') return new (require('./core/windows.cjs').WindowsPlatform)({ log, packaged: app.isPackaged });
+  if (process.platform === 'linux') return new (require('./core/linux.cjs').LinuxPlatform)({ log, packaged: app.isPackaged, dataDir: DATA });
   return { name: process.platform, supported: false, self: () => ({ location: 'development' }), find: async () => null, running: async () => false, preferencesFile: () => null };
 }
 const platform = makePlatform();
@@ -117,6 +121,7 @@ function start() {
   function createWindow(visible) {
     win = new BrowserWindow({ width: 1120, height: 780, minWidth: 900, minHeight: 620, show: false, title: 'HN Group App Manager', backgroundColor: nativeTheme.shouldUseDarkColors ? '#0E1020' : '#F6F4FA',
       titleBarStyle: 'hidden', ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 18, y: 18 } } : { titleBarOverlay: { ...colors(), height: 48 } }),
+      ...(process.platform === 'linux' ? { icon: path.join(UI, 'assets', 'app-icon.png') } : {}),
       webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, spellcheck: false, backgroundThrottling: false } });
     win.removeMenu();
     const wc = win.webContents;
@@ -156,7 +161,12 @@ function start() {
       { label: 'Quit App Manager', click: () => { quitting = true; app.quit(); } },
     ]));
   }
-  function loginItem() { if (!TEST && app.isPackaged) app.setLoginItemSettings({ openAtLogin: store.preferences.openAtLogin, args: ['--hidden'] }); }
+  // Open at sign-in: the system's login items, or on Linux a desktop entry in ~/.config/autostart (AppImage only).
+  function loginItem() {
+    if (TEST || !app.isPackaged) return;
+    if (process.platform === 'linux') { const self = platform.self(); if (store.preferences.openAtLogin && !self.bundle) return; try { appimage.setAutostart(!!store.preferences.openAtLogin, { id: 'hn-group-app-manager', name: 'HN Group App Manager', exec: self.bundle, args: ['--hidden'], comment: 'Install and update HN Group apps' }); } catch (e) { log.warn('start', 'Open at sign-in couldn’t be changed: ' + e.message); } return; }
+    app.setLoginItemSettings({ openAtLogin: store.preferences.openAtLogin, args: ['--hidden'] });
+  }
   function updateAll() { for (const a of manager.snapshot().apps) if (a.update) { try { manager.enqueue(a.id, 'update'); } catch (e) { if (e.status) throw e; } } }
   async function restartToUpdate() {
     if (manager.working) throw Error('Wait for the current change to finish first.');
@@ -168,7 +178,7 @@ function start() {
   async function moveToApplications() {
     if (platform.self().location !== 'temporary') throw Error('App Manager is already installed.');
     if (manager.working) throw Error('Wait for the current change to finish first.');
-    store.record('manager', 'App Manager moved to the Applications folder.');
+    store.record('manager', process.platform === 'linux' ? 'App Manager was installed in your Applications folder and app menu.' : 'App Manager moved to the Applications folder.');
     await platform.moveToApplications();
     quitting = true; setTimeout(() => app.quit(), 300);
   }
@@ -194,7 +204,7 @@ function start() {
     enqueue: (id, kind) => manager.enqueue(id, kind),
     cancel: (id) => manager.cancel(id),
     'update-all': () => updateAll(),
-    open: async (id) => { const f = await platform.find(id); if (!f) throw Error(entry(id).name + ' isn’t installed.'); if (TEST) return void testLog.push({ open: id }); const e = await shell.openPath(process.platform === 'darwin' ? f.path : f.exe); if (e) throw Error(e); },
+    open: async (id) => { const f = await platform.find(id); if (!f) throw Error(entry(id).name + ' isn’t installed.'); if (TEST) return void testLog.push({ open: id }); if (platform.open) return void await platform.open(f); const e = await shell.openPath(process.platform === 'darwin' ? f.path : f.exe); if (e) throw Error(e); },
     reveal: async (id) => { const f = await platform.find(id); if (!f) throw Error(entry(id).name + ' isn’t installed.'); if (TEST) return void testLog.push({ reveal: id }); shell.showItemInFolder(process.platform === 'darwin' ? f.path : f.exe); },
     settings: (id) => manager.readSettings(entry(id).id),
     'save-settings': (id, patch) => manager.saveSettings(entry(id).id, patch),
