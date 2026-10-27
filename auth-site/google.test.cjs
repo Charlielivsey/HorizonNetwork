@@ -1,11 +1,11 @@
 'use strict';
-// Sign in with Google: turning it on (only for a Google account with your own email), signing in with it (the PIN is
-// still asked, and the browser never remembers the account), refusals, and turning it off. The real staff account
+// Sign in with Google: turning it on (only for a Google account with your own email), signing in with it (no password
+// or PIN, and the browser never remembers the account), refusals, and turning it off. The real staff account
 // service and Auth run here; only Google's token endpoint is a stand-in.
 //   node --test auth-site/google.test.cjs
 const { test } = require('node:test'), assert = require('node:assert/strict'), fs = require('node:fs'), os = require('node:os'), path = require('node:path'), http = require('node:http'), crypto = require('node:crypto'), { spawn } = require('node:child_process');
 
-test('Sign in with Google: optional, PIN still required, never remembered', async () => {
+test('Sign in with Google: optional, signs straight in, never remembered', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-auth-google-'));
   const store = require('../staff-portal/lib/store'); store.init(dir);
   const person = store.saveEmployee({ firstName: 'Gee', lastName: 'User', company: store.COMPANIES[0], jobTitle: 'Team member', emails: [{ local: 'google.user', domain: 'hngroup.org.uk', primary: true }] });
@@ -64,19 +64,16 @@ test('Sign in with Google: optional, PIN still required, never remembered', asyn
     g = await viaGoogle(await post('/api/google/start', { mode: 'link', next: '/' }, session), session, me);
     assert.deepEqual(g.value, { linked: 'google.user@hngroup.org.uk' });
     assert.equal((await (await fetch(base + '/api/me', { headers: { Cookie: session } })).json()).user.google.email, 'google.user@hngroup.org.uk');
-    // Signing in with Google, back to the application it started from: the PIN is still asked, and nothing is remembered.
+    // Signing in with Google, back to the application it started from: straight in (no password, no PIN), nothing remembered.
     const next = '/authorize?client_id=portal&state=' + 'a'.repeat(64);
     g = await viaGoogle(await post('/api/google/start', { mode: 'login', next }), '', me);
-    assert.equal(g.location, next + '&google=1'); assert.deepEqual(g.value, { codeRequired: true, email: 'google.user@hngroup.org.uk' });
-    const flow = cookie(g.result, '__Host-hn_auth_flow');
-    assert.equal((await post('/api/login/code', { code: '111111' }, flow)).status, 401, 'a wrong PIN is refused');
-    const done = await post('/api/login/code', { code: '582947' }, flow);
-    assert.equal(done.status, 200); assert.equal((await done.json()).user.email, 'google.user@hngroup.org.uk');
-    assert.equal(cookie(done, '__Host-hn_auth_resume'), undefined, 'a Google sign-in never remembers the account');
-    assert.ok(cookie(done, '__Host-hn_auth_session'));
+    assert.equal(g.location, next + '&google=1'); assert.equal(g.result.status, 200); assert.equal(g.value.user.email, 'google.user@hngroup.org.uk');
+    const googleSession = cookie(g.result, '__Host-hn_auth_session'); assert.ok(googleSession, 'signed in');
+    assert.equal(cookie(g.result, '__Host-hn_auth_resume'), undefined, 'a Google sign-in never remembers the account');
+    assert.equal((await post('/api/continue', { client_id: 'portal', state: 'a'.repeat(64) }, googleSession)).status, 200, 'and can continue to the application');
     // A remembered account already on this browser (from a password sign-in) is left as it is.
-    const kept = await post('/api/login/code', { code: '582947' }, [cookie((await viaGoogle(await post('/api/google/start', { mode: 'login', next: '/' }), '', me)).result, '__Host-hn_auth_flow'), cookie(signed, '__Host-hn_auth_resume')].join('; '));
-    assert.equal(kept.status, 200); assert.equal(cookie(kept, '__Host-hn_auth_resume'), undefined, 'not replaced or cleared');
+    const kept = await viaGoogle(await post('/api/google/start', { mode: 'login', next: '/' }), cookie(signed, '__Host-hn_auth_resume'), me);
+    assert.equal(kept.result.status, 200); assert.equal(cookie(kept.result, '__Host-hn_auth_resume'), undefined, 'not replaced or cleared');
     // Answers that don't check out are refused: an unverified email, someone else's id, a forged state.
     g = await viaGoogle(await post('/api/google/start', { mode: 'login', next: '/' }), '', { ...me, email_verified: false });
     assert.match(g.value.error, /isn’t verified/);

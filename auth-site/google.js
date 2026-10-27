@@ -1,8 +1,8 @@
 'use strict';
 // "Sign in with Google" for HN Group Auth (the user's request, 27 October 2026). Optional for each person: once
 // they've turned it on (signed in here with their password and PIN, then "Turn on" under Sign in with Google), the
-// "Continue with Google" button replaces their email and password. The six-digit PIN is still asked every time, and a
-// Google sign-in never makes the browser remember the account (no "Welcome back" resume; the user's request).
+// "Continue with Google" button signs them straight in: no password and no PIN (the user's request), and a Google
+// sign-in never makes the browser remember the account (no "Welcome back" resume).
 //
 // Google is only used to confirm who someone is. Auth runs the authorization-code flow with PKCE, a state bound to
 // this browser by a cookie and a nonce, and reads the ID token it gets straight back from Google's token endpoint
@@ -23,7 +23,7 @@ const GOOGLE_TOKEN = 'https://oauth2.googleapis.com/token';
 const ISSUERS = ['https://accounts.google.com', 'accounts.google.com'];
 const BINDING = '__Host-hn_auth_google', TICKET = '__Host-hn_auth_google_result';
 
-function createGoogle({ origin, staff, send, profile, entryFor, setCookie, cookie, challenges, destination, random, hash, fail, fetcher = fetch,
+function createGoogle({ origin, staff, send, profile, entryFor, setCookie, cookie, finishLogin, destination, random, hash, fail, fetcher = fetch,
   file = process.env.GOOGLE_OAUTH_FILE || path.join(process.env.DATA_DIR || '/var/lib/hn-auth', 'google-oauth.json') }) {
   const REDIRECT = origin + '/google/callback';
   const pending = new Map(), results = new Map();
@@ -109,9 +109,8 @@ function createGoogle({ origin, staff, send, profile, entryFor, setCookie, cooki
           await staff('/api/auth/google-link', { session: record.staffSession, sub: who.sub, email: who.email });
           finish(res, record.next, { linked: who.email });
         } else {
-          const { value } = await staff('/api/auth/google-login', { sub: who.sub, email: who.email }, req);
-          if (!value.codeRequired || !value.challenge) throw fail(403, 'Sign in with your email and password.');
-          finish(res, record.next, { challenge: value.challenge, email: who.email });
+          // The sign-in itself happens when the page collects the result (the return trip is a page load, which would end it).
+          finish(res, record.next, { google: who });
         }
       } catch (e) { finish(res, record.next, { error: e.status ? e.message : 'Sign in with Google is unavailable right now. Please try again shortly.' }); }
       return true;
@@ -123,9 +122,9 @@ function createGoogle({ origin, staff, send, profile, entryFor, setCookie, cooki
       if (!result || result.expires <= Date.now()) { send(res, 200, { none: true }, clear); return true; }
       if (result.error) { send(res, 200, { error: result.error }, clear); return true; }
       if (result.linked) { send(res, 200, { linked: result.linked }, clear); return true; }
-      if (challenges.size >= 10000) throw fail(503, 'Please try again shortly.');
-      const flow = random(); challenges.set(hash(flow), { challenge: result.challenge, expires: Date.now() + 5 * 60000, google: true });
-      send(res, 200, { codeRequired: true, email: result.email }, [...clear, setCookie('__Host-hn_auth_flow', flow, 300)]); return true;
+      // Signs in as the Google account's staff account: no password, no PIN, nothing remembered.
+      const { response } = await staff('/api/auth/google-login', { sub: result.google.sub, email: result.google.email }, req);
+      await finishLogin(req, res, response, { google: true }); return true;
     }
     // Turning it off.
     if (route === '/api/google/unlink') {

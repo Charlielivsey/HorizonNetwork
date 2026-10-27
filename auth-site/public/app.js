@@ -121,7 +121,7 @@ async function busy(button, action, label) {
   finally { if (label) button.innerHTML = previous; button.removeAttribute('aria-busy'); controls.forEach(b=>b.disabled=false); $('code').readOnly = false; working=false; maybeVerifyPin(); }
 }
 $('login').addEventListener('submit', event => { event.preventDefault(); busy(event.submitter, async () => {
-  resumeMode = false; $('resume-portrait').hidden = true; $('forget').hidden = true;
+  resumeMode = false; $('resume-portrait').hidden = true; $('forget').hidden = true; $('google-resume').hidden = true;
   const identity = $('username').value.trim();
   const data = await api('login', { username: identity, password: $('password').value }); $('password').value = '';
   $('password').type = 'password'; $('show-password').textContent = 'Show'; $('show-password').setAttribute('aria-pressed','false');
@@ -185,19 +185,20 @@ async function connectToStatus() {
   location.replace(result.redirect);
 }
 $('continue').onclick = () => busy($('continue'), connectToStatus, 'Connecting…');
-// ---------- Sign in with Google (optional for each person; the PIN is still asked, and nothing is remembered) ----------
+// ---------- Sign in with Google (optional for each person; no password or PIN, and nothing is remembered) ----------
 let googleEnabled = false;
-const googleReady = api('google').then(v => { googleEnabled = !!v.enabled; $('google-or').hidden = $('google-login').hidden = !googleEnabled; }).catch(() => {});
+const googleReady = api('google').then(v => { googleEnabled = !!v.enabled; $('google-or').hidden = $('google-login').hidden = !googleEnabled; $('google-resume').hidden = !googleEnabled || !resumeMode; }).catch(() => {});
 async function startGoogle(mode) {
   const result = await api('google/start', { mode, next: location.pathname + location.search });
   location.assign(result.url);
   await new Promise(() => {}); // Leaving for Google.
 }
 $('google-login').onclick = () => busy($('google-login'), () => startGoogle('login'), 'Opening Google…');
+$('google-resume').onclick = () => busy($('google-resume'), () => startGoogle('login'), 'Opening Google…');
 // The signed-in panel: turn Sign in with Google on (a trip to Google) or off.
 function showGoogle(user) {
   $('google-row').hidden = !googleEnabled && !user.google;
-  $('google-status').textContent = user.google ? 'On for ' + user.google.email + '. You still enter your PIN, and this browser won’t remember you.' : 'Use your Google account instead of your password. Your PIN is still asked.';
+  $('google-status').textContent = user.google ? 'On for ' + user.google.email + '. Continue with Google signs you straight in, and this browser won’t remember you.' : 'Sign in with your Google account instead of your password and PIN.';
   $('google-toggle').textContent = user.google ? 'Turn off' : 'Turn on';
   $('google-toggle').classList.toggle('off', !!user.google);
   $('google-toggle').onclick = () => busy($('google-toggle'), async () => {
@@ -240,13 +241,13 @@ document.querySelector('.pin-entry').addEventListener('pointerdown',event=>{
 for(const id of ['username','password']) $(id).addEventListener('input',()=>{ const input=$(id); input.classList.toggle('has-value',!!input.value); animate(input,[{boxShadow:'0 0 0 3px var(--soft)'},{boxShadow:'0 0 0 5px transparent'}],{duration:320}); });
 window.addEventListener('pageshow',event=>{if(event.persisted)location.reload();});
 function clearRemembered() {
-  remembered = null; resumeMode = false; $('resume-offer').hidden = true; $('resume-portrait').hidden = true; $('forget').hidden = true;
+  remembered = null; resumeMode = false; $('resume-offer').hidden = true; $('resume-portrait').hidden = true; $('forget').hidden = true; $('google-resume').hidden = true;
   $('resume-avatar').removeAttribute('src'); $('resume-avatar').hidden = true;
   $('offer-avatar').removeAttribute('src'); $('offer-avatar').hidden = true; $('offer-initials').hidden = false;
 }
 async function startResume() {
   if (!remembered) return;
-  resumeMode = true; resetPin(); $('resume-portrait').hidden = false; $('forget').hidden = false;
+  resumeMode = true; resetPin(); $('resume-portrait').hidden = false; $('forget').hidden = false; $('google-resume').hidden = !googleEnabled;
   $('card-title').textContent = 'Welcome back, ' + (remembered.displayName || remembered.firstName);
   $('subtitle').textContent = 'Enter your six-digit PIN to resume your session.';
   $('pin-identity').textContent = remembered.username;
@@ -278,14 +279,9 @@ async function loadRemembered(start, pending) {
 const rememberedRequest = api('resume');
 rememberedRequest.catch(() => {});
 (async () => {
-  // Back from Google: straight to the PIN, or a message about what happened.
+  // Back from Google: signed straight in (no PIN), or a message about what happened.
   const google = await googleResult();
-  if (google && google.codeRequired) {
-    resumeMode = false; resetPin(); $('resume-portrait').hidden = true; $('forget').hidden = true;
-    $('pin').querySelector('[type=submit]').innerHTML = 'Verify &amp; sign in <span aria-hidden="true">→</span>'; $('pin-identity').textContent = google.email;
-    $('card-title').textContent = 'One more step'; $('subtitle').textContent = 'Signed in with Google. Now your six-digit PIN.';
-    return await view('pin', 'code');
-  }
+  if (google && google.user) return await account(google.user);
   const note = google && (google.error ? [google.error, false] : google.linked ? ['Sign in with Google is on for ' + google.linked + '. Sign in again with your PIN to carry on.', true] : null);
   try {
     const data = await api('me'); await account(data.user);

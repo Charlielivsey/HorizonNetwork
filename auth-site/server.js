@@ -120,7 +120,7 @@ const native=createNative({codes,applications:applicationSessions,profile,requir
  issuePersistent:async(entry,req)=>(await staff('/api/auth/browser-issue',{session:entry.staffSession},req)).value,
  persistent:async(action,token,req,data={})=>(await staff('/api/auth/browser-'+action,{token,...(action==='unlock'?{code:data.code}:{}),...(action.startsWith('account')?{unlock:data.unlock,profile:data.profile,status:data.status,image:data.image,remove:!!data.remove}:{})},req)).value});
 // "Sign in with Google" (google.js): optional per person, and the PIN is still asked.
-const google=createGoogle({origin:ORIGIN,staff,send,profile,entryFor,setCookie,cookie,challenges,destination,random,hash,fail});
+const google=createGoogle({origin:ORIGIN,staff,send,profile,entryFor,setCookie,cookie,finishLogin,destination,random,hash,fail});
 const staticFiles = { '/': 'index.html', '/authorize': 'index.html', '/style.css': 'style.css', '/app.js': 'app.js', '/assets/favicon.svg': 'assets/favicon.svg', '/assets/brand/hn-group-wordmark-white.svg': 'assets/brand/hn-group-wordmark-white.svg', '/assets/brand/hn-group-wordmark.svg': 'assets/brand/hn-group-wordmark.svg', '/assets/fonts/plus-jakarta-sans.woff2': 'assets/fonts/plus-jakarta-sans.woff2' };
 const mime = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'application/javascript', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' };
 const server = http.createServer(async (req, res) => {

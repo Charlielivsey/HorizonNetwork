@@ -511,8 +511,9 @@ async function handleLogin(req, res) {
 }
 
 // "Sign in with Google" through HN Group Auth: Google has already confirmed who this is (Auth checks the token it
-// gets straight from Google), so this takes the place of the password. The account must be linked to that Google
-// account by its owner, be enabled and set up (no temporary password, a PIN), and the PIN is always asked next.
+// gets straight from Google), so it signs the person in without their password or PIN (the user's request,
+// 27 October 2026). The account must be linked to that Google account by its owner, be enabled and set up (no
+// temporary password), and the browser is never remembered.
 function googleLogin(req, res, { sub, email }) {
   const ip = clientIp(req);
   if (isLockedOut(ip)) {
@@ -528,14 +529,11 @@ function googleLogin(req, res, { sub, email }) {
     logEvent(req, null, "sign-in-google-mismatch", { actor: store.loginName(person) });
     return sendJson(res, 403, { error: "That Google account’s email no longer matches your staff account. Sign in with your email and password and connect Google again." });
   }
-  if (person.account.passwordTemporary || !store.hasCode(person)) {
+  if (person.account.passwordTemporary) {
     return sendJson(res, 403, { error: "Finish setting up your account first: sign in with your email and password." });
   }
   if (blockedByMaintenance(person)) return maintenanceReply(req, res, person);
-  const challenge = crypto.randomBytes(24).toString("hex");
-  codeChallenges.set(challenge, { personId: person.id, expires: Date.now() + CODE_CHALLENGE_MS, attempts: 0, how: "Google" });
-  logEvent(req, null, "sign-in-google", { actor: store.loginName(person) });
-  return sendJson(res, 200, { codeRequired: true, challenge });
+  completeLogin(req, res, person, "Google");
 }
 
 function completeLogin(req, res, person, how) {
