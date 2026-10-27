@@ -175,6 +175,9 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, { ok: true }, [setCookie(REMEMBER, '', 0), setCookie(COOKIE, '', 0), setCookie(FLOW, '', 0)]);
       }
       if (route === '/api/resume') {
+        // An account with Sign in with Google turned on resumes with Google only, never the PIN (the user's request).
+        const { value: who } = await staff('/api/resume', null, req, false, 'GET');
+        if (who.google && google.enabled()) throw fail(403, 'This account signs in with Google. Choose Continue with Google.');
         const { response } = await staff('/api/resume', { code: data.code }, req, true);
         return await finishLogin(req, res, response);
       }
@@ -183,6 +186,8 @@ const server = http.createServer(async (req, res) => {
         const { value, response } = await staff('/api/login', { username: data.username, password: data.password }, req, true);
         if (value.codeRequired) {
           if (challenges.size >= 10000) throw fail(503, 'Please try again shortly.');
+          // With Sign in with Google turned on, the second step is Google, not the PIN (the user's request).
+          if (value.google && google.enabled()) return send(res, 200, { googleRequired: true }, [setCookie(FLOW, '', 0)]);
           const flow = random(); challenges.set(hash(flow), { challenge: value.challenge, expires: Date.now() + 5 * 60000 });
           return send(res, 200, { codeRequired: true }, [setCookie(FLOW, flow, 300)]);
         }
@@ -191,8 +196,8 @@ const server = http.createServer(async (req, res) => {
       if (route === '/api/login/code') {
         const key = hash(cookie(req, FLOW)), flow = challenges.get(key);
         if (!flow || flow.expires <= Date.now()) { challenges.delete(key); throw fail(401, 'Sign-in expired. Start again.'); }
-        const { response } = await staff('/api/login/code', { challenge: flow.challenge, code: data.code }, req, !flow.google);
-        challenges.delete(key); return await finishLogin(req, res, response, { google: !!flow.google });
+        const { response } = await staff('/api/login/code', { challenge: flow.challenge, code: data.code }, req, true);
+        challenges.delete(key); return await finishLogin(req, res, response);
       }
       if (route === '/api/setup-code') {
         const entry = entryFor(req), user = await profile(entry);
@@ -230,6 +235,7 @@ const server = http.createServer(async (req, res) => {
     if (route === '/api/resume') {
       const { value } = await staff('/api/resume', null, req, false, 'GET');
       if (value.avatarUrl) value.avatarUrl = '/api/resume/avatar';
+      value.google = !!value.google && google.enabled();
       return send(res, 200, value, value.available ? [] : [setCookie(REMEMBER, '', 0)]);
     }
     if (route === '/api/resume/avatar') {

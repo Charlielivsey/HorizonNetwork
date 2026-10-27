@@ -1,6 +1,6 @@
 'use strict';
 // Sign in with Google: turning it on (only for a Google account with your own email), signing in with it (no password
-// or PIN, and the browser never remembers the account), refusals, and turning it off. The real staff account
+// or PIN, and the browser never remembers the account), no PIN offered while it's on, refusals, and turning it off. The real staff account
 // service and Auth run here; only Google's token endpoint is a stand-in.
 //   node --test auth-site/google.test.cjs
 const { test } = require('node:test'), assert = require('node:assert/strict'), fs = require('node:fs'), os = require('node:os'), path = require('node:path'), http = require('node:http'), crypto = require('node:crypto'), { spawn } = require('node:child_process');
@@ -64,6 +64,13 @@ test('Sign in with Google: optional, signs straight in, never remembered', async
     g = await viaGoogle(await post('/api/google/start', { mode: 'link', next: '/' }, session), session, me);
     assert.deepEqual(g.value, { linked: 'google.user@hngroup.org.uk' });
     assert.equal((await (await fetch(base + '/api/me', { headers: { Cookie: session } })).json()).user.google.email, 'google.user@hngroup.org.uk');
+    // Once it's on, the PIN is never offered: the password step and the remembered "Welcome back" go to Continue with Google.
+    const remember = cookie(signed, '__Host-hn_auth_resume');
+    const pw = await post('/api/login', { username: 'google.user@hngroup.org.uk', password: 'Cedar-river-9842!' });
+    assert.deepEqual(await pw.json(), { googleRequired: true }); assert.equal(cookie(pw, '__Host-hn_auth_session'), undefined);
+    assert.equal((await (await fetch(base + '/api/resume', { headers: { Cookie: remember } })).json()).google, true);
+    const byPin = await post('/api/resume', { code: '582947' }, remember);
+    assert.equal(byPin.status, 403); assert.match((await byPin.json()).error, /Continue with Google/);
     // Signing in with Google, back to the application it started from: straight in (no password, no PIN), nothing remembered.
     const next = '/authorize?client_id=portal&state=' + 'a'.repeat(64);
     g = await viaGoogle(await post('/api/google/start', { mode: 'login', next }), '', me);
@@ -85,6 +92,9 @@ test('Sign in with Google: optional, signs straight in, never remembered', async
     const off = await post('/api/google/unlink', {}, session); assert.equal(off.status, 200); assert.equal((await off.json()).user.google, null);
     g = await viaGoogle(await post('/api/google/start', { mode: 'login', next: '/' }), '', me);
     assert.match(g.value.error, /isn’t connected/);
+    // And the PIN is back.
+    assert.deepEqual(await (await post('/api/login', { username: 'google.user@hngroup.org.uk', password: 'Cedar-river-9842!' })).json(), { codeRequired: true });
+    assert.equal((await (await fetch(base + '/api/resume', { headers: { Cookie: remember } })).json()).google, false);
   } finally {
     global.fetch = realFetch;
     await new Promise((r) => server.close(r)); if (child.exitCode === null) { child.kill(); await new Promise((r) => child.once('exit', r)); }

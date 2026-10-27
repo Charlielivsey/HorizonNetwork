@@ -110,3 +110,7 @@
 .google-copy{flex:1;min-width:0}.google-copy strong{display:block;font-size:12px}.google-copy small{display:block;font-size:10px;color:var(--muted);overflow-wrap:anywhere;line-height:1.6}
 .google-toggle{border:1px solid var(--border);background:var(--soft);color:var(--purple);border-radius:9px;padding:7px 12px;font-size:11px;font-weight:700;flex-shrink:0;transition:transform .2s,border-color .2s}.google-toggle:hover{border-color:var(--purple);transform:translateY(-1px)}
 .google-toggle.off{background:transparent;color:var(--muted)}
+
+/* Sign in with Google turned on: Continue with Google replaces the PIN on this step. */
+#pin.google-only label[for=code],#pin.google-only .pin-entry,#pin.google-only #pin-help,#pin.google-only [type=submit]{display:none}
+#pin.google-only .google-button{margin-top:18px;padding:14px 16px;font-size:13px}

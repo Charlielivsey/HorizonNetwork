@@ -76,7 +76,7 @@ function createGoogle({ origin, staff, send, profile, entryFor, setCookie, cooki
     return { sub: claims.sub, email: claims.email.toLowerCase() };
   }
   // Handles Auth's Google routes. Returns true when it answered.
-  return async function google(req, res, route, data) {
+  async function google(req, res, route, data) {
     // Whether the option is shown at all.
     if (route === '/api/google' && req.method === 'GET') { send(res, 200, { enabled: !!config() }); return true; }
     // Starts a Google sign-in (mode "login") or turning it on for the signed-in person (mode "link").
@@ -133,6 +133,9 @@ function createGoogle({ origin, staff, send, profile, entryFor, setCookie, cooki
       send(res, 200, { user: await profile(entry) }); return true;
     }
     return false;
-  };
+  }
+  // Whether Sign in with Google is set up (when it isn't, Google-linked accounts fall back to the PIN).
+  google.enabled = () => !!config();
+  return google;
 }
 module.exports = { createGoogle, BINDING, TICKET };

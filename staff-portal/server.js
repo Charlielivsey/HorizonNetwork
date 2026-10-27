@@ -505,7 +505,8 @@ async function handleLogin(req, res) {
   if (store.hasCode(person)) {
     const challenge = crypto.randomBytes(24).toString("hex");
     codeChallenges.set(challenge, { personId: person.id, expires: Date.now() + CODE_CHALLENGE_MS, attempts: 0 });
-    return sendJson(res, 200, { codeRequired: true, challenge });
+    // An account with Sign in with Google turned on is told so, so Auth offers Continue with Google instead of the PIN.
+    return sendJson(res, 200, { codeRequired: true, challenge, google: !!(person.account && person.account.google) });
   }
   completeLogin(req, res, person);
 }
@@ -561,7 +562,7 @@ function resumePerson(req) {
 // What the sign-in page shows for "Welcome back".
 function resumeInfo(person) {
   const v = store.publicView(person);
-  return { available: true, displayName: person.displayName, firstName: person.firstName || person.displayName.split(" ")[0], username: store.meView(person).username, avatarUrl: v.avatarUrl ? "/api/resume/avatar?v=" + person.avatar.version : null, id: person.id };
+  return { available: true, displayName: person.displayName, firstName: person.firstName || person.displayName.split(" ")[0], username: store.meView(person).username, avatarUrl: v.avatarUrl ? "/api/resume/avatar?v=" + person.avatar.version : null, id: person.id, google: !!(person.account && person.account.google) };
 }
 
 // Why signing in through HN Group Auth didn't finish (maintenance, no access, an expired or interrupted sign-in, or

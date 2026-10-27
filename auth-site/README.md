@@ -60,8 +60,12 @@ up a Google OAuth client.
 - **Turning it on:** sign in here with your email, password and PIN, choose Turn on, and pick your Google account. Only
   a Google account with one of your own HN Group email addresses can be connected. The staff account stores Google's
   permanent account id (`account.google` in staff data: `findByGoogle`/`setGoogle` in staff-portal/lib/store.js).
-  Afterwards Auth asks you to sign in again with your PIN, because a page load always ends the Auth session.
-- **Signing in:** Continue with Google signs you straight in, with no password and no PIN (the user's request, 27 October 2026). The "Welcome back" PIN screen also offers Continue with Google instead.
+  Afterwards you sign in again with Google, because a page load always ends the Auth session.
+- **Signing in:** Continue with Google signs you straight in, with no password and no PIN (the user's request, 27 October 2026).
+- **No PIN while it's on** (the user's request, 27 October 2026): for an account with Google turned on, Auth never shows
+  the PIN. A correct email and password leads to Continue with Google (`googleRequired`), the remembered "Welcome back"
+  shows only Continue with Google, and a PIN resume is refused. If the Google client file is removed, the PIN comes back
+  so nobody is locked out. The PIN screen still offers Continue with Google as an alternative for everyone else.
 - **No remembering:** a Google sign-in never makes the browser remember the account (no "Welcome back" resume token),
   and leaves any account that was already remembered on that browser as it was. This is enforced in Auth and in the
   staff service (`completeLogin` skips remembering when `how === "Google"`).
