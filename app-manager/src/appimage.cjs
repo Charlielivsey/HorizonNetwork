@@ -5,7 +5,8 @@
 //  - checks a downloaded file really is an AppImage,
 //  - swaps a verified update in for the running copy once the app has quit (same file name, so shortcuts keep
 //    working; the old copy stays if anything fails) and opens it again,
-//  - turns "open when I sign in" on and off with a desktop entry in ~/.config/autostart.
+//  - turns "open when I sign in" on and off with a desktop entry in ~/.config/autostart,
+//  - adds the app to the desktop's app menu the first time it runs from an AppImage (integrate()).
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),{spawn}=require('node:child_process');
 const quote=value=>"'"+String(value).replace(/'/g,"'\\''")+"'";
 
@@ -49,5 +50,22 @@ function setAutostart(enabled,{id,name,exec,args=[],comment='',icon='',home,conf
  const entry=['[Desktop Entry]','Type=Application','Name='+name,...(comment?['Comment='+comment]:[]),'Exec='+[exec,...args].map(desktopQuote).join(' '),...(icon?['Icon='+icon]:[]),'Terminal=false','X-GNOME-Autostart-enabled=true','X-KDE-autostart-after=panel',''].join('\n');
  fs.writeFileSync(file+'.tmp',entry,{mode:0o644});fs.renameSync(file+'.tmp',file);
 }
+// The environment for desktop tools: the AppImage's own folders and libraries left out.
+function hostEnv(env=process.env){const out={...env};for(const k of['APPIMAGE','APPDIR','ARGV0','OWD','LD_LIBRARY_PATH','GSETTINGS_SCHEMA_DIR','ELECTRON_RUN_AS_NODE','CHROME_DESKTOP'])delete out[k];if(env.APPDIR)out.PATH=String(env.PATH||'').split(':').filter(p=>!p.startsWith(env.APPDIR)).join(':');return out;}
+// Puts the running AppImage in the app menu (~/.local/share/applications/<id>.desktop, with its icon), so an AppImage
+// opened from Downloads shows up like any other app. An entry that already opens a copy that still exists is left alone
+// (HN Group App Manager's, or one for a copy kept elsewhere). Returns true when it added or repaired the entry.
+function integrate({id,name,comment='',categories='Utility;',args=[],icon,env=process.env,home=os.homedir()}){
+ const file=env.APPIMAGE;if(!file||!path.isAbsolute(file)||!/\.AppImage$/i.test(file)||!fs.existsSync(file))return false;
+ const data=env.XDG_DATA_HOME&&path.isAbsolute(env.XDG_DATA_HOME)?env.XDG_DATA_HOME:path.join(home,'.local','share'),entry=path.join(data,'applications',id+'.desktop');
+ try{const old=fs.readFileSync(entry,'utf8'),m=/^TryExec=(.+)$/m.exec(old)||/^Exec="?([^"\s]+)/m.exec(old);if(m&&fs.existsSync(m[1].trim()))return false;}catch{}
+ if(icon&&fs.existsSync(icon)){try{const dir=path.join(data,'icons','hicolor','256x256','apps');fs.mkdirSync(dir,{recursive:true});fs.writeFileSync(path.join(dir,id+'.png'),fs.readFileSync(icon));}catch{}}
+ fs.mkdirSync(path.dirname(entry),{recursive:true});
+ const lines=['[Desktop Entry]','Type=Application','Name='+name,...(comment?['Comment='+comment]:[]),'Exec='+[desktopQuote(file),...args].join(' '),'TryExec='+file,'Icon='+id,'Terminal=false','Categories='+categories,'StartupWMClass='+id,'X-HN-Group-App-Manager=true',''];
+ fs.writeFileSync(entry+'.tmp',lines.join('\n'),{mode:0o644});fs.renameSync(entry+'.tmp',entry);
+ // Tell the desktop (KDE keeps a menu cache; others read the desktop entry database).
+ for(const[cmd,a]of[['update-desktop-database',[path.dirname(entry)]],['kbuildsycoca6',[]],['kbuildsycoca5',[]]]){const c=spawn(cmd,a,{detached:true,stdio:'ignore',env:hostEnv(env)});c.on('error',()=>{});c.unref();}
+ return true;
+}
 function autostartEnabled(id,{home,config}={}){try{return fs.readFileSync(autostartFile(id,home,config),'utf8').includes('[Desktop Entry]');}catch{return false;}}
-module.exports={currentAppImage,isAppImage,swapScript,installUpdate,setAutostart,autostartEnabled,autostartFile,desktopQuote};
+module.exports={currentAppImage,isAppImage,swapScript,installUpdate,setAutostart,autostartEnabled,autostartFile,desktopQuote,integrate,hostEnv};

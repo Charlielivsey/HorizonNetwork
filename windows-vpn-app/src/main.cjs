@@ -57,6 +57,8 @@ function go(page,extra={}){show();send('sn:go',{page,...extra});}
 const colors=()=>nativeTheme.shouldUseDarkColors?{color:'#0E1020',symbolColor:'#ECEBF4'}:{color:'#F6F4FA',symbolColor:'#1B1A21'};
 async function start(){
  app.setAppUserModelId('uk.org.hngroup.securenetwork');
+ // Linux: an AppImage opened from Downloads adds itself to the app menu (src/appimage.cjs).
+ if(LINUX&&app.isPackaged){try{appimage.integrate({id:'hn-secure-network',name:'HN Secure Network',comment:'The HN Group VPN and SSH',categories:'Network;Security;',icon:path.join(UI,'assets','app-icon.png')});}catch{}}
  nativeTheme.themeSource=['light','dark'].includes(prefs.theme)?prefs.theme:'system';
  // This PC must be approved on devices.hngroup.org.uk before the app opens (desktop tests answer from a file).
  device=new Device({app:'secure-network',version:app.getVersion(),...(TESTING?{dir:path.join(DATA,'device'),fetcher:testFetcher(path.join(DATA,'device-status.txt')),machine:'0'.repeat(64),name:'Test PC'}:{})});

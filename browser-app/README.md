@@ -20,6 +20,8 @@ desktops. Everything is the same as on Mac and Windows, with these Linux parts:
   keep working) after HN Browser quits, then it reopens (`src/appimage.cjs`, identical in all three apps).
 - **Sandbox:** Chromium's sandbox stays on (`appImage.executableArgs: []`); the AppImage's launcher only turns it off
   on systems without user namespaces, which Bazzite has.
+- **App menu:** opened from Downloads, it adds itself to the app menu (`integrate()` in `src/appimage.cjs`, 1.2.1),
+  never taking over an entry that opens a copy that still exists (App Manager's).
 - **Quitting** turns the VPN off unless HN Secure Network (`hn-secure-network`) is running, as on Mac and Windows.
 
 ## What changed in 1.0

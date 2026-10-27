@@ -11,7 +11,11 @@ built for Bazzite (the user's request, 27 October 2026) and working on Fedora an
 
 - **Installing** puts the checked AppImage in `~/Applications` under a fixed name (`HN-Browser.AppImage`,
   `HN-Secure-Network.AppImage`) in one step, and adds it to the app menu (`~/.local/share/applications/<id>.desktop`
-  with its icon). Copies kept in `~/AppImages` or `~/.local/bin` (also with the version in the name) are found too.
+  with its icon). Copies kept in `~/AppImages` (Gear Lever) or `~/.local/bin`, and ones waiting in Downloads or on the
+  Desktop under any name (`HN-Browser-1.2.0-linux-x86_64 (1).AppImage`, `hn_browser.appimage`), are found too; a
+  downloaded copy is moved into `~/Applications` (old one to the Bin) when it's updated or reinstalled. Paths are
+  resolved first: on Bazzite `/home` is a link to `/var/home`, which the AppImage runtime and `/proc` report (3.1.1 fix
+  for "still says Install App Manager" and apps not showing).
 - **Versions** come from App Manager's own record (`linux-apps.json`), the release's SHA-256 (so an app that updated
   itself is recognised), the file name, or the AppImage's desktop entry, read without running the app.
 - **Open apps** are found from `/proc` (the AppImage's runtime, or a process started from it); changes wait until
@@ -21,7 +25,7 @@ built for Bazzite (the user's request, 27 October 2026) and working on Fedora an
 - **Settings** go to the apps' own `~/.config/HN Browser` and `~/.config/HN Secure Network`; turning on HN Secure
   Network's "Open when I sign in" also writes its autostart entry.
 - **Itself:** run from a download, it offers **Install** (copies itself to `~/Applications`, adds itself to the menu
-  and reopens); its own updates are staged, verified and swapped in after it quits. "Open at sign-in" is
+  and reopens); opened from the download again once installed, it opens the installed copy instead (`handOver`); its own updates are staged, verified and swapped in after it quits. "Open at sign-in" is
   `~/.config/autostart/hn-group-app-manager.desktop`.
 - **Tests:** `test/linux.test.cjs` (pretend home folder). CI builds the AppImage on Ubuntu alongside Mac and Windows,
   self-checks it under Xvfb, and the publish step records `downloads-site/app-manager-linux.json`.

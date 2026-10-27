@@ -18,7 +18,7 @@ const shots = path.join(__dirname, '..', 'screenshots');
   fs.mkdirSync(fixtures); fs.mkdirSync(shots, { recursive: true });
   const file = (route, name, version, build) => { const data = Buffer.from('installer ' + name + ' '.repeat(300000)); fs.writeFileSync(path.join(fixtures, route), data); return { version, build, publishedAt: '2026-10-25T10:00:00Z', asset: { name, size: data.length, sha256: crypto.createHash('sha256').update(data).digest('hex'), url: '/download/' + route } }; };
   const browser = file('windows-x64', 'HN-Browser-1.1.6-win-x64.exe', '1.1.6', 41);
-  fs.writeFileSync(path.join(fixtures, 'feed.json'), JSON.stringify({ release: { version: '1.1.6-41', publishedAt: '2026-10-25T10:00:00Z', assets: { 'windows-x64': browser.asset } }, apps: { 'secure-network-windows': file('secure-network-windows', 'HN-Secure-Network-2.0.1-windows-x64.exe', '2.0.1', 4), 'app-manager-windows': file('app-manager-windows', 'HN-Group-App-Manager-3.1.0-win-x64.exe', '3.1.0', 9) } }));
+  fs.writeFileSync(path.join(fixtures, 'feed.json'), JSON.stringify({ release: { version: '1.1.6-41', publishedAt: '2026-10-25T10:00:00Z', assets: { 'windows-x64': browser.asset } }, apps: { 'secure-network-windows': file('secure-network-windows', 'HN-Secure-Network-2.0.1-windows-x64.exe', '2.0.1', 4), 'app-manager-windows': file('app-manager-windows', 'HN-Group-App-Manager-9.0.0-win-x64.exe', '9.0.0', 9) } }));
   // HN Browser's settings, with one App Manager doesn't know about; and this PC isn't approved yet.
   fs.mkdirSync(path.join(profile, 'roaming', 'HN Browser'), { recursive: true });
   fs.writeFileSync(path.join(profile, 'roaming', 'HN Browser', 'preferences.json'), JSON.stringify({ theme: 'daylight', futureFeature: 42 }));
@@ -109,18 +109,18 @@ const shots = path.join(__dirname, '..', 'screenshots');
     // "Keep App Manager up to date" is on: the update downloads by itself after checking.
     await page.locator('#self-install').waitFor({ timeout: 20000 });
     assert.equal(await page.locator('.page[data-page=updates] [data-pref=autoUpdateSelf]').getAttribute('aria-checked'), 'true', 'switches show their real setting on every page');
-    await page.locator('#self-status', { hasText: 'Version 3.1.0 is ready to install' }).waitFor();
+    await page.locator('#self-status', { hasText: 'Version 9.0.0 is ready to install' }).waitFor();
     await page.locator('#self-note', { hasText: 'Restart to update' }).waitFor();
     await shot('updates');
     await page.locator('#self-install').click();
     await confirm('Restart to update App Manager?');
     await page.waitForFunction(() => window.manager.call('state').then((r) => r.value.updater.status === 'installing'));
-    assert.ok((await testLog()).some((x) => x.restartToUpdate === '3.1.0-9'));
-    assert.deepEqual((await events()).at(-1), { selfUpdate: '3.1.0', reopen: true });
+    assert.ok((await testLog()).some((x) => x.restartToUpdate === '9.0.0-9'));
+    assert.deepEqual((await events()).at(-1), { selfUpdate: '9.0.0', reopen: true });
 
     step('activity');
     await page.locator('.nav[data-go=activity]').click();
-    for (const t of ['HN Browser was updated to 1.1.6.', 'HN Secure Network 2.0.1 was installed.', 'HN Browser settings changed', 'HN Secure Network was removed.', 'App Manager is updating to 3.1.0']) await page.locator('.event', { hasText: t }).first().waitFor();
+    for (const t of ['HN Browser was updated to 1.1.6.', 'HN Secure Network 2.0.1 was installed.', 'HN Browser settings changed', 'HN Secure Network was removed.', 'App Manager is updating to 9.0.0']) await page.locator('.event', { hasText: t }).first().waitFor();
     await shot('activity');
 
     step('settings and diagnostics');

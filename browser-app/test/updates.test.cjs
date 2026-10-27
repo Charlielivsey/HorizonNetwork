@@ -33,3 +33,16 @@ test('Linux updates from the AppImage, swapped in place under the same name and 
  const s=linuxScript({pid:4321,target:'/home/sam/Applications/HN Browser.AppImage',source:'/tmp/w/HN-Browser.AppImage',work:'/tmp/w'});
  assert.match(s,/kill -0 4321/);assert.match(s,/mv -f '\/home\/sam\/Applications\/\.HN Browser\.AppImage\.hn-update' '\/home\/sam\/Applications\/HN Browser\.AppImage'/);assert.match(s,/unset APPIMAGE APPDIR/);assert.match(s,/nohup '\/home\/sam\/Applications\/HN Browser\.AppImage'/);
 });
+
+test('Linux: an AppImage opened from Downloads adds itself to the app menu, without taking over a working entry',()=>{
+ const{integrate}=require('../src/appimage.cjs');const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-integrate-'));
+ try{const data=path.join(dir,'share'),app=path.join(dir,'Downloads','HN-Browser-1.2.1-linux-x86_64.AppImage'),icon=path.join(dir,'icon.png');fs.mkdirSync(path.dirname(app));fs.writeFileSync(app,'x');fs.writeFileSync(icon,'png');
+  const env={APPIMAGE:app,XDG_DATA_HOME:data,PATH:'/nonexistent'},spec={id:'hn-browser',name:'HN Browser',categories:'Network;WebBrowser;',args:['%U'],icon,env};
+  assert.equal(integrate(spec),true);const entry=path.join(data,'applications','hn-browser.desktop');
+  assert.match(fs.readFileSync(entry,'utf8'),/^Exec=\S+HN-Browser-1\.2\.1-linux-x86_64\.AppImage %U$/m);assert.equal(fs.readFileSync(path.join(data,'icons','hicolor','256x256','apps','hn-browser.png'),'utf8'),'png');
+  // A working entry (for example App Manager's, for ~/Applications) is left alone; a broken one is repaired.
+  const other=path.join(dir,'Applications','HN-Browser.AppImage');fs.mkdirSync(path.dirname(other));fs.writeFileSync(other,'x');fs.writeFileSync(entry,'[Desktop Entry]\nExec='+other+' %U\nTryExec='+other+'\n');
+  assert.equal(integrate(spec),false);fs.rmSync(other);assert.equal(integrate(spec),true);assert.match(fs.readFileSync(entry,'utf8'),/Downloads/);
+  assert.equal(integrate({...spec,env:{XDG_DATA_HOME:data}}),false,'only from an AppImage');
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});

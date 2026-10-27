@@ -109,3 +109,40 @@ test('Linux: App Manager’s own update is staged, checked and swapped in after 
     assert.deepEqual(env, { PATH: '/usr/bin', HOME: '/h' });
   } finally { fs.rmSync(home, { recursive: true, force: true }); }
 });
+
+test('Bazzite: a home folder behind a link (/home → /var/home), downloads under any name, and opening the installed copy', onlyLinux, async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-manager-bazzite-')), realHome = path.join(root, 'var', 'home', 'sam'), linkedHome = path.join(root, 'home');
+  fs.mkdirSync(realHome, { recursive: true }); fs.symlinkSync(path.join(root, 'var', 'home'), linkedHome);
+  const home = path.join(linkedHome, 'sam'); // what $HOME says; the AppImage runtime and /proc report realHome
+  try {
+    // A browser AppImage downloaded by hand, renamed by the web browser, is found and shown.
+    fs.mkdirSync(path.join(home, 'Downloads'));
+    const v1 = fakeAppImage('1.2.0'), download = path.join(home, 'Downloads', 'HN-Browser-1.2.0-linux-x86_64 (1).AppImage');
+    fs.writeFileSync(download, v1, { mode: 0o755 });
+    const p = new LinuxPlatform({ log, home, env: { HOME: home }, arch: 'x64', dataDir: path.join(root, 'data'), ui: path.join(__dirname, '..', 'ui') });
+    const found = await p.find('browser');
+    assert.equal(found.version, '1.2.0'); assert.equal(found.managed, false); assert.ok(found.path.startsWith(realHome), 'paths are resolved');
+    // Gear Lever's naming in ~/AppImages counts as installed.
+    fs.mkdirSync(path.join(home, 'AppImages')); fs.writeFileSync(path.join(home, 'AppImages', 'hn_secure_network.appimage'), fakeAppImage('2.1.0'));
+    assert.equal((await p.find('network', { latest: rel('network', '2.1.0-1', fakeAppImage('2.1.0')) })).managed, true);
+    // Open: the runtime reports the resolved path, even though $HOME goes through the link.
+    const child = spawn(process.execPath, ['-e', 'setTimeout(()=>{},20000)'], { env: { ...process.env, APPIMAGE: path.join(realHome, 'Downloads', path.basename(download)) }, stdio: 'ignore' });
+    try { let open = false; for (let i = 0; i < 50 && !(open = await p.running({ ...found, path: download })); i++) await new Promise((r) => setTimeout(r, 50)); assert.equal(open, true); } finally { child.kill(); }
+    // Updating moves it into ~/Applications with a menu entry, and the download goes to the Bin.
+    const v2 = fakeAppImage('1.2.1'), dl = path.join(root, 'dl'); fs.writeFileSync(dl, v2);
+    const now = await p.install('browser', dl, rel('browser', '1.2.1-45', v2));
+    assert.equal(now.path, path.join(realHome, 'Applications', 'HN-Browser.AppImage')); assert.equal(now.managed, true);
+    assert.equal(fs.existsSync(download), false); assert.equal(fs.readdirSync(path.join(realHome, '.local', 'share', 'Trash', 'files')).length, 1);
+    // App Manager installed in ~/Applications: run from there (resolved path) it's installed, not "temporary".
+    const installed = path.join(realHome, 'Applications', 'HN-Group-App-Manager.AppImage'); fs.writeFileSync(installed, fakeAppImage('3.1.0'), { mode: 0o755 });
+    assert.equal(new LinuxPlatform({ log, home, env: { APPIMAGE: installed } }).self().location, 'installed');
+    assert.equal(new LinuxPlatform({ log, home, env: { APPIMAGE: path.join(home, 'Applications', 'HN-Group-App-Manager.AppImage') } }).self().location, 'installed');
+    // Opened again from the download: it hands over to the installed copy instead of offering Install (unless it's newer).
+    const fromDownload = path.join(home, 'Downloads', 'HN-Group-App-Manager-3.1.0-linux-x86_64.AppImage'); fs.writeFileSync(fromDownload, fakeAppImage('3.1.0'));
+    const temp = new LinuxPlatform({ log, home, env: { APPIMAGE: fromDownload, PATH: '/usr/bin:/bin' }, dataDir: path.join(root, 'data') });
+    assert.equal(temp.self().location, 'temporary');
+    temp.remember(installed, '3.1.0', 12);
+    assert.equal(await temp.handOver('3.2.0'), false, 'a newer download still offers to install');
+    assert.equal(await temp.handOver('3.1.0'), true);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});

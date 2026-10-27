@@ -26,6 +26,7 @@ same PIN before every connection; the Linux parts:
   deleted after two minutes even if unused. The app follows the session (signed in via ssh's `LocalCommand`, or how
   it ended). Needs `openssh-clients` (included in Bazzite and Fedora).
 - **Open when I sign in:** `~/.config/autostart/hn-secure-network.desktop` (AppImage only).
+- **App menu:** opened from Downloads, it adds itself to the app menu (`integrate()` in `src/appimage.cjs`, 2.1.1).
 - **Updates:** from `apps['secure-network-linux']` on downloads.hngroup.org.uk, verified, then the AppImage is swapped
   in place after the app quits and reopened (`src/appimage.cjs`).
 - **Build:** `.github/workflows/secure-network-linux.yml` runs `npm test`, builds the AppImage on Ubuntu, publishes a

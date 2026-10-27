@@ -1,6 +1,6 @@
 {
  "name": "hn-group-app-manager",
- "version": "3.1.0",
+ "version": "3.1.1",
  "productName": "HN Group App Manager",
  "private": true,
  "description": "Install, update, repair and look after HN Group desktop apps on macOS, Windows and Linux",

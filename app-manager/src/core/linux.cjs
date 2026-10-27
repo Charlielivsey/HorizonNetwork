@@ -2,7 +2,10 @@
 // Everything App Manager does on Linux (Bazzite, Fedora and other x64 desktops). HN Group apps are AppImages: App
 // Manager keeps them in ~/Applications under a fixed name (HN-Browser.AppImage and so on), adds them to the desktop's
 // app menu (a desktop entry and icon in ~/.local/share), and updates them by putting the checked new AppImage in place
-// in one step. It also finds copies saved in ~/AppImages or ~/.local/bin. Removing moves the AppImage to the Bin and
+// in one step. It also finds copies kept in ~/AppImages (Gear Lever) or ~/.local/bin, and ones just downloaded to
+// Downloads or the Desktop under any name (those are moved into ~/Applications when App Manager updates or reinstalls
+// them). Paths are compared after resolving links: on Bazzite and other Fedora Atomic systems /home is a link to
+// /var/home, and the AppImage runtime and /proc report the resolved path. Removing moves the AppImage to the Bin and
 // takes its menu entry away; the app's own data (~/.config/<app>) is never touched. App Manager never stops another
 // app, and never reads account data, SSH or VPN keys.
 const fs = require('node:fs');
@@ -11,12 +14,12 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { execFile, spawn } = require('node:child_process');
 const { app: entry, APPS, MANAGER } = require('./catalog.cjs');
-const { verify, short, parts } = require('./feed.cjs');
+const { verify, short, parts, newer } = require('./feed.cjs');
 const appimage = require('../appimage.cjs');
 
 const fail = (message, extra) => Object.assign(new Error(message), extra || {});
-function run(file, args, { timeout = 60000, cwd } = {}) {
-  return new Promise((resolve) => execFile(file, args, { timeout, cwd, maxBuffer: 16 * 1024 * 1024 }, (error, stdout, stderr) =>
+function run(file, args, { timeout = 60000, cwd, env } = {}) {
+  return new Promise((resolve) => execFile(file, args, { timeout, cwd, env, maxBuffer: 16 * 1024 * 1024 }, (error, stdout, stderr) =>
     resolve({ code: error ? (typeof error.code === 'number' ? error.code : 1) : 0, out: String(stdout || ''), err: String(stderr || '') })));
 }
 // What each app is in the desktop's app menu.
@@ -37,8 +40,13 @@ function cleanEnv(env = process.env) {
   return out;
 }
 
+const real = (p) => { try { return fs.realpathSync(p); } catch { return p; } };
+// Is this file name an AppImage of the app with this key? (Case and punctuation don't matter.)
+const matches = (spec, name) => !name.startsWith('.') && /\.appimage$/i.test(name) && name.toLowerCase().replace(/[^a-z0-9.]/g, '').startsWith(spec.key);
+
 class LinuxPlatform {
   constructor({ log, home = os.homedir(), env = process.env, arch = process.arch, packaged = true, dataDir, ui = path.join(__dirname, '..', '..', 'ui') } = {}) {
+    home = real(home);
     Object.assign(this, { log, home, env, arch, packaged, ui });
     this.name = 'linux';
     this.supported = arch === 'x64' || !packaged;
@@ -48,8 +56,10 @@ class LinuxPlatform {
     this.records = path.join(dataDir || path.join(this.config, 'HN Group App Manager'), 'linux-apps.json');
     this.hashes = new Map();
   }
-  // Folders an HN app's AppImage may be kept in, App Manager's own first.
+  // Folders an HN app's AppImage is kept in (App Manager's own first), then where a downloaded one may be waiting.
   folders() { return [this.applications, path.join(this.home, 'AppImages'), path.join(this.home, '.local', 'bin')]; }
+  downloads() { return [path.join(this.home, 'Downloads'), path.join(this.home, 'Desktop')]; }
+  managed(file) { return this.folders().includes(path.dirname(real(file))); }
   readRecords() { try { const v = JSON.parse(fs.readFileSync(this.records, 'utf8')); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; } catch { return {}; } }
   writeRecords(v) { fs.mkdirSync(path.dirname(this.records), { recursive: true, mode: 0o700 }); const tmp = this.records + '.' + crypto.randomUUID(); fs.writeFileSync(tmp, JSON.stringify(v, null, 1), { mode: 0o600 }); fs.renameSync(tmp, this.records); }
   remember(file, version, build) {
@@ -80,14 +90,14 @@ class LinuxPlatform {
   }
   // The installed copy of an app, or null. latest (the release App Manager knows about) lets an AppImage that updated
   // itself be recognised by its checksum.
-  async find(id, { latest } = {}) {
-    const a = entry(id), spec = a.linux;
-    for (const dir of this.folders()) {
+  async find(id, { latest, managedOnly = false } = {}) {
+    const a = id === 'manager' ? MANAGER : entry(id), spec = a.linux;
+    for (const dir of [...this.folders(), ...(managedOnly ? [] : this.downloads())]) {
       let names = [];
-      try { names = (await fs.promises.readdir(dir)).filter((n) => spec.names.test(n)); } catch { continue; }
+      try { names = (await fs.promises.readdir(dir)).filter((n) => matches(spec, n)); } catch { continue; }
       names.sort((x, y) => (y === spec.file) - (x === spec.file) || y.localeCompare(x, 'en', { numeric: true }));
       for (const n of names) {
-        const file = path.join(dir, n);
+        const file = real(path.join(dir, n));
         let st; try { st = await fs.promises.stat(file); } catch { continue; }
         if (!st.isFile()) continue;
         const known = this.readRecords()[file];
@@ -95,10 +105,10 @@ class LinuxPlatform {
         if (known && known.size === st.size && known.mtimeMs === st.mtimeMs && parts(known.version)) ({ version, build } = known);
         else {
           if (latest && latest.size === st.size && await this.sha256(file, st) === latest.sha256) { [version, build] = [short(latest.version), Number(String(latest.version).split('-')[1]) || 0]; }
-          else { const named = /-(\d+\.\d+\.\d+)-linux-x86_64\.AppImage$/.exec(n); version = named ? named[1] : await this.embeddedVersion(file).catch(() => null); }
+          else { const named = /-(\d+\.\d+\.\d+)-linux-x86_64[^/]*\.AppImage$/i.exec(n); version = named ? named[1] : await this.embeddedVersion(file).catch(() => null); }
           if (version) try { this.remember(file, version, build); } catch {}
         }
-        return { path: file, exe: file, version: version || '0.0.0', build };
+        return { path: file, exe: file, version: version || '0.0.0', build, managed: this.managed(file) };
       }
     }
     return null;
@@ -108,10 +118,10 @@ class LinuxPlatform {
     if (!found) return false;
     let pids = [];
     try { pids = (await fs.promises.readdir('/proc')).filter((p) => /^\d+$/.test(p) && Number(p) !== process.pid); } catch { return false; }
-    const marker = Buffer.from('APPIMAGE=' + found.path + '\0');
+    const file = real(found.path), marker = Buffer.from('APPIMAGE=' + file + '\0'), other = Buffer.from('APPIMAGE=' + found.path + '\0');
     for (const pid of pids) {
-      try { if (await fs.promises.readlink('/proc/' + pid + '/exe') === found.path) return true; } catch {}
-      try { if ((await fs.promises.readFile('/proc/' + pid + '/environ')).includes(marker)) return true; } catch {}
+      try { const exe = await fs.promises.readlink('/proc/' + pid + '/exe'); if (exe === file || exe === found.path) return true; } catch {}
+      try { const e = await fs.promises.readFile('/proc/' + pid + '/environ'); if (e.includes(marker) || e.includes(other)) return true; } catch {}
     }
     return false;
   }
@@ -129,7 +139,13 @@ class LinuxPlatform {
     await fs.promises.mkdir(path.dirname(target), { recursive: true });
     await fs.promises.writeFile(target + '.tmp', lines.join('\n'), { mode: 0o644 });
     await fs.promises.rename(target + '.tmp', target);
-    run('update-desktop-database', [path.dirname(target)], { timeout: 15000 }).catch(() => {});
+    this.refreshMenu();
+  }
+  // Tells the desktop its app menu changed (KDE's menu cache, and the desktop entry database other desktops read).
+  refreshMenu() {
+    const env = cleanEnv(this.env);
+    run('update-desktop-database', [path.join(this.data, 'applications')], { timeout: 15000, env }).catch(() => {});
+    run('kbuildsycoca6', [], { timeout: 60000, env }).then((r) => { if (r.code !== 0) return run('kbuildsycoca5', [], { timeout: 60000, env }); }).catch(() => {});
   }
   async removeFromMenu(id) {
     const spec = (id === 'manager' ? MANAGER : entry(id)).linux, file = this.menuFile(spec);
@@ -137,6 +153,7 @@ class LinuxPlatform {
     if (!text.includes('X-HN-Group-App-Manager=true')) return;
     await fs.promises.rm(file, { force: true });
     await fs.promises.rm(path.join(this.data, 'icons', 'hicolor', 'scalable', 'apps', spec.desktop + '.svg'), { force: true });
+    this.refreshMenu();
   }
   // Puts a checked AppImage at target in one step (the old one stays if anything fails).
   async place(source, target) {
@@ -151,11 +168,16 @@ class LinuxPlatform {
     if (!appimage.isAppImage(file)) throw fail('The download isn’t an AppImage, so it wasn’t used.');
     const existing = await this.find(id, { latest: rel });
     if (existing && await this.running(existing)) throw fail('Quit ' + a.name + ' first.');
-    const target = existing ? existing.path : path.join(this.applications, a.linux.file);
+    // A copy that's only in Downloads or on the Desktop is replaced by one in ~/Applications (the old one goes to the Bin).
+    const target = existing && existing.managed ? existing.path : path.join(this.applications, a.linux.file);
     this.log.info('linux', 'Installing ' + a.name + ' ' + rel.version + ' to ' + target);
     await this.place(file, target);
     await verify(target, rel);
     this.remember(target, rel.version, Number(String(rel.version).split('-')[1]) || 0);
+    if (existing && !existing.managed && existing.path !== target) {
+      await this.trash(existing.path).catch((e) => this.log.warn('linux', 'The downloaded copy of ' + a.name + ' couldn’t be moved to the Bin: ' + e.message));
+      const all = this.readRecords(); delete all[existing.path]; try { this.writeRecords(all); } catch {}
+    }
     await this.addToMenu(id, target);
     const now = await this.find(id, { latest: rel });
     if (!now || short(now.version) !== short(rel.version)) throw fail(a.name + ' didn’t install properly. Try again.');
@@ -196,10 +218,28 @@ class LinuxPlatform {
     child.unref();
   }
   // ---------- App Manager itself ----------
+  // Where App Manager is running from: 'installed' (~/Applications and the like), 'temporary' (a download, for example)
+  // or 'development'. The AppImage runtime gives the resolved path, so it's compared with resolved folders.
   self() {
-    const file = this.packaged ? this.env.APPIMAGE : null;
-    if (!file || !path.isAbsolute(file)) return { bundle: null, location: 'development' };
-    return { bundle: file, location: this.folders().includes(path.dirname(file)) ? 'installed' : 'temporary' };
+    const given = this.packaged ? this.env.APPIMAGE : null;
+    if (!given || !path.isAbsolute(given)) return { bundle: null, location: 'development' };
+    const file = real(given);
+    return { bundle: file, location: this.managed(file) ? 'installed' : 'temporary' };
+  }
+  // Opened from a download while App Manager is already installed (the same version or newer): opens the installed one
+  // instead, once this one has quit, so you never see "Install App Manager" again. Returns true when it's handing over.
+  async handOver(version) {
+    const { bundle, location } = this.self();
+    if (location !== 'temporary') return false;
+    const installed = await this.find('manager', { managedOnly: true }).catch(() => null);
+    if (!installed || installed.path === bundle || (installed.version !== '0.0.0' && newer(version, installed.version))) return false;
+    this.log.info('self', 'Already installed at ' + installed.path + ' (' + installed.version + '); opening that one');
+    const script = ['#!/bin/sh', 'for i in $(seq 1 120); do kill -0 ' + Number(process.pid) + ' 2>/dev/null || break; sleep 0.25; done',
+      'nohup ' + "'" + installed.path.replace(/'/g, "'\\''") + "'" + ' >/dev/null 2>&1 &'].join('\n') + '\n';
+    const child = spawn('/bin/sh', ['-c', script], { detached: true, stdio: 'ignore', env: cleanEnv(this.env) });
+    child.on('error', () => {});
+    child.unref();
+    return true;
   }
   async stageSelf(file, rel, dir) {
     await verify(file, rel);

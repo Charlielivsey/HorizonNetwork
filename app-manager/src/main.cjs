@@ -241,7 +241,11 @@ function start() {
   if (!app.requestSingleInstanceLock()) { app.quit(); return; }
   app.on('second-instance', () => show());
   app.whenReady().then(async () => {
+    // Linux: opened from a download while App Manager is already installed, so open the installed one instead.
+    if (!TEST && platform.handOver && await platform.handOver(VERSION).catch(() => false)) { quitting = true; app.quit(); return; }
     app.setAppUserModelId('uk.org.hngroup.appmanager');
+    // Linux: once installed (in ~/Applications), make sure App Manager is in the app menu.
+    if (process.platform === 'linux' && app.isPackaged && platform.self().location === 'installed') { try { appimage.integrate({ id: 'hn-group-app-manager', name: 'HN Group App Manager', comment: 'Install and update HN Group apps', categories: 'Utility;System;', icon: path.join(UI, 'assets', 'app-icon.png'), env: { ...process.env, APPIMAGE: platform.self().bundle } }); } catch {} }
     nativeTheme.themeSource = store.preferences.theme;
     nativeTheme.on('updated', () => { if (win && !win.isDestroyed() && process.platform !== 'darwin') win.setTitleBarOverlay(colors()); });
     // This computer must be approved on devices.hngroup.org.uk before App Manager opens (tests answer from a file).
