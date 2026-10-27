@@ -34,7 +34,7 @@ test('Sign in with Google: optional, signs straight in, never remembered', async
   // A trip to "Google" and back: returns where Auth sends the browser and the result the page then collects.
   async function viaGoogle(start, jar, who) {
     assert.equal(start.status, 200); const { url } = await start.json(), u = new URL(url), binding = cookie(start, '__Host-hn_auth_google');
-    assert.equal(u.origin + u.pathname, 'https://accounts.google.com/o/oauth2/v2/auth'); assert.equal(u.searchParams.get('code_challenge_method'), 'S256'); assert.equal(u.searchParams.get('scope'), 'openid email profile');
+    assert.equal(u.origin + u.pathname, 'https://accounts.google.com/o/oauth2/v2/auth'); assert.equal(u.searchParams.get('code_challenge_method'), 'S256'); assert.equal(u.searchParams.get('scope'), 'openid email');
     const code = crypto.randomBytes(8).toString('hex'); google.challenges.set(code, { challenge: u.searchParams.get('code_challenge'), nonce: u.searchParams.get('nonce') }); google.next = who;
     const back = await fetch(base + '/google/callback?state=' + u.searchParams.get('state') + '&code=' + code, { headers: { Cookie: [jar, binding].filter(Boolean).join('; ') }, redirect: 'manual' });
     assert.equal(back.status, 302);

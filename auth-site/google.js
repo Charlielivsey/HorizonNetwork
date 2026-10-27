@@ -92,7 +92,7 @@ function createGoogle({ origin, staff, send, profile, entryFor, setCookie, cooki
       const binding = random(), state = random(); record.state = state;
       pending.set(hash(binding), record);
       const url = new URL(GOOGLE_AUTHORIZE);
-      for (const [k, v] of Object.entries({ client_id: client.id, redirect_uri: REDIRECT, response_type: 'code', scope: 'openid email profile', state, nonce: record.nonce,
+      for (const [k, v] of Object.entries({ client_id: client.id, redirect_uri: REDIRECT, response_type: 'code', scope: 'openid email', state, nonce: record.nonce,
         code_challenge: crypto.createHash('sha256').update(record.verifier).digest('base64url'), code_challenge_method: 'S256', prompt: 'select_account', ...(record.email ? { login_hint: record.email } : {}) })) url.searchParams.set(k, v);
       send(res, 200, { url: url.href }, [setCookie(BINDING, binding, 600)]); return true;
     }

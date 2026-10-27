@@ -101,7 +101,7 @@
             '<label for="ap-phone">Phone <span class="optional">(optional)</span></label><input id="ap-phone" type="tel" autocomplete="tel" maxlength="40">' +
             '<label for="ap-cv">Your CV <span class="optional">(PDF or Word, up to 10 MB)</span></label><input id="ap-cv" type="file" accept=".pdf,.doc,.docx,.odt,.rtf,.txt" required>' +
             '<label for="ap-msg">Why you’re interested <span class="optional">(optional)</span></label><textarea id="ap-msg" rows="4" maxlength="3000"></textarea>' +
-            '<p class="small muted">Your application goes to our recruitment team. See our <a href="/privacy">privacy notice</a> for how we use it.</p>' +
+            '<p class="small muted">Your application goes to our recruitment team. See our <a href="/privacypolicy">privacy policy</a> for how we use it.</p>' +
             '<p class="form-error" id="ap-error" role="alert" hidden></p>' +
             '<button class="btn btn-primary" type="submit" id="ap-send">Send application</button></form>';
         $("#apply-form").addEventListener("submit", async function (e) {

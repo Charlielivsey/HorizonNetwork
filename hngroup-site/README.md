@@ -14,7 +14,7 @@ The public website for HN Group: who we are, the four Horizon companies, open jo
 | Hero, About, Our companies, How we work | Written in `public/index.html`. Edit the text there. |
 | **Careers** | Live from the staff portal. When posting a vacancy under People → Jobs, tick **Advertise on the HN Group website**. The vacancy shows here while it's open and before its closing date. Anyone can apply with their CV. Applications go straight into the vacancy's applicants with the source *Company website*, and recruiters get a notification. |
 | **Contact form** | Messages go into the staff portal under **Support → Website enquiries** for people with the *Website enquiries* permission. That permission is given to Super Admin, Leadership & HR and Communications to start with. They get a notification for each message, can assign it, add notes and reply from their own email. Nothing is emailed by the server. Spam caught by a hidden trap field is filed under *Spam*. |
-| Privacy notice | `public/privacy.html`. Please have it checked before going live. It says enquiries are kept for a year after they're dealt with, and unsuccessful applications for 6 months. Those match the defaults in System Admin → Data retention, so change both if you change one. |
+| Privacy policy and terms | `public/privacypolicy.html` (old `/privacy` links redirect there) and `public/tos.html` (`/tos`), the links given to Google for Sign in with Google (the user's request, 27 October 2026). The privacy policy covers HN Group Auth and the Google user data Auth receives (account id and email only). `public/privacypolicy.html` Please have it checked before going live. It says enquiries are kept for a year after they're dealt with, and unsuccessful applications for 6 months. Those match the defaults in System Admin → Data retention, so change both if you change one. |
 
 Only `/api/public/` on this domain reaches the staff portal: the list of open jobs, job applications and the contact form. All of it is limited to 5 submissions per IP address every 10 minutes. The rest of the portal is not reachable through hngroup.org.uk.
 
@@ -107,7 +107,7 @@ cd /root/HorizonNetwork && git pull && sudo bash staff-portal/install.sh
 | Path | What it is |
 |------|------------|
 | `public/index.html` | The home page, with every section. |
-| `public/privacy.html`, `public/404.html` | Privacy notice and the "page not found" page. |
+| `public/privacypolicy.html`, `public/tos.html`, `public/404.html` | Privacy policy, terms of service and the "page not found" page. |
 | `public/assets/site.css`, `site.js` | Styles, and the menu, Careers and contact form code. |
 | `public/assets/brand/` | Logos, copied from the staff portal's brand library. |
 | `public/assets/og-image.png` | The picture shown when someone shares the link. |

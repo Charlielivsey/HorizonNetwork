@@ -64,6 +64,8 @@ const server=http.createServer(async(req,res)=>{
     if(!['GET','HEAD'].includes(req.method))return json(res,405,{error:'Method not allowed.'});
     const decoded=decodeURIComponent(route);
     if(decoded.split('/').some(part=>part.startsWith('.')))return json(res,404,{error:'Not found.'});
+    // The privacy policy's address is /privacypolicy; old /privacy links are sent there.
+    if(decoded==='/privacy'||decoded==='/privacy.html'){res.writeHead(301,{Location:'/privacypolicy'});return res.end();}
     let target=path.resolve(PUBLIC,'.'+decoded);
     if(!target.startsWith(path.resolve(PUBLIC)+path.sep)&&target!==path.resolve(PUBLIC))return json(res,404,{error:'Not found.'});
     if(decoded.endsWith('/'))target=path.join(target,'index.html');
