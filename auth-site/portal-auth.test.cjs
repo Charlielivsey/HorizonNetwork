@@ -1,5 +1,5 @@
 'use strict';
-// Staff portal sign-in through HN Group Auth, with "Resume session" still on the portal.
+// Staff portal sign-in only through HN Group Auth: no sign-in page, PIN step or "Resume session" of its own.
 // Uses temporary staff data only.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -12,7 +12,7 @@ const freePort = async () => {
 };
 const cookieOf = (res, name) => (res.headers.getSetCookie().find(c => c.startsWith(name + '=')) || '').split(';')[0];
 
-test('portal sign-in goes through Auth and returns to the portal; resume session still works', async () => {
+test('portal sign-in only goes through Auth and returns to the portal; old portal resume tokens are retired', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-portal-auth-test-'));
   const store = require('../staff-portal/lib/store'); store.init(dir);
   const person = store.saveEmployee({ firstName: 'Test', lastName: 'Staff', jobTitle: 'Analyst', company: store.COMPANIES[0], emails: [{ local: 'test.staff', domain: 'hngroup.org.uk', primary: true }] });
@@ -68,26 +68,42 @@ test('portal sign-in goes through Auth and returns to the portal; resume session
     const done = await portalGet(cb2.pathname + cb2.search, cookieOf(start2, 'hn_staff_auth_state'));
     assert.equal(done.status, 302);
     assert.equal(done.headers.get('location'), '/home');
-    const session = cookieOf(done, 'hn_staff_session'), remembered = cookieOf(done, 'hn_staff_resume');
-    assert.ok(session.length > 30 && remembered.length > 30);
+    const session = cookieOf(done, 'hn_staff_session');
+    assert.ok(session.length > 30);
+    assert.equal(cookieOf(done, 'hn_staff_resume'), '', 'the portal no longer remembers the browser itself');
     assert.equal((await portalGet('/home', session)).status, 200);
 
     // The code can't be used twice.
     const replay = await portalGet(cb2.pathname + cb2.search, cookieOf(start2, 'hn_staff_auth_state'));
     assert.equal(replay.headers.get('location'), '/login?auth_error=expired');
 
-    // Two independent Auth browser sign-ins and the portal browser each have their own remembered token.
-    const resumeTokens = Object.keys(JSON.parse(fs.readFileSync(path.join(dir, 'resume.json'))).tokens);
-    assert.equal(resumeTokens.length, 3);
-
-    // Resume session: the sign-in page is shown (not sent to Auth) and the code alone signs in.
-    assert.equal((await portalGet('/login', remembered)).status, 200);
+    // A "Resume session" token the portal gave out before is retired: /login still goes straight to Auth (no
+    // portal PIN page) and clears it, and it no longer signs anyone in.
+    const tokens = () => Object.values(JSON.parse(fs.readFileSync(path.join(dir, 'resume.json'))).tokens);
+    const before = tokens().length;
+    const old = await fetch(portalBase + '/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: 'test.staff@hngroup.org.uk', password: 'Test-password-582!' }) });
+    const oldCode = await fetch(portalBase + '/api/login/code', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ challenge: (await old.json()).challenge, code: '582947' }) });
+    const remembered = cookieOf(oldCode, 'hn_staff_resume');
+    assert.ok(remembered.length > 30, 'set up an old portal token');
+    assert.equal(tokens().length, before + 1);
+    const visit = await portalGet('/login', remembered);
+    assert.equal(visit.status, 302); assert.equal(visit.headers.get('location'), '/auth/start');
+    assert.match(visit.headers.getSetCookie().join(';'), /hn_staff_resume=;/);
+    assert.equal(tokens().length, before);
     const resumed = await fetch(portalBase + '/api/resume', { method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: remembered }, body: JSON.stringify({ code: '582947' }) });
-    assert.equal(resumed.status, 200);
-    assert.ok(cookieOf(resumed, 'hn_staff_session').length > 30);
+    assert.equal(cookieOf(resumed, 'hn_staff_session'), '');
 
-    // An error page from Auth is shown rather than looping back to Auth.
-    assert.equal((await portalGet('/login?auth_error=denied')).status, 200);
+    // Where it's going (a Status admin sign-in) is kept; anything else isn't.
+    const next = encodeURIComponent('/status-admin/authorize?state=' + 'd'.repeat(64));
+    assert.equal((await portalGet('/login?next=' + next)).headers.get('location'), '/auth/start?next=' + next);
+    assert.equal((await portalGet('/login?next=https%3A%2F%2Fevil.example')).headers.get('location'), '/auth/start');
+
+    // A sign-in that didn't finish gets a page with one button back to Auth, rather than looping back to Auth.
+    for (const [query, words] of [['auth_error=denied', /can’t use the staff portal/], ['auth_error=expired', /try that again/], ['auth_error=unavailable', /isn’t answering/], ['maintenance=1', /in maintenance/]]) {
+      const page = await portalGet('/login?' + query);
+      assert.equal(page.status, 200); const html = await page.text();
+      assert.match(html, words); assert.match(html, /href="\/auth\/start"/); assert.doesNotMatch(html, /<form|<input/);
+    }
     assert.deepEqual(await (await fetch(portalBase + '/api/login/options')).json(), { auth: true });
   } finally {
     await new Promise(r => server.close(r));

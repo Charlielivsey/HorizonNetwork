@@ -3,7 +3,9 @@
 // /auth/start sends the browser to Auth with a one-time state; Auth sends it back to /auth/callback
 // with a one-time code, which the portal exchanges server-to-server (with the shared service secret)
 // for the signed-in person, then gives the browser a normal portal session.
-// "Resume session" is unchanged: it stays on the portal's own sign-in page.
+// The portal has no sign-in page of its own any more (the user's request, 27 October 2026): remembering the
+// account, the PIN and Sign in with Google all happen on HN Group Auth, so the portal never issues its own
+// "Resume session" token and retires any it gave out before.
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 
@@ -91,8 +93,9 @@ function createPortalAuth({ store, sessions, resume, createSession, cookieFor, p
     console.log(`${store.meView(person).username} signed in from ${clientIp(req)} (HN Group Auth)`);
     logEvent(req, null, 'signed-in', { actor: store.loginName(person), detail: 'HN Group Auth', ua: String(req.headers['user-agent'] || '').slice(0, 300) });
     const cookies = [cookieFor(req, token), stateCookie(req, '', 0)];
-    // Remember this browser for "Resume session", exactly as a sign-in on the portal's own page does.
-    if (store.hasCode(person)) cookies.push(resume.cookie(req, resume.issue(person.id, parseCookies(req)[resume.COOKIE], req.headers['user-agent'])));
+    // An old portal "Resume session" token on this browser is retired: Auth remembers the account now.
+    const old = parseCookies(req)[resume.COOKIE];
+    if (old) { resume.forget(old); cookies.push(resume.cookie(req, '', true)); }
     send(res, 302, '', { Location: pending.next || '/home', 'Cache-Control': 'no-store', 'Set-Cookie': cookies });
   }
 

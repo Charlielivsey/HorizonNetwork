@@ -564,6 +564,23 @@ function resumeInfo(person) {
   return { available: true, displayName: person.displayName, firstName: person.firstName || person.displayName.split(" ")[0], username: store.meView(person).username, avatarUrl: v.avatarUrl ? "/api/resume/avatar?v=" + person.avatar.version : null, id: person.id };
 }
 
+// Why signing in through HN Group Auth didn't finish (maintenance, no access, an expired or interrupted sign-in, or
+// Auth not answering), with one button to sign in again.
+function sendSignInProblem(req, res, params, start, headers) {
+  const m = store.maintenance(), error = params.get("auth_error");
+  const [title, text] = params.has("maintenance")
+    ? ["The staff portal is in maintenance", m.message || "It’s being worked on right now. Please try again later."]
+    : error === "denied" ? ["You can’t use the staff portal", "This account isn’t allowed to sign in to the staff portal. If you think it should be, contact the IT team."]
+    : error === "unavailable" ? ["HN Group Auth isn’t answering", "Signing in couldn’t finish because HN Group Auth didn’t answer. Please try again in a moment."]
+    : ["Let’s try that again", "Your sign-in took too long or was already used. Sign in again to carry on."];
+  const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  fs.readFile(path.join(PUBLIC_DIR, "signin.html"), "utf8", (err, html) => {
+    if (err) return send(res, 500, "Server error", { "Content-Type": "text/plain" });
+    html = html.replace("{{title}}", esc(title)).replace("{{text}}", esc(text)).replace("{{start}}", esc(start)).replace("{{tone}}", params.has("maintenance") ? "maintenance" : error === "denied" ? "denied" : "retry");
+    send(res, 200, html, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", ...headers });
+  });
+}
+
 // The sign-in page, with the remembered person (if any) built in, so it opens straight on the
 // "Welcome back" step instead of showing the email and password form first.
 function sendLoginPage(req, res) {
@@ -2207,11 +2224,15 @@ async function route(req, res) {
       sessions.delete(session.token);
       return send(res, 302, "", { Location: "/login" + (next ? "?next=" + encodeURIComponent(next) : ""), "Cache-Control": "no-store", "Set-Cookie": sessionCookie(req, "", 0) });
     }
-    // With HN Group Auth installed, signing in happens on auth.hngroup.org.uk. This page is only
-    // shown to offer "Resume session", or to explain why the Auth sign-in didn't complete.
+    // With HN Group Auth installed, signing in only ever happens on auth.hngroup.org.uk (password and PIN, its
+    // "Welcome back", or Sign in with Google). The portal has no form or PIN step of its own: it goes straight to
+    // Auth, or explains why the last sign-in didn't finish with one button to try again (so it can never loop).
     const params = new URL(req.url, "http://localhost").searchParams;
-    if (portalAuthLib.enabled() && !resumePerson(req).person && !params.has("maintenance") && !params.has("auth_error")) {
-      return redirect(res, "/auth/start" + (next ? "?next=" + encodeURIComponent(next) : ""));
+    if (portalAuthLib.enabled()) {
+      const raw = parseCookies(req)[resume.COOKIE], clear = raw ? (resume.forget(raw), { "Set-Cookie": resume.cookie(req, "", true) }) : {};
+      const start = "/auth/start" + (next ? "?next=" + encodeURIComponent(next) : "");
+      if (!params.has("maintenance") && !params.has("auth_error")) return send(res, 302, "", { Location: start, "Cache-Control": "no-store", ...clear });
+      return sendSignInProblem(req, res, params, start, clear);
     }
     return sendLoginPage(req, res);
   }

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Sign in · HN Group Staff Portal</title>
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/assets/style.css">
+    <script src="/assets/theme-boot.js"></script>
+</head>
+<body class="login-page">
+    <div class="login-shell">
+        <aside class="login-brand" aria-hidden="true">
+            <div class="login-glow g1"></div>
+            <div class="login-glow g2"></div>
+            <div class="login-glow g3"></div>
+            <div class="login-brand-inner">
+                <img src="/assets/hn-group-logo-white.png" alt="" class="login-brand-logo">
+                <div class="login-brand-copy">
+                    <p class="login-kicker">Staff Portal</p>
+                    <h2>Everything you need across HN Group, in one place.</h2>
+                    <p>News, documents and policies, and your colleagues across every company in the group.</p>
+                </div>
+                <ul class="login-companies">
+                    <li>HN Group</li>
+                    <li>Horizon Network</li>
+                    <li>Horizon Advertising</li>
+                    <li>Horizon Development</li>
+                    <li>Horizon Media Group</li>
+                </ul>
+                <div class="login-stripes"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+            </div>
+        </aside>
+
+        <main class="login-main">
+            <div class="login-card signin-card" data-tone="{{tone}}">
+                <div class="login-card-logo">
+                    <img src="/assets/hn-group-logo.png" alt="HN Group" class="logo-light-theme">
+                    <img src="/assets/hn-group-logo-white.png" alt="HN Group" class="logo-dark-theme">
+                </div>
+                <div class="signin-mark" aria-hidden="true">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v4M12 16h.01"/></svg>
+                </div>
+                <h1>{{title}}</h1>
+                <p class="muted signin-text">{{text}}</p>
+                <a href="{{start}}" class="btn btn-primary btn-block btn-login">
+                    <span class="btn-label">Sign in with HN Group Auth</span>
+                    <svg class="icon btn-arrow" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+                </a>
+                <p class="login-foot muted">Signing in happens on auth.hngroup.org.uk. Having trouble? Contact the IT team.</p>
+            </div>
+            <p class="legal">Authorised HN Group staff only. Activity on this system is logged.</p>
+        </main>
+    </div>
+</body>
+</html>

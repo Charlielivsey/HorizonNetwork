@@ -3813,3 +3813,11 @@ input[type="range"] { width: 100%; accent-color: var(--primary); }
 /* About me on staff profiles */
 .profile-bio { line-height: 1.55; overflow-wrap: anywhere; }
 .profile-bio p { margin: 0 0 0.6rem; }
+
+/* ---------- Sign-in through HN Group Auth didn't finish ---------- */
+.signin-card { animation: rise 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.signin-mark { width: 54px; height: 54px; border-radius: 16px; display: grid; place-items: center; background: var(--primary-tint); color: var(--primary); margin-bottom: 1.25rem; }
+.signin-mark .icon { width: 26px; height: 26px; }
+.signin-card[data-tone="maintenance"] .signin-mark, .signin-card[data-tone="denied"] .signin-mark { background: var(--warn-bg); color: var(--warn-text); border: 1px solid var(--warn-border); }
+.signin-card .signin-text { margin: 0.4rem 0 1.5rem; line-height: 1.55; white-space: pre-line; }
+@media (prefers-reduced-motion: reduce) { .signin-card { animation: none; } }
