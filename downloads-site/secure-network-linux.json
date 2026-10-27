@@ -1,0 +1,11 @@
+{
+ "tag": "secure-network-linux-v2.1.0-1",
+ "version": "2.1.0",
+ "build": 1,
+ "publishedAt": "2026-10-27T01:13:08.298Z",
+ "asset": {
+  "name": "HN-Secure-Network-2.1.0-linux-x86_64.AppImage",
+  "size": 125527740,
+  "sha256": "958c05cd758231107541b004246dd8e77768604012b6f7bc418943ebdacbd2ec"
+ }
+}
