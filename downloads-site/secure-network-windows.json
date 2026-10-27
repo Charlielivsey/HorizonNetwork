@@ -1,11 +1,11 @@
 {
- "tag": "secure-network-windows-v2.1.1-6",
- "version": "2.1.1",
- "build": 6,
- "publishedAt": "2026-10-27T15:45:28.449Z",
+ "tag": "secure-network-windows-v2.1.2-7",
+ "version": "2.1.2",
+ "build": 7,
+ "publishedAt": "2026-10-27T19:12:46.128Z",
  "asset": {
-  "name": "HN-Secure-Network-2.1.1-windows-x64.exe",
-  "size": 135701909,
-  "sha256": "5d91d637f68261b633bc69129362a8a03d9923f8af4cb19dac862b3027942be7"
+  "name": "HN-Secure-Network-2.1.2-windows-x64.exe",
+  "size": 135702125,
+  "sha256": "cab1abf531d19cf4693fe96a01567afb2b0ace3ffe1452da2137de18552462ba"
  }
 }
