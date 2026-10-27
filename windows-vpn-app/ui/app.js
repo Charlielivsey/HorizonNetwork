@@ -97,7 +97,7 @@ $('pin-cancel').addEventListener('click',cancelPin);
 function cancelPin(){if(current?.kind!=='pin'||current.checking)return;current.ssh=null;next();}
 async function submitPin(pin){
  const item=current;if(!item||item.kind!=='pin'||item.checking)return;
- item.checking=true;pinInput.disabled=true;$('pin-cancel').disabled=true;pinMessage(item.ssh?'Checking your PIN and connecting…':'Checking your PIN and connecting…');drawPin();
+ item.checking=true;pinInput.disabled=true;$('pin-cancel').disabled=true;pinMessage(item.ssh?'Checking your PIN and connecting…':'Checking your PIN…');drawPin();
  const r=await api.action(item.ssh?'ssh-open':'connect',item.ssh?{...item.ssh,pin}:{pin});
  item.checking=false;pinInput.disabled=false;$('pin-cancel').disabled=false;
  if(current!==item)return;

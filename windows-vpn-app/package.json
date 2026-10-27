@@ -1,6 +1,6 @@
 {
   "name": "hn-secure-network-windows",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "productName": "HN Secure Network",
   "private": true,
   "description": "HN Secure Network for Windows and Linux: the HN Group VPN (connect with your PIN) and SSH sessions to the HN Group server in their own terminal window",

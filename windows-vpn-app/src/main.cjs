@@ -145,10 +145,14 @@ async function installWireGuard(){
 
 // ---------- Connecting (always with the PIN) ----------
 async function checkPin(pin){try{await vpn.verifyPin(pin);}catch(e){throw Object.assign(e,{pin:true});}}
-async function connect(pin){
+// wait:false returns once the PIN is accepted, so the PIN sheet closes and the window shows "Connecting…" while the
+// tunnel comes up; a problem connecting then shows as a message (vpn.error).
+async function connect(pin,{wait=true}={}){
  if(!vpn.ready)throw Error('Set up the VPN on this '+PC+' first.');
  await checkPin(pin);
- if(!vpn.connected)await vpn.connect();
+ if(vpn.connected)return;
+ const connecting=vpn.connect();
+ if(wait)await connecting;else connecting.catch(()=>{});
 }
 
 // ---------- SSH in its own window ----------
@@ -186,7 +190,7 @@ ipcMain.handle('sn:action',async(event,name,data)=>{trusted(event);try{let resul
  case'cancel-sign-in':vpn.cancel();vpn.note();break;
  case'install-tools':await installWireGuard();break;
  case'set-up':await vpn.setUp();break;
- case'connect':await connect(data?.pin);break;
+ case'connect':await connect(data?.pin,{wait:false});break;
  case'disconnect':await vpn.disconnect();break;
  case'refresh':await vpn.poll();break;
  case'remove':await vpn.remove();break;

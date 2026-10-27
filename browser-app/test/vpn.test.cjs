@@ -35,7 +35,7 @@ test('HN VPN sign-in through a tab, set-up, connect, remove and sign-out',async(
   await vpn.setUp();const s=vpn.snapshot();assert.equal(s.ready,true);assert.equal(s.device.name,'HN Browser on Test-PC');assert.equal(s.shared,false);
   assert.doesNotMatch(controller.installed,/this device’s private key/);const priv=/PrivateKey = (\S+)/.exec(controller.installed)[1];assert.notEqual(priv,service.devices[0].publicKey);assert.ok(!JSON.stringify(service.headers).includes(priv));
   assert.ok(!fs.readFileSync(path.join(dir,'vpn.json'),'utf8').includes(priv));
-  await vpn.connect();assert.equal(vpn.snapshot().connected,true);assert.equal(vpn.snapshot().reachable,true);assert.equal(vpn.snapshot().server,SERVER);
+  await vpn.connect();assert.equal(vpn.snapshot().connected,true,'connected as soon as the tunnel is up');await vpn.poll();assert.equal(vpn.snapshot().reachable,true,'the server check follows in the background');assert.equal(vpn.snapshot().server,SERVER);
   await vpn.toggle();assert.equal(vpn.snapshot().connected,false);
   // Setting up again replaces this computer's old registration rather than adding another.
   await vpn.setUp();assert.equal(service.devices.length,1);
