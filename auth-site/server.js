@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const {nativeDestination,createNative}=require('./native');
+const {createGoogle}=require('./google');
 const ORIGIN = 'https://auth.hngroup.org.uk';
 // Registered applications: fixed callbacks and who may use them.
 const CLIENTS = {
@@ -79,7 +80,8 @@ async function profile(entry) {
 }
 function requireReady(user) { if (user.passwordChangeRequired) throw fail(403, 'Create a new password before continuing.'); if (user.codeSetupRequired) throw fail(403, 'Set your sign-in PIN before continuing.'); }
 function entryFor(req) { return sessions.get(hash(cookie(req, COOKIE))); }
-async function finishLogin(req, res, response) {
+// google: a Google sign-in, which never remembers the account and leaves any remembered account on this browser as it is.
+async function finishLogin(req, res, response, { google = false } = {}) {
   const raw = (response.headers.get('set-cookie') || '').match(/(?:^|,\s*)hn_staff_session=([a-f0-9]{64})(?:;|$)/)?.[1];
   if (!raw) throw fail(503, 'The staff account service did not create a session.');
   const entry = { staffSession: hash(raw), expires: Date.now() + 12 * 3600000 };
@@ -90,7 +92,8 @@ async function finishLogin(req, res, response) {
   challenges.delete(hash(cookie(req, FLOW)));
   const remembered = (response.headers.get('set-cookie') || '').match(/(?:^|,\s*)hn_staff_resume=([a-f0-9]{64})(?:;|$)/)?.[1];
   const cookies = [setCookie(COOKIE, token), setCookie(FLOW, '', 0)];
-  if (remembered) cookies.push(setCookie(REMEMBER, remembered, 30 * 86400));
+  if (google) {}
+  else if (remembered) cookies.push(setCookie(REMEMBER, remembered, 30 * 86400));
   else {
     if (HEX.test(cookie(req, REMEMBER))) await staff('/api/resume/forget', {}, req);
     cookies.push(setCookie(REMEMBER, '', 0));
@@ -116,6 +119,8 @@ async function persistentAvatar(token,res){
 const native=createNative({codes,applications:applicationSessions,profile,requireReady,send,body,serveAvatar,destination,persistentAvatar,
  issuePersistent:async(entry,req)=>(await staff('/api/auth/browser-issue',{session:entry.staffSession},req)).value,
  persistent:async(action,token,req,data={})=>(await staff('/api/auth/browser-'+action,{token,...(action==='unlock'?{code:data.code}:{}),...(action.startsWith('account')?{unlock:data.unlock,profile:data.profile,status:data.status,image:data.image,remove:!!data.remove}:{})},req)).value});
+// "Sign in with Google" (google.js): optional per person, and the PIN is still asked.
+const google=createGoogle({origin:ORIGIN,staff,send,profile,entryFor,setCookie,cookie,challenges,destination,random,hash,fail});
 const staticFiles = { '/': 'index.html', '/authorize': 'index.html', '/style.css': 'style.css', '/app.js': 'app.js', '/assets/favicon.svg': 'assets/favicon.svg', '/assets/brand/hn-group-wordmark-white.svg': 'assets/brand/hn-group-wordmark-white.svg', '/assets/brand/hn-group-wordmark.svg': 'assets/brand/hn-group-wordmark.svg', '/assets/fonts/plus-jakarta-sans.woff2': 'assets/fonts/plus-jakarta-sans.woff2' };
 const mime = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'application/javascript', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' };
 const server = http.createServer(async (req, res) => {
@@ -163,6 +168,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST') {
       if (req.headers.origin !== ORIGIN) throw fail(403, 'Request origin not allowed.');
       const data = await body(req);
+      if (route.startsWith('/api/google/') && await google(req, res, route, data)) return;
       if (route === '/api/resume/forget') {
         await staff('/api/resume/forget', {}, req);
         sessions.delete(hash(cookie(req, COOKIE))); challenges.delete(hash(cookie(req, FLOW)));
@@ -185,8 +191,8 @@ const server = http.createServer(async (req, res) => {
       if (route === '/api/login/code') {
         const key = hash(cookie(req, FLOW)), flow = challenges.get(key);
         if (!flow || flow.expires <= Date.now()) { challenges.delete(key); throw fail(401, 'Sign-in expired. Start again.'); }
-        const { response } = await staff('/api/login/code', { challenge: flow.challenge, code: data.code }, req, true);
-        challenges.delete(key); return await finishLogin(req, res, response);
+        const { response } = await staff('/api/login/code', { challenge: flow.challenge, code: data.code }, req, !flow.google);
+        challenges.delete(key); return await finishLogin(req, res, response, { google: !!flow.google });
       }
       if (route === '/api/setup-code') {
         const entry = entryFor(req), user = await profile(entry);
@@ -220,6 +226,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, 404, { error: 'Not found.' });
     }
     if (req.method !== 'GET') return send(res, 405, { error: 'Method not allowed.' });
+    if ((route === '/api/google' || route === '/google/callback') && await google(req, res, route, {})) return;
     if (route === '/api/resume') {
       const { value } = await staff('/api/resume', null, req, false, 'GET');
       if (value.avatarUrl) value.avatarUrl = '/api/resume/avatar';

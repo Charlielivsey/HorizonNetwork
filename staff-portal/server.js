@@ -510,6 +510,34 @@ async function handleLogin(req, res) {
   completeLogin(req, res, person);
 }
 
+// "Sign in with Google" through HN Group Auth: Google has already confirmed who this is (Auth checks the token it
+// gets straight from Google), so this takes the place of the password. The account must be linked to that Google
+// account by its owner, be enabled and set up (no temporary password, a PIN), and the PIN is always asked next.
+function googleLogin(req, res, { sub, email }) {
+  const ip = clientIp(req);
+  if (isLockedOut(ip)) {
+    logEvent(req, null, "sign-in-blocked", { actor: "(locked out)" });
+    return sendJson(res, 429, { error: "Too many failed attempts. Please try again in 15 minutes." });
+  }
+  const person = store.findByGoogle(sub);
+  if (!person || !person.account || !person.account.enabled) {
+    logEvent(req, null, "sign-in-google-unknown", { actor: String(email || "").toLowerCase().slice(0, 100) || "(unknown)" });
+    return sendJson(res, 404, { error: "That Google account isn’t connected to an HN Group staff account. Sign in with your email and password, then connect Google." });
+  }
+  if (!store.ownsEmail(person, email)) {
+    logEvent(req, null, "sign-in-google-mismatch", { actor: store.loginName(person) });
+    return sendJson(res, 403, { error: "That Google account’s email no longer matches your staff account. Sign in with your email and password and connect Google again." });
+  }
+  if (person.account.passwordTemporary || !store.hasCode(person)) {
+    return sendJson(res, 403, { error: "Finish setting up your account first: sign in with your email and password." });
+  }
+  if (blockedByMaintenance(person)) return maintenanceReply(req, res, person);
+  const challenge = crypto.randomBytes(24).toString("hex");
+  codeChallenges.set(challenge, { personId: person.id, expires: Date.now() + CODE_CHALLENGE_MS, attempts: 0, how: "Google" });
+  logEvent(req, null, "sign-in-google", { actor: store.loginName(person) });
+  return sendJson(res, 200, { codeRequired: true, challenge });
+}
+
 function completeLogin(req, res, person, how) {
   store.recordLogin(person);
   const token = createSession(person.id, req, { allowPageLoad: true });
@@ -517,8 +545,9 @@ function completeLogin(req, res, person, how) {
   logEvent(req, null, "signed-in", { actor: store.loginName(person), detail: how || undefined, ua: String(req.headers["user-agent"] || "").slice(0, 300) });
   const cookies = [cookieFor(req, token)];
   // Remember this browser for "Resume session" (only for people with a sign-in code, which it asks for).
-  // Auth explicitly requests a separate remembered token for its own browser cookie.
-  if (store.hasCode(person) && (!serviceRequest(req) || req.headers["x-auth-remember"] === "1")) cookies.push(resume.cookie(req, resume.issue(person.id, parseCookies(req)[resume.COOKIE], req.headers["user-agent"])));
+  // Auth explicitly requests a separate remembered token for its own browser cookie. Signing in with Google never
+  // remembers the account (the user's request, 27 October 2026).
+  if (how !== "Google" && store.hasCode(person) && (!serviceRequest(req) || req.headers["x-auth-remember"] === "1")) cookies.push(resume.cookie(req, resume.issue(person.id, parseCookies(req)[resume.COOKIE], req.headers["user-agent"])));
   sendJson(res, 200, { user: store.meView(person) }, { "Set-Cookie": cookies });
 }
 
@@ -637,7 +666,7 @@ async function handleLoginCode(req, res) {
   codeChallenges.delete(challenge);
   failedAttempts.delete(ip);
   if (blockedByMaintenance(person)) return maintenanceReply(req, res, person);
-  completeLogin(req, res, person);
+  completeLogin(req, res, person, entry.how);
 }
 
 async function handleSetCode(req, res, session, suppliedBody) {
@@ -2153,7 +2182,7 @@ extraRoutes.init({
 
 // A new staff session for an HN Group service acting for this person (HN Account), from where they are.
 const issueSession = (personId, ip, userAgent) => createSession(personId, { socket: { remoteAddress: "127.0.0.1" }, headers: { "x-real-ip": ip || "127.0.0.1", "user-agent": userAgent || "HN Account" } });
-const statusSso = createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent, handleChangePassword, handleSetCode, verifyBrowserPin, verifyVpnPin, issueSession });
+const statusSso = createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent, handleChangePassword, handleSetCode, verifyBrowserPin, verifyVpnPin, issueSession, googleLogin });
 const portalAuth = portalAuthLib.createPortalAuth({ store, sessions, resume, createSession, cookieFor, parseCookies, send, redirect, logEvent, loginNext, clientIp });
 
 async function route(req, res) {

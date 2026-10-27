@@ -50,3 +50,39 @@ With the latest central-control installation, the one private staff backend runs
 Native browser exchanges issue a revocable staff-backed `kind: browser` credential in hashed resume storage, separate from normal remembered web cookies. The app encrypts it with OS safeStorage and requires the PIN on every reopen. `/api/native/unlock` delegates PIN checks to the private account backend with existing IP/credential attempt limits. `/api/native/session` and avatar requests check account readiness/revocation live. No browser grant creates a staff or website session automatically.
 
 For website sign-in, `/api/native/offer` creates a one-use 60-second ticket bound to the exact registered non-native authorize URL (or Auth’s direct home page). Only the native main process sends it, in `X-HN-Browser-Offer` to Auth. The authorize document consumes it and issues the usual HttpOnly remembered-account cookie; the existing PIN flow and registered-client ACL still apply, including on refresh. Child remembered tokens depend on the browser grant, share its five-failure budget and stop working after browser sign-out. Switching accounts opts out of offers. Restart tests: `node --test auth-site/browser-session.test.cjs`.
+
+## Sign in with Google (optional for each person)
+
+Added at the user's request (27 October 2026). A **Continue with Google** button sits under the password form, and
+signed-in people see a **Sign in with Google** row with **Turn on / Turn off**. It's only shown once the owner has set
+up a Google OAuth client.
+
+- **Turning it on:** sign in here with your email, password and PIN, choose Turn on, and pick your Google account. Only
+  a Google account with one of your own HN Group email addresses can be connected. The staff account stores Google's
+  permanent account id (`account.google` in staff data: `findByGoogle`/`setGoogle` in staff-portal/lib/store.js).
+  Afterwards Auth asks you to sign in again with your PIN, because a page load always ends the Auth session.
+- **Signing in:** Continue with Google replaces your email and password only. **The six-digit PIN is always asked.**
+- **No remembering:** a Google sign-in never makes the browser remember the account (no "Welcome back" resume token),
+  and leaves any account that was already remembered on that browser as it was. This is enforced in Auth and in the
+  staff service (`completeLogin` skips remembering when `how === "Google"`).
+- **Refusals:** a Google account that isn't connected, an email that no longer matches, an account that is disabled,
+  or one that still needs its temporary password replaced or a PIN set. Maintenance mode applies as usual. The
+  activity log records `sign-in-google`, `google-connected` and `google-disconnected`.
+- **How it works** (`google.js`):
+  - authorization-code flow with PKCE (S256);
+  - a state bound to the browser by a cookie, and a nonce;
+  - the ID token is read straight from Google's token endpoint over TLS, then the issuer, audience, expiry, nonce and
+    verified email are checked;
+  - the return trip is a page load, which ends Auth sessions, so the callback leaves a 5-minute result ticket that the
+    page collects through `/api/google/result`;
+  - the PIN step then uses the normal `/api/login/code`.
+- **Set-up (owner):**
+  1. In Google Cloud Console create an OAuth client of type *Web application*, with the authorised redirect URI
+     `https://auth.hngroup.org.uk/google/callback`.
+  2. On the OAuth consent screen choose *Internal* if all staff use the hngroup.org.uk Google Workspace. Scopes:
+     `openid`, `email`, `profile`.
+  3. On the VPS, save `{"client_id":"…apps.googleusercontent.com","client_secret":"…"}` as
+     `/var/lib/hn-auth/google-oauth.json` (`chmod 600`). It's read when needed, so no restart is required.
+  4. Delete the file to switch the button off.
+- **Tests:** `node --test auth-site/google.test.cjs`. It runs the real staff service and Auth, with a stand-in for
+  Google's token endpoint.

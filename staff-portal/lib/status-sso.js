@@ -27,7 +27,7 @@ function serviceRequest(req) {
 function loginNext(value) {
   return typeof value === 'string' && /^\/status-admin\/authorize\?state=[a-f0-9]{64}$/.test(value) ? value : null;
 }
-function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent, handleChangePassword, handleSetCode, verifyBrowserPin, verifyVpnPin, issueSession }) {
+function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent, handleChangePassword, handleSetCode, verifyBrowserPin, verifyVpnPin, issueSession, googleLogin }) {
   const codes = new Map();
   function current(token) {
     const data = sessions.get(token);
@@ -41,7 +41,9 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       id:p.id,displayName:p.displayName,firstName:p.firstName||'',lastName:p.lastName||'',email:(p.emails||[]).find(e=>e.primary)?.address||p.emails?.[0]?.address||store.loginName(p),
       jobTitle:p.jobTitle||'',company:p.company||'',companies:[...new Set([p.company,...(p.otherRoles||[]).map(r=>r.company)].filter(Boolean))],avatarUrl:store.avatarFile(p)?'/api/avatar':null,
       ...(p.account.passwordTemporary?{passwordChangeRequired:true,passwordMinLength:store.meView(p).passwordMinLength}:{}),
-      ...(!store.hasCode(p)?{codeSetupRequired:true}:{}),statusAdminAllowed:allowed(active,store),ownerAccess:store.hasOwnerAccess(p)&&!active.data.impersonatorId,
+      ...(!store.hasCode(p)?{codeSetupRequired:true}:{}),statusAdminAllowed:allowed(active,store),
+      // "Sign in with Google": the connected Google account's email, if the person has turned it on.
+      google:p.account.google?{email:p.account.google.email,linkedAt:p.account.google.linkedAt}:null,ownerAccess:store.hasOwnerAccess(p)&&!active.data.impersonatorId,
       // Who may open other people's document storage on docs.hngroup.org.uk (never while logged in as someone else).
       ...(active.data.impersonatorId?{storageAccess:false,storageGrants:[]}:storageAccess.forIdentity(p))
     };
@@ -69,7 +71,7 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       logEvent(req, session, 'status-admin-sign-in');
       redirect(res, `${STATUS_ORIGIN}/auth/callback?code=${code}&state=${state}`); return true;
     }
-    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/password', '/api/auth/code', '/api/auth/network-leadership', '/api/auth/network-avatar', '/api/auth/account-status', '/api/auth/staff-directory', '/api/auth/vpn-pin', '/api/auth/accounts-session', '/api/auth/browser-issue', '/api/auth/browser-profile', '/api/auth/browser-avatar', '/api/auth/browser-offer', '/api/auth/browser-logout', '/api/auth/browser-unlock', '/api/auth/browser-lock', '/api/auth/browser-account', '/api/auth/browser-account-update', '/api/auth/browser-account-status', '/api/auth/browser-account-photo'].includes(pathname)) return false;
+    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/password', '/api/auth/code', '/api/auth/network-leadership', '/api/auth/network-avatar', '/api/auth/account-status', '/api/auth/staff-directory', '/api/auth/vpn-pin', '/api/auth/accounts-session', '/api/auth/browser-issue', '/api/auth/browser-profile', '/api/auth/browser-avatar', '/api/auth/browser-offer', '/api/auth/browser-logout', '/api/auth/browser-unlock', '/api/auth/browser-lock', '/api/auth/browser-account', '/api/auth/browser-account-update', '/api/auth/browser-account-status', '/api/auth/browser-account-photo', '/api/auth/google-login', '/api/auth/google-link', '/api/auth/google-unlink'].includes(pathname)) return false;
     if (req.method !== 'POST') { sendJson(res, 405, { error: 'Method not allowed.' }); return true; }
     if (!credentials(req)) { sendJson(res, 401, { error: 'Status integration not authenticated.' }); return true; }
     const body = await readJsonBody(req, pathname === '/api/auth/browser-account-photo' ? 2 * 1024 * 1024 : undefined);
@@ -109,6 +111,11 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
         res.writeHead(200,{'Content-Type':avatar.mime,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});fs.createReadStream(avatar.file).on('error',()=>res.destroy()).pipe(res);return true;
       }
       sendJson(res,200,{expires:resume.lookup(raw).expires,user:identity(active)});return true;
+    }
+    // "Sign in with Google" (HN Group Auth checked the Google sign-in): starts the PIN step for the linked account.
+    if (pathname === '/api/auth/google-login') {
+      if (typeof body.sub !== 'string' || typeof body.email !== 'string') { sendJson(res, 400, { error: 'Invalid Google sign-in.' }); return true; }
+      googleLogin(req, res, { sub: body.sub, email: body.email }); return true;
     }
     // Lets HN Group services (such as the VPN) check that staff accounts they serve are still enabled.
     if (pathname === '/api/auth/account-status') {
@@ -171,6 +178,17 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
         sessions.delete(token);
         logEvent({ socket: { remoteAddress: '127.0.0.1' }, headers: { 'x-real-ip': ip, 'user-agent': ua } }, null, 'signed-in', { actor: store.loginName(active.person), detail: 'HN Account', ua });
         sendJson(res, 200, { token: raw, user: identity(active) }); return true;
+      }
+      // Turning "Sign in with Google" on or off, by the person themselves while signed in to HN Group Auth.
+      if (pathname === '/api/auth/google-link' || pathname === '/api/auth/google-unlink') {
+        const p = active.person;
+        if (p.account.passwordTemporary || !store.hasCode(p)) { sendJson(res, 403, { error: 'Finish setting up your account first.' }); return true; }
+        if (pathname === '/api/auth/google-unlink') { store.setGoogle(p, null); logEvent(req, active, 'google-disconnected'); sendJson(res, 200, { user: identity(active) }); return true; }
+        if (typeof body.sub !== 'string' || !/^[0-9A-Za-z_-]{1,255}$/.test(body.sub)) { sendJson(res, 400, { error: 'Invalid Google account.' }); return true; }
+        if (!store.ownsEmail(p, body.email)) { sendJson(res, 403, { error: 'Use the Google account for one of your own HN Group email addresses (' + identity(active).email + ').' }); return true; }
+        try { store.setGoogle(p, { sub: body.sub, email: body.email }); } catch (e) { if (e.status) { sendJson(res, e.status, { error: e.message }); return true; } throw e; }
+        logEvent(req, active, 'google-connected', { detail: String(body.email).toLowerCase().slice(0, 100) });
+        sendJson(res, 200, { user: identity(active) }); return true;
       }
       if (pathname === '/api/auth/avatar') {
         const avatar = store.avatarFile(active.person);

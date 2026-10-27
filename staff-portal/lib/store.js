@@ -466,6 +466,29 @@ function loginName(person) {
 }
 
 // Login accepts a system username or any of an employee's email addresses.
+// "Sign in with Google" (HN Group Auth): a staff account can be linked to one Google account, identified by
+// Google's permanent account id (sub). Only the account's owner links it, while signed in, and only a Google
+// account with one of their own email addresses; signing in with Google still asks for the PIN.
+function findByGoogle(sub) {
+  const id = String(sub || "");
+  if (!/^[0-9A-Za-z_-]{1,255}$/.test(id)) return null;
+  return people.find((p) => p.account && p.account.google && p.account.google.sub === id) || null;
+}
+function ownsEmail(person, email) {
+  const e = String(email || "").trim().toLowerCase();
+  return !!e && !person.system && (person.emails || []).some((x) => String(x.address || "").toLowerCase() === e);
+}
+function setGoogle(person, link) {
+  if (!person.account) return;
+  if (link) {
+    const other = findByGoogle(link.sub);
+    if (other && other.id !== person.id) throw Object.assign(new Error("That Google account is already connected to another staff account."), { status: 409 });
+    person.account.google = { sub: String(link.sub), email: String(link.email || "").toLowerCase().slice(0, 254), linkedAt: new Date().toISOString() };
+  } else delete person.account.google;
+  person.updatedAt = new Date().toISOString();
+  savePeople();
+}
+
 function findByLogin(login) {
   const name = String(login || "").trim().toLowerCase();
   if (!name) return null;
@@ -1106,6 +1129,9 @@ module.exports = {
   savePeople,
   employees,
   findByLogin,
+  findByGoogle,
+  ownsEmail,
+  setGoogle,
   verifyPassword,
   validateNewPassword,
   setPassword,

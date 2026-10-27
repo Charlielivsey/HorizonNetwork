@@ -1,6 +1,9 @@
 'use strict';
 const $ = id => document.getElementById(id);
 const query = new URLSearchParams(location.search);
+// Coming back from Google: the result is collected below; the address is tidied so a refresh starts afresh.
+const googleReturn = query.get('google') === '1';
+if (googleReturn) { query.delete('google'); history.replaceState(null, '', location.pathname + (query.toString() ? '?' + query : '')); }
 const client = query.get('client_id'), state = query.get('state');
 // Must match the applications registered in server.js.
 const APPS = {
@@ -44,8 +47,8 @@ async function animate(element, frames, options) {
   if (reducedMotion.matches || !element.animate) return;
   try { await element.animate(frames, options).finished; } catch {}
 }
-function message(text) {
-  $('message').textContent = text; $('message').hidden = !text;
+function message(text, ok = false) {
+  $('message').textContent = text; $('message').hidden = !text; $('message').classList.toggle('ok', !!text && ok);
   if (text) {
     animate($('message'), [{ opacity: 0, transform: 'translateY(-6px)' }, { opacity: 1, transform: 'translateY(0)' }], { duration: 220 });
     if (!$('pin').hidden) { $('code').setAttribute('aria-invalid','true'); animate(document.querySelector('.pin-boxes'), [{transform:'translateX(0)'},{transform:'translateX(-5px)'},{transform:'translateX(5px)'},{transform:'translateX(-3px)'},{transform:'translateX(0)'}],{duration:280}); }
@@ -92,6 +95,7 @@ async function account(user) {
   $('avatar').onerror = () => { $('avatar').hidden = true; $('initials').hidden = false; };
   if (user.avatarUrl) { $('avatar').onload = () => { $('avatar').hidden = false; $('initials').hidden = true; }; $('avatar').src = user.avatarUrl; }
   $('destination').hidden = true;
+  await googleReady; showGoogle(user);
   $('application-panel').hidden = !connecting; $('root-account-note').hidden = connecting;
   const allowed = connecting && app.allowed(user);
   $('continue').hidden = !allowed;
@@ -181,6 +185,30 @@ async function connectToStatus() {
   location.replace(result.redirect);
 }
 $('continue').onclick = () => busy($('continue'), connectToStatus, 'Connecting…');
+// ---------- Sign in with Google (optional for each person; the PIN is still asked, and nothing is remembered) ----------
+let googleEnabled = false;
+const googleReady = api('google').then(v => { googleEnabled = !!v.enabled; $('google-or').hidden = $('google-login').hidden = !googleEnabled; }).catch(() => {});
+async function startGoogle(mode) {
+  const result = await api('google/start', { mode, next: location.pathname + location.search });
+  location.assign(result.url);
+  await new Promise(() => {}); // Leaving for Google.
+}
+$('google-login').onclick = () => busy($('google-login'), () => startGoogle('login'), 'Opening Google…');
+// The signed-in panel: turn Sign in with Google on (a trip to Google) or off.
+function showGoogle(user) {
+  $('google-row').hidden = !googleEnabled && !user.google;
+  $('google-status').textContent = user.google ? 'On for ' + user.google.email + '. You still enter your PIN, and this browser won’t remember you.' : 'Use your Google account instead of your password. Your PIN is still asked.';
+  $('google-toggle').textContent = user.google ? 'Turn off' : 'Turn on';
+  $('google-toggle').classList.toggle('off', !!user.google);
+  $('google-toggle').onclick = () => busy($('google-toggle'), async () => {
+    if (!user.google) return startGoogle('link');
+    const data = await api('google/unlink', {}); showGoogle(data.user); message('Sign in with Google is off.', true);
+  });
+}
+async function googleResult() {
+  if (!googleReturn) return null;
+  try { return await api('google/result', {}); } catch (e) { return { error: e.message }; }
+}
 function maybeVerifyPin() {
   if (!pendingPinSubmit || working || transitioning || $('pin').hidden || $('code').value.length !== 6) return;
   pendingPinSubmit = false; $('pin').requestSubmit($('pin').querySelector('[type=submit]'));
@@ -249,12 +277,26 @@ async function loadRemembered(start, pending) {
 // without the email and password form flashing up first.
 const rememberedRequest = api('resume');
 rememberedRequest.catch(() => {});
-api('me').then(data => account(data.user)).catch(async e => {
-  if (e.status !== 401) { await view('login'); return message(e.message); }
-  const resume = query.get('switch') !== '1' && query.get('account') !== 'other';
-  try { await loadRemembered(false, rememberedRequest); } catch (error) { await view('login'); return message(error.message); }
-  if (remembered && resume) await startResume(); else {
-    $('card-title').textContent = 'Welcome back'; $('subtitle').textContent = 'Sign in with your staff account.';
-    await view('login');
+(async () => {
+  // Back from Google: straight to the PIN, or a message about what happened.
+  const google = await googleResult();
+  if (google && google.codeRequired) {
+    resumeMode = false; resetPin(); $('resume-portrait').hidden = true; $('forget').hidden = true;
+    $('pin').querySelector('[type=submit]').innerHTML = 'Verify &amp; sign in <span aria-hidden="true">→</span>'; $('pin-identity').textContent = google.email;
+    $('card-title').textContent = 'One more step'; $('subtitle').textContent = 'Signed in with Google. Now your six-digit PIN.';
+    return await view('pin', 'code');
   }
-});
+  const note = google && (google.error ? [google.error, false] : google.linked ? ['Sign in with Google is on for ' + google.linked + '. Sign in again with your PIN to carry on.', true] : null);
+  try {
+    const data = await api('me'); await account(data.user);
+  } catch (e) {
+    if (e.status !== 401) { await view('login'); return message(e.message); }
+    const resume = query.get('switch') !== '1' && query.get('account') !== 'other';
+    try { await loadRemembered(false, rememberedRequest); } catch (error) { await view('login'); return message(error.message); }
+    if (remembered && resume) await startResume(); else {
+      $('card-title').textContent = 'Welcome back'; $('subtitle').textContent = 'Sign in with your staff account.';
+      await view('login');
+    }
+  }
+  if (note) message(note[0], note[1]);
+})();
