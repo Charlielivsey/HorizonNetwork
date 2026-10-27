@@ -17,6 +17,8 @@ const log = { info() {}, warn() {}, error() {} };
 // A tiny file that looks like an AppImage (ELF header, "AI" 2 at byte 8), different for each version.
 const fakeAppImage = (v) => Buffer.concat([Buffer.from([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1, 0, 0x41, 0x49, 2]), Buffer.alloc(64), Buffer.from('version ' + v)]);
 const sha = (b) => crypto.createHash('sha256').update(b).digest('hex');
+// The install/update tests use /proc, Unix permissions and /bin/sh, so they run on Linux (CI's Ubuntu runner).
+const onlyLinux = { skip: process.platform !== 'linux' && 'needs Linux' };
 const rel = (id, version, data) => ({ id, version, name: 'x', size: data.length, sha256: sha(data), url: 'https://downloads.hngroup.org.uk/download/x' });
 
 test('Linux release records: the AppImage of each app, never another platform’s file', () => {
@@ -31,7 +33,7 @@ test('Linux release records: the AppImage of each app, never another platform’
   assert.deepEqual(settings.describe('network', 'linux').map((x) => x.label), ['Appearance', 'Open when I sign in', 'Ask to connect when it opens']);
 });
 
-test('Linux: install into ~/Applications with a menu entry, find it, notice it’s open, update, settings, remove to the Bin', async () => {
+test('Linux: install into ~/Applications with a menu entry, find it, notice it’s open, update, settings, remove to the Bin', onlyLinux, async () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-manager-linux-')), dl = path.join(home, 'dl');
   fs.mkdirSync(dl);
   try {
@@ -81,7 +83,7 @@ test('Linux: install into ~/Applications with a menu entry, find it, notice it�
   } finally { fs.rmSync(home, { recursive: true, force: true }); }
 });
 
-test('Linux: App Manager’s own update is staged, checked and swapped in after it quits', async () => {
+test('Linux: App Manager’s own update is staged, checked and swapped in after it quits', onlyLinux, async () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-manager-self-'));
   try {
     const dev = new LinuxPlatform({ log, home, env: {}, packaged: true });
