@@ -865,9 +865,11 @@
             '<div class="glass-clock"><div class="gc-label">' + icon("pin") + "Your time \u00b7 " + esc(placeName) + "</div>" +
             '<div class="gc-time">' + clock(profileTz, "time") + "</div>" +
             '<div class="gc-sub">' + clock(profileTz, "zone") + (me.location ? "" : ' \u00b7 <a href="/settings" data-link>Set location</a>') + "</div></div>" +
+            // The UK clock is only shown when it differs from their own time.
+            (tzOffsetMinutes(UK_TZ) === tzOffsetMinutes(profileTz) ? "" :
             '<div class="glass-clock"><div class="gc-label">' + icon("clock") + "UK time \u00b7 London</div>" +
             '<div class="gc-time">' + clock(UK_TZ, "time") + "</div>" +
-            '<div class="gc-sub">' + clock(UK_TZ, "zone") + " \u00b7 " + esc(tzDifference(UK_TZ, profileTz, "you")) + "</div></div>" +
+            '<div class="gc-sub">' + clock(UK_TZ, "zone") + " \u00b7 " + esc(tzDifference(UK_TZ, profileTz, "you")) + "</div></div>") +
             "</div></section>" +
 
             '<div class="home-layout">' +
