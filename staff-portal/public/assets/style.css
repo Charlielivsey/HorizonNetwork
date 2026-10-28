@@ -3821,3 +3821,9 @@ input[type="range"] { width: 100%; accent-color: var(--primary); }
 .signin-card[data-tone="maintenance"] .signin-mark, .signin-card[data-tone="denied"] .signin-mark { background: var(--warn-bg); color: var(--warn-text); border: 1px solid var(--warn-border); }
 .signin-card .signin-text { margin: 0.4rem 0 1.5rem; line-height: 1.55; white-space: pre-line; }
 @media (prefers-reduced-motion: reduce) { .signin-card { animation: none; } }
+/* Clock labels shorten with an ellipsis instead of being cut off. */
+.gc-place { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Only one clock (their time is UK time): a neat card on the right of the banner, not a half-width column. */
+.hero-clocks.single { grid-template-columns: minmax(0, 300px); justify-content: end; }
+@media (max-width: 960px) { .hero-clocks.single { justify-content: start; } }
+@media (max-width: 480px) { .hero-clocks.single { grid-template-columns: 1fr; } }

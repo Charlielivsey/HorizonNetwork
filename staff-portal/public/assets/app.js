@@ -817,6 +817,10 @@
         const profileTz = me.timezone || state.meta.defaultTimezone;
         const placeName = me.location || tzCity(profileTz);
         const UK_TZ = "Europe/London";
+        // The UK clock is only shown when it differs from their own time.
+        const sameAsUk = tzOffsetMinutes(UK_TZ) === tzOffsetMinutes(profileTz);
+        // Just the town on the clock ("Doncaster", not "Doncaster, United Kingdom"); the full place is its tooltip.
+        const placeShort = String(placeName || "").split(",")[0].trim() || placeName;
         const hour = Number(fmt(profileTz, { hour: "2-digit", hourCycle: "h23" }));
         const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
         // Greetings use the name people chose to be known by.
@@ -861,12 +865,11 @@
             (me.helpdeskBadge ? '<a class="hero-chip" href="/helpdesk" data-link>' + icon("lifebuoy") + me.helpdeskBadge + " IT ticket" + (me.helpdeskBadge === 1 ? "" : "s") + " need" + (me.helpdeskBadge === 1 ? "s" : "") + " attention</a>" : "") +
             (!me.unreadAnnouncements && !me.pendingAcks && !me.openPolls && !me.onboardingTasks && !me.leaveApprovals && !me.timesheetApprovals && !me.helpdeskBadge && !me.payrollOverdrawn && !me.reviewsDue && !me.returnToWorkDue && !me.servicesDown && !me.expenseApprovals && !me.budgetWarnings && !me.invoicesOverdue && !me.trainingDue && !me.newApplicants && !me.backupStale && !me.billsDue && !me.exitInterviewDue && !me.feedbackDue && !me.flexibleDecisions && !me.chatUnread && !me.mentoringDue && !me.enquiriesNew ? '<span class="hero-chip calm">' + icon("tick") + "You\u2019re all caught up</span>" : "") +
             "</div></div>" +
-            '<div class="hero-clocks">' +
-            '<div class="glass-clock"><div class="gc-label">' + icon("pin") + "Your time \u00b7 " + esc(placeName) + "</div>" +
+            '<div class="hero-clocks' + (sameAsUk ? " single" : "") + '">' +
+            '<div class="glass-clock"><div class="gc-label" title="' + esc(placeName) + '">' + icon("pin") + '<span class="gc-place">Your time \u00b7 ' + esc(placeShort) + "</span></div>" +
             '<div class="gc-time">' + clock(profileTz, "time") + "</div>" +
-            '<div class="gc-sub">' + clock(profileTz, "zone") + (me.location ? "" : ' \u00b7 <a href="/settings" data-link>Set location</a>') + "</div></div>" +
-            // The UK clock is only shown when it differs from their own time.
-            (tzOffsetMinutes(UK_TZ) === tzOffsetMinutes(profileTz) ? "" :
+            '<div class="gc-sub">' + clock(profileTz, "zone") + (sameAsUk ? " \u00b7 UK time" : "") + (me.location ? "" : ' \u00b7 <a href="/settings" data-link>Set location</a>') + "</div></div>" +
+            (sameAsUk ? "" :
             '<div class="glass-clock"><div class="gc-label">' + icon("clock") + "UK time \u00b7 London</div>" +
             '<div class="gc-time">' + clock(UK_TZ, "time") + "</div>" +
             '<div class="gc-sub">' + clock(UK_TZ, "zone") + " \u00b7 " + esc(tzDifference(UK_TZ, profileTz, "you")) + "</div></div>") +
