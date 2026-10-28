@@ -150,7 +150,8 @@ test('HN Group Investors: staff access, investors, holdings, values and news', a
     // Share certificates: only the ones issued to the register names on this account (Charlie Livsey).
     assert.ok(page.text.includes('Your documents') && page.text.includes('HNG-001') && page.text.includes('HNW-001') && !page.text.includes('HNG-002'));
     const docs = await inv.go('/documents');
-    assert.ok(docs.text.includes('Share certificate HNG-001: HN Group Limited') && docs.text.includes('75% of the shares, Class C') && !docs.text.includes('Jack Vinckx'));
+    assert.ok(docs.text.includes('Share certificate HNG-001: HN Group Limited (cancelled)') && docs.text.includes('Share certificate HNG-003: HN Group Limited') && docs.text.includes('30% of the shares, Class C') && !docs.text.includes('Jack Vinckx'));
+    assert.ok(!docs.text.includes('HNG-004') && !docs.text.includes('HNG-005'), 'CLivsey Holdings Limited’s and Jack’s certificates are theirs only');
     const pdf = await inv.go('/documents/share-certificate-hng-001');
     assert.equal(pdf.status, 200); assert.ok(pdf.text.startsWith('%PDF'), 'the certificate PDF');
     assert.equal((await inv.go('/documents/share-certificate-hng-002')).status, 404, 'another holder’s certificate');

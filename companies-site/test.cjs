@@ -427,7 +427,8 @@ test('company register: group structure update', () => {
     // Horizon Assets Management Limited was renamed HN Group Management Limited (20 October 2026), with a Change of name filing.
     assert.equal(ham.name, 'HN Group Management'); assert.deepEqual(ham.previousNames.map((p) => p.name), ['Horizon Assets Management Limited']);
     assert.ok(!by('Horizon Assets Management Limited'));
-    assert.deepEqual(current(hn).map((p) => [p.name, p.kind, p.share]), [['Charlie Livsey', 'Individual', '100']]);
+    // Then HN Group Limited's holders of 28 October 2026 (tested on their own below).
+    assert.deepEqual(current(hn).map((p) => [p.name, p.kind, p.share]), [['Charlie Livsey', 'Individual', '30'], ['CLivsey Holdings Limited', 'Relevant legal entity', '55'], ['Jack Vinckx', 'Individual', '15']]);
     assert.ok(inv && inv.parent === hn.slug && inv.managedBy === hn.slug && inv.officers.some((o) => o.name === 'Charlie Livsey'));
     assert.deepEqual(current(inv).map((p) => [p.name, p.share, p.control.length]), [['HN Group Limited', '100', 4]]);
     for (const c of [media, net]) {
@@ -450,6 +451,47 @@ test('company register: group structure update', () => {
     assert.ok(charlies.length >= 3); assert.ok(charlies.every((o) => o.role === 'Managing director'));
     // Running again changes nothing, and every filing has its PDF.
     assert.equal(s.db.filings.filter((f) => /Cessation of HN Group Limited/.test(f.description)).length, 2);
+    for (const f of s.db.filings) assert.ok(fs.existsSync(s.filePath(f.file)));
+  } finally {
+    delete process.env.COMPANIES_GROUP_UPDATES;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// The user's request (28 October 2026): HN Group Limited is held by CLivsey Holdings Limited (55% Class C), Charlie
+// Livsey (30% Class C) and Jack Vinckx (the rest, Class B), with every filing and nobody deleted.
+test('company register: HN Group shareholding of 28 October 2026', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-companies-hng-'));
+  const store = path.join(__dirname, 'lib', 'store.js');
+  const fresh = () => { delete require.cache[require.resolve(store)]; return require(store); };
+  try {
+    process.env.COMPANIES_GROUP_UPDATES = 'off';
+    let s = fresh(); s.init(dir);
+    s.saveCompany('hn-group', { legalName: 'HN Group Limited', name: 'HN Group', status: 'Active', incorporated: '2026-09-01' }, 't');
+    s.saveItem('hn-group', 'officers', '', { name: 'Charlie Livsey', role: 'Managing director', appointed: '2026-09-01' }, 't');
+    s.saveItem('hn-group', 'psc', '', { name: 'Charlie Livsey', kind: 'Individual', classC: '75', classCIssuedBy: 'Charlie Livsey', notified: '2026-09-01', control: 'Ownership of shares – 75% or more\nOwnership of voting rights – 75% or more\nRight to appoint and remove directors' }, 't');
+    s.saveItem('hn-group', 'psc', '', { name: 'Jack Vinckx', kind: 'Individual', classB: '15', notified: '2026-09-01' }, 't');
+    s.saveItem('hn-group', 'psc', '', { name: 'Old Holder', kind: 'Individual', classA: '5', notified: '2026-09-01' }, 't');
+    // Only this update is still to run.
+    s.db.migrations.push('group-structure-2026-10-18', 'charlie-managing-director', 'rename-hn-group-management'); s.save();
+    const before = s.db.filings.length;
+    delete process.env.COMPANIES_GROUP_UPDATES;
+    s = fresh(); s.init(dir); s = fresh(); s.init(dir);
+    const hn = s.company('hn-group'), current = hn.psc.filter((p) => !p.ceased);
+    assert.deepEqual(current.map((p) => [p.name, p.kind, p.share, p.classB, p.classC]).sort(), [['CLivsey Holdings Limited', 'Relevant legal entity', '55', '', '55'], ['Charlie Livsey', 'Individual', '30', '', '30'], ['Jack Vinckx', 'Individual', '15', '15', '']]);
+    assert.ok(hn.psc.some((p) => p.name === 'Old Holder' && p.ceased), 'other holders cease rather than being deleted');
+    const charlie = current.find((p) => p.name === 'Charlie Livsey'), cl = current.find((p) => p.name === 'CLivsey Holdings Limited');
+    assert.deepEqual(charlie.control, ['Ownership of shares – more than 25% but not more than 50%', 'Ownership of voting rights – more than 25% but not more than 50%', 'Right to appoint and remove directors']);
+    assert.deepEqual(cl.control, ['Ownership of shares – more than 50% but less than 75%', 'Ownership of voting rights – more than 50% but less than 75%']);
+    const v = s.votingPower(hn);
+    assert.deepEqual([v[cl.id].votes, v[cl.id].control, v[charlie.id].votes], [61.97, true, 33.8]);
+    const filed = s.db.filings.slice(before).map((f) => f.category + ': ' + f.description);
+    assert.equal(filed.length, 4, filed.join('\n'));
+    assert.ok(filed.some((f) => /^Persons with significant control: Cessation of Old Holder/.test(f)));
+    assert.ok(filed.some((f) => /^Persons with significant control: Change of details of Charlie Livsey/.test(f)));
+    assert.ok(filed.some((f) => /^Persons with significant control: Notification of CLivsey Holdings Limited/.test(f)));
+    assert.ok(filed.some((f) => /^Capital: Statement of capital/.test(f)));
+    assert.ok(!filed.some((f) => /Jack Vinckx/.test(f)), 'Jack’s holding is unchanged, so nothing is filed for him');
     for (const f of s.db.filings) assert.ok(fs.existsSync(s.filePath(f.file)));
   } finally {
     delete process.env.COMPANIES_GROUP_UPDATES;

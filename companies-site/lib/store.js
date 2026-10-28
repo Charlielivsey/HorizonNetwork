@@ -84,6 +84,90 @@ function runGroupMigrations() {
     }
     db.migrations.push('rename-hn-group-management');
   }
+  if (process.env.COMPANIES_GROUP_UPDATES !== 'off' && !db.migrations.includes('hn-group-shareholding-2026-10-28')) {
+    // All or nothing: if the change can't be made, the register is left exactly as it was and says why.
+    const snapshot = JSON.stringify(db), files = new Set(db.filings.map((f) => f.file));
+    try { hnGroupShareholding20261028(); db.migrations.push('hn-group-shareholding-2026-10-28'); }
+    catch (e) {
+      for (const f of db.filings) if (!files.has(f.file)) removeFile(f.file);
+      db = JSON.parse(snapshot);
+      audit('system:hn-group-shareholding', 'failed', e.message);
+      console.error('HN Group shareholding update not applied: ' + e.message);
+    }
+  }
+}
+
+// The user's request (28 October 2026): HN Group Limited is held by CLivsey Holdings Limited (55%, Class C), Charlie
+// Livsey (30%, Class C) and Jack Vinckx (the rest, 15%, Class B). Nobody is deleted: changed holdings get a Change of
+// details filing, CLivsey Holdings Limited a Notification filing, anyone else still recorded a Cessation filing, and a
+// statement of capital records the shares by class before and after. The natures of control that come from shares
+// and votes follow the new figures; any other nature recorded on a holder is kept.
+function hnGroupShareholding20261028() {
+  const today = now().slice(0, 10), actor = 'system:hn-group-shareholding';
+  const same = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+  const hn = db.companies.find((c) => same(c.legalName, 'HN Group Limited'));
+  if (!hn) { audit(actor, 'skipped', 'HN Group Limited is not on the register'); return; }
+  const officers = hn.officers.filter((o) => !o.resigned);
+  const issuer = (officers.find((o) => same(o.name, 'Charlie Livsey')) || officers[0] || {}).name;
+  if (!issuer) { audit(actor, 'skipped', 'HN Group Limited has no current officer to issue Class C shares'); return; }
+  const before = shareClasses(hn) || { classA: 0, classB: 0, classC: 0 };
+  const beforeTotal = hn.psc.filter((p) => !p.ceased).reduce((n, p) => n + Number(p.share || 0), 0);
+  const TARGET = [
+    { name: 'CLivsey Holdings Limited', kind: 'Relevant legal entity', classC: '55' },
+    { name: 'Charlie Livsey', kind: 'Individual', classC: '30' },
+    { name: 'Jack Vinckx', kind: 'Individual', classB: '15' },
+  ];
+  const holding = (t, was) => {
+    const x = { kind: t.kind, classA: '', classB: t.classB || '', classC: t.classC || '', classCIssuedBy: t.classC ? (was && was.classCIssuedBy && officers.some((o) => same(o.name, was.classCIssuedBy)) ? was.classCIssuedBy : issuer) : '' };
+    x.share = String(Number(x.classB || 0) + Number(x.classC || 0));
+    return x;
+  };
+  const show = (y) => [y.name, y.kind, y.share ? y.share + '%' : 'Shareholding not recorded', classText(y), (y.control || []).join('; ')].filter(Boolean).join(' · ');
+  const pick = (y) => ({ name: y.name, kind: y.kind, share: y.share || '', control: [...(y.control || [])], classA: y.classA || '', classB: y.classB || '', classC: y.classC || '', classCIssuedBy: y.classCIssuedBy || '' });
+
+  // Work out the new holdings first, so the natures of control can follow the new votes.
+  const plan = TARGET.map((t) => ({ t, was: hn.psc.find((p) => !p.ceased && same(p.name, t.name)) || null }));
+  const leaving = hn.psc.filter((p) => !p.ceased && !TARGET.some((t) => same(t.name, p.name)));
+  const draft = { psc: plan.map(({ t, was }, i) => ({ id: 'n' + i, name: t.name, ...holding(t, was) })) };
+  const votes = votingPower(draft);
+  const band = (n, what) => n > 25 && n <= 50 ? 'Ownership of ' + what + ' – more than 25% but not more than 50%' : n > 50 && n < 75 ? 'Ownership of ' + what + ' – more than 50% but less than 75%' : n >= 75 ? 'Ownership of ' + what + ' – 75% or more' : '';
+  const natures = (old, share, vote) => [band(share, 'shares'), band(vote, 'voting rights')].filter(Boolean)
+    .concat((old || []).filter((x) => !/^Ownership of (shares|voting rights) –/.test(x)));
+
+  // Anyone else recorded as holding HN Group Limited's shares ceases, with their filing.
+  for (const p of leaving) {
+    p.ceased = today;
+    newGeneratedFiling(hn, today, 'Persons with significant control', 'Cessation of ' + p.name + ' as a person with significant control on ' + longDate(today), { code: FORM_CODES.psc_cease, heading: CHANGE_TYPES.psc_cease.label,
+      rows: [['Name', p.name], ['Type', p.kind], ['Ceased on', longDate(today)]] });
+    audit(actor, 'psc.cease', hn.slug + ' ' + p.name);
+  }
+  // Smaller holdings change before new ones are notified, so the company never has more than 100% issued.
+  const order = plan.map((x, i) => ({ ...x, i })).sort((a, b) => (a.was ? 0 : 1) - (b.was ? 0 : 1));
+  for (const { t, was, i } of order) {
+    const next = { name: t.name, ...holding(t, was) };
+    next.control = natures(was && was.control, Number(next.share), (votes['n' + i] || {}).votes || 0);
+    if (was) {
+      const a = pick(was), b = pick({ ...was, ...next });
+      if (JSON.stringify(a) === JSON.stringify(b)) continue;
+      Object.assign(was, next);
+      newGeneratedFiling(hn, today, 'Persons with significant control', 'Change of details of ' + t.name + ' as a person with significant control on ' + longDate(today), { code: FORM_CODES.psc_change, heading: CHANGE_TYPES.psc_change.label,
+        rows: [['Person with significant control', t.name], ['Previous details', show(a)], ['New details', show(b)], ['Changed on', longDate(today)]] });
+      audit(actor, 'psc.change', hn.slug + ' ' + t.name + ' ' + a.share + '% → ' + b.share + '%');
+    } else {
+      hn.psc.push({ id: id(), ...next, notified: today, ceased: '' });
+      audit(actor, 'psc.add', hn.slug + ' ' + t.name);
+    }
+  }
+  checkShareRules(hn, hn.psc);
+  hn.updatedAt = now();
+  generateFilings(hn); // the Notification filing for CLivsey Holdings Limited
+  // A statement of the company's shares by class, before and after.
+  const after = shareClasses(hn), r = (n) => Math.round(n * 100) / 100;
+  const line = (s, total) => ['Class A ' + r(s.classA) + '%', 'Class B ' + r(s.classB) + '%', 'Class C ' + r(s.classC) + '%'].join(', ') + ' (' + r(total) + '% issued)';
+  newGeneratedFiling(hn, today, 'Capital', 'Statement of capital following a change in shareholdings on ' + longDate(today), { code: 'REG-CAP', heading: 'Statement of capital',
+    rows: [['Company', hn.legalName], ['Shares before', line(before, beforeTotal)], ['Shares after', line(after, 100)],
+      ...hn.psc.filter((p) => !p.ceased).map((p) => [p.name, p.share + '% · ' + classText(p)]), ['Changed on', longDate(today)]] });
+  audit(actor, 'capital.statement', hn.slug);
 }
 
 // The user's request (18 October 2026):
