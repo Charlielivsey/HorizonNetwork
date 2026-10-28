@@ -33,6 +33,9 @@ const APPS = {
 };
 const app = Object.prototype.hasOwnProperty.call(APPS, client) ? APPS[client] : null;
 const connecting = !!app && /^[a-f0-9]{64}$/.test(state || '');
+// Signing in to an app on this computer (HN Browser, App Manager) always uses the password and PIN: the app is unlocked
+// with the PIN afterwards, so Sign in with Google isn't offered there (the user's request, 28 October 2026).
+const pinApp = connecting && (client === 'browser' || client === 'app-manager');
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 let working = false, transitioning = false, pendingPinSubmit = false;
 let remembered = null, resumeMode = false;
@@ -123,7 +126,7 @@ async function busy(button, action, label) {
 $('login').addEventListener('submit', event => { event.preventDefault(); busy(event.submitter, async () => {
   resumeMode = false; googleOnly(false); $('resume-portrait').hidden = true; $('forget').hidden = true; $('google-resume').hidden = true;
   const identity = $('username').value.trim();
-  const data = await api('login', { username: identity, password: $('password').value }); $('password').value = '';
+  const data = await api('login', { username: identity, password: $('password').value, ...(pinApp ? { pin: true } : {}) }); $('password').value = '';
   $('password').type = 'password'; $('show-password').textContent = 'Show'; $('show-password').setAttribute('aria-pressed','false');
   if (data.googleRequired) {
     await googleReady; googleOnly(true); $('pin-identity').textContent = identity;
@@ -137,7 +140,7 @@ $('login').addEventListener('submit', event => { event.preventDefault(); busy(ev
 }, 'Signing in…'); });
 $('pin').addEventListener('submit', event => { event.preventDefault(); pendingPinSubmit = false; busy(event.submitter, async () => {
   let data;
-  try { data = await api(resumeMode ? 'resume' : 'login/code', { code: $('code').value }); }
+  try { data = await api(resumeMode ? 'resume' : 'login/code', { code: $('code').value, ...(pinApp ? { pin: true } : {}) }); }
   catch (e) { if (e.restart) { clearRemembered(); await logout(); } throw e; }
   document.querySelector('.pin-entry').classList.add('verified');
   $('pin-help').textContent = 'Verified. Welcome to HN Group.';
@@ -191,7 +194,7 @@ async function connectToStatus() {
 $('continue').onclick = () => busy($('continue'), connectToStatus, 'Connecting…');
 // ---------- Sign in with Google (optional for each person; no password or PIN, and nothing is remembered) ----------
 let googleEnabled = false;
-const googleReady = api('google').then(v => { googleEnabled = !!v.enabled; $('google-or').hidden = $('google-login').hidden = !googleEnabled; $('google-resume').hidden = !googleEnabled || !resumeMode; }).catch(() => {});
+const googleReady = api('google').then(v => { googleEnabled = !!v.enabled && !pinApp; $('google-or').hidden = $('google-login').hidden = !googleEnabled; $('google-resume').hidden = !googleEnabled || !resumeMode; }).catch(() => {});
 async function startGoogle(mode) {
   const result = await api('google/start', { mode, next: location.pathname + location.search });
   location.assign(result.url);

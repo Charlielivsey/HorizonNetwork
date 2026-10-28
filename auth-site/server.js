@@ -177,7 +177,7 @@ const server = http.createServer(async (req, res) => {
       if (route === '/api/resume') {
         // An account with Sign in with Google turned on resumes with Google only, never the PIN (the user's request).
         const { value: who } = await staff('/api/resume', null, req, false, 'GET');
-        if (who.google && google.enabled()) throw fail(403, 'This account signs in with Google. Choose Continue with Google.');
+        if (who.google && google.enabled() && data.pin !== true) throw fail(403, 'This account signs in with Google. Choose Continue with Google.');
         const { response } = await staff('/api/resume', { code: data.code }, req, true);
         return await finishLogin(req, res, response);
       }
@@ -187,7 +187,7 @@ const server = http.createServer(async (req, res) => {
         if (value.codeRequired) {
           if (challenges.size >= 10000) throw fail(503, 'Please try again shortly.');
           // With Sign in with Google turned on, the second step is Google, not the PIN (the user's request).
-          if (value.google && google.enabled()) return send(res, 200, { googleRequired: true }, [setCookie(FLOW, '', 0)]);
+          if (value.google && google.enabled() && data.pin !== true) return send(res, 200, { googleRequired: true }, [setCookie(FLOW, '', 0)]);
           const flow = random(); challenges.set(hash(flow), { challenge: value.challenge, expires: Date.now() + 5 * 60000 });
           return send(res, 200, { codeRequired: true }, [setCookie(FLOW, flow, 300)]);
         }

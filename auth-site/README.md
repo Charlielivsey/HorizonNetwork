@@ -65,7 +65,8 @@ up a Google OAuth client.
 - **No PIN while it's on** (the user's request, 27 October 2026): for an account with Google turned on, Auth never shows
   the PIN. A correct email and password leads to Continue with Google (`googleRequired`), the remembered "Welcome back"
   shows only Continue with Google, and a PIN resume is refused. If the Google client file is removed, the PIN comes back
-  so nobody is locked out. The PIN screen still offers Continue with Google as an alternative for everyone else.
+  so nobody is locked out. Signing in to HN Browser or App Manager always uses the password and PIN, with no Google
+  option, because those apps are unlocked with the PIN afterwards (the page sends `pin: true`). The PIN screen still offers Continue with Google as an alternative for everyone else.
 - **No remembering:** a Google sign-in never makes the browser remember the account (no "Welcome back" resume token),
   and leaves any account that was already remembered on that browser as it was. This is enforced in Auth and in the
   staff service (`completeLogin` skips remembering when `how === "Google"`).

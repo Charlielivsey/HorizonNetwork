@@ -71,6 +71,10 @@ test('Sign in with Google: optional, signs straight in, never remembered', async
     assert.equal((await (await fetch(base + '/api/resume', { headers: { Cookie: remember } })).json()).google, true);
     const byPin = await post('/api/resume', { code: '582947' }, remember);
     assert.equal(byPin.status, 403); assert.match((await byPin.json()).error, /Continue with Google/);
+    // Except when signing in to an app on the computer (HN Browser, App Manager), which is unlocked with the PIN later.
+    const appLogin = await post('/api/login', { username: 'google.user@hngroup.org.uk', password: 'Cedar-river-9842!', pin: true });
+    assert.deepEqual(await appLogin.json(), { codeRequired: true });
+    assert.equal((await post('/api/login/code', { code: '582947', pin: true }, cookie(appLogin, '__Host-hn_auth_flow'))).status, 200);
     // Signing in with Google, back to the application it started from: straight in (no password, no PIN), nothing remembered.
     const next = '/authorize?client_id=portal&state=' + 'a'.repeat(64);
     g = await viaGoogle(await post('/api/google/start', { mode: 'login', next }), '', me);
