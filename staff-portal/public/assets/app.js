@@ -1320,50 +1320,58 @@
             '<div class="profile-avatar">' + avatar(p, "xl") + "</div>" +
             '<div class="profile-id"><h2 class="modal-title">' + esc(p.displayName) + "</h2>" +
             '<div class="profile-role">' + esc(e.jobTitle) + "</div>" +
-            (e.department ? '<div class="profile-dept">' + icon("users") + esc(e.department) + " department</div>" : "") +
+            (e.department ? '<div class="profile-dept">' + icon("users") + esc(e.department) + "</div>" : "") +
             '<div class="profile-company">' + icon("building") + esc(e.company) + "</div></div>" +
             '<div class="profile-badges">' + (roles.length > 1 ? (e.main ? '<span class="badge">Main role</span>' : '<span class="badge badge-soft">Additional role</span>') : "") +
             (p.isOwner ? '<span class="badge badge-owner">System owner</span>' : "") + "</div>" +
             "</div>" +
             (p.status ? '<div class="profile-status">' + statusPill(p.status) + "</div>" : "") +
 
-            (roles.length > 1
-                ? '<div class="role-tabs" role="tablist" aria-label="Roles">' + roles.map(function (r) {
-                    return '<button type="button" role="tab" class="role-tab' + (r.key === key ? " active" : "") + '" aria-selected="' + (r.key === key) + '" data-entry="' + esc(r.key) + '">' +
-                        '<span class="rt-company">' + esc(r.company) + '</span><span class="rt-title">' + esc(r.jobTitle) + (r.department ? " \u00b7 " + esc(r.department) : "") + "</span></button>";
-                }).join("") + "</div>"
-                : "") +
-
-            '<div class="profile-content">' +
-            '<div class="profile-grid">' +
-            '<div class="info-card"><div class="info-label">' + icon("mail") + "Email</div>" +
-            p.emails.map(function (x) {
-                return '<div class="email-line"><a href="mailto:' + esc(x.address) + '">' + esc(x.address) + "</a>" +
-                    '<button type="button" class="icon-btn icon-btn-sm" data-copy="' + esc(x.address) + '" aria-label="Copy ' + esc(x.address) + '">' + icon("copy") + "</button></div>";
-            }).join("") +
-            (p.phone ? '<div class="info-sub">' + icon("phone") + '<a href="tel:' + esc(p.phone.replace(/\s+/g, "")) + '">' + esc(p.phone) + "</a></div>" : "") +
-            "</div>" +
-            discordCard(p) +
-            '<div class="info-card"><div class="info-label">' + icon("clock") + "Local time</div>" +
-            '<div class="info-time">' + clock(p.timezone, "short") + "</div>" +
-            '<div class="info-sub">' + icon("pin") + esc(p.location || tzCity(p.timezone)) + "</div>" +
-            '<div class="muted small">' + esc(tzDifference(p.timezone)) + "</div></div>" +
-            celebrationCard(p) +
-            "</div>" +
-
-            '<div class="profile-section"><h3 class="detail-head">Reports to</h3>' +
-            (supervisor ? personRow(supervisor) : '<div class="top-of-org">' + icon("tree") + "Top of " + esc(e.company) + "</div>") + "</div>" +
-            (reports.length
-                ? '<div class="profile-section"><h3 class="detail-head">Team <span class="tab-count">' + reports.length + "</span></h3>" +
-                  '<div class="team-grid">' + reports.map(personRow).join("") + "</div></div>"
-                : "") +
-            (p.bio ? '<div class="profile-section"><h3 class="detail-head">About</h3><div class="profile-bio">' + richText(p.bio) + "</div></div>" : "") +
-            ((p.skills || []).length || (p.languages || []).length
-                ? '<div class="profile-section">' +
-                  ((p.skills || []).length ? '<h3 class="detail-head">Skills</h3><div class="tag-list">' + p.skills.map(function (t) { return '<span class="tag">' + esc(t) + "</span>"; }).join("") + "</div>" : "") +
-                  ((p.languages || []).length ? '<h3 class="detail-head">Languages</h3><div class="tag-list">' + p.languages.map(function (t) { return '<span class="tag">' + esc(t) + "</span>"; }).join("") + "</div>" : "") + "</div>"
-                : "") +
-            "</div>" +
+            // A big profile with a menu (the user's request, 28 October 2026): Overview, Roles, Team and About.
+            (function () {
+                const roleTabs = roles.length > 1
+                    ? '<div class="role-tabs" role="tablist" aria-label="Roles">' + roles.map(function (r) {
+                        return '<button type="button" role="tab" class="role-tab' + (r.key === key ? " active" : "") + '" aria-selected="' + (r.key === key) + '" data-entry="' + esc(r.key) + '">' +
+                            '<span class="rt-company">' + esc(r.company) + '</span><span class="rt-title">' + esc(r.jobTitle) + (r.department ? " \u00b7 " + esc(r.department) : "") + "</span></button>";
+                    }).join("") + "</div>"
+                    : "";
+                const overview =
+                    '<div class="profile-grid">' +
+                    '<div class="info-card"><div class="info-label">' + icon("mail") + "Email</div>" +
+                    p.emails.map(function (x) {
+                        return '<div class="email-line"><a href="mailto:' + esc(x.address) + '">' + esc(x.address) + "</a>" +
+                            '<button type="button" class="icon-btn icon-btn-sm" data-copy="' + esc(x.address) + '" aria-label="Copy ' + esc(x.address) + '">' + icon("copy") + "</button></div>";
+                    }).join("") +
+                    (p.phone ? '<div class="info-sub">' + icon("phone") + '<a href="tel:' + esc(p.phone.replace(/\s+/g, "")) + '">' + esc(p.phone) + "</a></div>" : "") +
+                    "</div>" +
+                    discordCard(p) +
+                    '<div class="info-card"><div class="info-label">' + icon("clock") + "Local time</div>" +
+                    '<div class="info-time">' + clock(p.timezone, "short") + "</div>" +
+                    '<div class="info-sub">' + icon("pin") + esc(p.location || tzCity(p.timezone)) + "</div>" +
+                    '<div class="muted small">' + esc(tzDifference(p.timezone)) + "</div></div>" +
+                    celebrationCard(p) +
+                    "</div>" +
+                    '<div class="profile-section"><h3 class="detail-head">Reports to</h3>' +
+                    (supervisor ? personRow(supervisor) : '<div class="top-of-org">' + icon("tree") + "Top of " + esc(e.company) + "</div>") + "</div>";
+                const team = reports.length ? '<div class="profile-section"><h3 class="detail-head">Team <span class="tab-count">' + reports.length + "</span></h3>" +
+                    '<div class="team-grid">' + reports.map(personRow).join("") + "</div></div>" : "";
+                const about = (p.bio ? '<div class="profile-section"><h3 class="detail-head">About</h3><div class="profile-bio">' + richText(p.bio) + "</div></div>" : "") +
+                    ((p.skills || []).length ? '<div class="profile-section"><h3 class="detail-head">Skills</h3><div class="tag-list">' + p.skills.map(function (t) { return '<span class="tag">' + esc(t) + "</span>"; }).join("") + "</div></div>" : "") +
+                    ((p.languages || []).length ? '<div class="profile-section"><h3 class="detail-head">Languages</h3><div class="tag-list">' + p.languages.map(function (t) { return '<span class="tag">' + esc(t) + "</span>"; }).join("") + "</div></div>" : "");
+                const panels = [
+                    ["overview", "Overview", "home", overview],
+                    ["roles", "Roles", "briefcase", roleTabs ? '<div class="profile-section"><h3 class="detail-head">Roles <span class="tab-count">' + roles.length + "</span></h3>" + roleTabs + "</div>" : ""],
+                    ["team", "Team", "users", team],
+                    ["about", "About", "user", about],
+                ].filter(function (x) { return x[3]; });
+                return '<div class="profile-body">' +
+                    '<nav class="profile-menu" aria-label="Profile">' + panels.map(function (x, i) {
+                        return '<button type="button" class="profile-menu-item' + (i ? "" : " active") + '" data-panel="' + x[0] + '"' + (i ? "" : ' aria-current="true"') + ">" + icon(x[2]) + "<span>" + x[1] + "</span></button>";
+                    }).join("") + "</nav>" +
+                    '<div class="profile-panels">' + panels.map(function (x, i) {
+                        return '<section class="profile-panel" data-panel-body="' + x[0] + '"' + (i ? " hidden" : "") + ">" + x[3] + "</section>";
+                    }).join("") + "</div></div>";
+            })() +
 
             '<div class="profile-actions">' + (p.id !== state.me.id && !p.system ? '<button type="button" class="btn btn-ghost" data-message-person="' + esc(p.id) + '">' + icon("message") + "Message</button>" : "") +
             (email ? '<a class="btn btn-primary" href="mailto:' + esc(email) + '">' + icon("mail") + "Email " + esc(p.displayName || p.firstName) + "</a>" : "") + "</div>",
@@ -1380,6 +1388,12 @@
                     state.chatChannel = r.channel;
                     navigate("/chat?c=" + r.channel);
                 } catch (err) { toast(err.message); }
+                return;
+            }
+            const tab = ev.target.closest("[data-panel]");
+            if (tab) {
+                m.el.querySelectorAll("[data-panel]").forEach(function (b) { const on = b === tab; b.classList.toggle("active", on); if (on) b.setAttribute("aria-current", "true"); else b.removeAttribute("aria-current"); });
+                m.el.querySelectorAll("[data-panel-body]").forEach(function (sec) { sec.hidden = sec.dataset.panelBody !== tab.dataset.panel; });
                 return;
             }
             const target = ev.target.closest("[data-entry]");
