@@ -168,7 +168,15 @@ test('sign-in accounts: made on HN Account, several profiles with a default, own
     assert.equal((await admin.post('/api/logins/' + adaAccount.id, { roleIds: adaAccount.roleIds, profiles: [] })).status, 200);
     // Only people who manage staff see accounts; only people who can manage roles give permissions.
     const samSite = await hnAccount('sam.test@hngroup.org.uk', 'Sam-password-582!', '493817');
+
     assert.equal((await samSite.get('/api/logins')).status, 403);
+    // HN Account asks you to sign in every time you open it: the page straight after signing in opens, and opening it
+    // again ends that sign-in and goes back through HN Group Auth.
+    assert.equal((await samSite.get('/')).status, 200);
+    const reopened = await samSite.get('/');
+    assert.ok(reopened.redirected && new URL(reopened.url).hostname !== new URL(ACC).hostname || reopened.url.includes('/authorize'), 'reopening goes back to HN Group Auth');
+    assert.equal((await samSite.get('/api/session')).status, 401);
+    assert.equal((await fetch(ACC + '/')).status, 200, 'signed-out visitors see the landing page');
   } finally {
     await new Promise((r) => auth.close(r));
     for (const p of [staffProc, acc]) if (p.exitCode === null) { p.kill(); await new Promise((r) => p.once('exit', r)); }

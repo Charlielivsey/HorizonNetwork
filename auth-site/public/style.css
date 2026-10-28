@@ -126,7 +126,8 @@
 @media (prefers-reduced-motion:reduce){.profile-option{transition:none}.profile-option:hover{transform:none}}
 .profile-initials img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 
-/* Continue with Discord: Discord's own blurple */
-.discord-button{background:#5865f2;border-color:#5865f2;color:#fff}.discord-button:hover{border-color:#4752c4;box-shadow:0 7px 20px -12px #5865f2}
+/* Continue with Discord: the HN Group button style */
+/* Same HN button as Google; only the Discord mark keeps Discord's colour */
+.discord-button .discord-mark{color:#5865f2}
 .discord-button .discord-mark{width:20px;height:20px}
 .discord-badge{color:#5865f2}.discord-badge .discord-mark{width:22px;height:22px}

@@ -544,8 +544,12 @@ function updateDiscordNames(updates) {
   for (const u of Array.isArray(updates) ? updates.slice(0, 5000) : []) {
     if (!DISCORD_ID.test(String(u && u.id)) || typeof u.username !== "string" || !u.username) continue;
     const name = u.username.slice(0, 64);
-    for (const l of logins) if (l.account && l.account.discord && l.account.discord.id === u.id && l.account.discord.username !== name) { l.account.discord.username = name; changed++; }
-    for (const p of people) if (p.discord && p.discord.id === u.id && p.discord.username !== name) { p.discord.username = name; p.discord.updatedAt = now; changed++; }
+    // Their Discord profile as the bot sees it: username, display name and picture (an avatar hash on Discord's CDN).
+    const globalName = typeof u.globalName === "string" ? u.globalName.slice(0, 64) : null;
+    const avatar = typeof u.avatar === "string" && /^(a_)?[a-f0-9]{32}$/.test(u.avatar) ? u.avatar : null;
+    const apply = (d) => { if (d.username === name && (d.globalName || null) === globalName && (d.avatar || null) === avatar) return false; d.username = name; d.globalName = globalName; d.avatar = avatar; return true; };
+    for (const l of logins) if (l.account && l.account.discord && l.account.discord.id === u.id && apply(l.account.discord)) changed++;
+    for (const p of people) if (p.discord && p.discord.id === u.id && apply(p.discord)) { p.discord.updatedAt = now; changed++; }
   }
   if (changed) savePeople();
   return changed;
@@ -641,7 +645,7 @@ function publicView(p) {
     languages: p.languages || [],
     bio: p.bio || "",
     // Their Discord account, when a sign-in account of theirs is connected to Discord (kept up to date by the bot).
-    discord: p.discord ? { id: p.discord.id, username: p.discord.username } : null,
+    discord: p.discord ? { id: p.discord.id, username: p.discord.username || null, globalName: p.discord.globalName || null, avatarUrl: p.discord.avatar ? "/api/discord-avatar/" + p.id + "?v=" + p.discord.avatar.slice(-8) : null, updatedAt: p.discord.updatedAt || null } : null,
   };
 }
 

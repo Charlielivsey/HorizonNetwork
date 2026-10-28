@@ -125,7 +125,7 @@ async function handle(req, res) {
       if (sessions.size > 5000) throw fail(503, 'Please try again shortly.');
       const old = cookieOf(req, COOKIE); if (old) sessions.delete(old);
       const token = crypto.randomBytes(32).toString('hex');
-      sessions.set(token, { staff: result.token, user: result.user, csrf: crypto.randomBytes(24).toString('hex'), expires: Date.now() + 12 * 3600000 });
+      sessions.set(token, { staff: result.token, user: result.user, csrf: crypto.randomBytes(24).toString('hex'), expires: Date.now() + 12 * 3600000, fresh: true });
       return redirect(res, safeBack(Buffer.from(back || '', 'base64url').toString()), [clear, setCookie(COOKIE, token, 12 * 3600)]);
     } catch (e) { return messagePage(res, e.status === 403 ? 403 : 503, 'Sign-in failed', e.message, [clear]); }
   }
@@ -160,7 +160,17 @@ async function handle(req, res) {
 
   if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, '');
   const s = current(req);
-  if (route === '/' || route === '/index.html') return page(res, 200, s ? 'app.html' : 'index.html');
+  // You sign in every time you open HN Account (the user's request, 28 October 2026): the page straight after
+  // signing in opens; opening or refreshing it again ends that sign-in and goes back through HN Group Auth.
+  if (route === '/' || route === '/index.html') {
+    if (s && s.entry.fresh) { s.entry.fresh = false; return page(res, 200, 'app.html'); }
+    if (s) {
+      sessions.delete(s.token);
+      fetch(STAFF_BACKEND + '/api/logout', { method: 'POST', headers: { Cookie: 'hn_staff_session=' + s.staff, 'Content-Type': 'application/json' }, body: '{}', signal: AbortSignal.timeout(5000) }).catch(() => {});
+      return redirect(res, '/auth/login', [setCookie(COOKIE, '', 0)]);
+    }
+    return page(res, 200, 'index.html');
+  }
   return messagePage(res, 404, 'Not found', 'That page isn’t part of HN Account.');
 }
 

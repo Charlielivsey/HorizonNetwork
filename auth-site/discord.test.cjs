@@ -29,7 +29,7 @@ test('Continue with Discord: Discord ID on the staff record, connect, sign in, b
     }
     if (u === 'https://discord.com/api/v10/users/@me') { assert.equal(options.headers.Authorization, 'Bearer user-token'); return Response.json(fake.next); }
     const m = /^https:\/\/discord\.com\/api\/v10\/users\/(\d+)$/.exec(u);
-    if (m) { assert.equal(options.headers.Authorization, 'Bot ' + 'b'.repeat(70)); return fake.names[m[1]] ? Response.json({ id: m[1], username: fake.names[m[1]] }) : new Response('{}', { status: 404 }); }
+    if (m) { assert.equal(options.headers.Authorization, 'Bot ' + 'b'.repeat(70)); return fake.names[m[1]] ? Response.json({ id: m[1], username: fake.names[m[1]], global_name: 'Dee S', avatar: 'a'.repeat(32) }) : new Response('{}', { status: 404 }); }
     return realFetch(url, options);
   };
   const { server, discord } = require('./server'); await new Promise((r) => server.listen(0, '127.0.0.1', r));
@@ -71,7 +71,8 @@ test('Continue with Discord: Discord ID on the staff record, connect, sign in, b
     assert.equal(await discord.refreshNames(), 2);
     const status = await (await realFetch(process.env.STAFF_PORTAL_BACKEND + '/api/auth/discord-accounts', { method: 'POST', headers: { Authorization: 'Bearer ' + 'f'.repeat(64), 'Content-Type': 'application/json' }, body: '{}' })).json();
     assert.deepEqual(status.ids, ['111111111111111111']);
-    const people = JSON.parse(fs.readFileSync(path.join(dir, 'people.json'))); assert.equal(people.find((p) => p.id === person.id).discord.username, 'dee_new_name');
+    const people = JSON.parse(fs.readFileSync(path.join(dir, 'people.json'))), stored = people.find((p) => p.id === person.id).discord;
+    assert.equal(stored.username, 'dee_new_name'); assert.equal(stored.globalName, 'Dee S'); assert.equal(stored.avatar, 'a'.repeat(32), 'the Discord profile picture too');
     // A forged return is refused; turning it off stops Discord sign-in.
     const forged = await fetch(base + '/discord/callback?state=' + 'b'.repeat(64) + '&code=x', { redirect: 'manual' });
     assert.match((await (await post('/api/discord/result', {}, cookie(forged, '__Host-hn_auth_discord_result'))).json()).error, /expired/);

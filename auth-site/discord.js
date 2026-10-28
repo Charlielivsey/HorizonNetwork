@@ -72,7 +72,7 @@ function createDiscord({ origin, staff, send, profile, entryFor, setCookie, cook
       me = r.ok ? await r.json() : null;
     } catch { me = null; }
     if (!me || !ID.test(String(me.id || '')) || typeof me.username !== 'string') throw fail(401, 'Discord’s answer didn’t check out, so you weren’t signed in.');
-    return { id: String(me.id), username: me.username.slice(0, 64) };
+    return { id: String(me.id), username: me.username.slice(0, 64), globalName: typeof me.global_name === 'string' ? me.global_name.slice(0, 64) : null, avatar: typeof me.avatar === 'string' ? me.avatar : null };
   }
 
   // The bot: looks up every connected Discord account and stores any changed username.
@@ -90,7 +90,7 @@ function createDiscord({ origin, staff, send, profile, entryFor, setCookie, cook
         if (r.status === 429) { const wait = Number((await r.json().catch(() => ({}))).retry_after || 1); await new Promise((ok) => setTimeout(ok, Math.min(30, wait) * 1000)); continue; }
         if (r.status === 401) break; // the bot token isn't valid
         const u = r.ok ? await r.json().catch(() => null) : null;
-        if (u && typeof u.username === 'string') updates.push({ id, username: u.username.slice(0, 64) });
+        if (u && typeof u.username === 'string') updates.push({ id, username: u.username.slice(0, 64), globalName: typeof u.global_name === 'string' ? u.global_name : null, avatar: typeof u.avatar === 'string' ? u.avatar : null });
         await new Promise((ok) => setTimeout(ok, 250));
       }
       if (!updates.length) return 0;
@@ -131,6 +131,7 @@ function createDiscord({ origin, staff, send, profile, entryFor, setCookie, cook
         const who = await identity(url.searchParams.get('code'), c);
         if (record.mode === 'link') {
           await staff('/api/auth/discord-link', { session: record.staffSession, id: who.id, username: who.username });
+          await staff('/api/auth/discord-update', { updates: [who] }).catch(() => {});
           finish(res, record.next, { linked: who.username });
         } else finish(res, record.next, { discord: who });
       } catch (e) { finish(res, record.next, { error: e.status ? e.message : 'Continue with Discord is unavailable right now. Please try again shortly.' }); }

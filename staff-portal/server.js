@@ -203,6 +203,7 @@ class SessionStore extends Map {
 const sessions = new SessionStore(SESSIONS_FILE); // tokenHash -> { id, personId, expires, ip, userAgent, createdAt, lastSeen, impersonatorId?, returnKey? }
 const failedAttempts = new Map(); // ip -> { count, first }
 const pinFailures = new Map(); // personId -> { count, first }
+const discordAvatars = new Map(); // "<id>/<hash>" -> { body, expires }: Discord profile pictures, cached
 const codeChallenges = new Map(); // challenge -> { personId, expires, attempts } (password accepted, waiting for the code)
 const CODE_CHALLENGE_MS = 5 * 60 * 1000;
 const MAX_CODE_ATTEMPTS = 5;
@@ -1333,6 +1334,26 @@ async function routeApi(req, res, pathname, session) {
     const avatar = store.avatarFile(store.getPerson(m[1]));
     if (!avatar) return send(res, 404, "Not found", { "Content-Type": "text/plain" });
     return sendFile(res, avatar.file, { "Content-Type": avatar.mime, "Cache-Control": "private, max-age=86400" });
+  }
+
+  // Someone's Discord profile picture, fetched from Discord's CDN by the portal (pages here only load the portal's own
+  // images) and kept for an hour.
+  if (method === "GET" && (m = /^\/api\/discord-avatar\/([a-f0-9]{16})$/.exec(pathname))) {
+    const p = store.getPerson(m[1]), d = p && p.discord;
+    if (!d || !d.avatar) return send(res, 404, "Not found", { "Content-Type": "text/plain" });
+    const key = d.id + "/" + d.avatar, hit = discordAvatars.get(key);
+    let image = hit && hit.expires > Date.now() ? hit : null;
+    if (!image) {
+      try {
+        const r = await fetch("https://cdn.discordapp.com/avatars/" + d.id + "/" + d.avatar + ".png?size=256", { signal: AbortSignal.timeout(6000), redirect: "error" });
+        const body = r.ok ? Buffer.from(await r.arrayBuffer()) : null;
+        if (!body || body.length > 2 * 1024 * 1024 || !(body[0] === 0x89 && body[1] === 0x50)) return send(res, 404, "Not found", { "Content-Type": "text/plain" });
+        if (discordAvatars.size > 500) discordAvatars.clear();
+        image = { body, expires: Date.now() + 3600000 };
+        discordAvatars.set(key, image);
+      } catch { return send(res, 404, "Not found", { "Content-Type": "text/plain" }); }
+    }
+    return send(res, 200, image.body, { "Content-Type": "image/png", "Cache-Control": "private, max-age=3600" });
   }
 
   if (method === "GET" && (m = /^\/api\/banners\/([a-f0-9]{16})$/.exec(pathname))) {
