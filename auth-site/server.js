@@ -6,6 +6,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const {nativeDestination,createNative}=require('./native');
 const {createGoogle}=require('./google');
+const {createDiscord}=require('./discord');
 const ORIGIN = 'https://auth.hngroup.org.uk';
 // Registered applications: fixed callbacks and who may use them.
 const CLIENTS = {
@@ -80,7 +81,7 @@ async function profile(entry) {
 }
 function requireReady(user) { if (user.passwordChangeRequired) throw fail(403, 'Create a new password before continuing.'); if (user.codeSetupRequired) throw fail(403, 'Set your sign-in PIN before continuing.'); }
 function entryFor(req) { return sessions.get(hash(cookie(req, COOKIE))); }
-// google: a Google sign-in, which never remembers the account and leaves any remembered account on this browser as it is.
+// google: a Google or Discord sign-in, which never remembers the account and leaves any remembered account on this browser as it is.
 async function finishLogin(req, res, response, { google = false } = {}) {
   const raw = (response.headers.get('set-cookie') || '').match(/(?:^|,\s*)hn_staff_session=([a-f0-9]{64})(?:;|$)/)?.[1];
   if (!raw) throw fail(503, 'The staff account service did not create a session.');
@@ -121,6 +122,8 @@ const native=createNative({codes,applications:applicationSessions,profile,requir
  persistent:async(action,token,req,data={})=>(await staff('/api/auth/browser-'+action,{token,...(action==='unlock'?{code:data.code}:{}),...(action.startsWith('account')?{unlock:data.unlock,profile:data.profile,status:data.status,image:data.image,remove:!!data.remove}:{})},req)).value});
 // "Sign in with Google" (google.js): optional per person, and the PIN is still asked.
 const google=createGoogle({origin:ORIGIN,staff,send,profile,entryFor,setCookie,cookie,finishLogin,destination,random,hash,fail});
+// "Continue with Discord" (discord.js): the same as Google, plus the bot that keeps Discord usernames current.
+const discord=createDiscord({origin:ORIGIN,staff,send,profile,entryFor,setCookie,cookie,finishLogin,destination,random,hash,fail});
 const staticFiles = { '/': 'index.html', '/authorize': 'index.html', '/style.css': 'style.css', '/app.js': 'app.js', '/assets/favicon.svg': 'assets/favicon.svg', '/assets/brand/hn-group-wordmark-white.svg': 'assets/brand/hn-group-wordmark-white.svg', '/assets/brand/hn-group-wordmark.svg': 'assets/brand/hn-group-wordmark.svg', '/assets/fonts/plus-jakarta-sans.woff2': 'assets/fonts/plus-jakarta-sans.woff2' };
 const mime = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'application/javascript', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' };
 const server = http.createServer(async (req, res) => {
@@ -169,6 +172,7 @@ const server = http.createServer(async (req, res) => {
       if (req.headers.origin !== ORIGIN) throw fail(403, 'Request origin not allowed.');
       const data = await body(req);
       if (route.startsWith('/api/google/') && await google(req, res, route, data)) return;
+      if (route.startsWith('/api/discord/') && await discord(req, res, route, data)) return;
       if (route === '/api/resume/forget') {
         await staff('/api/resume/forget', {}, req);
         sessions.delete(hash(cookie(req, COOKIE))); challenges.delete(hash(cookie(req, FLOW)));
@@ -238,6 +242,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method !== 'GET') return send(res, 405, { error: 'Method not allowed.' });
     if ((route === '/api/google' || route === '/google/callback') && await google(req, res, route, {})) return;
+    if ((route === '/api/discord' || route === '/discord/callback') && await discord(req, res, route, {})) return;
     if (route === '/api/resume') {
       const { value } = await staff('/api/resume', null, req, false, 'GET');
       if (value.avatarUrl) value.avatarUrl = '/api/resume/avatar';
@@ -293,4 +298,4 @@ const server = http.createServer(async (req, res) => {
 });
 setInterval(() => { for (const [key, value] of applicationSessions) if (value.expires <= Date.now() || !value.entry && !sessions.has(value.session)) applicationSessions.delete(key); for (const map of [sessions, challenges, codes]) for (const [key, value] of map) if (value.expires <= Date.now()) map.delete(key); }, 60000).unref();
 if (require.main === module) server.listen(Number(process.env.PORT || 3400), process.env.HOST || '127.0.0.1');
-module.exports = { server };
+module.exports = { server, discord };

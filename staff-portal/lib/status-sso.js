@@ -27,7 +27,7 @@ function serviceRequest(req) {
 function loginNext(value) {
   return typeof value === 'string' && /^\/status-admin\/authorize\?state=[a-f0-9]{64}$/.test(value) ? value : null;
 }
-function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent, handleChangePassword, handleSetCode, verifyBrowserPin, verifyVpnPin, issueSession, googleLogin }) {
+function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent, handleChangePassword, handleSetCode, verifyBrowserPin, verifyVpnPin, issueSession, googleLogin, discordLogin }) {
   const codes = new Map();
   function current(token) {
     const data = sessions.get(token);
@@ -50,7 +50,8 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       ...(p.account.passwordTemporary?{passwordChangeRequired:true,passwordMinLength:store.meView(p).passwordMinLength}:{}),
       ...(!store.hasCode(p)?{codeSetupRequired:true}:{}),statusAdminAllowed:allowed(active,store),
       // "Sign in with Google": the connected Google account's email, if the person has turned it on.
-      google:p.account.google?{email:p.account.google.email,linkedAt:p.account.google.linkedAt}:null,ownerAccess:store.hasOwnerAccess(p)&&!active.data.impersonatorId,
+      google:p.account.google?{email:p.account.google.email,linkedAt:p.account.google.linkedAt}:null,
+      discord:p.account.discord?{id:p.account.discord.id,username:p.account.discord.username,linkedAt:p.account.discord.linkedAt}:null,ownerAccess:store.hasOwnerAccess(p)&&!active.data.impersonatorId,
       // Who may open other people's document storage on docs.hngroup.org.uk (never while logged in as someone else).
       ...(active.data.impersonatorId?{storageAccess:false,storageGrants:[]}:storageAccess.forIdentity(p))
     };
@@ -78,7 +79,7 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       logEvent(req, session, 'status-admin-sign-in');
       redirect(res, `${STATUS_ORIGIN}/auth/callback?code=${code}&state=${state}`); return true;
     }
-    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/password', '/api/auth/code', '/api/auth/network-leadership', '/api/auth/network-avatar', '/api/auth/account-status', '/api/auth/staff-directory', '/api/auth/vpn-pin', '/api/auth/accounts-session', '/api/auth/profile-select', '/api/auth/profile-avatar', '/api/auth/browser-issue', '/api/auth/browser-profile', '/api/auth/browser-avatar', '/api/auth/browser-offer', '/api/auth/browser-logout', '/api/auth/browser-unlock', '/api/auth/browser-lock', '/api/auth/browser-account', '/api/auth/browser-account-update', '/api/auth/browser-account-status', '/api/auth/browser-account-photo', '/api/auth/google-login', '/api/auth/google-link', '/api/auth/google-unlink'].includes(pathname)) return false;
+    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/password', '/api/auth/code', '/api/auth/network-leadership', '/api/auth/network-avatar', '/api/auth/account-status', '/api/auth/staff-directory', '/api/auth/vpn-pin', '/api/auth/accounts-session', '/api/auth/profile-select', '/api/auth/profile-avatar', '/api/auth/browser-issue', '/api/auth/browser-profile', '/api/auth/browser-avatar', '/api/auth/browser-offer', '/api/auth/browser-logout', '/api/auth/browser-unlock', '/api/auth/browser-lock', '/api/auth/browser-account', '/api/auth/browser-account-update', '/api/auth/browser-account-status', '/api/auth/browser-account-photo', '/api/auth/google-login', '/api/auth/google-link', '/api/auth/google-unlink', '/api/auth/discord-login', '/api/auth/discord-link', '/api/auth/discord-unlink', '/api/auth/discord-accounts', '/api/auth/discord-update'].includes(pathname)) return false;
     if (req.method !== 'POST') { sendJson(res, 405, { error: 'Method not allowed.' }); return true; }
     if (!credentials(req)) { sendJson(res, 401, { error: 'Status integration not authenticated.' }); return true; }
     const body = await readJsonBody(req, pathname === '/api/auth/browser-account-photo' ? 2 * 1024 * 1024 : undefined);
@@ -124,6 +125,14 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       if (typeof body.sub !== 'string' || typeof body.email !== 'string') { sendJson(res, 400, { error: 'Invalid Google sign-in.' }); return true; }
       googleLogin(req, res, { sub: body.sub, email: body.email }); return true;
     }
+    // "Continue with Discord" (HN Group Auth checked the Discord sign-in): signs in as the linked account.
+    if (pathname === '/api/auth/discord-login') {
+      if (typeof body.id !== 'string') { sendJson(res, 400, { error: 'Invalid Discord sign-in.' }); return true; }
+      discordLogin(req, res, { id: body.id, username: typeof body.username === 'string' ? body.username.slice(0, 64) : '' }); return true;
+    }
+    // HN Group Auth's Discord bot keeps the stored usernames up to date.
+    if (pathname === '/api/auth/discord-accounts') { sendJson(res, 200, { ids: store.discordIds() }); return true; }
+    if (pathname === '/api/auth/discord-update') { sendJson(res, 200, { changed: store.updateDiscordNames(body.updates) }); return true; }
     // Lets HN Group services (such as the VPN) check that staff accounts they serve are still enabled.
     if (pathname === '/api/auth/account-status') {
       const ids = Array.isArray(body.ids) ? body.ids.filter((x) => typeof x === 'string').slice(0, 5000) : [];
@@ -200,6 +209,15 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
         sendJson(res, 200, { token: raw, user: identity(active) }); return true;
       }
       // Turning "Sign in with Google" on or off, by the person themselves while signed in to HN Group Auth.
+      // Connecting or disconnecting Discord, by the person themselves while signed in to HN Group Auth.
+      if (pathname === '/api/auth/discord-link' || pathname === '/api/auth/discord-unlink') {
+        const p = active.person;
+        if (p.account.passwordTemporary || !store.hasCode(p)) { sendJson(res, 403, { error: 'Finish setting up your account first.' }); return true; }
+        if (pathname === '/api/auth/discord-unlink') { store.setDiscord(p, null); logEvent(req, active, 'discord-disconnected'); sendJson(res, 200, { user: identity(active) }); return true; }
+        try { store.setDiscord(p, { id: String(body.id || ''), username: String(body.username || '') }); } catch (e) { if (e.status) { sendJson(res, e.status, { error: e.message }); return true; } throw e; }
+        logEvent(req, active, 'discord-connected', { detail: String(body.username || '').slice(0, 64) });
+        sendJson(res, 200, { user: identity(active) }); return true;
+      }
       if (pathname === '/api/auth/google-link' || pathname === '/api/auth/google-unlink') {
         const p = active.person;
         if (p.account.passwordTemporary || !store.hasCode(p)) { sendJson(res, 403, { error: 'Finish setting up your account first.' }); return true; }

@@ -51,6 +51,17 @@ Native browser exchanges issue a revocable staff-backed `kind: browser` credenti
 
 For website sign-in, `/api/native/offer` creates a one-use 60-second ticket bound to the exact registered non-native authorize URL (or Auth’s direct home page). Only the native main process sends it, in `X-HN-Browser-Offer` to Auth. The authorize document consumes it and issues the usual HttpOnly remembered-account cookie; the existing PIN flow and registered-client ACL still apply, including on refresh. Child remembered tokens depend on the browser grant, share its five-failure budget and stop working after browser sign-out. Switching accounts opts out of offers. Restart tests: `node --test auth-site/browser-session.test.cjs`.
 
+## Continue with Discord (optional for each sign-in account)
+
+Added at the user's request (28 October 2026), next to Sign in with Google (`discord.js`).
+
+- **Staff records need a Discord user ID**: the staff portal's Add employee form requires it (15–22 digits; Discord → Settings → Advanced → Developer Mode, then right-click the person → Copy User ID). It's kept on the record (`discord: {id, username}`) and shown on their profile.
+- **The bot** (bot token in the config) looks up every Discord ID on staff records and connected accounts every 30 minutes (first 20 s after Auth starts) and stores the current username on the record and account.
+- **Connecting**: signed in with their password and PIN, people choose Connect under Continue with Discord. An account with staff profiles can only connect the Discord account whose ID is on one of those records (an account with no profile can connect any).
+- **Signing in**: Continue with Discord signs straight in, no password and no PIN, and never remembers the browser (like Google). Sign-ins to HN Browser and App Manager don't offer it.
+- **Config**: `/var/lib/hn-auth/discord.json` (root, `chmod 600`): `{"client_id","client_secret","bot_token"}`; redirect `https://auth.hngroup.org.uk/discord/callback`, scope `identify`. Read when needed; the button stays hidden until the client id and secret are there. The bot token is never stored in the repository.
+- Test: `node --test auth-site/discord.test.cjs`. Bot artwork: `brand/discord-bot/`.
+
 ## Sign in with Google (optional for each person)
 
 Added at the user's request (27 October 2026). A **Continue with Google** button sits under the password form, and

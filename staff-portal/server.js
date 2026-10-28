@@ -518,6 +518,25 @@ async function handleLogin(req, res) {
 // gets straight from Google), so it signs the person in without their password or PIN (the user's request,
 // 27 October 2026). The account must be linked to that Google account by its owner, be enabled and set up (no
 // temporary password), and the browser is never remembered.
+// "Continue with Discord" (HN Group Auth checked the Discord sign-in): signs straight in, like Google, and never
+// remembers the browser.
+function discordLogin(req, res, { id, username }) {
+  const ip = clientIp(req);
+  if (isLockedOut(ip)) {
+    logEvent(req, null, "sign-in-blocked", { actor: "(locked out)" });
+    return sendJson(res, 429, { error: "Too many failed attempts. Please try again in 15 minutes." });
+  }
+  const person = store.findByDiscord(id);
+  if (!person || !person.account || !person.account.enabled) {
+    logEvent(req, null, "sign-in-discord-unknown", { actor: String(username || "").slice(0, 64) || "(unknown)" });
+    return sendJson(res, 404, { error: "That Discord account isn’t connected to an HN Group sign-in account. Sign in with your email and password, then connect Discord." });
+  }
+  if (person.account.passwordTemporary) return sendJson(res, 403, { error: "Finish setting up your account first: sign in with your email and password." });
+  if (blockedByMaintenance(person)) return maintenanceReply(req, res, person);
+  if (username && person.account.discord.username !== username) store.updateDiscordNames([{ id, username }]);
+  completeLogin(req, res, person, "Discord");
+}
+
 function googleLogin(req, res, { sub, email }) {
   const ip = clientIp(req);
   if (isLockedOut(ip)) {
@@ -549,7 +568,7 @@ function completeLogin(req, res, person, how) {
   // Remember this browser for "Resume session" (only for people with a sign-in code, which it asks for).
   // Auth explicitly requests a separate remembered token for its own browser cookie. Signing in with Google never
   // remembers the account (the user's request, 27 October 2026).
-  if (how !== "Google" && store.hasCode(person) && (!serviceRequest(req) || req.headers["x-auth-remember"] === "1")) cookies.push(resume.cookie(req, resume.issue(store.sessionIdOf(person), parseCookies(req)[resume.COOKIE], req.headers["user-agent"])));
+  if (how !== "Google" && how !== "Discord" && store.hasCode(person) && (!serviceRequest(req) || req.headers["x-auth-remember"] === "1")) cookies.push(resume.cookie(req, resume.issue(store.sessionIdOf(person), parseCookies(req)[resume.COOKIE], req.headers["user-agent"])));
   sendJson(res, 200, { user: store.meView(person) }, { "Set-Cookie": cookies });
 }
 
@@ -1420,7 +1439,10 @@ async function routeApi(req, res, pathname, session) {
       return sendJson(res, 200, store.resolveEmails(body.firstName, body.lastName, body.emails, body.excludeId));
     }
     if (method === "POST" && pathname === "/api/employees") {
-      const person = store.saveEmployee(await readJsonBody(req), null);
+      const body = await readJsonBody(req);
+      // A new staff record needs its Discord user ID (the user's request, 28 October 2026).
+      if (!String(body.discordId || "").trim()) throw httpError(400, "Enter their Discord user ID.");
+      const person = store.saveEmployee(body, null);
       logEvent(req, session, "employee-added", { target: person.displayName, detail: `${person.jobTitle}, ${person.company}` });
       return sendJson(res, 201, { employee: store.manageView(person) });
     }
@@ -2291,7 +2313,7 @@ extraRoutes.init({
 // A new staff session for an HN Group service acting for this person (HN Account), from where they are.
 // Sessions for HN Account (accounts.hngroup.org.uk) are marked: only HN Account makes and manages sign-in accounts.
 const issueSession = (personId, ip, userAgent) => createSession(personId, { socket: { remoteAddress: "127.0.0.1" }, headers: { "x-real-ip": ip || "127.0.0.1", "user-agent": userAgent || "HN Account" } }, { via: "accounts" });
-const statusSso = createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent, handleChangePassword, handleSetCode, verifyBrowserPin, verifyVpnPin, issueSession, googleLogin });
+const statusSso = createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent, handleChangePassword, handleSetCode, verifyBrowserPin, verifyVpnPin, issueSession, googleLogin, discordLogin });
 const portalAuth = portalAuthLib.createPortalAuth({ store, sessions, resume, createSession, cookieFor, parseCookies, send, redirect, logEvent, loginNext, clientIp });
 
 async function route(req, res) {

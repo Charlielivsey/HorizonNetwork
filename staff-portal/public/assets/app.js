@@ -1342,6 +1342,7 @@
                     '<button type="button" class="icon-btn icon-btn-sm" data-copy="' + esc(x.address) + '" aria-label="Copy ' + esc(x.address) + '">' + icon("copy") + "</button></div>";
             }).join("") +
             (p.phone ? '<div class="info-sub">' + icon("phone") + '<a href="tel:' + esc(p.phone.replace(/\s+/g, "")) + '">' + esc(p.phone) + "</a></div>" : "") +
+            (p.discord ? '<div class="info-sub" title="Discord user ID ' + esc(p.discord.id) + '">' + icon("message") + "Discord: " + (p.discord.username ? "@" + esc(p.discord.username) : '<span class="muted">' + esc(p.discord.id) + "</span>") + "</div>" : "") +
             "</div>" +
             '<div class="info-card"><div class="info-label">' + icon("clock") + "Local time</div>" +
             '<div class="info-time">' + clock(p.timezone, "short") + "</div>" +
@@ -1620,6 +1621,9 @@
             '<div><label for="f-location">Location</label><input type="text" id="f-location" maxlength="80" value="' + esc(v.location) + '" placeholder="e.g. Manchester, UK"></div>' +
             '<div><label for="f-tz">Time zone</label><select id="f-tz">' + timezoneOptions(v.timezone || meta.defaultTimezone) + "</select></div>" +
             "</div>" +
+            '<div class="grid-2"><div><label for="f-discord">Discord user ID' + (isEdit ? ' <span class="muted small">(optional)</span>' : "") + '</label><input type="text" id="f-discord" inputmode="numeric" pattern="[0-9]{15,22}" maxlength="22" autocomplete="off"' + (isEdit ? "" : " required") + ' value="' + esc((v.discord && v.discord.id) || "") + '" placeholder="e.g. 123456789012345678">' +
+            '<p class="muted small">In Discord, turn on Developer Mode (Settings → Advanced), then right-click their name and choose Copy User ID.' + (v.discord && v.discord.username ? " Currently @" + esc(v.discord.username) + "." : "") + "</p></div>" +
+            '<div></div></div>' +
             '<div class="grid-2"><div><label for="f-phone">Phone <span class="muted small">(optional)</span></label><input type="tel" id="f-phone" maxlength="40" value="' + esc(v.phone) + '"></div>' +
             '<div><label for="f-start">Start date <span class="muted small">(for work anniversaries)</span></label><input type="date" id="f-start" value="' + esc(v.startDate || "") + '"></div></div>' +
             "</fieldset>" +
@@ -1818,6 +1822,7 @@
                 location: f("f-location").value,
                 timezone: f("f-tz").value,
                 phone: f("f-phone").value,
+                discordId: f("f-discord").value.trim(),
                 startDate: f("f-start").value,
             };
             const submit = f("f-submit");

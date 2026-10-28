@@ -4,6 +4,9 @@ const query = new URLSearchParams(location.search);
 // Coming back from Google: the result is collected below; the address is tidied so a refresh starts afresh.
 const googleReturn = query.get('google') === '1';
 if (googleReturn) { query.delete('google'); history.replaceState(null, '', location.pathname + (query.toString() ? '?' + query : '')); }
+// The same for Continue with Discord.
+const discordReturn = query.get('discord') === '1';
+if (discordReturn) { query.delete('discord'); history.replaceState(null, '', location.pathname + (query.toString() ? '?' + query : '')); }
 const client = query.get('client_id'), state = query.get('state');
 // Must match the applications registered in server.js.
 const APPS = {
@@ -133,6 +136,7 @@ async function account(user) {
   if (user.avatarUrl) { $('avatar').onload = () => { $('avatar').hidden = false; $('initials').hidden = true; }; $('avatar').src = user.avatarUrl; }
   $('destination').hidden = true;
   await googleReady; showGoogle(user);
+  await discordReady; showDiscord(user);
   $('application-panel').hidden = !connecting; $('root-account-note').hidden = connecting;
   const allowed = connecting && app.allowed(user);
   $('continue').hidden = !allowed;
@@ -158,7 +162,7 @@ async function busy(button, action, label) {
   finally { if (label) button.innerHTML = previous; button.removeAttribute('aria-busy'); controls.forEach(b=>b.disabled=false); $('code').readOnly = false; working=false; maybeVerifyPin(); }
 }
 $('login').addEventListener('submit', event => { event.preventDefault(); busy(event.submitter, async () => {
-  resumeMode = false; googleOnly(false); $('resume-portrait').hidden = true; $('forget').hidden = true; $('google-resume').hidden = true;
+  resumeMode = false; googleOnly(false); $('resume-portrait').hidden = true; $('forget').hidden = true; $('google-resume').hidden = true; $('discord-resume').hidden = true;
   const identity = $('username').value.trim();
   const data = await api('login', { username: identity, password: $('password').value, ...(pinApp ? { pin: true } : {}) }); $('password').value = '';
   $('password').type = 'password'; $('show-password').textContent = 'Show'; $('show-password').setAttribute('aria-pressed','false');
@@ -229,7 +233,7 @@ async function connectToStatus() {
 $('continue').onclick = () => busy($('continue'), connectToStatus, 'Connecting…');
 // ---------- Sign in with Google (optional for each person; no password or PIN, and nothing is remembered) ----------
 let googleEnabled = false;
-const googleReady = api('google').then(v => { googleEnabled = !!v.enabled && !pinApp; $('google-or').hidden = $('google-login').hidden = !googleEnabled; $('google-resume').hidden = !googleEnabled || !resumeMode; }).catch(() => {});
+const googleReady = api('google').then(v => { googleEnabled = !!v.enabled && !pinApp; $('google-login').hidden = !googleEnabled; $('google-or').hidden = !(googleEnabled || discordEnabled); $('google-resume').hidden = !googleEnabled || !resumeMode; }).catch(() => {});
 async function startGoogle(mode) {
   const result = await api('google/start', { mode, next: location.pathname + location.search });
   location.assign(result.url);
@@ -253,6 +257,29 @@ function showGoogle(user) {
     if (!user.google) return startGoogle('link');
     const data = await api('google/unlink', {}); showGoogle(data.user); message('Sign in with Google is off.', true);
   });
+}
+// Continue with Discord (discord.js on the server): signs straight in once someone has connected Discord.
+let discordEnabled = false;
+const discordReady = api('discord').then(v => { discordEnabled = !!v.enabled && !pinApp; $('discord-login').hidden = !discordEnabled; $('google-or').hidden = !(googleEnabled || discordEnabled); $('discord-resume').hidden = !discordEnabled || !resumeMode; }).catch(() => {});
+async function startDiscord(mode) {
+  const result = await api('discord/start', { mode, next: location.pathname + location.search });
+  location.href = result.url;
+}
+$('discord-login').onclick = () => busy($('discord-login'), () => startDiscord('login'), 'Opening Discord…');
+$('discord-resume').onclick = () => busy($('discord-resume'), () => startDiscord('login'), 'Opening Discord…');
+function showDiscord(user) {
+  $('discord-row').hidden = !discordEnabled && !user.discord;
+  $('discord-status').textContent = user.discord ? 'Connected to @' + user.discord.username + '. Continue with Discord signs you straight in, and this browser won’t remember you.' : 'Sign in with your Discord account instead of your password and PIN. Use the Discord account on your staff profile.';
+  $('discord-toggle').textContent = user.discord ? 'Disconnect' : 'Connect';
+  $('discord-toggle').classList.toggle('off', !!user.discord);
+  $('discord-toggle').onclick = () => busy($('discord-toggle'), async () => {
+    if (!user.discord) return startDiscord('link');
+    const data = await api('discord/unlink', {}); showDiscord(data.user); message('Continue with Discord is off.', true);
+  });
+}
+async function discordResult() {
+  if (!discordReturn) return null;
+  try { return await api('discord/result', {}); } catch (e) { return { error: e.message }; }
 }
 async function googleResult() {
   if (!googleReturn) return null;
@@ -289,7 +316,7 @@ document.querySelector('.pin-entry').addEventListener('pointerdown',event=>{
 for(const id of ['username','password']) $(id).addEventListener('input',()=>{ const input=$(id); input.classList.toggle('has-value',!!input.value); animate(input,[{boxShadow:'0 0 0 3px var(--soft)'},{boxShadow:'0 0 0 5px transparent'}],{duration:320}); });
 window.addEventListener('pageshow',event=>{if(event.persisted)location.reload();});
 function clearRemembered() {
-  remembered = null; resumeMode = false; googleOnly(false); $('resume-offer').hidden = true; $('resume-portrait').hidden = true; $('forget').hidden = true; $('google-resume').hidden = true;
+  remembered = null; resumeMode = false; googleOnly(false); $('resume-offer').hidden = true; $('resume-portrait').hidden = true; $('forget').hidden = true; $('google-resume').hidden = true; $('discord-resume').hidden = true;
   $('resume-avatar').removeAttribute('src'); $('resume-avatar').hidden = true;
   $('offer-avatar').removeAttribute('src'); $('offer-avatar').hidden = true; $('offer-initials').hidden = false;
 }
@@ -297,7 +324,8 @@ async function startResume() {
   if (!remembered) return;
   await googleReady;
   const viaGoogle = !!remembered.google && googleEnabled;
-  resumeMode = true; resetPin(); googleOnly(viaGoogle); $('resume-portrait').hidden = false; $('forget').hidden = false; $('google-resume').hidden = !googleEnabled;
+  await discordReady;
+  resumeMode = true; resetPin(); googleOnly(viaGoogle); $('resume-portrait').hidden = false; $('forget').hidden = false; $('google-resume').hidden = !googleEnabled; $('discord-resume').hidden = !discordEnabled;
   $('card-title').textContent = 'Welcome back, ' + (remembered.displayName || remembered.firstName);
   $('subtitle').textContent = viaGoogle ? 'Your account signs in with Google. No PIN needed.' : 'Enter your six-digit PIN to resume your session.';
   $('pin-identity').textContent = remembered.username;
@@ -330,9 +358,12 @@ const rememberedRequest = api('resume');
 rememberedRequest.catch(() => {});
 (async () => {
   // Back from Google: signed straight in (no PIN), or a message about what happened.
+  const fromDiscord = await discordResult();
+  if (fromDiscord && fromDiscord.user) return await account(fromDiscord.user);
   const google = await googleResult();
   if (google && google.user) return await account(google.user);
-  const note = google && (google.error ? [google.error, false] : google.linked ? ['Sign in with Google is on for ' + google.linked + '. From now on, Continue with Google signs you in, with no PIN.', true] : null);
+  const note = (fromDiscord && (fromDiscord.error ? [fromDiscord.error, false] : fromDiscord.linked ? ['Discord is connected (@' + fromDiscord.linked + '). From now on, Continue with Discord signs you in, with no PIN.', true] : null)) ||
+    (google && (google.error ? [google.error, false] : google.linked ? ['Sign in with Google is on for ' + google.linked + '. From now on, Continue with Google signs you in, with no PIN.', true] : null));
   try {
     const data = await api('me'); await account(data.user);
   } catch (e) {

@@ -500,6 +500,57 @@ function setGoogle(person, link) {
 
 // Signing in: a built-in account's username, or a sign-in account's username (an account that is a staff
 // member's own login also accepts any of their email addresses). Returns the account acting as its default profile.
+// "Continue with Discord" (the user's request, 28 October 2026): a sign-in account can be linked to one Discord
+// account (its permanent id). The Discord username and id are also kept on the staff record the account belongs to
+// (its own record, or else its default profile's), and HN Group Auth's bot keeps the username up to date.
+const DISCORD_ID = /^\d{15,22}$/;
+function findByDiscord(id) {
+  if (!DISCORD_ID.test(String(id || ""))) return null;
+  const l = logins.find((x) => x.account && x.account.discord && x.account.discord.id === String(id));
+  return l ? viewOf(l, defaultProfile(l)) : null;
+}
+function discordRecordOf(l) {
+  const def = defaultProfile(l);
+  return (l.primaryFor && getRecord(l.primaryFor)) || (def && getRecord(def.personId)) || null;
+}
+function setDiscord(person, link) {
+  const l = person.__login || (!person.system && primaryLogin(person));
+  if (!l || !l.account) return;
+  const rec = discordRecordOf(l), now = new Date().toISOString();
+  if (link) {
+    if (!DISCORD_ID.test(String(link.id))) throw new ValidationError("Invalid Discord account.");
+    // An account with staff profiles can only connect the Discord account recorded on one of those profiles.
+    const allowed = loginProfiles(l).map((p) => (getRecord(p.personId) || {}).discord).filter((d) => d && d.id).map((d) => d.id);
+    if (allowed.length && !allowed.includes(String(link.id))) throw Object.assign(new Error("Use the Discord account that’s on your staff profile."), { status: 403 });
+    const other = findByDiscord(link.id);
+    if (other && other.loginId !== l.id) throw Object.assign(new Error("That Discord account is already connected to another sign-in account."), { status: 409 });
+    const username = String(link.username || "").slice(0, 64);
+    l.account.discord = { id: String(link.id), username, linkedAt: now };
+    // The staff record keeps its Discord id; connecting fills in (or records) it and the current username.
+    if (rec && (!rec.discord || rec.discord.id === String(link.id))) rec.discord = { id: String(link.id), username, updatedAt: now };
+  } else {
+    delete l.account.discord;
+  }
+  savePeople();
+}
+// Every linked Discord id, for the bot to look up.
+function discordIds() {
+  return [...new Set([...logins.filter((l) => l.account && l.account.discord).map((l) => l.account.discord.id), ...people.filter((p) => p.discord && p.discord.id).map((p) => p.discord.id)])];
+}
+// New usernames from Discord (the bot): updates the sign-in accounts and the staff records that hold them.
+function updateDiscordNames(updates) {
+  let changed = 0;
+  const now = new Date().toISOString();
+  for (const u of Array.isArray(updates) ? updates.slice(0, 5000) : []) {
+    if (!DISCORD_ID.test(String(u && u.id)) || typeof u.username !== "string" || !u.username) continue;
+    const name = u.username.slice(0, 64);
+    for (const l of logins) if (l.account && l.account.discord && l.account.discord.id === u.id && l.account.discord.username !== name) { l.account.discord.username = name; changed++; }
+    for (const p of people) if (p.discord && p.discord.id === u.id && p.discord.username !== name) { p.discord.username = name; p.discord.updatedAt = now; changed++; }
+  }
+  if (changed) savePeople();
+  return changed;
+}
+
 function findByLogin(login) {
   const name = String(login || "").trim().toLowerCase();
   if (!name) return null;
@@ -589,6 +640,8 @@ function publicView(p) {
     skills: p.skills || [],
     languages: p.languages || [],
     bio: p.bio || "",
+    // Their Discord account, when a sign-in account of theirs is connected to Discord (kept up to date by the bot).
+    discord: p.discord ? { id: p.discord.id, username: p.discord.username } : null,
   };
 }
 
@@ -831,6 +884,17 @@ function saveEmployee(input, existing) {
     startDate: validDate(input.startDate),
     updatedAt: now,
   };
+
+  // Their Discord user id (the user's request, 28 October 2026: required when a staff record is made; the staff
+  // portal enforces that). HN Group Auth's Discord bot fills in the username from it.
+  if (input.discordId !== undefined) {
+    const id = String(input.discordId || "").trim();
+    if (id && !DISCORD_ID.test(id)) throw new ValidationError("Enter their Discord user ID: 15 to 22 digits (in Discord, turn on Developer Mode, then right-click their name and choose Copy User ID).");
+    if (id && people.some((p) => p !== existing && p.discord && p.discord.id === id)) throw new ValidationError("That Discord user ID is already on another staff record.");
+    const current = existing && existing.discord;
+    if (!id) { if (existing) delete existing.discord; }
+    else if (!current || current.id !== id) fields.discord = { id, username: null, updatedAt: now };
+  }
 
   if (existing) {
     Object.assign(existing, fields);
@@ -1434,6 +1498,10 @@ module.exports = {
   employees,
   findByLogin,
   findByGoogle,
+  findByDiscord,
+  setDiscord,
+  discordIds,
+  updateDiscordNames,
   ownsEmail,
   setGoogle,
   verifyPassword,
