@@ -85,7 +85,43 @@ fi
 
 # ---- nginx ----
 NGINX_SITE="/etc/nginx/sites-available/hn-staff-portal"
-sed "s/staff\.hngroup\.org\.uk/$DOMAIN/" "$SCRIPT_DIR/nginx-staff.conf" > "$NGINX_SITE"
+CERT_DIR="/etc/letsencrypt/live/$DOMAIN"
+if [ -f "$CERT_DIR/fullchain.pem" ] && [ -f "$CERT_DIR/privkey.pem" ]; then
+    # The certificate already exists: write the HTTPS site ourselves, so the portal never depends on
+    # certbot putting it back (when that failed, only port 80 was left and HTTPS visits got nginx's
+    # empty catch-all answer).
+    {
+        sed -e "s/staff\.hngroup\.org\.uk/$DOMAIN/" \
+            -e "s/^\(\s*\)listen 80;/\1listen 443 ssl;/" -e "s/^\(\s*\)listen \[::\]:80;/\1listen [::]:443 ssl;/" \
+            -e "/^\s*server_name /a\\    ssl_certificate $CERT_DIR/fullchain.pem;\\n    ssl_certificate_key $CERT_DIR/privkey.pem;" \
+            "$SCRIPT_DIR/nginx-staff.conf"
+        [ -f /etc/letsencrypt/options-ssl-nginx.conf ] && SSL_OPTS="    include /etc/letsencrypt/options-ssl-nginx.conf;" || SSL_OPTS=""
+        [ -f /etc/letsencrypt/ssl-dhparams.pem ] && SSL_OPTS="$SSL_OPTS
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;"
+        cat <<NGINX
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name $DOMAIN;
+    return 301 https://\$host\$request_uri;
+}
+NGINX
+    } > "$NGINX_SITE"
+    if [ -n "$SSL_OPTS" ]; then
+        python3 - "$NGINX_SITE" "$SSL_OPTS" <<'PY'
+import sys
+path, extra = sys.argv[1], sys.argv[2]
+text = open(path).read()
+marker = "privkey.pem;\n"
+open(path, "w").write(text.replace(marker, marker + extra + "\n", 1))
+PY
+    fi
+    STAFF_HTTPS_WRITTEN=1
+else
+    sed "s/staff\.hngroup\.org\.uk/$DOMAIN/" "$SCRIPT_DIR/nginx-staff.conf" > "$NGINX_SITE"
+    STAFF_HTTPS_WRITTEN=0
+fi
 ln -sf "$NGINX_SITE" /etc/nginx/sites-enabled/hn-staff-portal
 if nginx -t 2>/dev/null; then
     systemctl reload nginx || systemctl restart nginx
@@ -108,7 +144,10 @@ SERVER_IP="$(curl -4 -fsS https://api.ipify.org 2>/dev/null || hostname -I | awk
 DNS_IP="$(getent ahostsv4 "$DOMAIN" 2>/dev/null | awk 'NR==1{print $1}')"
 HTTPS_OK=0
 
-if [ -d "/etc/letsencrypt/live/$DOMAIN" ]; then
+if [ "$STAFF_HTTPS_WRITTEN" = 1 ]; then
+    HTTPS_OK=1
+    ok "HTTPS: using the existing certificate (it renews automatically)"
+elif [ -d "/etc/letsencrypt/live/$DOMAIN" ]; then
     # Existing certificate: re-attach it to the freshly written nginx config (renews if close to expiry).
     if certbot --nginx -d "$DOMAIN" --non-interactive --redirect --keep-until-expiring; then
         HTTPS_OK=1
