@@ -21,7 +21,7 @@ const CLIENTS = {
   network: { name: 'Horizon Network website configuration', callback: 'https://horizon-network.co.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can configure Horizon Network.' },
   status: { name: 'Status administration', callback: 'https://status.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage status.' },
   website: { name: 'HN Group website configuration', callback: 'https://hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can configure the website.' },
-  portal: { name: 'Staff portal', callback: 'https://staff.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use the staff portal.' },
+  portal: { name: 'Staff portal', callback: 'https://staff.hngroup.org.uk/auth/callback', allowed: (user) => !user.standalone, denied: 'This account has no staff profile, so it can’t use the staff portal.' },
   wiki: { name: 'HN Group Wiki', callback: 'https://wiki.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot edit the HN Group Wiki.' },
   branding: { name: 'HN Group brand centre', callback: 'https://branding.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use the HN Group brand centre.' },
   accounts: { name: 'HN Account', callback: 'https://accounts.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use HN Account.' },
@@ -216,6 +216,12 @@ const server = http.createServer(async (req, res) => {
       if (route === '/api/logout') {
         sessions.delete(hash(cookie(req, COOKIE))); challenges.delete(hash(cookie(req, FLOW)));
         return send(res, 200, { ok: true }, [setCookie(COOKIE, '', 0), setCookie(FLOW, '', 0)]);
+      }
+      // Which profile to sign in as, when the account has several (the user's request, 28 October 2026).
+      if (route === '/api/profile/select') {
+        const entry = entryFor(req); await profile(entry);
+        const { value } = await staff('/api/auth/profile-select', { session: entry.staffSession, key: String(data.key || '') });
+        return send(res, 200, { user: value.user });
       }
       if (route === '/api/continue') {
         const requestURL=new URL('/authorize',ORIGIN);for(const key of ['client_id','state','redirect_uri','code_challenge','code_challenge_method'])if(typeof data[key]==='string')requestURL.searchParams.set(key,data[key]);

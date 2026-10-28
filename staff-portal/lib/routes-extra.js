@@ -1112,8 +1112,7 @@ async function handleMe(req, res, pathname, session) {
     if (!entry) throw httpError(404, "That sign-in isn't in your history.");
     if (entry.reported) throw httpError(400, "You've already reported that sign-in.");
     // Sign out everywhere else, forget remembered browsers, and tell IT.
-    ctx.endSessionsFor(me.id, session.token);
-    require("./resume").revokeFor(me.id);
+    ctx.endSessionsFor(store.sessionIdOf(me), session.token);
     const t = helpdesk.createTicket(me, {
       subject: "Sign-in I don't recognise",
       category: "access",

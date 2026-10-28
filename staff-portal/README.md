@@ -56,7 +56,7 @@ Internal staff portal for the whole of HN Group, served at **https://staff.hngro
     - Each address can be overridden with a custom one.
     - Employees can have several addresses on different brand domains.
     - The **primary** address is their login username.
-  - After adding someone, you're asked whether to create their login account. A temporary password is shown once on screen, and the employee must create their own password the first time they sign in.
+  - Sign-in accounts are created on HN Account (accounts.hngroup.org.uk), not here (the user's request, 28 October 2026). After adding someone, the portal links there. Accounts are separate from staff records: each has its own password, PIN and permissions and can use several profiles (each company on a staff record is its own profile), and people choose the profile when they sign in through HN Group Auth.
   - You can reset a password, disable or re-enable a login, edit details and delete employees.
 - **Settings.** Opened by clicking your name. It has three tabs: **Profile** (picture, banner, display name, phone, location, time zone, skills, languages and birthday), **Appearance** (theme) and **Security** (password, sign-in code, **Where you're signed in**, where you can sign out other devices, **Sign-in history** and **Download my data**). Birthdays are day and month only, and you choose whether colleagues can see yours.
 - **Profile banners.** Under **Settings → Profile**, everyone can choose one of eight preset gradient banners or upload their own wide image, which is cropped to 3:1. The banner shows at the top of their profile and on their Staff Directory card.
@@ -310,7 +310,8 @@ Everything lives in `/var/lib/hn-staff-portal`:
 
 | Path              | Contents                                                        |
 |-------------------|-----------------------------------------------------------------|
-| `people.json`     | Employees and login accounts. Passwords are stored as scrypt hashes. |
+| `people.json`     | Employees (staff records) and the built-in admin accounts. |
+| `logins.json`     | Sign-in accounts: username, scrypt password and PIN hashes, Google sign-in, roles and profiles. |
 | `settings.json`   | Roles, the system owner and the system PIN (hashed).            |
 | `announcements.json`, `documents.json`, `documents/` | Announcements, the document library and the uploaded files. |
 | `sessions.json`   | Signed-in sessions (hashed tokens).                              |

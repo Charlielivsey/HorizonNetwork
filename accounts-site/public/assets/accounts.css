@@ -142,7 +142,7 @@ th { font-size: .74rem; text-transform: uppercase; letter-spacing: .06em; color:
 td .muted { display: block; }
 .person { display: flex; align-items: center; gap: .6rem; }
 .person > span:last-child { display: flex; flex-direction: column; }
-.actions { display: flex; flex-wrap: wrap; gap: .35rem; justify-content: flex-end; }
+.actions { display: flex; flex-wrap: nowrap; align-items: center; gap: .35rem; justify-content: flex-end; }
 
 /* Dialog and toast */
 .dialog { border: 0; border-radius: var(--radius); padding: 0; max-width: min(460px, calc(100vw - 32px)); background: var(--surface); color: var(--text); box-shadow: 0 30px 80px rgba(0,0,0,.35); }
@@ -181,3 +181,43 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* Sign-in accounts */
+.page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.page-head .lede { max-width: 640px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-block; padding: .12rem .6rem; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); font-size: .76rem; font-weight: 600; white-space: nowrap; }
+.chip.default { background: var(--purple-soft, rgba(85,20,180,.1)); border-color: transparent; color: var(--purple); }
+.dialog.wide { max-width: min(720px, calc(100vw - 32px)); width: 100%; }
+.account-editor { display: grid; gap: 10px; max-height: min(64vh, 640px); overflow-y: auto; padding-right: 4px; }
+.account-editor h3 { margin: 10px 0 0; font-size: 1rem; }
+.account-editor .muted.small { margin: 0; }
+.profile-pick { display: grid; gap: 6px; max-height: 260px; overflow-y: auto; border: 1px solid var(--border); border-radius: 12px; padding: 6px; }
+.profile-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 8px; border-radius: 10px; transition: background .15s; }
+.profile-row.on { background: var(--surface-2); }
+.profile-row .check { margin: 0; flex: 1; min-width: 0; }
+.profile-row .check > span:last-child { display: grid; min-width: 0; }
+.default-pick { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); white-space: nowrap; }
+.default-pick input { accent-color: var(--purple); }
+.role-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 4px 12px; }
+.role-pick .check > span { display: grid; }
+@media (prefers-reduced-motion: reduce) { .profile-row { transition: none; } }
+
+.nowrap { white-space: nowrap; }
+.more { position: relative; }
+.more > summary { list-style: none; cursor: pointer; }
+.more > summary::-webkit-details-marker { display: none; }
+.more-pop { position: fixed; z-index: 50; min-width: 170px; display: grid; padding: 6px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); box-shadow: 0 18px 40px -18px rgba(14,16,32,.45); animation: pop .15s ease-out; }
+.more-pop button { text-align: left; border: 0; background: none; color: var(--text); font: inherit; font-weight: 600; font-size: .86rem; padding: .5rem .7rem; border-radius: 8px; cursor: pointer; }
+.more-pop button:hover, .more-pop button:focus-visible { background: var(--surface-2); }
+.more-pop button.danger { color: var(--raspberry); }
+@media (prefers-reduced-motion: reduce) { .more-pop { animation: none; } }
+
+.staff-table th { white-space: nowrap; }
+
+.accounts-table td:first-child { min-width: 210px; max-width: 280px; }
+.accounts-table .person { min-width: 0; }
+.accounts-table .person > span:last-child { min-width: 0; }
+.accounts-table .person .muted { overflow-wrap: anywhere; }
+.accounts-table td:nth-child(2) { max-width: 220px; }
+.accounts-table td:nth-child(4) .pill { white-space: normal; }

@@ -258,11 +258,14 @@ function getSession(req) {
   return { token: key, raw, person, data: session };
 }
 
+// Ends sessions for a staff record (every sign-in account acting as one of its profiles) or for one sign-in
+// account (pass its session id, from store.sessionIdOf).
+function endAllFor(personId, exceptToken) { return endSessionsFor(personId, exceptToken); }
 function endSessionsFor(personId, exceptToken) {
   // Remembered browsers ("Resume session") go too: password changes, disabled logins and so on.
-  resume.revokeFor(personId);
+  resume.revokeFor(personId, store.principalMatches);
   for (const [token, s] of sessions) {
-    if (s.personId === personId && token !== exceptToken) sessions.delete(token);
+    if (store.principalMatches(s.personId, personId) && token !== exceptToken) sessions.delete(token);
   }
 }
 
@@ -504,7 +507,7 @@ async function handleLogin(req, res) {
   // Step two: anyone with a sign-in code has to enter it before they're signed in.
   if (store.hasCode(person)) {
     const challenge = crypto.randomBytes(24).toString("hex");
-    codeChallenges.set(challenge, { personId: person.id, expires: Date.now() + CODE_CHALLENGE_MS, attempts: 0 });
+    codeChallenges.set(challenge, { personId: store.sessionIdOf(person), expires: Date.now() + CODE_CHALLENGE_MS, attempts: 0 });
     // An account with Sign in with Google turned on is told so, so Auth offers Continue with Google instead of the PIN.
     return sendJson(res, 200, { codeRequired: true, challenge, google: !!(person.account && person.account.google) });
   }
@@ -539,14 +542,14 @@ function googleLogin(req, res, { sub, email }) {
 
 function completeLogin(req, res, person, how) {
   store.recordLogin(person);
-  const token = createSession(person.id, req, { allowPageLoad: true });
+  const token = createSession(store.sessionIdOf(person), req, { allowPageLoad: true });
   console.log(`${store.meView(person).username} signed in from ${clientIp(req)}${how ? ` (${how})` : ""}`);
   logEvent(req, null, "signed-in", { actor: store.loginName(person), detail: how || undefined, ua: String(req.headers["user-agent"] || "").slice(0, 300) });
   const cookies = [cookieFor(req, token)];
   // Remember this browser for "Resume session" (only for people with a sign-in code, which it asks for).
   // Auth explicitly requests a separate remembered token for its own browser cookie. Signing in with Google never
   // remembers the account (the user's request, 27 October 2026).
-  if (how !== "Google" && store.hasCode(person) && (!serviceRequest(req) || req.headers["x-auth-remember"] === "1")) cookies.push(resume.cookie(req, resume.issue(person.id, parseCookies(req)[resume.COOKIE], req.headers["user-agent"])));
+  if (how !== "Google" && store.hasCode(person) && (!serviceRequest(req) || req.headers["x-auth-remember"] === "1")) cookies.push(resume.cookie(req, resume.issue(store.sessionIdOf(person), parseCookies(req)[resume.COOKIE], req.headers["user-agent"])));
   sendJson(res, 200, { user: store.meView(person) }, { "Set-Cookie": cookies });
 }
 
@@ -631,9 +634,14 @@ async function handleResume(req, res, pathname) {
 // HN Secure Network asks for the person's six-digit PIN each time it connects the VPN; the VPN service
 // checks it here. Five wrong PINs lock VPN connections for that person (and the address) for 15 minutes.
 function verifyVpnPin(personId, code, ip, client) {
-  const person = store.getPerson(String(personId || ""));
-  if (!person || !person.account || !person.account.enabled) return { status: 403, error: "This account can’t use the VPN right now." };
-  if (!store.hasCode(person)) return { status: 403, error: "Set up your six-digit PIN in HN Group Auth first." };
+  // The VPN knows people by their profile id; any enabled sign-in account using that profile can confirm with its PIN.
+  const candidates = store.loginsForId(String(personId || "")).filter((l) => l.account && l.account.enabled).map((l) => store.loginAsPerson(l));
+  const legacy = !candidates.length && store.getPerson(String(personId || ""));
+  const usable = candidates.length ? candidates : legacy && legacy.account && legacy.account.enabled ? [legacy] : [];
+  if (!usable.length) return { status: 403, error: "This account can’t use the VPN right now." };
+  const withPin = usable.filter((p) => store.hasCode(p));
+  if (!withPin.length) return { status: 403, error: "Set up your six-digit PIN in HN Group Auth first." };
+  const person = withPin.find((p) => /^\d{6}$/.test(String(code || "")) && store.verifyCode(p, String(code))) || withPin[0];
   const key = "vpn:" + person.id, entry = pinFailures.get(key), fresh = entry && Date.now() - entry.first <= LOCKOUT_WINDOW_MS;
   const req = { socket: { remoteAddress: "127.0.0.1" }, headers: { "x-real-ip": ip || "127.0.0.1", "user-agent": client || "HN Secure Network" } };
   if ((fresh && entry.count >= MAX_PIN_ATTEMPTS) || (ip && isLockedOut(ip))) return { status: 429, error: "Too many wrong PINs. Try again in 15 minutes." };
@@ -696,9 +704,9 @@ async function handleSetCode(req, res, session, suppliedBody) {
     return sendJson(res, 400, { error: "Your current password is incorrect." });
   }
   store.setCode(person, code);
-  if (changing) resume.revokeFor(person.id);
+  if (changing) resume.revokeFor(store.sessionIdOf(person), store.principalMatches);
   logEvent(req, session, changing ? "code-changed" : "code-set");
-  if (serviceRequest(req)) res.setHeader("Set-Cookie", resume.cookie(req, resume.issue(person.id, parseCookies(req)[resume.COOKIE], req.headers["user-agent"])));
+  if (serviceRequest(req)) res.setHeader("Set-Cookie", resume.cookie(req, resume.issue(store.sessionIdOf(person), parseCookies(req)[resume.COOKIE], req.headers["user-agent"])));
   sendJson(res, 200, { user: meResponse(session) });
 }
 
@@ -766,7 +774,7 @@ async function handleChangePassword(req, res, session, suppliedBody) {
     return sendJson(res, 400, { error: person.account.passwordTemporary ? "Choose a new password rather than reusing the temporary one." : "Choose a different password from your old one." });
   }
   store.setPassword(person, newPassword);
-  endSessionsFor(person.id, session.token);
+  endSessionsFor(store.sessionIdOf(person), session.token);
   console.log(`${store.meView(person).username} changed their password`);
   logEvent(req, session, "password-changed");
   sendJson(res, 200, { user: meResponse(session) });
@@ -1056,7 +1064,7 @@ async function routeSystem(req, res, pathname, session) {
     if (protectedPerson(target.id)) throw httpError(403, "Only the system owner can log in as the system owner.");
     if (!target.account) throw httpError(400, `${target.displayName} doesn't have a login account yet.`);
     if (!target.account.enabled) throw httpError(400, `${target.displayName}'s login is disabled.`);
-    const token = createSession(target.id, req, { impersonatorId: me.id, returnKey: session.token, allowPageLoad: true });
+    const token = createSession(target.id, req, { impersonatorId: store.sessionIdOf(me), returnKey: session.token, allowPageLoad: true });
     logEvent(req, session, "logged-in-as", { target: store.loginName(target) });
     return sendJson(res, 200, { ok: true }, { "Set-Cookie": cookieFor(req, token) });
   }
@@ -1318,6 +1326,82 @@ async function routeApi(req, res, pathname, session) {
     return sendJson(res, 200, { people: store.employees().map(store.publicView) });
   }
 
+  // ----- Sign-in accounts (HN Account only) -----
+  // The user's request, 28 October 2026: sign-in accounts are made and managed on HN Account. Each has its own
+  // password, PIN and permissions (roles), and any number of profiles (a company on a staff record) or none.
+  if (pathname.startsWith("/api/logins")) {
+    requireManager(session);
+    if (session.data.via !== "accounts") throw httpError(403, "Sign-in accounts are managed on HN Account at accounts.hngroup.org.uk.");
+    const myLogin = me.__login && me.__login.id;
+    // Roles that include a permission only its holders can give out can only be given or taken away by them.
+    const guardRoles = (before, after) => {
+      const changed = [...before.filter((id) => !after.includes(id)), ...after.filter((id) => !before.includes(id))];
+      if (changed.length && !store.can(me, "access.manage")) throw httpError(403, "You need the “Manage roles” permission to change an account’s permissions.");
+      for (const id of changed) {
+        const role = store.getRole(id);
+        for (const key of store.GUARDED_PERMISSIONS) if (role && role.permissions.includes(key) && !store.can(me, key)) {
+          throw httpError(403, `Only people with the “${(store.PERMISSIONS.find((x) => x.key === key) || {}).name || key}” permission can give or remove the ${role.name} role.`);
+        }
+      }
+    };
+    if (method === "GET" && pathname === "/api/logins") {
+      return sendJson(res, 200, { accounts: store.listLogins(), profiles: store.allProfiles(), roles: store.listRoles().map((r) => ({ id: r.id, name: r.name, permissions: r.permissions })), canManageRoles: store.can(me, "access.manage") });
+    }
+    if (method === "POST" && pathname === "/api/logins") {
+      const body = await readJsonBody(req);
+      guardRoles([], Array.isArray(body.roleIds) ? body.roleIds : []);
+      const { login, credentials } = store.createLogin(body);
+      logEvent(req, session, "login-created", { target: credentials.username, detail: store.loginProfiles(login).map((p) => p.displayName + " (" + p.company + ")").join(", ") || "No staff profile" });
+      return sendJson(res, 201, { ...credentials, account: store.loginView(login) });
+    }
+    if (method === "POST" && (m = /^\/api\/logins\/([a-f0-9]{16})(?:\/(reset|code\/reset|disable|enable|delete))?$/.exec(pathname))) {
+      const l = store.getLogin(m[1]), action = m[2];
+      if (!l) throw httpError(404, "Account not found.");
+      const own = l.primaryFor && store.getPerson(l.primaryFor);
+      if (own && store.isOwner(own) && !store.hasOwnerAccess(me)) throw httpError(403, "Only the system owner can change the system owner's account.");
+      const self = l.id === myLogin, label = store.loginView(l).username;
+      if (!action) {
+        const body = await readJsonBody(req);
+        if (body.roleIds !== undefined) {
+          if (self) throw httpError(400, "You can't change your own account's permissions.");
+          guardRoles(l.roleIds || [], Array.isArray(body.roleIds) ? body.roleIds.map(String) : []);
+        }
+        store.updateLogin(l, body);
+        logEvent(req, session, "login-updated", { target: label });
+        return sendJson(res, 200, { account: store.loginView(l) });
+      }
+      if (self) throw httpError(400, "Change your own password and PIN on your own account page.");
+      const sid = "p~" + l.id;
+      // Ends this account's sessions, including ones from before sign-in accounts were separate (kept under the record).
+      const endSessionsFor = (id) => {
+        endAllFor(id);
+        if (l.primaryFor) { resume.revokeFor(l.primaryFor); for (const [t, x] of sessions) if (x.personId === l.primaryFor) sessions.delete(t); }
+      };
+      if (action === "reset") {
+        const credentials = store.issueTemporaryPassword(store.loginAsPerson(l));
+        endSessionsFor(sid);
+        logEvent(req, session, "password-reset", { target: credentials.username });
+        return sendJson(res, 200, { ...credentials, account: store.loginView(l) });
+      }
+      if (!l.account) throw httpError(400, "This account has no password yet.");
+      if (action === "code/reset") {
+        store.clearCode(store.loginAsPerson(l)); endSessionsFor(sid);
+        logEvent(req, session, "code-reset", { target: label });
+      } else if (action === "delete") {
+        if (l.primaryFor) throw httpError(400, "This is " + (own ? own.displayName : "someone") + "’s own account; disable it, or delete their staff record, instead.");
+        endSessionsFor(sid); store.deleteLogin(l);
+        logEvent(req, session, "login-deleted", { target: label });
+        return sendJson(res, 200, { ok: true });
+      } else {
+        store.setAccountEnabled(store.loginAsPerson(l), action === "enable");
+        if (action === "disable") endSessionsFor(sid);
+        logEvent(req, session, action === "enable" ? "login-enabled" : "login-disabled", { target: label });
+      }
+      return sendJson(res, 200, { account: store.loginView(l) });
+    }
+    throw httpError(404, "Not found.");
+  }
+
   // ----- Employee management (leadership & HR) -----
   if (pathname.startsWith("/api/employees")) {
     requireManager(session);
@@ -1356,6 +1440,8 @@ async function routeApi(req, res, pathname, session) {
       }
       if (action === "account") {
         if (person.id === me.id) throw httpError(400, "Use Profile & settings to change your own password.");
+        // New sign-in accounts are made on HN Account, not the staff portal (the user's request, 28 October 2026).
+        if (!person.account && session.data.via !== "accounts") throw httpError(403, "Sign-in accounts are created on HN Account at accounts.hngroup.org.uk.");
         const hadAccount = !!person.account;
         const credentials = store.issueTemporaryPassword(person);
         endSessionsFor(person.id);
@@ -1388,7 +1474,7 @@ async function routeApi(req, res, pathname, session) {
   if (method === "GET" && pathname === "/api/me/sessions") {
     const list = [];
     for (const [token, s2] of sessions) {
-      if (s2.personId !== me.id || s2.expires < Date.now()) continue;
+      if (!store.principalMatches(s2.personId, store.sessionIdOf(me)) || s2.expires < Date.now()) continue;
       list.push({
         id: s2.id, ip: s2.ip, userAgent: s2.userAgent, current: token === session.token,
         createdAt: new Date(s2.createdAt).toISOString(), lastSeen: new Date(s2.lastSeen).toISOString(),
@@ -1401,7 +1487,7 @@ async function routeApi(req, res, pathname, session) {
   if (method === "POST" && (m = /^\/api\/me\/sessions\/(?:([a-f0-9]{12})\/end|(end-others))$/.exec(pathname))) {
     let count = 0;
     for (const [token, s2] of sessions) {
-      if (s2.personId !== me.id || token === session.token) continue;
+      if (!store.principalMatches(s2.personId, store.sessionIdOf(me)) || token === session.token) continue;
       if (m[2] || s2.id === m[1]) { sessions.delete(token); count++; }
     }
     logEvent(req, session, "own-sessions-ended", { detail: `${count} session(s)` });
@@ -2197,7 +2283,8 @@ extraRoutes.init({
 // ---------- Routing ----------
 
 // A new staff session for an HN Group service acting for this person (HN Account), from where they are.
-const issueSession = (personId, ip, userAgent) => createSession(personId, { socket: { remoteAddress: "127.0.0.1" }, headers: { "x-real-ip": ip || "127.0.0.1", "user-agent": userAgent || "HN Account" } });
+// Sessions for HN Account (accounts.hngroup.org.uk) are marked: only HN Account makes and manages sign-in accounts.
+const issueSession = (personId, ip, userAgent) => createSession(personId, { socket: { remoteAddress: "127.0.0.1" }, headers: { "x-real-ip": ip || "127.0.0.1", "user-agent": userAgent || "HN Account" } }, { via: "accounts" });
 const statusSso = createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent, handleChangePassword, handleSetCode, verifyBrowserPin, verifyVpnPin, issueSession, googleLogin });
 const portalAuth = portalAuthLib.createPortalAuth({ store, sessions, resume, createSession, cookieFor, parseCookies, send, redirect, logEvent, loginNext, clientIp });
 

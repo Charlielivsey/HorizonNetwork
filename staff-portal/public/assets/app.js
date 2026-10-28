@@ -1425,14 +1425,16 @@
                 const actions = [
                     '<button type="button" class="menu-item compact" data-act="edit">' + icon("edit") + "<span>Edit details</span></button>",
                 ];
+                // Sign-in accounts are created on HN Account (the user's request, 28 October 2026).
+                const onHnAccount = '<a class="menu-item compact" href="https://accounts.hngroup.org.uk/#accounts" target="_blank" rel="noopener">' + icon("key") + "<span>Create sign-in account on HN Account</span></a>";
                 if (locked && !e.account) {
                     actions.length = 0;
-                    actions.push('<button type="button" class="menu-item compact" data-act="account">' + icon("key") + "<span>Create login account</span></button>");
+                    actions.push(onHnAccount);
                 }
                 if (!isMe && !locked) {
                     actions.push(e.account
                         ? '<button type="button" class="menu-item compact" data-act="reset">' + icon("key") + "<span>Reset password</span></button>"
-                        : '<button type="button" class="menu-item compact" data-act="account">' + icon("key") + "<span>Create login account</span></button>");
+                        : onHnAccount);
                     if (e.account && e.account.hasCode) {
                         actions.push('<button type="button" class="menu-item compact" data-act="code-reset">' + icon("shield") + "<span>Reset sign-in code</span></button>");
                     }
@@ -1845,16 +1847,12 @@
         const m = openModal(
             '<div class="success-mark">' + icon("check") + "</div>" +
             '<h2 class="modal-title center">' + esc(emp.displayName) + " has been added</h2>" +
-            '<p class="muted center">Would you like to create a login account for them now?</p>' +
-            '<div class="cred-box"><div class="cred-label">Username</div><div class="cred-value">' + esc(emp.loginUsername) + "</div></div>" +
+            '<p class="muted center">Sign-in accounts are created on HN Account. Give them one there when they need to sign in; each company they work at is its own profile.</p>' +
             '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Not now</button>' +
-            '<button type="button" class="btn btn-primary" data-create>Create login account</button></div>',
+            '<a class="btn btn-primary" href="https://accounts.hngroup.org.uk/#accounts" target="_blank" rel="noopener" data-create>Open HN Account</a></div>',
             { onClose: onDone }
         );
-        $("[data-create]", m.el).addEventListener("click", function () {
-            m.onClose = null;
-            createAccountFlow(emp, onDone);
-        });
+        $("[data-create]", m.el).addEventListener("click", function () { closeModal(); });
     }
 
     async function createAccountFlow(emp, onDone) {
@@ -6279,7 +6277,10 @@
         "sign-in-google-mismatch": ["tried to sign in with Google, but its email no longer matches", "signin"],
         "google-connected": ["turned on Sign in with Google", "accounts"],
         "google-disconnected": ["turned off Sign in with Google", "accounts"],
-        "login-created": ["created a login for", "accounts"],
+        "login-created": ["created a sign-in account for", "accounts"],
+        "login-updated": ["changed the sign-in account", "accounts"],
+        "login-deleted": ["deleted the sign-in account", "accounts"],
+        "profile-chosen": ["signed in as their profile at", "sign-ins"],
         "password-reset": ["reset the password for", "accounts"],
         "login-disabled": ["disabled the login for", "accounts"],
         "login-enabled": ["enabled the login for", "accounts"],

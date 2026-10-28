@@ -33,6 +33,9 @@ const ROUTES = [
   ['GET', /^\/api\/avatars\/[a-f0-9]{16}$/],
   ['GET', /^\/api\/employees$/, 0, true], ['GET', /^\/api\/roles$/, 0, true],
   ['POST', /^\/api\/employees\/[a-f0-9]{16}\/(?:account|account\/disable|account\/enable|code\/reset)$/, 0, true],
+  // Sign-in accounts (made and managed only here): their profiles, default profile and permissions.
+  ['GET', /^\/api\/logins$/, 0, true], ['POST', /^\/api\/logins$/, 0, true],
+  ['POST', /^\/api\/logins\/[a-f0-9]{16}(?:\/(?:reset|code\/reset|disable|enable|delete))?$/, 0, true],
 ];
 const isAdmin = (u) => !!(u && (u.ownerAccess || u.statusAdminAllowed));
 

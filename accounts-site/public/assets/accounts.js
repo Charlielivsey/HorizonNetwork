@@ -85,7 +85,8 @@
     ['security', 'Password & PIN', 'M6 10h12v11H6zM8 10V7a4 4 0 0 1 8 0v3'],
     ['devices', 'Devices', 'M3 4h18v12H3zM8 20h8M12 16v4'],
     ['websites', 'Websites', 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18'],
-    ['staff', 'Staff accounts', 'M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 20c1-3.5 3.5-5 7-5s6 1.5 7 5M17 11a3 3 0 1 0 0-6M22 20c-.6-2.6-2-4.1-4-4.7', true],
+    ['accounts', 'Sign-in accounts', 'M15 7a4 4 0 1 1-3.9 5H9v2H7v2H4v-3l6.1-6.1A4 4 0 0 1 15 7zM16 9.5h.01', true],
+    ['staff', 'Staff records', 'M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 20c1-3.5 3.5-5 7-5s6 1.5 7 5M17 11a3 3 0 1 0 0-6M22 20c-.6-2.6-2-4.1-4-4.7', true],
   ];
   const icon = (d) => { const ns = 'http://www.w3.org/2000/svg', svg = document.createElementNS(ns, 'svg'), p = document.createElementNS(ns, 'path'); svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true'); p.setAttribute('d', d); svg.append(p); return svg; };
   function nav(active) {
@@ -246,16 +247,130 @@
     }
     search.addEventListener('input', draw); draw();
     const counts = { all: staffList.length, active: staffList.filter((e) => e.account && e.account.enabled).length, disabled: staffList.filter((e) => e.account && !e.account.enabled).length };
-    return [h('h1', { text: 'Staff accounts' }), h('p', { class: 'lede', text: 'Every staff account. Resetting a password or PIN, or disabling an account, signs that person out everywhere.' }),
+    return [h('h1', { text: 'Staff records' }), h('p', { class: 'lede', text: 'Every staff record and its own sign-in account. To give someone more accounts, accounts at other profiles, or an account with no staff record, use Sign-in accounts.' }),
       h('div', { class: 'stats' }, h('div', { class: 'stat' }, h('b', { text: counts.all }), ' people'), h('div', { class: 'stat' }, h('b', { text: counts.active }), ' active'), h('div', { class: 'stat' }, h('b', { text: counts.disabled }), ' disabled')),
       h('section', { class: 'card' }, search, h('div', { class: 'table-wrap' }, h('table', { class: 'staff-table' },h('thead', {}, h('tr', {}, ['Person', 'Role', 'Account', 'Last sign-in', ''].map((t) => h('th', { text: t })))), body))),
       h('p', { class: 'muted small' }, 'To add staff, change roles or edit staff records, use the ', h('a', { href: 'https://staff.hngroup.org.uk/', text: 'staff portal' }), '.')];
   }
 
-  const VIEWS = { overview, profile, security, devices, websites, staff };
+  // ---------- Sign-in accounts ----------
+  // The user's request, 28 October 2026: sign-in accounts are separate from staff records. Each has its own
+  // password, PIN and permissions, and can use any number of profiles (each company on a staff record is its own
+  // profile) with one as its default, or none at all. People choose the profile when they sign in.
+  let loginData = null;
+  function credentialsDialog(name, r) {
+    showDialog('Sign-in details for ' + name, [h('p', { text: 'Give them these details. They’ll choose a new password and PIN when they first sign in. This won’t be shown again.' }), h('dl', { class: 'creds' }, h('dt', { text: 'Username' }), h('dd', {}, h('code', { text: r.username })), h('dt', { text: 'Temporary password' }), h('dd', {}, h('code', { text: r.temporaryPassword })))]);
+  }
+  // Create or edit an account: its name and username (new accounts), profiles, default profile and permissions.
+  function editAccount(account, done) {
+    const d = $('#dialog'), creating = !account, own = account && account.ownLoginOf;
+    const chosen = new Map((account ? account.profiles : []).map((p) => [p.key, p]));
+    let def = account ? (account.profiles.find((p) => p.default) || {}).key || null : null;
+    const roles = new Set(account ? account.roleIds : []);
+    const status = h('p', { class: 'form-status', role: 'status', 'aria-live': 'polite' });
+    const name = creating || !own ? field('Name', 'displayName', account ? account.displayName : '', { max: 80, required: true, hint: 'How this account is shown when it isn’t using a staff profile.' }) : null;
+    const user = creating ? field('Username or email address', 'username', '', { max: 120, required: true, auto: 'off', hint: 'What they type to sign in. It can be any email address, including a personal one.' }) : null;
+    const filter = h('input', { type: 'search', class: 'search', placeholder: 'Find a profile by name or company', 'aria-label': 'Find a profile' });
+    const list = h('div', { class: 'profile-pick' });
+    function drawProfiles() {
+      const q = filter.value.trim().toLowerCase();
+      const all = loginData.profiles.filter((p) => chosen.has(p.key) || !q || (p.displayName + ' ' + p.company + ' ' + p.jobTitle).toLowerCase().includes(q));
+      if (def && !chosen.has(def)) def = null;
+      if (!def && chosen.size) def = [...chosen.keys()][0];
+      list.replaceChildren(...(all.length ? all.map((p) => {
+        const auto = own && account.profiles.some((x) => x.key === p.key && x.automatic);
+        const box = h('input', { type: 'checkbox', checked: chosen.has(p.key), disabled: auto, onchange: () => { if (box.checked) chosen.set(p.key, p); else chosen.delete(p.key); drawProfiles(); } });
+        const star = h('input', { type: 'radio', name: 'default-profile', checked: def === p.key, disabled: !chosen.has(p.key), 'aria-label': 'Default profile', onchange: () => { def = p.key; } });
+        return h('div', { class: 'profile-row' + (chosen.has(p.key) ? ' on' : '') }, h('label', { class: 'check' }, box, avatar(p, 'sm'), h('span', {}, h('b', { text: p.displayName }), h('span', { class: 'muted small', text: p.company + (p.jobTitle ? ' · ' + p.jobTitle : '') + (auto ? ' · their own record' : '') }))),
+          h('label', { class: 'default-pick small' }, star, 'Default'));
+      }) : [h('p', { class: 'muted small', text: 'No profiles match.' })]));
+    }
+    filter.addEventListener('input', drawProfiles); drawProfiles();
+    const roleBoxes = h('div', { class: 'role-pick' }, loginData.roles.map((r) => h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: roles.has(r.id), disabled: !loginData.canManageRoles || (account && account.id === (me.accountId || '')), onchange: (e) => { if (e.target.checked) roles.add(r.id); else roles.delete(r.id); } }), h('span', {}, h('b', { text: r.name }), h('span', { class: 'muted small', text: r.permissions.length + (r.permissions.length === 1 ? ' permission' : ' permissions') })))));
+    const save = h('button', { class: 'button', type: 'button', text: creating ? 'Create account' : 'Save changes' });
+    save.addEventListener('click', async () => {
+      if (save.disabled) return;
+      save.disabled = true; status.textContent = ''; status.className = 'form-status';
+      try {
+        const body = { profiles: [...chosen.values()].filter((p) => !(own && account.profiles.some((x) => x.key === p.key && x.automatic))).map((p) => ({ personId: p.personId, company: p.company })), defaultProfile: def, ...(loginData.canManageRoles ? { roleIds: [...roles] } : {}) };
+        if (name) body.displayName = name.querySelector('input').value;
+        if (creating) body.username = user.querySelector('input').value;
+        const r = creating ? await api('/api/logins', body) : await api('/api/logins/' + account.id, body);
+        d.close('ok'); loginData = null; done();
+        if (r.temporaryPassword) credentialsDialog(r.account.displayName, r); else toast('Saved.');
+      } catch (err) { status.textContent = err.message; status.className = 'form-status bad'; }
+      finally { save.disabled = false; }
+    });
+    $('#dialog-title').textContent = creating ? 'New sign-in account' : 'Edit ' + account.displayName;
+    $('#dialog-body').replaceChildren(h('div', { class: 'account-editor' },
+      name, user,
+      h('h3', { text: 'Profiles' }), h('p', { class: 'muted small', text: 'Each company someone works at is its own profile. Tick the profiles this account can use and choose its default; they’ll pick one each time they sign in. With none, the account works on HN Group websites but not as a member of staff.' }),
+      filter, list,
+      h('h3', { text: 'Permissions' }), h('p', { class: 'muted small', text: loginData.canManageRoles ? 'This account’s own permissions, whichever profile it uses.' : 'You need the “Manage roles” permission to change these.' }), roleBoxes, status));
+    $('#dialog-buttons').replaceChildren(h('button', { class: 'button secondary', value: 'cancel', text: 'Cancel', formnovalidate: true }), save);
+    d.onclose = null; d.classList.add('wide'); d.addEventListener('close', () => d.classList.remove('wide'), { once: true });
+    d.showModal();
+  }
+  // A small "More" menu of actions (the danger ones in red).
+  function moreMenu(items) {
+    const pop = h('div', { class: 'more-pop', role: 'menu' }, items.filter(Boolean).map(([label, run, danger]) => h('button', { type: 'button', role: 'menuitem', class: danger ? 'danger' : '', onclick: () => { menu.open = false; run(); } }, label)));
+    const summary = h('summary', { class: 'button secondary small' }, 'More');
+    const menu = h('details', { class: 'more' }, summary, pop);
+    // Drawn above the page (fixed), so the table's scrolling area never cuts it off; opens upwards near the bottom.
+    menu.addEventListener('toggle', () => {
+      if (!menu.open) return;
+      const r = summary.getBoundingClientRect(), height = pop.offsetHeight || 160, below = window.innerHeight - r.bottom > height + 12;
+      pop.style.left = Math.max(8, r.right - Math.max(pop.offsetWidth, 170)) + 'px';
+      pop.style.top = (below ? r.bottom + 6 : r.top - height - 6) + 'px';
+    });
+    return menu;
+  }
+  document.addEventListener('click', (e) => { for (const m of document.querySelectorAll('details.more[open]')) if (!m.contains(e.target)) m.open = false; });
+  window.addEventListener('scroll', () => { for (const m of document.querySelectorAll('details.more[open]')) m.open = false; }, true);
+  async function accounts() {
+    if (!loginData) loginData = await api('/api/logins');
+    const search = h('input', { type: 'search', placeholder: 'Search by name, username, profile or company', 'aria-label': 'Search sign-in accounts', class: 'search' });
+    const body = h('tbody');
+    const roleName = (id) => (loginData.roles.find((r) => r.id === id) || {}).name;
+    const status = (a) => !a.account ? ['No password', ''] : !a.account.enabled ? ['Disabled', 'warn'] : a.account.passwordTemporary ? ['Temporary password', ''] : !a.account.hasCode ? ['PIN not set', ''] : ['Active', 'ok'];
+    const reload = async () => { loginData = await api('/api/logins'); draw(); };
+    async function act(a, action, title, text, label, danger) {
+      if (!(await confirmDialog(title, text, label, danger))) return;
+      try {
+        const r = await api('/api/logins/' + a.id + '/' + action, {});
+        if (r.temporaryPassword) credentialsDialog(a.displayName, r); else toast(action === 'delete' ? 'Account deleted.' : 'Done.');
+        await reload();
+      } catch (err) { toast(err.message, true); }
+    }
+    function draw() {
+      const q = search.value.trim().toLowerCase();
+      body.replaceChildren(...loginData.accounts.filter((a) => !q || [a.displayName, a.username, ...a.profiles.map((p) => p.displayName + ' ' + p.company)].join(' ').toLowerCase().includes(q)).map((a) => {
+        const [label, cls] = status(a), self = a.id === me.accountId;
+        return h('tr', {}, h('td', {}, h('span', { class: 'person' }, avatar(a.profiles.find((p) => p.default) || a, 'sm'), h('span', {}, h('b', { text: a.displayName }), h('span', { class: 'muted small', text: a.username })))),
+          h('td', {}, a.profiles.length ? h('div', { class: 'chips' }, a.profiles.map((p) => h('span', { class: 'chip' + (p.default ? ' default' : ''), title: p.default ? 'Default profile' : null, text: (a.profiles.some((x) => x.personId !== p.personId) ? p.displayName + ' · ' : '') + p.company + (p.default ? ' ★' : '') }))) : h('span', { class: 'muted small', text: 'No staff profile' })),
+          h('td', {}, a.ownerAccess ? h('span', { class: 'pill ok', text: 'Owner-level' }) : a.roleIds.length ? h('span', { class: 'small', text: a.roleIds.map(roleName).filter(Boolean).join(', ') }) : h('span', { class: 'muted small', text: 'None' })),
+          h('td', {}, h('span', { class: 'pill ' + cls, text: label })), h('td', { class: 'small nowrap', text: a.account && a.account.lastLoginAt ? new Date(a.account.lastLoginAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Never' }),
+          h('td', {}, h('div', { class: 'actions' },
+            h('button', { class: 'button secondary small', type: 'button', onclick: () => editAccount(a, draw) }, 'Edit'),
+            self ? h('span', { class: 'muted small', text: 'You' }) : moreMenu([
+              [a.account ? 'Reset password' : 'Set password', () => act(a, 'reset', 'Reset the password for ' + a.username + '?', 'They’ll be signed out everywhere and get a temporary password.', 'Reset password')],
+              a.account && a.account.hasCode ? ['Reset PIN', () => act(a, 'code/reset', 'Reset the PIN for ' + a.username + '?', 'They’ll be signed out and asked to set a new PIN when they next sign in.', 'Reset PIN')] : null,
+              a.account ? [a.account.enabled ? 'Disable' : 'Enable', () => act(a, a.account.enabled ? 'disable' : 'enable', (a.account.enabled ? 'Disable ' : 'Enable ') + a.username + '?', a.account.enabled ? 'It’ll be signed out everywhere and can’t sign in to any HN Group website until it’s enabled again.' : 'It’ll be able to sign in again.', a.account.enabled ? 'Disable' : 'Enable', a.account.enabled), a.account.enabled] : null,
+              a.ownLoginOf ? null : ['Delete', () => act(a, 'delete', 'Delete ' + a.username + '?', 'The account is removed and signed out everywhere. Staff records and their data aren’t affected.', 'Delete account', true), true]]))));
+      }));
+    }
+    search.addEventListener('input', draw); draw();
+    const list = loginData.accounts, counts = { all: list.length, linked: list.filter((a) => a.profiles.length).length, none: list.filter((a) => !a.profiles.length).length };
+    return [h('div', { class: 'page-head' }, h('div', {}, h('h1', { text: 'Sign-in accounts' }), h('p', { class: 'lede', text: 'Every account people sign in with. Each has its own password, PIN and permissions, and the profiles it can use. Accounts are only created here.' })),
+      h('button', { class: 'button', type: 'button', onclick: () => editAccount(null, async () => { await reload(); }) }, 'New sign-in account')),
+      h('div', { class: 'stats' }, h('div', { class: 'stat' }, h('b', { text: counts.all }), ' accounts'), h('div', { class: 'stat' }, h('b', { text: counts.linked }), ' with staff profiles'), h('div', { class: 'stat' }, h('b', { text: counts.none }), ' without')),
+      h('section', { class: 'card' }, search, h('div', { class: 'table-wrap' }, h('table', { class: 'staff-table accounts-table' }, h('thead', {}, h('tr', {}, ['Account', 'Profiles', 'Permissions', 'Status', 'Last sign-in', ''].map((t) => h('th', { text: t })))), body)))];
+  }
+
+  const VIEWS = { overview, profile, security, devices, websites, accounts, staff };
   let seq = 0;
   async function render(name) {
-    if (!VIEWS[name] || (name === 'staff' && !session.admin)) name = 'overview';
+    if (!VIEWS[name] || ((name === 'staff' || name === 'accounts') && !session.admin)) name = 'overview';
     const mine = ++seq, main = $('#content');
     nav(name); main.classList.add('leaving');
     try {

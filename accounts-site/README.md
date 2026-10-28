@@ -11,7 +11,8 @@ The public face of the staff account service. PM2 `hn-account-web`, loopback por
 - **Password & PIN**: change the password (needs the current one) and the six-digit sign-in PIN.
 - **Devices**: every signed-in session, with sign out of one or all others.
 - **Websites**: every HN Group website that uses staff accounts and whether this account can use it.
-- **Staff accounts** (system owner, owner-level accounts and Super Admin members only): search all staff, reset a password (shows a temporary password once), reset a PIN, disable or enable an account. Adding staff and changing roles stay in the staff portal.
+- **Sign-in accounts** (people who can manage staff; the user's request, 28 October 2026): sign-in accounts are separate from staff records and are **only created here**. Each account has its own username (any email address or a plain username), password, PIN, Google sign-in and **permissions** (roles; giving or removing roles needs "Manage roles", and roles with guarded permissions can only be given by people who have them). An account can use **any number of profiles** (each company on a staff record is its own profile) with one **default**, several accounts can share a profile, and an account can have **no profile** at all (it works on the HN Group websites but not the staff portal). HN Group Auth asks which profile to use at every sign-in, with the default first. Reset password/PIN, disable/enable and delete (someone's own account can only be disabled) are under More.
+- **Staff records** (same people): every staff record with its own sign-in account: create one, reset its password or PIN, disable or enable it. Adding staff and editing records stay in the staff portal.
 
 ## How sign-in works
 
@@ -34,4 +35,4 @@ The public face of the staff account service. PM2 `hn-account-web`, loopback por
 
 ## Tests
 
-`node --test accounts-site/test.cjs` runs the real staff account service and the real HN Group Auth with temporary data. It covers the sign-in flow, profile, devices, CSRF/origin/allowlist checks, admin-only access, password change, disabling (which signs the person out), password reset and sign-out.
+`node --test accounts-site/test.cjs` runs the real staff account service and the real HN Group Auth with temporary data. It covers the sign-in flow, profile, devices, CSRF/origin/allowlist checks, admin-only access, password change, disabling (which signs the person out), password reset and sign-out. `node --test accounts-site/sign-in-accounts.test.cjs` covers sign-in accounts: converted logins, the staff portal refusing to create accounts, creating accounts with several profiles, a default and their own permissions, the profile choice at Auth and what applications receive, profile-id account checks, disabling, accounts with no profile, and deletion.

@@ -20,8 +20,8 @@ const APPS = {
     granted: 'You have permission to manage services and publish incident updates.',
     restricted: 'Only the system owner and Super Admin members can manage status. Contact your system owner if you need access.' },
   website: { name: 'HN Group website configuration', short: 'website configuration', allowed: user => user.statusAdminAllowed, granted: 'You can manage the HN Group website and maintenance mode.', restricted: 'Only the system owner and Super Admin members can configure this website.' },
-  portal: { name: 'Staff portal', short: 'the staff portal', allowed: () => true,
-    granted: 'Your staff portal account is ready.', restricted: '' },
+  portal: { name: 'Staff portal', short: 'the staff portal', allowed: (user) => !user.standalone,
+    granted: 'Your staff portal account is ready.', restricted: 'This account has no staff profile, so it can’t use the staff portal.' },
   wiki: { name: 'HN Group Wiki', short: 'the wiki', allowed: () => true, granted: 'You can edit HN Group Wiki articles.', restricted: '' },
   branding: { name: 'HN Group brand centre', short: 'the brand centre', allowed: () => true, granted: 'You can use the HN Group brand centre.', restricted: '' },
   accounts: { name: 'HN Account', short: 'HN Account', allowed: () => true, granted: 'You can manage your HN account.', restricted: '' },
@@ -59,11 +59,11 @@ function message(text, ok = false) {
 }
 async function view(id, focus) {
   const stage = $('auth-stage');
-  const previous = ['login','pin','change-password','setup-code','account','loading'].find(name => !$(name).hidden);
+  const previous = ['login','pin','change-password','setup-code','profiles','account','loading'].find(name => !$(name).hidden);
   transitioning = true;
   const oldHeight = stage.getBoundingClientRect().height;
   if (previous && previous !== id) await animate($(previous), [{ opacity:1, transform:'translateY(0)' },{opacity:0,transform:'translateY(-8px)'}],{duration:130,easing:'ease-in'});
-  for (const name of ['login','pin','change-password','setup-code','account','loading']) $(name).hidden = name !== id;
+  for (const name of ['login','pin','change-password','setup-code','profiles','account','loading']) $(name).hidden = name !== id;
   const nextHeight = stage.getBoundingClientRect().height;
   stage.classList.add('transitioning');
   await Promise.all([
@@ -76,6 +76,31 @@ async function view(id, focus) {
   maybeVerifyPin();
 }
 function resetPin() { pendingPinSubmit = false; $('code').value = ''; $('code').removeAttribute('aria-invalid'); syncPin(); }
+let profileChosen = false;
+async function chooseProfile(user) {
+  const list = (user.profiles || []).slice().sort((a, b) => (b.default - a.default));
+  $('card-title').textContent = 'Choose a profile';
+  $('subtitle').textContent = 'You can use this account as any of these. Your default is first.';
+  const box = $('profile-list');
+  box.replaceChildren(...list.map((p) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'profile-option' + (p.default ? ' default' : '');
+    const initials = document.createElement('span'); initials.className = 'profile-initials'; initials.setAttribute('aria-hidden', 'true');
+    initials.textContent = (p.company || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+    const text = document.createElement('span'); text.className = 'profile-text';
+    const name = document.createElement('strong'); name.textContent = p.company;
+    const sub = document.createElement('small'); sub.textContent = [p.displayName, p.jobTitle].filter(Boolean).join(' · ');
+    text.append(name, sub);
+    b.append(initials, text);
+    if (p.default) { const tag = document.createElement('span'); tag.className = 'profile-default'; tag.textContent = 'Default'; b.append(tag); }
+    b.onclick = () => busy(b, async () => {
+      const data = await api('profile/select', { key: p.key });
+      profileChosen = true; await account(data.user);
+    }, 'Opening…');
+    return b;
+  }));
+  await view('profiles');
+  const first = box.querySelector('button'); if (first) first.focus({ preventScroll: true });
+}
 async function account(user) {
   if (user.passwordChangeRequired) {
     $('card-title').textContent = 'Create your password';
@@ -91,6 +116,9 @@ async function account(user) {
     for (const id of ['new-code','confirm-code']) { $(id).value = ''; syncSetupPin($(id)); }
     return await view('setup-code', 'new-code');
   }
+  // Several profiles (each company someone works at, or more on one account): ask which one, every sign-in
+  // (the user's request, 28 October 2026), with the default first and focused.
+  if ((user.profiles || []).length > 1 && !profileChosen) return await chooseProfile(user);
   $('card-title').textContent = 'You’re in.'; $('subtitle').textContent = 'One identity. Everything connected.';
   $('name').textContent = user.displayName; $('email').textContent = user.email; $('job').textContent = user.jobTitle || 'Not provided'; $('company').textContent = user.company || 'Not provided';
   $('initials').textContent = user.displayName.split(/\s+/).filter(Boolean).slice(0,2).map(n=>n[0]).join('');
@@ -153,6 +181,7 @@ async function logout() {
   await view('login','username');
 }
 $('logout').onclick = () => busy($('logout'), async () => { await logout(); await loadRemembered(true); });
+$('profiles-signout').onclick = () => busy($('profiles-signout'), async () => { await logout(); profileChosen = false; await view('login', 'username'); });
 $('back').onclick = () => busy($('back'), async () => { await logout(); resumeMode = false; googleOnly(false); $('resume-portrait').hidden = true; $('forget').hidden = true; });
 $('forget').onclick = () => busy($('forget'), async () => { await api('resume/forget', {}); clearRemembered(); await logout(); });
 $('resume-offer').onclick = () => busy($('resume-offer'), startResume);

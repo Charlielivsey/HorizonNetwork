@@ -12,7 +12,7 @@ const HEX = /^[a-f0-9]{64}$/;
 function allowed(session, store) {
   if (!session || session.data.impersonatorId || !session.person.account?.enabled || session.person.account.passwordTemporary || !store.hasCode(session.person)) return false;
   if (store.maintenance().on && !store.hasOwnerAccess(session.person)) return false;
-  return store.hasOwnerAccess(session.person) || (!session.person.system && (session.person.roleIds || []).some(id => {
+  return store.hasOwnerAccess(session.person) || ((!session.person.system || session.person.standalone) && (session.person.roleIds || []).some(id => {
     const role = store.getRole(id);
     return role?.name.toLowerCase() === 'super admin';
   }));
@@ -37,8 +37,15 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
   }
   function identity(active) {
     const p=active.person;
+    // The profile someone signed in as: websites and apps know them by its id (each company on a staff record is its
+    // own profile), with that company's job; permissions come from the sign-in account (store.viewOf).
+    const login=p.__login,profiles=login?store.loginProfiles(login):[];
     return {
-      id:p.id,displayName:p.displayName,firstName:p.firstName||'',lastName:p.lastName||'',email:(p.emails||[]).find(e=>e.primary)?.address||p.emails?.[0]?.address||store.loginName(p),
+      id:p.profileId||p.id,accountId:login?login.id:p.id,displayName:p.displayName,firstName:p.firstName||'',lastName:p.lastName||'',email:(p.emails||[]).find(e=>e.primary)?.address||p.emails?.[0]?.address||store.loginName(p),
+      username:store.loginName(p),
+      // Every profile this sign-in account can use, so HN Group Auth can ask which one (the default first chosen).
+      profileKey:p.profile?p.profile.key:null,profiles:profiles.map(x=>({key:x.key,company:x.company,jobTitle:x.jobTitle,displayName:x.displayName,default:!!login&&store.defaultProfile(login)?.key===x.key})),
+      ...(p.standalone?{standalone:true}:{}),
       jobTitle:p.jobTitle||'',company:p.company||'',companies:[...new Set([p.company,...(p.otherRoles||[]).map(r=>r.company)].filter(Boolean))],avatarUrl:store.avatarFile(p)?'/api/avatar':null,
       ...(p.account.passwordTemporary?{passwordChangeRequired:true,passwordMinLength:store.meView(p).passwordMinLength}:{}),
       ...(!store.hasCode(p)?{codeSetupRequired:true}:{}),statusAdminAllowed:allowed(active,store),
@@ -71,7 +78,7 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       logEvent(req, session, 'status-admin-sign-in');
       redirect(res, `${STATUS_ORIGIN}/auth/callback?code=${code}&state=${state}`); return true;
     }
-    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/password', '/api/auth/code', '/api/auth/network-leadership', '/api/auth/network-avatar', '/api/auth/account-status', '/api/auth/staff-directory', '/api/auth/vpn-pin', '/api/auth/accounts-session', '/api/auth/browser-issue', '/api/auth/browser-profile', '/api/auth/browser-avatar', '/api/auth/browser-offer', '/api/auth/browser-logout', '/api/auth/browser-unlock', '/api/auth/browser-lock', '/api/auth/browser-account', '/api/auth/browser-account-update', '/api/auth/browser-account-status', '/api/auth/browser-account-photo', '/api/auth/google-login', '/api/auth/google-link', '/api/auth/google-unlink'].includes(pathname)) return false;
+    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/password', '/api/auth/code', '/api/auth/network-leadership', '/api/auth/network-avatar', '/api/auth/account-status', '/api/auth/staff-directory', '/api/auth/vpn-pin', '/api/auth/accounts-session', '/api/auth/profile-select', '/api/auth/browser-issue', '/api/auth/browser-profile', '/api/auth/browser-avatar', '/api/auth/browser-offer', '/api/auth/browser-logout', '/api/auth/browser-unlock', '/api/auth/browser-lock', '/api/auth/browser-account', '/api/auth/browser-account-update', '/api/auth/browser-account-status', '/api/auth/browser-account-photo', '/api/auth/google-login', '/api/auth/google-link', '/api/auth/google-unlink'].includes(pathname)) return false;
     if (req.method !== 'POST') { sendJson(res, 405, { error: 'Method not allowed.' }); return true; }
     if (!credentials(req)) { sendJson(res, 401, { error: 'Status integration not authenticated.' }); return true; }
     const body = await readJsonBody(req, pathname === '/api/auth/browser-account-photo' ? 2 * 1024 * 1024 : undefined);
@@ -87,7 +94,7 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       if(action==='lock'){resume.lock(raw);sendJson(res,200,{ok:true});return true;}
       if(action==='logout'){resume.forget(raw);sendJson(res,200,{ok:true});return true;}
       if(action==='issue'){
-        const token=resume.issue(active.person.id,null,req.headers['user-agent'],{kind:'browser'});
+        const token=resume.issue(store.sessionIdOf(active.person),null,req.headers['user-agent'],{kind:'browser'});
         logEvent(req,active,'browser-connected');sendJson(res,200,{token,expires:resume.lookup(token).expires,user:identity(active),unlock:resume.unlockKey(token)});return true;
       }
       resume.touch(raw);
@@ -103,7 +110,7 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
         sendJson(res,200,{user:identity(active),profile:accountView(p)});return true;
       }
       if(action==='offer'){
-        const token=resume.issue(active.person.id,null,'HN Browser website PIN sign-in',{parent:raw});
+        const token=resume.issue(store.sessionIdOf(active.person),null,'HN Browser website PIN sign-in',{parent:raw});
         sendJson(res,200,{remembered:token});return true;
       }
       if(action==='avatar'){
@@ -121,13 +128,15 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
     if (pathname === '/api/auth/account-status') {
       const ids = Array.isArray(body.ids) ? body.ids.filter((x) => typeof x === 'string').slice(0, 5000) : [];
       const accounts = {};
-      for (const id of ids) { const p = store.getPerson(id); accounts[id] = !!(p && p.account && p.account.enabled); }
+      // Ids are profile ids (or a sign-in account's own id): enabled while any sign-in account using it is.
+      for (const id of ids) { const found = store.loginsForId(id), p = !found.length && store.getPerson(id); accounts[id] = found.length ? found.some((l) => l.account && l.account.enabled) : !!(p && p.account && p.account.enabled); }
       sendJson(res, 200, { accounts }); return true;
     }
     // HN Group Docs lists everyone's storage for people allowed to open it (names and job titles of enabled staff only).
     if (pathname === '/api/auth/staff-directory') {
-      const people = store.employees().filter((p) => p.account && p.account.enabled).map((p) => ({ id: p.id, displayName: p.displayName, jobTitle: p.jobTitle || '', company: p.company || '' }))
-        .sort((a, b) => a.displayName.localeCompare(b.displayName));
+      // One entry per profile (each company someone works at), for profiles an enabled sign-in account uses.
+      const people = store.allProfiles().filter((x) => store.loginsForId(x.profileId).some((l) => l.account && l.account.enabled))
+        .map((x) => ({ id: x.profileId, displayName: x.displayName, jobTitle: x.jobTitle || '', company: x.company }));
       sendJson(res, 200, { people }); return true;
     }
     // HN Secure Network asks for the PIN before connecting the VPN (checked through vpn.hngroup.org.uk).
@@ -169,12 +178,23 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
         if (store.hasCode(active.person)) { sendJson(res, 403, { error: 'A sign-in PIN is already configured.' }); return true; }
         await handleSetCode(req, res, active, { code: body.code }); return true;
       }
+      // HN Group Auth asks which profile to use after signing in (the user's request, 28 October 2026): the sign-in
+      // carries on as the chosen profile of the same sign-in account.
+      if (pathname === '/api/auth/profile-select') {
+        const login = active.person.__login, profile = login && store.loginProfiles(login).find((x) => x.key === body.key);
+        if (!profile) { sendJson(res, 400, { error: 'That profile isn’t available for this account.' }); return true; }
+        const view = store.viewOf(login, profile);
+        active.data.personId = view.principalId;
+        if (typeof sessions.save === 'function') sessions.save();
+        logEvent(req, { person: view, data: active.data }, 'profile-chosen', { detail: profile.company });
+        sendJson(res, 200, { user: identity({ person: view, data: active.data }) }); return true;
+      }
       // HN Account (accounts.hngroup.org.uk): swaps the sign-in Auth just made for the account website's own
       // staff session, which it keeps on its server and uses for the person's own account and, where their
       // permissions allow, staff accounts. The Auth sign-in session ends here.
       if (pathname === '/api/auth/accounts-session') {
         const ip = typeof body.ip === 'string' ? body.ip.slice(0, 64) : '', ua = typeof body.userAgent === 'string' ? body.userAgent.slice(0, 300) : '';
-        const raw = issueSession(active.person.id, ip, ua);
+        const raw = issueSession(store.sessionIdOf(active.person), ip, ua);
         sessions.delete(token);
         logEvent({ socket: { remoteAddress: '127.0.0.1' }, headers: { 'x-real-ip': ip, 'user-agent': ua } }, null, 'signed-in', { actor: store.loginName(active.person), detail: 'HN Account', ua });
         sendJson(res, 200, { token: raw, user: identity(active) }); return true;
@@ -199,7 +219,7 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       sendJson(res,200,{session:token,expires:active.data.expires,user:identity(active)});return true;
     }
     if (!allowed(active, store)) { sendJson(res, 403, { error: 'Only the system owner and Super Admin members can manage status.' }); return true; }
-    sendJson(res, 200, { session: token, expires: active.data.expires, user: { id: active.person.id, displayName: active.person.displayName } });
+    sendJson(res, 200, { session: token, expires: active.data.expires, user: { id: active.person.profileId || active.person.id, displayName: active.person.displayName } });
     return true;
   };
 }

@@ -93,9 +93,9 @@ function forget(raw) {
 }
 
 // Cancels every remembered browser for a person (password changed, login disabled...).
-function revokeFor(personId) {
+function revokeFor(personId, matches) {
   let changed = false;
-  for (const [k, t] of Object.entries(db.data.tokens)) if (t.personId === personId) { delete db.data.tokens[k]; changed = true; }
+  for (const [k, t] of Object.entries(db.data.tokens)) if (matches ? matches(t.personId, personId) : t.personId === personId) { delete db.data.tokens[k]; changed = true; }
   if (changed) db.save();
 }
 

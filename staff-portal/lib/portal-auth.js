@@ -80,16 +80,17 @@ function createPortalAuth({ store, sessions, resume, createSession, cookieFor, p
       return back(req, res, 'auth_error=unavailable');
     }
 
-    const person = user && store.getPerson(user.id);
-    if (!person || !person.account || !person.account.enabled) return back(req, res, 'auth_error=denied');
-    if (store.maintenance().on && !store.hasOwnerAccess(person)) return back(req, res, 'maintenance=1');
-
-    // Auth checked the password and PIN through its own portal session; end it now the browser gets its own.
+    // Auth checked the password and PIN (and the profile chosen) through its own staff session: carry on as that
+    // sign-in account and profile, and end Auth's session now the browser gets its own.
     const used = HEX.test(staffSession || '') && sessions.get(staffSession);
-    if (used && used.personId === person.id) sessions.delete(staffSession);
+    const person = used ? store.getPerson(used.personId) : user && store.getPerson(user.id);
+    // A sign-in account with no staff profile can use other HN Group websites, but not the staff portal.
+    if (!person || !person.account || !person.account.enabled || person.standalone) return back(req, res, 'auth_error=denied');
+    if (store.maintenance().on && !store.hasOwnerAccess(person)) return back(req, res, 'maintenance=1');
+    if (used) sessions.delete(staffSession);
 
     store.recordLogin(person);
-    const token = createSession(person.id, req, { allowPageLoad: true });
+    const token = createSession(store.sessionIdOf(person), req, { allowPageLoad: true });
     console.log(`${store.meView(person).username} signed in from ${clientIp(req)} (HN Group Auth)`);
     logEvent(req, null, 'signed-in', { actor: store.loginName(person), detail: 'HN Group Auth', ua: String(req.headers['user-agent'] || '').slice(0, 300) });
     const cookies = [cookieFor(req, token), stateCookie(req, '', 0)];
