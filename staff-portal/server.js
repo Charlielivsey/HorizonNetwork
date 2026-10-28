@@ -1336,18 +1336,19 @@ async function routeApi(req, res, pathname, session) {
     return sendFile(res, avatar.file, { "Content-Type": avatar.mime, "Cache-Control": "private, max-age=86400" });
   }
 
-  // Someone's Discord profile picture, fetched from Discord's CDN by the portal (pages here only load the portal's own
-  // images) and kept for an hour.
-  if (method === "GET" && (m = /^\/api\/discord-avatar\/([a-f0-9]{16})$/.exec(pathname))) {
-    const p = store.getPerson(m[1]), d = p && p.discord;
-    if (!d || !d.avatar) return send(res, 404, "Not found", { "Content-Type": "text/plain" });
-    const key = d.id + "/" + d.avatar, hit = discordAvatars.get(key);
+  // Someone's Discord profile picture or banner, fetched from Discord's CDN by the portal (pages here only load the
+  // portal's own images) and kept for an hour.
+  if (method === "GET" && (m = /^\/api\/discord-(avatar|banner)\/([a-f0-9]{16})$/.exec(pathname))) {
+    const p = store.getPerson(m[2]), d = p && p.discord, hash = d && (m[1] === "avatar" ? d.avatar : d.banner);
+    if (!hash) return send(res, 404, "Not found", { "Content-Type": "text/plain" });
+    const key = m[1] + "/" + d.id + "/" + hash, hit = discordAvatars.get(key);
     let image = hit && hit.expires > Date.now() ? hit : null;
     if (!image) {
       try {
-        const r = await fetch("https://cdn.discordapp.com/avatars/" + d.id + "/" + d.avatar + ".png?size=256", { signal: AbortSignal.timeout(6000), redirect: "error" });
+        const url = "https://cdn.discordapp.com/" + (m[1] === "avatar" ? "avatars" : "banners") + "/" + d.id + "/" + hash + ".png?size=" + (m[1] === "avatar" ? 256 : 1024);
+        const r = await fetch(url, { signal: AbortSignal.timeout(6000), redirect: "error" });
         const body = r.ok ? Buffer.from(await r.arrayBuffer()) : null;
-        if (!body || body.length > 2 * 1024 * 1024 || !(body[0] === 0x89 && body[1] === 0x50)) return send(res, 404, "Not found", { "Content-Type": "text/plain" });
+        if (!body || body.length > 4 * 1024 * 1024 || !(body[0] === 0x89 && body[1] === 0x50)) return send(res, 404, "Not found", { "Content-Type": "text/plain" });
         if (discordAvatars.size > 500) discordAvatars.clear();
         image = { body, expires: Date.now() + 3600000 };
         discordAvatars.set(key, image);

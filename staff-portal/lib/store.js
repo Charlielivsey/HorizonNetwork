@@ -547,7 +547,19 @@ function updateDiscordNames(updates) {
     // Their Discord profile as the bot sees it: username, display name and picture (an avatar hash on Discord's CDN).
     const globalName = typeof u.globalName === "string" ? u.globalName.slice(0, 64) : null;
     const avatar = typeof u.avatar === "string" && /^(a_)?[a-f0-9]{32}$/.test(u.avatar) ? u.avatar : null;
-    const apply = (d) => { if (d.username === name && (d.globalName || null) === globalName && (d.avatar || null) === avatar) return false; d.username = name; d.globalName = globalName; d.avatar = avatar; return true; };
+    // ...and the rest of their public profile: banner, profile colour and badges (public flags).
+    const hasMore = u.banner !== undefined || u.accentColor !== undefined || u.publicFlags !== undefined;
+    const banner = typeof u.banner === "string" && /^(a_)?[a-f0-9]{32}$/.test(u.banner) ? u.banner : null;
+    const accentColor = Number.isInteger(u.accentColor) && u.accentColor >= 0 && u.accentColor <= 0xffffff ? u.accentColor : null;
+    const publicFlags = Number.isInteger(u.publicFlags) && u.publicFlags >= 0 ? u.publicFlags : 0;
+    const apply = (d) => {
+      const same = d.username === name && (d.globalName || null) === globalName && (d.avatar || null) === avatar &&
+        (!hasMore || ((d.banner || null) === banner && (d.accentColor ?? null) === accentColor && (d.publicFlags || 0) === publicFlags));
+      if (same) return false;
+      d.username = name; d.globalName = globalName; d.avatar = avatar;
+      if (hasMore) { d.banner = banner; d.accentColor = accentColor; d.publicFlags = publicFlags; }
+      return true;
+    };
     for (const l of logins) if (l.account && l.account.discord && l.account.discord.id === u.id && apply(l.account.discord)) changed++;
     for (const p of people) if (p.discord && p.discord.id === u.id && apply(p.discord)) { p.discord.updatedAt = now; changed++; }
   }
@@ -645,7 +657,15 @@ function publicView(p) {
     languages: p.languages || [],
     bio: p.bio || "",
     // Their Discord account, when a sign-in account of theirs is connected to Discord (kept up to date by the bot).
-    discord: p.discord ? { id: p.discord.id, username: p.discord.username || null, globalName: p.discord.globalName || null, avatarUrl: p.discord.avatar ? "/api/discord-avatar/" + p.id + "?v=" + p.discord.avatar.slice(-8) : null, updatedAt: p.discord.updatedAt || null } : null,
+    discord: p.discord ? {
+      id: p.discord.id, username: p.discord.username || null, globalName: p.discord.globalName || null,
+      avatarUrl: p.discord.avatar ? "/api/discord-avatar/" + p.id + "?v=" + p.discord.avatar.slice(-8) : null,
+      bannerUrl: p.discord.banner ? "/api/discord-banner/" + p.id + "?v=" + p.discord.banner.slice(-8) : null,
+      accentColor: p.discord.accentColor ?? null, publicFlags: p.discord.publicFlags || 0,
+      // When the Discord account was made (from its id).
+      createdAt: new Date(Number((BigInt(p.discord.id) >> 22n) + 1420070400000n)).toISOString(),
+      updatedAt: p.discord.updatedAt || null,
+    } : null,
   };
 }
 

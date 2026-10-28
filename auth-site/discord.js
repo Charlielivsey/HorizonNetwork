@@ -56,6 +56,10 @@ function createDiscord({ origin, staff, send, profile, entryFor, setCookie, cook
     res.writeHead(302, { Location: back(next), 'Cache-Control': 'no-store', 'Set-Cookie': [setCookie(BINDING, '', 0), setCookie(TICKET, token, 300)] });
     res.end();
   }
+  // The parts of a Discord user kept on staff profiles: username, display name, picture, banner, colour and badges.
+  const profileOf = (u) => ({ id: String(u.id), username: String(u.username).slice(0, 64), globalName: typeof u.global_name === 'string' ? u.global_name.slice(0, 64) : null,
+    avatar: typeof u.avatar === 'string' ? u.avatar : null, banner: typeof u.banner === 'string' ? u.banner : null,
+    accentColor: Number.isInteger(u.accent_color) ? u.accent_color : null, publicFlags: Number.isInteger(u.public_flags) ? u.public_flags : 0 });
   // Who signed in, from Discord.
   async function identity(code, c) {
     let response;
@@ -72,7 +76,7 @@ function createDiscord({ origin, staff, send, profile, entryFor, setCookie, cook
       me = r.ok ? await r.json() : null;
     } catch { me = null; }
     if (!me || !ID.test(String(me.id || '')) || typeof me.username !== 'string') throw fail(401, 'Discord’s answer didn’t check out, so you weren’t signed in.');
-    return { id: String(me.id), username: me.username.slice(0, 64), globalName: typeof me.global_name === 'string' ? me.global_name.slice(0, 64) : null, avatar: typeof me.avatar === 'string' ? me.avatar : null };
+    return profileOf(me);
   }
 
   // The bot: looks up every connected Discord account and stores any changed username.
@@ -90,7 +94,7 @@ function createDiscord({ origin, staff, send, profile, entryFor, setCookie, cook
         if (r.status === 429) { const wait = Number((await r.json().catch(() => ({}))).retry_after || 1); await new Promise((ok) => setTimeout(ok, Math.min(30, wait) * 1000)); continue; }
         if (r.status === 401) break; // the bot token isn't valid
         const u = r.ok ? await r.json().catch(() => null) : null;
-        if (u && typeof u.username === 'string') updates.push({ id, username: u.username.slice(0, 64), globalName: typeof u.global_name === 'string' ? u.global_name : null, avatar: typeof u.avatar === 'string' ? u.avatar : null });
+        if (u && typeof u.username === 'string') updates.push(profileOf(u));
         await new Promise((ok) => setTimeout(ok, 250));
       }
       if (!updates.length) return 0;
