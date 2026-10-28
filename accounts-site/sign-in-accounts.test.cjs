@@ -151,6 +151,21 @@ test('sign-in accounts: made on HN Account, several profiles with a default, own
     data = await (await admin.get('/api/logins')).json();
     assert.equal((await admin.post('/api/logins/' + made.account.id + '/delete', {})).status, 200);
     assert.equal((await admin.post('/api/logins/' + samOwn.id + '/delete', {})).status, 400);
+    // catnap@hngroup.org.uk is the system owner, whatever profile it uses, and can change anything, its own account included.
+    made = await (await admin.post('/api/logins', { displayName: 'Catnap', username: 'catnap@hngroup.org.uk', profiles: [{ personId: ada.id, company: 'HN Group' }] })).json();
+    first = await authSignIn('catnap@hngroup.org.uk', made.temporaryPassword);
+    await authPost('/api/password', { newPassword: 'Catnap-pass-5521!' }, first.session);
+    await authPost('/api/setup-code', { code: '826153' }, first.session);
+    signed = await authSignIn('catnap@hngroup.org.uk', 'Catnap-pass-5521!', '826153');
+    assert.equal(signed.user.ownerAccess, true); assert.equal(signed.user.statusAdminAllowed, true);
+    const owner = await hnAccount('catnap@hngroup.org.uk', 'Catnap-pass-5521!', '826153');
+    const own = await owner.post('/api/logins/' + made.account.id, { roleIds: [itRole.id], owner: false });
+    assert.equal(own.status, 200, await own.clone().text()); assert.deepEqual((await own.json()).account.roleIds, [itRole.id]);
+    assert.equal((await owner.post('/api/logins/' + desk.account.id, { owner: 'level' })).status, 200, 'the system owner can make an account owner-level');
+    assert.equal((await admin.post('/api/logins/' + desk.account.id, { owner: false })).status, 403, 'nobody else can change owner access');
+    // Saving your own account without changing its permissions is fine for anyone.
+    const adaAccount = (await (await admin.get('/api/logins')).json()).accounts.find((x) => x.username === 'ada.test@hngroup.org.uk');
+    assert.equal((await admin.post('/api/logins/' + adaAccount.id, { roleIds: adaAccount.roleIds, profiles: [] })).status, 200);
     // Only people who manage staff see accounts; only people who can manage roles give permissions.
     const samSite = await hnAccount('sam.test@hngroup.org.uk', 'Sam-password-582!', '493817');
     assert.equal((await samSite.get('/api/logins')).status, 403);

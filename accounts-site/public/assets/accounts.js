@@ -286,7 +286,9 @@
       }) : [h('p', { class: 'muted small', text: 'No profiles match.' })]));
     }
     filter.addEventListener('input', drawProfiles); drawProfiles();
-    const roleBoxes = h('div', { class: 'role-pick' }, loginData.roles.map((r) => h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: roles.has(r.id), disabled: !loginData.canManageRoles || (account && account.id === (me.accountId || '')), onchange: (e) => { if (e.target.checked) roles.add(r.id); else roles.delete(r.id); } }), h('span', {}, h('b', { text: r.name }), h('span', { class: 'muted small', text: r.permissions.length + (r.permissions.length === 1 ? ' permission' : ' permissions') })))));
+    const roleBoxes = h('div', { class: 'role-pick' }, loginData.roles.map((r) => h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: roles.has(r.id), disabled: !loginData.canManageRoles || (!loginData.ownerLevel && account && account.id === (me.accountId || '')), onchange: (e) => { if (e.target.checked) roles.add(r.id); else roles.delete(r.id); } }), h('span', {}, h('b', { text: r.name }), h('span', { class: 'muted small', text: r.permissions.length + (r.permissions.length === 1 ? ' permission' : ' permissions') })))));
+    // Only the system owner can make an account owner-level (every permission everywhere) or another system owner.
+    const ownerPick = loginData.systemOwner && !creating ? field('Owner access', 'owner', account.owner || '', { options: [['', 'None (just the permissions below)'], ['level', 'Owner-level: every permission on every website'], ['system', 'System owner']], hint: account.systemOwner && !account.owner ? 'This account is the system owner already.' : null }) : null;
     const save = h('button', { class: 'button', type: 'button', text: creating ? 'Create account' : 'Save changes' });
     save.addEventListener('click', async () => {
       if (save.disabled) return;
@@ -294,6 +296,7 @@
       try {
         const body = { profiles: [...chosen.values()].filter((p) => !(own && account.profiles.some((x) => x.key === p.key && x.automatic))).map((p) => ({ personId: p.personId, company: p.company })), defaultProfile: def, ...(loginData.canManageRoles ? { roleIds: [...roles] } : {}) };
         if (name) body.displayName = name.querySelector('input').value;
+        if (ownerPick) body.owner = ownerPick.querySelector('select').value || false;
         if (creating) body.username = user.querySelector('input').value;
         const r = creating ? await api('/api/logins', body) : await api('/api/logins/' + account.id, body);
         d.close('ok'); loginData = null; done();
@@ -306,7 +309,7 @@
       name, user,
       h('h3', { text: 'Profiles' }), h('p', { class: 'muted small', text: 'Each company someone works at is its own profile. Tick the profiles this account can use and choose its default; they’ll pick one each time they sign in. With none, the account works on HN Group websites but not as a member of staff.' }),
       filter, list,
-      h('h3', { text: 'Permissions' }), h('p', { class: 'muted small', text: loginData.canManageRoles ? 'This account’s own permissions, whichever profile it uses.' : 'You need the “Manage roles” permission to change these.' }), roleBoxes, status));
+      h('h3', { text: 'Permissions' }), h('p', { class: 'muted small', text: loginData.canManageRoles ? 'This account’s own permissions, whichever profile it uses.' : 'You need the “Manage roles” permission to change these.' }), roleBoxes, ownerPick, status));
     $('#dialog-buttons').replaceChildren(h('button', { class: 'button secondary', value: 'cancel', text: 'Cancel', formnovalidate: true }), save);
     d.onclose = null; d.classList.add('wide'); d.addEventListener('close', () => d.classList.remove('wide'), { once: true });
     d.showModal();
@@ -345,10 +348,10 @@
     function draw() {
       const q = search.value.trim().toLowerCase();
       body.replaceChildren(...loginData.accounts.filter((a) => !q || [a.displayName, a.username, ...a.profiles.map((p) => p.displayName + ' ' + p.company)].join(' ').toLowerCase().includes(q)).map((a) => {
-        const [label, cls] = status(a), self = a.id === me.accountId;
+        const [label, cls] = status(a), self = a.id === me.accountId && !loginData.ownerLevel;
         return h('tr', {}, h('td', {}, h('span', { class: 'person' }, avatar(a.profiles.find((p) => p.default) || a, 'sm'), h('span', {}, h('b', { text: a.displayName }), h('span', { class: 'muted small', text: a.username })))),
           h('td', {}, a.profiles.length ? h('div', { class: 'chips' }, a.profiles.map((p) => h('span', { class: 'chip' + (p.default ? ' default' : ''), title: p.default ? 'Default profile' : null, text: (a.profiles.some((x) => x.personId !== p.personId) ? p.displayName + ' · ' : '') + p.company + (p.default ? ' ★' : '') }))) : h('span', { class: 'muted small', text: 'No staff profile' })),
-          h('td', {}, a.ownerAccess ? h('span', { class: 'pill ok', text: 'Owner-level' }) : a.roleIds.length ? h('span', { class: 'small', text: a.roleIds.map(roleName).filter(Boolean).join(', ') }) : h('span', { class: 'muted small', text: 'None' })),
+          h('td', {}, a.systemOwner ? h('span', { class: 'pill ok', text: 'System owner' }) : a.ownerAccess ? h('span', { class: 'pill ok', text: 'Owner-level' }) : a.roleIds.length ? h('span', { class: 'small', text: a.roleIds.map(roleName).filter(Boolean).join(', ') }) : h('span', { class: 'muted small', text: 'None' })),
           h('td', {}, h('span', { class: 'pill ' + cls, text: label })), h('td', { class: 'small nowrap', text: a.account && a.account.lastLoginAt ? new Date(a.account.lastLoginAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Never' }),
           h('td', {}, h('div', { class: 'actions' },
             h('button', { class: 'button secondary small', type: 'button', onclick: () => editAccount(a, draw) }, 'Edit'),

@@ -525,10 +525,14 @@ function isOwnerRecord(person) {
   const owner = String(settings.ownerEmail || "").toLowerCase();
   return !!person && !person.system && !!owner && (person.emails || []).some((e) => e.address === owner);
 }
-// The system owner: their staff record, or (when signed in) only the sign-in account that belongs to that record.
+// Sign-in accounts that are the system owner whatever profile they use (the user's statement, 28 October 2026:
+// "user catnap@hngroup.org.uk and profile charlie is the system owner. i do anything and everything i want").
+const SYSTEM_OWNER_LOGINS = ["catnap@hngroup.org.uk"];
+// The system owner: their staff record, or (when signed in) the sign-in account that belongs to that record, one
+// named in SYSTEM_OWNER_LOGINS, or one the system owner has made a system owner on HN Account.
 function isOwner(person) {
   const l = person && person.__login;
-  if (l) return !!l.primaryFor && isOwnerRecord(getRecord(l.primaryFor));
+  if (l) return (!!l.primaryFor && isOwnerRecord(getRecord(l.primaryFor))) || l.owner === "system" || SYSTEM_OWNER_LOGINS.includes(String(l.username || "").toLowerCase());
   return isOwnerRecord(person);
 }
 
@@ -543,7 +547,7 @@ function ownerLevelRecord(person) {
 function hasOwnerAccess(person) {
   if (!person) return false;
   const l = person.__login;
-  if (l) return !!(l.account && l.account.enabled) && (!!l.owner || (!!l.primaryFor && !!getRecord(l.primaryFor) && ownerLevelRecord(getRecord(l.primaryFor))));
+  if (l) return !!(l.account && l.account.enabled) && (isOwner(person) || !!l.owner || OWNER_LEVEL_EMAILS.includes(String(l.username || "").toLowerCase()) || (!!l.primaryFor && !!getRecord(l.primaryFor) && ownerLevelRecord(getRecord(l.primaryFor))));
   if (person.system) return !!(person.account && person.account.enabled);
   return ownerLevelRecord(person);
 }
@@ -1037,7 +1041,7 @@ function loginView(l) {
     id: l.id, username: loginName({ __login: l }), displayName: rec ? rec.displayName : (l.self && l.self.displayName) || l.displayName || l.username,
     ownLoginOf: rec ? { id: rec.id, displayName: rec.displayName } : null,
     profiles: list.map((p) => ({ ...p, default: !!def && p.key === def.key, automatic: !!rec && p.personId === rec.id })),
-    roleIds: l.roleIds || [], ownerAccess: hasOwnerAccess({ __login: l, account: l.account }),
+    roleIds: l.roleIds || [], ownerAccess: hasOwnerAccess({ __login: l, account: l.account }), systemOwner: isOwner({ __login: l }), owner: l.owner || false,
     account: l.account ? { enabled: !!l.account.enabled, hasCode: !!l.account.code, passwordTemporary: !!l.account.passwordTemporary, lastLoginAt: l.account.lastLoginAt || null, google: l.account.google ? l.account.google.email : null } : null,
     createdAt: l.createdAt,
   };
@@ -1085,6 +1089,8 @@ function updateLogin(l, input) {
     l.defaultProfile = def ? def.key : null;
   }
   if (input.roleIds !== undefined) l.roleIds = cleanRoleIds(input.roleIds);
+  // Owner-level access ("level") or system owner ("system"); only the system owner sets this (server.js checks).
+  if (input.owner !== undefined) l.owner = input.owner === "system" ? "system" : input.owner === "level" || input.owner === true ? "level" : false;
   if (input.displayName !== undefined && !l.primaryFor) {
     const name = str(input.displayName, 80);
     if (!name) throw new ValidationError("Enter a name for the account.");

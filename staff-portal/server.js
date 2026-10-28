@@ -1345,7 +1345,7 @@ async function routeApi(req, res, pathname, session) {
       }
     };
     if (method === "GET" && pathname === "/api/logins") {
-      return sendJson(res, 200, { accounts: store.listLogins(), profiles: store.allProfiles(), roles: store.listRoles().map((r) => ({ id: r.id, name: r.name, permissions: r.permissions })), canManageRoles: store.can(me, "access.manage") });
+      return sendJson(res, 200, { accounts: store.listLogins(), profiles: store.allProfiles(), roles: store.listRoles().map((r) => ({ id: r.id, name: r.name, permissions: r.permissions })), canManageRoles: store.can(me, "access.manage"), ownerLevel: store.hasOwnerAccess(me), systemOwner: store.isOwner(me) });
     }
     if (method === "POST" && pathname === "/api/logins") {
       const body = await readJsonBody(req);
@@ -1359,13 +1359,19 @@ async function routeApi(req, res, pathname, session) {
       if (!l) throw httpError(404, "Account not found.");
       const own = l.primaryFor && store.getPerson(l.primaryFor);
       if (own && store.isOwner(own) && !store.hasOwnerAccess(me)) throw httpError(403, "Only the system owner can change the system owner's account.");
-      const self = l.id === myLogin, label = store.loginView(l).username;
+      // Owner-level accounts can do anything, including to their own account (the user's request, 28 October 2026).
+      const ownerLevel = store.hasOwnerAccess(me);
+      const self = l.id === myLogin && !ownerLevel, label = store.loginView(l).username;
       if (!action) {
         const body = await readJsonBody(req);
         if (body.roleIds !== undefined) {
-          if (self) throw httpError(400, "You can't change your own account's permissions.");
-          guardRoles(l.roleIds || [], Array.isArray(body.roleIds) ? body.roleIds.map(String) : []);
+          const before = (l.roleIds || []).slice().sort().join(), after = (Array.isArray(body.roleIds) ? body.roleIds.map(String) : []).slice().sort().join();
+          if (before !== after) {
+            if (self) throw httpError(400, "You can't change your own account's permissions.");
+            guardRoles(l.roleIds || [], Array.isArray(body.roleIds) ? body.roleIds.map(String) : []);
+          }
         }
+        if (body.owner !== undefined && String(body.owner) !== String(l.owner || false) && !store.isOwner(me)) throw httpError(403, "Only the system owner can give or remove owner access.");
         store.updateLogin(l, body);
         logEvent(req, session, "login-updated", { target: label });
         return sendJson(res, 200, { account: store.loginView(l) });
