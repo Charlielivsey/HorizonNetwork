@@ -428,7 +428,7 @@ test('company register: group structure update', () => {
     assert.equal(ham.name, 'HN Group Management'); assert.deepEqual(ham.previousNames.map((p) => p.name), ['Horizon Assets Management Limited']);
     assert.ok(!by('Horizon Assets Management Limited'));
     // Then HN Group Limited's holders of 28 October 2026 (tested on their own below).
-    assert.deepEqual(current(hn).map((p) => [p.name, p.kind, p.share]), [['Charlie Livsey', 'Individual', '30'], ['CLivsey Holdings Limited', 'Relevant legal entity', '55'], ['Jack Vinckx', 'Individual', '15']]);
+    assert.deepEqual(current(hn).map((p) => [p.name, p.kind, p.share]), [['Charlie Livsey', 'Individual', '30'], ['CLivsey Holdings Limited', 'Parent company', '55'], ['Jack Vinckx', 'Individual', '15']]);
     assert.ok(inv && inv.parent === hn.slug && inv.managedBy === hn.slug && inv.officers.some((o) => o.name === 'Charlie Livsey'));
     assert.deepEqual(current(inv).map((p) => [p.name, p.share, p.control.length]), [['HN Group Limited', '100', 4]]);
     for (const c of [media, net]) {
@@ -478,7 +478,7 @@ test('company register: HN Group shareholding of 28 October 2026', () => {
     delete process.env.COMPANIES_GROUP_UPDATES;
     s = fresh(); s.init(dir); s = fresh(); s.init(dir);
     const hn = s.company('hn-group'), current = hn.psc.filter((p) => !p.ceased);
-    assert.deepEqual(current.map((p) => [p.name, p.kind, p.share, p.classB, p.classC]).sort(), [['CLivsey Holdings Limited', 'Relevant legal entity', '55', '', '55'], ['Charlie Livsey', 'Individual', '30', '', '30'], ['Jack Vinckx', 'Individual', '15', '15', '']]);
+    assert.deepEqual(current.map((p) => [p.name, p.kind, p.share, p.classB, p.classC]).sort(), [['CLivsey Holdings Limited', 'Parent company', '55', '', '55'], ['Charlie Livsey', 'Individual', '30', '', '30'], ['Jack Vinckx', 'Individual', '15', '15', '']]);
     assert.ok(hn.psc.some((p) => p.name === 'Old Holder' && p.ceased), 'other holders cease rather than being deleted');
     const charlie = current.find((p) => p.name === 'Charlie Livsey'), cl = current.find((p) => p.name === 'CLivsey Holdings Limited');
     assert.deepEqual(charlie.control, ['Ownership of shares – more than 25% but not more than 50%', 'Ownership of voting rights – more than 25% but not more than 50%', 'Right to appoint and remove directors']);
@@ -493,6 +493,23 @@ test('company register: HN Group shareholding of 28 October 2026', () => {
     assert.ok(filed.some((f) => /^Capital: Statement of capital/.test(f)));
     assert.ok(!filed.some((f) => /Jack Vinckx/.test(f)), 'Jack’s holding is unchanged, so nothing is filed for him');
     for (const f of s.db.filings) assert.ok(fs.existsSync(s.filePath(f.file)));
+    // CLivsey Holdings Limited is HN Group Limited's parent company, on the register with nothing invented.
+    const parent = s.company(hn.parent);
+    assert.ok(parent && parent.legalName === 'CLivsey Holdings Limited' && parent.status === 'Active');
+    assert.deepEqual([parent.officers.length, parent.psc.length, parent.number, parent.incorporated], [0, 0, '', '']);
+    assert.ok(s.children(parent.slug).some((c) => c.slug === 'hn-group'));
+    // Where the shareholding was already in place with CLivsey Holdings as a relevant legal entity, it becomes a parent company with a filing.
+    process.env.COMPANIES_GROUP_UPDATES = 'off';
+    s = fresh(); s.init(dir);
+    const entry = s.company('hn-group').psc.find((p) => p.name === 'CLivsey Holdings Limited' && !p.ceased); entry.kind = 'Relevant legal entity';
+    s.company('hn-group').parent = '';
+    s.db.migrations.splice(s.db.migrations.indexOf('clivsey-holdings-parent-2026-10-28'), 1); s.save();
+    delete process.env.COMPANIES_GROUP_UPDATES;
+    s = fresh(); s.init(dir);
+    assert.equal(s.company('hn-group').parent, parent.slug);
+    assert.equal(s.company('hn-group').psc.find((p) => p.name === 'CLivsey Holdings Limited' && !p.ceased).kind, 'Parent company');
+    assert.equal(s.db.companies.filter((c) => c.legalName === 'CLivsey Holdings Limited').length, 1, 'not added twice');
+    assert.ok(/Previous details.*Relevant legal entity/.test(JSON.stringify(s.db.filings.at(-1).doc.rows)) && /Change of details of CLivsey Holdings Limited/.test(s.db.filings.at(-1).description));
   } finally {
     delete process.env.COMPANIES_GROUP_UPDATES;
     fs.rmSync(dir, { recursive: true, force: true });

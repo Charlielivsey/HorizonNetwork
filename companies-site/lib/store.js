@@ -84,17 +84,50 @@ function runGroupMigrations() {
     }
     db.migrations.push('rename-hn-group-management');
   }
-  if (process.env.COMPANIES_GROUP_UPDATES !== 'off' && !db.migrations.includes('hn-group-shareholding-2026-10-28')) {
-    // All or nothing: if the change can't be made, the register is left exactly as it was and says why.
+  // All or nothing: if a change can't be made, the register is left exactly as it was and says why.
+  const atomically = (name, fn) => {
+    if (process.env.COMPANIES_GROUP_UPDATES === 'off' || db.migrations.includes(name)) return;
     const snapshot = JSON.stringify(db), files = new Set(db.filings.map((f) => f.file));
-    try { hnGroupShareholding20261028(); db.migrations.push('hn-group-shareholding-2026-10-28'); }
+    try { fn(); db.migrations.push(name); }
     catch (e) {
       for (const f of db.filings) if (!files.has(f.file)) removeFile(f.file);
       db = JSON.parse(snapshot);
-      audit('system:hn-group-shareholding', 'failed', e.message);
-      console.error('HN Group shareholding update not applied: ' + e.message);
+      audit('system:' + name, 'failed', e.message);
+      console.error('Register update ' + name + ' not applied: ' + e.message);
     }
+  };
+  atomically('hn-group-shareholding-2026-10-28', hnGroupShareholding20261028);
+  atomically('clivsey-holdings-parent-2026-10-28', clivseyHoldingsParent20261028);
+}
+
+// The user's request (28 October 2026): "CLivsey Holdings is the parent company of HN Group". CLivsey Holdings Limited
+// goes on the register (only what's known: its name and that it's active; its officers, owners, number and dates are
+// left for staff to record), HN Group Limited's parent becomes it, and its entry as HN Group Limited's person with
+// significant control is a parent company (a Change of details filing if it was recorded as a relevant legal entity).
+function clivseyHoldingsParent20261028() {
+  const today = now().slice(0, 10), actor = 'system:clivsey-holdings-parent';
+  const same = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+  const hn = db.companies.find((c) => same(c.legalName, 'HN Group Limited'));
+  if (!hn) { audit(actor, 'skipped', 'HN Group Limited is not on the register'); return; }
+  let cl = db.companies.find((c) => same(c.legalName, 'CLivsey Holdings Limited'));
+  if (!cl) {
+    cl = blankCompany({ slug: '', name: 'CLivsey Holdings', legalName: 'CLivsey Holdings Limited', description: 'The parent company of HN Group Limited.' });
+    let s = 'clivsey-holdings', n = 2; while (company(s)) s = 'clivsey-holdings-' + n++;
+    cl.slug = s; cl.status = 'Active';
+    db.companies.push(cl);
+    audit(actor, 'company.create', cl.slug);
   }
+  if (hn.parent !== cl.slug) { hn.parent = cl.slug; audit(actor, 'company.parent', hn.slug + ' → ' + cl.slug); }
+  const p = hn.psc.find((x) => !x.ceased && same(x.name, cl.legalName));
+  if (p && p.kind !== 'Parent company') {
+    const pick = (y) => ({ name: y.name, kind: y.kind, share: y.share || '', control: [...(y.control || [])], classA: y.classA || '', classB: y.classB || '', classC: y.classC || '', classCIssuedBy: y.classCIssuedBy || '' });
+    const show = (y) => [y.name, y.kind, y.share ? y.share + '%' : 'Shareholding not recorded', classText(y), (y.control || []).join('; ')].filter(Boolean).join(' · ');
+    const a = pick(p); p.kind = 'Parent company';
+    newGeneratedFiling(hn, today, 'Persons with significant control', 'Change of details of ' + p.name + ' as a person with significant control on ' + longDate(today), { code: FORM_CODES.psc_change, heading: CHANGE_TYPES.psc_change.label,
+      rows: [['Person with significant control', p.name], ['Previous details', show(a)], ['New details', show(pick(p))], ['Changed on', longDate(today)]] });
+    audit(actor, 'psc.change', hn.slug + ' ' + p.name + ' → Parent company');
+  }
+  hn.updatedAt = cl.updatedAt = now();
 }
 
 // The user's request (28 October 2026): HN Group Limited is held by CLivsey Holdings Limited (55%, Class C), Charlie
@@ -113,7 +146,7 @@ function hnGroupShareholding20261028() {
   const before = shareClasses(hn) || { classA: 0, classB: 0, classC: 0 };
   const beforeTotal = hn.psc.filter((p) => !p.ceased).reduce((n, p) => n + Number(p.share || 0), 0);
   const TARGET = [
-    { name: 'CLivsey Holdings Limited', kind: 'Relevant legal entity', classC: '55' },
+    { name: 'CLivsey Holdings Limited', kind: 'Parent company', classC: '55' },
     { name: 'Charlie Livsey', kind: 'Individual', classC: '30' },
     { name: 'Jack Vinckx', kind: 'Individual', classB: '15' },
   ];
