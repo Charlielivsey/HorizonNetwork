@@ -1,0 +1,25 @@
+/* Horizon Advertising: the standard HN Group website theme (site.css, shared with Horizon Network) plus a few extras. */
+.brand img { height: 44px; width: auto; }
+.site-footer .footer-inner img { height: 44px; width: auto; }
+.ad-pillars { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.pillar h3 { margin: 0 0 .5rem; font-size: 1.15rem; }
+@media (max-width: 900px) { .ad-pillars { grid-template-columns: minmax(0, 1fr); } }
+.values li strong { color: var(--text); }
+/* The roundel with the HN colours orbiting it */
+.ad-orbit { position: relative; width: min(340px, 80vw); aspect-ratio: 1; display: grid; place-items: center; }
+.ad-orbit img { width: 62%; height: auto; position: relative; z-index: 1; filter: drop-shadow(0 18px 40px rgba(85, 20, 180, .22)); }
+.ad-orbit::before, .ad-orbit::after { content: ""; position: absolute; inset: 0; border-radius: 50%; }
+.ad-orbit::before { border: 2px dashed color-mix(in srgb, var(--accent) 35%, transparent); animation: ad-spin 40s linear infinite; }
+.ad-orbit::after { inset: 9%; background: conic-gradient(from 20deg, var(--pink), var(--purple), var(--yellow), var(--teal), var(--plum), var(--raspberry), var(--green), var(--pink)); opacity: .14; filter: blur(18px); }
+@keyframes ad-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .ad-orbit::before { animation: none; } }
+@media (max-width: 820px) { .ad-orbit { width: 220px; } }
+/* Call to action */
+.cta { display: flex; align-items: center; justify-content: space-between; gap: 2rem; flex-wrap: wrap; padding: clamp(1.8rem, 4vw, 3rem); border-radius: calc(var(--radius) + 6px); color: #fff;
+  background: radial-gradient(circle at 85% 20%, rgba(233, 125, 232, .35), transparent 55%), linear-gradient(135deg, #2a1360, var(--purple)); box-shadow: var(--shadow); }
+.cta h2 { color: #fff; margin: 0 0 .4rem; }
+.cta p { margin: 0; color: rgba(255, 255, 255, .8); max-width: 52ch; }
+.cta .btn-primary { background: #fff; color: var(--purple); }
+.cta .btn-primary:hover { background: #f2edfb; }
+.cta-section { padding-top: 0; }
+#news:not([hidden]) + .cta-section { padding-top: 0; }
