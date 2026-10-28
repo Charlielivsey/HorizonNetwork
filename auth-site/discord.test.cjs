@@ -12,7 +12,7 @@ test('Continue with Discord: Discord ID on the staff record, connect, sign in, b
   store.issueTemporaryPassword(person); store.setPassword(person, 'Cedar-river-9842!'); store.setCode(person, '582947');
   assert.throws(() => store.saveEmployee({ firstName: 'Bad', lastName: 'Id', company: store.COMPANIES[0], jobTitle: 'x', discordId: 'abc', emails: [{ local: 'bad.id', domain: 'hngroup.org.uk', primary: true }] }), /Discord user ID/);
   const secret = path.join(dir, 'secret'); fs.writeFileSync(secret, 'f'.repeat(64)); process.env.STATUS_SSO_SECRET_FILE = secret;
-  const discordFile = path.join(dir, 'discord.json'); process.env.DISCORD_OAUTH_FILE = discordFile;
+  const discordFile = path.join(dir, 'discord.json'); process.env.DISCORD_OAUTH_FILE = discordFile; process.env.HN_DISCORD_PRESENCE = '0';
   const reserve = http.createServer(); await new Promise((r) => reserve.listen(0, '127.0.0.1', r)); const port = reserve.address().port; await new Promise((r) => reserve.close(r));
   const child = spawn(process.execPath, [path.resolve(__dirname, '../staff-portal/server.js')], { env: { ...process.env, PORT: String(port), DATA_DIR: dir }, stdio: 'ignore' });
   process.env.STAFF_PORTAL_BACKEND = 'http://127.0.0.1:' + port;

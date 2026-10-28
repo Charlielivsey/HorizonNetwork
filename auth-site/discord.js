@@ -15,6 +15,7 @@
 // https://auth.hngroup.org.uk/discord/callback must be added under OAuth2 → Redirects. It's read when needed, so no
 // restart. Without client_id/client_secret the option is hidden; the bot only needs bot_token.
 const fs = require('node:fs');
+const { startPresence } = require('./discord-gateway');
 const path = require('node:path');
 
 const DISCORD_API = 'https://discord.com/api/v10';
@@ -99,6 +100,8 @@ function createDiscord({ origin, staff, send, profile, entryFor, setCookie, cook
   if (refreshEvery > 0) {
     setTimeout(() => { refreshNames(); setInterval(refreshNames, refreshEvery).unref(); }, 20000).unref();
   }
+  // Keeps the bot online in Discord while a bot token is set (discord-gateway.js).
+  const presence = process.env.HN_DISCORD_PRESENCE === '0' ? null : startPresence(() => (config() || {}).bot || null);
 
   async function discord(req, res, route, data) {
     if (route === '/api/discord' && req.method === 'GET') { send(res, 200, { enabled: !!client() }); return true; }
@@ -153,6 +156,7 @@ function createDiscord({ origin, staff, send, profile, entryFor, setCookie, cook
   }
   discord.enabled = () => !!client();
   discord.refreshNames = refreshNames;
+  discord.presence = presence;
   return discord;
 }
 module.exports = { createDiscord, BINDING, TICKET };
