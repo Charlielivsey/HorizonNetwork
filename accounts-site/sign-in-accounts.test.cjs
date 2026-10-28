@@ -21,6 +21,7 @@ test('sign-in accounts: made on HN Account, several profiles with a default, own
   const sam = make('Sam', 'sam.test', 'Sam-password-582!', '493817', { otherRoles: [{ company: 'Horizon Network', jobTitle: 'Network engineer' }] });
   const nia = make('Nia', 'nia.test');
   store.setRoleMembers(store.listRoles().find((r) => r.name === 'Super Admin'), [ada.id]);
+  store.saveAvatar(sam, 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
   const itRole = store.listRoles().find((r) => r.name === 'IT Support');
   const secret = path.join(dir, 'secret'); fs.writeFileSync(secret, 'e'.repeat(64));
 
@@ -102,6 +103,13 @@ test('sign-in accounts: made on HN Account, several profiles with a default, own
     assert.equal(signed.user.jobTitle, 'Network engineer');
     assert.deepEqual(signed.user.companies, ['Horizon Network']);
     assert.equal(signed.user.statusAdminAllowed, false, 'its own permissions, not Sam’s or Ada’s');
+    // Choosing a profile shows each one's picture (only for this account's own profiles).
+    assert.equal(signed.user.profiles.find((p) => p.key === samNetwork.key).photo, true);
+    assert.equal(signed.user.profiles.find((p) => p.key === adaGroup.key).photo, false);
+    const pic = await fetch(authBase + '/api/profile/avatar?key=' + encodeURIComponent(samNetwork.key), { headers: { Cookie: signed.session } });
+    assert.equal(pic.status, 200); assert.equal(pic.headers.get('content-type'), 'image/png');
+    const samOwnKey = data.profiles.find((p) => p.personId === sam.id && p.company === 'HN Group').key;
+    assert.equal((await fetch(authBase + '/api/profile/avatar?key=' + encodeURIComponent(samOwnKey), { headers: { Cookie: signed.session } })).status, 404, 'not another account’s profiles');
     // Choosing Ada's HN Group profile: Ada's details, but still this account's own permissions.
     let chosen = await authPost('/api/profile/select', { key: adaGroup.key }, signed.session);
     assert.equal(chosen.status, 200);

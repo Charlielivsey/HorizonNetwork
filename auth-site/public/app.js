@@ -84,8 +84,14 @@ async function chooseProfile(user) {
   const box = $('profile-list');
   box.replaceChildren(...list.map((p) => {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'profile-option' + (p.default ? ' default' : '');
+    // The person's profile picture, falling back to their initials.
     const initials = document.createElement('span'); initials.className = 'profile-initials'; initials.setAttribute('aria-hidden', 'true');
-    initials.textContent = (p.company || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+    initials.textContent = (p.displayName || p.company || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+    if (p.photo) {
+      const img = document.createElement('img'); img.alt = ''; img.src = '/api/profile/avatar?key=' + encodeURIComponent(p.key);
+      img.onerror = () => img.remove();
+      initials.append(img);
+    }
     const text = document.createElement('span'); text.className = 'profile-text';
     const name = document.createElement('strong'); name.textContent = p.company;
     const sub = document.createElement('small'); sub.textContent = [p.displayName, p.jobTitle].filter(Boolean).join(' · ');

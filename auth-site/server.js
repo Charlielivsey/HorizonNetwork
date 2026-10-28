@@ -253,6 +253,15 @@ const server = http.createServer(async (req, res) => {
       return res.end(Buffer.from(await response.arrayBuffer()));
     }
     if (route === '/api/me') return send(res, 200, { user: await profile(entryFor(req)) });
+    // A profile's picture on "Choose a profile" (only the signed-in account's own profiles).
+    if (route === '/api/profile/avatar') {
+      const entry = entryFor(req); await profile(entry);
+      const key = new URL(req.url, ORIGIN).searchParams.get('key') || '';
+      const response = await fetch(backend + '/api/auth/profile-avatar', { method: 'POST', headers: { Authorization: 'Bearer ' + secret(), 'Content-Type': 'application/json' }, body: JSON.stringify({ session: entry.staffSession, key }), signal: AbortSignal.timeout(5000) });
+      if (!response.ok) return send(res, response.status, { error: 'Profile picture unavailable.' });
+      res.writeHead(200, { 'Content-Type': response.headers.get('content-type'), 'Cache-Control': 'no-store' });
+      return res.end(Buffer.from(await response.arrayBuffer()));
+    }
     if (route === '/api/avatar') {
       const entry = entryFor(req); await profile(entry);
       return await serveAvatar(entry, res);

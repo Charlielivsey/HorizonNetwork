@@ -120,7 +120,8 @@
 .profile-option{display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;border:1px solid var(--border);border-radius:14px;background:var(--bg);color:var(--ink);text-align:left;font:inherit;transition:transform .2s,border-color .2s,box-shadow .2s}
 .profile-option:hover,.profile-option:focus-visible{border-color:var(--purple);transform:translateY(-1px);box-shadow:0 8px 22px -14px #5514b4}
 .profile-option.default{border-color:color-mix(in srgb,var(--purple) 45%,var(--border))}
-.profile-initials{flex:none;display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:var(--soft);color:var(--purple);font-weight:800;font-size:13px}
+.profile-initials{position:relative;overflow:hidden;flex:none;display:grid;place-items:center;width:44px;height:44px;border-radius:14px;background:var(--soft);color:var(--purple);font-weight:800;font-size:13px}
 .profile-text{display:grid;min-width:0;flex:1}.profile-text strong{font-size:14px}.profile-text small{color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .profile-default{flex:none;padding:3px 9px;border-radius:999px;background:var(--soft);color:var(--purple);font-size:11px;font-weight:800}
 @media (prefers-reduced-motion:reduce){.profile-option{transition:none}.profile-option:hover{transform:none}}
+.profile-initials img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}

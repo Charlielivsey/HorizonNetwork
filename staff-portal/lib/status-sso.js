@@ -44,7 +44,7 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       id:p.profileId||p.id,accountId:login?login.id:p.id,displayName:p.displayName,firstName:p.firstName||'',lastName:p.lastName||'',email:(p.emails||[]).find(e=>e.primary)?.address||p.emails?.[0]?.address||store.loginName(p),
       username:store.loginName(p),
       // Every profile this sign-in account can use, so HN Group Auth can ask which one (the default first chosen).
-      profileKey:p.profile?p.profile.key:null,profiles:profiles.map(x=>({key:x.key,company:x.company,jobTitle:x.jobTitle,displayName:x.displayName,default:!!login&&store.defaultProfile(login)?.key===x.key})),
+      profileKey:p.profile?p.profile.key:null,profiles:profiles.map(x=>({key:x.key,company:x.company,jobTitle:x.jobTitle,displayName:x.displayName,photo:!!x.avatarUrl,default:!!login&&store.defaultProfile(login)?.key===x.key})),
       ...(p.standalone?{standalone:true}:{}),
       jobTitle:p.jobTitle||'',company:p.company||'',companies:[...new Set([p.company,...(p.otherRoles||[]).map(r=>r.company)].filter(Boolean))],avatarUrl:store.avatarFile(p)?'/api/avatar':null,
       ...(p.account.passwordTemporary?{passwordChangeRequired:true,passwordMinLength:store.meView(p).passwordMinLength}:{}),
@@ -78,7 +78,7 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       logEvent(req, session, 'status-admin-sign-in');
       redirect(res, `${STATUS_ORIGIN}/auth/callback?code=${code}&state=${state}`); return true;
     }
-    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/password', '/api/auth/code', '/api/auth/network-leadership', '/api/auth/network-avatar', '/api/auth/account-status', '/api/auth/staff-directory', '/api/auth/vpn-pin', '/api/auth/accounts-session', '/api/auth/profile-select', '/api/auth/browser-issue', '/api/auth/browser-profile', '/api/auth/browser-avatar', '/api/auth/browser-offer', '/api/auth/browser-logout', '/api/auth/browser-unlock', '/api/auth/browser-lock', '/api/auth/browser-account', '/api/auth/browser-account-update', '/api/auth/browser-account-status', '/api/auth/browser-account-photo', '/api/auth/google-login', '/api/auth/google-link', '/api/auth/google-unlink'].includes(pathname)) return false;
+    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/password', '/api/auth/code', '/api/auth/network-leadership', '/api/auth/network-avatar', '/api/auth/account-status', '/api/auth/staff-directory', '/api/auth/vpn-pin', '/api/auth/accounts-session', '/api/auth/profile-select', '/api/auth/profile-avatar', '/api/auth/browser-issue', '/api/auth/browser-profile', '/api/auth/browser-avatar', '/api/auth/browser-offer', '/api/auth/browser-logout', '/api/auth/browser-unlock', '/api/auth/browser-lock', '/api/auth/browser-account', '/api/auth/browser-account-update', '/api/auth/browser-account-status', '/api/auth/browser-account-photo', '/api/auth/google-login', '/api/auth/google-link', '/api/auth/google-unlink'].includes(pathname)) return false;
     if (req.method !== 'POST') { sendJson(res, 405, { error: 'Method not allowed.' }); return true; }
     if (!credentials(req)) { sendJson(res, 401, { error: 'Status integration not authenticated.' }); return true; }
     const body = await readJsonBody(req, pathname === '/api/auth/browser-account-photo' ? 2 * 1024 * 1024 : undefined);
@@ -209,6 +209,14 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
         try { store.setGoogle(p, { sub: body.sub, email: body.email }); } catch (e) { if (e.status) { sendJson(res, e.status, { error: e.message }); return true; } throw e; }
         logEvent(req, active, 'google-connected', { detail: String(body.email).toLowerCase().slice(0, 100) });
         sendJson(res, 200, { user: identity(active) }); return true;
+      }
+      // The picture of one of the signed-in account's profiles, for "Choose a profile" on HN Group Auth.
+      if (pathname === '/api/auth/profile-avatar') {
+        const login = active.person.__login, profile = login && store.loginProfiles(login).find((x) => x.key === body.key);
+        const avatar = profile && store.avatarFile(store.getPerson(profile.personId));
+        if (!avatar) { sendJson(res, 404, { error: 'No profile picture.' }); return true; }
+        res.writeHead(200, { 'Content-Type': avatar.mime, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+        fs.createReadStream(avatar.file).on('error', () => res.destroy()).pipe(res); return true;
       }
       if (pathname === '/api/auth/avatar') {
         const avatar = store.avatarFile(active.person);
