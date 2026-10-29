@@ -86,7 +86,7 @@
     S.back = location.pathname + location.search;
     if (S.scope !== 'person') tab(S.scope);
     showLibrary();
-    if (p === '/new') openNew({ company: params.get('company'), template: params.get('template') });
+    if (p === '/new') openNew({ company: params.get('company'), template: params.get('template'), chosen: !!(params.get('company') && params.get('template')) });
   }
   const tab = (name) => { const a = document.querySelector('[data-tab=' + name + ']'); if (a) a.setAttribute('aria-current', 'page'); };
 
@@ -296,13 +296,15 @@
     const groups = S.filter.company ? [company(S.filter.company)] : S.companies;
     $('template-list').replaceChildren(...groups.map((c) => el('section', { class: 'template-group' },
       el('h2', {}, el('img', { src: logo(c), alt: '' }), c.name),
-      el('div', { class: 'grid' }, ...S.templates.map((t) => el('button', { type: 'button', class: 'doc-card template-card', onclick: () => openNew({ company: c.id, template: t.id }) },
+      el('div', { class: 'grid' }, ...S.templates.map((t) => el('button', { type: 'button', class: 'doc-card template-card', onclick: () => openNew({ company: c.id, template: t.id, chosen: true }) },
         paper(c, t, t.id === 'blank' ? '' : t.titleHint),
         el('div', { class: 'card-body' }, el('h3', { text: t.name }), el('p', { text: t.blurb }), el('span', { class: 'use', text: 'Use this template →' }))))))));
   }
 
   // ---------- New document ----------
-  function openNew({ company: cid, template: tid } = {}) {
+  // From a template card (or a link naming both), the company and template are already chosen, so the dialog only
+  // asks for the title and where it goes (the user's request, 29 October 2026: don't make me choose the template twice).
+  function openNew({ company: cid, template: tid, chosen } = {}) {
     const cSel = S.companies.some((c) => c.id === cid) ? cid : S.filter.company || S.companies[0].id;
     const tSel = S.templates.some((t) => t.id === tid) ? tid : 'letter';
     $('new-companies').replaceChildren(...S.companies.map((c) => el('label', { class: 'option' }, el('input', { type: 'radio', name: 'company', value: c.id, checked: c.id === cSel }),
@@ -313,8 +315,12 @@
         el('strong', { text: t.name }), el('small', { text: t.blurb })))]));
     $('new-confidential').checked = !!template(tSel).confidential;
     $('new-name').value = ''; $('new-sharing').value = S.scope === 'shared' && location.pathname === '/' ? 'staff' : 'private'; $('new-error').hidden = true; $('new-create').disabled = false;
+    const fixed = !!chosen && S.companies.some((c) => c.id === cid) && S.templates.some((t) => t.id === tid);
+    $('new-company-set').hidden = fixed; $('new-template-set').hidden = fixed; $('new-chosen').hidden = !fixed;
+    $('new-title').textContent = fixed ? 'New ' + template(tSel).name.replace(/^./, (x) => x.toLowerCase()) : 'New document';
+    if (fixed) $('new-chosen').textContent = 'On ' + company(cSel).name + ' letterhead. ' + template(tSel).blurb;
     showLayer('new-dialog');
-    $('new-dialog').querySelector('input[name=company]:checked').focus();
+    (fixed ? $('new-name') : $('new-dialog').querySelector('input[name=company]:checked')).focus();
   }
   // Choosing a template sets its usual marking (termination and resignation letters start private & confidential).
   $('new-templates').addEventListener('change', (e) => { if (e.target.name === 'template') $('new-confidential').checked = !!template(e.target.value).confidential; });

@@ -125,8 +125,9 @@
  <section class="sheet-dialog" id="new-dialog" role="dialog" aria-modal="true" aria-labelledby="new-title" hidden>
   <header class="dialog-head"><h2 id="new-title">New document</h2><button class="btn small ghost icon" type="button" data-close aria-label="Close">✕</button></header>
   <form id="new-form">
-   <fieldset><legend>Company</legend><div class="pick companies-pick" id="new-companies"></div></fieldset>
-   <fieldset><legend>Template</legend><div class="pick templates-pick" id="new-templates"></div></fieldset>
+   <p class="muted" id="new-chosen" hidden></p>
+   <fieldset id="new-company-set"><legend>Company</legend><div class="pick companies-pick" id="new-companies"></div></fieldset>
+   <fieldset id="new-template-set"><legend>Template</legend><div class="pick templates-pick" id="new-templates"></div></fieldset>
    <div class="row-2">
     <label class="field-label">Title<input type="text" id="new-name" maxlength="160" placeholder="You can change it later" autocomplete="off"></label>
     <label class="field-label">Where it goes<select id="new-sharing"><option value="private">My storage (private)</option><option value="staff">Shared with staff</option></select></label>
