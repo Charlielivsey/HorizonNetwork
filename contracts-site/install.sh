@@ -11,8 +11,13 @@ LE_DIR="/etc/letsencrypt/live/$DOMAIN"
 [ "$(id -u)" = 0 ] || { echo 'Run with sudo.'; exit 1; }
 for tool in node pm2 nginx certbot curl python3 openssl; do command -v "$tool" >/dev/null || { echo "Required tool missing: $tool"; exit 1; }; done
 for file in server.js lib/store.js lib/auth.js public/assets/contracts.js lib/certificate.js lib/pdf.js; do node --check "$SCRIPT_DIR/$file"; done
+# The old HN Group Documents service (retired when it became HN Group Docs) must not be left running.
+if pm2 describe hn-documents >/dev/null 2>&1; then pm2 delete hn-documents >/dev/null 2>&1 || true; pm2 save >/dev/null 2>&1 || true; echo 'Stopped the old HN Group Documents service (its data is kept).'; fi
 if python3 -c 'import socket;s=socket.socket();s.settimeout(2);exit(s.connect_ex(("127.0.0.1",5560)))'; then
-    pm2 describe hn-contracts >/dev/null 2>&1 || { echo 'Port 5560 belongs to another service. No changes made.'; exit 1; }
+    if ! pm2 describe hn-contracts >/dev/null 2>&1; then
+        echo 'CONTRACTS NOT INSTALLED: port 5560 is used by another program:'; ss -ltnp 'sport = :5560' 2>/dev/null || true
+        echo 'Stop that program, then run: sudo bash contracts-site/install.sh'; exit 1
+    fi
 fi
 for config in /etc/nginx/sites-enabled/* /etc/nginx/conf.d/*.conf; do
     [ -f "$config" ] || continue
@@ -32,7 +37,11 @@ for attempt in {1..15}; do
     if curl -fsS --max-time 2 http://127.0.0.1:5560/healthz >/dev/null; then healthy=1; break; fi
     sleep 1
 done
-[ "$healthy" = 1 ] || { echo 'Contracts did not start (see: pm2 logs hn-contracts). Nginx was left unchanged.'; exit 1; }
+if [ "$healthy" != 1 ]; then
+    echo 'CONTRACTS NOT INSTALLED: the contracts service did not start. Its last log lines:'
+    pm2 logs hn-contracts --lines 25 --nostream 2>/dev/null || true
+    exit 1
+fi
 [ -f /var/lib/hn-status-sso/secret ] || echo "Note: HN Group Auth isn’t integrated on this server yet, so signing in to Contracts won’t work until auth-site/install.sh has run."
 BACKUP="$(mktemp -d)"
 trap 'rm -rf "$BACKUP"' EXIT
@@ -54,11 +63,25 @@ PYCONF
     if ! nginx -t; then
         if [ -f "$BACKUP/site" ]; then cp "$BACKUP/site" "$SITE"; else rm -f "$SITE"; fi
         [ "$WAS_ENABLED" = 1 ] || rm -f "$ENABLED"
-        echo 'Contracts nginx configuration rolled back.'; exit 1
+        echo 'CONTRACTS NOT INSTALLED: nginx refused the configuration (see above), so it was rolled back.'; exit 1
     fi
     systemctl reload nginx
 }
 write_config
+# Checks the site through nginx, the way visitors reach it, and says plainly what's wrong if it doesn't answer.
+verify_public() {
+    local answer scheme=http
+    if [ -f "$LE_DIR/fullchain.pem" ]; then scheme=https
+        answer="$(curl -sk --max-time 5 --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/healthz" || true)"
+    else answer="$(curl -s --max-time 5 -H "Host: $DOMAIN" "http://127.0.0.1/healthz" || true)"; fi
+    if printf '%s' "$answer" | grep -q '"service":"hn-contracts"'; then
+        if printf '%s' "$answer" | grep -q '"ok":true'; then echo "HN Group Contracts is working: $scheme://$DOMAIN · PM2 hn-contracts · port 5560."
+        else echo "HN Group Contracts answers at $scheme://$DOMAIN but is missing something: $answer"; fi
+    else
+        echo "CONTRACTS NOT REACHABLE: nginx didn't hand $scheme://$DOMAIN to the contracts service (it answered: ${answer:0:200})."
+        echo 'Check: sudo nginx -T | grep -n contracts ; ls -l /etc/nginx/sites-enabled/hn-contracts'; exit 1
+    fi
+}
 # Website control may not know this site until admin-site/install.sh runs (install.sh runs it last).
 if [ -f /opt/hn-admin/reconcile-power.cjs ]; then node /opt/hn-admin/reconcile-power.cjs contracts 2>/dev/null || echo "Note: website control will pick up the contracts site when admin-site/install.sh runs."; fi
 pm2 save
@@ -104,6 +127,7 @@ if ! has_web_dns "$DOMAIN"; then
     echo 'Contracts installed and running in PM2. Public DNS and SSL are pending.'
     echo 'Add A contracts -> 217.154.34.205 (DNS only) in the hngroup.org.uk DNS zone.'
     echo 'Then rerun: sudo bash contracts-site/install.sh'
+    verify_public
     exit 0
 fi
 CERT_ARGS=()
@@ -113,4 +137,4 @@ certbot certonly --webroot -w "$CHALLENGE_DIR" -d "$DOMAIN" --cert-name "$DOMAIN
     --deploy-hook 'nginx -t && systemctl reload nginx' || { echo 'SSL issuance failed. Check DNS and rerun: sudo bash contracts-site/install.sh'; exit 1; }
 write_config
 if systemctl list-unit-files certbot.timer --no-legend 2>/dev/null | grep -q certbot.timer; then systemctl enable --now certbot.timer; fi
-echo 'HN Group Contracts installed with HTTPS: https://contracts.hngroup.org.uk · PM2 hn-contracts · port 5560 · staff sign in through HN Group Auth.'
+verify_public

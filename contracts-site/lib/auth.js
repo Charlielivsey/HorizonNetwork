@@ -1,9 +1,9 @@
 'use strict';
-// Sign-in through HN Group Auth (auth.hngroup.org.uk), where this site is the registered "contracts" application
-// with the fixed callback https://contracts.hngroup.org.uk/auth/callback. Every enabled sign-in account that has finished
-// its password and PIN setup can sign in, to sign what it's been sent. Sending contracts needs the staff portal's
-// "Send contracts for signing" permission, which HN Group Auth passes with every check (at least once a minute), like
-// every other permission, so this site always matches the staff portal's roles.
+// Sign-in through HN Group Auth (auth.hngroup.org.uk), where this site is the registered "contracts" application with
+// the fixed callback https://contracts.hngroup.org.uk/auth/callback. Every enabled sign-in account can sign in, to read
+// and sign what it has been sent. Sending needs the staff portal's "Send contracts for signing" permission: HN Group
+// Auth passes every permission the account has with each check (at least once a minute), the same as every other
+// HN Group website. The site keeps a browser-session cookie tied to the Auth sign-in.
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 
@@ -19,12 +19,12 @@ const fail = (status, message) => Object.assign(new Error(message), { status });
 
 function cookie(req, name) { return (req.headers.cookie || '').split(';').map((x) => x.trim()).find((x) => x.startsWith(name + '='))?.slice(name.length + 1) || ''; }
 function setCookie(name, value, maxAge) { return `${name}=${value}; Path=/; HttpOnly;${SECURE ? ' Secure;' : ''} SameSite=Lax${maxAge === undefined ? '' : '; Max-Age=' + maxAge}`; }
-// What this site keeps about the signed-in person: who they are (the profile they signed in as, and their sign-in
-// account, so they can sign from any of its profiles), their permissions, and whether it's really them.
+// Who is signed in: the profile they chose, their sign-in account (so they can sign from any of its profiles), their
+// permissions, and whether an administrator is logged in as them.
 function userOf(u) {
   const full = [u.firstName, u.lastName].map((x) => String(x || '').trim()).filter(Boolean).join(' ');
-  return { id: String(u.id || ''), accountId: String(u.accountId || ''), email: String(u.email || '').toLowerCase(), displayName: String(u.displayName || u.email || 'Staff member'), fullName: full || String(u.displayName || ''),
-    jobTitle: String(u.jobTitle || '').slice(0, 120), owner: u.ownerAccess === true, impersonated: u.impersonated === true,
+  return { id: String(u.id || ''), accountId: String(u.accountId || ''), email: String(u.email || '').toLowerCase(), displayName: String(u.displayName || u.email || 'Staff member'),
+    fullName: full || String(u.displayName || ''), jobTitle: String(u.jobTitle || '').slice(0, 120), owner: u.ownerAccess === true, impersonated: u.impersonated === true,
     permissions: (Array.isArray(u.permissions) ? u.permissions : []).filter((k) => typeof k === 'string' && /^[a-z.]{1,40}$/.test(k)).slice(0, 100) };
 }
 // Where to go after signing in: only a path on this site.
@@ -52,10 +52,7 @@ function createAuth(store) {
     // Changes must come from this website itself.
     if (req.method !== 'GET' && req.headers.origin !== ORIGIN) throw fail(403, 'That request didn’t come from HN Group Contracts.');
     if (Date.now() - (s.checked || 0) > 60000) {
-      try {
-        const r = await authApi('session', { session: s.authSession }), user = userOf(r.user);
-        store.updateSession(token, { user, checked: Date.now() }); store.notePerson(user);
-      }
+      try { const r = await authApi('session', { session: s.authSession }); store.updateSession(token, { user: userOf(r.user), checked: Date.now() }); }
       catch (e) { if ([401, 403].includes(e.status)) { store.endSession(token); return null; } throw e; }
     }
     return { user: store.session(token).user, token };
@@ -76,9 +73,7 @@ function createAuth(store) {
       try { result = await authApi('exchange', { code: url.searchParams.get('code'), state }); }
       catch (e) { showPage(res, e.status === 403 ? 403 : 503, 'Sign-in failed', e.message, [clear]); return true; }
       const old = cookie(req, SESSION_COOKIE); if (old) store.endSession(old);
-      const user = userOf(result.user);
-      const token = store.createSession(user, result.session, result.expires);
-      store.notePerson(user);
+      const token = store.createSession(userOf(result.user), result.session, result.expires);
       let next = '/'; try { next = safeNext(Buffer.from(nextRaw || '', 'base64url').toString('utf8')); } catch {}
       redirect(res, next, [clear, setCookie(SESSION_COOKIE, token)]);
       return true;

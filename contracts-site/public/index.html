@@ -1,34 +1,70 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en-GB">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex, nofollow">
-<title>HN Group Contracts</title>
-<meta name="description" content="Send contracts for signing and sign the ones sent to you, with your HN Group Auth account.">
-<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/assets/contracts.css?v=1">
-<script src="/assets/contracts.js?v=1" defer></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="theme-color" content="#5514B4">
+    <title>HN Group Contracts</title>
+    <meta name="description" content="Read and sign the contracts sent to you, and send contracts for signing, with your HN Group Auth account.">
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+    <link rel="preload" href="/assets/fonts/plus-jakarta-sans.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="/assets/site.css">
+    <link rel="stylesheet" href="/assets/contracts.css?v=2">
+    <script src="/assets/contracts.js?v=2" defer></script>
 </head>
 <body>
-<header class="top">
- <div class="wrap top-inner">
-  <a class="brand" href="/"><img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="118" height="41"><img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="118" height="41"><span class="brand-name">Contracts</span></a>
-  <nav class="nav" id="nav" aria-label="Contracts">
-   <a href="/" data-view="home"><span class="label">To sign</span><span class="count" id="count-to-sign" hidden></span></a>
-   <a href="/signed" data-view="signed"><span class="label">Signed</span></a>
-   <a href="/sent" data-view="sent" data-sender hidden><span class="label">Sent</span></a>
-   <a href="/all" data-view="all" data-manager hidden><span class="label">All contracts</span></a>
-  </nav>
-  <div class="who" id="who" hidden>
-   <a class="btn primary small" href="/new" data-sender hidden>New contract</a>
-   <span class="avatar" id="who-avatar"></span><span class="who-text"><strong id="who-name"></strong><small id="who-role"></small></span>
-   <form method="post" action="/auth/logout"><button class="btn small ghost" type="submit">Sign out</button></form>
-  </div>
- </div>
- <div class="stripe" aria-hidden="true"></div>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header" id="top">
+    <div class="wrap header-inner">
+        <a class="brand" href="/" aria-label="HN Group Contracts home">
+            <img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="120" height="42">
+            <img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="120" height="42">
+            <span class="brand-label">Contracts</span>
+        </a>
+        <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu"><span></span><span></span><span></span></button>
+        <nav class="site-nav" id="site-nav" aria-label="Contracts">
+            <a href="/" data-view="sign">To sign <span class="count" id="count-sign" hidden></span></a>
+            <a href="/waiting" data-view="waiting">In progress</a>
+            <a href="/completed" data-view="completed">Finished</a>
+            <a href="/drafts" data-view="drafts" data-sender hidden>Drafts</a>
+            <a href="/all" data-view="all" data-manager hidden>All contracts</a>
+            <a class="btn btn-small btn-primary" href="/new" data-sender hidden>New contract</a>
+            <span class="who" id="who" hidden><span class="avatar" id="who-avatar" aria-hidden="true"></span><span class="who-name" id="who-name"></span>
+                <form method="post" action="/auth/logout"><button class="btn btn-small btn-ghost" type="submit">Sign out</button></form></span>
+        </nav>
+    </div>
 </header>
-<main class="wrap" id="main" aria-live="polite"></main>
-<div class="layer" id="layer" hidden><div class="scrim" data-close></div><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title"><h2 id="sheet-title"></h2><p id="sheet-text"></p><div id="sheet-extra"></div><div class="sheet-actions"><button class="btn" type="button" data-close id="sheet-cancel">Cancel</button><button class="btn primary" type="button" id="sheet-ok">OK</button></div></div></div>
+
+<main id="main" aria-live="polite">
+    <section class="section"><div class="wrap"><p class="muted">Loading your contracts…</p></div></section>
+</main>
+
+<footer class="site-footer">
+    <div class="stripe" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+    <div class="wrap footer-inner">
+        <div>
+            <img src="/assets/brand/hn-group-wordmark-white.svg" alt="HN Group" width="110" height="38">
+            <p class="small">HN Group Contracts: read and sign the contracts sent to you with your HN Group Auth account.</p>
+        </div>
+        <nav aria-label="Footer" class="footer-links">
+            <a href="https://docs.hngroup.org.uk/">HN Group Docs</a>
+            <a href="https://staff.hngroup.org.uk/">Staff portal</a>
+            <a href="https://accounts.hngroup.org.uk/">HN Account</a>
+            <a href="https://hngroup.org.uk/privacypolicy">Privacy</a>
+        </nav>
+    </div>
+    <div class="wrap footer-legal small">© <span id="year">2026</span> HN Group Limited. All rights reserved.</div>
+</footer>
+
+<dialog class="ask" id="ask" aria-labelledby="ask-title">
+    <form method="dialog" class="ask-body">
+        <h2 id="ask-title"></h2>
+        <p class="muted" id="ask-text"></p>
+        <div id="ask-extra"></div>
+        <div class="ask-actions"><button class="btn btn-ghost" value="cancel" id="ask-cancel">Cancel</button><button class="btn btn-primary" value="ok" id="ask-ok">OK</button></div>
+    </form>
+</dialog>
+<div class="toast" id="toast" role="status" hidden></div>
 </body>
 </html>

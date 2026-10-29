@@ -20,6 +20,6 @@ function certificate(c) {
     '<h2>History</h2><table><thead><tr><th>When</th><th>Who</th><th>What happened</th></tr></thead><tbody>' + events + '</tbody></table>';
   return renderDocument({ title: 'Signing certificate', confidential: true, owner: 'HN Group Contracts', body,
     fields: { contract: c.title, file: c.file.name + ' (' + c.file.pages + ' page' + (c.file.pages === 1 ? '' : 's') + ')', fingerprint: c.file.sha256, reference: c.id.toUpperCase(),
-      sentBy: c.createdBy.name, sent: when(c.sentAt), completed: when(c.completedAt) } }, HN_GROUP, TEMPLATE);
+      sentBy: c.sender.name, sent: when(c.sentAt), completed: when(c.completedAt) } }, HN_GROUP, TEMPLATE);
 }
 module.exports = { certificate };

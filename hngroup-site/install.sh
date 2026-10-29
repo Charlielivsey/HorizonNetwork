@@ -80,32 +80,55 @@ else
     use_cert "$SSL_DIR/selfsigned.crt" "$SSL_DIR/selfsigned.key"
 fi
 
-# ---- nginx: catch-all for HTTPS ----
-# Without this, nginx answers HTTPS requests for any name it doesn't know (for example the main
-# domain before its certificate exists) with the first HTTPS site it has, which is the staff
-# portal. This closes those connections instead.
+# ---- nginx: catch-all for addresses this server doesn't host ----
+# Any name nginx doesn't know (a website that hasn't finished installing, or a wrong address) gets an HN Group error
+# page (HN-NO-SITE) on HTTP and HTTPS, instead of whichever website nginx would otherwise pick (the user's request,
+# 29 October 2026: "dont just have them redirect to the main website ... show some form of an error so that we know").
 CATCHALL="/etc/nginx/sites-available/hn-catch-all"
 if [ ! -f /etc/nginx/hn-catch-all.crt ]; then
     openssl req -x509 -nodes -newkey rsa:2048 -days 3650 -subj "/CN=invalid" \
         -keyout /etc/nginx/hn-catch-all.key -out /etc/nginx/hn-catch-all.crt >/dev/null 2>&1
     chmod 600 /etc/nginx/hn-catch-all.key
 fi
+mkdir -p /var/www/hn-catch-all
+cp "$SCRIPT_DIR/nginx/not-set-up.html" /var/www/hn-catch-all/not-set-up.html
+CATCHALL_BACKUP="$(mktemp)"; [ ! -f "$CATCHALL" ] || cp "$CATCHALL" "$CATCHALL_BACKUP"
 cat > "$CATCHALL" <<'NGINX'
 # Requests for names this server doesn't host. Written by hngroup-site/install.sh.
 server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
     listen 443 ssl default_server;
     listen [::]:443 ssl default_server;
     server_name _;
     ssl_certificate /etc/nginx/hn-catch-all.crt;
     ssl_certificate_key /etc/nginx/hn-catch-all.key;
-    return 444;
+    root /var/www/hn-catch-all;
+    error_page 404 /not-set-up.html;
+    location = /not-set-up.html { internal; default_type text/html; add_header Cache-Control "no-store" always; }
+    location / { return 404; }
 }
 NGINX
-if grep -REqs "^[[:space:]]*listen[^#]*443[^#]*default_server" /etc/nginx/sites-enabled/ --exclude=hn-catch-all; then
-    warn "Another nginx site is already the default for HTTPS, so the catch-all was not enabled."
-else
-    ln -sf "$CATCHALL" /etc/nginx/sites-enabled/hn-catch-all
+[ -s /proc/net/if_inet6 ] || sed -i '/listen \[::\]/d' "$CATCHALL"
+# The first HN website's nginx file (setup-websites.sh: sites "horizon") also claimed to be the default for port 80, which
+# is why unknown names used to show the main website. Only the catch-all is the default now; that site still answers
+# for the server's own IP address.
+for other in /etc/nginx/sites-enabled/*; do
+    [ -f "$other" ] || continue
+    case "$other" in */hn-catch-all) continue ;; esac
+    if grep -Eq '^[[:space:]]*listen[^#;]*(80|443)[^#;]*default_server' "$other"; then
+        real="$(readlink -f "$other")"; cp "$real" "$real.before-catch-all" 2>/dev/null || true
+        sed -i -E 's/^([[:space:]]*listen[^#;]*)[[:space:]]+default_server/\1/; s/^([[:space:]]*server_name[^#;]*)[[:space:]]+_([[:space:]]*;)/\1\2/' "$real"
+        ok "Removed default_server from $(basename "$real") (backup: $real.before-catch-all)"
+    fi
+done
+ln -sf "$CATCHALL" /etc/nginx/sites-enabled/hn-catch-all
+if ! nginx -t >/dev/null 2>&1; then
+    warn "nginx didn't accept the catch-all page, so it was put back as it was:"; nginx -t || true
+    if [ -s "$CATCHALL_BACKUP" ]; then cp "$CATCHALL_BACKUP" "$CATCHALL"; else rm -f "$CATCHALL" /etc/nginx/sites-enabled/hn-catch-all; fi
+    for other in /etc/nginx/sites-available/*.before-catch-all; do [ -f "$other" ] && mv "$other" "${other%.before-catch-all}"; done
 fi
+rm -f "$CATCHALL_BACKUP"
 
 # ---- nginx: the website ----
 # The file name starts with 00- so nginx loads it before the other sites: if anything else also
