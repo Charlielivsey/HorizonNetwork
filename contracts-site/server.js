@@ -15,7 +15,7 @@ const { certificate } = require('./lib/certificate');
 
 const PUBLIC = process.env.CONTRACTS_PUBLIC_DIR || path.join(__dirname, 'public');
 const DATA_DIR = process.env.CONTRACTS_DATA_DIR || '/var/lib/hn-contracts';
-const HOST = process.env.HOST || '127.0.0.1', PORT = Number(process.env.PORT || 5500);
+const HOST = process.env.HOST || '127.0.0.1', PORT = Number(process.env.PORT || 5560);
 const STAFF_BACKEND = process.env.STAFF_BACKEND || 'http://127.0.0.1:3250';
 const SECRET_FILE = process.env.STATUS_SSO_SECRET_FILE || '/var/lib/hn-status-sso/secret';
 const fail = (status, message) => Object.assign(new Error(message), { status });

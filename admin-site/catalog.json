@@ -151,7 +151,7 @@
     "id": "contracts",
     "name": "HN Group Contracts",
     "process": "hn-contracts",
-    "port": 5500,
+    "port": 5560,
     "hosts": [
       "contracts.hngroup.org.uk"
     ]

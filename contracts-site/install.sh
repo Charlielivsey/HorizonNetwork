@@ -11,8 +11,8 @@ LE_DIR="/etc/letsencrypt/live/$DOMAIN"
 [ "$(id -u)" = 0 ] || { echo 'Run with sudo.'; exit 1; }
 for tool in node pm2 nginx certbot curl python3 openssl; do command -v "$tool" >/dev/null || { echo "Required tool missing: $tool"; exit 1; }; done
 for file in server.js lib/store.js lib/auth.js public/assets/contracts.js lib/certificate.js lib/pdf.js; do node --check "$SCRIPT_DIR/$file"; done
-if python3 -c 'import socket;s=socket.socket();s.settimeout(2);exit(s.connect_ex(("127.0.0.1",5500)))'; then
-    pm2 describe hn-contracts >/dev/null 2>&1 || { echo 'Port 5500 belongs to another service. No changes made.'; exit 1; }
+if python3 -c 'import socket;s=socket.socket();s.settimeout(2);exit(s.connect_ex(("127.0.0.1",5560)))'; then
+    pm2 describe hn-contracts >/dev/null 2>&1 || { echo 'Port 5560 belongs to another service. No changes made.'; exit 1; }
 fi
 for config in /etc/nginx/sites-enabled/* /etc/nginx/conf.d/*.conf; do
     [ -f "$config" ] || continue
@@ -29,7 +29,7 @@ cp -r "$SCRIPT_DIR/lib" "$SCRIPT_DIR/public" /opt/hn-contracts/
 pm2 startOrRestart "$SCRIPT_DIR/ecosystem.config.cjs" --update-env
 healthy=0
 for attempt in {1..15}; do
-    if curl -fsS --max-time 2 http://127.0.0.1:5500/healthz >/dev/null; then healthy=1; break; fi
+    if curl -fsS --max-time 2 http://127.0.0.1:5560/healthz >/dev/null; then healthy=1; break; fi
     sleep 1
 done
 [ "$healthy" = 1 ] || { echo 'Contracts did not start (see: pm2 logs hn-contracts). Nginx was left unchanged.'; exit 1; }
@@ -113,4 +113,4 @@ certbot certonly --webroot -w "$CHALLENGE_DIR" -d "$DOMAIN" --cert-name "$DOMAIN
     --deploy-hook 'nginx -t && systemctl reload nginx' || { echo 'SSL issuance failed. Check DNS and rerun: sudo bash contracts-site/install.sh'; exit 1; }
 write_config
 if systemctl list-unit-files certbot.timer --no-legend 2>/dev/null | grep -q certbot.timer; then systemctl enable --now certbot.timer; fi
-echo 'HN Group Contracts installed with HTTPS: https://contracts.hngroup.org.uk · PM2 hn-contracts · port 5500 · staff sign in through HN Group Auth.'
+echo 'HN Group Contracts installed with HTTPS: https://contracts.hngroup.org.uk · PM2 hn-contracts · port 5560 · staff sign in through HN Group Auth.'

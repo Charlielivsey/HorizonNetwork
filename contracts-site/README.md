@@ -1,6 +1,6 @@
 # HN Group Contracts — contracts.hngroup.org.uk
 
-Contracts are sent here to be signed (the user's request, 29 October 2026). PM2 `hn-contracts`, loopback port 5500,
+Contracts are sent here to be signed (the user's request, 29 October 2026). PM2 `hn-contracts`, loopback port 5560,
 data in `/var/lib/hn-contracts` (`contracts.json` and the PDFs in `files/`), HN Group Auth client `contracts`.
 
 - **Sending** needs the staff portal permission **Send contracts for signing** (`contracts.send`); **Manage all

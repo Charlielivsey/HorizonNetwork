@@ -32,6 +32,18 @@ if [ -f /opt/hn-docs/config.json ]; then
     rm -rf /opt/hn-docs
     echo "Retired the old docs help-article site; its data is kept in /var/lib/hn-docs/old-help-site-$STAMP."
 fi
+# HN Group Docs started out as HN Group Documents (documents.hngroup.org.uk, PM2 hn-documents on port 5500). That
+# process was never stopped when it moved here, and it still held port 5500. Stop it and take its web address down,
+# once; its data stays in /var/lib/hn-documents (nothing is deleted).
+if pm2 describe hn-documents >/dev/null 2>&1; then
+    pm2 delete hn-documents >/dev/null 2>&1 || true
+    pm2 save >/dev/null 2>&1 || true
+    echo "Stopped the old HN Group Documents service (hn-documents). Its data is kept in /var/lib/hn-documents."
+fi
+if [ -e /etc/nginx/sites-enabled/hn-documents ]; then
+    rm -f /etc/nginx/sites-enabled/hn-documents
+    if nginx -t >/dev/null 2>&1; then systemctl reload nginx; else ln -sfn /etc/nginx/sites-available/hn-documents /etc/nginx/sites-enabled/hn-documents; fi
+fi
 mkdir -p /var/lib/hn-docs /opt/hn-docs "$CHALLENGE_DIR" /etc/nginx/sites-available /etc/nginx/sites-enabled
 chmod 700 /var/lib/hn-docs
 rm -rf /opt/hn-docs/lib /opt/hn-docs/public /opt/hn-docs/seed

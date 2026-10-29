@@ -85,7 +85,7 @@ async function service(req, res, url) {
 
 // HN Group Contracts on this server: "Send for signing" hands it a PDF of the document over loopback with the shared
 // service secret, as the signed-in member of staff (it checks their "Send contracts for signing" permission itself).
-const CONTRACTS_BACKEND = process.env.CONTRACTS_BACKEND || 'http://127.0.0.1:5500';
+const CONTRACTS_BACKEND = process.env.CONTRACTS_BACKEND || 'http://127.0.0.1:5560';
 const canSendContracts = (u) => !u.impersonated && (u.owner || u.permissions.includes('contracts.send') || u.permissions.includes('contracts.manage'));
 async function sendForSigning(d, user) {
   if (!canSendContracts(user)) throw fail(403, 'You need the “Send contracts for signing” permission. Ask an administrator to add it to one of your roles in the staff portal.');
@@ -99,7 +99,9 @@ async function sendForSigning(d, user) {
         title, fileName: title.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-') + '.pdf', docId: d.id, pdf: pdf.toString('base64') }) });
   } catch { throw fail(503, 'HN Group Contracts is unavailable. Please try again shortly.'); }
   const value = await response.json().catch(() => ({}));
-  if (!response.ok || typeof value.url !== 'string') throw fail(response.status === 403 ? 403 : 503, value.error || 'HN Group Contracts didn’t take the document. Please try again.');
+  // Only HN Group Contracts' own answers are passed on (a different program on the port would say something unrelated).
+  if (!response.ok && [400, 403, 413].includes(response.status) && typeof value.error === 'string') throw fail(response.status, value.error);
+  if (!response.ok || typeof value.url !== 'string' || !/^https?:\/\/[^/]+\/contract\/[0-9a-f-]{36}$/.test(value.url)) throw fail(503, 'HN Group Contracts isn’t running on this server yet. Run the server update, then try again.');
   store.audit(user, 'document.send-for-signing', d, { contract: String(value.id || '') });
   return { url: value.url };
 }

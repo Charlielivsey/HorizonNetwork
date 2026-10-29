@@ -84,11 +84,12 @@ test('HN Group Docs: sign-in, storage, files, access, templates, filters, editin
     owner: { id: 'p-owner', accountId: 'a-owner', email: 'charlie@hngroup.org.uk', displayName: 'Charlie', firstName: 'Charlie', lastName: 'Livsey', jobTitle: 'Managing Director', ownerAccess: true, permissions: ['contracts.send', 'contracts.manage'] },
   };
   const PNG = Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000000', 'hex');
-  const codes = new Map(), sessions = new Map(), imports = [];
+  const codes = new Map(), sessions = new Map(), imports = []; let stubBroken = false;
   const authServer = http.createServer((req, res) => {
     let body = ''; req.on('data', (c) => { body += c; }); req.on('end', () => {
       const data = JSON.parse(body || '{}'), send = (status, value) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(value)); };
-      if (req.url === '/api/service/import') { imports.push({ auth: req.headers.authorization, ...data }); return req.headers.authorization === 'Bearer ' + secret ? send(201, { id: 'c1', url: 'https://contracts.example/contract/c1' }) : send(404, {}); }
+      if (req.url === '/api/service/import' && stubBroken) { imports.push({}); return send(401, { error: 'Sign in to use HN Group Documents.' }); }
+      if (req.url === '/api/service/import') { imports.push({ auth: req.headers.authorization, ...data }); return req.headers.authorization === 'Bearer ' + secret ? send(201, { id: 'c1', url: 'https://contracts.example/contract/0b1c2d3e-4f50-4a61-8b72-938495a6b7c8' }) : send(404, {}); }
       if (req.url === '/api/auth/staff-directory') return req.headers.authorization === 'Bearer ' + secret ? send(200, { people: Object.values(people).map((p) => ({ id: p.id, displayName: p.displayName, jobTitle: p.jobTitle, company: 'HN Group' })) }) : send(401, { error: 'No.' });
       if (req.headers.authorization !== 'Bearer ' + secret || data.client_id !== 'docs') return send(401, { error: 'No.' });
       if (req.url === '/api/sso/exchange') { const g = codes.get(data.code); codes.delete(data.code); if (!g || g.state !== data.state) return send(401, { error: 'Expired.' }); const s = hex(); sessions.set(s, g.who); return send(200, { session: s, expires: Date.now() + 3600000, user: people[g.who] }); }
@@ -300,8 +301,13 @@ test('HN Group Docs: sign-in, storage, files, access, templates, filters, editin
     assert.equal((await call('/api/me', { cookie: owner.cookie })).body.user.canSendContracts, true);
     assert.equal((await call('/api/documents/' + letter.id + '/send-for-signing', { cookie: sam.cookie, json: {} })).status, 403);
     r = await call('/api/documents/' + contractDoc.id + '/send-for-signing', { cookie: owner.cookie, json: {} });
-    assert.equal(r.status, 200); assert.equal(r.body.url, 'https://contracts.example/contract/c1');
-    const sent = imports.at(-1);
+    assert.equal(r.status, 200); assert.equal(r.body.url, 'https://contracts.example/contract/0b1c2d3e-4f50-4a61-8b72-938495a6b7c8');
+    // Anything else answering on the Contracts port (an old service) gives a clear message, not its own error.
+    stubBroken = true;
+    r = await call('/api/documents/' + contractDoc.id + '/send-for-signing', { cookie: owner.cookie, json: {} });
+    assert.equal(r.status, 503); assert.match(r.body.error, /isn’t running on this server/);
+    stubBroken = false;
+    const sent = imports.at(-2);
     assert.equal(sent.auth, 'Bearer ' + secret); assert.equal(sent.by.id, 'p-owner'); assert.deepEqual(sent.by.permissions, ['contracts.send', 'contracts.manage']);
     assert.equal(sent.title, 'Employee Agreement'); assert.equal(sent.docId, contractDoc.id); assert.ok(Buffer.from(sent.pdf, 'base64').subarray(0, 5).toString() === '%PDF-');
 
