@@ -555,7 +555,8 @@ test('company register: share classes and voting power', () => {
     s.saveItem(tie.slug, 'psc', '', { name: 'Ben', kind: 'Individual', classC: '40', classCIssuedBy: 'Olive Officer' }, 't');
     s.saveItem(tie.slug, 'psc', '', { name: 'Cat', kind: 'Individual', classA: '20' }, 't');
     const tv = Object.fromEntries(s.company(tie.slug).psc.map((p) => [p.name, s.votingPower(s.company(tie.slug))[p.id]]));
-    assert.deepEqual(tv, { Ann: { votes: 44.44, control: true }, Ben: { votes: 44.44, control: true }, Cat: { votes: 11.11, control: false } });
+    // Neither has 51% alone, so neither is said to have voting control: they share it (the user's report, 29 October 2026).
+    assert.deepEqual(tv, { Ann: { votes: 44.44, control: false, sharedControl: true, sharedWith: ['Ben'], together: 88.89 }, Ben: { votes: 44.44, control: false, sharedControl: true, sharedWith: ['Ann'], together: 88.89 }, Cat: { votes: 11.11, control: false } });
     // The public feed carries classes, votes and the company's shares by class.
     const feed = s.publicFeed().companies.find((x) => x.slug === c.slug);
     const zara = feed.owners.find((o) => o.name === 'Zara Special');

@@ -17,7 +17,7 @@ function directHoldings(names, valuations) {
       const latest = history[history.length - 1] || null, previous = history[history.length - 2] || null;
       out.push({
         company: c, holder: o.name, kind: o.kind, share, shareText: register.shareText(o), control: o.control || [], notified: o.notified || '',
-        classes: o.classes || null, classCIssuedBy: o.classCIssuedBy || '', votes: typeof o.votes === 'number' ? o.votes : null, votingControl: !!o.votingControl,
+        classes: o.classes || null, classCIssuedBy: o.classCIssuedBy || '', votes: typeof o.votes === 'number' ? o.votes : null, votingControl: !!o.votingControl, sharedVotingControl: !!o.sharedVotingControl, sharedWith: Array.isArray(o.sharedWith) ? o.sharedWith.map(String) : [],
         valuation: latest, value: latest && share !== null ? Math.round(latest.amount * share) / 100 : null,
         previousValue: previous && share !== null ? Math.round(previous.amount * share) / 100 : null,
         history: share === null ? [] : history.map((v) => ({ asOf: v.asOf, value: Math.round(v.amount * share) / 100 })),

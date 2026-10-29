@@ -77,7 +77,7 @@ document.addEventListener('DOMContentLoaded', function () {
       const ctrl = over.filter(function (k) { return Math.abs(k[2] - most) < 1e-9; });
       if (!ctrl.length) return { votes: w(self) / W * 100, control: false };
       const wc = ctrl.reduce(function (n, k) { return n + w(k); }, 0), rest = W - wc, own = rest > 0 ? Math.max(controlVotes, wc / W * 100) : 100;
-      return ctrl.indexOf(self) >= 0 ? { votes: own * w(self) / wc, control: true } : { votes: rest > 0 ? (100 - own) * w(self) / rest : 0, control: false };
+      return ctrl.indexOf(self) >= 0 ? { votes: own * w(self) / wc, control: ctrl.length === 1, shared: ctrl.length > 1 } : { votes: rest > 0 ? (100 - own) * w(self) / rest : 0, control: false };
     }
     function update() {
       const v = votes(), sh = shares();
@@ -86,7 +86,7 @@ document.addEventListener('DOMContentLoaded', function () {
       const pct = Math.round(v.votes * 100) / 100;
       out.textContent = '';
       const strong = document.createElement('strong'); strong.textContent = pct + '% of the votes';
-      out.append('With these details: ', strong, v.control ? ' (voting control through Class C shares)' : '', ' and ' + (Math.round(sh * 100) / 100) + '% of the shares. ');
+      out.append('With these details: ', strong, v.control ? ' (voting control through Class C shares)' : v.shared ? ' (voting control shared with the other largest Class C holder)' : '', ' and ' + (Math.round(sh * 100) / 100) + '% of the shares. ');
       // Suggest the matching shares and voting rights options, and offer to tick them.
       const picks = [['shares', band('shares', sh)], ['voting rights', band('voting rights', pct)]];
       const wanted = picks.map(function (x) { return x[1]; }).filter(Boolean);

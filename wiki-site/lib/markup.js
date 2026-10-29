@@ -186,7 +186,9 @@ function companyInfobox(params, ctx) {
   add(own.length > 1 ? 'Owners' : 'Owner', own.map((o) => ownerText(o, hasClasses(c))).join('<br>'));
   if (hasClasses(c)) add('Share classes', ['A', 'B', 'C'].map((k) => 'Class ' + k + ' ' + c.shareClasses['class' + k] + '%').join('<br>'));
   const ctrl = own.find((o) => o.votingControl);
-  if (ctrl) add('Voting control', (ctrl.company ? link(ctrl.name) : ctrl.name) + ' (' + ctrl.votes + '% of votes, through Class C shares)');
+  const sharing = own.filter((o) => o.sharedVotingControl), nameOf = (o) => (o.company ? link(o.name) : o.name);
+  if (ctrl) add('Voting control', nameOf(ctrl) + ' (' + ctrl.votes + '% of votes, through Class C shares)');
+  else if (sharing.length > 1) add('Voting control', 'Shared by ' + listWords(sharing.map(nameOf)) + ' (' + Math.round(sharing.reduce((n, o) => n + o.votes, 0) * 100) / 100 + '% of votes together, through Class C shares)');
   if (parent && !own.some((o) => o.company && o.company.slug === parent.slug)) add('Parent', link(R.displayName(parent)));
   if (manager) add('Managed by', link(R.displayName(manager)));
   add('Subsidiaries', R.children(c).map((x) => link(R.displayName(x))).join('<br>'));
@@ -231,7 +233,7 @@ function companyOwnership(params, ctx) {
   parts.push(chain ? n + (gone ? ' was owned by ' : ' is owned by ') + chain + '.' : 'No owner is recorded for ' + n + ' on the Company Register.');
   const parent = c.parent && R.bySlug(c.parent), own = R.owners(c);
   if (hasClasses(c) && own.some((o) => o.votes !== null)) {
-    const voters = own.filter((o) => o.votes !== null).sort((a, b) => b.votes - a.votes).map((o) => (o.company ? link(o.name) : o.name) + ' ' + o.votes + '%' + (o.votingControl ? ' (the largest holder of Class C shares, with more than 10% of them, holds 51% of the votes or more)' : ''));
+    const voters = own.filter((o) => o.votes !== null).sort((a, b) => b.votes - a.votes).map((o) => (o.company ? link(o.name) : o.name) + ' ' + o.votes + '%' + (o.votingControl ? ' (the largest holder of Class C shares, with more than 10% of them, holds 51% of the votes or more)' : o.sharedVotingControl ? ' (tied for the most Class C shares, so voting control is shared)' : ''));
     parts.push('Its shares are split into classes with different voting rights, so the votes are held ' + (voters.length > 1 ? 'as follows: ' : 'by ') + listWords(voters) + '.');
   }
   if (parent && !own.some((o) => o.company && o.company.slug === parent.slug)) parts.push('It is a subsidiary of ' + link(R.displayName(parent)) + '.');

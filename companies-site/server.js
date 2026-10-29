@@ -206,7 +206,8 @@ function peoplePage(res, ctx, c, sub) {
   const active = officers.filter((o) => !o.resigned).length;
   const votes = store.votingPower(c), classes = store.shareClasses(c);
   const classLine = (p) => { const k = store.classesOf(p); return k.split ? [['A', p.classA], ['B', p.classB], ['C', p.classC]].filter(([, v]) => Number(v || 0) > 0).map(([n, v]) => 'Class ' + n + ' ' + esc(v) + '%').join('<br>') + (Number(p.classC || 0) > 0 ? '<br><span class="muted">Class C issued by ' + esc(p.classCIssuedBy) + '</span>' : '') : (p.share ? 'Not split into classes (counted as Class A)' : val('')); };
-  const voteLine = (p) => { const v = votes[p.id]; return p.ceased ? val('') : v ? '<strong>' + esc(v.votes) + '%</strong>' + (v.control ? ' <span class="status">Voting control</span><br><span class="muted">Holds more than ' + store.CLASS_C_CONTROL + '% of the Class C shares, so holds ' + store.CONTROL_VOTES + '% of the votes or more.</span>' : '') : val(''); };
+  const voteLine = (p) => { const v = votes[p.id]; return p.ceased ? val('') : v ? '<strong>' + esc(v.votes) + '%</strong>' + (v.control ? ' <span class="status">Voting control</span><br><span class="muted">Holds the most Class C shares (more than ' + store.CLASS_C_CONTROL + '% of them), so holds ' + store.CONTROL_VOTES + '% of the votes or more.</span>'
+    : v.sharedControl ? ' <span class="status">Shared voting control</span><br><span class="muted">Holds the most Class C shares together with ' + esc(v.sharedWith.join(' and ')) + ', so together they hold ' + esc(v.together) + '% of the votes. ' + (v.sharedWith.length > 1 ? 'None of them' : 'Neither') + ' holds ' + store.CONTROL_VOTES + '% alone.</span>' : '') : val(''); };
   const body = psc
     ? '<h2 class="heading-m">' + plural(c.psc.filter((p) => !p.ceased).length, 'active person', 'active persons') + ' with significant control</h2>' +
       (classes ? '<div class="inset share-classes"><p><strong>Shares by class</strong> (recorded holdings): Class A ' + esc(classes.classA) + '% · Class B ' + esc(classes.classB) + '% · Class C ' + esc(classes.classC) + '%</p>' +
@@ -498,7 +499,7 @@ function votePreview(c, selfId) {
   const others = c ? c.psc.filter((p) => !p.ceased && p.id !== selfId).map((p) => store.classesOf(p)).filter((k) => k.known).map((k) => [k.a, k.b, k.c]) : [];
   const now = c && selfId ? store.votingPower(c)[selfId] : null;
   return '<div class="wide vote-preview" data-vote-preview data-others="' + esc(JSON.stringify(others)) + '" data-threshold="' + store.CLASS_C_CONTROL + '" data-control="' + store.CONTROL_VOTES + '">' +
-    '<p class="field-group-title">Voting power</p>' + (now ? '<p>Now: <strong>' + esc(now.votes) + '% of the votes</strong>' + (now.control ? ' (voting control through Class C shares)' : '') + '.</p>' : '') +
+    '<p class="field-group-title">Voting power</p>' + (now ? '<p>Now: <strong>' + esc(now.votes) + '% of the votes</strong>' + (now.control ? ' (voting control through Class C shares)' : now.sharedControl ? ' (voting control shared with ' + esc(now.sharedWith.join(' and ')) + ')' : '') + '.</p>' : '') +
     '<p class="vote-after" aria-live="polite">' + (now ? '' : 'Enter the shareholding or share classes to see the voting power.') + '</p></div>';
 }
 const ITEM_FIELDS = {

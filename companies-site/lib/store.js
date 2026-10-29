@@ -382,7 +382,7 @@ function publicFeed() {
     managedBy: c.managedBy && company(c.managedBy) && !company(c.managedBy).hidden ? c.managedBy : '',
     divisions: c.divisions.slice(), previousNames: (c.previousNames || []).map((p) => ({ name: p.name, until: p.until || p.changed || '' })),
     officers: c.officers.filter((o) => !o.resigned).map((o) => ({ name: o.name, role: o.role, appointed: o.appointed })),
-    owners: c.psc.filter((p) => !p.ceased).map((p) => { const v = votes[p.id]; return { name: p.name, kind: p.kind, share: p.share, classes: classesOf(p).split ? { A: p.classA || '', B: p.classB || '', C: p.classC || '' } : null, classCIssuedBy: p.classCIssuedBy || '', votes: v ? v.votes : null, votingControl: !!(v && v.control), control: (p.control || []).slice(), notified: p.notified }; }),
+    owners: c.psc.filter((p) => !p.ceased).map((p) => { const v = votes[p.id]; return { name: p.name, kind: p.kind, share: p.share, classes: classesOf(p).split ? { A: p.classA || '', B: p.classB || '', C: p.classC || '' } : null, classCIssuedBy: p.classCIssuedBy || '', votes: v ? v.votes : null, votingControl: !!(v && v.control), sharedVotingControl: !!(v && v.sharedControl), sharedWith: v && v.sharedControl ? v.sharedWith.slice() : [], control: (p.control || []).slice(), notified: p.notified }; }),
     shareClasses: shareClasses(c),
     updatedAt: c.updatedAt,
   }; });
@@ -514,7 +514,12 @@ function votingPower(c) {
   const round = (n) => Math.round(n * 100) / 100;
   if (!ctrl.length) { for (const x of cur) out[x.p.id] = { votes: round(weight(x.k) / W * 100), control: false }; return out; }
   const wCtrl = ctrl.reduce((n, x) => n + weight(x.k), 0), rest = W - wCtrl, own = rest > 0 ? Math.max(CONTROL_VOTES, wCtrl / W * 100) : 100;
-  for (const x of cur) out[x.p.id] = ctrl.includes(x) ? { votes: round(own * weight(x.k) / wCtrl), control: true } : { votes: round(rest > 0 ? (100 - own) * weight(x.k) / rest : 0), control: false };
+  // Only a holder who really has the votes is said to have voting control: holders tied for the most Class C shares
+  // share it (together they hold 51% or more, but none of them does alone).
+  const shared = ctrl.length > 1;
+  for (const x of cur) out[x.p.id] = ctrl.includes(x)
+    ? (shared ? { votes: round(own * weight(x.k) / wCtrl), control: false, sharedControl: true, sharedWith: ctrl.filter((y) => y !== x).map((y) => y.p.name), together: round(own) } : { votes: round(own), control: true })
+    : { votes: round(rest > 0 ? (100 - own) * weight(x.k) / rest : 0), control: false };
   return out;
 }
 // The company's issued shares by class, from the holdings recorded on it.
