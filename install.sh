@@ -101,6 +101,7 @@ changed companies-site/ && run 'Company register (companies.hngroup.org.uk)' bas
 changed accounts-site/ && run 'HN Account (accounts.hngroup.org.uk)' bash "$ROOT/accounts-site/install.sh" "$EMAIL"
 changed devices-site/ && run 'Devices (devices.hngroup.org.uk)' bash "$ROOT/devices-site/install.sh" "$EMAIL"
 changed docs-site/ && run 'HN Group Docs (docs.hngroup.org.uk)' bash "$ROOT/docs-site/install.sh" "$EMAIL"
+changed contracts-site/ && run 'HN Group Contracts (contracts.hngroup.org.uk)' bash "$ROOT/contracts-site/install.sh" "$EMAIL"
 changed investors-site/ && run 'Investors (investors.hngroup.org.uk)' bash "$ROOT/investors-site/install.sh" "$EMAIL"
 changed vpn-site/ && run 'VPN (vpn.hngroup.org.uk + WireGuard)' bash "$ROOT/vpn-site/install.sh" "$EMAIL"
 changed downloads-site/ && run 'Downloads (downloads.hngroup.org.uk)' bash "$ROOT/downloads-site/install.sh" "$EMAIL"

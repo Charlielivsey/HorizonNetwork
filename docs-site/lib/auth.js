@@ -27,7 +27,10 @@ function userOf(u) {
     .slice(0, 200).map((g) => ({ personId: g.personId.slice(0, 64), name: String(g.name || '').slice(0, 120), until: String(g.until) }));
   return { id: String(u.id || ''), email: String(u.email || '').toLowerCase(), displayName: String(u.displayName || u.email || 'Staff member'), fullName: full || String(u.displayName || ''),
     jobTitle: String(u.jobTitle || '').slice(0, 120), picture: !!u.avatarUrl, admin: u.ownerAccess === true || u.statusAdminAllowed === true,
-    storageAccess: u.storageAccess === true || u.ownerAccess === true || u.statusAdminAllowed === true, storageGrants: grants };
+    storageAccess: u.storageAccess === true || u.ownerAccess === true || u.statusAdminAllowed === true, storageGrants: grants,
+    // The staff portal permissions HN Group Auth passes to every website (for sending documents to HN Group Contracts).
+    accountId: String(u.accountId || ''), owner: u.ownerAccess === true, impersonated: u.impersonated === true,
+    permissions: (Array.isArray(u.permissions) ? u.permissions : []).filter((k) => typeof k === 'string' && /^[a-z.]{1,40}$/.test(k)).slice(0, 100) };
 }
 // Where to go after signing in: only a path on this site.
 const safeNext = (next) => (typeof next === 'string' && /^\/[A-Za-z0-9/_?=&.-]{0,200}$/.test(next) && !next.startsWith('//') ? next : '/');

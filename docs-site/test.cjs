@@ -51,6 +51,14 @@ test('every template starts filled in for every company, signed with the author�
     }
   }
   for (const id of ['termination', 'resignation', 'onboarding', 'welcome']) assert.equal(catalog.template(id).group, 'HR letters', id);
+  // The staff contract (HN Group Limited employs) and the same contract with the branded company as the employer.
+  const network = catalog.company('horizon-network');
+  const group = catalog.start(catalog.template('contract'), network, me), own = catalog.start(catalog.template('contract-company'), network, me);
+  assert.match(group.body, /made between <strong>HN Group Limited<\/strong>/); assert.match(group.body, /64 days’ paid holiday/); assert.match(group.body, /two weeks’ written notice/);
+  assert.match(group.body, /Any director of HN Group Limited, as listed on the Company Register/); assert.equal(group.fields.deployedTo, 'Horizon Network Limited');
+  assert.match(own.body, /made between <strong>Horizon Network Limited<\/strong>/); assert.match(own.body, /Any director of Horizon Network Limited/); assert.match(own.body, /On behalf of Horizon Network Limited/);
+  assert.ok(!/HN Group Limited/.test(own.body), 'the company version never names HN Group Limited as employer');
+  assert.ok(catalog.template('contract').confidential && catalog.template('contract-company').confidential);
   assert.match(catalog.start(catalog.template('resignation'), catalog.company('hn-group'), me).body, /my role as Head of People at HN Group Limited/);
   assert.match(catalog.start(catalog.template('termination'), catalog.company('hn-group'), me).body, /right to appeal/);
 });
@@ -73,13 +81,14 @@ test('HN Group Docs: sign-in, storage, files, access, templates, filters, editin
   const people = {
     sam: { id: 'p-sam', email: 'sam@hngroup.org.uk', displayName: 'Sam', firstName: 'Sam', lastName: 'Taylor', jobTitle: 'Head of People', avatarUrl: '/api/avatar', statusAdminAllowed: false, ownerAccess: false },
     alex: { id: 'p-alex', email: 'alex@hngroup.org.uk', displayName: 'Alex Jones', firstName: 'Alex', lastName: 'Jones', jobTitle: 'Designer', statusAdminAllowed: false, ownerAccess: false, storageGrants: [] },
-    owner: { id: 'p-owner', email: 'charlie@hngroup.org.uk', displayName: 'Charlie', firstName: 'Charlie', lastName: 'Livsey', jobTitle: 'Managing Director', ownerAccess: true },
+    owner: { id: 'p-owner', accountId: 'a-owner', email: 'charlie@hngroup.org.uk', displayName: 'Charlie', firstName: 'Charlie', lastName: 'Livsey', jobTitle: 'Managing Director', ownerAccess: true, permissions: ['contracts.send', 'contracts.manage'] },
   };
   const PNG = Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000000', 'hex');
-  const codes = new Map(), sessions = new Map();
+  const codes = new Map(), sessions = new Map(), imports = [];
   const authServer = http.createServer((req, res) => {
     let body = ''; req.on('data', (c) => { body += c; }); req.on('end', () => {
       const data = JSON.parse(body || '{}'), send = (status, value) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(value)); };
+      if (req.url === '/api/service/import') { imports.push({ auth: req.headers.authorization, ...data }); return req.headers.authorization === 'Bearer ' + secret ? send(201, { id: 'c1', url: 'https://contracts.example/contract/c1' }) : send(404, {}); }
       if (req.url === '/api/auth/staff-directory') return req.headers.authorization === 'Bearer ' + secret ? send(200, { people: Object.values(people).map((p) => ({ id: p.id, displayName: p.displayName, jobTitle: p.jobTitle, company: 'HN Group' })) }) : send(401, { error: 'No.' });
       if (req.headers.authorization !== 'Bearer ' + secret || data.client_id !== 'docs') return send(401, { error: 'No.' });
       if (req.url === '/api/sso/exchange') { const g = codes.get(data.code); codes.delete(data.code); if (!g || g.state !== data.state) return send(401, { error: 'Expired.' }); const s = hex(); sessions.set(s, g.who); return send(200, { session: s, expires: Date.now() + 3600000, user: people[g.who] }); }
@@ -90,7 +99,7 @@ test('HN Group Docs: sign-in, storage, files, access, templates, filters, editin
   });
   await new Promise((r) => authServer.listen(0, '127.0.0.1', r));
   const port = await freePort(), SITE = 'http://127.0.0.1:' + port;
-  const env = { ...process.env, PORT: String(port), HOST: '127.0.0.1', DOCS_DATA_DIR: path.join(dir, 'data'), DOCS_SEED_DIR: seedDir, DOCS_ORIGIN: SITE, AUTH_ORIGIN: 'https://auth.example', AUTH_BACKEND: 'http://127.0.0.1:' + authServer.address().port, STAFF_BACKEND: 'http://127.0.0.1:' + authServer.address().port, STATUS_SSO_SECRET_FILE: path.join(dir, 'secret') };
+  const env = { ...process.env, PORT: String(port), HOST: '127.0.0.1', DOCS_DATA_DIR: path.join(dir, 'data'), DOCS_SEED_DIR: seedDir, DOCS_ORIGIN: SITE, AUTH_ORIGIN: 'https://auth.example', AUTH_BACKEND: 'http://127.0.0.1:' + authServer.address().port, STAFF_BACKEND: 'http://127.0.0.1:' + authServer.address().port, CONTRACTS_BACKEND: 'http://127.0.0.1:' + authServer.address().port, STATUS_SSO_SECRET_FILE: path.join(dir, 'secret') };
   let child = spawn(process.execPath, [path.join(__dirname, 'server.js')], { env, stdio: ['ignore', 'ignore', 'inherit'] });
   const call = async (p, o = {}) => {
     const headers = { ...(o.json ? { 'Content-Type': 'application/json' } : {}), ...(o.cookie ? { cookie: o.cookie } : {}), ...(o.origin === false ? {} : typeof o.origin === 'string' ? { origin: o.origin } : o.method && o.method !== 'GET' || o.json ? { origin: SITE } : {}), ...(o.headers || {}) };
@@ -284,6 +293,17 @@ test('HN Group Docs: sign-in, storage, files, access, templates, filters, editin
     r = await svc('/api/service/documents/' + secretDoc.id + '/pdf?by=Portal%20Person&byId=p-x');
     assert.equal(r.status, 200); assert.ok(r.body.subarray(0, 5).toString() === '%PDF-');
     assert.equal((await svc('/api/service/documents/' + termination.id + '?by=x')).status, 404, 'only private storage');
+
+    // Send for signing: a PDF of the document goes to HN Group Contracts over loopback, only for people with the permission.
+    const contractDoc = (await call('/api/documents', { cookie: owner.cookie, json: { company: 'hn-group', template: 'contract' } })).body.document;
+    assert.equal((await call('/api/me', { cookie: sam.cookie })).body.user.canSendContracts, false);
+    assert.equal((await call('/api/me', { cookie: owner.cookie })).body.user.canSendContracts, true);
+    assert.equal((await call('/api/documents/' + letter.id + '/send-for-signing', { cookie: sam.cookie, json: {} })).status, 403);
+    r = await call('/api/documents/' + contractDoc.id + '/send-for-signing', { cookie: owner.cookie, json: {} });
+    assert.equal(r.status, 200); assert.equal(r.body.url, 'https://contracts.example/contract/c1');
+    const sent = imports.at(-1);
+    assert.equal(sent.auth, 'Bearer ' + secret); assert.equal(sent.by.id, 'p-owner'); assert.deepEqual(sent.by.permissions, ['contracts.send', 'contracts.manage']);
+    assert.equal(sent.title, 'Employee Agreement'); assert.equal(sent.docId, contractDoc.id); assert.ok(Buffer.from(sent.pdf, 'base64').subarray(0, 5).toString() === '%PDF-');
 
     // Everything survives a restart, the seed isn't added twice, and sign-out needs the site's own origin.
     child.kill(); await new Promise((res) => child.once('exit', res));

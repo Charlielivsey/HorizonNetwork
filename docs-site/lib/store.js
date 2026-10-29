@@ -393,5 +393,5 @@ function session(token) { const s = data.sessions[hash(token || '')]; if (!s || 
 function updateSession(token, patch) { const s = session(token); if (s) { Object.assign(s, patch); save(); } }
 function endSession(token) { if (token && data.sessions[hash(token)]) { delete data.sessions[hash(token)]; save(); } }
 
-module.exports = { init, list, storage, get, view, create, update, duplicate, remove, removeMany, counts, addFile, readFile, updateFile, removeFile, notePerson, person, setAvatar, avatar,
+module.exports = { init, audit, list, storage, get, view, create, update, duplicate, remove, removeMany, counts, addFile, readFile, updateFile, removeFile, notePerson, person, setAvatar, avatar,
   createSession, session, updateSession, endSession, sections, describeChanges, nextVersion };

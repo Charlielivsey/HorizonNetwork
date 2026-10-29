@@ -420,6 +420,7 @@
     sheet.classList.toggle('final', locked);
     for (const n of sheet.querySelectorAll('[contenteditable]')) n.setAttribute('contenteditable', locked ? 'false' : 'true');
     $('toolbar').classList.toggle('off', locked);
+    $('doc-sign').hidden = !S.me.canSendContracts || !!d.readOnly;
     $('toolbar').hidden = !!d.readOnly;
     $('final-note').hidden = !final || d.readOnly;
     $('readonly-note').hidden = !d.readOnly;
@@ -518,6 +519,18 @@
     const a = el('a', { href: '/api/documents/' + S.doc.id + '/pdf', download: '' });
     document.body.append(a); a.click(); a.remove();
     toast('Downloading “' + S.doc.title + '.pdf”…');
+  });
+  // Send for signing: HN Group Docs makes the PDF and hands it to HN Group Contracts, which opens to choose who signs it.
+  $('doc-sign').addEventListener('click', async () => {
+    await saveNow();
+    const ok = await ask({ title: 'Send for signing?', text: 'A PDF of this document, exactly as it is now, goes to HN Group Contracts. Next you choose who signs it; each person signs in with their own HN Group Auth account.', ok: 'Send to Contracts' });
+    if (!ok) return;
+    const tab = window.open('', '_blank');
+    try {
+      const r = await api('POST', '/api/documents/' + S.doc.id + '/send-for-signing', {});
+      toast('Sent to HN Group Contracts.');
+      if (tab) tab.location.href = r.url; else location.href = r.url;
+    } catch (e) { if (tab) tab.close(); toast(e.message, true); }
   });
   // The "…" menu.
   $('doc-settings').addEventListener('click', () => { closeMenu(); openSettings(); });

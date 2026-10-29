@@ -133,6 +133,15 @@ function init(dir) {
     if (role && !role.permissions.includes(STORAGE_ACCESS)) role.permissions.push(STORAGE_ACCESS);
     settings.storageAccessPermissionAdded = true;
   }
+  if (!settings.contractsPermissionsAdded) {
+    // HN Group Contracts (the user's request, 29 October 2026): Super Admin and Leadership & HR can send and manage
+    // contracts; anyone else can be given "Send contracts for signing" in Roles.
+    for (const role of settings.roles) {
+      const name = role.name.toLowerCase();
+      if (name === "super admin" || name === "leadership & hr") for (const k of ["contracts.send", "contracts.manage"]) if (!role.permissions.includes(k)) role.permissions.push(k);
+    }
+    settings.contractsPermissionsAdded = true;
+  }
   writeJson(settingsFile, settings);
   loadLogins();
 }
@@ -156,13 +165,16 @@ const PERMISSIONS = [
   { key: "enquiries.manage", name: "Website enquiries", description: "Read and answer messages sent from the contact form on hngroup.org.uk." },
   { key: "reports.view", name: "Activity reports", description: "See the monthly activity reports (payroll figures only for people who can run payroll)." },
   { key: "storage.access", name: "Access staff document storage", description: "Open anyone's private storage on docs.hngroup.org.uk (view only) and give people access to someone's storage for a while. Only people who already have it can give it out." },
+  { key: "contracts.send", name: "Send contracts for signing", description: "Upload contracts (or send them from HN Group Docs) to contracts.hngroup.org.uk and invite people to sign them with their HN Group Auth account." },
+  { key: "contracts.manage", name: "Manage all contracts", description: "See, chase and cancel every contract on contracts.hngroup.org.uk, not just the ones you sent. Only people who already have it can give it out." },
   { key: "system.admin", name: "System Admin", description: "Open System Admin with the PIN: sessions, log in as, backups and the full activity log. Only people who already have it can give it out." },
 ];
 const SYSTEM_ADMIN = "system.admin";
 const PAYROLL = "payroll.manage";
 // Permissions only someone who already has them can hand out.
 const STORAGE_ACCESS = "storage.access";
-const GUARDED_PERMISSIONS = [SYSTEM_ADMIN, PAYROLL, STORAGE_ACCESS];
+const CONTRACTS_MANAGE = "contracts.manage";
+const GUARDED_PERMISSIONS = [SYSTEM_ADMIN, PAYROLL, STORAGE_ACCESS, CONTRACTS_MANAGE];
 const PERMISSION_KEYS = PERMISSIONS.map((p) => p.key);
 
 // First run with roles: create sensible defaults, and give anyone who had access through their

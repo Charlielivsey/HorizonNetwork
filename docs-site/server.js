@@ -83,6 +83,27 @@ async function service(req, res, url) {
   throw fail(404, 'Not found.');
 }
 
+// HN Group Contracts on this server: "Send for signing" hands it a PDF of the document over loopback with the shared
+// service secret, as the signed-in member of staff (it checks their "Send contracts for signing" permission itself).
+const CONTRACTS_BACKEND = process.env.CONTRACTS_BACKEND || 'http://127.0.0.1:5500';
+const canSendContracts = (u) => !u.impersonated && (u.owner || u.permissions.includes('contracts.send') || u.permissions.includes('contracts.manage'));
+async function sendForSigning(d, user) {
+  if (!canSendContracts(user)) throw fail(403, 'You need the “Send contracts for signing” permission. Ask an administrator to add it to one of your roles in the staff portal.');
+  const key = secret();
+  if (!key) throw fail(503, 'HN Group Contracts isn’t set up on this server.');
+  const pdf = renderDocument(d, catalog.company(d.company), catalog.template(d.template)), title = String(d.title || 'Document').trim() || 'Document';
+  let response;
+  try {
+    response = await fetch(CONTRACTS_BACKEND + '/api/service/import', { method: 'POST', headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(20000), redirect: 'error',
+      body: JSON.stringify({ by: { id: user.id, accountId: user.accountId, displayName: user.displayName, email: user.email, owner: user.owner, impersonated: user.impersonated, permissions: user.permissions },
+        title, fileName: title.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-') + '.pdf', docId: d.id, pdf: pdf.toString('base64') }) });
+  } catch { throw fail(503, 'HN Group Contracts is unavailable. Please try again shortly.'); }
+  const value = await response.json().catch(() => ({}));
+  if (!response.ok || typeof value.url !== 'string') throw fail(response.status === 403 ? 403 : 503, value.error || 'HN Group Contracts didn’t take the document. Please try again.');
+  store.audit(user, 'document.send-for-signing', d, { contract: String(value.id || '') });
+  return { url: value.url };
+}
+
 // A document as a PDF download (made here, so no print dialog is involved).
 function sendPdf(res, d) {
   const bytes = renderDocument(d, catalog.company(d.company), catalog.template(d.template));
@@ -117,7 +138,7 @@ async function api(req, res, url) {
   const q = url.searchParams;
   if (route === '/api/me' && method === 'GET') {
     return send(res, 200, { user: { id: user.id, name: user.displayName, fullName: user.fullName, jobTitle: user.jobTitle, email: user.email, admin: user.admin, picture: !!store.avatar(user.id),
-      storageAccess: user.storageAccess, storageGrants: user.storageGrants }, ...catalog.publicCatalog(), counts: { shared: store.counts(user, 'shared'), mine: store.counts(user, 'mine') } });
+      storageAccess: user.storageAccess, storageGrants: user.storageGrants, canSendContracts: canSendContracts(user) }, ...catalog.publicCatalog(), counts: { shared: store.counts(user, 'shared'), mine: store.counts(user, 'mine') } });
   }
   if (route === '/api/avatar' && method === 'GET') {
     const a = store.avatar(user.id);
@@ -130,7 +151,9 @@ async function api(req, res, url) {
     return send(res, 200, { ...store.list(user, { scope, company: q.get('company') || '', template: q.get('template') || '', q: q.get('q') || '' }), counts: store.counts(user, scope) });
   }
   if (route === '/api/documents' && method === 'POST') return send(res, 201, { document: store.create(user, await json(req)) });
-  let m = /^\/api\/documents\/([0-9a-f-]{36})\/pdf$/.exec(route);
+  let m = /^\/api\/documents\/([0-9a-f-]{36})\/send-for-signing$/.exec(route);
+  if (m && UUID.test(m[1]) && method === 'POST') return send(res, 200, await sendForSigning(store.view(store.get(m[1], user), user, true), user));
+  m = /^\/api\/documents\/([0-9a-f-]{36})\/pdf$/.exec(route);
   if (m && UUID.test(m[1]) && method === 'GET') return sendPdf(res, store.view(store.get(m[1], user), user, true));
   m = /^\/api\/documents\/([0-9a-f-]{36})(\/duplicate)?$/.exec(route);
   if (m && UUID.test(m[1])) {

@@ -148,6 +148,15 @@
     ]
   },
   {
+    "id": "contracts",
+    "name": "HN Group Contracts",
+    "process": "hn-contracts",
+    "port": 5500,
+    "hosts": [
+      "contracts.hngroup.org.uk"
+    ]
+  },
+  {
     "id": "media",
     "name": "Horizon Media Group",
     "process": "hn-media",

@@ -1,6 +1,6 @@
 {
   "name": "hn-group-browser",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "productName": "HN Browser",
   "private": true,
   "description": "HN Browser — a Chromium-powered browser with HN Group account sign-in, for macOS, Windows and Linux",

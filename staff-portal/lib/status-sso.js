@@ -53,7 +53,12 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       google:p.account.google?{email:p.account.google.email,linkedAt:p.account.google.linkedAt}:null,
       discord:p.account.discord?{id:p.account.discord.id,username:p.account.discord.username,linkedAt:p.account.discord.linkedAt}:null,ownerAccess:store.hasOwnerAccess(p)&&!active.data.impersonatorId,
       // Who may open other people's document storage on docs.hngroup.org.uk (never while logged in as someone else).
-      ...(active.data.impersonatorId?{storageAccess:false,storageGrants:[]}:storageAccess.forIdentity(p))
+      ...(active.data.impersonatorId?{storageAccess:false,storageGrants:[]}:storageAccess.forIdentity(p)),
+      // Every staff portal permission this sign-in account has (owner-level accounts have them all), so each website
+      // uses the same permissions as the portal (the user's request, 29 October 2026: "make sure the permissions are
+      // all synced across all sites"). None while logged in as someone else, and sites can see that it's not them.
+      permissions:active.data.impersonatorId||!Array.isArray(store.PERMISSIONS)||typeof store.can!=='function'?[]:store.PERMISSIONS.map(x=>x.key).filter(k=>store.can(p,k)),
+      ...(active.data.impersonatorId?{impersonated:true}:{})
     };
   }
   // What HN Browser's settings show and let people change about themselves.
@@ -145,7 +150,7 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
     if (pathname === '/api/auth/staff-directory') {
       // One entry per profile (each company someone works at), for profiles an enabled sign-in account uses.
       const people = store.allProfiles().filter((x) => store.loginsForId(x.profileId).some((l) => l.account && l.account.enabled))
-        .map((x) => ({ id: x.profileId, displayName: x.displayName, jobTitle: x.jobTitle || '', company: x.company }));
+        .map((x) => ({ id: x.profileId, accountIds: store.loginsForId(x.profileId).filter((l) => l.account && l.account.enabled).map((l) => l.id), displayName: x.displayName, jobTitle: x.jobTitle || '', company: x.company }));
       sendJson(res, 200, { people }); return true;
     }
     // HN Secure Network asks for the PIN before connecting the VPN (checked through vpn.hngroup.org.uk).

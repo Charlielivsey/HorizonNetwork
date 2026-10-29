@@ -17,6 +17,7 @@ const sites=[
 ['accounts','HN Account','hn-account-web',5300,['accounts.hngroup.org.uk']],
 ['devices','HN Group Devices','hn-devices',5400,['devices.hngroup.org.uk']],
 ['docs','HN Group Docs','hn-docs',4500,['docs.hngroup.org.uk']],
+['contracts','HN Group Contracts','hn-contracts',5500,['contracts.hngroup.org.uk']],
 ...[['media','Horizon Media Group',3900],['holding','HN Group Management',4000],['development','Horizon Development',4100],['support','Support',4200],['clients','Client portal',4300],['careers','Careers',4400],['news','News',4600]].map(([id,name,port])=>[id,name,'hn-'+id,port,[id+'.hngroup.org.uk']])
 ].map(([id,name,process,port,hosts])=>({id,name,process,port,hosts}));
 module.exports={sites,ROOT_ACCOUNT:'charlie.livsey@hngroup.org.uk',PERMISSIONS:['maintenance','power','audit','access']};
