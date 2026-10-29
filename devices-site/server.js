@@ -59,6 +59,32 @@ async function deviceCheck(req, res) {
     trustFor: 7 * 86400000 });
 }
 
+// ---------- Profile pictures ----------
+const STAFF_BACKEND = process.env.STAFF_BACKEND || 'http://127.0.0.1:3250';
+const SECRET_FILE = process.env.STATUS_SSO_SECRET_FILE || '/var/lib/hn-status-sso/secret';
+const pictures = new Map(), IMAGE = /^image\/(png|jpeg|webp|gif)$/;
+async function staffPicture(id) {
+  let key; try { key = fs.readFileSync(SECRET_FILE, 'utf8').trim(); } catch { return null; }
+  try {
+    const r = await fetch(STAFF_BACKEND + '/api/auth/directory-avatar', { method: 'POST', headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' }, body: JSON.stringify({ id }), signal: AbortSignal.timeout(5000), redirect: 'error' });
+    return r.ok ? { type: r.headers.get('content-type') || '', bytes: Buffer.from(await r.arrayBuffer()) } : null;
+  } catch { return null; }
+}
+async function picture(res, id, who) {
+  const mine = id === who.user.id;
+  if (!mine && !who.user.admin) { res.writeHead(404); return res.end(); }
+  const cacheKey = (mine ? 'me:' : '') + id;
+  let p = pictures.get(cacheKey);
+  if (!p || p.at < Date.now() - 600000) {
+    const got = mine ? await auth.ownPicture(who.authSession) : await staffPicture(id);
+    p = { at: Date.now(), value: got && IMAGE.test(got.type.split(';')[0]) && got.bytes.length && got.bytes.length < 3 * 1024 * 1024 ? got : null };
+    pictures.set(cacheKey, p); if (pictures.size > 2000) pictures.delete(pictures.keys().next().value);
+  }
+  if (!p.value) { res.writeHead(404, { 'Cache-Control': 'private, max-age=300' }); return res.end(); }
+  res.writeHead(200, { 'Content-Type': p.value.type, 'Content-Length': p.value.bytes.length, 'Cache-Control': 'private, max-age=600', 'X-Content-Type-Options': 'nosniff' });
+  res.end(p.value.bytes);
+}
+
 // ---------- The website ----------
 async function api(req, res, url) {
   const route = url.pathname, method = req.method;
@@ -66,6 +92,10 @@ async function api(req, res, url) {
   const current = await auth.current(req);
   if (!current) throw fail(401, 'Sign in to manage your computers.');
   const { user } = current;
+  // Profile pictures (the user's request, 29 October 2026: "always pull profile pictures everywhere"): your own from
+  // HN Group Auth, a computer owner's from the staff list (for people who approve computers). Kept ten minutes.
+  const pic = /^\/api\/picture\/([A-Za-z0-9_-]{1,64})$/.exec(route);
+  if (pic && method === 'GET') return picture(res, pic[1], current);
   if (route === '/api/me' && method === 'GET') return send(res, 200, { user, devices: store.forOwner(user.id), counts: user.admin ? store.counts() : null });
   if (route === '/api/link' && method === 'POST') {
     if (limited('link:' + user.id, 20, 600000)) throw fail(429, 'Too many tries. Wait a few minutes and try again.');

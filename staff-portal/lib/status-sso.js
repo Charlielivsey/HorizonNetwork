@@ -84,7 +84,7 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       logEvent(req, session, 'status-admin-sign-in');
       redirect(res, `${STATUS_ORIGIN}/auth/callback?code=${code}&state=${state}`); return true;
     }
-    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/password', '/api/auth/code', '/api/auth/network-leadership', '/api/auth/network-avatar', '/api/auth/account-status', '/api/auth/staff-directory', '/api/auth/vpn-pin', '/api/auth/accounts-session', '/api/auth/profile-select', '/api/auth/profile-avatar', '/api/auth/browser-issue', '/api/auth/browser-profile', '/api/auth/browser-avatar', '/api/auth/browser-offer', '/api/auth/browser-logout', '/api/auth/browser-unlock', '/api/auth/browser-lock', '/api/auth/browser-account', '/api/auth/browser-account-update', '/api/auth/browser-account-status', '/api/auth/browser-account-photo', '/api/auth/google-login', '/api/auth/google-link', '/api/auth/google-unlink', '/api/auth/discord-login', '/api/auth/discord-link', '/api/auth/discord-unlink', '/api/auth/discord-accounts', '/api/auth/discord-update'].includes(pathname)) return false;
+    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/password', '/api/auth/code', '/api/auth/network-leadership', '/api/auth/network-avatar', '/api/auth/account-status', '/api/auth/staff-directory', '/api/auth/directory-avatar', '/api/auth/vpn-pin', '/api/auth/accounts-session', '/api/auth/profile-select', '/api/auth/profile-avatar', '/api/auth/browser-issue', '/api/auth/browser-profile', '/api/auth/browser-avatar', '/api/auth/browser-offer', '/api/auth/browser-logout', '/api/auth/browser-unlock', '/api/auth/browser-lock', '/api/auth/browser-account', '/api/auth/browser-account-update', '/api/auth/browser-account-status', '/api/auth/browser-account-photo', '/api/auth/google-login', '/api/auth/google-link', '/api/auth/google-unlink', '/api/auth/discord-login', '/api/auth/discord-link', '/api/auth/discord-unlink', '/api/auth/discord-accounts', '/api/auth/discord-update'].includes(pathname)) return false;
     if (req.method !== 'POST') { sendJson(res, 405, { error: 'Method not allowed.' }); return true; }
     if (!credentials(req)) { sendJson(res, 401, { error: 'Status integration not authenticated.' }); return true; }
     const body = await readJsonBody(req, pathname === '/api/auth/browser-account-photo' ? 2 * 1024 * 1024 : undefined);
@@ -150,7 +150,7 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
     if (pathname === '/api/auth/staff-directory') {
       // One entry per profile (each company someone works at), for profiles an enabled sign-in account uses.
       const people = store.allProfiles().filter((x) => store.loginsForId(x.profileId).some((l) => l.account && l.account.enabled))
-        .map((x) => ({ id: x.profileId, accountIds: store.loginsForId(x.profileId).filter((l) => l.account && l.account.enabled).map((l) => l.id), displayName: x.displayName, jobTitle: x.jobTitle || '', company: x.company }));
+        .map((x) => ({ id: x.profileId, accountIds: store.loginsForId(x.profileId).filter((l) => l.account && l.account.enabled).map((l) => l.id), photo: !!x.avatarUrl, displayName: x.displayName, jobTitle: x.jobTitle || '', company: x.company }));
       sendJson(res, 200, { people }); return true;
     }
     // HN Secure Network asks for the PIN before connecting the VPN (checked through vpn.hngroup.org.uk).
@@ -160,6 +160,15 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
     }
     if (pathname === '/api/auth/network-leadership') {
       sendJson(res, 200, { leaders: network.publicMembers(store) }); return true;
+    }
+    // The profile picture of someone on the staff list (by profile id), for HN Group websites that show people, such
+    // as HN Group Contracts' signers (the user's request, 29 October 2026: "always pull profile pictures everywhere").
+    if (pathname === '/api/auth/directory-avatar') {
+      const profile = store.allProfiles().find((x) => x.profileId === body.id && store.loginsForId(x.profileId).some((l) => l.account && l.account.enabled));
+      const avatar = profile && store.avatarFile(store.getPerson(profile.personId));
+      if (!avatar) { sendJson(res, 404, { error: 'No profile picture.' }); return true; }
+      res.writeHead(200, { 'Content-Type': avatar.mime, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+      fs.createReadStream(avatar.file).on('error', () => res.destroy()).pipe(res); return true;
     }
     if (pathname === '/api/auth/network-avatar') {
       const person = network.members(store).find(p => p.id === body.id);

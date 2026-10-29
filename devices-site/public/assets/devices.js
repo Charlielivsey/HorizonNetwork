@@ -56,7 +56,9 @@ function deviceCard(d, { admin = false } = {}) {
     el('span', { class: 'device-icon ' + d.platform, 'aria-hidden': 'true' }),
     el('div', { class: 'device-main' },
       el('div', { class: 'device-head' }, el('h3', {}, d.name), el('span', { class: 'pill ' + tone }, label)),
-      el('p', { class: 'muted small' }, (PLATFORM[d.platform] || 'Computer') + (d.os ? ' · ' + d.os : '') + (admin && d.owner ? ' · ' + d.owner.displayName : '') + ' · last used ' + when(d.lastSeen)),
+      el('p', { class: 'muted small' }, (PLATFORM[d.platform] || 'Computer') + (d.os ? ' · ' + d.os : '') + (admin && d.owner ? ' · ' : ''),
+        admin && d.owner ? [(() => { const f = el('span', { class: 'avatar owner-face', 'aria-hidden': 'true' }); setFace(f, d.owner.id, d.owner.displayName); return f; })(), d.owner.displayName] : null,
+        ' · last used ' + when(d.lastSeen)),
       el('p', { class: 'small apps' }, apps),
       d.mismatchAt ? el('p', { class: 'small warn' }, 'Its identity was used from different hardware on ' + new Date(d.mismatchAt).toLocaleDateString('en-GB') + '. Approving it again trusts the new hardware.') : null),
     actions);
@@ -76,11 +78,19 @@ async function act(d, action) {
   } catch (e) { toast(e.message, true); }
 }
 
+// Someone's profile picture over their initials (the user's request, 29 October 2026: always show profile pictures).
+function setFace(box, id, name) {
+  box.textContent = String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((s) => s[0]).join('').toUpperCase();
+  if (!id || box.dataset.face === id) return;
+  box.dataset.face = id;
+  const img = new Image(); img.alt = ''; img.onload = () => { box.textContent = ''; box.append(img); box.classList.add('has-photo'); }; img.src = '/api/picture/' + encodeURIComponent(id);
+}
+
 function render() {
   $('signed-out').hidden = !!me; $('signed-in').hidden = !me; $('who').hidden = !me;
   if (!me) return;
   $('who-name').textContent = me.user.displayName; $('who-role').textContent = me.user.admin ? 'Can approve computers' : me.user.email;
-  $('who-avatar').textContent = me.user.displayName.split(/\s+/).slice(0, 2).map((s) => s[0]).join('').toUpperCase();
+  setFace($('who-avatar'), me.user.id, me.user.displayName);
   $('greeting').textContent = 'Hello, ' + me.user.displayName.split(/\s+/)[0];
   $('mine').replaceChildren(...(me.devices.length ? me.devices.map((d) => deviceCard(d, { admin: me.user.admin })) : [el('div', { class: 'empty' }, el('strong', {}, 'No computers yet'), el('p', { class: 'muted small' }, 'Add one with the code from an HN app.'))]));
   $('admin').hidden = !me.user.admin;

@@ -85,6 +85,32 @@ async function service(req, res, route) {
   return send(res, 201, { id: c.id, url: auth.ORIGIN + '/contract/' + c.id });
 }
 
+// Profile pictures (the user's request, 29 October 2026: "always pull profile pictures everywhere they should be"):
+// your own from HN Group Auth, anyone else's from the staff list, kept for ten minutes. Only images are passed on.
+const pictures = new Map();
+const IMAGE = /^image\/(png|jpeg|webp|gif)$/;
+async function staffPicture(id) {
+  const key = secret(); if (!key) return null;
+  try {
+    const r = await fetch(STAFF_BACKEND + '/api/auth/directory-avatar', { method: 'POST', headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' }, body: JSON.stringify({ id }), signal: AbortSignal.timeout(5000), redirect: 'error' });
+    if (!r.ok) return null;
+    return { type: r.headers.get('content-type') || '', bytes: Buffer.from(await r.arrayBuffer()) };
+  } catch { return null; }
+}
+async function picture(res, id, who) {
+  const mine = id === who.user.id, cacheKey = (mine ? 'me:' + who.user.accountId + ':' : '') + id;
+  let p = pictures.get(cacheKey);
+  if (!p || p.at < Date.now() - 600000) {
+    const got = mine ? await auth.ownPicture(who.authSession) : await staffPicture(id);
+    p = { at: Date.now(), value: got && IMAGE.test(got.type.split(';')[0]) && got.bytes.length && got.bytes.length < 3 * 1024 * 1024 ? got : null };
+    pictures.set(cacheKey, p);
+    if (pictures.size > 2000) pictures.delete(pictures.keys().next().value);
+  }
+  if (!p.value) { res.writeHead(404, { ...HEADERS, 'Cache-Control': 'private, max-age=300' }); return res.end(); }
+  res.writeHead(200, { 'Content-Type': p.value.type, 'Content-Length': p.value.bytes.length, 'Cache-Control': 'private, max-age=600', 'X-Content-Type-Options': 'nosniff' });
+  res.end(p.value.bytes);
+}
+
 function pdf(res, bytes, name, download) {
   const encoded = encodeURIComponent(name);
   res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Length': bytes.length, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin',
@@ -98,7 +124,9 @@ async function api(req, res, url) {
   const who = await auth.current(req);
   if (!who) throw fail(401, 'Sign in to continue.');
   const user = who.user;
-  if (route === '/api/me' && method === 'GET') return send(res, 200, { user: { displayName: user.displayName, fullName: user.fullName, jobTitle: user.jobTitle, impersonated: user.impersonated }, canSend: store.canSend(user), canManage: store.canManage(user) });
+  const pic = /^\/api\/picture\/([A-Za-z0-9_-]{1,64})$/.exec(route);
+  if (pic && method === 'GET') return picture(res, pic[1], who);
+  if (route === '/api/me' && method === 'GET') return send(res, 200, { user: { id: user.id, displayName: user.displayName, fullName: user.fullName, jobTitle: user.jobTitle, impersonated: user.impersonated }, canSend: store.canSend(user), canManage: store.canManage(user) });
   if (route === '/api/contracts' && method === 'GET') return send(res, 200, store.lists(user));
   if (route === '/api/contracts' && method === 'POST') {
     if (!store.canSend(user)) throw fail(403, 'You need the “Send contracts for signing” permission to upload contracts.');

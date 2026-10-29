@@ -55,7 +55,8 @@ function createAuth(store) {
       try { const r = await authApi('session', { session: s.authSession }); store.updateSession(token, { user: userOf(r.user), checked: Date.now() }); }
       catch (e) { if ([401, 403].includes(e.status)) { store.endSession(token); return null; } throw e; }
     }
-    return { user: store.session(token).user, token };
+    const now = store.session(token);
+    return { user: now.user, token, authSession: now.authSession };
   }
   function redirect(res, location, cookies) { res.writeHead(302, { Location: location, 'Cache-Control': 'no-store', 'Set-Cookie': cookies || [] }); res.end(); }
   async function handle(req, res, url, showPage) {
@@ -85,6 +86,17 @@ function createAuth(store) {
     }
     return false;
   }
-  return { current, handle, ORIGIN };
+  // The signed-in person's own profile picture, from HN Group Auth (works for every sign-in account, with or without a
+  // staff profile). Resolves to {type, bytes} or null.
+  async function ownPicture(authSession) {
+    let secret; try { secret = fs.readFileSync(SECRET_FILE, 'utf8').trim(); } catch { return null; }
+    try {
+      const r = await fetch(AUTH_BACKEND + '/api/sso/avatar', { method: 'POST', headers: { Authorization: 'Bearer ' + secret, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session: authSession, client_id: 'contracts' }), signal: AbortSignal.timeout(5000), redirect: 'error' });
+      if (!r.ok) return null;
+      return { type: r.headers.get('content-type') || 'image/png', bytes: Buffer.from(await r.arrayBuffer()) };
+    } catch { return null; }
+  }
+  return { current, handle, ownPicture, ORIGIN };
 }
 module.exports = { createAuth, safeNext };

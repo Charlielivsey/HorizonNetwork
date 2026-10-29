@@ -86,7 +86,7 @@ function view(c, u) {
   return {
     id: c.id, title: c.title, message: c.message, status: c.status, order: c.order, dueDate: c.dueDate, overdue: overdue(c),
     createdAt: c.createdAt, sentAt: c.sentAt || null, completedAt: c.completedAt || null, cancelledAt: c.cancelledAt || null,
-    sender: { name: c.sender.name }, mine: isSender(c, u), source: c.source,
+    sender: { id: c.sender.id, name: c.sender.name }, mine: isSender(c, u), source: c.source,
     file: { name: c.file.name, size: c.file.size, pages: c.file.pages, sha256: c.file.sha256 }, certificate: !!c.certificate,
     signers: c.signers.map((s, i) => ({ position: i + 1, id: s.id, name: s.name, jobTitle: s.jobTitle, company: s.company, role: s.role, status: s.status, me: s === me,
       viewedAt: s.viewedAt || null, signedAt: s.signedAt || null, declinedAt: s.declinedAt || null, remindedAt: s.remindedAt || null,
@@ -105,8 +105,8 @@ function view(c, u) {
 const summary = (c, u) => {
   const me = mySigner(c, u);
   return { id: c.id, title: c.title, status: c.status, order: c.order, dueDate: c.dueDate, overdue: overdue(c), createdAt: c.createdAt, sentAt: c.sentAt || null,
-    completedAt: c.completedAt || null, sender: c.sender.name, mine: isSender(c, u), signed: c.signers.filter((s) => s.status === 'signed').length, total: c.signers.length,
-    signers: c.signers.map((s) => ({ name: s.name, status: s.status })), needsMe: !u.impersonated && canSignNow(c, me), reminded: !!(me && me.remindedAt && me.status === 'waiting'),
+    completedAt: c.completedAt || null, sender: c.sender.name, senderId: c.sender.id, mine: isSender(c, u), signed: c.signers.filter((s) => s.status === 'signed').length, total: c.signers.length,
+    signers: c.signers.map((s) => ({ id: s.id, name: s.name, status: s.status })), needsMe: !u.impersonated && canSignNow(c, me), reminded: !!(me && me.remindedAt && me.status === 'waiting'),
     myStatus: me ? me.status : null };
 };
 

@@ -30,12 +30,15 @@ test('HN Group Contracts', async () => {
     fake: { id: 'p-jo', accountId: 'a-jo', email: 'jo@hngroup.org.uk', displayName: 'Jo', jobTitle: 'Designer', permissions: [], impersonated: true },
   };
   const codes = new Map(), sessions = new Map();
+  const PNG = Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000000', 'hex');
   const authServer = http.createServer((req, res) => {
     let b = ''; req.on('data', (c) => { b += c; }); req.on('end', () => {
       const data = JSON.parse(b || '{}'), send = (status, value) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(value)); };
       if (req.headers.authorization !== 'Bearer ' + secret) return send(401, { error: 'No.' });
       if (req.url === '/api/auth/staff-directory') return send(200, { people: [people.hr, people.jo, people.joOther, people.sam, people.boss].map((p) => ({ id: p.id, accountIds: [p.accountId], displayName: p.displayName, jobTitle: p.jobTitle, company: 'HN Group' })) });
+      if (req.url === '/api/auth/directory-avatar') { if (data.id !== 'p-jo') return send(404, { error: 'None.' }); res.writeHead(200, { 'Content-Type': 'image/png' }); return res.end(PNG); }
       if (data.client_id !== 'contracts') return send(401, { error: 'No.' });
+      if (req.url === '/api/sso/avatar') { if (sessions.get(data.session) !== 'hr') return send(404, { error: 'None.' }); res.writeHead(200, { 'Content-Type': 'image/png' }); return res.end(PNG); }
       if (req.url === '/api/sso/exchange') { const g = codes.get(data.code); codes.delete(data.code); if (!g || g.state !== data.state) return send(401, { error: 'Expired.' }); const s = hex(); sessions.set(s, g.who); return send(200, { session: s, expires: Date.now() + 3600000, user: people[g.who] }); }
       if (req.url === '/api/sso/session') { const who = sessions.get(data.session); return who ? send(200, { session: data.session, user: people[who] }) : send(401, { error: 'Expired.' }); }
       send(404, { error: 'Not found' });
@@ -74,6 +77,13 @@ test('HN Group Contracts', async () => {
     const hr = await signIn('hr'), jo = await signIn('jo'), sam = await signIn('sam'), boss = await signIn('boss');
     r = await call('/', { cookie: hr }); assert.match(r.body, /class="site-header"/); assert.match(r.body, /assets\/site\.css/);
     assert.deepEqual([(await call('/api/me', { cookie: hr })).body.canSend, (await call('/api/me', { cookie: jo })).body.canSend, (await call('/api/me', { cookie: jo })).body.canManage], [true, false, false]);
+
+    // Profile pictures: your own from HN Group Auth, anyone else's from the staff list, never anything but an image.
+    r = await call('/api/picture/p-hr', { cookie: hr }); assert.equal(r.status, 200); assert.equal(r.headers.get('content-type'), 'image/png'); assert.deepEqual(r.body, PNG);
+    r = await call('/api/picture/p-jo', { cookie: hr }); assert.equal(r.status, 200); assert.deepEqual(r.body, PNG);
+    assert.equal((await call('/api/picture/p-sam', { cookie: hr })).status, 404, 'no picture, so the page shows initials');
+    assert.equal((await call('/api/picture/p-hr')).status, 401, 'signed in only');
+    assert.equal((await call('/api/me', { cookie: hr })).body.user.id, 'p-hr');
 
     // Only people with "Send contracts for signing" upload or see the staff list.
     assert.equal((await upload(jo)).status, 403);

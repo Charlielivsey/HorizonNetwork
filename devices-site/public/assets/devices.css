@@ -103,3 +103,8 @@ a{color:var(--accent)}
 .toast.bad{background:#7d1838}
 @media (max-width:760px){.hero{grid-template-columns:1fr;padding-top:40px}.hero-art{display:none}.add{grid-template-columns:1fr}.add-form input{flex:1;width:auto}.device{flex-wrap:wrap}.actions{width:100%;justify-content:flex-start}.tiles{grid-template-columns:1fr}.who-text{display:none}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+/* Profile pictures */
+.avatar { position: relative; overflow: hidden; }
+.avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.owner-face { width: 22px; height: 22px; font-size: 10px; display: inline-grid; vertical-align: -6px; margin-right: 6px; }

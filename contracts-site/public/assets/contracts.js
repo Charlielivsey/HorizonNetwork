@@ -27,6 +27,14 @@
   let toastTimer;
   function toast(text, bad) { const t = $('toast'); t.textContent = text; t.className = 'toast' + (bad ? ' bad' : ''); t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 3800); }
   const initials = (n) => String(n || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
+  // Someone's profile picture (yours from HN Group Auth, anyone else's from the staff list), with their initials
+  // underneath until it loads and if they haven't got one.
+  function face(id, name, size) {
+    const box = el('span', { class: 'avatar' + (size ? ' ' + size : ''), 'aria-hidden': 'true' }, el('span', { class: 'initials', text: initials(name) }));
+    if (id) { const img = new Image(); img.alt = ''; img.decoding = 'async'; img.onload = () => { box.classList.add('has-photo'); box.append(img); }; img.src = '/api/picture/' + encodeURIComponent(id); }
+    return box;
+  }
+  const faces = (people) => el('span', { class: 'faces' }, people.slice(0, 4).map((p) => face(p.id, p.name, 'small')), people.length > 4 ? el('span', { class: 'avatar small more', text: '+' + (people.length - 4) }) : null);
   const when = (iso) => (iso ? new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '');
   const day = (iso) => (iso ? new Date(iso.length === 10 ? iso + 'T12:00:00' : iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
   const STATUS = { draft: ['Draft', 'plain'], out: ['Out for signing', 'wait'], completed: ['Signed', 'good'], declined: ['Declined', 'bad'], cancelled: ['Cancelled', 'bad'] };
@@ -78,6 +86,7 @@
       el('span', { class: 'row-side' },
         c.needsMe ? tag(c.reminded ? 'Reminder: please sign' : 'Needs your signature', 'you') : tag(STATUS[c.status][0], STATUS[c.status][1]),
         c.overdue ? tag('Overdue', 'bad') : null,
+        faces(c.signers),
         c.total ? el('span', { class: 'progress', title: c.signed + ' of ' + c.total + ' signed' }, el('span', { 'data-w': Math.round(c.signed / c.total * 100) })) : null));
   }
   async function dashboard(view) {
@@ -146,7 +155,9 @@
     else viewer.append(frame());
     const tags = el('p', { class: 'button-row' }, tag(STATUS[c.status][0], STATUS[c.status][1]), c.overdue ? tag('Overdue', 'bad') : null, c.source.kind === 'docs' ? tag('From HN Group Docs', 'plain') : null,
       c.order === 'sequence' ? tag('Signed in order', 'plain') : null, c.dueDate ? tag('Sign by ' + day(c.dueDate), c.overdue ? 'bad' : 'plain') : null);
-    main.replaceChildren(section(head(c.mine ? 'You sent this' : 'From ' + c.sender.name, c.title, null, tags), el('div', { class: 'contract' }, viewer, side)));
+    const pageHead = head(c.mine ? 'You sent this' : 'From ' + c.sender.name, c.title, null, tags);
+    pageHead.querySelector('.eyebrow').prepend(face(c.sender.id, c.sender.name, 'tiny'));
+    main.replaceChildren(section(pageHead, el('div', { class: 'contract' }, viewer, side)));
     fillSide(c, side);
   }
   async function refreshSide(id, side) { try { fillSide((await api('/api/contracts/' + id)).contract, side); } catch (e) { toast(e.message, true); } }
@@ -177,7 +188,7 @@
   function signersCard(c) {
     return el('div', { class: 'card' }, el('h2', { text: c.order === 'sequence' ? 'Signing, in order' : 'Signing' }),
       c.signers.map((s) => el('div', { class: 'signer' },
-        c.order === 'sequence' ? el('span', { class: 'position', text: s.position }) : el('span', { class: 'avatar', text: initials(s.name), 'aria-hidden': 'true' }),
+        el('span', { class: 'face-wrap' }, face(s.id, s.name), c.order === 'sequence' ? el('span', { class: 'position', text: s.position }) : null),
         el('span', {}, el('strong', { text: s.name + (s.me ? ' (you)' : '') }), el('small', { text: [s.role, s.jobTitle].filter(Boolean).join(' · ') }),
           s.status === 'signed' ? el('span', { class: 'signature', text: s.signature }) : null,
           s.status === 'signed' ? el('small', { text: 'Signed ' + when(s.signedAt) }) : null,
@@ -221,7 +232,7 @@
     const results = el('div', { class: 'results', id: 'c-results', role: 'listbox', hidden: true });
     const chosen = el('div', { class: 'chosen' });
     const drawChosen = () => chosen.replaceChildren(...(list.length ? list.map((s, i) => el('div', { class: 'chosen-row' },
-      el('span', { class: 'avatar', text: initials(s.name), 'aria-hidden': 'true' }),
+      face(s.id, s.name),
       el('span', {}, el('strong', { text: s.name }), el('small', { text: [s.jobTitle, s.company].filter(Boolean).join(', ') })),
       el('span', { class: 'order-buttons' },
         el('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Move ' + s.name + ' up', disabled: i === 0, onclick: () => { [list[i - 1], list[i]] = [list[i], list[i - 1]]; drawChosen(); } }, '↑'),
@@ -235,7 +246,7 @@
       const q = search.value.trim().toLowerCase();
       const hits = q ? people.filter((p) => !list.some((s) => s.id === p.id) && (p.name + ' ' + p.jobTitle + ' ' + p.company).toLowerCase().includes(q)).slice(0, 8) : [];
       results.replaceChildren(...hits.map((p) => el('button', { type: 'button', role: 'option', onclick: () => { list.push({ ...p, role: '' }); search.value = ''; results.hidden = true; search.setAttribute('aria-expanded', 'false'); drawChosen(); search.focus(); } },
-        el('strong', { text: p.name }), el('small', { text: [p.jobTitle, p.company].filter(Boolean).join(' · ') }))));
+        face(p.id, p.name, 'small'), el('span', {}, el('strong', { text: p.name }), el('small', { text: [p.jobTitle, p.company].filter(Boolean).join(' · ') })))));
       results.hidden = !hits.length; search.setAttribute('aria-expanded', String(!!hits.length));
     });
     const save = () => api('/api/contracts/' + c.id, { method: 'PUT', json: { title: title.value, message: message.value, dueDate: due.value, order: orderSeq.checked ? 'sequence' : 'any', signers: list.map((s) => ({ id: s.id, role: s.role || '' })) } });
@@ -274,7 +285,7 @@
   (async () => {
     $('year').textContent = new Date().getFullYear();
     try { me = await api('/api/me'); } catch (e) { if (e.message !== 'Signed out') main.replaceChildren(section(head('HN Group Contracts', 'Not available', e.message))); return; }
-    $('who').hidden = false; $('who-name').textContent = me.user.displayName; $('who-avatar').textContent = initials(me.user.displayName);
+    $('who').hidden = false; $('who-name').textContent = me.user.displayName; $('who-avatar').replaceWith(face(me.user.id, me.user.displayName));
     for (const n of document.querySelectorAll('[data-sender]')) n.hidden = !me.canSend;
     for (const n of document.querySelectorAll('[data-manager]')) n.hidden = !me.canManage;
     if (me.user.impersonated) document.body.insertBefore(el('div', { class: 'wrap' }, el('p', { class: 'notice bad', text: 'You’re logged in as someone else, so you can look but not sign or send.' })), main);
