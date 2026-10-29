@@ -1,4 +1,4 @@
-# HN Group Contracts — contracts.hngroup.org.uk
+# HN Group Contracts — contract.hngroup.org.uk
 
 Contracts are sent here to be signed (the user's requests, 29 October 2026; rebuilt the same day in the HN Group
 website theme). PM2 `hn-contracts`, loopback port 5560, data in `/var/lib/hn-contracts` (`contracts.json` and the PDFs

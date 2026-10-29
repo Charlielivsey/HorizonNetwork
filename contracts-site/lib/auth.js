@@ -1,6 +1,6 @@
 'use strict';
 // Sign-in through HN Group Auth (auth.hngroup.org.uk), where this site is the registered "contracts" application with
-// the fixed callback https://contracts.hngroup.org.uk/auth/callback. Every enabled sign-in account can sign in, to read
+// the fixed callback https://contract.hngroup.org.uk/auth/callback. Every enabled sign-in account can sign in, to read
 // and sign what it has been sent. Sending needs the staff portal's "Send contracts for signing" permission: HN Group
 // Auth passes every permission the account has with each check (at least once a minute), the same as every other
 // HN Group website. The site keeps a browser-session cookie tied to the Auth sign-in.
@@ -9,7 +9,7 @@ const crypto = require('node:crypto');
 
 const AUTH_ORIGIN = process.env.AUTH_ORIGIN || 'https://auth.hngroup.org.uk';
 const AUTH_BACKEND = process.env.AUTH_BACKEND || 'http://127.0.0.1:3400';
-const ORIGIN = process.env.CONTRACTS_ORIGIN || 'https://contracts.hngroup.org.uk';
+const ORIGIN = process.env.CONTRACTS_ORIGIN || 'https://contract.hngroup.org.uk';
 const SECRET_FILE = process.env.STATUS_SSO_SECRET_FILE || '/var/lib/hn-status-sso/secret';
 const SECURE = ORIGIN.startsWith('https://');
 const SESSION_COOKIE = (SECURE ? '__Host-' : '') + 'hn_contracts_session';

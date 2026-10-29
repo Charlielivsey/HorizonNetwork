@@ -1,5 +1,5 @@
 'use strict';
-// HN Group Contracts — contracts.hngroup.org.uk (the user's requests, 29 October 2026: "a contracts site where contracts
+// HN Group Contracts — contract.hngroup.org.uk (the user's requests, 29 October 2026: "a contracts site where contracts
 // will be sent to be signed, where the person uploading the contract will have to invite them via their Auth account and
 // have to sign the document", rebuilt the same day in the HN Group website theme). People with the staff portal's "Send
 // contracts for signing" permission upload a PDF or send a document from HN Group Docs, choose who signs it, and send

@@ -94,7 +94,14 @@ changed wiki-site/ && run 'Wiki' bash "$ROOT/wiki-site/install.sh" "$EMAIL"
 for site in media holding development support clients careers news; do
     changed "$site-site/" website-suite/ && run "$site" bash "$ROOT/$site-site/install.sh" "$EMAIL"
 done
-changed horizon-advertising/ && run 'Horizon Advertising' bash "$ROOT/horizon-advertising/install.sh" "$EMAIL"
+# The Horizon Advertising website was deleted (the user's request, 29 October 2026): stop it and take its web address
+# down once. Its files stay in /opt/ha-website; horizonadvertising.co.uk then shows the HN Group "not set up" page.
+if pm2 describe ha-website >/dev/null 2>&1 || [ -e /etc/nginx/sites-enabled/ha-website ]; then
+    pm2 delete ha-website >/dev/null 2>&1 || true; pm2 save >/dev/null 2>&1 || true
+    rm -f /etc/nginx/sites-enabled/ha-website
+    if nginx -t >/dev/null 2>&1; then systemctl reload nginx; fi
+    echo "Removed the Horizon Advertising website (ha-website)."
+fi
 changed links-site/ && run 'Links' bash "$ROOT/links-site/install.sh" "$EMAIL"
 changed branding-site/ && run 'Brand centre (branding.hngroup.org.uk)' bash "$ROOT/branding-site/install.sh" "$EMAIL"
 changed companies-site/ && run 'Company register (companies.hngroup.org.uk)' bash "$ROOT/companies-site/install.sh" "$EMAIL"
@@ -103,7 +110,7 @@ changed devices-site/ && run 'Devices (devices.hngroup.org.uk)' bash "$ROOT/devi
 changed docs-site/ && run 'HN Group Docs (docs.hngroup.org.uk)' bash "$ROOT/docs-site/install.sh" "$EMAIL"
 # Also set Contracts up whenever it isn't running or has no web address yet, even if its folder hasn't changed.
 if changed contracts-site/ || ! pm2 describe hn-contracts >/dev/null 2>&1 || [ ! -e /etc/nginx/sites-enabled/hn-contracts ]; then
-    run 'HN Group Contracts (contracts.hngroup.org.uk)' bash "$ROOT/contracts-site/install.sh" "$EMAIL"
+    run 'HN Group Contracts (contract.hngroup.org.uk)' bash "$ROOT/contracts-site/install.sh" "$EMAIL"
 fi
 changed investors-site/ && run 'Investors (investors.hngroup.org.uk)' bash "$ROOT/investors-site/install.sh" "$EMAIL"
 changed vpn-site/ && run 'VPN (vpn.hngroup.org.uk + WireGuard)' bash "$ROOT/vpn-site/install.sh" "$EMAIL"

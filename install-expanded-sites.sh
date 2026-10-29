@@ -8,6 +8,5 @@ failed=0
 for site in media holding development support clients careers news; do
     bash "$ROOT/$site-site/install.sh" "${1:-}" || failed=1
 done
-bash "$ROOT/horizon-advertising/install.sh" "${1:-}" || failed=1
 bash "$ROOT/links-site/install.sh" "${1:-}" || failed=1
 exit "$failed"

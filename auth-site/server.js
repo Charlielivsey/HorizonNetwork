@@ -31,7 +31,7 @@ const CLIENTS = {
   devices: { name: 'HN Group Devices', callback: 'https://devices.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use HN Group Devices.' },
   docs: { name: 'HN Group Docs', callback: 'https://docs.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use HN Group Docs.' },
   // Anyone can sign in to sign what they've been sent; sending needs the "Send contracts for signing" permission.
-  contracts: { name: 'HN Group Contracts', callback: 'https://contracts.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use HN Group Contracts.' },
+  contracts: { name: 'HN Group Contracts', callback: 'https://contract.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use HN Group Contracts.' },
 };
 const HEX = /^[a-f0-9]{64}$/;
 const COOKIE = '__Host-hn_auth_session', FLOW = '__Host-hn_auth_flow', REMEMBER = '__Host-hn_auth_resume';

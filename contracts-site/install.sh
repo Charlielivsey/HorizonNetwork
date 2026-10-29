@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Isolated HN Group Contracts site (contracts.hngroup.org.uk). Keeps its data (/var/lib/hn-contracts) and every other service.
+# Isolated HN Group Contracts site (contract.hngroup.org.uk). Keeps its data (/var/lib/hn-contracts) and every other service.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DOMAIN=contracts.hngroup.org.uk
+DOMAIN=contract.hngroup.org.uk
 EMAIL="${1:-}"
 SITE=/etc/nginx/sites-available/hn-contracts
 ENABLED=/etc/nginx/sites-enabled/hn-contracts
@@ -22,7 +22,7 @@ fi
 for config in /etc/nginx/sites-enabled/* /etc/nginx/conf.d/*.conf; do
     [ -f "$config" ] || continue
     [ "$config" = "$ENABLED" ] && continue
-    if grep -Eq 'server_name[^;]*[[:space:]]contracts\.hngroup\.org\.uk([[:space:];]|$)' "$config"; then
+    if grep -Eq 'server_name[^;]*[[:space:]]contract\.hngroup\.org\.uk([[:space:];]|$)' "$config"; then
         echo "Another host serves $DOMAIN: $config. No changes made."; exit 1
     fi
 done
@@ -54,7 +54,7 @@ write_config() {
         python3 - "$SITE" <<'PYCONF'
 from pathlib import Path
 import sys
-p=Path(sys.argv[1]);s=p.read_text();s=s[:s.index('    location / {')]+'    location / { return 301 https://contracts.hngroup.org.uk$request_uri; }\n}\n';p.write_text(s)
+p=Path(sys.argv[1]);s=p.read_text();s=s[:s.index('    location / {')]+'    location / { return 301 https://contract.hngroup.org.uk$request_uri; }\n}\n';p.write_text(s)
 PYCONF
         cat "$SCRIPT_DIR/nginx-https.conf" >> "$SITE"
     fi
@@ -125,7 +125,7 @@ PYDNS
 
 if ! has_web_dns "$DOMAIN"; then
     echo 'Contracts installed and running in PM2. Public DNS and SSL are pending.'
-    echo 'Add A contracts -> 217.154.34.205 (DNS only) in the hngroup.org.uk DNS zone.'
+    echo 'Add A contract -> 217.154.34.205 (DNS only) in the hngroup.org.uk DNS zone.'
     echo 'Then rerun: sudo bash contracts-site/install.sh'
     verify_public
     exit 0

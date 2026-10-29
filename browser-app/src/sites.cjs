@@ -4,7 +4,6 @@ const SITES=[
  ['https://mail.google.com/',['mail','gmail','email']],
  ['https://hngroup.org.uk/',['hn','hn group','hn group website','hn group home']],
  ['https://horizon-network.co.uk/',['horizon network','network','hn network']],
- ['https://horizonadvertising.co.uk/',['horizon advertising','advertising']],
  ['https://staff.hngroup.org.uk/',['staff','staff portal','hn staff','hn group staff portal','staff portal login']],
  ['https://auth.hngroup.org.uk/',['auth','hn auth','hn group auth','authentication portal','auth portal']],
  ['https://admin.hngroup.org.uk/',['admin','website control','website admin','admin portal','hn group admin']],
@@ -23,7 +22,7 @@ const SITES=[
  ['https://news.hngroup.org.uk/',['news','hn news','hn group news']],
  ['https://accounts.hngroup.org.uk/',['hn account','my account','hn group account','account settings','accounts']],
  ['https://devices.hngroup.org.uk/',['hn group devices','hn devices','my devices','device approval','devices']],
- ['https://contracts.hngroup.org.uk/',['hn group contracts','hn contracts','contracts','sign contract','contract signing']],
+ ['https://contract.hngroup.org.uk/',['hn group contracts','hn contracts','contracts','sign contract','contract signing']],
  ['https://docs.hngroup.org.uk/',['hn group docs','hn docs','docs','documentation','hn group documents','documents','letterhead','company letterhead','document templates','my storage']],
  ['https://investors.hngroup.org.uk/',['investors','hn investors','hn group investors','investor relations','investor portal']],
  ['https://downloads.hngroup.org.uk/',['downloads','hn downloads','hn group downloads','hn browser','browser download']]
