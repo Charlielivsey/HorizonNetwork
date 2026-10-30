@@ -35,7 +35,32 @@ function init(dataDir, seedDir) {
   data.audit = Array.isArray(data.audit) ? data.audit : [];
   for (const [k, s] of Object.entries(data.sessions)) if (s.expires <= now()) delete data.sessions[k];
   if (seedDir) seed(seedDir);
+  removeOnce();
   save();
+}
+
+// One-off removals the system owner asked for. Protection from deletion stops anyone removing these on the site, so
+// they're removed here, once, after a private copy is kept in DATA_DIR/backups.
+const REMOVALS = [
+  // The user's request (30 October 2026): the protected draft "Letter" (HN Group, Letter template, confidential, last
+  // edited 26 October 2026) in catnap@hngroup.org.uk's private storage.
+  { id: 'catnap-letter-2026-10-30', owner: 'catnap@hngroup.org.uk', match: (d) => d.title === 'Letter' && d.template === 'letter' && d.company === 'hn-group' &&
+    d.status === 'draft' && d.sharing === 'private' && d.protected && !!d.confidential && new Date(d.updatedAt).toLocaleDateString('en-CA', { timeZone: 'Europe/London' }) === '2026-10-26' },
+];
+function removeOnce() {
+  data.removals = data.removals && typeof data.removals === 'object' ? data.removals : {};
+  for (const r of REMOVALS) {
+    if (data.removals[r.id]) continue;
+    const ownerOf = (d) => String(d.ownerEmail || (data.people[d.ownerId] || {}).email || '').toLowerCase();
+    const found = Object.values(data.documents).filter((d) => ownerOf(d) === r.owner && r.match(d));
+    if (found.length) {
+      const backups = path.join(dir, 'backups');
+      fs.mkdirSync(backups, { recursive: true, mode: 0o700 });
+      fs.writeFileSync(path.join(backups, r.id + '-' + now() + '.json'), JSON.stringify(found, null, 1), { mode: 0o600 });
+      for (const d of found) { delete data.documents[d.id]; audit(null, 'deleted at the system owner’s request', d, { of: d.ownerId }); }
+    }
+    data.removals[r.id] = { at: now(), removed: found.map((d) => d.id) };
+  }
 }
 function save() {
   const tmp = file + '.' + crypto.randomUUID();
