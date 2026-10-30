@@ -510,7 +510,7 @@ async function handleLogin(req, res) {
     const challenge = crypto.randomBytes(24).toString("hex");
     codeChallenges.set(challenge, { personId: store.sessionIdOf(person), expires: Date.now() + CODE_CHALLENGE_MS, attempts: 0 });
     // An account with Sign in with Google turned on is told so, so Auth offers Continue with Google instead of the PIN.
-    return sendJson(res, 200, { codeRequired: true, challenge, google: !!(person.account && person.account.google) });
+    return sendJson(res, 200, { codeRequired: true, challenge, google: !!(person.account && person.account.google), discord: !!(person.account && person.account.discord) });
   }
   completeLogin(req, res, person);
 }
@@ -567,9 +567,10 @@ function completeLogin(req, res, person, how) {
   logEvent(req, null, "signed-in", { actor: store.loginName(person), detail: how || undefined, ua: String(req.headers["user-agent"] || "").slice(0, 300) });
   const cookies = [cookieFor(req, token)];
   // Remember this browser for "Resume session" (only for people with a sign-in code, which it asks for).
-  // Auth explicitly requests a separate remembered token for its own browser cookie. Signing in with Google never
-  // remembers the account (the user's request, 27 October 2026).
-  if (how !== "Google" && how !== "Discord" && store.hasCode(person) && (!serviceRequest(req) || req.headers["x-auth-remember"] === "1")) cookies.push(resume.cookie(req, resume.issue(store.sessionIdOf(person), parseCookies(req)[resume.COOKIE], req.headers["user-agent"])));
+  // Auth explicitly requests a separate remembered token for its own browser cookie. Google and Discord sign-ins are
+  // remembered too (the user's request, 30 October 2026), so Welcome back shows who last signed in; resuming still needs
+  // the PIN, or Google/Discord again for an account that signs in with Google.
+  if ((how === "Google" || how === "Discord" || store.hasCode(person)) && (!serviceRequest(req) || req.headers["x-auth-remember"] === "1")) cookies.push(resume.cookie(req, resume.issue(store.sessionIdOf(person), parseCookies(req)[resume.COOKIE], req.headers["user-agent"])));
   sendJson(res, 200, { user: store.meView(person) }, { "Set-Cookie": cookies });
 }
 
@@ -578,14 +579,14 @@ function resumePerson(req) {
   const raw = parseCookies(req)[resume.COOKIE];
   const t = resume.lookup(raw);
   const person = t && t.kind !== "browser" ? store.getPerson(t.personId) : null;
-  if (!person || !person.account || !person.account.enabled || !store.hasCode(person)) return { raw, person: null };
+  if (!person || !person.account || !person.account.enabled || !(store.hasCode(person) || person.account.google || person.account.discord)) return { raw, person: null };
   return { raw, person };
 }
 
 // What the sign-in page shows for "Welcome back".
 function resumeInfo(person) {
   const v = store.publicView(person);
-  return { available: true, displayName: person.displayName, firstName: person.firstName || person.displayName.split(" ")[0], username: store.meView(person).username, avatarUrl: v.avatarUrl ? "/api/resume/avatar?v=" + person.avatar.version : null, id: person.id, google: !!(person.account && person.account.google) };
+  return { available: true, displayName: person.displayName, firstName: person.firstName || person.displayName.split(" ")[0], username: store.meView(person).username, avatarUrl: v.avatarUrl ? "/api/resume/avatar?v=" + person.avatar.version : null, id: person.id, google: !!(person.account && person.account.google), discord: !!(person.account && person.account.discord), pin: store.hasCode(person) };
 }
 
 // Why signing in through HN Group Auth didn't finish (maintenance, no access, an expired or interrupted sign-in, or
@@ -637,6 +638,7 @@ async function handleResume(req, res, pathname) {
   const ip = clientIp(req);
   if (isLockedOut(ip)) return sendJson(res, 429, { error: "Too many failed attempts. Please try again in 15 minutes.", restart: true });
   if (!person) return sendJson(res, 401, { error: "This browser doesn't remember you any more. Please sign in with your email and password.", restart: true }, { "Set-Cookie": resume.cookie(req, "", true) });
+  if (!store.hasCode(person)) return sendJson(res, 403, { error: "This account signs in with Google or Discord. Choose one of those to continue." });
   const { code } = await readJsonBody(req);
   if (!store.verifyCode(person, String(code || ""))) {
     recordFailure(ip);

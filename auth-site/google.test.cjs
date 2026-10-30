@@ -1,11 +1,11 @@
 'use strict';
 // Sign in with Google: turning it on (only for a Google account with your own email), signing in with it (no password
-// or PIN, and the browser never remembers the account), no PIN offered while it's on, refusals, and turning it off. The real staff account
+// or PIN, and the browser remembers the account for next time), no PIN offered while it's on, refusals, and turning it off. The real staff account
 // service and Auth run here; only Google's token endpoint is a stand-in.
 //   node --test auth-site/google.test.cjs
 const { test } = require('node:test'), assert = require('node:assert/strict'), fs = require('node:fs'), os = require('node:os'), path = require('node:path'), http = require('node:http'), crypto = require('node:crypto'), { spawn } = require('node:child_process');
 
-test('Sign in with Google: optional, signs straight in, never remembered', async () => {
+test('Sign in with Google: optional, signs straight in, remembered', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-auth-google-'));
   const store = require('../staff-portal/lib/store'); store.init(dir);
   const person = store.saveEmployee({ firstName: 'Gee', lastName: 'User', company: store.COMPANIES[0], jobTitle: 'Team member', emails: [{ local: 'google.user', domain: 'hngroup.org.uk', primary: true }] });
@@ -67,7 +67,7 @@ test('Sign in with Google: optional, signs straight in, never remembered', async
     // Once it's on, the PIN is never offered: the password step and the remembered "Welcome back" go to Continue with Google.
     const remember = cookie(signed, '__Host-hn_auth_resume');
     const pw = await post('/api/login', { username: 'google.user@hngroup.org.uk', password: 'Cedar-river-9842!' });
-    assert.deepEqual(await pw.json(), { googleRequired: true }); assert.equal(cookie(pw, '__Host-hn_auth_session'), undefined);
+    assert.deepEqual(await pw.json(), { googleRequired: true, discord: false }); assert.equal(cookie(pw, '__Host-hn_auth_session'), undefined);
     assert.equal((await (await fetch(base + '/api/resume', { headers: { Cookie: remember } })).json()).google, true);
     const byPin = await post('/api/resume', { code: '582947' }, remember);
     assert.equal(byPin.status, 403); assert.match((await byPin.json()).error, /Continue with Google/);
@@ -75,16 +75,21 @@ test('Sign in with Google: optional, signs straight in, never remembered', async
     const appLogin = await post('/api/login', { username: 'google.user@hngroup.org.uk', password: 'Cedar-river-9842!', pin: true });
     assert.deepEqual(await appLogin.json(), { codeRequired: true });
     assert.equal((await post('/api/login/code', { code: '582947', pin: true }, cookie(appLogin, '__Host-hn_auth_flow'))).status, 200);
-    // Signing in with Google, back to the application it started from: straight in (no password, no PIN), nothing remembered.
+    // Signing in with Google, back to the application it started from: straight in (no password, no PIN), and this browser
+    // remembers the account, whose Welcome back offers Continue with Google (the user's request, 30 October 2026).
     const next = '/authorize?client_id=portal&state=' + 'a'.repeat(64);
     g = await viaGoogle(await post('/api/google/start', { mode: 'login', next }), '', me);
     assert.equal(g.location, next + '&google=1'); assert.equal(g.result.status, 200); assert.equal(g.value.user.email, 'google.user@hngroup.org.uk');
     const googleSession = cookie(g.result, '__Host-hn_auth_session'); assert.ok(googleSession, 'signed in');
-    assert.equal(cookie(g.result, '__Host-hn_auth_resume'), undefined, 'a Google sign-in never remembers the account');
+    const googleRemembered = cookie(g.result, '__Host-hn_auth_resume');
+    assert.ok(googleRemembered && googleRemembered.length > '__Host-hn_auth_resume='.length, 'a Google sign-in remembers the account');
+    const welcome = await (await fetch(base + '/api/resume', { headers: { Cookie: googleRemembered } })).json();
+    assert.deepEqual([welcome.available, welcome.google, welcome.username], [true, true, 'google.user@hngroup.org.uk']);
+    assert.equal((await post('/api/resume', { code: '582947' }, googleRemembered)).status, 403, 'remembering never skips Google: no PIN resume');
     assert.equal((await post('/api/continue', { client_id: 'portal', state: 'a'.repeat(64) }, googleSession)).status, 200, 'and can continue to the application');
-    // A remembered account already on this browser (from a password sign-in) is left as it is.
+    // Whoever signs in last is the one remembered on this browser.
     const kept = await viaGoogle(await post('/api/google/start', { mode: 'login', next: '/' }), cookie(signed, '__Host-hn_auth_resume'), me);
-    assert.equal(kept.result.status, 200); assert.equal(cookie(kept.result, '__Host-hn_auth_resume'), undefined, 'not replaced or cleared');
+    assert.equal(kept.result.status, 200); assert.ok(cookie(kept.result, '__Host-hn_auth_resume').length > '__Host-hn_auth_resume='.length, 'the Google account is now remembered');
     // Answers that don't check out are refused: an unverified email, someone else's id, a forged state.
     g = await viaGoogle(await post('/api/google/start', { mode: 'login', next: '/' }), '', { ...me, email_verified: false });
     assert.match(g.value.error, /isn’t verified/);

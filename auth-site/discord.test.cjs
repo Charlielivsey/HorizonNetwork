@@ -1,6 +1,6 @@
 'use strict';
 // Continue with Discord: a new staff record needs its Discord user ID, connecting only accepts that Discord account,
-// signing in with it (no password or PIN, nothing remembered), the bot keeping usernames current, and turning it off.
+// signing in with it (no password or PIN, remembered on the browser), the bot keeping usernames current, and turning it off.
 // The real staff account service and Auth run here; only Discord's API is a stand-in.
 //   node --test auth-site/discord.test.cjs
 const { test } = require('node:test'), assert = require('node:assert/strict'), fs = require('node:fs'), os = require('node:os'), path = require('node:path'), http = require('node:http'), { spawn } = require('node:child_process');
@@ -62,11 +62,13 @@ test('Continue with Discord: Discord ID on the staff record, connect, sign in, b
     d = await viaDiscord(await post('/api/discord/start', { mode: 'link', next: '/' }, session), session, me);
     assert.deepEqual(d.value, { linked: 'dee_discord' });
     assert.equal((await (await fetch(base + '/api/me', { headers: { Cookie: session } })).json()).user.discord.username, 'dee_discord');
-    // Signing in with Discord: straight in, nothing remembered.
+    // Signing in with Discord: straight in, and the browser remembers the account with Continue with Discord.
     const next = '/authorize?client_id=portal&state=' + 'a'.repeat(64);
     d = await viaDiscord(await post('/api/discord/start', { mode: 'login', next }), '', me);
     assert.equal(d.location, next + '&discord=1'); assert.equal(d.result.status, 200, JSON.stringify(d.value));
-    assert.ok(cookie(d.result, '__Host-hn_auth_session')); assert.equal(cookie(d.result, '__Host-hn_auth_resume'), undefined);
+    assert.ok(cookie(d.result, '__Host-hn_auth_session'));
+    const discordRemembered = cookie(d.result, '__Host-hn_auth_resume'); assert.ok(discordRemembered.length > '__Host-hn_auth_resume='.length);
+    assert.equal((await (await fetch(base + '/api/resume', { headers: { Cookie: discordRemembered } })).json()).discord, true);
     // The bot keeps the username on the account and the staff record up to date.
     assert.equal(await discord.refreshNames(), 2);
     const status = await (await realFetch(process.env.STAFF_PORTAL_BACKEND + '/api/auth/discord-accounts', { method: 'POST', headers: { Authorization: 'Bearer ' + 'f'.repeat(64), 'Content-Type': 'application/json' }, body: '{}' })).json();

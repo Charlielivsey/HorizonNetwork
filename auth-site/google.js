@@ -122,8 +122,9 @@ function createGoogle({ origin, staff, send, profile, entryFor, setCookie, cooki
       if (!result || result.expires <= Date.now()) { send(res, 200, { none: true }, clear); return true; }
       if (result.error) { send(res, 200, { error: result.error }, clear); return true; }
       if (result.linked) { send(res, 200, { linked: result.linked }, clear); return true; }
-      // Signs in as the Google account's staff account: no password, no PIN, nothing remembered.
-      const { response } = await staff('/api/auth/google-login', { sub: result.google.sub, email: result.google.email }, req);
+      // Signs in as the Google account's staff account with no password or PIN, and remembers who it was on this browser
+      // (the user's request, 30 October 2026), so Welcome back shows them next time.
+      const { response } = await staff('/api/auth/google-login', { sub: result.google.sub, email: result.google.email }, req, true);
       await finishLogin(req, res, response, { google: true }); return true;
     }
     // Turning it off.

@@ -168,8 +168,10 @@ $('login').addEventListener('submit', event => { event.preventDefault(); busy(ev
   const data = await api('login', { username: identity, password: $('password').value, ...(pinApp ? { pin: true } : {}) }); $('password').value = '';
   $('password').type = 'password'; $('show-password').textContent = 'Show'; $('show-password').setAttribute('aria-pressed','false');
   if (data.googleRequired) {
-    await googleReady; googleOnly(true); $('pin-identity').textContent = identity;
-    $('card-title').textContent = 'One more step'; $('subtitle').textContent = 'Your account signs in with Google. No PIN needed.';
+    await googleReady; await discordReady;
+    const withDiscord = !!data.discord && discordEnabled;
+    googleOnly(true, { discord: withDiscord }); $('pin-identity').textContent = identity;
+    $('card-title').textContent = 'One more step'; $('subtitle').textContent = 'Your account signs in with Google' + (withDiscord ? ' or Discord' : '') + '. No PIN needed.';
     await view('pin','google-resume');
   } else if (data.codeRequired) {
     googleOnly(false); resetPin(); $('pin').querySelector('[type=submit]').innerHTML = 'Verify &amp; sign in <span aria-hidden="true">→</span>'; $('pin-identity').textContent = identity;
@@ -232,7 +234,7 @@ async function connectToStatus() {
   location.replace(result.redirect);
 }
 $('continue').onclick = () => busy($('continue'), connectToStatus, 'Connecting…');
-// ---------- Sign in with Google (optional for each person; no password or PIN, and nothing is remembered) ----------
+// ---------- Sign in with Google (optional for each person; no password or PIN, and the account is remembered) ----------
 let googleEnabled = false;
 const googleReady = api('google').then(v => { googleEnabled = !!v.enabled && !pinApp; $('google-login').hidden = !googleEnabled; $('google-or').hidden = !(googleEnabled || discordEnabled); $('google-resume').hidden = !googleEnabled || !resumeMode; }).catch(() => {});
 async function startGoogle(mode) {
@@ -240,18 +242,21 @@ async function startGoogle(mode) {
   location.assign(result.url);
   await new Promise(() => {}); // Leaving for Google.
 }
-// An account with Sign in with Google turned on gets only Continue with Google on this step: no PIN (the user's request).
-function googleOnly(on) {
+// An account with Sign in with Google turned on gets only Continue with Google on this step: no PIN (the user's request),
+// plus Continue with Discord when its Discord is connected (the user's request, 30 October 2026). An account remembered
+// from a Google or Discord sign-in that has no PIN gets the same.
+function googleOnly(on, { google = true, discord = false } = {}) {
   $('pin').classList.toggle('google-only', on);
-  if (on) $('google-resume').hidden = false;
+  if (on) { $('google-resume').hidden = !(google && googleEnabled); $('discord-resume').hidden = !discord; }
   $('google-resume').querySelector('span').textContent = on ? 'Continue with Google' : 'Continue with Google instead';
+  $('discord-resume').querySelector('span').textContent = on ? 'Continue with Discord' : 'Continue with Discord instead';
 }
 $('google-login').onclick = () => busy($('google-login'), () => startGoogle('login'), 'Opening Google…');
 $('google-resume').onclick = () => busy($('google-resume'), () => startGoogle('login'), 'Opening Google…');
 // The signed-in panel: turn Sign in with Google on (a trip to Google) or off.
 function showGoogle(user) {
   $('google-row').hidden = !googleEnabled && !user.google;
-  $('google-status').textContent = user.google ? 'On for ' + user.google.email + '. Continue with Google signs you straight in, and this browser won’t remember you.' : 'Sign in with your Google account instead of your password and PIN.';
+  $('google-status').textContent = user.google ? 'On for ' + user.google.email + '. Continue with Google signs you straight in, and this browser remembers you for next time.' : 'Sign in with your Google account instead of your password and PIN.';
   $('google-toggle').textContent = user.google ? 'Turn off' : 'Turn on';
   $('google-toggle').classList.toggle('off', !!user.google);
   $('google-toggle').onclick = () => busy($('google-toggle'), async () => {
@@ -270,7 +275,7 @@ $('discord-login').onclick = () => busy($('discord-login'), () => startDiscord('
 $('discord-resume').onclick = () => busy($('discord-resume'), () => startDiscord('login'), 'Opening Discord…');
 function showDiscord(user) {
   $('discord-row').hidden = !discordEnabled && !user.discord;
-  $('discord-status').textContent = user.discord ? 'Connected to @' + user.discord.username + '. Continue with Discord signs you straight in, and this browser won’t remember you.' : 'Sign in with your Discord account instead of your password and PIN. Use the Discord account on your staff profile.';
+  $('discord-status').textContent = user.discord ? 'Connected to @' + user.discord.username + '. Continue with Discord signs you straight in, and this browser remembers you for next time.' : 'Sign in with your Discord account instead of your password and PIN. Use the Discord account on your staff profile.';
   $('discord-toggle').textContent = user.discord ? 'Disconnect' : 'Connect';
   $('discord-toggle').classList.toggle('off', !!user.discord);
   $('discord-toggle').onclick = () => busy($('discord-toggle'), async () => {
@@ -324,14 +329,20 @@ function clearRemembered() {
 async function startResume() {
   if (!remembered) return;
   await googleReady;
-  const viaGoogle = !!remembered.google && googleEnabled;
   await discordReady;
-  resumeMode = true; resetPin(); googleOnly(viaGoogle); $('resume-portrait').hidden = false; $('forget').hidden = false; $('google-resume').hidden = !googleEnabled; $('discord-resume').hidden = !discordEnabled;
+  // Google and Discord show for the remembered account when it has them; the PIN only when it has one and doesn't sign
+  // in with Google. Older answers without `pin`/`discord` keep the previous behaviour.
+  const hasGoogle = !!remembered.google && googleEnabled, hasDiscord = discordEnabled && remembered.discord !== false;
+  const noPin = remembered.pin === false && (hasGoogle || hasDiscord);
+  const viaGoogle = hasGoogle || noPin;
+  resumeMode = true; resetPin(); $('resume-portrait').hidden = false; $('forget').hidden = false; $('google-resume').hidden = !googleEnabled || (viaGoogle && !hasGoogle); $('discord-resume').hidden = !hasDiscord;
+  googleOnly(viaGoogle, { google: hasGoogle, discord: hasDiscord });
   $('card-title').textContent = 'Welcome back, ' + (remembered.displayName || remembered.firstName);
-  $('subtitle').textContent = viaGoogle ? 'Your account signs in with Google. No PIN needed.' : 'Enter your six-digit PIN to resume your session.';
+  const ways = [hasGoogle && 'Google', hasDiscord && 'Discord'].filter(Boolean).join(' or ');
+  $('subtitle').textContent = viaGoogle ? 'Your account signs in with ' + ways + '. No PIN needed.' : 'Enter your six-digit PIN to resume your session.';
   $('pin-identity').textContent = remembered.username;
   $('pin').querySelector('[type=submit]').innerHTML = 'Resume session <span aria-hidden="true">→</span>';
-  await view('pin', viaGoogle ? 'google-resume' : 'code');
+  await view('pin', viaGoogle ? (hasGoogle ? 'google-resume' : 'discord-resume') : 'code');
 }
 async function loadRemembered(start, pending) {
   const data = await (pending || api('resume'));

@@ -83,7 +83,9 @@ async function profile(entry) {
 }
 function requireReady(user) { if (user.passwordChangeRequired) throw fail(403, 'Create a new password before continuing.'); if (user.codeSetupRequired) throw fail(403, 'Set your sign-in PIN before continuing.'); }
 function entryFor(req) { return sessions.get(hash(cookie(req, COOKIE))); }
-// google: a Google or Discord sign-in, which never remembers the account and leaves any remembered account on this browser as it is.
+// google: a Google or Discord sign-in. Every sign-in remembers who it was on this browser (the user's request, 30 October
+// 2026: "its not remembering who was last signed in, even when using google or discord"); a Google or Discord sign-in
+// that comes back without a remembered token leaves any remembered account as it is.
 async function finishLogin(req, res, response, { google = false } = {}) {
   const raw = (response.headers.get('set-cookie') || '').match(/(?:^|,\s*)hn_staff_session=([a-f0-9]{64})(?:;|$)/)?.[1];
   if (!raw) throw fail(503, 'The staff account service did not create a session.');
@@ -95,9 +97,8 @@ async function finishLogin(req, res, response, { google = false } = {}) {
   challenges.delete(hash(cookie(req, FLOW)));
   const remembered = (response.headers.get('set-cookie') || '').match(/(?:^|,\s*)hn_staff_resume=([a-f0-9]{64})(?:;|$)/)?.[1];
   const cookies = [setCookie(COOKIE, token), setCookie(FLOW, '', 0)];
-  if (google) {}
-  else if (remembered) cookies.push(setCookie(REMEMBER, remembered, 30 * 86400));
-  else {
+  if (remembered) cookies.push(setCookie(REMEMBER, remembered, 30 * 86400));
+  else if (!google) {
     if (HEX.test(cookie(req, REMEMBER))) await staff('/api/resume/forget', {}, req);
     cookies.push(setCookie(REMEMBER, '', 0));
   }
@@ -193,7 +194,7 @@ const server = http.createServer(async (req, res) => {
         if (value.codeRequired) {
           if (challenges.size >= 10000) throw fail(503, 'Please try again shortly.');
           // With Sign in with Google turned on, the second step is Google, not the PIN (the user's request).
-          if (value.google && google.enabled() && data.pin !== true) return send(res, 200, { googleRequired: true }, [setCookie(FLOW, '', 0)]);
+          if (value.google && google.enabled() && data.pin !== true) return send(res, 200, { googleRequired: true, discord: !!value.discord && discord.enabled() }, [setCookie(FLOW, '', 0)]);
           const flow = random(); challenges.set(hash(flow), { challenge: value.challenge, expires: Date.now() + 5 * 60000 });
           return send(res, 200, { codeRequired: true }, [setCookie(FLOW, flow, 300)]);
         }
@@ -249,6 +250,7 @@ const server = http.createServer(async (req, res) => {
       const { value } = await staff('/api/resume', null, req, false, 'GET');
       if (value.avatarUrl) value.avatarUrl = '/api/resume/avatar';
       value.google = !!value.google && google.enabled();
+      value.discord = !!value.discord && discord.enabled();
       return send(res, 200, value, value.available ? [] : [setCookie(REMEMBER, '', 0)]);
     }
     if (route === '/api/resume/avatar') {
