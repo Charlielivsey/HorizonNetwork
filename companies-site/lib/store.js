@@ -99,7 +99,119 @@ function runGroupMigrations() {
   };
   atomically('hn-group-shareholding-2026-10-28', hnGroupShareholding20261028);
   atomically('clivsey-holdings-parent-2026-10-28', clivseyHoldingsParent20261028);
+  // The user's request (30 October 2026): new shareholdings for HN Group, Horizon Network, Horizon Media Group and
+  // Horizon Advertising, and Horizon Network appointed to manage Horizon Advertising. One step per company, so a
+  // company that can't be changed (missing, or no officer to issue Class C shares) doesn't hold up the others.
+  for (const [name, fn] of Object.entries(SHAREHOLDINGS_20261030)) atomically('shareholdings-2026-10-30-' + name, fn);
 }
+
+// ----- 30 October 2026 shareholdings -----
+const sameName = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+const byLegalName = (legal) => db.companies.find((c) => sameName(c.legalName, legal)) || null;
+// Sets a company's holdings to exactly `target` ([{ name, kind, classA, classB, classC, extra: [natures] }]); the rest of
+// its shares are unissued. Nobody is deleted: a changed holding gets a Change of details filing, a new holder a
+// Notification filing, anyone else still recorded a Cessation filing, and a statement of capital records the shares by
+// class before and after. Natures of control from shares and votes follow the new figures; others are kept.
+function setShareholdings(c, target, actor, today) {
+  const officers = c.officers.filter((o) => !o.resigned);
+  const issuer = (officers.find((o) => sameName(o.name, 'Charlie Livsey')) || officers[0] || {}).name;
+  if (target.some((t) => Number(t.classC || 0) > 0) && !issuer) throw new Error(c.legalName + ' has no current officer to issue Class C shares');
+  const before = shareClasses(c) || { classA: 0, classB: 0, classC: 0 };
+  const beforeTotal = c.psc.filter((p) => !p.ceased).reduce((n, p) => n + Number(p.share || 0), 0);
+  const holding = (t, was) => {
+    const x = { kind: t.kind, classA: t.classA || '', classB: t.classB || '', classC: t.classC || '', classCIssuedBy: t.classC ? (was && was.classCIssuedBy && officers.some((o) => sameName(o.name, was.classCIssuedBy)) ? was.classCIssuedBy : issuer) : '' };
+    x.share = String(Number(x.classA || 0) + Number(x.classB || 0) + Number(x.classC || 0));
+    return x;
+  };
+  const show = (y) => [y.name, y.kind, y.share ? y.share + '%' : 'Shareholding not recorded', classText(y), (y.control || []).join('; ')].filter(Boolean).join(' · ');
+  const pick = (y) => ({ name: y.name, kind: y.kind, share: y.share || '', control: [...(y.control || [])], classA: y.classA || '', classB: y.classB || '', classC: y.classC || '', classCIssuedBy: y.classCIssuedBy || '' });
+  const plan = target.map((t) => ({ t, was: c.psc.find((p) => !p.ceased && sameName(p.name, t.name)) || null }));
+  const leaving = c.psc.filter((p) => !p.ceased && !target.some((t) => sameName(t.name, p.name)));
+  const votes = votingPower({ psc: plan.map(({ t, was }, i) => ({ id: 'n' + i, name: t.name, ...holding(t, was) })) });
+  const band = (n, what) => n > 25 && n <= 50 ? 'Ownership of ' + what + ' – more than 25% but not more than 50%' : n > 50 && n < 75 ? 'Ownership of ' + what + ' – more than 50% but less than 75%' : n >= 75 ? 'Ownership of ' + what + ' – 75% or more' : '';
+  const natures = (old, share, vote, extra) => [...new Set([band(share, 'shares'), band(vote, 'voting rights')].filter(Boolean)
+    .concat((old || []).filter((x) => !/^Ownership of (shares|voting rights) –/.test(x)), extra || []))];
+  for (const p of leaving) {
+    p.ceased = today;
+    newGeneratedFiling(c, today, 'Persons with significant control', 'Cessation of ' + p.name + ' as a person with significant control on ' + longDate(today), { code: FORM_CODES.psc_cease, heading: CHANGE_TYPES.psc_cease.label,
+      rows: [['Name', p.name], ['Type', p.kind], ['Ceased on', longDate(today)]] });
+    audit(actor, 'psc.cease', c.slug + ' ' + p.name);
+  }
+  let changed = leaving.length > 0;
+  plan.forEach(({ t, was }, i) => {
+    const next = { name: t.name, ...holding(t, was) };
+    next.control = natures(was && was.control, Number(next.share), (votes['n' + i] || {}).votes || 0, t.extra);
+    if (was) {
+      const a = pick(was), b = pick({ ...was, ...next });
+      if (JSON.stringify(a) === JSON.stringify(b)) return;
+      Object.assign(was, next); changed = true;
+      newGeneratedFiling(c, today, 'Persons with significant control', 'Change of details of ' + t.name + ' as a person with significant control on ' + longDate(today), { code: FORM_CODES.psc_change, heading: CHANGE_TYPES.psc_change.label,
+        rows: [['Person with significant control', t.name], ['Previous details', show(a)], ['New details', show(b)], ['Changed on', longDate(today)]] });
+      audit(actor, 'psc.change', c.slug + ' ' + t.name + ' ' + (a.share || '?') + '% → ' + b.share + '%');
+    } else {
+      c.psc.push({ id: id(), ...next, notified: today, ceased: '' }); changed = true;
+      audit(actor, 'psc.add', c.slug + ' ' + t.name);
+    }
+  });
+  if (!changed) return;
+  checkShareRules(c, c.psc);
+  c.updatedAt = now();
+  generateFilings(c); // Notification filings for new holders
+  const after = shareClasses(c), r = (n) => Math.round(n * 100) / 100, afterTotal = c.psc.filter((p) => !p.ceased).reduce((n, p) => n + Number(p.share || 0), 0);
+  const line = (x, total) => ['Class A ' + r(x.classA) + '%', 'Class B ' + r(x.classB) + '%', 'Class C ' + r(x.classC) + '%'].join(', ') + ' (' + r(total) + '% issued' + (total < 100 ? ', ' + r(100 - total) + '% unissued' : '') + ')';
+  newGeneratedFiling(c, today, 'Capital', 'Statement of capital following a change in shareholdings on ' + longDate(today), { code: 'REG-CAP', heading: 'Statement of capital',
+    rows: [['Company', c.legalName], ['Shares before', line(before, beforeTotal)], ['Shares after', line(after, afterTotal)],
+      ...c.psc.filter((p) => !p.ceased).map((p) => [p.name, p.share + '% · ' + classText(p)]), ['Changed on', longDate(today)]] });
+  audit(actor, 'capital.statement', c.slug);
+}
+// Makes `parent` the company's parent company (recorded on the company; no filing, as before).
+function setParentCompany(c, parent, actor) { if (parent && c.parent !== parent.slug) { audit(actor, 'company.parent', c.slug + ' → ' + parent.slug); c.parent = parent.slug; c.updatedAt = now(); } }
+function shareholdingStep(legal, build) {
+  return () => {
+    const today = now().slice(0, 10), actor = 'system:shareholdings-2026-10-30', c = byLegalName(legal);
+    if (!c) { audit(actor, 'skipped', legal + ' is not on the register'); return; }
+    build(c, today, actor);
+  };
+}
+const SHAREHOLDINGS_20261030 = {
+  // HN Group Limited: CLivsey Holdings Limited 60% Class A, Charlie Livsey 20% Class A, Jack Vinckx 20% Class B.
+  'hn-group': shareholdingStep('HN Group Limited', (c, today, actor) => setShareholdings(c, [
+    { name: 'CLivsey Holdings Limited', kind: 'Parent company', classA: '60' },
+    { name: 'Charlie Livsey', kind: 'Individual', classA: '20' },
+    { name: 'Jack Vinckx', kind: 'Individual', classB: '20' },
+  ], actor, today)),
+  // Horizon Network Limited: HN Group Limited 70% Class A, Charlie Livsey 10% Class C, Jack Vinckx 20% Class B.
+  'horizon-network': shareholdingStep('Horizon Network Limited', (c, today, actor) => {
+    setParentCompany(c, byLegalName('HN Group Limited'), actor);
+    setShareholdings(c, [
+      { name: 'HN Group Limited', kind: 'Parent company', classA: '70' },
+      { name: 'Charlie Livsey', kind: 'Individual', classC: '10' },
+      { name: 'Jack Vinckx', kind: 'Individual', classB: '20' },
+    ], actor, today);
+  }),
+  // Horizon Media Group Limited: HN Group Limited 55% Class C; the rest unissued.
+  'horizon-media-group': shareholdingStep('Horizon Media Group Limited', (c, today, actor) => {
+    setParentCompany(c, byLegalName('HN Group Limited'), actor);
+    setShareholdings(c, [{ name: 'HN Group Limited', kind: 'Parent company', classC: '55' }], actor, today);
+  }),
+  // Horizon Advertising Limited: Horizon Media Group Limited 55% Class C, Horizon Network Limited 20% Class C (the rest
+  // unissued), and Horizon Network appointed to manage it, with its own filing.
+  'horizon-advertising': shareholdingStep('Horizon Advertising Limited', (c, today, actor) => {
+    const network = byLegalName('Horizon Network Limited');
+    setParentCompany(c, byLegalName('Horizon Media Group Limited'), actor);
+    setShareholdings(c, [
+      { name: 'Horizon Media Group Limited', kind: 'Parent company', classC: '55' },
+      { name: 'Horizon Network Limited', kind: 'Relevant legal entity', classC: '20', extra: ['Has significant influence or control'] },
+    ], actor, today);
+    if (network && c.managedBy !== network.slug) {
+      const was = c.managedBy ? (company(c.managedBy) || {}).legalName || c.managedBy : 'Not recorded';
+      c.managedBy = network.slug; c.updatedAt = now();
+      newGeneratedFiling(c, today, 'Officers', 'Appointment of ' + network.legalName + ' as manager of the company on ' + longDate(today), { code: 'REG-MGR', heading: 'Appointment of a managing company',
+        rows: [['Company', c.legalName], ['Managed by', network.legalName], ['Previously managed by', was], ['Appointed on', longDate(today)]] });
+      audit(actor, 'company.managedBy', c.slug + ' → ' + network.slug);
+    }
+  }),
+};
 
 // The user's request (28 October 2026): "CLivsey Holdings is the parent company of HN Group". CLivsey Holdings Limited
 // goes on the register (only what's known: its name and that it's active; its officers, owners, number and dates are

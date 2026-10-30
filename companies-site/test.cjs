@@ -418,6 +418,8 @@ test('company register: group structure update', () => {
     s.saveCompany('', { legalName: 'Horizon Advertising Limited', parent: 'horizon-media-group-limited' }, 't', { officer: { name: 'Ad Director', role: 'Director' }, psc: { name: 'Horizon Media Group Limited', kind: 'Parent company', share: '100' } });
     s.saveCompany('', { legalName: 'Horizon Assets Management Limited', parent: 'hn-group' }, 't', { officer: { name: 'Someone Else', role: 'Secretary' }, psc: { name: 'Old Holder', kind: 'Individual', share: '100' } });
     const adBefore = JSON.stringify(s.db.companies.find((c) => c.legalName === 'Horizon Advertising Limited'));
+    // The shareholdings of 30 October 2026 are tested on their own below.
+    s.db.migrations.push('shareholdings-2026-10-30-hn-group', 'shareholdings-2026-10-30-horizon-network', 'shareholdings-2026-10-30-horizon-media-group', 'shareholdings-2026-10-30-horizon-advertising'); s.save();
     // The update runs once, on the next start.
     delete process.env.COMPANIES_GROUP_UPDATES;
     s = fresh(); s.init(dir); s = fresh(); s.init(dir);
@@ -473,7 +475,7 @@ test('company register: HN Group shareholding of 28 October 2026', () => {
     s.saveItem('hn-group', 'psc', '', { name: 'Jack Vinckx', kind: 'Individual', classB: '15', notified: '2026-09-01' }, 't');
     s.saveItem('hn-group', 'psc', '', { name: 'Old Holder', kind: 'Individual', classA: '5', notified: '2026-09-01' }, 't');
     // Only this update is still to run.
-    s.db.migrations.push('group-structure-2026-10-18', 'charlie-managing-director', 'rename-hn-group-management'); s.save();
+    s.db.migrations.push('group-structure-2026-10-18', 'charlie-managing-director', 'rename-hn-group-management', 'shareholdings-2026-10-30-hn-group', 'shareholdings-2026-10-30-horizon-network', 'shareholdings-2026-10-30-horizon-media-group', 'shareholdings-2026-10-30-horizon-advertising'); s.save();
     const before = s.db.filings.length;
     delete process.env.COMPANIES_GROUP_UPDATES;
     s = fresh(); s.init(dir); s = fresh(); s.init(dir);
@@ -510,6 +512,63 @@ test('company register: HN Group shareholding of 28 October 2026', () => {
     assert.equal(s.company('hn-group').psc.find((p) => p.name === 'CLivsey Holdings Limited' && !p.ceased).kind, 'Parent company');
     assert.equal(s.db.companies.filter((c) => c.legalName === 'CLivsey Holdings Limited').length, 1, 'not added twice');
     assert.ok(/Previous details.*Relevant legal entity/.test(JSON.stringify(s.db.filings.at(-1).doc.rows)) && /Change of details of CLivsey Holdings Limited/.test(s.db.filings.at(-1).description));
+  } finally {
+    delete process.env.COMPANIES_GROUP_UPDATES;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// The user's request (30 October 2026): new holdings for HN Group, Horizon Network, Horizon Media Group and Horizon
+// Advertising, with every filing, nobody deleted, and Horizon Network appointed to manage Horizon Advertising.
+test('company register: shareholdings of 30 October 2026', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-companies-1030-'));
+  const store = path.join(__dirname, 'lib', 'store.js');
+  const fresh = () => { delete require.cache[require.resolve(store)]; return require(store); };
+  try {
+    process.env.COMPANIES_GROUP_UPDATES = 'off';
+    let s = fresh(); s.init(dir);
+    // The register as left on 28 October 2026.
+    s.saveCompany('hn-group', { legalName: 'HN Group Limited', name: 'HN Group', status: 'Active', incorporated: '2026-09-01' }, 't');
+    s.saveItem('hn-group', 'officers', '', { name: 'Charlie Livsey', role: 'Managing director', appointed: '2026-09-01' }, 't');
+    s.saveItem('hn-group', 'psc', '', { name: 'CLivsey Holdings Limited', kind: 'Parent company', classC: '55', classCIssuedBy: 'Charlie Livsey', notified: '2026-10-28' }, 't');
+    s.saveItem('hn-group', 'psc', '', { name: 'Charlie Livsey', kind: 'Individual', classC: '30', classCIssuedBy: 'Charlie Livsey', notified: '2026-09-01', control: 'Right to appoint and remove directors' }, 't');
+    s.saveItem('hn-group', 'psc', '', { name: 'Jack Vinckx', kind: 'Individual', classB: '15', notified: '2026-09-01' }, 't');
+    s.saveCompany('horizon-network', { legalName: 'Horizon Network Limited', name: 'Horizon Network', status: 'Active', incorporated: '2025-04-21' }, 't');
+    s.saveItem('horizon-network', 'officers', '', { name: 'Charlie Livsey', role: 'Managing director', appointed: '2025-04-21' }, 't');
+    s.company('horizon-network').psc = [];
+    s.saveItem('horizon-network', 'psc', '', { name: 'HN Group Limited', kind: 'Parent company', classA: '50', notified: '2026-09-01' }, 't');
+    s.saveItem('horizon-network', 'psc', '', { name: 'Charlie Livsey', kind: 'Individual', classC: '30', classCIssuedBy: 'Charlie Livsey', notified: '2025-04-21' }, 't');
+    s.saveItem('horizon-network', 'psc', '', { name: 'Jack Vinckx', kind: 'Individual', classB: '20', notified: '2025-04-21' }, 't');
+    s.saveCompany('', { legalName: 'Horizon Media Group Limited', parent: 'hn-group', incorporated: '2025-12-27' }, 't', { officer: { name: 'Charlie Livsey', role: 'Managing director' }, psc: { name: 'HN Group Limited', kind: 'Parent company', share: '100' } });
+    s.saveCompany('', { legalName: 'Horizon Advertising Limited', parent: 'horizon-media-group-limited', incorporated: '2026-10-01' }, 't', { officer: { name: 'Ad Director', role: 'Director' }, psc: { name: 'Horizon Media Group Limited', kind: 'Parent company', share: '100' } });
+    s.db.migrations.push('group-structure-2026-10-18', 'charlie-managing-director', 'rename-hn-group-management', 'hn-group-shareholding-2026-10-28', 'clivsey-holdings-parent-2026-10-28'); s.save();
+    const before = s.db.filings.length;
+    delete process.env.COMPANIES_GROUP_UPDATES;
+    s = fresh(); s.init(dir); s = fresh(); s.init(dir);
+    const by = (n) => s.db.companies.find((c) => c.legalName === n), current = (c) => c.psc.filter((p) => !p.ceased).map((p) => [p.name, p.kind, p.share, p.classA, p.classB, p.classC]).sort();
+    const hn = by('HN Group Limited'), net = by('Horizon Network Limited'), media = by('Horizon Media Group Limited'), ad = by('Horizon Advertising Limited');
+    assert.deepEqual(current(hn), [['CLivsey Holdings Limited', 'Parent company', '60', '60', '', ''], ['Charlie Livsey', 'Individual', '20', '20', '', ''], ['Jack Vinckx', 'Individual', '20', '', '20', '']]);
+    assert.deepEqual(current(net), [['Charlie Livsey', 'Individual', '10', '', '', '10'], ['HN Group Limited', 'Parent company', '70', '70', '', ''], ['Jack Vinckx', 'Individual', '20', '', '20', '']]);
+    assert.deepEqual(current(media), [['HN Group Limited', 'Parent company', '55', '', '', '55']]);
+    assert.deepEqual(current(ad), [['Horizon Media Group Limited', 'Parent company', '55', '', '', '55'], ['Horizon Network Limited', 'Relevant legal entity', '20', '', '', '20']]);
+    assert.ok(ad.psc.find((p) => p.name === 'Horizon Network Limited' && !p.ceased).control.includes('Has significant influence or control'));
+    assert.equal(ad.managedBy, net.slug); assert.equal(ad.parent, media.slug); assert.equal(net.parent, hn.slug); assert.equal(media.parent, hn.slug);
+    // Nobody is deleted; the Class C shares are issued by a current officer.
+    assert.ok(media.psc.some((p) => p.name === 'HN Group Limited' && p.ceased === '') && ad.psc.some((p) => p.name === 'Horizon Media Group Limited' && !p.ceased));
+    assert.equal(ad.psc.find((p) => p.name === 'Horizon Network Limited' && !p.ceased).classCIssuedBy, 'Ad Director');
+    // Votes: HN Group by A and B shares; Charlie's Class C gives him voting control of Horizon Network.
+    const votes = (c) => Object.fromEntries(c.psc.filter((p) => !p.ceased).map((p) => [p.name, s.votingPower(c)[p.id].votes]));
+    assert.deepEqual(votes(hn), { 'CLivsey Holdings Limited': 66.67, 'Charlie Livsey': 22.22, 'Jack Vinckx': 11.11 });
+    assert.equal(votes(net)['Charlie Livsey'], 51); assert.equal(votes(ad)['Horizon Media Group Limited'], 73.33);
+    const filed = s.db.filings.slice(before).map((f) => s.company(f.company).legalName + ' · ' + f.category + ': ' + f.description);
+    for (const re of [/HN Group Limited · Persons with significant control: Change of details of CLivsey Holdings Limited/, /HN Group Limited · .*Change of details of Charlie Livsey/, /HN Group Limited · .*Change of details of Jack Vinckx/,
+      /Horizon Network Limited · .*Change of details of HN Group Limited/, /Horizon Network Limited · .*Change of details of Charlie Livsey/, /Horizon Media Group Limited · .*Change of details of HN Group Limited/,
+      /Horizon Advertising Limited · .*Change of details of Horizon Media Group Limited/, /Horizon Advertising Limited · .*Notification of Horizon Network Limited/, /Horizon Advertising Limited · Officers: Appointment of Horizon Network Limited as manager/])
+      assert.ok(filed.some((f) => re.test(f)), re + '\n' + filed.join('\n'));
+    assert.equal(filed.filter((f) => /Statement of capital/.test(f)).length, 4);
+    assert.ok(!filed.some((f) => /Horizon Network Limited · .*Jack Vinckx/.test(f)), 'Jack’s Horizon Network holding is unchanged');
+    assert.match(JSON.stringify(s.db.filings.filter((f) => f.company === media.slug).at(-1).doc.rows), /45% unissued/);
+    for (const f of s.db.filings) assert.ok(fs.existsSync(s.filePath(f.file)));
   } finally {
     delete process.env.COMPANIES_GROUP_UPDATES;
     fs.rmSync(dir, { recursive: true, force: true });
