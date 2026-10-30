@@ -1,0 +1,17 @@
+title: Main Page
+protected: yes
+---
+'''HN Group Private Wiki''' is HN Group's private encyclopedia. It is completely separate from the public HN Group Wiki: nothing on one appears on the other. Every page needs an HN Group sign-in, and only the system owner, owner-level accounts and Super Admin members can edit.
+
+Company articles here are made and kept up to date from the [https://private.companies.hngroup.org.uk Private Company Register]: when a company is added or changed there, its article and the lists below change too.
+
+{{Cards start}}
+{{Company cards}}
+{{Cards end}}
+
+== Companies ==
+See the [[List of HN Group companies|list of companies]] and how they are owned.
+
+== About ==
+* [[HN Group Wiki:About|About this wiki]]
+* [[Help:Editing|How to edit]]

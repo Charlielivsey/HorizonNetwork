@@ -1,0 +1,7 @@
+title: HN Group Wiki:About
+---
+'''HN Group Private Wiki''' is HN Group's private encyclopedia, at private.wiki.hngroup.org.uk. It is completely separate from the public HN Group Wiki and the public Company Register: it has its own articles, images and history, and its company articles follow only the [https://private.companies.hngroup.org.uk Private Company Register].
+
+Everyone needs to sign in with their HN Group account (HN Group Auth) to read it. The system owner, owner-level accounts and Super Admin members can edit, upload images, set company logos and protect or delete pages. To learn how to edit, see [[Help:Editing]].
+
+[[Category:HN Group Wiki]]

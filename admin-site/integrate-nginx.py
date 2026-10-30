@@ -43,7 +43,7 @@ def patch(text):
     return text
 paths=[]
 if args.source:
-    for folder in ['auth-site','hngroup-site/nginx','horizon-network-site','staff-portal','status-site','links-site','wiki-site','branding-site','companies-site','vpn-site','investors-site','accounts-site','devices-site','docs-site','contracts-site','downloads-site']+[s+'-site' for s in ['media','holding','development','support','clients','careers','news']]:
+    for folder in ['auth-site','hngroup-site/nginx','horizon-network-site','staff-portal','status-site','links-site','wiki-site','branding-site','companies-site','vpn-site','investors-site','accounts-site','devices-site','docs-site','contracts-site','private-companies-site','private-wiki-site','downloads-site']+[s+'-site' for s in ['media','holding','development','support','clients','careers','news']]:
         paths.extend((repo/folder).glob('*.conf'))
 else:
     root=Path(args.root)

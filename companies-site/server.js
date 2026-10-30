@@ -11,13 +11,16 @@ const store = require('./lib/store');
 const staff = require('./lib/staff');
 const customers = require('./lib/customers');
 const forms = require('./lib/forms');
+const priv = require('./lib/private');
 
 const PUBLIC = process.env.COMPANIES_PUBLIC_DIR || path.join(__dirname, 'public');
 const DATA_DIR = process.env.COMPANIES_DATA_DIR || '/var/lib/hn-companies';
 const ORIGIN = process.env.COMPANIES_ORIGIN || 'https://companies.hngroup.org.uk';
 const MIME = { '.css': 'text/css; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.txt': 'text/plain; charset=utf-8' };
 store.init(DATA_DIR);
-staff.ensureDefault();
+// The private register (lib/private.js) signs everyone in through HN Group Auth instead of the register's own accounts.
+if (priv.ENABLED) priv.install(customers, staff); else staff.ensureDefault();
+const SERVICE = priv.ENABLED ? 'Private Company Register' : 'Company Register';
 
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = (iso) => { if (!iso) return ''; const d = new Date(iso.length === 10 ? iso + 'T12:00:00Z' : iso); return isNaN(d) ? '' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/London' }); };
@@ -30,21 +33,24 @@ const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
 
 function layout(o) {
   const signedOut = !o.customer && !o.staffUser;
-  const nav = o.staffUser
+  const signOut = (csrf) => '<form method="post" action="/auth/logout"><input type="hidden" name="csrf" value="' + esc(csrf) + '"><button class="nav-button" type="submit">Sign out</button></form>';
+  const nav = priv.ENABLED
+    ? (o.staffUser ? '<a href="/admin">Administration</a>' : '') + (o.customer ? '<a href="/account">Your account</a>' : '') + (o.customer || o.staffUser ? signOut((o.customer || o.staffUser).csrf) : '<a href="/auth/login">Sign in with HN Group</a>')
+    : o.staffUser
     ? '<a href="/admin">Administration</a><form method="post" action="/staff/logout"><input type="hidden" name="csrf" value="' + esc(o.staffUser.csrf) + '"><button class="nav-button" type="submit">Sign out</button></form>'
     : o.customer ? '<a href="/account">Your account</a><form method="post" action="/account/logout"><input type="hidden" name="csrf" value="' + esc(o.customer.csrf) + '"><button class="nav-button" type="submit">Sign out</button></form>'
       : '<a href="/account/login">Sign in</a><a href="/account/register">Create an account</a><a href="/staff/login" class="staff-link">Staff sign in</a>';
   return '<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0b0c0c">' +
-    '<title>' + esc(o.title) + ' – Company Register – HN Group</title>' + (o.description ? '<meta name="description" content="' + esc(o.description) + '">' : '') + (o.noindex ? '<meta name="robots" content="noindex">' : '') +
+    '<title>' + esc(o.title) + ' – ' + SERVICE + ' – HN Group</title>' + (o.description ? '<meta name="description" content="' + esc(o.description) + '">' : '') + (o.noindex ? '<meta name="robots" content="noindex">' : '') +
     '<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/assets/companies.css?v=6"><script src="/assets/companies.js?v=6" defer></script></head><body>' +
     '<a class="skip" href="#main">Skip to main content</a>' +
     '<header class="header"><div class="wrap header-inner"><a class="logo" href="/"><img src="/assets/brand/hn-group-wordmark-white.svg" alt="HN Group" width="126" height="44"></a>' +
-    '<a class="service" href="/">Company Register</a><nav class="header-nav" aria-label="Account">' + nav + '</nav></div></header>' +
+    '<a class="service" href="/">' + SERVICE + '</a><nav class="header-nav" aria-label="Account">' + nav + '</nav></div></header>' +
     (o.back ? '<div class="wrap"><a class="back-link" href="' + esc(o.back) + '">Back</a></div>' : '') +
     (o.searchBar === false || o.back ? '' : '<div class="wrap"><form class="search compact" action="/search" method="get" role="search"><label for="q" class="sr-only">Search for a company or officer</label><input id="q" name="q" type="search" placeholder="Search for a company or officer" value="' + esc(o.q || '') + '" autocomplete="off"><button type="submit" aria-label="Search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg></button></form></div>') +
     '<main id="main" class="wrap main' + (o.back ? ' after-back' : '') + '">' + (o.flash ? (o.flash.error ? '<div class="error-summary" role="alert" tabindex="-1" data-focus><h2>There is a problem</h2><p>' + esc(o.flash.text) + '</p></div>' : '<div class="flash" role="status">' + esc(o.flash.text) + '</div>') : '') + o.body + '</main>' +
-    '<footer class="footer"><div class="wrap"><ul class="footer-links"><li><a href="/">Search the register</a></li><li><a href="/about">About this register</a></li>' + (signedOut ? '<li><a href="/account/register">Create an account</a></li>' : '') + '<li><a href="/staff/login">Staff sign in</a></li></ul>' +
-    '<div class="footer-meta"><img src="/assets/brand/hn-group-wordmark.svg" alt="" width="115" height="40"><p>The Company Register is run by HN Group Limited for the companies in HN Group. It is not the UK government’s Companies House register.</p><p>© ' + new Date().getFullYear() + ' HN Group Limited</p></div></div></footer></body></html>';
+    '<footer class="footer"><div class="wrap"><ul class="footer-links"><li><a href="/">Search the register</a></li><li><a href="/about">About this register</a></li>' + (priv.ENABLED ? '' : (signedOut ? '<li><a href="/account/register">Create an account</a></li>' : '') + '<li><a href="/staff/login">Staff sign in</a></li>') + '</ul>' +
+    '<div class="footer-meta"><img src="/assets/brand/hn-group-wordmark.svg" alt="" width="115" height="40"><p>' + (priv.ENABLED ? 'The Private Company Register is run by HN Group Limited and is separate from the public Company Register. Only HN Group accounts can sign in. ' : 'The Company Register is run by HN Group Limited for the companies in HN Group. ') + 'It is not the UK government’s Companies House register.</p><p>© ' + new Date().getFullYear() + ' HN Group Limited</p></div></div></footer></body></html>';
 }
 
 function send(res, status, html, headers) {
@@ -118,7 +124,7 @@ function homePage(res, ctx) {
       '<h2 class="heading-m">Other things you can do</h2><ul class="link-list">' +
       '<li>Request a copy of a filing or a certificate for a company</li><li>Report a mistake on a company record</li><li>File a change for a company, such as a new address, officer or person with significant control</li></ul>' +
       '<p class="body">Find the company first, then choose what you need from its page. ' + (ctx.customer ? 'You’re signed in, so you’re ready to go.' : 'You’ll need a free account: <a href="/account/register">create an account</a> or <a href="/account/login">sign in</a>.') + '</p></div>' +
-      '<aside class="col-side"><div class="side-box"><h2 class="heading-s">Using this register</h2><ul><li><a href="/about">About this register</a></li>' + (ctx.customer ? '<li><a href="/account">Your requests and filings</a></li>' : '<li><a href="/account/login">Sign in to your account</a></li><li><a href="/account/register">Create an account</a></li>') + '<li><a href="/staff/login">Staff sign in</a></li></ul></div></aside></div>' });
+      '<aside class="col-side"><div class="side-box"><h2 class="heading-s">Using this register</h2><ul><li><a href="/about">About this register</a></li>' + (ctx.customer ? '<li><a href="/account">Your requests and filings</a></li>' : '<li><a href="/account/login">Sign in to your account</a></li><li><a href="/account/register">Create an account</a></li>') + (priv.ENABLED ? (ctx.staffUser ? '<li><a href="/admin">Administration</a></li>' : '') : '<li><a href="/staff/login">Staff sign in</a></li>') + '</ul></div></aside></div>' });
 }
 
 function searchPage(res, ctx, q) {
@@ -264,7 +270,10 @@ function chargesPage(res, ctx, c) {
 
 function aboutPage(res, ctx) {
   page(res, ctx, { title: 'About this register',
-    body: '<section class="panel narrow"><h1>About the Company Register</h1><p>This register holds information about the companies in HN Group. It is run by HN Group Limited. Our staff keep it up to date.</p>' +
+    body: priv.ENABLED ? '<section class="panel narrow"><h1>About the Private Company Register</h1><p>This is a private register run by HN Group Limited, completely separate from the public Company Register: nothing is shared between them. Only HN Group accounts can sign in, through HN Group Auth.</p>' +
+      '<h2>What you can do</h2><ul><li>Search for a company or officer and view its records.</li><li>Request copies of filings or certificates, report a mistake, or submit a filing for review, with the account you signed in with.</li></ul>' +
+      '<h2>Administration</h2><p>The system owner, owner-level accounts and Super Admin members run the register’s staff area. Our team replies on this site; we don’t send emails from the register.</p></section>' :
+      '<section class="panel narrow"><h1>About the Company Register</h1><p>This register holds information about the companies in HN Group. It is run by HN Group Limited. Our staff keep it up to date.</p>' +
       '<p>It is a group register, not the UK government’s Companies House register. Some details may not be recorded yet. These show as “Not recorded”.</p>' +
       '<h2>What you can do</h2><ul><li>Search for a company or officer and view its records without an account.</li><li>Create a free account to request copies of filings or certificates, report a mistake, or submit a filing for review.</li></ul>' +
       '<h2>Your account</h2><p>Your account is only used for your requests and submissions. Our team replies on this site; we don’t send emails from the register. Don’t include sensitive personal information in messages or documents unless it’s needed.</p></section>' });
@@ -299,7 +308,7 @@ function accountPage(res, ctx, flash) {
   const subs = store.db.submissions.filter((s) => s.customer === me.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const mine = store.managedCompanies(me.id).filter((c) => !c.hidden);
   page(res, ctx, { title: 'Your account', noindex: true, flash,
-    body: '<h1 class="page-title">Your account</h1><p class="muted">Signed in as ' + esc(me.name) + ' (' + esc(me.email) + ') · <a href="/account/settings">Change password</a></p>' +
+    body: '<h1 class="page-title">Your account</h1><p class="muted">Signed in as ' + esc(me.name) + ' (' + esc(me.email) + ')' + (priv.ENABLED ? ' with your HN Group account' : ' · <a href="/account/settings">Change password</a>') + '</p>' +
       '<section class="panel"><div class="panel-head"><h2>Your companies</h2><a class="button small" href="/account/register-company">Register a new company</a></div>' + (mine.length
         ? '<p class="muted">You can file changes for these companies and register subsidiaries of them.</p><div class="results">' + mine.map((c) => '<a class="result" href="/company/' + esc(c.slug) + '"><span class="result-name">' + esc(c.legalName) + '</span><span class="result-meta">' + (c.number ? 'Company number ' + esc(c.number) + ' · ' : '') + (c.status ? esc(c.status) : 'Status not recorded') + (c.managers.includes(me.id) ? '' : ' · Managed through its parent company') + '</span></a>').join('') + '</div>'
         : '<p class="muted">You don’t manage any companies yet. Register a new company, or find a company on the register and choose Manage this company.</p>') + '</section>' +
@@ -644,8 +653,11 @@ async function route(req, res) {
   if (p === '/healthz') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); return res.end('{"ok":true}'); }
   if (req.method === 'GET' && (p.startsWith('/assets/') || p === '/robots.txt') && serveStatic(res, p)) return;
   if (req.method === 'POST' && !sameOrigin(req)) throw fail(403, 'That request came from another website.');
+  if (priv.ENABLED && await priv.gate(req, res, url, p, (r, status, title, text, cookies, signedOut) =>
+    send(r, status, layout({ title, noindex: true, searchBar: false, customer: signedOut ? null : customers.current(req), staffUser: signedOut ? null : staff.current(req),
+      body: '<section class="panel narrow"><h1>' + esc(title) + '</h1><p>' + esc(text) + '</p><p><a class="button" href="' + (signedOut ? '/auth/login' : '/') + '">' + (signedOut ? 'Sign in with HN Group' : 'Go to the register') + '</a></p></section>' }), cookies && cookies.length ? { 'Set-Cookie': cookies } : {}))) return;
 
-  const ctx = { customer: customers.current(req), staffUser: null };
+  const ctx = { customer: customers.current(req), staffUser: priv.ENABLED ? staff.current(req) : null };
   if (p === '/staff/login') {
     const back = safeAdmin(url.searchParams.get('return'));
     if (req.method === 'GET') return staff.current(req) ? redirect(res, back) : staffLoginPage(res, ctx, { return: back });

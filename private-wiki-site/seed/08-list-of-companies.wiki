@@ -1,0 +1,11 @@
+title: List of HN Group companies
+---
+{{Short description|Companies on the Private Company Register}}
+This list is kept up to date automatically from the [https://private.companies.hngroup.org.uk Private Company Register].
+
+{{Company list}}
+
+== Structure ==
+{{Company tree}}
+
+[[Category:Companies]]

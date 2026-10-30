@@ -52,7 +52,8 @@ function init(dataDir) {
   }
   runMigrations();
   for (const c of db.companies) { if (!Array.isArray(c.managers)) c.managers = []; generateFilings(c); }
-  for (const s of SEED) if (!db.seeded.includes(s.slug)) { if (!db.companies.some((c) => c.slug === s.slug)) db.companies.push(blankCompany(s)); db.seeded.push(s.slug); }
+  // The private register (COMPANIES_SEED=off) starts empty: nothing from the main register is copied into it.
+  if (process.env.COMPANIES_SEED !== 'off') for (const s of SEED) if (!db.seeded.includes(s.slug)) { if (!db.companies.some((c) => c.slug === s.slug)) db.companies.push(blankCompany(s)); db.seeded.push(s.slug); }
   runGroupMigrations();
   save();
 }

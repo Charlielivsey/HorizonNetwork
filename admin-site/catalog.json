@@ -157,6 +157,24 @@
     ]
   },
   {
+    "id": "private-companies",
+    "name": "Private company register",
+    "process": "hn-private-companies",
+    "port": 5610,
+    "hosts": [
+      "private.companies.hngroup.org.uk"
+    ]
+  },
+  {
+    "id": "private-wiki",
+    "name": "HN Group Private Wiki",
+    "process": "hn-private-wiki",
+    "port": 5620,
+    "hosts": [
+      "private.wiki.hngroup.org.uk"
+    ]
+  },
+  {
     "id": "media",
     "name": "Horizon Media Group",
     "process": "hn-media",

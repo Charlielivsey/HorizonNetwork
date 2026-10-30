@@ -1,0 +1,82 @@
+title: Help:Editing
+---
+{{Hatnote|This page explains how to edit articles on HN Group Private Wiki.}}
+The system owner, owner-level accounts and Super Admin members can edit HN Group Private Wiki; everyone else signed in can read it. Choose '''Edit''' on the article you want to change. Use '''Show preview''' to check your changes before you publish them, and add a short summary of what you changed.
+
+Every change is kept in the article's '''View history''' tab, so any version can be viewed and restored. Some pages, such as the [[Main Page]], are protected so that only wiki administrators (the system owner and Super Admin members) can change them.
+
+== Formatting ==
+{| class="wikitable"
+! You type !! You get
+|-
+| <code>'''bold'''</code> || '''bold'''
+|-
+| <code>''italic''</code> || ''italic''
+|-
+| <code>[[Horizon Network]]</code> || A link to another article: [[Horizon Network]]
+|-
+| <code>[[Horizon Network|the network]]</code> || A link with different text: [[Horizon Network|the network]]
+|-
+| <code>[[HN Group#Brand|brand]]</code> || A link to a section: [[HN Group#Brand|brand]]
+|-
+| <code>[https://hngroup.org.uk HN Group website]</code> || An external link: [https://hngroup.org.uk HN Group website]
+|-
+| <code>== Heading ==</code> and <code>=== Subheading ===</code> || Section headings (three or more add a contents box)
+|-
+| <code>* item</code> and <code># item</code> || Bulleted and numbered lists (use <code>**</code> to nest)
+|-
+| <code><ref>Source</ref></code> || A numbered reference, listed where <code>{{Reflist}}</code> appears
+|-
+| <code>[[Category:Companies]]</code> || Adds the page to a category
+|-
+| <code>[[File:horizon-network-wordmark.svg|thumb|Caption]]</code> || A logo with a caption, on the right
+|-
+| <code>#REDIRECT [[HN Group]]</code> || Makes the page redirect to another one
+|}
+
+== Infoboxes ==
+Company articles start with an infobox, the summary box on the right:
+<code>{{Infobox</code><br>
+<code>| name = Company name</code><br>
+<code>| logo = horizon-network-wordmark.svg</code><br>
+<code>| Parent = [[HN Group]]</code><br>
+<code>| Website = [https://example.co.uk example.co.uk]</code><br>
+<code>}}</code>
+
+Any <code>| Label = value</code> line becomes a row. Logos are the approved HN Group logo files; the white version is shown automatically in dark mode.
+
+=== Company infoboxes ===
+Articles about companies on the HN Group Company Register use a company infobox instead:
+<code>{{Company infobox|Horizon Network</code><br>
+<code>| Industry = Digital infrastructure</code><br>
+<code>| Products = Horizon Hosting</code><br>
+<code>}}</code>
+
+Its owners (people, companies or both, with their shares), parent, managing company, subsidiaries, divisions, status, founding date, company number, registered office, key people, email domain and website come straight from the register and change on the wiki automatically when the register changes. Rows you add, such as Industry or Products, appear alongside them. The company's logo is shown too.
+
+* <code>{{Company ownership|Company}}</code> — who owns and manages the company, written as sentences
+* <code>{{Company tree}}</code> — the group's structure; <code>{{Company tree|Company}}</code> starts at one company
+* <code>{{Company list}}</code> — a table of every company on the register
+* <code>{{Company cards}}</code> — a card for every company with its logo (used on the Main Page)
+
+When a company's shares are split into classes on the register, the infobox also shows its '''Share classes''', each owner's classes and share of the votes, and who has '''Voting control'''. Class A shares are ordinary shares with one vote each; Class B shares are staff shares with half a vote each; Class C shares are special issue shares, issued by one of the company's officers, with two votes each, and of the holders with more than 10% of the Class C shares, the one holding the most holds 51% of the votes.
+
+When a company is added to the register, the wiki creates a short article for it. When a company's name changes, its article moves to the new name and the old name redirects to it.
+
+== Images and logos ==
+Signed-in staff can upload photos and other images at [[Special:Upload]] (PNG, JPEG, WebP, GIF or plain SVG, up to 4 MB). Use an uploaded image in an article with <code>[[File:name.jpg|thumb|Caption]]</code>. Every uploaded image is listed at [[Special:ListFiles]].
+
+To add or change a company's logo, open [[Special:CompanyLogo]] or choose '''Logo''' at the top of the company's article. You can add a second version for dark backgrounds. A new logo appears everywhere the company is shown on the wiki straight away, and you can go back to the original brand logo at any time.
+
+== Other templates ==
+* <code>{{Main|Page}}</code> — "Main article" note under a heading
+* <code>{{Hatnote|text}}</code> — a short italic note at the top of a section
+* <code>{{Stub}}</code> — marks an article that needs expanding
+* <code>{{Swatch|#5514B4}}</code> — a colour swatch
+
+== Good practice ==
+* Write in a neutral, factual tone, like an encyclopedia.
+* Only add information that's accurate and suitable for the public: the wiki can be read by anyone. Don't add personal details, passwords, internal system details or anything confidential.
+* Back up facts with references, such as pages on the group's websites.
+
+[[Category:Help]]

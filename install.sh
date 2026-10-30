@@ -113,6 +113,14 @@ changed docs-site/ && run 'HN Group Docs (docs.hngroup.org.uk)' bash "$ROOT/docs
 if changed contracts-site/ || ! pm2 describe hn-contracts >/dev/null 2>&1 || [ ! -e /etc/nginx/sites-enabled/hn-contracts ]; then
     run 'HN Group Contracts (contract.hngroup.org.uk)' bash "$ROOT/contracts-site/install.sh" "$EMAIL"
 fi
+# The private register and private wiki (the user's request, 30 October 2026) run the register's and wiki's code a
+# second time, so they update when either their own folder or the shared code changes, and are installed the first time.
+if changed companies-site/ private-companies-site/ || ! pm2 describe hn-private-companies >/dev/null 2>&1; then
+    run 'Private company register (private.companies.hngroup.org.uk)' bash "$ROOT/private-companies-site/install.sh" "$EMAIL"
+fi
+if changed wiki-site/ private-wiki-site/ || ! pm2 describe hn-private-wiki >/dev/null 2>&1; then
+    run 'Private wiki (private.wiki.hngroup.org.uk)' bash "$ROOT/private-wiki-site/install.sh" "$EMAIL"
+fi
 changed investors-site/ && run 'Investors (investors.hngroup.org.uk)' bash "$ROOT/investors-site/install.sh" "$EMAIL"
 changed vpn-site/ && run 'VPN (vpn.hngroup.org.uk + WireGuard)' bash "$ROOT/vpn-site/install.sh" "$EMAIL"
 changed downloads-site/ && run 'Downloads (downloads.hngroup.org.uk)' bash "$ROOT/downloads-site/install.sh" "$EMAIL"

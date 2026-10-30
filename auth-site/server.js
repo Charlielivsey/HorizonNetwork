@@ -32,6 +32,11 @@ const CLIENTS = {
   devices: { name: 'HN Group Devices', callback: 'https://devices.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use HN Group Devices.' },
   docs: { name: 'HN Group Docs', callback: 'https://docs.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use HN Group Docs.' },
   // Anyone can sign in to sign what they've been sent; sending needs the "Send contracts for signing" permission.
+  // The private register and private wiki (the user's request, 30 October 2026): any HN Group account reads them and
+  // uses the register's customer side; the sites themselves keep their staff area and editing to owner-level accounts
+  // and Super Admin members.
+  'private-companies': { name: 'HN Group Private Company Register', callback: 'https://private.companies.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use the private register.' },
+  'private-wiki': { name: 'HN Group Private Wiki', callback: 'https://private.wiki.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use the private wiki.' },
   contracts: { name: 'HN Group Contracts', callback: 'https://contract.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use HN Group Contracts.' },
 };
 const HEX = /^[a-f0-9]{64}$/;

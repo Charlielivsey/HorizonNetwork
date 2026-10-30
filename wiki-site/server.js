@@ -14,7 +14,9 @@ const { esc, normaliseTitle, pageUrl } = markup;
 const PUBLIC = process.env.WIKI_PUBLIC_DIR || path.join(__dirname, 'public');
 const DATA_DIR = process.env.WIKI_DATA_DIR || '/var/lib/hn-wiki';
 const SEED_DIR = process.env.WIKI_SEED_DIR || path.join(__dirname, 'seed');
-const SITE = 'HN Group Wiki';
+// The private wiki (WIKI_PRIVATE=1, lib/auth.js) runs this same code under its own name and data.
+const SITE = process.env.WIKI_NAME || 'HN Group Wiki';
+const ONLY_ADMINS = 'Only the system owner, owner-level accounts and Super Admin members can';
 const MIME = { '.css': 'text/css; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8', '.xml': 'application/xml' };
 
 const brandDir = path.join(PUBLIC, 'assets', 'brand');
@@ -126,11 +128,13 @@ function layout(o) {
     '<link rel="stylesheet" href="/assets/wiki.css?v=20261020b"><script src="/assets/wiki.js?v=20261020a" defer></script></head><body>' +
     '<a class="skip" href="#content">Skip to content</a><div class="stripe" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>' +
     '<header class="site-header"><button class="menu-toggle" type="button" aria-expanded="false" aria-controls="sidebar" aria-label="Main menu"><span></span><span></span><span></span></button>' +
-    '<a class="brand" href="/wiki/Main_Page" aria-label="HN Group Wiki main page"><img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="92" height="32"><img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="92" height="32"><span class="brand-wiki">Wiki</span></a>' +
-    '<form class="search" action="/wiki/Special:Search" method="get" role="search"><input type="search" name="search" placeholder="Search HN Group Wiki" aria-label="Search HN Group Wiki" value="' + esc(o.searchValue || '') + '" autocomplete="off"><button type="submit" aria-label="Search">' +
+    '<a class="brand" href="/wiki/Main_Page" aria-label="' + esc(SITE) + ' main page"><img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="92" height="32"><img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="92" height="32"><span class="brand-wiki">Wiki</span></a>' +
+    '<form class="search" action="/wiki/Special:Search" method="get" role="search"><input type="search" name="search" placeholder="Search ' + esc(SITE) + '" aria-label="Search ' + esc(SITE) + '" value="' + esc(o.searchValue || '') + '" autocomplete="off"><button type="submit" aria-label="Search">' +
     '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button></form>' +
     '<div class="user-tools">' + (user
       ? '<span class="user-name" title="Signed in with HN Group Auth">' + esc(user.name) + (user.admin ? ' <span class="badge">Admin</span>' : '') + '</span><form method="post" action="/auth/logout"><button class="link-button" type="submit">Sign out</button></form>'
+      : auth.PRIVATE && o.signedOut ? '<a href="/auth/login">Sign in with HN Group</a>'
+      : auth.PRIVATE ? '<span class="user-name" title="Signed in with HN Group Auth">Signed in · read only</span><form method="post" action="/auth/logout"><button class="link-button" type="submit">Sign out</button></form>'
       : '<a href="/auth/login?return=' + encodeURIComponent(o.returnTo || '/wiki/Main_Page') + '">Staff sign in</a>') + '</div></header>' +
     '<div class="page"><nav class="sidebar" id="sidebar" aria-label="Wiki navigation"><ul>' +
     '<li><a href="/wiki/Main_Page">Main page</a></li><li><a href="/wiki/Special:AllPages">All pages</a></li><li><a href="/wiki/Special:Categories">Categories</a></li>' +
@@ -142,7 +146,7 @@ function layout(o) {
     '<main class="content" id="content">' +
     (tabs.length ? '<div class="tabs"><ul class="tabs-left">' + tabs.filter((t) => t.side !== 'right').map(tabHtml).join('') + '</ul><ul class="tabs-right">' + tabs.filter((t) => t.side === 'right').map(tabHtml).join('') + '</ul></div>' : '') +
     '<article class="article"><h1 class="first-heading">' + (o.heading || esc(o.title)) + '</h1>' +
-    (o.tagline === false ? '' : '<div class="tagline">From HN Group Wiki, the encyclopedia of HN Group and its companies</div>') +
+    (o.tagline === false ? '' : '<div class="tagline">From ' + esc(SITE) + (auth.PRIVATE ? ', the private encyclopedia of HN Group' : ', the encyclopedia of HN Group and its companies') + '</div>') +
     (o.sub ? '<div class="subtitle">' + o.sub + '</div>' : '') +
     '<div class="body">' + o.body + '</div>' +
     (o.categories && o.categories.length ? '<div class="catlinks"><a href="/wiki/Special:Categories">Categories</a>: <ul>' + o.categories.map((c) => '<li><a href="' + esc(pageUrl('Category:' + c)) + '">' + esc(c) + '</a></li>').join('') + '</ul></div>' : '') +
@@ -200,9 +204,9 @@ function viewPage(req, res, url, user, title) {
   if (!page && !isCategory) {
     return send(res, 404, layout({
       title, user, returnTo: pageUrl(title), tabs: articleTabs(title, 'read', { user }), noindex: true,
-      body: '<div class="notice">HN Group Wiki does not have an article with this exact name.</div>' +
+      body: '<div class="notice">' + esc(SITE) + ' does not have an article with this exact name.</div>' +
         '<ul><li><a href="/wiki/Special:Search?search=' + encodeURIComponent(title) + '">Search for “' + esc(title) + '”</a> in existing articles.</li>' +
-        '<li>' + (user ? '<a href="' + esc(editUrl(title)) + '">Start the “' + esc(title) + '” article</a>.' : 'Staff can <a href="/auth/login?return=' + encodeURIComponent(editUrl(title)) + '">sign in</a> to start this article.') + '</li></ul>',
+        '<li>' + (user ? '<a href="' + esc(editUrl(title)) + '">Start the “' + esc(title) + '” article</a>.' : (auth.PRIVATE ? ONLY_ADMINS + ' start this article.' : 'Staff can <a href="/auth/login?return=' + encodeURIComponent(editUrl(title)) + '">sign in</a> to start this article.')) + '</li></ul>',
     }));
   }
   const oldid = url.searchParams.get('oldid');
@@ -235,7 +239,7 @@ function viewPage(req, res, url, user, title) {
     title: page ? page.title : title, user, returnTo: pageUrl(title), tabs: articleTabs(title, 'read', { user }),
     body, categories: r.categories, lastEdited: page && !oldNote ? rev.at : null, description: desc,
     canonical: pageUrl(title), noindex: !!oldNote,
-    heading: page && page.title === 'Main Page' ? 'Welcome to HN Group Wiki' : null, tagline: !(page && page.title === 'Main Page'),
+    heading: page && page.title === 'Main Page' ? 'Welcome to ' + SITE : null, tagline: !(page && page.title === 'Main Page'),
   }));
 }
 
@@ -247,7 +251,7 @@ function editPage(req, res, user, title, form) {
   const text = form ? form.text : current ? current.text : '';
   const preview = form && form.preview ? markup.render(text, { exists }) : null;
   const notices = (form && form.error ? '<div class="notice error">' + esc(form.error) + '</div>' : '') +
-    (!user ? '<div class="notice">You need to <a href="/auth/login?return=' + encodeURIComponent(editUrl(title)) + '">sign in with your staff account</a> to edit. You can view the source below.</div>' : '') +
+    (!user ? (auth.PRIVATE ? '<div class="notice">' + ONLY_ADMINS + ' edit the private wiki. You can view the source below.</div>' : '<div class="notice">You need to <a href="/auth/login?return=' + encodeURIComponent(editUrl(title)) + '">sign in with your staff account</a> to edit. You can view the source below.</div>') : '') +
     (user && readOnly ? '<div class="notice">This page is protected so only wiki administrators (the system owner and Super Admin members) can edit it. You can view its source.</div>' : '') +
     (!page && user ? '<div class="notice">You’re creating a new page. See <a href="/wiki/Help:Editing" target="_blank">how to edit</a> for the formatting you can use.</div>' : '');
   const body = notices +
@@ -301,7 +305,7 @@ function specialPage(req, res, url, user, name) {
   }
   if (lower === 'allpages') {
     const pages = store.all().filter((p) => !rendered(p).redirect);
-    const body = '<p>' + pages.length + ' pages on HN Group Wiki.</p><ul class="all-pages">' + pages.map((p) => '<li><a href="' + esc(pageUrl(p.title)) + '">' + esc(p.title) + '</a></li>').join('') + '</ul>';
+    const body = '<p>' + pages.length + ' pages on ' + esc(SITE) + '.</p><ul class="all-pages">' + pages.map((p) => '<li><a href="' + esc(pageUrl(p.title)) + '">' + esc(p.title) + '</a></li>').join('') + '</ul>';
     return send(res, 200, layout({ title: 'All pages', user, returnTo: '/wiki/Special:AllPages', body, tagline: false }));
   }
   if (lower === 'categories') {
@@ -373,7 +377,7 @@ function suggest(raw) {
 // ---------- Images and company logos ----------
 
 const csrfField = (user) => '<input type="hidden" name="csrf" value="' + esc(user.csrf) + '">';
-const signInFirst = (returnTo, what) => '<div class="notice">Staff can <a href="/auth/login?return=' + encodeURIComponent(returnTo) + '">sign in with HN Group Auth</a> to ' + what + '.</div>';
+const signInFirst = (returnTo, what) => auth.PRIVATE ? '<div class="notice">' + ONLY_ADMINS + ' ' + what + ' on the private wiki.</div>' : '<div class="notice">Staff can <a href="/auth/login?return=' + encodeURIComponent(returnTo) + '">sign in with HN Group Auth</a> to ' + what + '.</div>';
 const fileInput = (name, label, hint) => '<div class="field"><label for="' + name + '-file">' + label + '</label><input type="file" id="' + name + '-file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" data-into="' + name + '" data-preview="' + name + '-preview"' + (name === 'file' ? ' data-name="name"' : '') + '><input type="hidden" name="' + name + '">' +
   (hint ? '<p class="muted small">' + hint + '</p>' : '') + '<div class="upload-preview" id="' + name + '-preview" hidden></div></div>';
 const noScript = '<noscript><div class="notice">Uploading needs JavaScript turned on.</div></noscript>';
@@ -399,7 +403,7 @@ function uploadPage(res, user, error, values) {
 function listFilesPage(res, url, user) {
   const list = media.images(), added = url.searchParams.get('uploaded');
   const body = (added && media.image(added) ? '<div class="notice success">Uploaded. Use it in an article with <code>[[File:' + esc(added) + '|thumb|Caption]]</code>.</div>' : '') +
-    '<p>' + list.length + (list.length === 1 ? ' image has' : ' images have') + ' been uploaded to HN Group Wiki.' + (user ? ' <a href="/wiki/Special:Upload">Upload an image</a>.' : '') + '</p>' +
+    '<p>' + list.length + (list.length === 1 ? ' image has' : ' images have') + ' been uploaded to ' + esc(SITE) + '.' + (user ? ' <a href="/wiki/Special:Upload">Upload an image</a>.' : '') + '</p>' +
     (list.length ? '<ul class="file-list">' + list.map((f) => {
       const uses = usesOf(f.name);
       return '<li id="file-' + esc(f.name) + '"><a class="file-thumb" href="/w/upload/' + esc(f.file) + '"><img src="/w/upload/' + esc(f.file) + '" alt="' + esc(f.description || f.name) + '" loading="lazy"></a><div class="file-info"><b>' + esc(f.name) + '</b>' +
@@ -483,6 +487,8 @@ async function handlePost(req, res, url, title) {
   const form = await readForm(req, mediaPage ? 12 * 1024 * 1024 : 400 * 1024);
   let user;
   try { user = await auth.current(req, { fresh: true }); } catch (e) { return errorPage(res, 503, 'Can’t save right now', e.message); }
+  // (On the private wiki everyone here is signed in already; current() is empty for those who can't edit.)
+  if (!user && auth.PRIVATE) return errorPage(res, 403, 'Administrators only', ONLY_ADMINS + ' edit the private wiki.');
   if (!user) return errorPage(res, 401, 'Please sign in', 'Your sign-in has ended. Copy any changes, sign in again and retry.');
   if (form.csrf !== user.csrf) return errorPage(res, 403, 'Session expired', 'This form has expired. Go back, reload the page and try again.');
   if (mediaPage) return mediaPost(req, res, url, user, mediaPage[1].toLowerCase(), form);
@@ -537,6 +543,14 @@ const server = http.createServer(async (req, res) => {
     if (route === '/healthz') { res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end('{"ok":true}'); }
     if (await auth.handle(req, res, url, errorPage)) return;
     if (req.method === 'GET' && (route.startsWith('/assets/') || route === '/robots.txt') && serveStatic(res, route)) return;
+    // The private wiki: nothing without an HN Group Auth sign-in (any HN Group account can read).
+    if (auth.PRIVATE) {
+      if (route === '/signed-out' && req.method === 'GET') return send(res, 200, layout({ title: 'You’re signed out', signedOut: true, noindex: true, tagline: false, body: '<p>Sign in with your HN Group account to use the private wiki again.</p><p><a class="button primary" href="/auth/login">Sign in with HN Group</a></p>' }));
+      if (!(await auth.signedIn(req).catch(() => null))) {
+        if (req.method !== 'GET' && req.method !== 'HEAD') return errorPage(res, 401, 'Please sign in', 'Your sign-in has ended. Copy any changes, sign in again and retry.');
+        return redirect(res, '/auth/login?return=' + encodeURIComponent(route.startsWith('/wiki/') || route.startsWith('/w/') ? route + url.search : '/wiki/Main_Page'), 302);
+      }
+    }
     if (route === '/' || route === '/wiki' || route === '/wiki/') return redirect(res, '/wiki/Main_Page', 301);
     if (route === '/sitemap.xml' && req.method === 'GET') {
       res.writeHead(200, { 'Content-Type': 'application/xml' });
