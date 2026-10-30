@@ -12,6 +12,7 @@ const crypto = require('node:crypto');
 const store = require('./lib/store');
 const { createAuth } = require('./lib/auth');
 const { certificate } = require('./lib/certificate');
+const { signedCopy } = require('./lib/stamp');
 
 const VERSION = '2.0.0';
 const PUBLIC = process.env.CONTRACTS_PUBLIC_DIR || path.join(__dirname, 'public');
@@ -143,7 +144,14 @@ async function api(req, res, url) {
   const [, id, action] = m;
   if (!action && method === 'GET') return send(res, 200, { contract: store.view(store.get(id, user), user) });
   if (!action && method === 'PUT') { const input = await json(req); return send(res, 200, { contract: store.view(store.update(id, user, input, Array.isArray(input.signers) ? await staffDirectory() : []), user) }); }
-  if (action === 'file' && method === 'GET') { const c = store.get(id, user); store.opened(c, user); return pdf(res, store.fileOf(c), c.file.name, url.searchParams.has('download')); }
+  // The PDF with everyone's signature so far written on it (?original for the file exactly as it was uploaded).
+  if (action === 'file' && method === 'GET') {
+    const c = store.get(id, user); store.opened(c, user);
+    const original = store.fileOf(c);
+    let copy = null;
+    if (!url.searchParams.has('original')) copy = await signedCopy(original, c).catch((e) => { console.error('Couldn’t write the signatures onto contract ' + c.id + ':', e.message); return null; });
+    return pdf(res, copy || original, copy ? c.file.name.replace(/(\.pdf)?$/i, ' (signed).pdf') : c.file.name, url.searchParams.has('download'));
+  }
   if (action === 'certificate' && method === 'GET') {
     const c = store.get(id, user), bytes = store.certificateOf(c);
     if (!bytes) throw fail(404, 'There’s no signing certificate until everyone has signed.');

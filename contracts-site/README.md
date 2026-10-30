@@ -17,6 +17,12 @@ copy of hngroup-site's) plus `contracts.css` for the app's own parts.
 - **Reading**: the PDF is drawn on the page by PDF.js 4.10.38 (`public/assets/pdfjs/`, Apache-2.0, LICENSE.txt
   beside it), with zoom and a page counter, the same in every browser and in light and dark; if it can't open a PDF
   the browser's own viewer is used.
+- **Signed copy**: each signature is written onto the PDF as soon as that person signs, without waiting for the
+  others (`lib/stamp.js`: PDF.js finds the template's signing table, a heading such as "On behalf of HN Group
+  Limited" or "The Employee" with Name:, Signature: and Date: under it, and pdf-lib fills the block matching what the
+  signer signs as; anyone without a block goes on an "Electronic signatures" page at the end). The viewer and
+  Download show the signed copy; `?original` gives the file exactly as uploaded, whose SHA-256 every signature is
+  tied to. pdf-lib 1.17.1 (MIT) and the PDF.js legacy build are kept in `lib/vendor/`.
 - **Signing**: open the contract (recorded; signing is refused until then), type your full name and confirm. Each
   signature is tied to the PDF's SHA-256 fingerprint, with the time, account, email and IP address. Signers can
   decline with a reason. The sender can **remind** the people still to sign (shown on their list; nothing is emailed)

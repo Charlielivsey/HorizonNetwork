@@ -204,10 +204,13 @@
   async function contractPage(id) {
     setNav('');
     const { contract: c } = await api('/api/contracts/' + id);
+    // Signatures are written onto the PDF as each person signs; the original stays as it was uploaded.
+    const signedSoFar = c.signers.some((s) => s.status === 'signed');
     const bar = el('div', { class: 'viewer-bar' },
-      el('span', { class: 'file' }, el('span', { class: 'doc-icon small', 'aria-hidden': 'true' }), el('span', {}, el('strong', { text: c.file.name }), el('small', { text: c.file.pages + ' page' + (c.file.pages === 1 ? '' : 's') }))),
+      el('span', { class: 'file' }, el('span', { class: 'doc-icon small', 'aria-hidden': 'true' }), el('span', {}, el('strong', { text: c.file.name }), el('small', { text: c.file.pages + ' page' + (c.file.pages === 1 ? '' : 's') + (signedSoFar ? ' · with signatures' : '') }))),
       el('span', { class: 'zoom' }),
-      el('span', { class: 'actions' }, el('a', { class: 'btn btn-small btn-ghost', href: '/api/contracts/' + c.id + '/file?download', download: true, text: 'Download' }),
+      el('span', { class: 'actions' }, signedSoFar ? el('a', { class: 'btn-text', href: '/api/contracts/' + c.id + '/file?original&download', download: true, title: 'The PDF exactly as it was uploaded, without signatures', text: 'Original' }) : null,
+        el('a', { class: 'btn btn-small btn-ghost', href: '/api/contracts/' + c.id + '/file?download', download: true, text: 'Download' }),
         c.certificate ? el('a', { class: 'btn btn-small btn-primary', href: '/api/contracts/' + c.id + '/certificate?download', download: true, text: 'Signing certificate' }) : null));
     const viewer = el('section', { class: 'viewer' }, bar);
     const side = el('aside', { class: 'side' });

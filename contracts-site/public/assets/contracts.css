@@ -77,7 +77,8 @@
 .viewer-bar .file > span:last-child { min-width: 0; }
 .viewer-bar strong { display: block; font-size: 0.93rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .viewer-bar small { display: block; color: var(--muted); font-size: 0.78rem; }
-.viewer-bar .actions { display: flex; gap: 0.4rem; }
+.viewer-bar .actions { display: flex; align-items: center; gap: 0.4rem; }
+.viewer-bar .actions .btn-text { text-decoration: none; }
 .zoom { display: flex; align-items: center; gap: 0.3rem; }
 .zoom:empty { display: none; }
 .zoom .icon-btn { width: 30px; height: 30px; font-size: 1rem; line-height: 1; }

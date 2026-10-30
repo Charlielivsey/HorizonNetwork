@@ -155,6 +155,29 @@ test('HN Group Contracts', async () => {
     c = (await upload(hr)).body.contract;
     assert.deepEqual((await call('/api/contracts/' + c.id + '/cancel', { cookie: hr, json: {} })).body, { deleted: true }, 'a draft is deleted outright');
 
+    // Each signature is written onto the contract as soon as that person signs: into the template's signing table when
+    // there is one, otherwise on an Electronic signatures page at the end. The original stays as uploaded.
+    const { renderDocument } = require('./lib/pdf');
+    const contractPdf = await renderDocument({ title: 'Employee Agreement', body: '<p>Terms.</p><h2>Signatures</h2><table><thead><tr><th>On behalf of HN Group Limited</th><th>The Employee</th></tr></thead><tbody><tr><td>Name:</td><td>Name:</td></tr><tr><td>Signature:</td><td>Signature:</td></tr><tr><td>Date:</td><td>Date:</td></tr></tbody></table>', fields: {} },
+      { id: 'hn-group', name: 'HN Group', legal: 'HN Group Limited', logo: 'hn-group-wordmark', note: '' }, { label: 'Contract', title: 'heading', layout: '', head: [], foot: [] });
+    const pdfjs = await require('./lib/stamp').loadPdfjs();
+    const textOf = async (bytes) => { const d = await pdfjs.getDocument({ data: new Uint8Array(bytes), isEvalSupported: false, disableFontFace: true, verbosity: 0 }).promise; const pages = []; for (let i = 1; i <= d.numPages; i++) pages.push((await (await d.getPage(i)).getTextContent()).items.map((x) => x.str).join(' | ')); await d.destroy(); return pages; };
+    c = (await upload(hr, contractPdf)).body.contract;
+    await call('/api/contracts/' + c.id, { cookie: hr, method: 'PUT', json: { signers: [{ id: 'p-jo', role: 'Employee' }, { id: 'p-hr', role: 'On behalf of HN Group Limited' }, { id: 'p-sam', role: 'Witness' }] } });
+    c = (await call('/api/contracts/' + c.id + '/send', { cookie: hr, json: {} })).body.contract;
+    await open(jo, c); await sign(jo, c, 'Jo Bloggs');
+    r = await open(hr, c); assert.match(r.headers.get('content-disposition'), /signed/);
+    let pages = await textOf(r.body);
+    const base = (await textOf(contractPdf)).length;
+    assert.equal(pages.length, base, 'Sam, the witness, has no block in the table but hasn’t signed, so no extra page yet');
+    assert.match(pages[pages.length - 1], /Jo Bloggs/, 'Jo’s signature is on the contract before anyone else signs');
+    assert.doesNotMatch(pages.join(' '), /Harriet Reed/);
+    r = await call('/api/contracts/' + c.id + '/file?original', { cookie: hr }); assert.equal(crypto.createHash('sha256').update(r.body).digest('hex'), c.file.sha256, 'the original is unchanged');
+    await open(sam, c); await sign(sam, c, 'Sam Lee'); await open(hr, c); await sign(hr, c, 'Harriet Reed');
+    pages = await textOf((await open(hr, c)).body);
+    assert.equal(pages.length, base + 1, 'the witness goes on an Electronic signatures page');
+    assert.match(pages[base - 1], /Harriet Reed/); assert.match(pages[base], /Electronic signatures.*Sam Lee/);
+
     // HN Group Docs sends documents over loopback with the service secret, never through nginx.
     const importBody = (by) => JSON.stringify({ by, title: 'Employee Agreement', fileName: 'Employee Agreement.pdf', docId: crypto.randomUUID(), pdf: PDF.toString('base64') });
     const service = (json, headers = {}) => call('/api/service/import', { method: 'POST', origin: false, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + secret, ...headers }, body: json });

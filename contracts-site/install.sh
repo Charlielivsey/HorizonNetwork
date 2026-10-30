@@ -10,7 +10,7 @@ CHALLENGE_DIR=/var/www/hn-contracts-acme
 LE_DIR="/etc/letsencrypt/live/$DOMAIN"
 [ "$(id -u)" = 0 ] || { echo 'Run with sudo.'; exit 1; }
 for tool in node pm2 nginx certbot curl python3 openssl; do command -v "$tool" >/dev/null || { echo "Required tool missing: $tool"; exit 1; }; done
-for file in server.js lib/store.js lib/auth.js public/assets/contracts.js lib/certificate.js lib/pdf.js; do node --check "$SCRIPT_DIR/$file"; done
+for file in server.js lib/store.js lib/auth.js public/assets/contracts.js lib/certificate.js lib/pdf.js lib/stamp.js; do node --check "$SCRIPT_DIR/$file"; done
 # The old HN Group Documents service (retired when it became HN Group Docs) must not be left running.
 if pm2 describe hn-documents >/dev/null 2>&1; then pm2 delete hn-documents >/dev/null 2>&1 || true; pm2 save >/dev/null 2>&1 || true; echo 'Stopped the old HN Group Documents service (its data is kept).'; fi
 if python3 -c 'import socket;s=socket.socket();s.settimeout(2);exit(s.connect_ex(("127.0.0.1",5560)))'; then
