@@ -122,10 +122,14 @@ function splitParams(body) {
 function infobox(params, ctx, extra) {
   const rows = [];
   let name = '', logo = '', caption = '', image = '';
+  const named = params.find((p) => /^\s*name\s*=/.test(p)), onRegister = !(extra && extra.cls) && named ? companyOf(named.slice(named.indexOf('=') + 1).trim()) : null;
   for (const p of params) {
     const eq = p.indexOf('=');
     if (eq === -1) continue;
-    const key = p.slice(0, eq).trim(), value = p.slice(eq + 1).trim();
+    const key = p.slice(0, eq).trim();
+    let value = p.slice(eq + 1).trim();
+    // Type is the kind of company: the register's, for a company on it; "Part of …" and the like are left out.
+    if (/^type$/i.test(key)) value = onRegister ? typeOf(onRegister) : RELATION.test(value) ? '' : value;
     if (!value) continue;
     if (key === 'name') name = value;
     else if (key === 'logo') logo = value;
@@ -169,6 +173,11 @@ function statusSentence(c, n) {
   if (c.status === 'Dormant') return n + ' is dormant: it is registered but not currently trading.';
   return '';
 }
+// What kind of company it is (the user's requests, 30 October 2026): the type recorded on the register unless that
+// describes what it belongs to, otherwise what its legal name says. Never "Part of …" or "Subsidiary": the Owner,
+// Parent and Managed by rows say that.
+const RELATION = /\b(part of|subsidiary|division of|owned by|managed by|parent)\b/i;
+function typeOf(c) { return (c.type && !RELATION.test(c.type) ? c.type : '') || companyType(c.legalName); }
 function companyType(legal) {
   const n = String(legal || '').trim();
   if (/\b(plc|public limited company)$/i.test(n)) return 'Public limited company';
@@ -191,7 +200,7 @@ function companyInfobox(params, ctx) {
   // The kind of company (the user's request, 30 October 2026: "Type … should pull company type, not what it is a part
   // of"): the type recorded on the register, or, when none is recorded, what its legal name says it is. Being a
   // subsidiary is shown by the Owner and Parent rows instead.
-  add('Type', c.type || companyType(c.legalName));
+  add('Type', typeOf(c));
   add(own.length > 1 ? 'Owners' : 'Owner', own.map((o) => ownerText(o, hasClasses(c))).join('<br>'));
   if (hasClasses(c)) add('Share classes', ['A', 'B', 'C'].map((k) => 'Class ' + k + ' ' + c.shareClasses['class' + k] + '%').join('<br>'));
   const ctrl = own.find((o) => o.votingControl);
@@ -209,7 +218,8 @@ function companyInfobox(params, ctx) {
   add('Company number', c.number);
   add('Registered office', c.registeredOffice);
   add('Key people', (c.officers || []).map((o) => o.name + (o.role ? ' (' + o.role + ')' : '')).join('<br>'));
-  for (const p of extras) { const k = p.slice(0, p.indexOf('=')).trim(); if (!['industry', 'logo', 'name'].includes(k.toLowerCase())) rows.push(p); }
+  const FROM_REGISTER = ['industry', 'logo', 'name', 'type', 'parent', 'owner', 'owners', 'managed by', 'status', 'founded', 'company number', 'registered office', 'key people', 'subsidiaries', 'divisions', 'email domain'];
+  for (const p of extras) { const k = p.slice(0, p.indexOf('=')).trim(); if (!FROM_REGISTER.includes(k.toLowerCase().replace(/_/g, ' '))) rows.push(p); }
   add('Email domain', c.emailDomain);
   if (!given.website) add('Website', webLink(c.website));
   const logo = (companies.logo && companies.logo(c)) || (given.logo ? findImage(given.logo) : null);

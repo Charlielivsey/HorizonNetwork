@@ -1,10 +1,8 @@
 title: Horizon Development
 ---
 {{Short description|Software development business of Horizon Network}}
-{{Infobox
-| name = Horizon Development
+{{Company infobox|Horizon Development
 | logo = horizon-development-logo.svg
-| Type = Part of [[Horizon Network]]
 | Parent = [[Horizon Network]]
 | Industry = Software development
 | Services = Web applications<br>Custom software<br>From concept to deployment
