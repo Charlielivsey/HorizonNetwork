@@ -11,8 +11,12 @@ copy of hngroup-site's) plus `contracts.css` for the app's own parts.
   sign what they're sent. Nobody can send, sign or decline while an administrator is logged in as them.
 - **Sending**: upload a PDF (or press **Send for signing** in HN Group Docs, which hands the PDF over loopback to
   `/api/service/import` with the shared service secret; refused through nginx), choose who signs from the staff list
-  (each a profile of a sign-in account; any profile of that account can sign), say what each signs as, choose **any
+  (each a profile of a sign-in account; any profile of that account can sign), choose what each signs as from a list (`ROLES` in lib/store.js: Employee, On behalf of HN Group Limited or
+  another group company, Witness), choose **any
   order** or **one after another**, an optional date to sign by and a message, then send. Drafts can be deleted.
+- **Reading**: the PDF is drawn on the page by PDF.js 4.10.38 (`public/assets/pdfjs/`, Apache-2.0, LICENSE.txt
+  beside it), with zoom and a page counter, the same in every browser and in light and dark; if it can't open a PDF
+  the browser's own viewer is used.
 - **Signing**: open the contract (recorded; signing is refused until then), type your full name and confirm. Each
   signature is tied to the PDF's SHA-256 fingerprint, with the time, account, email and IP address. Signers can
   decline with a reason. The sender can **remind** the people still to sign (shown on their list; nothing is emailed)

@@ -139,6 +139,11 @@ function create(u, { title, pdf, fileName, source }) {
   return c;
 }
 
+// What each person signs as, chosen from a fixed list: the employee, or someone signing on behalf of the employer (HN
+// Group Limited, or the group company named as employer in a company contract), or a witness.
+const ROLES = ['Employee', 'On behalf of HN Group Limited', 'On behalf of Horizon Network Limited', 'On behalf of Horizon Media Group Limited',
+  'On behalf of Horizon Advertising Limited', 'On behalf of HN Group Management Limited', 'Witness'];
+
 // A draft's title, message, signers, signing order and date to sign by. Signers come from the staff list only.
 function update(id, u, input, directory) {
   const c = get(id, u);
@@ -160,7 +165,10 @@ function update(id, u, input, directory) {
       if (!p) throw fail(400, 'Choose everyone who signs from the staff list.');
       if (seen.has(p.id)) throw fail(400, p.name + ' is on the list twice.');
       seen.add(p.id);
-      return { id: p.id, accountIds: p.accountIds || [], name: p.name, jobTitle: p.jobTitle, company: p.company, role: clean(x.role, 80), status: 'waiting' };
+      // A role typed in before the list existed stays as it was; anything new comes from the list.
+      const role = clean(x.role, 80), before = c.signers.find((s) => s.id === p.id);
+      if (!ROLES.includes(role) && !(role && before && before.role === role)) throw fail(400, 'Choose what ' + p.name + ' signs as.');
+      return { id: p.id, accountIds: p.accountIds || [], name: p.name, jobTitle: p.jobTitle, company: p.company, role, status: 'waiting' };
     });
   }
   save(); return c;
@@ -235,4 +243,4 @@ const fileOf = (c) => readBlob(c.file.blob);
 const certificateOf = (c) => (c.certificate ? readBlob(c.certificate) : null);
 
 module.exports = { init, writable, createSession, session, updateSession, endSession, get, view, lists, create, update, send, opened, sign, decline, remind, cancel,
-  setCertificate, fileOf, certificateOf, canSend, canManage, MAX_PDF, get db() { return db; } };
+  setCertificate, fileOf, certificateOf, canSend, canManage, MAX_PDF, ROLES, get db() { return db; } };

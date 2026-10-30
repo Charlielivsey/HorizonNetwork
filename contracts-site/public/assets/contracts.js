@@ -139,24 +139,90 @@
   }
 
   // ---------- A contract ----------
+  // The PDF is drawn on the page by PDF.js (kept in /assets/pdfjs), so it looks the same in every browser, in light and
+  // dark, without the browser's own PDF toolbar. If PDF.js can't open it, the browser's viewer is used instead.
+  let pdfjs = null;
+  async function loadPdfjs() {
+    if (!pdfjs) { pdfjs = await import('/assets/pdfjs/pdf.min.mjs'); pdfjs.GlobalWorkerOptions.workerSrc = '/assets/pdfjs/pdf.worker.min.mjs'; }
+    return pdfjs;
+  }
+  function pdfViewer(c, bar) {
+    const url = '/api/contracts/' + c.id + '/file';
+    const pages = el('div', { class: 'pages', tabindex: '0', role: 'region', 'aria-label': 'The contract: ' + c.title }, el('div', { class: 'pages-loading' }, el('span', { class: 'spinner', 'aria-hidden': 'true' }), 'Opening the contract…'));
+    const pageNo = el('span', { class: 'page-no', 'aria-live': 'polite' });
+    const zoomText = el('span', { class: 'zoom-text', text: 'Fit' });
+    let doc = null, sizes = [], slots = [], zoom = 1, observer = null;
+    const zoomBy = (f) => { zoom = Math.min(3, Math.max(0.5, Math.round(zoom * f * 100) / 100)); layout(); };
+    bar.querySelector('.zoom').append(
+      el('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Zoom out', onclick: () => zoomBy(1 / 1.2) }, '−'), zoomText,
+      el('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Zoom in', onclick: () => zoomBy(1.2) }, '+'),
+      el('button', { class: 'btn-text', type: 'button', onclick: () => { zoom = 1; layout(); } }, 'Fit width'), pageNo);
+    async function draw(slot) {
+      if (slot.drawn === slot.width || !doc) return;
+      const width = slot.drawn = slot.width, page = await doc.getPage(slot.n);
+      const ratio = Math.min(window.devicePixelRatio || 1, 2), view = page.getViewport({ scale: width / sizes[slot.n - 1].width * ratio });
+      const canvas = el('canvas', { width: Math.floor(view.width), height: Math.floor(view.height), 'aria-hidden': 'true' });
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport: view }).promise;
+      if (slot.drawn === width) slot.node.replaceChildren(canvas);
+    }
+    function layout() {
+      if (!doc) return;
+      const fit = Math.max(260, pages.clientWidth - 48);
+      zoomText.textContent = zoom === 1 ? 'Fit' : Math.round(zoom * 100) + '%';
+      for (const slot of slots) {
+        slot.width = Math.round(Math.min(fit * zoom, 2400));
+        slot.node.style.width = slot.width + 'px';
+        slot.node.style.height = Math.round(slot.width * sizes[slot.n - 1].height / sizes[slot.n - 1].width) + 'px';
+        if (slot.visible) draw(slot);
+      }
+    }
+    function track() {
+      const top = pages.getBoundingClientRect().top + pages.clientHeight / 3;
+      let n = 1; for (const slot of slots) if (slot.node.getBoundingClientRect().top <= top) n = slot.n;
+      pageNo.textContent = 'Page ' + n + ' of ' + slots.length;
+    }
+    (async () => {
+      try {
+        const lib = await loadPdfjs();
+        doc = await lib.getDocument({ url, isEvalSupported: false, withCredentials: true }).promise;
+        for (let i = 1; i <= doc.numPages; i++) { const v = (await doc.getPage(i)).getViewport({ scale: 1 }); sizes.push({ width: v.width, height: v.height }); }
+        observer = new IntersectionObserver((entries) => { for (const e of entries) { const slot = slots.find((x) => x.node === e.target); slot.visible = e.isIntersecting; if (e.isIntersecting) draw(slot); } }, { root: pages, rootMargin: '400px 0px' });
+        slots = sizes.map((_, i) => ({ n: i + 1, node: el('div', { class: 'sheet', 'aria-label': 'Page ' + (i + 1) }), drawn: 0, width: 0, visible: false }));
+        pages.replaceChildren(...slots.map((x) => x.node));
+        slots.forEach((x) => observer.observe(x.node));
+        layout(); track();
+        pages.addEventListener('scroll', track, { passive: true });
+        new ResizeObserver(() => layout()).observe(pages);
+      } catch (e) {
+        bar.querySelector('.zoom').replaceChildren();
+        pages.replaceWith(el('iframe', { src: url + '#toolbar=0&navpanes=0&view=FitH', title: 'The contract: ' + c.title }));
+      }
+    })();
+    return pages;
+  }
+
   async function contractPage(id) {
     setNav('');
     const { contract: c } = await api('/api/contracts/' + id);
-    const viewer = el('section', { class: 'viewer' },
-      el('div', { class: 'viewer-bar' }, el('span', {}, el('strong', { text: c.file.name }), el('span', { class: 'muted small', text: ' · ' + c.file.pages + ' page' + (c.file.pages === 1 ? '' : 's') })),
-        el('span', { class: 'actions' }, el('a', { class: 'btn btn-small btn-ghost', href: '/api/contracts/' + c.id + '/file?download', download: true, text: 'Download' }),
-          c.certificate ? el('a', { class: 'btn btn-small btn-primary', href: '/api/contracts/' + c.id + '/certificate?download', download: true, text: 'Signing certificate' }) : null)));
-    const frame = () => el('iframe', { src: '/api/contracts/' + c.id + '/file', title: 'The contract: ' + c.title });
+    const bar = el('div', { class: 'viewer-bar' },
+      el('span', { class: 'file' }, el('span', { class: 'doc-icon small', 'aria-hidden': 'true' }), el('span', {}, el('strong', { text: c.file.name }), el('small', { text: c.file.pages + ' page' + (c.file.pages === 1 ? '' : 's') }))),
+      el('span', { class: 'zoom' }),
+      el('span', { class: 'actions' }, el('a', { class: 'btn btn-small btn-ghost', href: '/api/contracts/' + c.id + '/file?download', download: true, text: 'Download' }),
+        c.certificate ? el('a', { class: 'btn btn-small btn-primary', href: '/api/contracts/' + c.id + '/certificate?download', download: true, text: 'Signing certificate' }) : null));
+    const viewer = el('section', { class: 'viewer' }, bar);
     const side = el('aside', { class: 'side' });
     // A signer has to open the contract before they can sign it; opening it is recorded.
-    if (c.can.mustOpen) viewer.append(el('div', { class: 'viewer-closed' }, el('span', { class: 'doc-icon', 'aria-hidden': 'true' }), el('h3', { text: 'Read the contract before signing' }),
+    if (c.can.mustOpen) viewer.append(el('div', { class: 'viewer-closed' }, el('span', { class: 'doc-icon', 'aria-hidden': 'true' }), el('h3', { text: 'Read the contract before you sign' }),
       el('p', { class: 'muted', text: 'Opening it is recorded on the contract’s history.' }),
-      el('button', { class: 'btn btn-primary', type: 'button', onclick: () => { viewer.querySelector('.viewer-closed').replaceWith(frame()); setTimeout(() => refreshSide(c.id, side), 1200); } }, 'Open the contract')));
-    else viewer.append(frame());
-    const tags = el('p', { class: 'button-row' }, tag(STATUS[c.status][0], STATUS[c.status][1]), c.overdue ? tag('Overdue', 'bad') : null, c.source.kind === 'docs' ? tag('From HN Group Docs', 'plain') : null,
+      el('button', { class: 'btn btn-primary', type: 'button', onclick: () => { viewer.querySelector('.viewer-closed').replaceWith(pdfViewer(c, bar)); setTimeout(() => refreshSide(c.id, side), 1500); } }, 'Open the contract')));
+    else viewer.append(pdfViewer(c, bar));
+    const tags = el('div', { class: 'tags' }, tag(STATUS[c.status][0], STATUS[c.status][1]), c.overdue ? tag('Overdue', 'bad') : null, c.source.kind === 'docs' ? tag('From HN Group Docs', 'plain') : null,
       c.order === 'sequence' ? tag('Signed in order', 'plain') : null, c.dueDate ? tag('Sign by ' + day(c.dueDate), c.overdue ? 'bad' : 'plain') : null);
-    const pageHead = head(c.mine ? 'You sent this' : 'From ' + c.sender.name, c.title, null, tags);
-    pageHead.querySelector('.eyebrow').prepend(face(c.sender.id, c.sender.name, 'tiny'));
+    const back = c.status === 'draft' ? ['/drafts', 'Drafts'] : c.can.sign ? ['/', 'To sign'] : ['completed', 'declined', 'cancelled'].includes(c.status) ? ['/completed', 'Finished'] : ['/waiting', 'In progress'];
+    const pageHead = el('div', { class: 'contract-head' },
+      el('a', { class: 'back', href: back[0], text: '← ' + back[1] }),
+      el('h1', { text: c.title }),
+      el('div', { class: 'byline' }, face(c.sender.id, c.sender.name, 'tiny'), el('span', { text: (c.mine ? 'You' : c.sender.name) + (c.sentAt ? ' sent this on ' + day(c.sentAt) : ' uploaded this on ' + day(c.createdAt)) }), tags));
     main.replaceChildren(section(pageHead, el('div', { class: 'contract' }, viewer, side)));
     fillSide(c, side);
   }
@@ -189,7 +255,7 @@
     return el('div', { class: 'card' }, el('h2', { text: c.order === 'sequence' ? 'Signing, in order' : 'Signing' }),
       c.signers.map((s) => el('div', { class: 'signer' },
         el('span', { class: 'face-wrap' }, face(s.id, s.name), c.order === 'sequence' ? el('span', { class: 'position', text: s.position }) : null),
-        el('span', {}, el('strong', { text: s.name + (s.me ? ' (you)' : '') }), el('small', { text: [s.role, s.jobTitle].filter(Boolean).join(' · ') }),
+        el('span', {}, el('strong', { text: s.name + (s.me ? ' (you)' : '') }), s.role ? el('span', { class: 'role-chip', text: s.role }) : null, el('small', { text: [s.jobTitle, s.company].filter(Boolean).join(' · ') }),
           s.status === 'signed' ? el('span', { class: 'signature', text: s.signature }) : null,
           s.status === 'signed' ? el('small', { text: 'Signed ' + when(s.signedAt) }) : null,
           s.status === 'declined' ? el('small', { text: 'Declined: ' + s.reason }) : null,
@@ -221,49 +287,62 @@
       } }, 'Decline')));
   }
 
-  // A draft: title, message, who signs (from the staff list, with what they sign as), the order and a date to sign by.
+  // A draft: who signs (from the staff list, each with what they sign as, chosen from a list), the order, the title, a
+  // date to sign by and a message.
+  function roleSelect(s) {
+    const roles = me.roles.includes(s.role) || !s.role ? me.roles : [s.role, ...me.roles];
+    const pick = el('select', { 'aria-label': 'What ' + s.name + ' signs as', onchange: (e) => { s.role = e.target.value; } },
+      el('option', { value: '', text: 'Choose what they sign as', disabled: true, selected: !s.role }),
+      el('optgroup', { label: 'Signs as' }, roles.filter((r) => !r.startsWith('On behalf of ')).map((r) => el('option', { value: r, text: r, selected: r === s.role }))),
+      el('optgroup', { label: 'Signs for the employer' }, roles.filter((r) => r.startsWith('On behalf of ')).map((r) => el('option', { value: r, text: r, selected: r === s.role }))));
+    return el('label', { class: 'role' }, el('span', { text: 'Signs as' }), pick);
+  }
   function draftCard(c) {
     const list = c.signers.map((s) => ({ id: s.id, name: s.name, jobTitle: s.jobTitle, company: s.company, role: s.role }));
     const title = el('input', { id: 'c-title', value: c.title, maxlength: 160 });
     const message = el('textarea', { id: 'c-message', maxlength: 1000, rows: 3, placeholder: 'Optional. Everyone who signs sees it.' }); message.value = c.message || '';
     const due = el('input', { id: 'c-due', type: 'date', value: c.dueDate || '', min: new Date().toISOString().slice(0, 10) });
     const orderAny = el('input', { type: 'radio', name: 'order', value: 'any', checked: c.order !== 'sequence' }), orderSeq = el('input', { type: 'radio', name: 'order', value: 'sequence', checked: c.order === 'sequence' });
-    const search = el('input', { id: 'c-search', type: 'search', placeholder: 'Search the staff list', autocomplete: 'off', 'aria-expanded': 'false', role: 'combobox', 'aria-controls': 'c-results' });
+    const search = el('input', { id: 'c-search', type: 'search', placeholder: 'Search the staff list by name or job', autocomplete: 'off', 'aria-expanded': 'false', role: 'combobox', 'aria-controls': 'c-results' });
     const results = el('div', { class: 'results', id: 'c-results', role: 'listbox', hidden: true });
     const chosen = el('div', { class: 'chosen' });
     const drawChosen = () => chosen.replaceChildren(...(list.length ? list.map((s, i) => el('div', { class: 'chosen-row' },
-      face(s.id, s.name),
-      el('span', {}, el('strong', { text: s.name }), el('small', { text: [s.jobTitle, s.company].filter(Boolean).join(', ') })),
+      el('span', { class: 'face-wrap' }, face(s.id, s.name, 'small'), el('span', { class: 'position', text: i + 1 })),
+      el('span', { class: 'who-text' }, el('strong', { text: s.name }), el('small', { text: [s.jobTitle, s.company].filter(Boolean).join(' · ') })),
       el('span', { class: 'order-buttons' },
         el('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Move ' + s.name + ' up', disabled: i === 0, onclick: () => { [list[i - 1], list[i]] = [list[i], list[i - 1]]; drawChosen(); } }, '↑'),
         el('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Move ' + s.name + ' down', disabled: i === list.length - 1, onclick: () => { [list[i + 1], list[i]] = [list[i], list[i + 1]]; drawChosen(); } }, '↓'),
-        el('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Remove ' + s.name, onclick: () => { list.splice(i, 1); drawChosen(); } }, '×')),
-      el('input', { value: s.role || '', placeholder: 'Signs as, for example Employee', 'aria-label': 'What ' + s.name + ' signs as', oninput: (e) => { s.role = e.target.value; } })))
-      : [el('p', { class: 'muted small', text: 'Nobody yet. Search for each person who needs to sign, including anyone signing on behalf of the company.' })]));
+        el('button', { class: 'icon-btn remove', type: 'button', 'aria-label': 'Remove ' + s.name, onclick: () => { list.splice(i, 1); drawChosen(); } }, '×')),
+      roleSelect(s)))
+      : [el('div', { class: 'chosen-empty' }, el('strong', { text: 'Nobody yet' }), el('span', { text: 'Add the employee and the person signing on behalf of HN Group.' }))]));
     drawChosen();
     search.addEventListener('input', async () => {
       try { people = people || (await api('/api/people')).people; } catch (e) { toast(e.message, true); return; }
       const q = search.value.trim().toLowerCase();
       const hits = q ? people.filter((p) => !list.some((s) => s.id === p.id) && (p.name + ' ' + p.jobTitle + ' ' + p.company).toLowerCase().includes(q)).slice(0, 8) : [];
-      results.replaceChildren(...hits.map((p) => el('button', { type: 'button', role: 'option', onclick: () => { list.push({ ...p, role: '' }); search.value = ''; results.hidden = true; search.setAttribute('aria-expanded', 'false'); drawChosen(); search.focus(); } },
+      // The first person added is usually the employee, and anyone after them signs for the employer.
+      results.replaceChildren(...hits.map((p) => el('button', { type: 'button', role: 'option', onclick: () => { list.push({ ...p, role: list.some((s) => s.role === 'Employee') ? 'On behalf of HN Group Limited' : 'Employee' }); search.value = ''; results.hidden = true; search.setAttribute('aria-expanded', 'false'); drawChosen(); search.focus(); } },
         face(p.id, p.name, 'small'), el('span', {}, el('strong', { text: p.name }), el('small', { text: [p.jobTitle, p.company].filter(Boolean).join(' · ') })))));
       results.hidden = !hits.length; search.setAttribute('aria-expanded', String(!!hits.length));
     });
     const save = () => api('/api/contracts/' + c.id, { method: 'PUT', json: { title: title.value, message: message.value, dueDate: due.value, order: orderSeq.checked ? 'sequence' : 'any', signers: list.map((s) => ({ id: s.id, role: s.role || '' })) } });
-    return el('div', { class: 'card' }, el('h2', { text: 'Who signs it?' }),
-      el('p', { class: 'muted small', text: 'Everyone signs in with their own HN Group Auth account to read and sign it. Nobody can sign until you send it.' }),
-      el('label', { for: 'c-title', text: 'Title' }), title,
-      el('div', { class: 'picker' }, el('label', { for: 'c-search', text: 'Add someone' }), search, results), chosen,
-      el('p', { class: 'eyebrow', text: 'Order' }),
-      el('div', { class: 'radio-row' }, el('label', {}, orderAny, el('span', {}, 'Any order', el('small', { text: 'Everyone can sign straight away.' }))),
-        el('label', {}, orderSeq, el('span', {}, 'One after another', el('small', { text: 'Each person signs after the one above them, top to bottom.' })))),
-      el('label', { for: 'c-due', text: 'Sign by', }, el('span', { class: 'optional', text: ' (optional)' })), due,
-      el('label', { for: 'c-message', text: 'Message' }, el('span', { class: 'optional', text: ' (optional)' })), message,
-      el('div', { class: 'button-row' },
+    const part = (n, heading, ...kids) => el('div', { class: 'part' }, el('h3', {}, el('span', { class: 'step', text: n }), heading), ...kids);
+    return el('div', { class: 'card draft' },
+      el('div', { class: 'draft-head' }, el('h2', { text: 'Get it signed' }), el('p', { text: 'Each person signs in with their own HN Group Auth account to read and sign it. Nobody can see it until you send it.' })),
+      part(1, 'Who signs', el('div', { class: 'picker' }, search, results), chosen),
+      part(2, 'Order',
+        el('div', { class: 'segmented' }, el('label', {}, orderAny, el('span', {}, el('strong', { text: 'Any order' }), el('small', { text: 'Everyone can sign at once' }))),
+          el('label', {}, orderSeq, el('span', {}, el('strong', { text: 'In order' }), el('small', { text: 'Top to bottom, one at a time' }))))),
+      part(3, 'Details',
+        el('label', { for: 'c-title', text: 'Title' }), title,
+        el('label', { for: 'c-due', text: 'Sign by' }, el('span', { class: 'optional', text: ' (optional)' })), due,
+        el('label', { for: 'c-message', text: 'Message' }, el('span', { class: 'optional', text: ' (optional)' })), message),
+      el('div', { class: 'draft-foot' },
         el('button', { class: 'btn btn-ghost btn-small', type: 'button', onclick: async () => { try { await save(); toast('Draft saved.'); } catch (e) { toast(e.message, true); } } }, 'Save draft'),
         el('button', { class: 'btn btn-primary btn-small', type: 'button', onclick: async () => {
           if (!list.length) return toast('Add at least one person to sign it.', true);
-          const names = list.map((s) => s.name).join(', ');
+          const missing = list.find((s) => !s.role); if (missing) return toast('Choose what ' + missing.name + ' signs as.', true);
+          const names = list.map((s) => s.name + ' (' + s.role.replace(/^On behalf of /, 'for ') + ')').join(', ');
           if (!(await ask('Send for signing?', names + (list.length === 1 ? ' will' : ' will each') + ' be able to sign it with their HN Group Auth account' + (orderSeq.checked ? ', in that order' : '') + '. You can’t change it after this.', 'Send'))) return;
           try { await save(); await api('/api/contracts/' + c.id + '/send', { json: {} }); toast('Sent for signing.'); route(); } catch (e) { toast(e.message, true); }
         } }, 'Send for signing')));

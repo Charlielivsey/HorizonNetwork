@@ -126,7 +126,7 @@ async function api(req, res, url) {
   const user = who.user;
   const pic = /^\/api\/picture\/([A-Za-z0-9_-]{1,64})$/.exec(route);
   if (pic && method === 'GET') return picture(res, pic[1], who);
-  if (route === '/api/me' && method === 'GET') return send(res, 200, { user: { id: user.id, displayName: user.displayName, fullName: user.fullName, jobTitle: user.jobTitle, impersonated: user.impersonated }, canSend: store.canSend(user), canManage: store.canManage(user) });
+  if (route === '/api/me' && method === 'GET') return send(res, 200, { user: { id: user.id, displayName: user.displayName, fullName: user.fullName, jobTitle: user.jobTitle, impersonated: user.impersonated }, canSend: store.canSend(user), canManage: store.canManage(user), roles: store.ROLES });
   if (route === '/api/contracts' && method === 'GET') return send(res, 200, store.lists(user));
   if (route === '/api/contracts' && method === 'POST') {
     if (!store.canSend(user)) throw fail(403, 'You need the “Send contracts for signing” permission to upload contracts.');
@@ -162,7 +162,7 @@ async function api(req, res, url) {
   throw fail(404, 'Not found.');
 }
 
-const TYPES = { '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.html': 'text/html; charset=utf-8', '.txt': 'text/plain; charset=utf-8' };
+const TYPES = { '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.html': 'text/html; charset=utf-8', '.txt': 'text/plain; charset=utf-8' };
 function staticFile(res, rel) {
   const full = path.join(PUBLIC, rel);
   if (!full.startsWith(PUBLIC + path.sep) || !fs.existsSync(full) || !fs.statSync(full).isFile()) return false;

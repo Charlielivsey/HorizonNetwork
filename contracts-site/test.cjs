@@ -101,6 +101,9 @@ test('HN Group Contracts', async () => {
     assert.equal((await call('/api/contracts/' + c.id, { cookie: hr, method: 'PUT', json: { dueDate: '2001-01-01' } })).status, 400, 'not in the past');
     assert.equal((await call('/api/contracts/' + c.id, { cookie: sam, method: 'PUT', json: { signers: [{ id: 'p-sam' }] } })).status, 404, 'only the sender edits it');
     assert.equal((await call('/api/contracts/' + c.id + '/send', { cookie: hr, json: {} })).status, 400, 'needs someone to sign');
+    assert.equal((await call('/api/contracts/' + c.id, { cookie: hr, method: 'PUT', json: { signers: [{ id: 'p-jo', role: 'Chief Sandwich Officer' }] } })).status, 400, 'roles come from the list');
+    assert.equal((await call('/api/contracts/' + c.id, { cookie: hr, method: 'PUT', json: { signers: [{ id: 'p-jo' }] } })).status, 400, 'everyone needs a role');
+    assert.ok((await call('/api/me', { cookie: hr })).body.roles.includes('On behalf of HN Group Limited'));
     r = await call('/api/contracts/' + c.id, { cookie: hr, method: 'PUT', json: { message: 'Please sign by Friday.', order: 'sequence', dueDate: tomorrow(), signers: [{ id: 'p-jo', role: 'Employee' }, { id: 'p-hr', role: 'On behalf of HN Group Limited' }] } });
     assert.equal(r.status, 200); assert.deepEqual(r.body.contract.signers.map((s) => s.name), ['Jo', 'Harriet']); assert.equal(r.body.contract.order, 'sequence');
     c = (await call('/api/contracts/' + c.id + '/send', { cookie: hr, json: {} })).body.contract;
@@ -141,7 +144,7 @@ test('HN Group Contracts', async () => {
 
     // Any order, signing from another profile of the same sign-in account, declining and cancelling.
     c = (await upload(hr)).body.contract;
-    await call('/api/contracts/' + c.id, { cookie: hr, method: 'PUT', json: { signers: [{ id: 'p-jo-2' }, { id: 'p-sam' }] } });
+    await call('/api/contracts/' + c.id, { cookie: hr, method: 'PUT', json: { signers: [{ id: 'p-jo-2', role: 'Employee' }, { id: 'p-sam', role: 'Witness' }] } });
     await call('/api/contracts/' + c.id + '/send', { cookie: hr, json: {} });
     assert.equal((await call('/api/contracts', { cookie: jo })).body.toSign.length, 1, 'Jo’s other profile, same account');
     assert.equal((await call('/api/contracts', { cookie: sam })).body.toSign.length, 1, 'any order: Sam can sign straight away');
