@@ -286,6 +286,8 @@ function companyCards(ctx) {
   const R = companies.register, order = [], seen = new Set();
   const walk = (c) => { if (seen.has(c.slug)) return; seen.add(c.slug); order.push(c); R.children(c).forEach(walk); };
   R.roots().forEach(walk);
+  ctx.cards = ctx.cards || new Set();
+  for (const c of order) ctx.cards.add(normaliseTitle(R.displayName(c)).toLowerCase());
   return order.map((c) => { const n = R.displayName(c), logo = companies.logo && companies.logo(c), blurb = companies.blurb ? companies.blurb(c) : ''; ctx.links.add(n);
     return '<a class="company-card' + (inactive(c) ? ' status-' + esc(statusKey(c)) : '') + '" href="' + esc(pageUrl(n)) + '"><span class="cc-logo">' + (logo ? pictureHtml(logo, n) : '<span class="cc-initials">' + esc(n.split(/\s+/).map((w) => w[0]).join('').slice(0, 3)) + '</span>') + '</span><span class="cc-name">' + esc(n) + (inactive(c) ? ' <span class="co-status status-' + esc(statusKey(c)) + '">' + esc(statusLabel(c)) + '</span>' : '') + '</span>' + (blurb ? '<span class="cc-blurb">' + esc(blurb) + '</span>' : '') + '</a>'; }).join('');
 }
@@ -345,6 +347,9 @@ function render(source, opts) {
     if (name === 'company card') {
       // {{Company card|Page|logo.svg|Short description}}
       const page = normaliseTitle(params[1] || ''), logo = (params[2] || '').trim(), blurb = (params[3] || '').trim();
+      // A company the register's {{Company cards}} already shows on this page isn't shown twice.
+      if (ctx.cards && ctx.cards.has(page.toLowerCase())) return '';
+      ctx.cards = ctx.cards || new Set(); ctx.cards.add(page.toLowerCase());
       ctx.links.add(page);
       return keepBlock('<a class="company-card" href="' + esc(pageUrl(page)) + '"><span class="cc-logo">' + imageHtml(logo, page) + '</span><span class="cc-name">' + esc(page) + '</span>' + (blurb ? '<span class="cc-blurb">' + esc(blurb) + '</span>' : '') + '</a>');
     }
