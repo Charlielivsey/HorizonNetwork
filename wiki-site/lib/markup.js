@@ -138,6 +138,13 @@ function infobox(params, ctx, extra) {
     else if (key.startsWith('header')) rows.push('<tr><th colspan="2" class="ib-header">' + inline(value, ctx) + '</th></tr>');
     else rows.push('<tr><th scope="row">' + esc(key.replace(/_/g, ' ')) + '</th><td>' + value.split(/\s*<br>\s*|\n/).map((v) => inline(v, ctx)).join('<br>') + '</td></tr>');
   }
+  if (!(extra && extra.cls)) {
+    const keyOf = (r) => ((/<th scope="row">([^<]*)<\/th>/.exec(r) || [])[1] || '').toLowerCase();
+    let at = rows.findIndex((r) => keyOf(r) === 'parent'), parentRow = at >= 0 ? rows.splice(at, 1)[0] : '';
+    const reg = onRegister && onRegister.parent && companies.register.bySlug(onRegister.parent);
+    if (reg) parentRow = '<tr><th scope="row">Parent</th><td>' + inline('[[' + companies.register.displayName(reg) + ']]', ctx) + '</td></tr>';
+    if (parentRow) { const kp = rows.findIndex((r) => keyOf(r) === 'key people'); rows.splice(kp >= 0 ? kp + 1 : rows.length, 0, parentRow); }
+  }
   const logoHtml = extra && extra.logoHtml ? extra.logoHtml : logo ? imageHtml(logo, name) : '';
   return '<table class="infobox' + (extra && extra.cls ? ' ' + extra.cls : '') + '">' + (name ? '<caption>' + esc(name) + '</caption>' : '') +
     (logoHtml ? '<tr><td colspan="2" class="ib-logo">' + logoHtml + '</td></tr>' : '') +
@@ -207,7 +214,6 @@ function companyInfobox(params, ctx) {
   const sharing = own.filter((o) => o.sharedVotingControl), nameOf = (o) => (o.company ? link(o.name) : o.name);
   if (ctrl) add('Voting control', nameOf(ctrl) + ' (' + ctrl.votes + '% of votes, through Class C shares)');
   else if (sharing.length > 1) add('Voting control', 'Shared by ' + listWords(sharing.map(nameOf)) + ' (' + Math.round(sharing.reduce((n, o) => n + o.votes, 0) * 100) / 100 + '% of votes together, through Class C shares)');
-  if (parent && !own.some((o) => o.company && o.company.slug === parent.slug)) add('Parent', link(R.displayName(parent)));
   if (manager) add('Managed by', link(R.displayName(manager)));
   add('Subsidiaries', R.children(c).map((x) => link(R.displayName(x))).join('<br>'));
   add('Manages', R.managedBy(c).filter((x) => x.parent !== c.slug).map((x) => link(R.displayName(x))).join('<br>'));
@@ -218,6 +224,8 @@ function companyInfobox(params, ctx) {
   add('Company number', c.number);
   add('Registered office', c.registeredOffice);
   add('Key people', (c.officers || []).map((o) => o.name + (o.role ? ' (' + o.role + ')' : '')).join('<br>'));
+  // The parent company always has its own row, under Key people (the user's request, 30 October 2026).
+  if (parent) add('Parent', link(R.displayName(parent)));
   const FROM_REGISTER = ['industry', 'logo', 'name', 'type', 'parent', 'owner', 'owners', 'managed by', 'status', 'founded', 'company number', 'registered office', 'key people', 'subsidiaries', 'divisions', 'email domain'];
   for (const p of extras) { const k = p.slice(0, p.indexOf('=')).trim(); if (!FROM_REGISTER.includes(k.toLowerCase().replace(/_/g, ' '))) rows.push(p); }
   add('Email domain', c.emailDomain);

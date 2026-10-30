@@ -28,3 +28,17 @@ test('an infobox Type row is the kind of company, never what it belongs to', () 
   assert.equal(typeRow(html('{{Infobox\n| name = Somewhere else\n| Type = Subsidiary of X\n}}')), undefined);
   assert.equal(typeRow(html('{{Infobox\n| name = Somewhere else\n| Type = Partnership\n}}')), 'Partnership');
 });
+
+test('every company infobox has its Parent row, under Key people', () => {
+  const list = [{ slug: 'hng', name: 'HN Group', legalName: 'HN Group Limited' }, { slug: 'hn', name: 'Horizon Network', legalName: 'Horizon Network Limited', parent: 'hng', officers: [{ name: 'Charlie Livsey', role: 'Managing director' }] }];
+  const R = { roots: () => [list[0]], children: (c) => list.filter((x) => x.parent === c.slug), managedBy: () => [], displayName: (c) => c.name, registerUrl: () => 'https://companies.hngroup.org.uk/', find: (n) => list.find((c) => c.name === n) || null, bySlug: (s) => list.find((c) => c.slug === s) || null,
+    owners: (c) => (c.slug === 'hn' ? [{ name: 'HN Group', company: list[0], share: '70%' }] : []) };
+  markup.setCompanySource({ register: R, logo: () => null, blurb: () => '' });
+  const keys = (src) => { const r = markup.render(src, {}); return [...String(r.html || r).matchAll(/<th scope="row">([^<]*)<\/th>/g)].map((m) => m[1]); };
+  // Even when the parent is also an owner, it has its own row, straight after Key people.
+  const k = keys('{{Company infobox|Horizon Network}}');
+  assert.equal(k[k.indexOf('Key people') + 1], 'Parent');
+  // A plain {{Infobox}}: the Parent row moves under Key people, and a register company's parent comes from the register.
+  const p = keys('{{Infobox\n| name = Horizon Network\n| Parent = Someone\n| Founded = 2025\n| Key people = A\n| Website = x\n}}');
+  assert.deepEqual(p, ['Founded', 'Key people', 'Parent', 'Website']);
+});
