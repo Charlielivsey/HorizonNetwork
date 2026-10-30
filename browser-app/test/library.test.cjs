@@ -22,7 +22,7 @@ test('bookmarks add once, rename, reorder, toggle and reject non-websites',()=>{
 
 test('suggestions rank bookmarks, then frequent and recent history, and leave out search pages',()=>{const dir=temp();let now=1e12;try{
  const lib=new Library({dir,now:()=>now});for(let i=0;i<3;i++){lib.visit('https://staff.hngroup.org.uk/#people','Staff portal');now+=31*60000;}
- lib.visit('https://www.google.com/search?q=staff');lib.visit('https://status.hngroup.org.uk/','HN Group Status');lib.addBookmark('https://support.hngroup.org.uk/','Support');
+ lib.visit('https://www.google.com/search?q=staff');lib.visit('https://status.hngroup.org.uk/','HN Group Status');lib.addBookmark('https://hngroup.org.uk/support','Support');
  const s=lib.suggest('s');assert.equal(s[0].kind,'bookmark');assert.ok(s.some(x=>x.url.startsWith('https://staff.')));assert.ok(!s.some(x=>x.url.includes('google.com/search')));
  assert.deepEqual(lib.suggest('staff portal').map(x=>x.url),['https://staff.hngroup.org.uk/#people']);assert.deepEqual(lib.suggest(''),[]);
  assert.equal(lib.topSites()[0].title,'Staff portal');

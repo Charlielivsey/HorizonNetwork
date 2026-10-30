@@ -1,0 +1,37 @@
+/* HN Group support section: sits on the main website stylesheet (site.css tokens: --accent, --surface, --border,
+   --tint, --muted, --radius). Copied identically into each site (brand/web/copies.json). */
+.hs-help { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-bottom: 28px; }
+.hs-help-card { display: flex; flex-direction: column; gap: 6px; text-decoration: none; color: var(--text); transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
+.hs-help-card h3 { margin: 0; font-size: 1.05rem; }
+.hs-help-card p { margin: 0; flex: 1; }
+.hs-help-card .link-arrow { font-weight: 700; font-size: .9rem; color: var(--accent); }
+.hs-help-card:hover { transform: translateY(-3px); border-color: var(--accent); color: var(--text); }
+.hs-split { align-items: start; gap: 24px; }
+.hs-forms, .hs-side { display: grid; gap: 20px; min-width: 0; }
+.hs-forms h3, .hs-side h3 { margin-top: 0; }
+.hs-ref { display: block; padding: 14px 16px; border-radius: 12px; background: var(--tint); border: 1px dashed var(--accent); font: 600 .92rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; user-select: all; }
+.hs-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.hs-remember { display: flex; align-items: center; gap: 8px; font-weight: 500; font-size: .9rem; color: var(--muted); margin: 4px 0 12px; }
+.hs-remember input { width: auto; margin: 0; accent-color: var(--accent); }
+.hs-thread:focus, .hs-done:focus { outline: none; }
+.hs-thread-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.hs-thread-head h3 { margin: 0 0 4px; }
+.hs-status { white-space: nowrap; }
+.hs-status.is-done { background: rgba(95, 174, 123, .16); color: #2f7a4a; }
+@media (prefers-color-scheme: dark) { .hs-status.is-done { color: #8fd3a6; } }
+.hs-messages { list-style: none; padding: 0; margin: 16px 0; display: grid; gap: 10px; }
+.hs-messages li { padding: 12px 14px; border-radius: 14px; background: var(--tint); border: 1px solid var(--border); }
+.hs-messages li.from-staff { border-color: var(--accent); background: var(--accent-soft, var(--tint)); margin-left: 24px; }
+.hs-messages li.from-you { margin-right: 24px; }
+.hs-messages p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.hs-messages p.small { margin-bottom: 4px; white-space: normal; }
+.hs-faq details { border-top: 1px solid var(--border); padding: 12px 0; }
+.hs-faq details:first-of-type { border-top: 0; }
+.hs-faq summary { cursor: pointer; font-weight: 700; list-style: none; display: flex; justify-content: space-between; gap: 12px; }
+.hs-faq summary::-webkit-details-marker { display: none; }
+.hs-faq summary::after { content: "+"; color: var(--accent); font-weight: 800; transition: transform .2s ease; }
+.hs-faq details[open] summary::after { transform: rotate(45deg); }
+.hs-faq details p { margin: 8px 0 0; }
+@media (max-width: 960px) { .hs-help { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .hs-help { grid-template-columns: 1fr; } .hs-messages li.from-staff, .hs-messages li.from-you { margin: 0; } }
+@media (prefers-reduced-motion: reduce) { .hs-help-card, .hs-faq summary::after { transition: none; } .hs-help-card:hover { transform: none; } }

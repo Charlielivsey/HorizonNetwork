@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Add horizonetwork.com to the existing Horizon Network service; no service restart or other host edits.
+# Keep horizonetwork.com (a former Horizon Network address) redirecting to network.hngroup.org.uk; no service restart or other host edits.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOMAIN=horizonetwork.com
@@ -32,7 +32,7 @@ write_config() {
         python3 - "$SITE" <<'PY'
 from pathlib import Path
 import sys
-p=Path(sys.argv[1]);s=p.read_text();start=s.index('    location / {');s=s[:start]+'    location / { return 301 https://horizonetwork.com$request_uri; }\n}\n';p.write_text(s)
+p=Path(sys.argv[1]);s=p.read_text();start=s.index('    location / {');s=s[:start]+'    location / { return 301 https://network.hngroup.org.uk$request_uri; }\n}\n';p.write_text(s)
 PY
         if openssl x509 -in "$LE_DIR/fullchain.pem" -noout -ext subjectAltName | grep -q 'DNS:www.horizonetwork.com'; then
             cat "$SCRIPT_DIR/nginx-alias-https.conf" >> "$SITE"
@@ -107,4 +107,4 @@ else
     echo 'Alias hosting is prepared, but trusted SSL could not be issued. Check the alias DNS and rerun.'; exit 1
 fi
 if systemctl list-unit-files certbot.timer --no-legend 2>/dev/null | grep -q certbot.timer; then systemctl enable --now certbot.timer; fi
-echo 'Horizon Network is also hosted at https://horizonetwork.com using the existing hn-network PM2 service.'
+echo 'https://horizonetwork.com redirects to https://network.hngroup.org.uk.'

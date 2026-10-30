@@ -51,7 +51,7 @@ function saveVacancy(input, by, existing) {
     closingDate: closingDate || null,
     hiringManagerId: manager && !manager.system ? manager.id : null,
     internalOnly: !!input.internalOnly,
-    // Shown on the Careers section of hngroup.org.uk, where anyone can apply.
+    // Shown on careers.hngroup.org.uk, where anyone can apply.
     publicListing: !!input.publicListing,
     updatedAt: new Date().toISOString(),
   });
@@ -145,11 +145,34 @@ function addWebsiteApplicant(v, meta, buffer) {
     id: newId(), vacancyId: v.id, personId: null, name, email, phone: str(meta.phone, 40), source: "website", referredBy: null,
     message: str(meta.message, 3000), stage: "applied", notes: [], cv: null, createdAt: now, stageChangedAt: now,
   };
+  // A private reference lets the applicant check where their application is on careers.hngroup.org.uk (only its hash is kept).
+  const reference = crypto.randomBytes(32).toString("hex");
+  a.reference = crypto.createHash("sha256").update(reference).digest("hex");
   fs.writeFileSync(path.join(dir, a.id), buffer, { mode: 0o600 });
   a.cv = { fileName: workplace.cleanFileName(fileName), ext, size: buffer.length };
   db.data.applicants.push(a);
   db.save();
-  return a;
+  return Object.assign(Object.create(a), { plainReference: reference });
+}
+
+// What a website applicant sees with their reference: the role and a plain-English stage, never notes or names of staff.
+const PUBLIC_STAGES = {
+  applied: ["Received", "We\u2019ve got your application and will look at it soon."],
+  screening: ["Being reviewed", "The hiring team is reviewing your application."],
+  interview: ["Interview", "We\u2019d like to meet you. The hiring team will be in touch by email to arrange it."],
+  offer: ["Offer", "We\u2019d like to offer you the role. The hiring team will be in touch by email."],
+  hired: ["Hired", "Welcome to HN Group! Your onboarding details will follow by email."],
+  rejected: ["Not progressing", "Thank you for applying. We won\u2019t be taking your application further this time."],
+  withdrawn: ["Withdrawn", "This application was withdrawn."],
+};
+function applicationStatus(reference) {
+  if (!/^[a-f0-9]{64}$/.test(String(reference || ""))) return null;
+  const h = crypto.createHash("sha256").update(reference).digest("hex");
+  const a = db.data.applicants.find((x) => x.source === "website" && x.reference === h);
+  if (!a) return null;
+  const v = db.data.vacancies.find((x) => x.id === a.vacancyId);
+  const [stage, detail] = PUBLIC_STAGES[a.stage] || PUBLIC_STAGES.applied;
+  return { title: v ? v.title : "A role at HN Group", company: v ? v.company : "", appliedAt: a.createdAt, stage, detail, open: !["hired", "rejected", "withdrawn"].includes(a.stage) };
 }
 
 function getApplicant(id) {
@@ -270,5 +293,5 @@ function hiresBetween(from, to) {
 
 module.exports = {
   MANAGE, STAGES, CONTRACTS, SOURCES, init, canManage, saveVacancy, getVacancy, setVacancyStatus, deleteVacancy, addApplicant, getApplicant, cvFile,
-  setStage, addNote, hire, deleteApplicant, pruneApplicants, publicVacancies, addWebsiteApplicant, forViewer, vacancyView, openCount, newApplicantsCount, hiresBetween,
+  setStage, addNote, hire, deleteApplicant, pruneApplicants, publicVacancies, addWebsiteApplicant, applicationStatus, forViewer, vacancyView, openCount, newApplicantsCount, hiresBetween,
 };

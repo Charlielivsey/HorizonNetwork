@@ -5,11 +5,11 @@
   "kind": "company",
   "name": "Horizon Development",
   "logo": "horizon-development-logo",
-  "legal": "Horizon Development \u00b7 Part of Horizon Network Limited",
+  "legal": "Horizon Network Limited",
   "content": {
     "eyebrow": "PART OF HORIZON NETWORK",
     "title": "Your next idea. Built together.",
-    "lead": "Software and web development within Horizon Network. Start with your requirements, and let\u2019s work out the next step.",
+    "lead": "Software and web development within Horizon Network. Start with your requirements, and let’s work out the next step.",
     "cta": "Discuss a project",
     "sectionLabel": "START WITH YOUR IDEA",
     "sectionTitle": "From the first conversation onward.",
@@ -31,14 +31,17 @@
       }
     ],
     "aboutTitle": "Development within Horizon Network.",
-    "about": "Horizon Development is part of Horizon Network Limited. It is supported by HN Group\u2019s connected companies and shared standards.",
+    "about": "Horizon Development is part of Horizon Network Limited. It is supported by HN Group’s connected companies and shared standards.",
     "relatedLabel": "Explore Horizon Network",
-    "relatedUrl": "https://horizon-network.co.uk/services",
+    "relatedUrl": "https://network.hngroup.org.uk/services",
     "detailTitle": "Continue the conversation.",
     "detail": "Existing clients can use the HN Group client portal for shared project updates, documents and approvals. Access is by invitation from the team.",
     "contactLabel": "PROJECT ENQUIRIES",
     "contactTitle": "What would you like to build?",
     "contactText": "Tell us about the problem you want to solve, the audience and any timescales. There is no need to have every detail worked out.",
     "topic": "development"
-  }
+  },
+  "company": "Horizon Development",
+  "subsidiaryOf": "Part of Horizon Network Limited, a subsidiary of HN Group Limited",
+  "description": "Horizon Development builds software, websites and apps as part of Horizon Network, within HN Group."
 }

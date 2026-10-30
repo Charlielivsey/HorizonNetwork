@@ -21,7 +21,7 @@ HN Group Management keeps the things the whole group relies on in one place, sep
 * '''Technical assets''' — the systems and other technical assets used across the group
 * '''Email services''' — it manages email for HN Group and its companies
 
-Its own domain is '''holding.hngroup.org.uk'''.
+It doesn't have a website of its own; it is described on the [https://hngroup.org.uk/companies HN Group website].
 
 == Staff and management ==
 HN Group Management has no staff of its own. It is managed directly by the staff of [[HN Group]].

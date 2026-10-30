@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Install the dedicated Horizon Network website and its narrow staff leadership integration.
+# Install the dedicated Horizon Network website (network.hngroup.org.uk) and its narrow staff leadership integration.
+# Its former addresses, horizon-network.co.uk and horizonetwork.com, redirect there (the user's request, 30 October 2026).
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DOMAIN=horizon-network.co.uk
+DOMAIN=network.hngroup.org.uk
+OLD=horizon-network.co.uk
 EMAIL="${1:-}"
 APP_DIR=/opt/hn-network
 DATA_DIR=/var/lib/hn-network
@@ -11,6 +13,7 @@ CHALLENGE_DIR=/var/www/hn-network-acme
 SITE=/etc/nginx/sites-available/hn-network
 ENABLED=/etc/nginx/sites-enabled/hn-network
 LE_DIR="/etc/letsencrypt/live/$DOMAIN"
+OLD_LE="/etc/letsencrypt/live/$OLD"
 [ "$(id -u)" = 0 ] || { echo 'Run this installer with sudo.'; exit 1; }
 for tool in nginx certbot openssl curl node python3; do
     if ! command -v "$tool" >/dev/null; then
@@ -32,7 +35,7 @@ fi
 for config in /etc/nginx/sites-enabled/* /etc/nginx/conf.d/*.conf; do
     [ -f "$config" ] || continue
     [ "$config" = "$ENABLED" ] && continue
-    if grep -Eq 'server_name[^;]*[[:space:]](www\.)?horizon-network\.co\.uk([[:space:];]|$)' "$config"; then
+    if grep -Eq 'server_name[^;]*[[:space:]]((www\.)?horizon-network\.co\.uk|network\.hngroup\.org\.uk)([[:space:];]|$)' "$config"; then
         echo "Another nginx configuration already serves $DOMAIN: $config. No site configuration changed."
         exit 1
     fi
@@ -59,24 +62,21 @@ if [ -f /opt/hn-admin/reconcile-power.cjs ]; then node /opt/hn-admin/reconcile-p
 pm2 save
 if [ ! -f /etc/systemd/system/pm2-root.service ]; then pm2 startup systemd -u root --hp /root; fi
 systemctl enable pm2-root >/dev/null
-# Use only this site's certificates; certbot's webroot mode never rewrites other nginx sites.
-if [ -f "$LE_DIR/fullchain.pem" ]; then
-    ln -sfn "$LE_DIR/fullchain.pem" "$SSL_DIR/fullchain.pem"
-    ln -sfn "$LE_DIR/privkey.pem" "$SSL_DIR/privkey.pem"
-else
-    if [ ! -f "$SSL_DIR/selfsigned.crt" ]; then
-        openssl req -x509 -nodes -newkey rsa:2048 -days 365 -subj "/CN=$DOMAIN" \
-            -addext "subjectAltName=DNS:$DOMAIN,DNS:www.$DOMAIN" -keyout "$SSL_DIR/selfsigned.key" -out "$SSL_DIR/selfsigned.crt" >/dev/null 2>&1
-        chmod 600 "$SSL_DIR/selfsigned.key"
-    fi
+# The former address keeps its own certificates (renewed by certbot.timer); a temporary one is made only if it has none.
+if [ -f "$OLD_LE/fullchain.pem" ]; then
+    ln -sfn "$OLD_LE/fullchain.pem" "$SSL_DIR/fullchain.pem"
+    ln -sfn "$OLD_LE/privkey.pem" "$SSL_DIR/privkey.pem"
+elif [ ! -e "$SSL_DIR/fullchain.pem" ]; then
+    openssl req -x509 -nodes -newkey rsa:2048 -days 365 -subj "/CN=$OLD" \
+        -addext "subjectAltName=DNS:$OLD,DNS:www.$OLD" -keyout "$SSL_DIR/selfsigned.key" -out "$SSL_DIR/selfsigned.crt" >/dev/null 2>&1
+    chmod 600 "$SSL_DIR/selfsigned.key"
     ln -sfn "$SSL_DIR/selfsigned.crt" "$SSL_DIR/fullchain.pem"
     ln -sfn "$SSL_DIR/selfsigned.key" "$SSL_DIR/privkey.pem"
 fi
-# The direct www host can use its own trusted certificate when the root uses Cloudflare.
-if [ -f "/etc/letsencrypt/live/www.$DOMAIN/fullchain.pem" ]; then
-    ln -sfn "/etc/letsencrypt/live/www.$DOMAIN/fullchain.pem" "$SSL_DIR/www-fullchain.pem"
-    ln -sfn "/etc/letsencrypt/live/www.$DOMAIN/privkey.pem" "$SSL_DIR/www-privkey.pem"
-else
+if [ -f "/etc/letsencrypt/live/www.$OLD/fullchain.pem" ]; then
+    ln -sfn "/etc/letsencrypt/live/www.$OLD/fullchain.pem" "$SSL_DIR/www-fullchain.pem"
+    ln -sfn "/etc/letsencrypt/live/www.$OLD/privkey.pem" "$SSL_DIR/www-privkey.pem"
+elif [ ! -e "$SSL_DIR/www-fullchain.pem" ]; then
     ln -sfn "$SSL_DIR/fullchain.pem" "$SSL_DIR/www-fullchain.pem"
     ln -sfn "$SSL_DIR/privkey.pem" "$SSL_DIR/www-privkey.pem"
 fi
@@ -86,63 +86,46 @@ trap 'rm -rf "$BACKUP"' EXIT
 [ ! -f "$SITE" ] || cp "$SITE" "$BACKUP/site"
 WAS_ENABLED=0
 [ ! -e "$ENABLED" ] || WAS_ENABLED=1
-cp "$SCRIPT_DIR/nginx.conf" "$SITE"
-if [ ! -s /proc/net/if_inet6 ]; then sed -i '/listen \[::\]/d' "$SITE"; fi
-ln -sfn "$SITE" "$ENABLED"
-if ! nginx -t; then
-    if [ -f "$BACKUP/site" ]; then cp "$BACKUP/site" "$SITE"; else rm -f "$SITE"; fi
-    [ "$WAS_ENABLED" = 1 ] || rm -f "$ENABLED"
-    echo 'nginx validation failed; the Horizon Network configuration was rolled back.'; exit 1
-fi
-systemctl reload nginx
-HTTPS_OK=0
-CERT_ARGS=()
-if [ -n "$EMAIL" ]; then CERT_ARGS+=(--email "$EMAIL"); fi
-if [ -n "$EMAIL" ] || [ -d /etc/letsencrypt/accounts ]; then
-    # Prefer a single trusted origin certificate. Do not repeatedly retry a known Cloudflare
-    # validation failure on routine updates; NETWORK_REQUIRE_ORIGIN_CERT=1 retries it explicitly.
-    if [ -f "$LE_DIR/fullchain.pem" ] || [ ! -f "/etc/letsencrypt/live/www.$DOMAIN/fullchain.pem" ] || [ "${NETWORK_REQUIRE_ORIGIN_CERT:-0}" = 1 ]; then
-        if certbot certonly --webroot -w "$CHALLENGE_DIR" -d "$DOMAIN" -d "www.$DOMAIN" --cert-name "$DOMAIN" \
-            --non-interactive --agree-tos --keep-until-expiring "${CERT_ARGS[@]}" \
-            --deploy-hook 'nginx -t && systemctl reload nginx'; then
-            ln -sfn "$LE_DIR/fullchain.pem" "$SSL_DIR/fullchain.pem"
-            ln -sfn "$LE_DIR/privkey.pem" "$SSL_DIR/privkey.pem"
-            ln -sfn "$LE_DIR/fullchain.pem" "$SSL_DIR/www-fullchain.pem"
-            ln -sfn "$LE_DIR/privkey.pem" "$SSL_DIR/www-privkey.pem"
-            nginx -t && systemctl reload nginx
-            HTTPS_OK=1
-        fi
+write_config() {
+    cat "$SCRIPT_DIR/nginx.conf" "$SCRIPT_DIR/nginx-network-http.conf" > "$SITE"
+    if [ -f "$LE_DIR/fullchain.pem" ]; then
+        cat "$SCRIPT_DIR/nginx-network-https.conf" >> "$SITE"
+    else
+        # Until its certificate exists, the new address answers over HTTP only to say so.
+        python3 - "$SITE" <<'PY2'
+from pathlib import Path
+import sys
+p=Path(sys.argv[1]);s=p.read_text();i=s.rindex('    location / { return 301 https://network.hngroup.org.uk$request_uri; }')
+s=s[:i]+"    location / { default_type text/plain; return 503 'Horizon Network is moving to network.hngroup.org.uk. Please try again in a few minutes.'; }"+s[i+len('    location / { return 301 https://network.hngroup.org.uk$request_uri; }'):]
+p.write_text(s)
+PY2
     fi
-    if [ "$HTTPS_OK" != 1 ]; then
-        # Cloudflare supplies the root domain's visitor certificate. Secure the directly routed
-        # www host separately, and verify the root's real public HTTPS before accepting this mode.
-        if certbot certonly --webroot -w "$CHALLENGE_DIR" -d "www.$DOMAIN" --cert-name "www.$DOMAIN" \
-            --non-interactive --agree-tos --keep-until-expiring "${CERT_ARGS[@]}" \
-            --deploy-hook 'nginx -t && systemctl reload nginx'; then
-            ln -sfn "/etc/letsencrypt/live/www.$DOMAIN/fullchain.pem" "$SSL_DIR/www-fullchain.pem"
-            ln -sfn "/etc/letsencrypt/live/www.$DOMAIN/privkey.pem" "$SSL_DIR/www-privkey.pem"
-            nginx -t && systemctl reload nginx
-            if curl -fsS --max-time 15 -I "https://$DOMAIN/" | grep -qi '^cf-ray:' && \
-               curl -fsS --max-time 15 -I "https://www.$DOMAIN/" >/dev/null; then
-                HTTPS_OK=1
-                echo 'Public HTTPS verified: root via Cloudflare; www via Let’s Encrypt.'
-                echo 'The root origin still uses a temporary self-signed certificate. Cloudflare Full (strict) requires fixing root ACME validation and rerunning with NETWORK_REQUIRE_ORIGIN_CERT=1.'
-            fi
-        fi
+    if [ ! -s /proc/net/if_inet6 ]; then sed -i '/listen \[::\]/d' "$SITE"; fi
+    ln -sfn "$SITE" "$ENABLED"
+    if ! nginx -t; then
+        if [ -f "$BACKUP/site" ]; then cp "$BACKUP/site" "$SITE"; else rm -f "$SITE"; fi
+        [ "$WAS_ENABLED" = 1 ] || rm -f "$ENABLED"
+        echo 'nginx validation failed; the Horizon Network configuration was rolled back.'; exit 1
     fi
-else
-    echo 'First SSL registration needs an email: sudo bash horizon-network-site/install.sh you@hngroup.org.uk'
+    systemctl reload nginx
+}
+write_config
+if [ ! -f "$LE_DIR/fullchain.pem" ]; then
+    CERT_ARGS=()
+    if [ -n "$EMAIL" ]; then CERT_ARGS+=(--email "$EMAIL"); fi
+    if certbot certonly --webroot -w "$CHALLENGE_DIR" -d "$DOMAIN" --cert-name "$DOMAIN" \
+        --non-interactive --agree-tos --keep-until-expiring "${CERT_ARGS[@]}" \
+        --deploy-hook 'nginx -t && systemctl reload nginx'; then
+        write_config
+    else
+        echo "A certificate for $DOMAIN couldn't be issued yet. Check its DNS record (A network -> 217.154.34.205), then rerun: sudo bash horizon-network-site/install.sh"
+        exit 1
+    fi
 fi
 if systemctl list-unit-files certbot.timer --no-legend 2>/dev/null | grep -q certbot.timer; then
     systemctl enable --now certbot.timer
 fi
-echo "Horizon Network: https://$DOMAIN"
-echo 'PM2 process: hn-network (port 3600, loopback only)'
-echo 'Live Network Leadership profiles from selected staff records.'
-if [ "$HTTPS_OK" != 1 ]; then
-    echo 'Trusted public HTTPS could not be verified. Check root and www DNS/Cloudflare settings, then rerun.'
-    exit 1
-fi
-
-# Add the requested extra domain without changing the primary virtual host.
+# horizonetwork.com redirects to the new address too.
 bash "$SCRIPT_DIR/install-alias.sh" "$EMAIL"
+echo "Horizon Network: https://$DOMAIN (horizon-network.co.uk and horizonetwork.com redirect here)"
+echo 'PM2 process: hn-network (port 3600, loopback only)'

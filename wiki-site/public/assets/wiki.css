@@ -312,3 +312,12 @@ a.external::after { content: "↗"; font-size: .75em; margin-left: .15em; opacit
 .infobox.status-defunct .ib-logo img, .company-card.status-defunct .cc-logo img { filter: grayscale(1); opacity: .65; }
 .infobox.status-defunct caption { color: var(--muted); }
 .company-card.status-defunct { border-style: dashed; }
+
+/* Footer brand (the user's request, 30 October 2026): the company's logo, its name and, for a subsidiary, its parent. */
+footer .footer-brand { display: grid; justify-items: start; gap: 0; }
+footer .footer-brand img { height: 38px; width: auto; margin: 0 0 .8rem; }
+footer .footer-brand .footer-company { margin: 0; display: grid; gap: .1rem; line-height: 1.4; max-width: none; font-size: inherit; }
+footer .footer-brand .footer-company strong { font-size: 1.02rem; font-weight: 700; }
+footer .footer-brand .footer-parent { opacity: .82; font-size: .88rem; }
+footer .footer-brand .on-dark { display: none; }
+@media (prefers-color-scheme: dark) { footer .footer-brand .on-light { display: none; } footer .footer-brand .on-dark { display: block; } }

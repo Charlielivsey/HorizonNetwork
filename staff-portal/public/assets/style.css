@@ -3795,6 +3795,10 @@ input[type="range"] { width: 100%; accent-color: var(--primary); }
 .enq-contact a, .enq-contact span { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.9rem; }
 .enq-contact .icon { width: 15px; height: 15px; }
 .enq-message { padding: 0.9rem 1rem; background: var(--surface-2); border-radius: 12px; margin-bottom: 1rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.enq-message.enq-staff-reply { background: var(--primary-soft, rgba(85,20,180,.08)); margin-left: 1.5rem; }
+.enq-message .small { white-space: normal; margin-bottom: .25rem; }
+#enq-reply { margin: 0 0 1.2rem; display: grid; gap: .4rem; }
+#enq-reply textarea { width: 100%; }
 .enq-notes { list-style: none; padding: 0; margin: 0 0 0.6rem; display: grid; gap: 0.5rem; }
 .enq-notes li { padding: 0.5rem 0.7rem; border-left: 3px solid var(--primary-soft-border); }
 .enq-actions { align-items: center; }
@@ -4027,3 +4031,10 @@ body { background: var(--bg); background-attachment: scroll; font-size: 16px; }
 .footer { position: relative; margin-top: 3rem; padding: calc(8px + 1.6rem) max(1.5rem, calc((100% - 1240px) / 2)) 2rem; background: #1C2135; color: #C9CADB; text-align: left; font-size: .88rem; border: 0; }
 .footer::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 8px; background: linear-gradient(90deg, #e97de8 0 14%, #5514b4 14% 28%, #e3e65b 28% 34%, #3e9ba3 34% 54%, #7a1f6c 54% 64%, #c2306b 64% 74%, #5fae7b 74% 87%, #3a4166 87%); transform-origin: left; animation: hn-stripe 1s cubic-bezier(.2,.8,.2,1) both; }
 @media (prefers-reduced-motion: reduce) { .topbar::after, .page-head::after, .footer::before, .menu { animation: none !important; } .person-card, .announcement, .doc-row, .stat, .info-card { transition: none; } }
+
+/* Footer brand (the user's request, 30 October 2026): the company's logo, its name and, for a subsidiary, its parent. */
+footer .footer-brand { display: grid; justify-items: start; gap: 0; }
+footer .footer-brand img { height: 38px; width: auto; margin: 0 0 .8rem; }
+footer .footer-brand .footer-company { margin: 0; display: grid; gap: .1rem; line-height: 1.4; max-width: none; font-size: inherit; }
+footer .footer-brand .footer-company strong { font-size: 1.02rem; font-weight: 700; }
+footer .footer-brand .footer-parent { opacity: .82; font-size: .88rem; }

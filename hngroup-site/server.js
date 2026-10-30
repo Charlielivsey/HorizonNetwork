@@ -66,6 +66,8 @@ const server=http.createServer(async(req,res)=>{
     if(decoded.split('/').some(part=>part.startsWith('.')))return json(res,404,{error:'Not found.'});
     // The privacy policy's address is /privacypolicy; old /privacy links are sent there.
     if(decoded==='/privacy'||decoded==='/privacy.html'){res.writeHead(301,{Location:'/privacypolicy'});return res.end();}
+    // Careers moved to its own website (the user's request, 30 October 2026).
+    if(decoded==='/careers'||decoded==='/careers.html'){res.writeHead(301,{Location:'https://careers.hngroup.org.uk/'});return res.end();}
     let target=path.resolve(PUBLIC,'.'+decoded);
     if(!target.startsWith(path.resolve(PUBLIC)+path.sep)&&target!==path.resolve(PUBLIC))return json(res,404,{error:'Not found.'});
     if(decoded.endsWith('/'))target=path.join(target,'index.html');

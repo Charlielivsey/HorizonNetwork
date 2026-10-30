@@ -6,7 +6,7 @@
 const COMPANIES = [
   { id: 'hn-group', name: 'HN Group', legal: 'HN Group Limited', logo: 'hn-group-wordmark', website: 'hngroup.org.uk', note: '',
     about: 'HN Group brings together Horizon Network and Horizon Media Group.' },
-  { id: 'horizon-network', name: 'Horizon Network', legal: 'Horizon Network Limited', logo: 'horizon-network-wordmark', website: 'horizon-network.co.uk', note: 'A subsidiary of HN Group Limited',
+  { id: 'horizon-network', name: 'Horizon Network', legal: 'Horizon Network Limited', logo: 'horizon-network-wordmark', website: 'network.hngroup.org.uk', note: 'A subsidiary of HN Group Limited',
     about: 'Horizon Network is part of HN Group.' },
   { id: 'horizon-media-group', name: 'Horizon Media Group', legal: 'Horizon Media Group Limited', logo: 'horizon-media-group-logo', website: 'media.hngroup.org.uk', note: 'A subsidiary of HN Group Limited',
     about: 'Horizon Media Group is part of HN Group.' },
@@ -14,7 +14,7 @@ const COMPANIES = [
     about: 'Horizon Advertising is part of HN Group.' },
   { id: 'horizon-development', name: 'Horizon Development', legal: 'Horizon Network Limited', logo: 'horizon-development-logo', website: 'development.hngroup.org.uk', note: 'Horizon Development is part of Horizon Network Limited',
     about: 'Horizon Development is part of Horizon Network, an HN Group company.' },
-  { id: 'hn-group-management', name: 'HN Group Management', legal: 'HN Group Management Limited', logo: 'hn-group-management-logo', website: 'holding.hngroup.org.uk', note: 'A subsidiary of HN Group Limited',
+  { id: 'hn-group-management', name: 'HN Group Management', legal: 'HN Group Management Limited', logo: 'hn-group-management-logo', website: 'hngroup.org.uk', note: 'A subsidiary of HN Group Limited',
     about: 'HN Group Management is part of HN Group.' },
 ];
 

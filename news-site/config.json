@@ -5,5 +5,7 @@
   "kind": "news",
   "name": "HN Group News",
   "logo": "hn-group-wordmark",
-  "legal": "HN Group Limited"
+  "legal": "HN Group Limited",
+  "company": "HN Group",
+  "description": "HN Group News: announcements and updates from across HN Group and its companies."
 }

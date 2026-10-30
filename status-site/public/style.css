@@ -43,3 +43,10 @@ body{font-size:15px}
 .button.small{padding:.5rem 1.1rem;font-size:.88rem}
 h1{font-size:clamp(2.4rem,5vw,3.8rem);letter-spacing:-.025em;line-height:1.06}
 .site-footer{background:#1C2135}
+
+/* Footer brand (the user's request, 30 October 2026): the company's logo, its name and, for a subsidiary, its parent. */
+footer .footer-brand { display: grid; justify-items: start; gap: 0; }
+footer .footer-brand img { height: 38px; width: auto; margin: 0 0 .8rem; }
+footer .footer-brand .footer-company { margin: 0; display: grid; gap: .1rem; line-height: 1.4; max-width: none; font-size: inherit; }
+footer .footer-brand .footer-company strong { font-size: 1.02rem; font-weight: 700; }
+footer .footer-brand .footer-parent { opacity: .82; font-size: .88rem; }

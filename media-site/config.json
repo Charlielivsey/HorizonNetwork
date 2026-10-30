@@ -5,7 +5,7 @@
   "kind": "company",
   "name": "Horizon Media Group",
   "logo": "horizon-media-group-logo",
-  "legal": "Horizon Media Group Limited \u00b7 A subsidiary of HN Group Limited",
+  "legal": "Horizon Media Group Limited",
   "content": {
     "eyebrow": "HORIZON MEDIA GROUP",
     "title": "Media, with a wider perspective.",
@@ -17,7 +17,7 @@
       {
         "label": "MEDIA",
         "title": "A home for media.",
-        "text": "Horizon Media Group brings together the group\u2019s media activity. Contact us to discuss publications, media projects and opportunities."
+        "text": "Horizon Media Group brings together the group’s media activity. Contact us to discuss publications, media projects and opportunities."
       },
       {
         "label": "ADVERTISING",
@@ -33,12 +33,15 @@
     "aboutTitle": "Part of something connected.",
     "about": "Horizon Media Group Limited is a direct wholly owned subsidiary of HN Group Limited, alongside Horizon Network Limited and HN Group Management Limited.",
     "relatedLabel": "Horizon Advertising's services",
-    "relatedUrl": "https://horizon-network.co.uk/services",
+    "relatedUrl": "https://network.hngroup.org.uk/services",
     "detailTitle": "Ownership and management, made clear.",
     "detail": "Horizon Media Group owns Horizon Advertising. Horizon Network manages its advertising services, supported by the wider HN Group.",
     "contactLabel": "MEDIA & PRESS",
-    "contactTitle": "Let\u2019s talk media.",
+    "contactTitle": "Let’s talk media.",
     "contactText": "Tell us about your enquiry, publication or project. Our group team will route it to the right place.",
     "topic": "media"
-  }
+  },
+  "company": "Horizon Media Group",
+  "subsidiaryOf": "A subsidiary of HN Group Limited",
+  "description": "Horizon Media Group, the media business of HN Group: media, publications and partnerships, with Horizon Advertising."
 }

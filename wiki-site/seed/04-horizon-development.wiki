@@ -10,7 +10,7 @@ title: Horizon Development
 | Services = Web applications<br>Custom software<br>From concept to deployment
 | Email domain = hngroup.org.uk
 | Brand colour = {{Swatch|#5514B4}}Indigo <code>#5514B4</code>
-| Website = [https://horizon-network.co.uk/services horizon-network.co.uk/services]
+| Website = [https://development.hngroup.org.uk development.hngroup.org.uk]
 }}
 '''Horizon Development''' builds custom software and web applications, from concept to deployment, using modern technologies. It is part of [[Horizon Network]].<ref>[https://hngroup.org.uk/companies Our companies], hngroup.org.uk.</ref>
 
@@ -19,7 +19,7 @@ title: Horizon Development
 * '''Custom software'''
 * '''From concept to deployment''' — taking a project from first idea to launch
 
-Horizon Development turns ideas into useful software. As part of Horizon Network, its work can sit on the network's digital infrastructure and be promoted through [[Horizon Advertising]].<ref>[https://horizon-network.co.uk/services Our services], horizon-network.co.uk.</ref> Enquiries about projects are handled through the Horizon Network and HN Group contact forms.
+Horizon Development turns ideas into useful software. As part of Horizon Network, its work can sit on the network's digital infrastructure and be promoted through [[Horizon Advertising]].<ref>[https://network.hngroup.org.uk/services Our services], horizon-network.co.uk.</ref> Enquiries about projects are handled through the Horizon Network and HN Group contact forms.
 
 == Structure ==
 Horizon Development is part of [[Horizon Network]] and is not a separate company: it sits within Horizon Network.
@@ -38,8 +38,8 @@ Horizon Development's logo is a thick indigo ring containing the initials '''HD'
 {{Reflist}}
 
 == External links ==
-* [https://horizon-network.co.uk/services Horizon Network services]
-* [https://horizon-network.co.uk/contact?topic=development Talk to us about a project]
+* [https://network.hngroup.org.uk/services Horizon Network services]
+* [https://network.hngroup.org.uk/contact?topic=development Talk to us about a project]
 
 [[Category:Companies]]
 [[Category:Horizon Network]]

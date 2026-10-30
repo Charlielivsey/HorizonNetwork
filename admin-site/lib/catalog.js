@@ -5,7 +5,7 @@ const sites=[
 ['downloads','Downloads','hn-downloads',5100,['downloads.hngroup.org.uk']],
 ['auth','HN Group Auth','hn-auth',3400,['auth.hngroup.org.uk']],
 ['website','HN Group','hn-website',3500,['hngroup.org.uk','www.hngroup.org.uk']],
-['network','Horizon Network','hn-network',3600,['horizon-network.co.uk','www.horizon-network.co.uk','horizonetwork.com','www.horizonetwork.com']],
+['network','Horizon Network','hn-network',3600,['network.hngroup.org.uk','horizon-network.co.uk','www.horizon-network.co.uk','horizonetwork.com','www.horizonetwork.com']],
 ['staff','Staff portal','hn-staff-portal',3200,['staff.hngroup.org.uk']],
 ['status','Service status','hn-status',3300,['status.hngroup.org.uk']],
 ['links','HN Group Links','hn-links',3700,['links.hngroup.org.uk']],
@@ -20,6 +20,6 @@ const sites=[
 ['contracts','HN Group Contracts','hn-contracts',5560,['contract.hngroup.org.uk']],
 ['private-companies','Private company register','hn-private-companies',5610,['private.companies.hngroup.org.uk']],
 ['private-wiki','HN Group Private Wiki','hn-private-wiki',5620,['private.wiki.hngroup.org.uk']],
-...[['media','Horizon Media Group',3900],['holding','HN Group Management',4000],['development','Horizon Development',4100],['support','Support',4200],['clients','Client portal',4300],['careers','Careers',4400],['news','News',4600]].map(([id,name,port])=>[id,name,'hn-'+id,port,[id+'.hngroup.org.uk']])
+...[['media','Horizon Media Group',3900],['development','Horizon Development',4100],['careers','Careers',4400],['news','News',4600]].map(([id,name,port])=>[id,name,'hn-'+id,port,[id+'.hngroup.org.uk']])
 ].map(([id,name,process,port,hosts])=>({id,name,process,port,hosts}));
 module.exports={sites,ROOT_ACCOUNT:'charlie.livsey@hngroup.org.uk',PERMISSIONS:['maintenance','power','audit','access']};

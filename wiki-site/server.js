@@ -142,7 +142,7 @@ function layout(o) {
     '<h3>Companies</h3><ul>' + sidebarCompanies().map((t) => '<li><a href="' + esc(pageUrl(t)) + '">' + esc(t) + '</a></li>').join('') + '</ul>' +
     '<h3>Tools</h3><ul><li><a href="/wiki/Special:Upload">Upload an image</a></li><li><a href="/wiki/Special:ListFiles">Images</a></li><li><a href="/wiki/Special:CompanyLogo">Company logos</a></li></ul>' +
     '<h3>Help</h3><ul><li><a href="/wiki/Help:Editing">How to edit</a></li><li><a href="/wiki/HN_Group_Wiki:About">About this wiki</a></li></ul>' +
-    '<h3>HN Group sites</h3><ul><li><a class="external" href="https://hngroup.org.uk">hngroup.org.uk</a></li><li><a class="external" href="https://horizon-network.co.uk">horizon-network.co.uk</a></li><li><a class="external" href="https://staff.hngroup.org.uk">Staff portal</a></li><li><a class="external" href="https://status.hngroup.org.uk">Service status</a></li></ul></nav>' +
+    '<h3>HN Group sites</h3><ul><li><a class="external" href="https://hngroup.org.uk">hngroup.org.uk</a></li><li><a class="external" href="https://network.hngroup.org.uk">network.hngroup.org.uk</a></li><li><a class="external" href="https://staff.hngroup.org.uk">Staff portal</a></li><li><a class="external" href="https://status.hngroup.org.uk">Service status</a></li></ul></nav>' +
     '<main class="content" id="content">' +
     (tabs.length ? '<div class="tabs"><ul class="tabs-left">' + tabs.filter((t) => t.side !== 'right').map(tabHtml).join('') + '</ul><ul class="tabs-right">' + tabs.filter((t) => t.side === 'right').map(tabHtml).join('') + '</ul></div>' : '') +
     '<article class="article"><h1 class="first-heading">' + (o.heading || esc(o.title)) + '</h1>' +
@@ -151,7 +151,7 @@ function layout(o) {
     '<div class="body">' + o.body + '</div>' +
     (o.categories && o.categories.length ? '<div class="catlinks"><a href="/wiki/Special:Categories">Categories</a>: <ul>' + o.categories.map((c) => '<li><a href="' + esc(pageUrl('Category:' + c)) + '">' + esc(c) + '</a></li>').join('') + '</ul></div>' : '') +
     '</article>' +
-    '<footer class="footer">' + (o.lastEdited ? '<p>This page was last edited on ' + esc(fmtDate(o.lastEdited)) + '.</p>' : '') +
+    '<footer class="footer">' + '<div class="footer-brand"><img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="" height="32" loading="lazy"><img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" height="32" loading="lazy"><p class="footer-company"><strong>HN Group</strong></p></div>' + (o.lastEdited ? '<p>This page was last edited on ' + esc(fmtDate(o.lastEdited)) + '.</p>' : '') +
     '<p>Content is maintained by HN Group staff. © ' + new Date().getFullYear() + ' HN Group Limited. <a href="/wiki/HN_Group_Wiki:About">About HN Group Wiki</a> · <a class="external" href="https://hngroup.org.uk/privacypolicy">Privacy</a> · <a class="external" href="https://hngroup.org.uk/contact">Contact</a></p></footer>' +
     '</main></div></body></html>';
 }

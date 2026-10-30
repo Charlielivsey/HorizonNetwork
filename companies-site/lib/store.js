@@ -18,7 +18,7 @@ const PSC_KINDS = ['Individual', 'Parent company', 'Relevant legal entity'];
 const SEED = [
   { slug: 'hn-group', name: 'HN Group', legalName: 'HN Group Limited', website: 'hngroup.org.uk', emailDomain: 'hngroup.org.uk',
     description: 'The parent company of the group. HN Group brings together Horizon Network and Horizon Media Group.' },
-  { slug: 'horizon-network', name: 'Horizon Network', legalName: 'Horizon Network Limited', website: 'horizon-network.co.uk', emailDomain: 'horizon-network.co.uk', parent: 'hn-group',
+  { slug: 'horizon-network', name: 'Horizon Network', legalName: 'Horizon Network Limited', website: 'network.hngroup.org.uk', emailDomain: 'horizon-network.co.uk', parent: 'hn-group',
     description: 'A wholly owned subsidiary of HN Group Limited. Horizon Development is part of Horizon Network Limited.',
     divisions: ['Horizon Development'],
     psc: [{ name: 'HN Group Limited', kind: 'Parent company', share: '100', control: ['Ownership of shares – 75% or more'] }] },

@@ -14,7 +14,7 @@ title: Horizon Advertising
 * '''Campaign management'''
 * '''Analytics and reporting''' — clear reporting on how campaigns perform
 
-Horizon Advertising works alongside the rest of Horizon Network, so advertising can be combined with the network's digital infrastructure and with software from [[Horizon Development]].<ref>[https://horizon-network.co.uk/services Our services], horizon-network.co.uk.</ref>
+Horizon Advertising works alongside the rest of Horizon Network, so advertising can be combined with the network's digital infrastructure and with software from [[Horizon Development]].<ref>[https://network.hngroup.org.uk/services Our services], horizon-network.co.uk.</ref>
 
 == Structure ==
 Horizon Advertising has an unusual position in [[HN Group]]: it is a '''subsidiary of [[Horizon Media Group]]''', the group's media business, but it is '''managed by [[Horizon Network]]''', which runs it alongside its digital infrastructure and [[Horizon Development]].

@@ -108,3 +108,14 @@ a{color:var(--accent)}
 .avatar { position: relative; overflow: hidden; }
 .avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .owner-face { width: 22px; height: 22px; font-size: 10px; display: inline-grid; vertical-align: -6px; margin-right: 6px; }
+
+/* Footer brand (the user's request, 30 October 2026): the company's logo, its name and, for a subsidiary, its parent. */
+footer .footer-brand { display: grid; justify-items: start; gap: 0; }
+footer .footer-brand img { height: 38px; width: auto; margin: 0 0 .8rem; }
+footer .footer-brand .footer-company { margin: 0; display: grid; gap: .1rem; line-height: 1.4; max-width: none; font-size: inherit; }
+footer .footer-brand .footer-company strong { font-size: 1.02rem; font-weight: 700; }
+footer .footer-brand .footer-parent { opacity: .82; font-size: .88rem; }
+footer .footer-brand .on-dark { display: none; }
+@media (prefers-color-scheme: dark) { footer .footer-brand .on-light { display: none; } footer .footer-brand .on-dark { display: block; } }
+.site-foot { border-top: 1px solid var(--border, #E5E0EE); margin-top: 3rem; }
+.site-foot-inner { max-width: 1160px; margin: 0 auto; padding: 1.6rem 24px 2.4rem; display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem; flex-wrap: wrap; color: var(--muted, #5A5C6B); font-size: .88rem; }

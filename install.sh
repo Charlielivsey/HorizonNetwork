@@ -90,10 +90,21 @@ else
 fi
 changed bots-site/ && run 'HN Group Bots (bots.hngroup.org.uk)' bash "$ROOT/bots-site/install.sh" "$EMAIL"
 changed status-site/ admin-site/catalog.json && run 'Status' bash "$ROOT/status-site/install.sh" "$EMAIL"
-changed horizon-network-site/ && run 'Horizon Network (+ horizonetwork.com)' bash "$ROOT/horizon-network-site/install.sh" "$EMAIL"
+changed horizon-network-site/ && run 'Horizon Network (network.hngroup.org.uk)' bash "$ROOT/horizon-network-site/install.sh" "$EMAIL"
 changed wiki-site/ && run 'Wiki' bash "$ROOT/wiki-site/install.sh" "$EMAIL"
-for site in media holding development support clients careers news; do
+for site in media development careers news; do
     changed "$site-site/" website-suite/ && run "$site" bash "$ROOT/$site-site/install.sh" "$EMAIL"
+done
+# The HN Group Management, Client portal and Support websites were removed (the user's request, 30 October 2026;
+# support is now a section of hngroup.org.uk, network.hngroup.org.uk, media and development). Stop them and take their
+# web addresses down once. Their data stays in /var/lib/hn-<site> (support requests were copied into the staff portal).
+for site in holding clients support; do
+    if pm2 describe "hn-$site" >/dev/null 2>&1 || [ -e "/etc/nginx/sites-enabled/hn-$site" ]; then
+        pm2 delete "hn-$site" >/dev/null 2>&1 || true; pm2 save >/dev/null 2>&1 || true
+        rm -f "/etc/nginx/sites-enabled/hn-$site"
+        if nginx -t >/dev/null 2>&1; then systemctl reload nginx; fi
+        echo "Removed the $site.hngroup.org.uk website (hn-$site)."
+    fi
 done
 # The Horizon Advertising website was deleted (the user's request, 29 October 2026): stop it and take its web address
 # down once. Its files stay in /opt/ha-website; horizonadvertising.co.uk then shows the HN Group "not set up" page.

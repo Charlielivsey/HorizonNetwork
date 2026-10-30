@@ -6,14 +6,14 @@ title: Horizon Network
 | Industry = Digital infrastructure<br>Advertising<br>Software development
 | Products = Horizon Hosting (coming soon)
 | Country = United Kingdom
-| Website = [https://horizon-network.co.uk horizon-network.co.uk]<br>[https://horizonetwork.com horizonetwork.com]
+| Website = [https://network.hngroup.org.uk network.hngroup.org.uk]
 }}
-'''Horizon Network''' is the [[HN Group]] business for digital infrastructure, advertising and software. It brings together its own digital services and infrastructure with [[Horizon Development]], which is part of Horizon Network, and [[Horizon Advertising]], a [[Horizon Media Group]] subsidiary that Horizon Network manages.<ref>[https://horizon-network.co.uk/ Horizon Network], horizon-network.co.uk.</ref>
+'''Horizon Network''' is the [[HN Group]] business for digital infrastructure, advertising and software. It brings together its own digital services and infrastructure with [[Horizon Development]], which is part of Horizon Network, and [[Horizon Advertising]], a [[Horizon Media Group]] subsidiary that Horizon Network manages.<ref>[https://network.hngroup.org.uk/ Horizon Network], horizon-network.co.uk.</ref>
 
 Its tagline is "Connecting ideas. Building what's next." — digital infrastructure, advertising and software, brought together to help businesses build, connect and grow.
 
 == Overview ==
-Horizon Network describes itself as a growing network of digital services and solutions, building the infrastructure for tomorrow's businesses. It is UK based, with 24/7 monitoring and a stated 99.9% uptime for its services. Digital infrastructure is the foundation; advertising helps businesses reach people; development turns ideas into useful software. The network brings them together.<ref>[https://horizon-network.co.uk/services Our services], horizon-network.co.uk.</ref>
+Horizon Network describes itself as a growing network of digital services and solutions, building the infrastructure for tomorrow's businesses. It is UK based, with 24/7 monitoring and a stated 99.9% uptime for its services. Digital infrastructure is the foundation; advertising helps businesses reach people; development turns ideas into useful software. The network brings them together.<ref>[https://network.hngroup.org.uk/services Our services], horizon-network.co.uk.</ref>
 
 == Services ==
 {| class="wikitable"
@@ -40,10 +40,10 @@ On 1 September 2026, Horizon Network merged with [[Horizon Media Group]] to form
 {{Company tree}}
 
 == Leadership ==
-The "About us" page of the Horizon Network website introduces the people guiding the network. It is published live from HN Group's staff records and shows staff whose role at Horizon Network is in the '''Network Leadership''' department, with their job title, photo and the introduction they choose to share.<ref>[https://horizon-network.co.uk/about About us], horizon-network.co.uk.</ref>
+The "About us" page of the Horizon Network website introduces the people guiding the network. It is published live from HN Group's staff records and shows staff whose role at Horizon Network is in the '''Network Leadership''' department, with their job title, photo and the introduction they choose to share.<ref>[https://network.hngroup.org.uk/about About us], horizon-network.co.uk.</ref>
 
 == Website ==
-Horizon Network's website is at [https://horizon-network.co.uk horizon-network.co.uk], with pages about the company, its services, its leadership and a contact form. The same site is also served at '''horizonetwork.com'''; horizon-network.co.uk remains the main address.
+Horizon Network's website is at [https://network.hngroup.org.uk network.hngroup.org.uk], with pages about the company, its services, its leadership and a contact form. Its earlier addresses, horizon-network.co.uk and '''horizonetwork.com''', lead to the same pages there.
 
 == Brand ==
 [[File:horizon-network-wordmark-stacked.svg|thumb|The stacked Horizon Network wordmark, used where space is tight]]
@@ -57,8 +57,8 @@ Like HN Group, Horizon Network uses a heavy wordmark above a stepped line of the
 {{Reflist}}
 
 == External links ==
-* [https://horizon-network.co.uk Official website]
-* [https://horizon-network.co.uk/contact Contact Horizon Network]
+* [https://network.hngroup.org.uk Official website]
+* [https://network.hngroup.org.uk/contact Contact Horizon Network]
 
 [[Category:Companies]]
 [[Category:Horizon Network]]

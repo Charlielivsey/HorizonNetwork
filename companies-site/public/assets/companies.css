@@ -314,3 +314,13 @@ details.mini { border: 0; padding: 0 0 6px; }
 .check.suggested { outline: 3px solid #1d70b8; outline-offset: 3px; border-radius: 2px; }
 .vote-preview .link-button { background: none; border: 0; padding: 0; font: inherit; color: #1d70b8; text-decoration: underline; cursor: pointer; }
 .vote-preview .link-button:focus { outline: 3px solid #ffdd00; background: #ffdd00; color: #0b0c0c; }
+
+/* Footer brand (the user's request, 30 October 2026): the company's logo, its name and, for a subsidiary, its parent. */
+footer .footer-brand { display: grid; justify-items: start; gap: 0; }
+footer .footer-brand img { height: 38px; width: auto; margin: 0 0 .8rem; }
+footer .footer-brand .footer-company { margin: 0; display: grid; gap: .1rem; line-height: 1.4; max-width: none; font-size: inherit; }
+footer .footer-brand .footer-company strong { font-size: 1.02rem; font-weight: 700; }
+footer .footer-brand .footer-parent { opacity: .82; font-size: .88rem; }
+footer .footer-brand .on-dark { display: none; }
+@media (prefers-color-scheme: dark) { footer .footer-brand .on-light { display: none; } footer .footer-brand .on-dark { display: block; } }
+footer .footer-brand { margin-bottom: 1rem; }

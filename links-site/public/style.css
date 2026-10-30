@@ -8,3 +8,10 @@ footer{background:#1c2135;color:#d3cce1}.stripe{display:flex;height:4px}.stripe 
 @media(max-width:900px){.hero{gap:35px;grid-template-columns:1.3fr 1fr}.link-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.search{width:290px}.directory h2{font-size:23px}}
 @media(max-width:620px){.wrap{padding-left:20px;padding-right:20px}.header-inner{height:76px}.brand{gap:14px}.brand img{width:100px}.brand>span{padding-left:14px;font-size:12px}.header-link{font-size:0}.header-link span{font-size:20px}.hero{display:block;padding-top:45px;padding-bottom:45px}.hero h1{font-size:40px}.lead{font-size:14px}.status-feature{display:block;margin-top:30px;padding:25px}.feature-icon{float:right;margin:0}.status-feature>p:not(.eyebrow){max-width:100%}.directory-top{display:block}.search{width:100%;margin-top:22px}.filter-row{display:block;margin:22px 0}.filters{gap:4px}.filters button{padding:7px 10px;font-size:10px}.count{margin-top:15px}.link-grid{grid-template-columns:1fr;gap:16px}.link-card{padding:24px}.help-strip{display:block}.help-strip .button{margin-top:22px}.footer-inner{flex-wrap:wrap;gap:18px}.footer-inner>span{margin-left:0;width:100%}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation:none!important;transition:none!important}}
+
+/* Footer brand (the user's request, 30 October 2026): the company's logo, its name and, for a subsidiary, its parent. */
+footer .footer-brand { display: grid; justify-items: start; gap: 0; }
+footer .footer-brand img { height: 38px; width: auto; margin: 0 0 .8rem; }
+footer .footer-brand .footer-company { margin: 0; display: grid; gap: .1rem; line-height: 1.4; max-width: none; font-size: inherit; }
+footer .footer-brand .footer-company strong { font-size: 1.02rem; font-weight: 700; }
+footer .footer-brand .footer-parent { opacity: .82; font-size: .88rem; }

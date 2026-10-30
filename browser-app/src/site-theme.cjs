@@ -1,7 +1,7 @@
 'use strict';
 const {SITES}=require('./sites.cjs');
 const HOSTS=new Set(SITES.map(([url])=>new URL(url).hostname).filter(host=>host!=='mail.google.com'));
-HOSTS.add('horizonetwork.com');
+HOSTS.add('horizonetwork.com');HOSTS.add('horizon-network.co.uk');
 const PALETTES={
  'midnight-lavender':['#151222','#201b31','#302740','#f2edfc','#b2a6c5','#c3a2ff','#3c3150'],
  daylight:['#f5f3f9','#ffffff','#eae4f4','#251c35','#736781','#6731ad','#dcd3e8'],

@@ -27,7 +27,7 @@ The staff portal issues and validates these independent remembered tokens, store
 
 Update this service with `cd /root/HorizonNetwork && git pull && sudo bash auth-site/install.sh`.
 
-The `network` application has fixed callback `https://horizon-network.co.uk/auth/callback` and admits the system owner and Super Admin members to Horizon Network’s website configuration. Admin entry from horizonetwork.com first redirects to this registered domain, keeping state and session cookies on the callback host.
+The `network` application has fixed callback `https://network.hngroup.org.uk/auth/callback` and admits the system owner and Super Admin members to Horizon Network’s website configuration. The former addresses (horizon-network.co.uk, horizonetwork.com) redirect to network.hngroup.org.uk.
 
 ## Required account setup, including direct Auth visits
 

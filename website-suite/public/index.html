@@ -1,1 +1,46 @@
-<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#5514b4"><meta name="description" content="{{TITLE}} — part of the HN Group family."><title>{{TITLE}} · HN Group</title><link rel="canonical" href="https://{{DOMAIN}}/"><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="preload" href="/assets/fonts/plus-jakarta-sans.woff2" as="font" type="font/woff2" crossorigin><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head><body><a class="skip" href="#content">Skip to content</a><header><a href="/" class="brand" id="brand" aria-label="Home"><img src="/assets/brand/hn-group-wordmark.svg" class="light" alt="HN Group"><img src="/assets/brand/hn-group-wordmark-white.svg" class="dark" alt="HN Group"></a><nav aria-label="Main navigation"><a href="https://links.hngroup.org.uk">Explore HN Group ↗</a><a href="/auth/login">Staff admin →</a></nav></header><main id="content"><div class="loading" role="status">Getting things ready…</div></main><footer><div class="stripe" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="footer-inner"><p id="legal">HN Group Limited</p><div><a href="https://links.hngroup.org.uk">All websites</a><a href="https://status.hngroup.org.uk">Service status</a><a href="https://hngroup.org.uk/contact">Contact</a></div><p>© <span id="year">2026</span> HN Group Limited.</p></div></footer><div id="notice" role="status" tabindex="-1" hidden></div><noscript><p class="wrap">Enable JavaScript to use this site. You can also <a href="https://hngroup.org.uk/contact">contact HN Group</a>.</p></noscript></body></html>
+<!doctype html>
+<html lang="en-GB" data-hn-reveal=".card, .stat, .step, .section-head">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#5514B4">
+    <meta name="description" content="{{DESCRIPTION}}">
+    <title>{{TITLE}}</title>
+    <link rel="canonical" href="https://{{DOMAIN}}/">
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+    <link rel="preload" href="/assets/fonts/plus-jakarta-sans.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="/assets/site.css?v=suite-2">
+    <link rel="stylesheet" href="/assets/hn-motion.css?v=1">
+    <link rel="stylesheet" href="/assets/hn-support.css?v=1">
+    <link rel="stylesheet" href="/assets/suite.css?v=2">
+    <script src="/assets/hn-motion.js?v=1" defer></script>
+    <script src="/app.js?v=2" defer></script>
+</head>
+<body class="kind-{{KIND}}" data-site="{{SITE}}">
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header" id="top" data-hn-header>
+    <div class="wrap header-inner">
+        <a class="brand" href="/" aria-label="{{COMPANY}} home">
+            <img class="on-light" src="/assets/brand/{{LOGO}}.svg" alt="{{COMPANY}}" height="42">
+            <img class="on-dark" src="/assets/brand/{{LOGO}}-white.svg" alt="" height="42">
+        </a>
+        <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu"><span></span><span></span><span></span></button>
+        <nav class="site-nav" id="site-nav" aria-label="Main">{{NAV}}<a class="btn btn-small btn-outline" href="/admin">Admin sign in</a></nav>
+    </div>
+</header>
+<main id="main"><div class="wrap loading" role="status">Loading…</div></main>
+<footer class="site-footer">
+    <div class="stripe hn-stripe-draw" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+    <div class="wrap footer-inner">
+        <div class="footer-brand">
+            <img src="/assets/brand/{{LOGO}}-white.svg" alt="" height="40" loading="lazy">
+            <p class="footer-company"><strong>{{COMPANY}}</strong>{{SUBSIDIARY}}</p>
+        </div>
+        <nav aria-label="Footer" class="footer-links">{{FOOTER_LINKS}}<a class="btn btn-small btn-outline" href="/admin">Admin sign in</a></nav>
+    </div>
+    <div class="wrap footer-legal small">© <span id="year">2026</span> {{LEGAL}}. All rights reserved.</div>
+</footer>
+<div id="notice" class="notice" role="status" tabindex="-1" hidden></div>
+<noscript><p class="wrap">Please turn on JavaScript to use this website, or <a href="https://hngroup.org.uk/contact">contact HN Group</a>.</p></noscript>
+</body>
+</html>

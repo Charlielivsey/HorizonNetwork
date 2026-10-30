@@ -1,1 +1,0 @@
-module.exports={apps:[{name:'hn-clients',script:'/opt/hn-clients/server.js',cwd:'/opt/hn-clients',instances:1,exec_mode:'fork',autorestart:true,max_memory_restart:'256M',env:{NODE_ENV:'production',PORT:4300,DATA_DIR:'/var/lib/hn-clients'}}]};

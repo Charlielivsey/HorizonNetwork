@@ -1,9 +1,0 @@
-{
-  "id": "support",
-  "domain": "support.hngroup.org.uk",
-  "port": 4200,
-  "kind": "support",
-  "name": "HN Group Support",
-  "logo": "hn-group-wordmark",
-  "legal": "HN Group Limited"
-}

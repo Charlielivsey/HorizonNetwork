@@ -8,8 +8,15 @@ function websites(catalog=readCatalog()){
  return result;
 }
 function normalURL(value){try{const u=new URL(value);return u.origin+u.pathname.replace(/\/$/,'');}catch{return null;}}
+const RETIRED=new Set(['holding','clients','support']);
 function reconcile(db,catalog){const offered=new Set(db.cataloguedWebsites||[]);let changed=false;
  for(const site of websites(catalog)){if(offered.has(site.key))continue;let service=db.services.find(s=>normalURL(s.url)===normalURL(site.url));if(!service){if(db.services.length>=50)continue;service={id:'website:'+site.key,name:site.name,url:site.url,override:'auto',checks:[],days:{}};db.services.push(service);}offered.add(site.key);changed=true;}
+ // Monitors the catalogue made follow its names, and go when their website is removed (the user's request, 30 October 2026:
+ // HN Group Management, Client portal and Support removed). Monitors staff added themselves are never touched.
+ const current=new Map(websites(catalog).map(site=>[site.key,site]));
+ db.services=db.services.filter(service=>{if(!String(service.id).startsWith('website:'))return true;const key=service.id.slice(8),site=current.get(key);
+  if(!site){if(RETIRED.has(key.split(':')[0])){changed=true;return false;}return true;}
+  if(service.name!==site.name){service.name=site.name;changed=true;}return true;});
  if(changed)db.cataloguedWebsites=[...offered];return changed;
 }
 function fresh(catalog){const db={services:[],incidents:[]};reconcile(db,catalog);return db;}

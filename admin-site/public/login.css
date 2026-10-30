@@ -99,3 +99,12 @@
 .password-change-note{font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:20px}.setup-pin-entry{margin:10px 0 24px}.setup-pin-entry .setup-pin-input{position:absolute;inset:0;width:100%;height:100%;z-index:2;opacity:0;padding:0;border:0;caret-color:transparent}.setup-pin-entry .pin-boxes span{height:52px}
 
 .resume-mini img{grid-area:1/1;width:100%;height:100%;object-fit:cover;border-radius:50%}.resume-mini>span{grid-area:1/1}
+
+/* Footer brand (the user's request, 30 October 2026): the company's logo, its name and, for a subsidiary, its parent. */
+footer .footer-brand { display: grid; justify-items: start; gap: 0; }
+footer .footer-brand img { height: 38px; width: auto; margin: 0 0 .8rem; }
+footer .footer-brand .footer-company { margin: 0; display: grid; gap: .1rem; line-height: 1.4; max-width: none; font-size: inherit; }
+footer .footer-brand .footer-company strong { font-size: 1.02rem; font-weight: 700; }
+footer .footer-brand .footer-parent { opacity: .82; font-size: .88rem; }
+footer .footer-brand .on-dark { display: none; }
+@media (prefers-color-scheme: dark) { footer .footer-brand .on-light { display: none; } footer .footer-brand .on-dark { display: block; } }

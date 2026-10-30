@@ -42,6 +42,7 @@
     "process": "hn-network",
     "port": 3600,
     "hosts": [
+      "network.hngroup.org.uk",
       "horizon-network.co.uk",
       "www.horizon-network.co.uk",
       "horizonetwork.com",
@@ -184,39 +185,12 @@
     ]
   },
   {
-    "id": "holding",
-    "name": "HN Group Management",
-    "process": "hn-holding",
-    "port": 4000,
-    "hosts": [
-      "holding.hngroup.org.uk"
-    ]
-  },
-  {
     "id": "development",
     "name": "Horizon Development",
     "process": "hn-development",
     "port": 4100,
     "hosts": [
       "development.hngroup.org.uk"
-    ]
-  },
-  {
-    "id": "support",
-    "name": "Support",
-    "process": "hn-support",
-    "port": 4200,
-    "hosts": [
-      "support.hngroup.org.uk"
-    ]
-  },
-  {
-    "id": "clients",
-    "name": "Client portal",
-    "process": "hn-clients",
-    "port": 4300,
-    "hosts": [
-      "clients.hngroup.org.uk"
     ]
   },
   {

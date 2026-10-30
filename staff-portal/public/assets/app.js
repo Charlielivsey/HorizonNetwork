@@ -3688,7 +3688,7 @@
             ],
         },
         {
-            name: "Horizon Network", legal: "Horizon Network Limited", logo: "horizon-network-wordmark", domain: "horizon-network.co.uk",
+            name: "Horizon Network", legal: "Horizon Network Limited", logo: "horizon-network-wordmark", domain: "network.hngroup.org.uk",
             about: "A growing network of digital services and solutions, building the infrastructure for tomorrow's businesses. UK based, with 24/7 monitoring and 99.9% uptime.",
             points: ["Horizon Hosting (coming soon): VPS, dedicated servers and managed cloud"],
             files: [
@@ -3828,9 +3828,9 @@
     // the eight-colour stripe, the parent company line and the confidentiality notice.
     const SIGNATURE_COMPANIES = {
         "HN Group": { logo: "hn-group-email-logo", accent: "#5514B4", web: "hngroup.org.uk", domain: "hngroup.org.uk", legal: "HN Group Limited" },
-        "Horizon Network": { logo: "horizon-network-email-logo", accent: "#5514B4", web: "horizon-network.co.uk", domain: "horizon-network.co.uk", legal: "Horizon Network Limited", parent: "HN Group", parentLegal: "HN Group Limited" },
+        "Horizon Network": { logo: "horizon-network-email-logo", accent: "#5514B4", web: "network.hngroup.org.uk", domain: "horizon-network.co.uk", legal: "Horizon Network Limited", parent: "HN Group", parentLegal: "HN Group Limited" },
         "Horizon Advertising": { logo: "horizon-advertising-email-logo", accent: "#7B52C4", web: "horizonadvertising.co.uk", domain: "horizonadvertising.co.uk", legal: "Horizon Advertising Limited", parent: "Horizon Media Group", parentLegal: "Horizon Media Group Limited" },
-        "Horizon Development": { logo: "horizon-development-email-logo", accent: "#5514B4", web: "horizon-network.co.uk", legal: "Horizon Development", parent: "Horizon Network", parentLegal: "Horizon Network Limited" },
+        "Horizon Development": { logo: "horizon-development-email-logo", accent: "#5514B4", web: "development.hngroup.org.uk", legal: "Horizon Development", parent: "Horizon Network", parentLegal: "Horizon Network Limited" },
         "Horizon Media Group": { logo: "horizon-media-group-email-logo", accent: "#5514B4", web: "hngroup.org.uk", domain: "media.hngroup.org.uk", legal: "Horizon Media Group Limited", parent: "HN Group", parentLegal: "HN Group Limited" },
     };
     const SIG_STRIPE = [["#E97DE8", 14], ["#5514B4", 14], ["#E3E65B", 6], ["#3E9BA3", 20], ["#7A1F6C", 10], ["#C2306B", 10], ["#5FAE7B", 13], ["#1C2235", 13]];
@@ -6556,6 +6556,7 @@
         "retention-cleanup": ["\u2014 old data was deleted:", "system"],
         "leaver-record-deleted": ["\u2014 a leaver\u2019s record was deleted:", "system"],
         "website-enquiry": ["sent a message from the website:", "workplace"],
+        "website-support": ["sent a support request from the website:", "workplace"],
         "website-application": ["applied on the website for", "staff"],
         "enquiry-updated": ["updated the website enquiry from", "workplace"],
         "enquiry-deleted": ["deleted the website enquiry from", "workplace"],
@@ -7936,7 +7937,7 @@
             '<div class="grid-2"><div><label for="vf-close">Closing date <span class="muted small">(optional)</span></label><input type="date" id="vf-close" value="' + esc(v.closingDate || "") + '"></div>' +
             '<div><label for="vf-mgr">Hiring manager</label><select id="vf-mgr"><option value="">None</option>' + d.people.map(function (p) { return '<option value="' + p.id + '"' + (p.id === v.hiringManagerId ? " selected" : "") + ">" + esc(p.displayName) + "</option>"; }).join("") + "</select></div></div>" +
             '<label for="vf-desc">Description</label><textarea id="vf-desc" rows="7" maxlength="6000" placeholder="What the role involves, who you’re looking for…">' + esc(v.description) + "</textarea>" +
-            '<label class="inline-check"><input type="checkbox" id="vf-public"' + (v.publicListing ? " checked" : "") + "> Advertise on the HN Group website (hngroup.org.uk/careers), where anyone can apply with a CV</label>" +
+            '<label class="inline-check"><input type="checkbox" id="vf-public"' + (v.publicListing ? " checked" : "") + "> Advertise on HN Group Careers (careers.hngroup.org.uk), where anyone can apply with a CV and check how their application is going</label>" +
             '<div class="form-error" id="vf-error" hidden></div>' +
             '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">' + (v.id ? "Save" : "Post vacancy") + "</button></div></form>",
             { wide: true }
@@ -9967,9 +9968,9 @@
         if (!current()) return;
         let filter = state.enqFilter || "inbox";
         let openId = new URLSearchParams(window.location.search).get("e");
-        root.innerHTML = '<div class="page-head"><div><h1>Website enquiries</h1><p class="muted">Messages sent from the contact form on hngroup.org.uk. Reply from your own email, then mark them as dealt with.</p></div></div>' +
+        root.innerHTML = '<div class="page-head"><div><h1>Website enquiries</h1><p class="muted">Messages and support requests from the group\u2019s websites. Reply to support requests here (the person reads it on the website with their private reference); reply to enquiries from your own email. Then mark them as dealt with.</p></div></div>' +
             '<div class="toolbar"><label class="search">' + icon("search") + '<input type="search" id="enq-search" placeholder="Search by name, email or message"></label>' +
-            '<div class="company-tabs" id="enq-tabs">' + [["inbox", "To deal with"], ["mine", "Assigned to me"], ["done", "Dealt with"], ["spam", "Spam"], ["all", "All"]].map(function (t) {
+            '<div class="company-tabs" id="enq-tabs">' + [["inbox", "To deal with"], ["support", "Support requests"], ["mine", "Assigned to me"], ["done", "Dealt with"], ["spam", "Spam"], ["all", "All"]].map(function (t) {
                 const n = t[0] === "inbox" ? d.enquiries.filter(function (e) { return e.status === "new" || e.status === "open"; }).length : 0;
                 return '<button type="button" data-f="' + t[0] + '">' + t[1] + (n ? ' <span class="tab-count">' + n + "</span>" : "") + "</button>";
             }).join("") + "</div></div>" +
@@ -9980,8 +9981,9 @@
             return d.enquiries.filter(function (e) {
                 if (filter === "inbox" && !(e.status === "new" || e.status === "open")) return false;
                 if (filter === "mine" && e.assigneeId !== state.me.id) return false;
+                if (filter === "support" && (e.kind !== "support" || e.status === "spam")) return false;
                 if ((filter === "done" || filter === "spam") && e.status !== filter) return false;
-                return !q || [e.name, e.email, e.organisation, e.message, e.company].join(" ").toLowerCase().indexOf(q) !== -1;
+                return !q || [e.name, e.email, e.organisation, e.message, e.company, e.subject].concat((e.messages || []).map(function (m) { return m.text; })).join(" ").toLowerCase().indexOf(q) !== -1;
             });
         }
         function drawList() {
@@ -9991,8 +9993,8 @@
             $("#enq-list").innerHTML = list.length ? list.map(function (e) {
                 return '<button type="button" class="enq-row' + (e.id === openId ? " active" : "") + (e.status === "new" ? " is-new" : "") + '" data-e="' + e.id + '">' +
                     '<span class="enq-top"><strong>' + esc(e.name) + '</strong><span class="muted small">' + esc(timeAgo(e.createdAt)) + "</span></span>" +
-                    '<span class="muted small">' + esc(e.topicLabel) + (e.company ? " · " + esc(e.company) : "") + "</span>" +
-                    '<span class="enq-snip small">' + esc(e.message.slice(0, 110)) + "</span></button>";
+                    '<span class="muted small">' + (e.kind === "support" ? "Support · " + esc(e.siteLabel) + " · " + esc(e.subject) : esc(e.topicLabel) + (e.company ? " · " + esc(e.company) : "")) + "</span>" +
+                    '<span class="enq-snip small">' + esc(((e.messages && e.messages.length ? e.messages[e.messages.length - 1].text : "") || e.message).slice(0, 110)) + "</span></button>";
             }).join("") : '<div class="empty-page">' + icon("mail", "big") + "<h2>Nothing here</h2><p class=\"muted\">New messages from the website appear here.</p></div>";
             drawDetail();
         }
@@ -10001,15 +10003,21 @@
             const box = $("#enq-detail");
             box.hidden = !e;
             if (!e) return;
-            const subject = "Re: your message to HN Group";
+            const support = e.kind === "support";
+            const subject = support ? "Re: " + e.subject : "Re: your message to HN Group";
             box.innerHTML = '<div class="panel-head"><div><h2 class="panel-title">' + esc(e.name) + "</h2>" +
-                '<p class="muted small">' + esc(fmtDateTime(e.createdAt)) + " · " + esc(e.topicLabel) + (e.company ? " · about " + esc(e.company) : "") + "</p></div>" +
+                '<p class="muted small">' + esc(fmtDateTime(e.createdAt)) + " · " + (support ? "Support request on " + esc(e.siteLabel) + " · " + esc(e.topicLabel) : esc(e.topicLabel) + (e.company ? " · about " + esc(e.company) : "")) + "</p>" +
+                (support ? '<p class="small"><strong>' + esc(e.subject) + "</strong></p>" : "") + "</div>" +
                 '<span class="badge ' + (e.status === "done" ? "badge-green" : e.status === "spam" ? "badge-red" : e.status === "new" ? "badge-yellow" : "") + '">' + esc(e.statusLabel) + "</span></div>" +
                 '<div class="enq-contact">' +
                 '<a href="mailto:' + esc(e.email) + "?subject=" + encodeURIComponent(subject) + '">' + icon("mail") + esc(e.email) + "</a>" +
                 (e.phone ? '<a href="tel:' + esc(e.phone.replace(/[^\d+]/g, "")) + '">' + icon("phone") + esc(e.phone) + "</a>" : "") +
                 (e.organisation ? "<span>" + icon("building") + esc(e.organisation) + "</span>" : "") + "</div>" +
                 '<div class="enq-message">' + richText(e.message) + "</div>" +
+                (support ? (e.messages || []).map(function (msg) {
+                    return '<div class="enq-message' + (msg.from === "customer" ? "" : " enq-staff-reply") + '"><div class="small"><strong>' + esc(msg.byName) + '</strong> <span class="muted">' + esc(fmtDateTime(msg.at)) + (msg.from === "customer" ? "" : " · reply on the website") + "</span></div>" + richText(msg.text) + "</div>";
+                }).join("") +
+                '<form class="stack-form" id="enq-reply"><label for="enq-reply-text">Reply on the website</label><textarea id="enq-reply-text" maxlength="5000" rows="4" placeholder="' + esc(e.name.split(" ")[0]) + ' reads this with their private reference on the website. No email is sent."></textarea><div class="form-actions"><button type="submit" class="btn btn-primary btn-small">' + icon("message") + 'Send reply</button></div></form>' : "") +
                 '<div class="grid-2"><div><label for="enq-assign">Assigned to</label><select id="enq-assign"><option value="">Nobody</option>' + d.handlers.map(function (h) {
                     return '<option value="' + h.id + '"' + (h.id === e.assigneeId ? " selected" : "") + ">" + esc(h.displayName) + "</option>";
                 }).join("") + "</select></div>" +
@@ -10023,7 +10031,7 @@
                 '<form class="inline-form" id="enq-note"><input type="text" maxlength="3000" placeholder="e.g. Replied with our rates, following up on Friday"><button type="submit" class="btn btn-ghost btn-small">Add note</button></form>' +
                 '<div class="form-actions enq-actions">' +
                 '<button type="button" class="icon-btn" id="enq-del" aria-label="Delete enquiry">' + icon("trash") + "</button>" +
-                '<a class="btn btn-ghost" href="mailto:' + esc(e.email) + "?subject=" + encodeURIComponent(subject) + '">' + icon("mail") + "Reply by email</a>" +
+                '<a class="btn btn-ghost" href="mailto:' + esc(e.email) + "?subject=" + encodeURIComponent(subject) + '">' + icon("mail") + (support ? "Email them" : "Reply by email") + "</a>" +
                 (e.status !== "done" ? '<button type="button" class="btn btn-primary" id="enq-done">' + icon("check") + "Mark as dealt with</button>" : "") + "</div>";
         }
         async function save(body) {
@@ -10057,6 +10065,12 @@
             if (ev.target.id === "enq-status") save({ status: ev.target.value });
         });
         root.addEventListener("submit", function (ev) {
+            if (ev.target.id === "enq-reply") {
+                ev.preventDefault();
+                const text = $("#enq-reply-text", ev.target);
+                if (text.value.trim()) save({ reply: text.value }).then(function () { toast("Reply sent. They\u2019ll see it on the website with their reference."); });
+                return;
+            }
             if (ev.target.id !== "enq-note") return;
             ev.preventDefault();
             const input = $("input", ev.target);

@@ -18,7 +18,7 @@ protected: yes
 * … that the stripe under the [[HN Group#Brand|HN Group wordmark]] is made of '''eight colours''' arranged in steps?
 * … that [[Horizon Advertising]] is a subsidiary of [[Horizon Media Group]], but is managed by [[Horizon Network]]?
 * … that Horizon Hosting, [[Horizon Network]]'s planned hosting service, will offer VPS, dedicated servers and managed cloud?
-* … that Horizon Network can also be reached at '''horizonetwork.com''', with '''horizon-network.co.uk''' as its main address?
+* … that Horizon Network's website is at '''network.hngroup.org.uk''', and its earlier addresses '''horizon-network.co.uk''' and '''horizonetwork.com''' lead there?
 * … that [[HN Group Management]] owns the group's domains, Discord servers and technical assets, but has no staff of its own?
 * … that [[Horizon Advertising]]'s roundel logo is lavender, while the other Horizon roundels are indigo?
 {{Box end}}

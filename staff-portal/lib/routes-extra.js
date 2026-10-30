@@ -1203,7 +1203,13 @@ async function handlePublic(req, res, pathname) {
     const a = recruitment.addWebsiteApplicant(v, meta, buffer);
     store.audit({ action: "website-application", actor: a.email, target: v.title, detail: a.name, ip });
     if (notify) notify(staffWith(recruitment.MANAGE).concat(v.hiringManagerId || []), { type: "jobs", title: `${a.name} applied for ${v.title} on the website`, link: "/jobs" }, null);
-    return sendJson(res, 201, { ok: true }), true;
+    return sendJson(res, 201, { ok: true, reference: a.plainReference }), true;
+  }
+  if (method === "POST" && pathname === "/api/public/jobs/application") {
+    if (!publicLimit("application:" + ip, 30)) throw httpError(429, "Too many attempts. Please try again in ten minutes.");
+    const status = recruitment.applicationStatus((await readJsonBody(req)).reference);
+    if (!status) throw httpError(404, "We couldn't find an application with that reference. Check you copied all of it.");
+    return sendJson(res, 200, { application: status }), true;
   }
   if (method === "POST" && pathname === "/api/public/enquiry") {
     if (!publicLimit(ip, 5)) throw httpError(429, "You've sent a few messages already. Please try again later.");
@@ -1213,6 +1219,30 @@ async function handlePublic(req, res, pathname) {
       if (notify) notify(staffWith(enquiries.MANAGE), { type: "info", title: `Website enquiry from ${e.name}`, body: enquiries.TOPICS[e.topic] + (e.company ? " · " + e.company : ""), link: "/enquiries" }, null);
     }
     return sendJson(res, 201, { ok: true }), true;
+  }
+  // Support requests from the support sections of the group's websites (private reference, replies on the site).
+  if (method === "GET" && pathname === "/api/public/support/topics") {
+    return sendJson(res, 200, { topics: enquiries.SUPPORT_TOPICS }), true;
+  }
+  if (method === "POST" && pathname === "/api/public/support") {
+    if (!publicLimit(ip, 5)) throw httpError(429, "You've sent a few requests already. Please try again later.");
+    const { request: e, reference } = enquiries.createSupport(await readJsonBody(req), ip);
+    if (e.status !== "spam") {
+      store.audit({ action: "website-support", actor: e.email, detail: enquiries.SITES[e.site] + " · " + e.subject, ip });
+      if (notify) notify(staffWith(enquiries.MANAGE), { type: "info", title: `Support request from ${e.name}`, body: e.subject + " · " + enquiries.SITES[e.site], link: "/enquiries?e=" + e.id }, null);
+    }
+    return sendJson(res, 201, { reference }), true;
+  }
+  if (method === "POST" && pathname === "/api/public/support/track") {
+    if (!publicLimit("track:" + ip, 60)) throw httpError(429, "Too many attempts. Please try again in ten minutes.");
+    const body = await readJsonBody(req);
+    const e = enquiries.byReference(body.reference);
+    if (!e) throw httpError(404, "We couldn't find a request with that reference. Check you copied all of it.");
+    if (body.message) {
+      enquiries.customerReply(e, body.message);
+      if (notify) notify(staffWith(enquiries.MANAGE).filter((id) => !e.assigneeId || id === e.assigneeId), { type: "info", title: `${e.name} replied to their support request`, body: e.subject, link: "/enquiries?e=" + e.id }, null);
+    }
+    return sendJson(res, 200, { request: enquiries.publicView(e) }), true;
   }
   throw httpError(404, "Not found.");
 }

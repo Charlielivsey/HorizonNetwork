@@ -5,3 +5,10 @@
 .download-grid.three,.app-section .download-grid.three{grid-template-columns:repeat(3,minmax(0,360px))}.linux-icon{font-family:ui-monospace,"DejaVu Sans Mono",Menlo,monospace;font-weight:700;font-size:30px;letter-spacing:-1px;height:36px;display:flex;align-items:center}
 @media(max-width:1100px){.download-grid.three,.app-section .download-grid.three{grid-template-columns:repeat(2,minmax(0,380px))}}
 @media(max-width:760px){.download-grid.three,.app-section .download-grid.three{grid-template-columns:1fr}}
+
+/* Footer brand (the user's request, 30 October 2026): the company's logo, its name and, for a subsidiary, its parent. */
+footer .footer-brand { display: grid; justify-items: start; gap: 0; }
+footer .footer-brand img { height: 38px; width: auto; margin: 0 0 .8rem; }
+footer .footer-brand .footer-company { margin: 0; display: grid; gap: .1rem; line-height: 1.4; max-width: none; font-size: inherit; }
+footer .footer-brand .footer-company strong { font-size: 1.02rem; font-weight: 700; }
+footer .footer-brand .footer-parent { opacity: .82; font-size: .88rem; }

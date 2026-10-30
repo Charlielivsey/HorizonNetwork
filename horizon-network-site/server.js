@@ -45,10 +45,11 @@ const server=http.createServer(async(req,res)=>{
   res.setHeader('Content-Security-Policy',"default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; font-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'");
   try{
     const url=new URL(req.url,ORIGIN),route=url.pathname;
-    // Always start admin sign-in on the registered callback domain, so cookies and state match.
+    // The site moved to network.hngroup.org.uk (the user's request, 30 October 2026). nginx redirects the old addresses;
+    // this keeps them going to the same page if a request still arrives with an old host name.
     const host=String(req.headers.host || '').split(':')[0].toLowerCase();
-    if(['horizonetwork.com','www.horizonetwork.com'].includes(host) && (route==='/admin' || route.startsWith('/auth/'))) {
-      res.writeHead(302,{Location:ORIGIN+url.pathname+url.search});return res.end();
+    if(['horizon-network.co.uk','www.horizon-network.co.uk','horizonetwork.com','www.horizonetwork.com'].includes(host)) {
+      res.writeHead(301,{Location:ORIGIN+url.pathname+url.search});return res.end();
     }
     if(route==='/healthz')return json(res,200,{ok:true});
     if(await auth.handle(req,res,route))return;
@@ -83,6 +84,7 @@ const server=http.createServer(async(req,res)=>{
     if(match&&req.method==='GET')return await leadership('avatar',res,match[1]);
     if(route==='/api/news'&&req.method==='GET')return json(res,200,{posts:await siteNews()});
     if(route==='/api/public/enquiry'&&req.method==='POST')return publicApi(req,res);
+    if(['/api/public/support','/api/public/support/track'].includes(route)&&req.method==='POST')return publicApi(req,res);
     if(route.startsWith('/api/'))return json(res,404,{error:'Not found.'});
     if(!['GET','HEAD'].includes(req.method))return json(res,405,{error:'Method not allowed.'});
     const decoded=decodeURIComponent(route);
