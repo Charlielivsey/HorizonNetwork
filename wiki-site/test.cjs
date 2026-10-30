@@ -109,6 +109,7 @@ test('HN Group Wiki: reading, editing, history, protection and safety', async ()
     for (const [route, text] of [['/wiki/Main_Page', 'Welcome to HN Group Wiki'], ['/wiki/HN_Group', 'parent company'], ['/wiki/Horizon_Network', 'horizon-network.co.uk'], ['/wiki/Horizon_Advertising', 'subsidiary of'], ['/wiki/Horizon_Development', 'Custom software'], ['/wiki/Horizon_Media_Group', 'media arm'], ['/wiki/Horizon_Assets_Management', 'Discord servers'], ['/wiki/Horizon_Network_Limited', 'Horizon Network Limited'], ['/wiki/List_of_HN_Group_companies', 'Horizon Advertising'], ['/wiki/Help:Editing', 'Infoboxes'], ['/wiki/Category:Companies', 'Pages in category']]) {
       const r = await anon.go(route); assert.equal(r.status, 200, route); assert.ok(r.text.includes(text), route + ' should mention ' + text);
     }
+    { const page = (await anon.go('/wiki/Horizon_Network')).text; assert.match(page, /<th[^>]*>Type<\/th>\s*<td[^>]*>Private limited company/); assert.doesNotMatch(page, /Wholly owned subsidiary/, 'Type is the kind of company, not what it belongs to'); }
     assert.ok((await anon.go('/wiki/Horizon_Advertising')).text.includes('Managed by'), 'Advertising infobox shows who manages it');
     for (const t of ['HN_Group', 'Horizon_Network', 'Horizon_Advertising', 'Horizon_Development', 'Horizon_Media_Group', 'Horizon_Assets_Management', 'List_of_HN_Group_companies']) {
       const html = (await anon.go('/wiki/' + t)).text;

@@ -169,6 +169,13 @@ function statusSentence(c, n) {
   if (c.status === 'Dormant') return n + ' is dormant: it is registered but not currently trading.';
   return '';
 }
+function companyType(legal) {
+  const n = String(legal || '').trim();
+  if (/\b(plc|public limited company)$/i.test(n)) return 'Public limited company';
+  if (/\b(limited|ltd\.?)$/i.test(n)) return 'Private limited company';
+  if (/\b(llp|limited liability partnership)$/i.test(n)) return 'Limited liability partnership';
+  return '';
+}
 function companyOf(name) { return companies && companies.register ? companies.register.find(name) : null; }
 function sourceNote(c) { const R = companies.register; return 'Facts from the <a class="external" href="' + esc(R.registerUrl(c)) + '" rel="noopener">HN Group Company Register</a>, updated automatically.'; }
 
@@ -181,8 +188,10 @@ function companyInfobox(params, ctx) {
   const given = Object.fromEntries(extras.map((p) => [p.slice(0, p.indexOf('=')).trim().toLowerCase(), p.slice(p.indexOf('=') + 1).trim()]));
   const rows = [];
   const add = (key, value) => { if (value) rows.push(key + ' = ' + value); };
-  const whollyOwned = own.length === 1 && own[0].company && own[0].share === '100%';
-  add('Type', c.type || (parent ? (whollyOwned ? 'Wholly owned subsidiary' : 'Subsidiary') : ''));
+  // The kind of company (the user's request, 30 October 2026: "Type … should pull company type, not what it is a part
+  // of"): the type recorded on the register, or, when none is recorded, what its legal name says it is. Being a
+  // subsidiary is shown by the Owner and Parent rows instead.
+  add('Type', c.type || companyType(c.legalName));
   add(own.length > 1 ? 'Owners' : 'Owner', own.map((o) => ownerText(o, hasClasses(c))).join('<br>'));
   if (hasClasses(c)) add('Share classes', ['A', 'B', 'C'].map((k) => 'Class ' + k + ' ' + c.shareClasses['class' + k] + '%').join('<br>'));
   const ctrl = own.find((o) => o.votingControl);
