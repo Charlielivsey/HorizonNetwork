@@ -52,7 +52,7 @@ function createAuth(store) {
     // Changes must come from this website itself.
     if (req.method !== 'GET' && req.headers.origin !== ORIGIN) throw fail(403, 'That request didn’t come from HN Group Contracts.');
     if (Date.now() - (s.checked || 0) > 60000) {
-      try { const r = await authApi('session', { session: s.authSession }); store.updateSession(token, { user: userOf(r.user), checked: Date.now() }); }
+      try { const r = await authApi('session', { session: s.authSession }); store.updateSession(token, { user: userOf(r.user), checked: Date.now(), ...(r.expires > Date.now() ? { expires: Math.min(r.expires, Date.now() + 30 * 86400000) } : {}) }); }
       catch (e) { if ([401, 403].includes(e.status)) { store.endSession(token); return null; } throw e; }
     }
     const now = store.session(token);
@@ -76,7 +76,7 @@ function createAuth(store) {
       const old = cookie(req, SESSION_COOKIE); if (old) store.endSession(old);
       const token = store.createSession(userOf(result.user), result.session, result.expires);
       let next = '/'; try { next = safeNext(Buffer.from(nextRaw || '', 'base64url').toString('utf8')); } catch {}
-      redirect(res, next, [clear, setCookie(SESSION_COOKIE, token)]);
+      redirect(res, next, [clear, setCookie(SESSION_COOKIE, token, 30 * 86400)]);
       return true;
     }
     if (url.pathname === '/auth/logout' && req.method === 'POST') {

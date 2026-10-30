@@ -72,7 +72,7 @@ function createAuth(store) {
     if (Date.now() - (s.checked || 0) > 60000) {
       try {
         const r = await authApi('session', { session: s.authSession }), user = userOf(r.user);
-        store.updateSession(token, { user, checked: Date.now() }); store.notePerson(user);
+        store.updateSession(token, { user, checked: Date.now(), ...(r.expires > Date.now() ? { expires: Math.min(r.expires, Date.now() + 30 * 86400000) } : {}) }); store.notePerson(user);
         if (Date.now() - (s.avatarChecked || 0) > 10 * 60000) { store.updateSession(token, { avatarChecked: Date.now() }); await refreshAvatar(store, user, s.authSession); }
       }
       catch (e) { if ([401, 403].includes(e.status)) { store.endSession(token); return null; } throw e; }
@@ -100,7 +100,7 @@ function createAuth(store) {
       store.notePerson(user);
       await refreshAvatar(store, user, result.session);
       let next = '/'; try { next = safeNext(Buffer.from(nextRaw || '', 'base64url').toString('utf8')); } catch {}
-      redirect(res, next, [clear, setCookie(SESSION_COOKIE, token)]);
+      redirect(res, next, [clear, setCookie(SESSION_COOKIE, token, 30 * 86400)]);
       return true;
     }
     if (url.pathname === '/auth/logout' && req.method === 'POST') {

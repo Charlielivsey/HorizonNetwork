@@ -16,7 +16,7 @@ const crypto = require('node:crypto');
 const catalog = require('./catalog');
 const { sanitize, plain, decode } = require('./sanitize');
 
-const SESSION_MS = 12 * 3600 * 1000, MAX_DOCS = 20000, MAX_AUDIT = 5000, MAX_FILE = 25 * 1024 * 1024, MAX_FILES_EACH = 1000;
+const SESSION_MS = 30 * 86400 * 1000, MAX_DOCS = 20000, MAX_AUDIT = 5000, MAX_FILE = 25 * 1024 * 1024, MAX_FILES_EACH = 1000;
 const STATUSES = ['draft', 'final'];
 const SHARING = ['staff', 'private'];
 const hash = (s) => crypto.createHash('sha256').update(String(s)).digest('hex');

@@ -256,6 +256,12 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
         res.writeHead(200, { 'Content-Type': avatar.mime, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
         fs.createReadStream(avatar.file).on('error', () => res.destroy()).pipe(res); return true;
       }
+      // Website sign-ins made through HN Group Auth stay signed in while they're used: Auth asks for 30 more days on
+      // each check (the user's request, 30 October 2026: "not keeping signed in"). Disabled accounts are refused above.
+      if (pathname === '/api/auth/profile' && body.extend === true) {
+        const until = Date.now() + 30 * 86400000;
+        if (active.data.expires < until - 3600000) { active.data.expires = until; if (typeof sessions.save === 'function') sessions.save(60 * 1000); }
+      }
       sendJson(res,200,{session:token,expires:active.data.expires,user:identity(active)});return true;
     }
     if (!allowed(active, store)) { sendJson(res, 403, { error: 'Only the system owner and Super Admin members can manage status.' }); return true; }

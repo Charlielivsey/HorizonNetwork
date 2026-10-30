@@ -41,7 +41,7 @@ function audit(who, action, c, detail) {
 const hash = (t) => sha256(String(t));
 function createSession(user, authSession, expires) {
   const token = crypto.randomBytes(32).toString('hex');
-  db.sessions[hash(token)] = { user, authSession, checked: Date.now(), expires: Math.min(Number(expires) || 0, Date.now() + 12 * 3600000) || Date.now() + 3600000 };
+  db.sessions[hash(token)] = { user, authSession, checked: Date.now(), expires: Math.min(Number(expires) || 0, Date.now() + 30 * 86400000) || Date.now() + 3600000 };
   save(); return token;
 }
 function session(token) {

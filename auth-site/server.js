@@ -38,6 +38,21 @@ const COOKIE = '__Host-hn_auth_session', FLOW = '__Host-hn_auth_flow', REMEMBER 
 const secretFile = process.env.STATUS_SSO_SECRET_FILE || '/var/lib/hn-status-sso/secret';
 const backend = process.env.STAFF_PORTAL_BACKEND || 'http://127.0.0.1:3200';
 const sessions = new Map(), challenges = new Map(), codes = new Map(), applicationSessions = new Map();
+// Website sign-ins (the user's request, 30 October 2026: "not keeping signed in"). Each one keeps its own copy of the
+// staff sign-in, so it isn't ended when Auth's own page ends its browser session (on every page load) or when Auth
+// restarts: they're saved (keyed by a hash of the token) in DATA_DIR/app-sessions.json and last 30 days from last use.
+const APP_SESSIONS_FILE = process.env.DATA_DIR ? path.join(process.env.DATA_DIR, 'app-sessions.json') : '';
+try { if (APP_SESSIONS_FILE) for (const [k, v] of Object.entries(JSON.parse(fs.readFileSync(APP_SESSIONS_FILE, 'utf8')))) if (v && v.entry && v.expires > Date.now()) applicationSessions.set(k, v); } catch {}
+let appSaveTimer = null;
+function saveAppSessions() {
+  if (!APP_SESSIONS_FILE || appSaveTimer) return;
+  appSaveTimer = setTimeout(() => {
+    appSaveTimer = null;
+    const out = {}; for (const [k, v] of applicationSessions) if (v.entry && !v.native && v.expires > Date.now()) out[k] = { session: '', client: v.client, expires: v.expires, entry: { staffSession: v.entry.staffSession, expires: v.entry.expires } };
+    try { const tmp = APP_SESSIONS_FILE + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(out), { mode: 0o600 }); fs.renameSync(tmp, APP_SESSIONS_FILE); } catch (e) { console.error('Could not save website sign-ins:', e.message); }
+  }, 2000);
+  appSaveTimer.unref?.();
+}
 const random = () => crypto.randomBytes(32).toString('hex');
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 function cookie(req, name) { return (req.headers.cookie || '').split(';').map(s => s.trim()).find(s => s.startsWith(name + '='))?.slice(name.length + 1) || ''; }
@@ -75,10 +90,12 @@ async function staff(endpoint, data, req, login = false, method = 'POST') {
   if (!response.ok) throw Object.assign(fail(response.status, value.error || 'Sign-in could not be verified.'), { restart: !!value.restart });
   return { value, response };
 }
-async function profile(entry) {
+// extend: a website's sign-in asks the staff account service for 30 more days each time it's checked, so people stay
+// signed in to websites while they use them.
+async function profile(entry, extend = false) {
   if (!entry || entry.expires <= Date.now()) throw fail(401, 'Please sign in again.');
-  const { value } = await staff('/api/auth/profile', { session: entry.staffSession });
-  entry.expires = Math.min(entry.expires, value.expires);
+  const { value } = await staff('/api/auth/profile', { session: entry.staffSession, ...(extend ? { extend: true } : {}) });
+  entry.expires = extend ? value.expires : Math.min(entry.expires, value.expires);
   return value.user;
 }
 function requireReady(user) { if (user.passwordChangeRequired) throw fail(403, 'Create a new password before continuing.'); if (user.codeSetupRequired) throw fail(403, 'Set your sign-in PIN before continuing.'); }
@@ -154,7 +171,9 @@ const server = http.createServer(async (req, res) => {
         if (!application || application.client !== clientId || application.expires <= Date.now()) throw fail(401, 'Application sign-in expired.');
         token = application.session; applicationToken = data.session; detachedEntry = application.entry;
       }
-      const entry = detachedEntry || (HEX.test(token || '') && sessions.get(token)), user = await profile(entry);
+      const entry = detachedEntry || (HEX.test(token || '') && sessions.get(token));
+      const user = await profile(entry, !!detachedEntry);
+      if (detachedEntry) { const application = applicationSessions.get(hash(applicationToken)); if (application && application.expires !== entry.expires) { application.expires = entry.expires; saveAppSessions(); } }
       requireReady(user);
       if (!CLIENTS[clientId].allowed(user)) throw fail(403, CLIENTS[clientId].denied);
       if (clientId === 'portal' || clientId === 'accounts') {
@@ -167,7 +186,11 @@ const server = http.createServer(async (req, res) => {
       if (!applicationToken) {
         if (applicationSessions.size >= 10000) throw fail(503, 'Please try signing in again shortly.');
         applicationToken = random();
-        applicationSessions.set(hash(applicationToken), {session:token,client:clientId,expires:entry.expires});
+        const own = { staffSession: entry.staffSession, expires: entry.expires };
+        await profile(own, true).catch(() => {});
+        applicationSessions.set(hash(applicationToken), {session:token,client:clientId,expires:own.expires,entry:own});
+        saveAppSessions();
+        return send(res, 200, { session: applicationToken, expires: own.expires, user });
       }
       return send(res, 200, { session: applicationToken, expires: entry.expires, user });
     }
@@ -300,6 +323,6 @@ const server = http.createServer(async (req, res) => {
     fs.createReadStream(path.join(__dirname, 'public', file)).pipe(res);
   } catch (e) { send(res, e.status || 503, { error: e.status ? e.message : 'Authentication service is unavailable. Please try again shortly.', ...(e.restart ? { restart: true } : {}) }, e.restart ? [setCookie(REMEMBER, '', 0)] : []); }
 });
-setInterval(() => { for (const [key, value] of applicationSessions) if (value.expires <= Date.now() || !value.entry && !sessions.has(value.session)) applicationSessions.delete(key); for (const map of [sessions, challenges, codes]) for (const [key, value] of map) if (value.expires <= Date.now()) map.delete(key); }, 60000).unref();
+setInterval(() => { for (const [key, value] of applicationSessions) if (value.expires <= Date.now() || !value.entry && !sessions.has(value.session)) { applicationSessions.delete(key); saveAppSessions(); } for (const map of [sessions, challenges, codes]) for (const [key, value] of map) if (value.expires <= Date.now()) map.delete(key); }, 60000).unref();
 if (require.main === module) server.listen(Number(process.env.PORT || 3400), process.env.HOST || '127.0.0.1');
 module.exports = { server, discord };
