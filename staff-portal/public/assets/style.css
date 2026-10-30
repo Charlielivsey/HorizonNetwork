@@ -3915,3 +3915,115 @@ input[type="range"] { width: 100%; accent-color: var(--primary); }
     /* Leaves room for the close button above the menu row while the staff header is hidden. */
     .modal-profile.show-discord .profile-body { padding-top: 3.6rem; }
 }
+
+/* =================================================================
+   The HN Group website theme (the user's request, 30 October 2026:
+   "match the theme and animation across staff portal, accounts,
+   admin, status, docs, contracts…"). The portal now looks like
+   hngroup.org.uk: Light and Dark use the main website's colours,
+   every theme gets its header (the theme's own background, blurred,
+   plain links underlined when current, border once scrolled), pill
+   buttons, 18px cards that lift, page heads in the hero style with
+   the stepped stripe, and the navy striped footer. Movement comes
+   from hn-motion.css/js, shared with the other HN Group websites.
+   Your chosen theme (Midnight, Ocean, …) keeps its colours.
+   ================================================================= */
+:root[data-theme="light"] {
+    --primary: #5514B4; --primary-hover: #4710A0; --primary-tint: #EEE6FA; --on-primary: #FFFFFF;
+    --bg: #FFFFFF; --surface: #FFFFFF; --surface-2: #F6F3FB; --input-bg: #FFFFFF; --row-hover: #FAF8FD;
+    --text: #17161C; --text-muted: #5A5C6B; --border: #E5E0EE; --border-strong: #D3CBE2; --border-hover: #CFC6DF;
+    --focus-ring: rgba(85, 20, 180, .16); --primary-soft-border: #DCCDF3;
+}
+:root[data-theme="dark"] {
+    --primary: #A47BF0; --primary-hover: #B994F5; --primary-tint: #2A2350; --on-primary: #12101F;
+    --bg: #0E1020; --surface: #181C32; --surface-2: #14172B; --input-bg: #0E1020; --row-hover: #1C2138;
+    --text: #F1F0F7; --text-muted: #A6A8BA; --border: #2A2F4A; --border-strong: #3A4062; --border-hover: #454C70;
+    --focus-ring: rgba(164, 123, 240, .3); --primary-soft-border: rgba(164, 123, 240, .4);
+}
+:root { --radius: 18px; --topbar-h: 72px; }
+body { background: var(--bg); background-attachment: scroll; font-size: 16px; }
+
+/* Header, as on hngroup.org.uk */
+.topbar {
+    background: color-mix(in srgb, var(--bg) 86%, transparent);
+    backdrop-filter: saturate(160%) blur(14px); -webkit-backdrop-filter: saturate(160%) blur(14px);
+    box-shadow: none; border-bottom: 1px solid transparent; transition: border-color .2s;
+    padding: 0 max(1.5rem, calc((100% - 1240px) / 2));
+}
+.topbar.scrolled { border-bottom-color: var(--border); }
+.topbar::after { height: 3px; bottom: -3px; transform-origin: left; animation: hn-stripe 1s cubic-bezier(.2,.8,.2,1) both; }
+.topbar .logo-dark-theme { display: none !important; }
+.topbar .logo-light-theme { display: block !important; }
+:root[data-theme="dark"] .topbar .logo-light-theme, :root[data-theme="lavender-dusk"] .topbar .logo-light-theme, :root[data-theme="midnight"] .topbar .logo-light-theme { display: none !important; }
+:root[data-theme="dark"] .topbar .logo-dark-theme, :root[data-theme="lavender-dusk"] .topbar .logo-dark-theme, :root[data-theme="midnight"] .topbar .logo-dark-theme { display: block !important; }
+.brand-logo { height: 40px; }
+.topbar .brand-sub { color: var(--text); border-left-color: var(--border); font-size: .95rem; font-weight: 800; letter-spacing: 0; text-transform: none; }
+.topbar .user-btn { color: var(--text); }
+.topbar .user-role, .topbar .user-btn .chev { color: var(--text-muted); }
+.topbar .user-btn:hover, .topbar .user-btn[aria-expanded="true"] { background: var(--surface-2); border-color: var(--border); }
+.topbar .avatar { box-shadow: 0 0 0 2px var(--primary-tint); }
+.topbar .nav-toggle { color: var(--text); }
+.topbar .nav-toggle:hover, .topbar .nav-toggle[aria-expanded="true"] { background: var(--surface-2); color: var(--text); }
+@media (min-width: 901px) {
+    .mainnav { gap: 1.4rem; margin-left: .5rem; }
+    .topbar .nav-link { position: relative; padding: 0; height: 40px; border-radius: 0; color: var(--text); background: none !important; box-shadow: none !important; font-size: .95rem; }
+    .topbar .nav-link:hover, .topbar .nav-link[aria-expanded="true"] { color: var(--primary); }
+    .topbar .nav-link.active { color: var(--primary); }
+    .topbar .nav-link::after { content: ""; position: absolute; left: 0; right: 0; bottom: 2px; height: 2px; border-radius: 2px; background: var(--primary); transform: scaleX(0); transform-origin: left; transition: transform .3s cubic-bezier(.2,.8,.2,1); }
+    .topbar .nav-link.active::after, .topbar .nav-link:hover::after, .topbar .nav-link[aria-expanded="true"]::after { transform: scaleX(1); }
+}
+.menu { animation: hn-pop .22s cubic-bezier(.2,.8,.2,1) both; }
+
+/* Buttons: pills, as on hngroup.org.uk */
+.btn { border-radius: 999px; transition: background .15s, color .15s, border-color .15s, transform .15s; }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn-primary { background: var(--primary); background-image: none; color: var(--on-primary); box-shadow: none; }
+.btn-primary:hover:not(:disabled) { background: var(--primary-hover); background-image: none; box-shadow: none; }
+.btn-ghost { border: 2px solid var(--border); box-shadow: none; }
+.btn-ghost:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+.icon-btn, .search-btn { border-radius: 999px; }
+
+/* Cards lift a little under the pointer */
+.panel, .table-card, .person-card, .announcement, .doc-row, .stat, .force-card, .info-card { border-radius: var(--radius); }
+.person-card, .announcement, .doc-row, .stat, .info-card {
+    transition: transform .25s cubic-bezier(.2,.8,.2,1), box-shadow .25s, border-color .25s;
+}
+.person-card:hover, .announcement:hover, .doc-row:hover, .stat:hover, .info-card:hover {
+    transform: translateY(-3px); border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+    box-shadow: 0 2px 4px rgba(28, 33, 53, .06), 0 18px 40px -14px color-mix(in srgb, var(--primary) 35%, transparent);
+}
+
+/* Page heads: the main website's hero, with its glow and the stepped stripe drawing in */
+.page-head {
+    background: none; border: 0; box-shadow: none; border-radius: 0; overflow: visible; overflow-x: clip; isolation: isolate;
+    padding: clamp(1.6rem, 4vw, 2.6rem) 0 1.4rem; margin-bottom: 1.4rem;
+}
+.page-head::after {
+    content: ""; position: absolute; inset: auto 0 0 auto; z-index: -1; left: auto; bottom: auto; top: 50%; right: 0;
+    width: min(260px, 26%); height: auto; aspect-ratio: 1 / .3; translate: 0 -50%; opacity: 1; pointer-events: none;
+    background:
+        linear-gradient(#e97de8 0 0) 0% 0% / 14% 22%, linear-gradient(#5514b4 0 0) 14% 50% / 14% 22%,
+        linear-gradient(#e3e65b 0 0) 31.9% 0% / 6% 22%, linear-gradient(#3e9ba3 0 0) 42.5% 50% / 20% 22%,
+        linear-gradient(#7a1f6c 0 0) 60% 0% / 10% 22%, linear-gradient(#c2306b 0 0) 71.1% 50% / 10% 22%,
+        linear-gradient(#5fae7b 0 0) 85% 100% / 13% 22%, linear-gradient(var(--text) 0 0) 100% 50% / 13% 22%;
+    background-repeat: no-repeat; border-radius: 3px;
+    animation: hn-steps-wipe 1.1s cubic-bezier(.2,.8,.2,1) .1s both;
+}
+.page-head::before {
+    content: ""; position: absolute; z-index: -2; top: -80%; right: -6%; width: 55%; height: 260%; pointer-events: none;
+    background: radial-gradient(closest-side, color-mix(in srgb, #e97de8 22%, transparent), transparent 70%) 30% 40% / 60% 60% no-repeat,
+                radial-gradient(closest-side, color-mix(in srgb, #5514b4 20%, transparent), transparent 70%) 70% 60% / 70% 70% no-repeat;
+}
+@keyframes hn-steps-wipe { from { clip-path: inset(0 100% 0 0); opacity: .2; } to { clip-path: inset(0 0 0 0); opacity: 1; } }
+.page-head h1 { font-size: clamp(2rem, 3.6vw, 2.8rem); line-height: 1.08; }
+.page-head .page-icon { box-shadow: none; }
+.page-head > div:not(.page-actions):not(.segmented) { max-width: 72%; }
+.page-head .page-actions, .page-head .segmented { position: relative; z-index: 1; }
+.page-head:has(.page-actions) > div:not(.page-actions):not(.segmented) { max-width: none; }
+.page-head:has(.page-actions)::after { display: none; }
+@media (max-width: 760px) { .page-head::after { display: none; } .page-head > div:not(.page-actions):not(.segmented) { max-width: none; } }
+
+/* Footer: navy with the stripe, as on hngroup.org.uk */
+.footer { position: relative; margin-top: 3rem; padding: calc(8px + 1.6rem) max(1.5rem, calc((100% - 1240px) / 2)) 2rem; background: #1C2135; color: #C9CADB; text-align: left; font-size: .88rem; border: 0; }
+.footer::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 8px; background: linear-gradient(90deg, #e97de8 0 14%, #5514b4 14% 28%, #e3e65b 28% 34%, #3e9ba3 34% 54%, #7a1f6c 54% 64%, #c2306b 64% 74%, #5fae7b 74% 87%, #3a4166 87%); transform-origin: left; animation: hn-stripe 1s cubic-bezier(.2,.8,.2,1) both; }
+@media (prefers-reduced-motion: reduce) { .topbar::after, .page-head::after, .footer::before, .menu { animation: none !important; } .person-card, .announcement, .doc-row, .stat, .info-card { transition: none; } }

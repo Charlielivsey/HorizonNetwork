@@ -1,0 +1,76 @@
+/* HN Group motion kit: the movement of the main HN Group website (hngroup.org.uk), shared by every HN Group website.
+   The master copy is brand/web/hn-motion.css; each website keeps an identical copy in its own assets (checked by
+   brand/web/test.cjs). It only animates opacity and transform, and everything stops when reduce motion is on.
+   Pair it with hn-motion.js, which adds the classes below as pages and lists appear. */
+:root { --hn-ease: cubic-bezier(.2, .8, .2, 1); --hn-glow-a: #E97DE8; --hn-glow-b: #5514B4; }
+
+/* Things scrolling or appearing into view rise and fade in, one after another (hn-motion.js sets --hn-delay). */
+.hn-reveal { opacity: 0; transform: translateY(16px); transition: opacity .6s ease var(--hn-delay, 0s), transform .6s var(--hn-ease) var(--hn-delay, 0s); }
+.hn-reveal.hn-in { opacity: 1; transform: none; }
+
+/* A page or view coming on screen. */
+.hn-enter { animation: hn-enter .55s var(--hn-ease) both; }
+@keyframes hn-enter { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+/* The header slides down into place when a page first opens. */
+.hn-header-in { animation: hn-header-in .6s var(--hn-ease) both; }
+@keyframes hn-header-in { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: none; } }
+
+/* The stepped stripe from the HN Group wordmark, drawn large, as on the main website's home page. */
+.hn-steps { position: relative; width: 100%; max-width: 420px; aspect-ratio: 1 / .3; }
+.hn-steps span { position: absolute; height: 22%; border-radius: 3px; animation: hn-step-in .9s var(--hn-ease) both; }
+.hn-steps .s1 { background: #E97DE8; left: 0%;  width: 14%; top: 0%;  animation-delay: .05s; }
+.hn-steps .s2 { background: #5514B4; left: 14%; width: 14%; top: 39%; animation-delay: .12s; }
+.hn-steps .s3 { background: #E3E65B; left: 28%; width: 6%;  top: 0%;  animation-delay: .19s; }
+.hn-steps .s4 { background: #3E9BA3; left: 34%; width: 20%; top: 39%; animation-delay: .26s; }
+.hn-steps .s5 { background: #7A1F6C; left: 54%; width: 10%; top: 0%;  animation-delay: .33s; }
+.hn-steps .s6 { background: #C2306B; left: 64%; width: 10%; top: 39%; animation-delay: .40s; }
+.hn-steps .s7 { background: #5FAE7B; left: 74%; width: 13%; top: 78%; animation-delay: .47s; }
+.hn-steps .s8 { background: #1C2135; left: 87%; width: 13%; top: 39%; animation-delay: .54s; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .hn-steps .s8 { background: #E9E7F2; } }
+:root[data-theme="dark"] .hn-steps .s8 { background: #E9E7F2; }
+@keyframes hn-step-in { from { opacity: 0; transform: translateX(-24px) scaleX(.6); transform-origin: left; } to { opacity: 1; transform: none; } }
+/* The steps keep drifting very gently once they're in, like a living version of the stripe. */
+.hn-steps.hn-alive span { animation: hn-step-in .9s var(--hn-ease) both, hn-drift 7s ease-in-out infinite alternate; }
+.hn-steps.hn-alive .s2, .hn-steps.hn-alive .s5, .hn-steps.hn-alive .s7 { animation-direction: normal, alternate-reverse; }
+@keyframes hn-drift { from { translate: 0 0; } to { translate: 10px 0; } }
+
+/* The soft pink and purple glow behind the main website's hero, for page heads. */
+.hn-glow { position: relative; isolation: isolate; overflow-x: clip; } /* (clipped sideways so a page never scrolls sideways) */
+.hn-glow::before { content: ""; position: absolute; z-index: -1; inset: -60% -12% auto auto; width: 62%; height: 220%; pointer-events: none;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--hn-glow-a) 24%, transparent), transparent 70%),
+              radial-gradient(closest-side, color-mix(in srgb, var(--hn-glow-b) 20%, transparent), transparent 70%);
+  background-position: 30% 40%, 70% 60%; background-size: 60% 60%, 70% 70%; background-repeat: no-repeat;
+  animation: hn-glow 14s ease-in-out infinite alternate; }
+@keyframes hn-glow { from { transform: translate3d(0, 0, 0) scale(1); } to { transform: translate3d(-4%, 3%, 0) scale(1.06); } }
+
+/* The multicolour stripe draws itself in from the left. */
+.hn-stripe-draw { transform-origin: left; animation: hn-stripe 1s var(--hn-ease) both; }
+.hn-stripe-draw > span { transform-origin: left; animation: hn-stripe .8s var(--hn-ease) both; }
+.hn-stripe-draw > span:nth-child(2) { animation-delay: .06s; } .hn-stripe-draw > span:nth-child(3) { animation-delay: .12s; }
+.hn-stripe-draw > span:nth-child(4) { animation-delay: .18s; } .hn-stripe-draw > span:nth-child(5) { animation-delay: .24s; }
+.hn-stripe-draw > span:nth-child(6) { animation-delay: .30s; } .hn-stripe-draw > span:nth-child(7) { animation-delay: .36s; }
+.hn-stripe-draw > span:nth-child(8) { animation-delay: .42s; }
+@keyframes hn-stripe { from { transform: scaleX(0); } to { transform: none; } }
+
+/* Cards and rows lift a little under the pointer; buttons press in. */
+.hn-lift { transition: transform .2s var(--hn-ease), box-shadow .2s, border-color .2s; }
+.hn-lift:hover { transform: translateY(-3px); }
+.hn-press:active { transform: translateY(1px) scale(.985); }
+
+/* Pop-ups and menus open with a little scale; dialogs' backdrops fade. */
+dialog[open].hn-pop, .hn-pop:not([hidden]) { animation: hn-pop .28s var(--hn-ease) both; }
+dialog.hn-pop::backdrop { animation: hn-fade .28s ease both; }
+@keyframes hn-pop { from { opacity: 0; transform: translateY(10px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes hn-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* Loading placeholders shimmer. */
+.hn-shimmer { background: linear-gradient(90deg, transparent, color-mix(in srgb, currentColor 8%, transparent), transparent) 0 0 / 200% 100%; animation: hn-shimmer 1.4s linear infinite; }
+@keyframes hn-shimmer { to { background-position: -200% 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .hn-reveal { opacity: 1; transform: none; transition: none; }
+  .hn-enter, .hn-header-in, .hn-steps span, .hn-steps.hn-alive span, .hn-stripe-draw, .hn-stripe-draw > span, .hn-glow::before,
+  dialog[open].hn-pop, .hn-pop:not([hidden]), dialog.hn-pop::backdrop, .hn-shimmer { animation: none !important; }
+  .hn-lift, .hn-lift:hover, .hn-press:active { transition: none; transform: none; }
+}
