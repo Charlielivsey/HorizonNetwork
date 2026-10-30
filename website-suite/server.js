@@ -67,7 +67,7 @@ function page(res,status=200,head=false){
  const fill={TITLE:esc(config.name),DOMAIN:esc(config.domain),KIND:esc(config.kind),SITE:esc(config.id),LOGO:esc(logo),COMPANY:esc(company),
   DESCRIPTION:esc(config.description||config.name+' — part of HN Group.'),
   NAV:NAV[config.kind].map(link).join(''),FOOTER_LINKS:FOOT[config.kind].map(link).join(''),
-  SUBSIDIARY:config.subsidiaryOf?`<span class="footer-parent">${esc(config.subsidiaryOf)}</span>`:'',
+  SUBSIDIARY:config.subsidiaryOf?`<p class="footer-company"><span class="footer-parent">${esc(config.subsidiaryOf)}</span></p>`:'',
   LEGAL:esc(config.legal||company)};
  res.end(fs.readFileSync(path.join(__dirname,'public/index.html'),'utf8').replace(/\{\{([A-Z_]+)\}\}/g,(m,k)=>fill[k]??m));}
 function pageRoute(route){if(['/','/admin/denied'].includes(route))return true;if(config.kind==='company')return route==='/support';if(config.kind==='careers')return route==='/application'||/^\/jobs\/[a-f0-9]{16}$/.test(route);return false;}

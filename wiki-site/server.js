@@ -151,7 +151,7 @@ function layout(o) {
     '<div class="body">' + o.body + '</div>' +
     (o.categories && o.categories.length ? '<div class="catlinks"><a href="/wiki/Special:Categories">Categories</a>: <ul>' + o.categories.map((c) => '<li><a href="' + esc(pageUrl('Category:' + c)) + '">' + esc(c) + '</a></li>').join('') + '</ul></div>' : '') +
     '</article>' +
-    '<footer class="footer">' + '<div class="footer-brand"><img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="" height="32" loading="lazy"><img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" height="32" loading="lazy"><p class="footer-company"><strong>HN Group</strong></p></div>' + (o.lastEdited ? '<p>This page was last edited on ' + esc(fmtDate(o.lastEdited)) + '.</p>' : '') +
+    '<footer class="footer">' + '<div class="footer-brand"><img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="" height="32" loading="lazy"><img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" height="32" loading="lazy"></div>' + (o.lastEdited ? '<p>This page was last edited on ' + esc(fmtDate(o.lastEdited)) + '.</p>' : '') +
     '<p>Content is maintained by HN Group staff. © ' + new Date().getFullYear() + ' HN Group Limited. <a href="/wiki/HN_Group_Wiki:About">About HN Group Wiki</a> · <a class="external" href="https://hngroup.org.uk/privacypolicy">Privacy</a> · <a class="external" href="https://hngroup.org.uk/contact">Contact</a></p></footer>' +
     '</main></div></body></html>';
 }

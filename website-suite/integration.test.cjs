@@ -44,7 +44,7 @@ test('support requests and job applications go through to the staff portal and b
 
     // Pages: the support page, the HN Group theme and the footer with the company and its parent.
     const page = await (await fetch('http://127.0.0.1:' + mediaPort + '/support')).text();
-    assert.match(page, /assets\/site\.css/); assert.match(page, /<strong>Horizon Media Group<\/strong><span class="footer-parent">A subsidiary of HN Group Limited<\/span>/);
+    assert.match(page, /assets\/site\.css/); assert.match(page, /<p class="footer-company"><span class="footer-parent">A subsidiary of HN Group Limited<\/span><\/p>/); assert.doesNotMatch(page, /<strong>Horizon Media Group<\/strong>/, 'the logo already names the company');
     assert.match(page, /horizon-media-group-logo-white\.svg/);
     assert.equal((await fetch('http://127.0.0.1:' + mediaPort + '/assets/hn-support.js')).status, 200);
     assert.equal((await fetch('http://127.0.0.1:' + mediaPort + '/nowhere')).status, 404);

@@ -98,7 +98,7 @@ function layout(o) {
     '<header class="top"><a class="brand" href="/"><img class="on-light" src="/assets/brand/svg/hn-group-wordmark.svg" alt="HN Group" width="92" height="32"><img class="on-dark" src="/assets/brand/svg/hn-group-wordmark-white.svg" alt="" width="92" height="32"><span class="brand-name">Brand centre</span></a>' +
     (user ? '<div class="user"><span>' + esc(user.name) + '</span><form method="post" action="/auth/logout"><input type="hidden" name="csrf" value="' + esc(user.csrf) + '"><button type="submit" class="link">Sign out</button></form></div>' : '') +
     '</header><main id="content">' + o.body + '</main>' +
-    '<footer class="foot"><div class="footer-brand"><img class="on-light" src="/assets/brand/svg/hn-group-wordmark.svg" alt="" height="32" loading="lazy"><img class="on-dark" src="/assets/brand/svg/hn-group-wordmark-white.svg" alt="" height="32" loading="lazy"><p class="footer-company"><strong>HN Group</strong></p></div><p>For HN Group staff only. Please don’t share these files outside the group without permission. © ' + new Date().getFullYear() + ' HN Group Limited.</p></footer>' +
+    '<footer class="foot"><div class="footer-brand"><img class="on-light" src="/assets/brand/svg/hn-group-wordmark.svg" alt="" height="32" loading="lazy"><img class="on-dark" src="/assets/brand/svg/hn-group-wordmark-white.svg" alt="" height="32" loading="lazy"></div><p>For HN Group staff only. Please don’t share these files outside the group without permission. © ' + new Date().getFullYear() + ' HN Group Limited.</p></footer>' +
     '<div class="toast" role="status" aria-live="polite" hidden></div></body></html>';
 }
 
