@@ -1,5 +1,14 @@
 [
   {
+    "id": "bots",
+    "name": "HN Group Bots",
+    "process": "hn-bots",
+    "port": 5600,
+    "hosts": [
+      "bots.hngroup.org.uk"
+    ]
+  },
+  {
     "id": "downloads",
     "name": "Downloads",
     "process": "hn-downloads",

@@ -1,0 +1,1 @@
+module.exports={apps:[{name:'hn-bots',script:'/opt/hn-bots/server.js',cwd:'/opt/hn-bots',instances:1,exec_mode:'fork',autorestart:true,max_memory_restart:'192M',env:{NODE_ENV:'production',PORT:5600,BOTS_DATA_DIR:'/var/lib/hn-bots'}}]};

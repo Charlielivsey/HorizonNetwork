@@ -63,60 +63,25 @@ function connect({ host, path, port, tlsOptions }, { onOpen, onMessage, onClose 
 
 // Keeps the bot online for as long as `token()` returns a token (checked every minute, so adding or changing the
 // token in discord.json takes effect without a restart).
-function startPresence(token, { log = console, gateway = GATEWAY } = {}) {
-  let ws = null, current = null, heartbeat = null, seq = null, acked = true, retry = 0, stopped = false, fatal = null;
-  function stop(reason) {
-    clearInterval(heartbeat); heartbeat = null;
-    if (ws) { const w = ws; ws = null; w.close(); }
-    if (reason) log.log('Discord bot offline: ' + reason);
+function startPresence(token, { log = console, gateway = GATEWAY, settings = () => ({enabled:true,status:'online',activity:'HN Group sign-ins',activityType:3}), transport = connect, onInteraction = () => {} } = {}) {
+  let ws=null,heartbeat=null,timer=null,current=null,fatal=null,generation=0,stopped=false,retry=0,seq=null,acked=true,sentAt=0;
+  const state={phase:'offline',connectedAt:null,lastAck:null,latency:null,username:null,userId:null,reconnects:0,closeCode:null};
+  const presenceData=()=>{const s=settings();return{status:s.status||'online',afk:false,since:null,activities:s.activity?[{name:s.activity,type:s.activityType??3}]:[]};};
+  function disconnect(){generation++;clearInterval(heartbeat);clearTimeout(timer);heartbeat=timer=null;const old=ws;ws=null;if(old)old.close();state.connectedAt=null;}
+  function schedule(delay){if(stopped||!settings().enabled||!token())return;state.phase='reconnecting';state.reconnects++;clearTimeout(timer);timer=setTimeout(()=>{timer=null;check();},delay||Math.min(300000,2000*2**Math.min(retry++,8)));timer.unref();}
+  function start(t){disconnect();current=t;acked=true;seq=null;state.phase='connecting';const epoch=generation;
+    ws=transport(gateway,{onOpen(){},onMessage(text){if(epoch!==generation)return;let msg;try{msg=JSON.parse(text);}catch{return;}if(msg.s!=null)seq=msg.s;
+      if(msg.op===10){const every=Math.max(5000,Number(msg.d?.heartbeat_interval)||41250);clearInterval(heartbeat);heartbeat=setInterval(()=>{if(!acked){disconnect();schedule();return;}acked=false;sentAt=Date.now();ws?.send(JSON.stringify({op:1,d:seq}));},every);heartbeat.unref();ws.send(JSON.stringify({op:2,d:{token:t,intents:0,properties:{os:'linux',browser:'hn-group-auth',device:'hn-group-auth'},presence:presenceData()}}));}
+      else if(msg.op===11){acked=true;state.lastAck=new Date().toISOString();state.latency=sentAt?Date.now()-sentAt:null;}
+      else if(msg.op===1)ws?.send(JSON.stringify({op:1,d:seq}));
+      else if(msg.op===0&&msg.t==='READY'){retry=0;state.phase='online';state.connectedAt=new Date().toISOString();state.username=msg.d?.user?.username||null;state.userId=msg.d?.user?.id||null;state.closeCode=null;log.log('Discord bot connected.');}
+      else if(msg.op===0&&msg.t==='INTERACTION_CREATE')Promise.resolve(onInteraction(msg.d)).catch(()=>log.log('Discord command response failed.'));
+      else if(msg.op===7||msg.op===9){disconnect();schedule(msg.op===9?5000:1000);}
+    },onClose(code){if(epoch!==generation)return;clearInterval(heartbeat);heartbeat=null;ws=null;state.connectedAt=null;state.closeCode=code;if(stopped)return;if(FATAL.has(code)){fatal=current;state.phase='error';log.log('Discord bot connection refused (code '+code+').');return;}schedule();}});
   }
-  function start(t) {
-    current = t; acked = true; seq = null;
-    ws = connect(gateway, {
-      onOpen() {},
-      onMessage(text) {
-        let msg; try { msg = JSON.parse(text); } catch { return; }
-        if (msg.s != null) seq = msg.s;
-        if (msg.op === 10) {
-          clearInterval(heartbeat);
-          const every = Math.max(5000, Number(msg.d && msg.d.heartbeat_interval) || 41250);
-          heartbeat = setInterval(() => {
-            if (!acked) { stop(); schedule(); return; } // no reply to the last heartbeat: reconnect
-            acked = false; ws && ws.send(JSON.stringify({ op: 1, d: seq }));
-          }, every);
-          heartbeat.unref();
-          ws.send(JSON.stringify({ op: 2, d: { token: t, intents: 0, properties: { os: 'linux', browser: 'hn-group-auth', device: 'hn-group-auth' },
-            presence: { status: 'online', afk: false, since: null, activities: [{ name: 'HN Group sign-ins', type: 3 }] } } }));
-        } else if (msg.op === 11) acked = true;
-        else if (msg.op === 1) ws && ws.send(JSON.stringify({ op: 1, d: seq }));
-        else if (msg.op === 0 && msg.t === 'READY') { retry = 0; log.log('Discord bot online as ' + ((msg.d && msg.d.user && msg.d.user.username) || 'the HN Group bot') + '.'); }
-        else if (msg.op === 7 || msg.op === 9) { stop(); schedule(msg.op === 9 ? 5000 : 1000); }
-      },
-      onClose(code) {
-        clearInterval(heartbeat); heartbeat = null; ws = null;
-        if (stopped) return;
-        if (FATAL.has(code)) { fatal = current; log.log('Discord bot can’t connect (Discord closed with ' + code + (code === 4004 ? ': the bot token isn’t valid' : '') + '). Fix discord.json and it will try again.'); return; }
-        schedule();
-      },
-    });
-  }
-  let timer = null;
-  function schedule(delay) {
-    clearTimeout(timer);
-    const wait = delay || Math.min(5 * 60000, 2000 * 2 ** Math.min(retry++, 8));
-    timer = setTimeout(() => { const t = token(); if (t && !stopped && t !== fatal) start(t); }, wait);
-    timer.unref();
-  }
-  // Starts, restarts or stops when the token appears, changes or goes away.
-  function check() {
-    const t = token();
-    if (!t) { if (ws) stop('no bot token'); current = null; return; }
-    if (t === fatal) return;
-    if (t !== current || (!ws && !timer)) { stop(); fatal = null; retry = 0; start(t); }
-  }
-  check();
-  const watcher = setInterval(check, 60000); watcher.unref();
-  return { stop() { stopped = true; clearInterval(watcher); clearTimeout(timer); stop(); }, check };
+  function check(){if(stopped)return;const t=token();if(!settings().enabled||!t){disconnect();current=null;state.phase=!t?'not-configured':'offline';return;}if(t===fatal)return;if(t!==current||(!ws&&!timer)){fatal=null;start(t);}}
+  check();const watcher=setInterval(check,60000);watcher.unref();
+  return{check,snapshot:()=>({...state}),apply(){check();if(ws&&state.phase==='online')ws.send(JSON.stringify({op:3,d:presenceData()}));},restart(){disconnect();fatal=null;current=null;retry=0;check();},stop(){stopped=true;clearInterval(watcher);disconnect();state.phase='offline';}};
 }
 
 module.exports = { startPresence, connect };

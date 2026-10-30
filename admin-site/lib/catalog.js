@@ -1,6 +1,7 @@
 'use strict';
 // A fixed allowlist: no request may choose an arbitrary process or hostname.
 const sites=[
+['bots','HN Group Bots','hn-bots',5600,['bots.hngroup.org.uk']],
 ['downloads','Downloads','hn-downloads',5100,['downloads.hngroup.org.uk']],
 ['auth','HN Group Auth','hn-auth',3400,['auth.hngroup.org.uk']],
 ['website','HN Group','hn-website',3500,['hngroup.org.uk','www.hngroup.org.uk']],

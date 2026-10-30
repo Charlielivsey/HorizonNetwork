@@ -16,6 +16,7 @@
 // restart. Without client_id/client_secret the option is hidden; the bot only needs bot_token.
 const fs = require('node:fs');
 const { startPresence } = require('./discord-gateway');
+const { createBotManager } = require('./bot-manager');
 const path = require('node:path');
 
 const DISCORD_API = 'https://discord.com/api/v10';
@@ -81,7 +82,7 @@ function createDiscord({ origin, staff, send, profile, entryFor, setCookie, cook
 
   // The bot: looks up every connected Discord account and stores any changed username.
   let refreshing = false;
-  async function refreshNames() {
+  async function refreshNames(strict = false) {
     const c = config();
     if (!c || !c.bot || refreshing) return 0;
     refreshing = true;
@@ -90,22 +91,21 @@ function createDiscord({ origin, staff, send, profile, entryFor, setCookie, cook
       const updates = [];
       for (const id of (value.ids || []).filter((x) => ID.test(x))) {
         let r;
-        try { r = await fetcher(DISCORD_API + '/users/' + id, { headers: { Authorization: 'Bot ' + c.bot, Accept: 'application/json' }, signal: AbortSignal.timeout(10000), redirect: 'error' }); } catch { continue; }
-        if (r.status === 429) { const wait = Number((await r.json().catch(() => ({}))).retry_after || 1); await new Promise((ok) => setTimeout(ok, Math.min(30, wait) * 1000)); continue; }
-        if (r.status === 401) break; // the bot token isn't valid
+        try { r = await fetcher(DISCORD_API + '/users/' + id, { headers: { Authorization: 'Bot ' + c.bot, Accept: 'application/json' }, signal: AbortSignal.timeout(10000), redirect: 'error' }); } catch { if(strict)throw fail(503,'Discord could not be reached for profile synchronisation.'); continue; }
+        if (r.status === 429) { if(strict)throw fail(429,'Discord rate-limited profile synchronisation. Try again later.'); const wait = Number((await r.json().catch(() => ({}))).retry_after || 1); await new Promise((ok) => setTimeout(ok, Math.min(30, wait) * 1000)); continue; }
+        if (r.status === 401) { if(strict)throw fail(503,'Discord rejected the bot token. Review Credentials & setup.'); break; } // the bot token isn't valid
         const u = r.ok ? await r.json().catch(() => null) : null;
         if (u && typeof u.username === 'string') updates.push(profileOf(u));
         await new Promise((ok) => setTimeout(ok, 250));
       }
       if (!updates.length) return 0;
       return (await staff('/api/auth/discord-update', { updates })).value.changed || 0;
-    } catch { return 0; } finally { refreshing = false; }
+    } catch(e) { if(strict)throw e;return 0; } finally { refreshing = false; }
   }
-  if (refreshEvery > 0) {
-    setTimeout(() => { refreshNames(); setInterval(refreshNames, refreshEvery).unref(); }, 20000).unref();
-  }
-  // Keeps the bot online in Discord while a bot token is set (discord-gateway.js).
-  const presence = process.env.HN_DISCORD_PRESENCE === '0' ? null : startPresence(() => (config() || {}).bot || null);
+  let presence=null;
+  const manager=createBotManager({file:path.join(path.dirname(file),'discord-bot.json'),configFile:file,config,fetcher,refresh:()=>refreshNames(true),staff,presence:()=>presence});
+  if(refreshEvery>0){setTimeout(()=>{const tick=()=>{const s=manager.settings();if(s.enabled&&s.syncEnabled&&!manager.syncState.running&&(!(manager.syncState.lastAttemptAt||manager.syncState.lastAt)||Date.now()-Date.parse(manager.syncState.lastAttemptAt||manager.syncState.lastAt)>=s.syncMinutes*60000))manager.sync().catch(()=>{});};tick();setInterval(tick,60000).unref();},20000).unref();}
+  presence=process.env.HN_DISCORD_PRESENCE==='0'?null:startPresence(()=> (config()||{}).bot||null,{settings:manager.settings,onInteraction:manager.interaction,log:{log:message=>{console.log(message);manager.record(null,'gateway.event',{message});}}});
 
   async function discord(req, res, route, data) {
     if (route === '/api/discord' && req.method === 'GET') { send(res, 200, { enabled: !!client() }); return true; }
@@ -162,6 +162,7 @@ function createDiscord({ origin, staff, send, profile, entryFor, setCookie, cook
   discord.enabled = () => !!client();
   discord.refreshNames = refreshNames;
   discord.presence = presence;
+  discord.manager = manager;
   return discord;
 }
 module.exports = { createDiscord, BINDING, TICKET };

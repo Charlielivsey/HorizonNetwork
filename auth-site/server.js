@@ -10,6 +10,7 @@ const {createDiscord}=require('./discord');
 const ORIGIN = 'https://auth.hngroup.org.uk';
 // Registered applications: fixed callbacks and who may use them.
 const CLIENTS = {
+  bots: {name:'HN Group Bots',callback:'https://bots.hngroup.org.uk/auth/callback',allowed:u=>!!(u.ownerAccess||u.statusAdminAllowed)&&!u.impersonated,denied:'Only owner-level accounts and Super Admin members can manage bots.'},
   browser: { name: 'HN Browser', native: true, allowed: () => true, denied: 'This account cannot use HN Browser.' },
   'app-manager': { name: 'HN Group App Manager', native: true, allowed: () => true, denied: 'This account cannot use HN Group App Manager.' },
   media: { name: 'Horizon Media Group administration', callback: 'https://media.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage this website.' },
@@ -153,6 +154,16 @@ const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, ORIGIN), route = url.pathname;
     if (route === '/healthz') return send(res, 200, { ok: true });
+    if(route==='/api/service/bots'){
+      if(req.method!=='POST')return send(res,405,{error:'POST required.'});
+      if(req.headers['x-real-ip']||!['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress)||!service(req))return send(res,403,{error:'Private service only.'});
+      const data=await body(req,6500000),application=HEX.test(data.session||'')&&applicationSessions.get(hash(data.session));
+      if(!application||application.client!=='bots'||application.expires<=Date.now())throw fail(401,'Bot management sign-in expired.');
+      const user=await profile(application.entry||sessions.get(application.session),true);requireReady(user);
+      if(!CLIENTS.bots.allowed(user))throw fail(403,CLIENTS.bots.denied);
+      const result=await discord.manager.handle(data.action,data.payload,{email:user.email,owner:user.ownerAccess===true});
+      return send(res,200,{result});
+    }
     if(await native(req,res,route))return;
     if (route.startsWith('/api/sso/')) {
       if (req.method !== 'POST') return send(res, 405, { error: 'POST required.' });
