@@ -330,3 +330,9 @@ dialog.apply::backdrop { background: rgba(14, 16, 32, 0.6); backdrop-filter: blu
 .leader{display:flex;flex-direction:column}.leader-banner{flex-shrink:0}.leader-body{flex:1}
 .news-list{display:grid;gap:1.2rem;margin-top:2rem;max-width:860px}.news-item h2{font-size:clamp(1.3rem,2.4vw,1.7rem);margin:.3rem 0 .6rem}.news-item .lead{margin:0 0 .8rem}.news-topic{color:var(--accent);font-weight:700}.news-item summary{cursor:pointer;color:var(--accent);font-weight:700}.news-body{white-space:pre-line;margin-top:.8rem;color:var(--text)}.news-more{margin-top:1.6rem}
 @media(prefers-reduced-motion:no-preference){.news-item{animation:news-in .4s both cubic-bezier(.2,.8,.2,1)}@keyframes news-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}}
+
+/* The main HN Group website's page-head treatment on inner pages (the user's request, 30 October 2026): the glow and
+   the stepped stripe drawing in, from hn-motion.css/js. */
+.section-head:has(.page-steps){position:relative}
+.page-steps{position:absolute;right:0;top:0;width:min(300px,30%);pointer-events:none}
+@media(max-width:820px){.page-steps{display:none}}

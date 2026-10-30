@@ -37,8 +37,8 @@ const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&':
 function showPage(res, status, title, text, cookies, action) {
   res.writeHead(status, { ...HEADERS, 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Set-Cookie': cookies || [] });
   const [label, href] = action || ['Back to HN Group Docs', '/'];
-  res.end('<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex, nofollow"><title>' + esc(title) + ' · HN Group Docs</title><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/assets/documents.css?v=1"></head><body class="plain">' +
-    '<div class="stripe" aria-hidden="true"></div><header class="top"><div class="top-inner"><a class="brand" href="/"><img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="92" height="32"><img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="92" height="32"><span class="brand-name">Docs</span></a></div></header>' +
+  res.end('<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex, nofollow"><title>' + esc(title) + ' · HN Group Docs</title><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/assets/documents.css?v=4"><link rel="stylesheet" href="/assets/hn-motion.css?v=1"><script src="/assets/hn-motion.js?v=1" defer></script></head><body class="plain">' +
+    '<div class="stripe" aria-hidden="true"></div><header class="top" data-hn-header><div class="top-inner"><a class="brand" href="/"><img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="92" height="32"><img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="92" height="32"><span class="brand-name">Docs</span></a></div></header>' +
     '<main class="message"><section class="card"><p class="eyebrow">HN Group Docs</p><h1>' + esc(title) + '</h1><p class="muted">' + esc(text) + '</p><p><a class="btn primary" href="' + esc(href) + '">' + esc(label) + '</a></p></section></main></body></html>');
 }
 
@@ -197,7 +197,7 @@ async function api(req, res, url) {
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.png': 'image/png', '.txt': 'text/plain; charset=utf-8' };
 // Public without a sign-in: what the sign-in page needs. Company logos and the app itself need a sign-in.
-const PUBLIC_FILES = new Set(['/assets/documents.css', '/assets/favicon.svg', '/assets/fonts/plus-jakarta-sans.woff2', '/assets/brand/hn-group-wordmark.svg', '/assets/brand/hn-group-wordmark-white.svg', '/robots.txt']);
+const PUBLIC_FILES = new Set(['/assets/documents.css', '/assets/hn-motion.css', '/assets/hn-motion.js', '/assets/favicon.svg', '/assets/fonts/plus-jakarta-sans.woff2', '/assets/brand/hn-group-wordmark.svg', '/assets/brand/hn-group-wordmark-white.svg', '/robots.txt']);
 function serveFile(res, rel, cache) {
   const file = path.join(PUBLIC, path.normalize(rel).replace(/^([/\\])+/, ''));
   if (!file.startsWith(PUBLIC + path.sep)) return false;

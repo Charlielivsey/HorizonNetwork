@@ -4,16 +4,19 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<meta name="theme-color" content="#5514B4">
+<meta name="theme-color" content="#5514B4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1020" media="(prefers-color-scheme: dark)">
 <title>HN Group Docs</title>
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="/assets/fonts/plus-jakarta-sans.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/assets/documents.css?v=3">
-<script src="/assets/documents.js?v=3" defer></script>
+<link rel="stylesheet" href="/assets/documents.css?v=4">
+<link rel="stylesheet" href="/assets/hn-motion.css?v=1">
+<script src="/assets/hn-motion.js?v=1" defer></script>
+<script src="/assets/documents.js?v=4" defer></script>
 </head>
 <body>
 <div class="stripe" aria-hidden="true"></div>
-<header class="top">
+<header class="top" data-hn-header>
  <div class="top-inner">
   <a class="brand" href="/" data-link><img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="92" height="32"><img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="92" height="32"><span class="brand-name">Docs</span></a>
   <nav class="tabs" aria-label="Sections"><a href="/" data-link data-tab="shared">Shared</a><a href="/storage" data-link data-tab="mine">My storage</a><a href="/templates" data-link data-tab="templates">Templates</a><a href="/people" data-link data-tab="people" id="people-tab" hidden>Staff storage</a></nav>
@@ -29,7 +32,7 @@
 
  <!-- Documents -->
  <section class="view" id="view-library" hidden>
-  <div class="page-head">
+  <div class="page-head hn-glow"><div data-hn-steps="alive"></div>
    <div><p class="eyebrow" id="library-eyebrow">HN Group · Staff only</p><h1 id="library-title">Shared documents</h1><p class="muted" id="library-count"></p></div>
    <div class="search-row">
     <label class="search"><span class="sr">Search</span><input type="search" id="search" placeholder="Search by title or author" autocomplete="off"></label>
@@ -49,14 +52,14 @@
 
  <!-- Templates -->
  <section class="view" id="view-templates" hidden>
-  <div class="page-head"><div><p class="eyebrow">HN Group · Staff only</p><h1>Templates</h1><p class="muted">Every template is ready for each company’s letterhead. Choose one to start a document.</p></div></div>
+  <div class="page-head hn-glow"><div data-hn-steps="alive"></div><div><p class="eyebrow">HN Group · Staff only</p><h1>Templates</h1><p class="muted">Every template is ready for each company’s letterhead. Choose one to start a document.</p></div></div>
   <div class="companies" id="template-companies" role="radiogroup" aria-label="Filter by company"></div>
   <div id="template-list"></div>
  </section>
 
  <!-- Staff storage (people with the permission, Super Admin, the owner, or an individual grant) -->
  <section class="view" id="view-people" hidden>
-  <div class="page-head"><div><p class="eyebrow">HN Group · View only</p><h1>Staff storage</h1><p class="muted" id="people-note"></p></div>
+  <div class="page-head hn-glow"><div data-hn-steps="alive"></div><div><p class="eyebrow">HN Group · View only</p><h1>Staff storage</h1><p class="muted" id="people-note"></p></div>
    <div class="search-row"><label class="search"><span class="sr">Search staff</span><input type="search" id="people-search" placeholder="Search by name, job title or company" autocomplete="off"></label></div></div>
   <div class="file-list" id="people-list" role="list"></div>
   <div class="empty" id="people-empty" hidden><h2>Nobody here</h2><p class="muted" id="people-empty-text"></p></div>
@@ -119,6 +122,10 @@
   </div>
  </section>
 </main>
+<footer class="site-footer">
+ <div class="stripe-bar hn-stripe-draw" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+ <div class="footer-inner"><img src="/assets/brand/hn-group-wordmark-white.svg" alt="HN Group" width="98" height="34"><nav class="footer-links" aria-label="HN Group"><a href="https://hngroup.org.uk">hngroup.org.uk</a><a href="https://staff.hngroup.org.uk">Staff portal</a><a href="https://contract.hngroup.org.uk">Contracts</a><a href="https://links.hngroup.org.uk">All HN Group links</a></nav><span>HN Group Docs · Staff only</span></div>
+</footer>
 
 <!-- New document -->
 <div class="layer" id="layer" hidden>

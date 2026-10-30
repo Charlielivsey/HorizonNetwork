@@ -30,3 +30,16 @@ body[data-denied] .admin-main{width:min(850px,100%);margin:50px auto}.denied-act
 
 @keyframes account-open{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
 @media(max-width:520px){.header-inner:has(.account-menu:not([hidden])) .brand-sub{display:none}.account-menu .account-popover{position:fixed;top:78px;right:18px;left:auto;max-width:calc(100vw - 36px)}}
+/* ===== The HN Group website theme (the user's request, 30 October 2026: Status must match hngroup.org.uk's theme
+   and animations): the main website's colours and type scale, pill buttons, a header that only gains its border once
+   scrolled, lifting cards; movement from hn-motion.css/js. ===== */
+:root{--bg:#FFFFFF;--surface:#FFFFFF;--surface-soft:#F6F3FB;--text:#17161C;--muted:#5A5C6B;--border:#E5E0EE;--accent:#5514B4;--accent-hover:#4710A0;--accent-soft:#EEE6FA;--on-accent:#FFFFFF}
+@media(prefers-color-scheme:dark){:root{--bg:#0E1020;--surface:#181C32;--surface-soft:#14172B;--text:#F1F0F7;--muted:#A6A8BA;--border:#2A2F4A;--accent:#A47BF0;--accent-hover:#B994F5;--accent-soft:#2A2350;--on-accent:#12101F}}
+body{font-size:15px}
+.site-header{background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:saturate(160%) blur(14px);-webkit-backdrop-filter:saturate(160%) blur(14px);border-bottom-color:transparent;transition:border-color .2s}
+.site-header.scrolled{border-bottom-color:var(--border)}
+.button{border-radius:999px;border-width:2px;padding:.7rem 1.3rem;transition:background .15s,color .15s,border-color .15s,transform .15s}
+.button:hover{transform:none}.button:active{transform:translateY(1px)}
+.button.small{padding:.5rem 1.1rem;font-size:.88rem}
+h1{font-size:clamp(2.4rem,5vw,3.8rem);letter-spacing:-.025em;line-height:1.06}
+.site-footer{background:#1C2135}

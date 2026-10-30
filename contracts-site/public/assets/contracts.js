@@ -67,8 +67,9 @@
   const header = document.querySelector('.site-header');
   window.addEventListener('scroll', () => header.classList.toggle('scrolled', window.scrollY > 8), { passive: true });
   function setNav(view) { for (const a of document.querySelectorAll('#site-nav a[data-view]')) { if (a.dataset.view === view) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); } }
-  const section = (...kids) => el('section', { class: 'section compact' }, el('div', { class: 'wrap fade-in' }, ...kids));
-  const head = (eyebrow, title, lead, ...extra) => el('div', { class: 'page-head' }, el('div', {}, el('p', { class: 'eyebrow', text: eyebrow }), el('h1', { class: 'page-title', text: title }), lead ? el('p', { class: 'lead', text: lead }) : null), ...extra);
+  const section = (...kids) => el('section', { class: 'section compact' }, el('div', { class: 'wrap' }, ...kids));
+  // Page heads are the main website's hero in small: its glow and the stepped stripe drawing in (hn-motion.js).
+  const head = (eyebrow, title, lead, ...extra) => el('div', { class: 'page-head hn-glow' }, el('div', { class: 'head-steps', 'data-hn-steps': 'alive' }), el('div', {}, el('p', { class: 'eyebrow', text: eyebrow }), el('h1', { class: 'page-title', text: title }), lead ? el('p', { class: 'lead', text: lead }) : null), ...extra);
 
   // ---------- Dashboard ----------
   const VIEWS = {
@@ -97,7 +98,7 @@
     const [key, title, lead, empty] = VIEWS[view];
     const list = v[key] || [];
     const tiles = el('div', { class: 'tiles' }, [['sign', '/', 'To sign', 'c-purple'], ['waiting', '/waiting', 'In progress', 'c-teal'], ['completed', '/completed', 'Finished', 'c-lavender'], ...(me.canSend ? [['drafts', '/drafts', 'Drafts', 'c-raspberry']] : [])]
-      .map(([k, href, label, colour]) => el('a', { class: 'tile', href, 'aria-current': k === view ? 'page' : null }, el('span', { class: 'pillar-bar ' + colour }), el('strong', { text: counts[k] }), el('span', { text: label }))));
+      .map(([k, href, label, colour]) => el('a', { class: 'tile', href, 'aria-current': k === view ? 'page' : null }, el('span', { class: 'pillar-bar ' + colour }), el('strong', { 'data-hn-count': counts[k], text: '0' }), el('span', { text: label }))));
     const search = el('input', { class: 'search', type: 'search', placeholder: 'Search by title or name', 'aria-label': 'Search contracts' });
     const box = el('div', { class: 'rows' });
     const draw = () => {
@@ -222,7 +223,7 @@
     const tags = el('div', { class: 'tags' }, tag(STATUS[c.status][0], STATUS[c.status][1]), c.overdue ? tag('Overdue', 'bad') : null, c.source.kind === 'docs' ? tag('From HN Group Docs', 'plain') : null,
       c.order === 'sequence' ? tag('Signed in order', 'plain') : null, c.dueDate ? tag('Sign by ' + day(c.dueDate), c.overdue ? 'bad' : 'plain') : null);
     const back = c.status === 'draft' ? ['/drafts', 'Drafts'] : c.can.sign ? ['/', 'To sign'] : ['completed', 'declined', 'cancelled'].includes(c.status) ? ['/completed', 'Finished'] : ['/waiting', 'In progress'];
-    const pageHead = el('div', { class: 'contract-head' },
+    const pageHead = el('div', { class: 'contract-head hn-glow' },
       el('a', { class: 'back', href: back[0], text: '← ' + back[1] }),
       el('h1', { text: c.title }),
       el('div', { class: 'byline' }, face(c.sender.id, c.sender.name, 'tiny'), el('span', { text: (c.mine ? 'You' : c.sender.name) + (c.sentAt ? ' sent this on ' + day(c.sentAt) : ' uploaded this on ' + day(c.createdAt)) }), tags));

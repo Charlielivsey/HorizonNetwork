@@ -229,3 +229,32 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: 
 @media (max-width: 640px) { .accounts-table { min-width: 0; } }
 .dialog.wide form { padding: 28px 30px; }
 .dialog.wide h2 { font-size: 1.4rem; }
+
+/* ===== The HN Group website theme (the user's request, 30 October 2026: HN Account must match hngroup.org.uk's theme
+   and animations): the main website's colours, the 72px blurred header that gains a border on scroll, pill buttons,
+   hero glow and stepped stripe, lifting cards and the navy footer with the stripe; movement from hn-motion.css/js. ===== */
+:root{--bg:#FFFFFF;--surface:#FFFFFF;--surface-2:#F6F3FB;--text:#17161C;--muted:#5A5C6B;--border:#E5E0EE;--link:#5514B4;--accent-soft:#EEE6FA;--on-accent:#FFFFFF;--accent:#5514B4;--shadow:0 1px 2px rgba(28,33,53,.06),0 8px 24px rgba(28,33,53,.06)}
+@media (prefers-color-scheme: dark){:root{--bg:#0E1020;--surface:#181C32;--surface-2:#14172B;--text:#F1F0F7;--muted:#A6A8BA;--border:#2A2F4A;--link:#A47BF0;--accent-soft:#2A2350;--on-accent:#12101F;--accent:#A47BF0}}
+body>.stripe{display:none}
+.top{min-height:72px;padding:0 max(24px,calc((100% - 1160px)/2));background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:saturate(160%) blur(14px);-webkit-backdrop-filter:saturate(160%) blur(14px);border-bottom:1px solid transparent;transition:border-color .2s}
+.top.scrolled{border-bottom-color:var(--border)}
+.brand img{height:40px}.brand-name{font-size:1.15rem;border-left-width:1px;padding-left:.8rem}
+.button{background:var(--accent);color:var(--on-accent);border:2px solid var(--accent);box-shadow:none;transition:background .15s,color .15s,border-color .15s,transform .15s}
+.button:hover{transform:none;filter:brightness(1.08)}.button:active{transform:translateY(1px)}
+.button.secondary{background:var(--surface);color:var(--text);border:2px solid var(--border)}
+.button.secondary:hover{background:var(--surface);color:var(--accent);border-color:var(--accent);filter:none}
+.button.danger{border-color:var(--danger);color:#fff}
+.hero{position:relative}
+.hero h1{font-size:clamp(2.6rem,6vw,4.2rem);letter-spacing:-.03em;line-height:1.05}
+.hero .hn-steps{position:absolute;right:0;top:clamp(4rem,9vw,6.5rem);width:min(360px,34%)}
+.hero.hn-glow::before{inset:-40% -10% auto auto;width:62%;height:170%}
+.tile,.card{border-radius:18px}
+.tile{transition:transform .25s cubic-bezier(.2,.8,.2,1),box-shadow .25s,border-color .25s}
+.tile:hover{transform:translateY(-4px);border-color:color-mix(in srgb,var(--accent) 40%,var(--border));box-shadow:0 2px 4px rgba(28,33,53,.06),0 18px 40px -14px rgba(85,20,180,.3)}
+.side a.active{background:var(--accent-soft);color:var(--accent)}
+.side a{position:relative}
+.foot{max-width:none;margin-top:4rem;padding:0;background:#1C2135;color:#C9CADB}
+.foot::before{content:"";display:block;height:8px;background:linear-gradient(90deg,#E97DE8 0 14%,#5514B4 14% 28%,#E3E65B 28% 34%,#3E9BA3 34% 54%,#7A1F6C 54% 64%,#C2306B 64% 74%,#5FAE7B 74% 87%,#3A4166 87%);transform-origin:left;animation:hn-stripe 1s cubic-bezier(.2,.8,.2,1) both}
+.foot>*{max-width:1160px;margin-left:auto;margin-right:auto;padding:2rem 24px 2.4rem}
+.foot a{color:#fff}
+@media (max-width:820px){.hero .hn-steps{display:none}.top{padding:10px 16px}}

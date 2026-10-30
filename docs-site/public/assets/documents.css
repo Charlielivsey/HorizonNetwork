@@ -277,3 +277,100 @@ img.avatar.photo{object-fit:cover;background:var(--surface2);padding:0}
  .doc-body h1,.doc-body h2,.doc-body h3{break-after:avoid}
  .doc-body tr,.doc-body blockquote{break-inside:avoid}
 }
+
+/* ===== The HN Group website theme (the user's request, 30 October 2026: Docs must follow the main HN Group website,
+   hngroup.org.uk, with its animations). Same colours, type sizes, sticky blurred header with plain links, pill buttons,
+   hero glow with the stepped stripe, rounded cards and the navy footer with the stripe; movement comes from
+   hn-motion.css/js, the same kit as the other HN Group websites. ===== */
+:root{--bg:#FFFFFF;--tint:#F6F3FB;--surface:#FFFFFF;--surface2:#F6F3FB;--text:#17161C;--muted:#5A5C6B;--border:#E5E0EE;--accent:#5514B4;--accent-hover:#4710A0;--accent-soft:#EEE6FA;--on-accent:#FFFFFF;--radius:18px;--header-h:72px;--shadow:0 1px 2px rgba(28,33,53,.06),0 8px 24px rgba(28,33,53,.06)}
+@media (prefers-color-scheme:dark){:root{--bg:#0E1020;--tint:#14172B;--surface:#181C32;--surface2:#14172B;--text:#F1F0F7;--muted:#A6A8BA;--border:#2A2F4A;--accent:#A47BF0;--accent-hover:#B994F5;--accent-soft:#2A2350;--on-accent:#12101F;--shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.25)}}
+body{font-size:16px;line-height:1.6}
+body>.stripe{display:none}
+a{text-underline-offset:3px}
+:focus-visible{outline:3px solid var(--accent);outline-offset:3px;border-radius:6px}
+.eyebrow{font-size:.8rem;letter-spacing:.14em;margin-bottom:.9rem}
+
+/* Header: as on hngroup.org.uk */
+.top{height:auto;background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:saturate(160%) blur(14px);-webkit-backdrop-filter:saturate(160%) blur(14px);border-bottom:1px solid transparent;transition:border-color .2s}
+.top.scrolled{border-bottom-color:var(--border)}
+.top-inner{min-height:var(--header-h);width:min(1160px,100% - 48px);gap:2rem}
+.brand img{height:40px}
+.brand-name{font-size:1.15rem;padding-left:.8rem}
+.tabs{gap:1.8rem;margin-left:1rem}
+.tabs a{padding:0;border-radius:0;background:none!important;color:var(--text);font-weight:600;font-size:.95rem;position:relative}
+.tabs a:hover{color:var(--accent)}
+.tabs a[aria-current=page]{color:var(--accent)}
+.tabs a::after{content:"";position:absolute;left:0;right:0;bottom:-8px;height:2px;border-radius:2px;background:var(--accent);transform:scaleX(0);transform-origin:left;transition:transform .3s cubic-bezier(.2,.8,.2,1)}
+.tabs a[aria-current=page]::after,.tabs a:hover::after{transform:scaleX(1)}
+.who-name{font-weight:700;font-size:.92rem}
+.avatar{width:36px;height:36px;background:linear-gradient(135deg,#5514B4,#3E9BA3)}
+
+/* Buttons: pills, as on hngroup.org.uk */
+.btn{height:auto;padding:.75rem 1.3rem;border-radius:999px;border:2px solid var(--border);background:var(--surface);color:var(--text);font-size:.95rem;transition:background .15s,color .15s,border-color .15s,transform .15s}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent);box-shadow:none}
+.btn.primary:hover{background:var(--accent-hover);border-color:var(--accent-hover);color:var(--on-accent)}
+.btn.danger{background:var(--bad);border-color:var(--bad);color:#fff}
+.btn.ghost{border-color:var(--border);background:var(--surface);color:var(--text)}
+.btn.ghost:hover{color:var(--accent);border-color:var(--accent)}
+.btn.small{height:auto;padding:.45rem 1rem;border-radius:999px;font-size:.88rem}
+.btn.icon{padding:.45rem .8rem}
+.who .btn.small{border-color:var(--border)}
+input[type=text],input[type=search],select{height:46px;border-radius:12px;background:var(--bg);font-size:.95rem;padding:0 .9rem}
+input[type=text]:focus,input[type=search]:focus,select:focus{box-shadow:0 0 0 4px var(--accent-soft)}
+.select.small select{height:38px;border-radius:999px;padding:0 .9rem}
+
+/* Page heads: the hero of the main website, with its glow and the stepped stripe */
+main{width:min(1160px,100% - 48px);padding-bottom:5rem}
+.page-head{position:relative;align-items:center;padding:clamp(2.6rem,6vw,4.2rem) 0 2rem;gap:2rem}
+.page-head h1{font-size:clamp(2.3rem,4.6vw,3.4rem);line-height:1.08;letter-spacing:-.02em;margin:0 0 .5rem}
+.page-head .muted{font-size:1.08rem;max-width:640px}
+.page-head .hn-steps{position:absolute;right:0;top:clamp(4rem,8vw,5.6rem);width:min(280px,28%);pointer-events:none}
+.page-head>div:first-of-type+div{max-width:68%}
+.top .btn{padding:.55rem 1.15rem;font-size:.9rem}
+.page-head .search-row{position:relative;z-index:1}
+.view>.page-head.hn-glow::before{inset:-80% -18% auto auto;width:70%;height:240%}
+
+/* Cards, chips and lists in the main website's style */
+.chip{height:44px;border-width:1.5px;font-size:.9rem;transition:border-color .15s,background .15s,transform .2s cubic-bezier(.2,.8,.2,1)}
+.chip:hover{transform:translateY(-2px)}
+.doc-card,.file-row,.other-storage,.empty,.bulk-bar,.message .card{border-radius:var(--radius)}
+.doc-card{box-shadow:var(--shadow);animation:none}
+.doc-card:hover{transform:translateY(-4px);box-shadow:0 2px 4px rgba(28,33,53,.06),0 18px 40px -12px rgba(85,20,180,.28)}
+.card-body h3{font-size:1rem}
+.file-row{padding:.8rem 1rem;animation:none;transition:transform .2s cubic-bezier(.2,.8,.2,1),border-color .2s}
+.file-row:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--accent) 40%,var(--border))}
+.empty{padding:4rem 2rem;border-width:1.5px}
+.empty h2{font-size:1.4rem}
+.template-group h2{font-size:1.3rem}
+.section-title{font-size:1.3rem}
+.sheet-dialog{border-radius:22px}
+.sheet-dialog h2{font-size:1.5rem}
+.toast{border-radius:14px;background:var(--text);color:var(--bg)}
+.storage-note{border-radius:14px}
+.view{animation:none}
+.editor-bar{top:var(--header-h)}
+
+/* Footer: navy with the stripe, as on hngroup.org.uk */
+.site-footer{margin-top:3rem;background:#1C2135;color:#C9CADB}
+.site-footer a{color:#fff;text-decoration:none}.site-footer a:hover{text-decoration:underline}
+.site-footer .stripe-bar{display:flex;height:8px}
+.site-footer .stripe-bar span:nth-child(1){flex:14;background:#E97DE8}.site-footer .stripe-bar span:nth-child(2){flex:14;background:#5514B4}
+.site-footer .stripe-bar span:nth-child(3){flex:6;background:#E3E65B}.site-footer .stripe-bar span:nth-child(4){flex:20;background:#3E9BA3}
+.site-footer .stripe-bar span:nth-child(5){flex:10;background:#7A1F6C}.site-footer .stripe-bar span:nth-child(6){flex:10;background:#C2306B}
+.site-footer .stripe-bar span:nth-child(7){flex:13;background:#5FAE7B}.site-footer .stripe-bar span:nth-child(8){flex:13;background:#3A4166}
+.footer-inner{width:min(1160px,100% - 48px);margin:0 auto;display:flex;justify-content:space-between;align-items:center;gap:1.5rem;flex-wrap:wrap;padding:2rem 0 2.4rem;font-size:.92rem}
+.footer-inner img{height:34px;width:auto}
+.footer-links{display:flex;gap:.6rem 1.6rem;flex-wrap:wrap;font-weight:600}
+body:has(#view-editor:not([hidden])) .site-footer{display:none}
+@media print{.site-footer{display:none!important}}
+
+@media (max-width:900px){
+ .top-inner{width:calc(100% - 32px);gap:.8rem 1rem;padding:.8rem 0}
+ .tabs{gap:1.4rem;overflow-x:auto;padding-bottom:10px;scrollbar-width:none}
+ .tabs a{flex:none}
+ main{width:calc(100% - 32px)}
+ .page-head .hn-steps{display:none}
+ .brand img{height:34px}
+}
