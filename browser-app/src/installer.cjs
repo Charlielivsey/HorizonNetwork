@@ -1,5 +1,5 @@
 'use strict';
-// Installs a verified update in place, like HN Secure Network: on a Mac the new app (from the release's
+// Installs a verified update in place, like HN Secure Gateway: on a Mac the new app (from the release's
 // zip) is checked and swapped in for this one after HN Browser closes, then reopened; on Windows the
 // installer runs silently and reopens HN Browser; on Linux the new AppImage replaces this one (same file
 // name, so shortcuts keep working) after HN Browser closes, then opens. Browser data is kept either way.

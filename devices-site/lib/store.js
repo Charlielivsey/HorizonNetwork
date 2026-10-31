@@ -1,5 +1,5 @@
 'use strict';
-// HN Group Devices: the computers allowed to use HN Group's desktop apps (HN Browser, HN Secure Network and
+// HN Group Devices: the computers allowed to use HN Group's desktop apps (HN Browser, HN Secure Gateway and
 // HN Group App Manager). Each computer has an id and a secret made on it, and a fingerprint of its hardware
 // id; only hashes of the secret and fingerprint are kept. A new computer gets a pairing code; a staff member
 // links it to their account on devices.hngroup.org.uk, and an owner-level or Super Admin account approves it.
@@ -9,7 +9,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 const STATUSES = ['unlinked', 'pending', 'authorised', 'revoked'];
-const APPS = { browser: 'HN Browser', 'secure-network': 'HN Secure Network', 'app-manager': 'HN Group App Manager' };
+const APPS = { browser: 'HN Browser', 'secure-network': 'HN Secure Gateway', 'app-manager': 'HN Group App Manager' };
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const MAX_DEVICES = 5000, MAX_AUDIT = 2000;
 const SESSION_MS = 12 * 3600 * 1000;

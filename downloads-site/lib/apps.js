@@ -1,5 +1,5 @@
 'use strict';
-// Other HN Group apps on the downloads page: HN Secure Network (the HN Group VPN and SSH app) for Mac, Windows
+// Other HN Group apps on the downloads page: HN Secure Gateway (the HN Group VPN and SSH app) for Mac, Windows
 // and Linux, and HN Group App Manager. Each is built by its own GitHub workflow (.github/workflows/mac-vpn-app.yml,
 // windows-vpn-app.yml, secure-network-linux.yml and app-manager.yml), published as a GitHub preview release of the
 // fixed repository and recorded in downloads-site/<kind's file>. Newest wins between GitHub and the installed copy.

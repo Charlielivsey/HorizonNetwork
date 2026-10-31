@@ -653,7 +653,7 @@ async function handleResume(req, res, pathname) {
   completeLogin(req, res, person, "resumed");
 }
 
-// HN Secure Network asks for the person's six-digit PIN each time it connects the VPN; the VPN service
+// HN Secure Gateway asks for the person's six-digit PIN each time it connects the VPN; the VPN service
 // checks it here. Five wrong PINs lock VPN connections for that person (and the address) for 15 minutes.
 function verifyVpnPin(personId, code, ip, client) {
   // The VPN knows people by their profile id; any enabled sign-in account using that profile can confirm with its PIN.
@@ -665,7 +665,7 @@ function verifyVpnPin(personId, code, ip, client) {
   if (!withPin.length) return { status: 403, error: "Set up your six-digit PIN in HN Group Auth first." };
   const person = withPin.find((p) => /^\d{6}$/.test(String(code || "")) && store.verifyCode(p, String(code))) || withPin[0];
   const key = "vpn:" + person.id, entry = pinFailures.get(key), fresh = entry && Date.now() - entry.first <= LOCKOUT_WINDOW_MS;
-  const req = { socket: { remoteAddress: "127.0.0.1" }, headers: { "x-real-ip": ip || "127.0.0.1", "user-agent": client || "HN Secure Network" } };
+  const req = { socket: { remoteAddress: "127.0.0.1" }, headers: { "x-real-ip": ip || "127.0.0.1", "user-agent": client || "HN Secure Gateway" } };
   if ((fresh && entry.count >= MAX_PIN_ATTEMPTS) || (ip && isLockedOut(ip))) return { status: 429, error: "Too many wrong PINs. Try again in 15 minutes." };
   if (!/^\d{6}$/.test(String(code || "")) || !store.verifyCode(person, String(code))) {
     if (ip) recordFailure(ip);

@@ -12,7 +12,7 @@ const APPS = Object.freeze({
     linux: Object.freeze({ file: 'HN-Browser.AppImage', key: 'hnbrowser', desktop: 'hn-browser' }),
   }),
   network: Object.freeze({
-    id: 'network', name: 'HN Secure Network', bundle: 'uk.org.hngroup.vpn', mac: 'HN Secure Network.app', macOld: ['HN Group VPN.app'], exe: 'HN Secure Network.exe', data: 'HN Secure Network', icon: 'secure-network.svg',
+    id: 'network', name: 'HN Secure Gateway', bundle: 'uk.org.hngroup.vpn', mac: 'HN Secure Gateway.app', macOld: ['HN Secure Network.app', 'HN Group VPN.app'], exe: 'HN Secure Network.exe', data: 'HN Secure Network', nameOld: ['HN Secure Network'], icon: 'secure-network.svg',
     kind: 'VPN and SSH', tagline: 'The HN Group VPN and SSH to the server, asking for your PIN each time it connects.',
     macArch: ['arm64', 'x64'],
     linux: Object.freeze({ file: 'HN-Secure-Network.AppImage', key: 'hnsecurenetwork', desktop: 'hn-secure-network' }),

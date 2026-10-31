@@ -14,7 +14,7 @@
     var TOPICS = [
         ["account", "My HN Group account or sign-in"],
         ["website", "A website or online service"],
-        ["apps", "HN Browser, Secure Network or App Manager"],
+        ["apps", "HN Browser, Secure Gateway or App Manager"],
         ["project", "A project or service we provide"],
         ["billing", "Invoices and payments"],
         ["other", "Something else"]
@@ -22,7 +22,7 @@
     var HELP = [
         ["Sign-in, password and PIN", "Manage your HN Group account, password, PIN and signed-in devices.", "https://accounts.hngroup.org.uk", "HN Account"],
         ["Is something down?", "Live availability, maintenance and incident updates for every HN Group service.", "https://status.hngroup.org.uk", "Service status"],
-        ["Apps and downloads", "Download HN Browser, HN Secure Network and the HN Group App Manager.", "https://downloads.hngroup.org.uk", "Downloads"],
+        ["Apps and downloads", "Download HN Browser, HN Secure Gateway and the HN Group App Manager.", "https://downloads.hngroup.org.uk", "Downloads"],
         ["Find a website", "Every HN Group company, website and service in one place.", "https://links.hngroup.org.uk", "HN Group Links"]
     ];
     var FAQ = [

@@ -66,7 +66,7 @@ test('HN Group VPN: Auth sign-in (website and Mac app), devices, admin and accou
     let body = ''; req.on('data', (c) => { body += c; }); req.on('end', () => {
       const data = JSON.parse(body || '{}');
       if (req.headers.authorization === 'Bearer ' + secret && req.url === '/api/auth/vpn-pin') {
-        const ok = data.id === 'p-sam' && data.code === '123456' && data.client === 'HN Secure Network';
+        const ok = data.id === 'p-sam' && data.code === '123456' && data.client === 'HN Secure Gateway';
         res.writeHead(ok ? 200 : 401, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify(ok ? { ok: true } : { error: 'That PIN isn’t right. 4 tries left.' }));
       }

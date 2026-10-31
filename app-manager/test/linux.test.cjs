@@ -65,7 +65,7 @@ test('Linux: install into ~/Applications with a menu entry, find it, notice itâ€
       assert.equal(await p.running(found), true);
       await assert.rejects(p.install('browser', (fs.writeFileSync(f1, v2), f1), rel('browser', '1.2.0-50', v2)), /Quit HN Browser first/);
     } finally { child.kill(); }
-    // Settings go to the app's own data folder; Secure Network's "open when I sign in" is an autostart entry.
+    // Settings go to the app's own data folder; Secure Gateway's "open when I sign in" is an autostart entry.
     assert.equal(p.preferencesFile('browser'), path.join(home, '.config', 'HN Browser', 'preferences.json'));
     const net = await p.find('network');
     await p.afterSettings('network', net, { launchAtLogin: true });

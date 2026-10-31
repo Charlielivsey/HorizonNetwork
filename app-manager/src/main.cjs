@@ -1,5 +1,5 @@
 'use strict';
-// HN Group App Manager 3: installs, updates and removes HN Browser and HN Secure Network from checked downloads,
+// HN Group App Manager 3: installs, updates and removes HN Browser and HN Secure Gateway from checked downloads,
 // changes their settings while they're closed, and keeps itself up to date in the app. It opens only on a computer
 // approved on devices.hngroup.org.uk, after signing in with an HN Group account (HN Group Auth) and unlocking it with
 // the six-digit PIN. Everything it does is written to a log (Settings → Diagnostics). This file only starts things

@@ -118,10 +118,10 @@ async function api(req, res, route) {
   let m;
   // The Mac app says which version it is, so the profile can show it.
   const appVersion = String(req.headers['x-hn-vpn-app'] || '');
-  // HN Browser and Secure Network both use app sign-ins; X-HN-VPN-Client says which one this is.
-  const appClient = { 'hn-browser': 'HN Browser', 'secure-terminal': 'HN Secure Network', 'secure-network': 'HN Secure Network' }[String(req.headers['x-hn-vpn-client'] || '')];
+  // HN Browser and Secure Gateway both use app sign-ins; X-HN-VPN-Client says which one this is.
+  const appClient = { 'hn-browser': 'HN Browser', 'secure-terminal': 'HN Secure Gateway', 'secure-network': 'HN Secure Gateway' }[String(req.headers['x-hn-vpn-client'] || '')];
   if (!current.cookie && (appClient || /^[0-9][0-9A-Za-z.\- ()]{0,30}$/.test(appVersion))) { const s = store.session(current.token); if (s) { if (/^[0-9][0-9A-Za-z.\- ()]{0,30}$/.test(appVersion)) s.appVersion = appVersion; if (appClient) s.client = appClient; } }
-  // HN Secure Network (Mac and Windows) asks for the six-digit PIN before every VPN connection.
+  // HN Secure Gateway (Mac and Windows) asks for the six-digit PIN before every VPN connection.
   if (route === '/api/app/verify-pin' && method === 'POST') {
     const body = await json(req);
     if (!/^\d{6}$/.test(String(body.pin || ''))) throw fail(400, 'Enter your six-digit PIN.');
@@ -188,7 +188,7 @@ async function api(req, res, route) {
     const body = await readBody(req, MAX_APP);
     if (body.slice(0, 4).toString('binary') !== 'PK\x03\x04') throw fail(400, 'Upload the app as a .zip file.');
     let plist = null; try { plist = macApp.infoPlist(body); } catch { plist = null; }
-    if (!plist || !/CFBundleShortVersionString/.test(plist) || !/<key>CFBundleIdentifier<\/key>\s*<string>uk\.org\.hngroup\.vpn<\/string>/.test(plist)) throw fail(400, 'That zip doesn’t contain the HN Secure Network app.');
+    if (!plist || !/CFBundleShortVersionString/.test(plist) || !/<key>CFBundleIdentifier<\/key>\s*<string>uk\.org\.hngroup\.vpn<\/string>/.test(plist)) throw fail(400, 'That zip doesn’t contain the HN Secure Gateway app.');
     const tmp = APP_FILE + '.tmp';
     fs.writeFileSync(tmp, body, { mode: 0o600 }); fs.renameSync(tmp, APP_FILE);
     const a = appView();

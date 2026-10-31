@@ -153,7 +153,7 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
         .map((x) => ({ id: x.profileId, accountIds: store.loginsForId(x.profileId).filter((l) => l.account && l.account.enabled).map((l) => l.id), photo: !!x.avatarUrl, displayName: x.displayName, jobTitle: x.jobTitle || '', company: x.company }));
       sendJson(res, 200, { people }); return true;
     }
-    // HN Secure Network asks for the PIN before connecting the VPN (checked through vpn.hngroup.org.uk).
+    // HN Secure Gateway asks for the PIN before connecting the VPN (checked through vpn.hngroup.org.uk).
     if (pathname === '/api/auth/vpn-pin') {
       const error = verifyVpnPin(body.id, body.code, typeof body.ip === 'string' ? body.ip.slice(0, 64) : '', typeof body.client === 'string' ? body.client.slice(0, 80) : '');
       sendJson(res, error ? error.status : 200, error ? { error: error.error } : { ok: true }); return true;

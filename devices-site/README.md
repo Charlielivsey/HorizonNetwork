@@ -1,6 +1,6 @@
 # HN Group Devices — devices.hngroup.org.uk
 
-The list of computers allowed to use HN Group's desktop apps: HN Browser, HN Secure Network (Mac and Windows)
+The list of computers allowed to use HN Group's desktop apps: HN Browser, HN Secure Gateway (Mac and Windows)
 and HN Group App Manager (the user's request, 23 October 2026: "a device must be authorised to be able to
 download and use the apps").
 

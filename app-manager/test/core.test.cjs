@@ -148,7 +148,7 @@ test('checking finds updates; a change for an open app waits until it’s quit, 
     t.platform.open.delete('network'); t.platform.failNext = 'Windows blocked the installer.';
     t.manager.enqueue('network', 'update');
     await until(() => !t.manager.working);
-    assert.match(t.store.activity[0].message, /HN Secure Network: Windows blocked the installer\./);
+    assert.match(t.store.activity[0].message, /HN Secure Gateway: Windows blocked the installer\./);
     assert.ok(t.log.tail().some((l) => l.includes('ERROR') && l.includes('Windows blocked')), 'and written to the log');
     // Removing.
     t.manager.enqueue('network', 'remove');
@@ -178,7 +178,7 @@ test('settings are read from and written to the app, only while it’s closed', 
     assert.equal(JSON.parse(fs.readFileSync(path.join(t.dir, 'HN Browser', 'preferences.json'), 'utf8')).theme, 'forest');
     t.platform.open.add('browser');
     await assert.rejects(t.manager.saveSettings('browser', { theme: 'rose' }), /Quit HN Browser first/);
-    await assert.rejects(t.manager.saveSettings('network', { theme: 'dark' }), /Install HN Secure Network first/);
+    await assert.rejects(t.manager.saveSettings('network', { theme: 'dark' }), /Install HN Secure Gateway first/);
   } finally { t.done(); }
 });
 

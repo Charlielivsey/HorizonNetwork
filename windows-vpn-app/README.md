@@ -1,11 +1,11 @@
-# HN Secure Network (Windows)
+# HN Secure Gateway (Windows)
 
-The HN Group VPN and SSH app for Windows 10 and 11 (64-bit), matching HN Secure Network for Mac. It
+The HN Group VPN and SSH app for Windows 10 and 11 (64-bit), matching HN Secure Gateway for Mac. It
 connects this PC to HN Group's server over the VPN: all of the PC's internet traffic goes through it,
 and the server is 10.88.0.1 inside it. It also opens SSH sessions to that server in their own terminal
 window, like the Mac app opens Terminal.
 
-## HN Secure Network for Linux (Bazzite) — 2.1.0
+## HN Secure Gateway for Linux (Bazzite) — 2.1.0
 
 The same app also runs on Linux x64 as an AppImage (`HN-Secure-Network-<version>-linux-x86_64.AppImage`), built for
 Bazzite (the user's request, 27 October 2026) and working on Fedora and other NetworkManager desktops. Same window,
@@ -40,7 +40,7 @@ HN Group design (never a plain Windows box), the PIN before every connection, an
 
 ## Using it
 
-1. Download it from https://downloads.hngroup.org.uk (HN Secure Network → Download for Windows) and run
+1. Download it from https://downloads.hngroup.org.uk (HN Secure Gateway → Download for Windows) and run
    the installer. Preview builds aren't code-signed yet: if SmartScreen asks, choose **More info → Run anyway**.
 2. **Sign in with HN Group Auth.** Your browser opens HN Group Auth (password and six-digit PIN). The
    one-time code comes straight back to the app on this PC (a loopback address); nothing is pasted.

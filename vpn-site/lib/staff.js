@@ -34,7 +34,7 @@ async function accountStatus(ids) {
   try { const { value } = await call('/api/auth/account-status', { ids }); return value.accounts || null; } catch { return null; }
 }
 
-// HN Secure Network asks for the person's PIN before each VPN connection; the staff account service
+// HN Secure Gateway asks for the person's PIN before each VPN connection; the staff account service
 // checks it (with its own lockout). A wrong PIN is a 400 here so apps never mistake it for a sign-out.
 async function verifyPin(id, code, client) {
   try { await call('/api/auth/vpn-pin', { id, code: String(code || ''), ip: client.ip, client: client.agent }); }

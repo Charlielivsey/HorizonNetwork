@@ -151,7 +151,7 @@ Requirements:
   - **Sign-in:** an app sign-in through a browser tab. Open `/auth/login?app=<sha256 hex challenge>&loopback=<port>`. The one-time code comes back to `http://127.0.0.1:<port>/vpn-callback`, and the browser swaps it with its secret at `/api/app/exchange`. Requests carry `X-HN-VPN-Client: hn-browser` and `X-HN-VPN-App: <version>`.
   - **Storage:** store only the encrypted VPN token (`vpn.enc` via `safeStorage`).
   - **Registering this computer:** make the WireGuard key pair locally, send only the public key to `POST /api/devices`, and write the private key straight into the local config. Each account can have at most 5 devices. Setting up again replaces this computer's device instead of adding another.
-  - **Mac control:** use the same root helper as the HN Secure Network Mac app (`/usr/local/libexec/hn-vpn/hn-vpn-ctl`, installed once with an admin prompt, plus a sudoers rule for that helper only), using Homebrew `wireguard-tools`.
+  - **Mac control:** use the same root helper as the HN Secure Gateway Mac app (`/usr/local/libexec/hn-vpn/hn-vpn-ctl`, installed once with an admin prompt, plus a sudoers rule for that helper only), using Homebrew `wireguard-tools`.
     - `browser-app/src/hn-vpn-ctl` must stay byte-identical to `mac-vpn-app/Resources/hn-vpn-ctl`, so the two apps share one connection.
   - **Windows control:** use the WireGuard for Windows tunnel service `WireGuardTunnel$hn-vpn`.
     - The config lives in an Administrators-only ProgramData folder.
@@ -159,7 +159,7 @@ Requirements:
   - **Account rules:** set-up, connecting and VPN sign-in require the unlocked HN account. Signing in to the browser as a different HN account signs the VPN out.
 - **Make it work well:**
   - **Status:**
-    - Show the true connection state, polled every 15 seconds and reconciled with the OS. Detect a tunnel already brought up by HN Secure Network.
+    - Show the true connection state, polled every 15 seconds and reconciled with the OS. Detect a tunnel already brought up by HN Secure Gateway.
     - Show the public IP the internet sees (`GET /api/ip` returns `{ip, viaVpn}`), whether the server answers, and the last handshake time.
   - **Clear guided set-up:** sign in → install WireGuard (open Terminal with `brew install wireguard-tools` on Mac, or the WireGuard download page on Windows, with a "check again" step) → set up this computer → connect.
   - **Updating old devices:** devices set up for the old split tunnel get an "Update this computer's VPN" step.

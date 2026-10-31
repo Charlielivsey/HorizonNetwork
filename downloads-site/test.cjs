@@ -20,7 +20,7 @@ test('the newest release wins: an older GitHub answer never replaces a newer ins
   const offline=createReleases(path.join(dir,'data'),{bundled:path.join(dir,'missing.json'),fetcher:async()=>{throw Error('Offline');}});await offline.refresh();assert.equal(offline.current.version,'0.7.0-17');
  }finally{fs.rmSync(dir,{recursive:true,force:true});}});
 
-test('HN Secure Network is offered only from a genuine record, newest first',async()=>{const{readApp,createApp}=require('./lib/apps');const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-download-app-'));
+test('HN Secure Gateway is offered only from a genuine record, newest first',async()=>{const{readApp,createApp}=require('./lib/apps');const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-download-app-'));
  const record=(v,n)=>({tag:'secure-network-v'+v+'-'+n,asset:{name:'HN-Secure-Network-'+v+'-macOS.zip',size:1000,sha256:'a'.repeat(64)}});
  try{assert.equal(readApp({...record('2.1.0',30),tag:'browser-v2.1.0-30'}),null);assert.equal(readApp({...record('2.1.0',30),asset:{name:'evil.zip',size:1,sha256:'a'.repeat(64)}}),null);
   assert.equal(readApp(record('2.1.0',30)).asset.url,'https://github.com/Charlielivsey/HorizonNetwork/releases/download/secure-network-v2.1.0-30/HN-Secure-Network-2.1.0-macOS.zip');
@@ -29,7 +29,7 @@ test('HN Secure Network is offered only from a genuine record, newest first',asy
   const b=createApp(path.join(dir,'data2'),{bundled:path.join(dir,'none'),fetcher:async()=>Response.json(record('2.1.0',32))});await b.refresh();assert.equal(b.current.version,'2.1.0-32');
  }finally{fs.rmSync(dir,{recursive:true,force:true});}});
 
-test('HN Secure Network for Windows is offered only from a genuine Windows record',async()=>{const{readApp,createApp}=require('./lib/apps');const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-download-win-'));
+test('HN Secure Gateway for Windows is offered only from a genuine Windows record',async()=>{const{readApp,createApp}=require('./lib/apps');const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-download-win-'));
  const record=(v,n)=>({tag:'secure-network-windows-v'+v+'-'+n,asset:{name:'HN-Secure-Network-'+v+'-windows-x64.exe',size:5000,sha256:'b'.repeat(64)}});
  try{assert.equal(readApp(record('1.0.0',3),'mac'),null,'a Windows record is never a Mac one');assert.equal(readApp({tag:'secure-network-v1.0.0-3',asset:{name:'HN-Secure-Network-1.0.0-macOS.zip',size:1,sha256:'b'.repeat(64)}},'windows'),null);
   assert.equal(readApp({...record('1.0.0',3),asset:{name:'HN-Secure-Network-1.0.1-windows-x64.exe',size:5000,sha256:'b'.repeat(64)}},'windows'),null,'the file name must match the version');
@@ -39,7 +39,7 @@ test('HN Secure Network for Windows is offered only from a genuine Windows recor
 
 test('App Manager offers only the matching verified Mac and Windows installers',()=>{const{readApp}=require('./lib/apps');for(const[kind,suffix]of[['manager-mac','mac-universal.zip'],['manager-windows','win-x64.exe'],['manager-linux','linux-x86_64.AppImage']]){const record={tag:'app-manager-v1.0.0-1',asset:{name:'HN-Group-App-Manager-1.0.0-'+suffix,size:500,sha256:'a'.repeat(64)}};assert.equal(readApp(record,kind).version,'1.0.0-1');assert.equal(readApp({...record,tag:'browser-v1.0.0-1'},kind),null);assert.equal(readApp({...record,asset:{...record.asset,sha256:'bad'}},kind),null);assert.equal(readApp(record,kind==='manager-mac'?'manager-windows':'manager-mac'),null);}});
 
-test('Linux: HN Secure Network’s AppImage comes only from a genuine Linux record, and HN Browser’s from its release',()=>{
+test('Linux: HN Secure Gateway’s AppImage comes only from a genuine Linux record, and HN Browser’s from its release',()=>{
  const{readApp}=require('./lib/apps'),{readRelease}=require('./lib/releases');
  const rec={tag:'secure-network-linux-v2.1.0-5',asset:{name:'HN-Secure-Network-2.1.0-linux-x86_64.AppImage',size:5000,sha256:'c'.repeat(64)}};
  assert.equal(readApp(rec,'linux').asset.url,'https://github.com/Charlielivsey/HorizonNetwork/releases/download/secure-network-linux-v2.1.0-5/HN-Secure-Network-2.1.0-linux-x86_64.AppImage');

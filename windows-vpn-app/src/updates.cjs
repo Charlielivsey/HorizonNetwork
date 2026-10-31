@@ -1,5 +1,5 @@
 'use strict';
-// Updates for HN Secure Network on Windows and Linux, from downloads.hngroup.org.uk: the same installer (Windows) or
+// Updates for HN Secure Gateway on Windows and Linux, from downloads.hngroup.org.uk: the same installer (Windows) or
 // AppImage (Linux) the downloads page offers, checked for size and SHA-256 before it's used. Windows runs the installer
 // silently; Linux swaps the AppImage in place (src/appimage.cjs). Either way the app reopens.
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');

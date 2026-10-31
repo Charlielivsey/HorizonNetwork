@@ -30,7 +30,7 @@ const SITES = { website: "HN Group", network: "Horizon Network", media: "Horizon
 const SUPPORT_TOPICS = {
   account: "My HN Group account or sign-in",
   website: "A website or online service",
-  apps: "HN Browser, Secure Network or App Manager",
+  apps: "HN Browser, Secure Gateway or App Manager",
   project: "A project or service we provide",
   billing: "Invoices and payments",
   other: "Something else",

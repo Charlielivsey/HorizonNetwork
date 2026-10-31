@@ -120,7 +120,7 @@ struct VisualEffect: NSViewRepresentable {
     func updateNSView(_ view: NSVisualEffectView, context: Context) { view.material = material }
 }
 
-/// The HN Secure Network mark: a shield on the brand gradient.
+/// The HN Secure Gateway mark: a shield on the brand gradient.
 struct AppMark: View {
     var size: CGFloat = 34
     var body: some View {

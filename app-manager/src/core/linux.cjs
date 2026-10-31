@@ -198,14 +198,14 @@ class LinuxPlatform {
     const a = entry(id);
     await this.trash(found.path);
     await this.removeFromMenu(id);
-    // HN Secure Network's "open when I sign in" entry points at the AppImage that's gone.
+    // HN Secure Gateway's "open when I sign in" entry points at the AppImage that's gone.
     if (id === 'network') appimage.setAutostart(false, { id: a.linux.desktop, name: a.name, config: this.config });
     const all = this.readRecords(); delete all[found.path]; try { this.writeRecords(all); } catch {}
   }
   preferencesFile(id) { return path.join(this.config, entry(id).data, 'preferences.json'); }
   async readNative() { return {}; }
   async writeNative() {}
-  // After settings are saved: HN Secure Network's "Open when I sign in" is a desktop entry in ~/.config/autostart.
+  // After settings are saved: HN Secure Gateway's "Open when I sign in" is a desktop entry in ~/.config/autostart.
   async afterSettings(id, found, saved) {
     if (id !== 'network' || !Object.hasOwn(saved, 'launchAtLogin')) return;
     const a = entry(id);

@@ -1,6 +1,6 @@
 # HN Group App Manager
 
-The desktop app that installs, updates, repairs and looks after HN Browser and HN Secure Network, for macOS
+The desktop app that installs, updates, repairs and looks after HN Browser and HN Secure Gateway, for macOS
 (Apple silicon and Intel; HN Browser itself needs Apple silicon) and Windows 10/11 x64.
 
 ## Linux (Bazzite) — 3.1.0
@@ -20,9 +20,9 @@ built for Bazzite (the user's request, 27 October 2026) and working on Fedora an
   itself is recognised), the file name, or the AppImage's desktop entry, read without running the app.
 - **Open apps** are found from `/proc` (the AppImage's runtime, or a process started from it); changes wait until
   they're quit, as on Mac and Windows.
-- **Removing** moves the AppImage to the Bin (restorable) and takes it out of the app menu; HN Secure Network's
+- **Removing** moves the AppImage to the Bin (restorable) and takes it out of the app menu; HN Secure Gateway's
   autostart entry goes too. `~/.config/<app>` is never touched.
-- **Settings** go to the apps' own `~/.config/HN Browser` and `~/.config/HN Secure Network`; turning on HN Secure
+- **Settings** go to the apps' own `~/.config/HN Browser` and `~/.config/HN Secure Gateway`; turning on HN Secure
   Network's "Open when I sign in" also writes its autostart entry.
 - **Itself:** run from a download, it offers **Install** (copies itself to `~/Applications`, adds itself to the menu
   and reopens); opened from the download again once installed, it opens the installed copy instead (`handOver`); its own updates are staged, verified and swapped in after it quits. "Open at sign-in" is
@@ -33,7 +33,7 @@ built for Bazzite (the user's request, 27 October 2026) and working on Fedora an
 Version 3.0.0 is a rebuild from scratch (the user's request, 26 October 2026: "completely rebuild the app manager
 from scratch. it is buggy and doesnt work right. it also needs to have its own in app updates"). Only the shared
 pieces were kept: HN Group sign-in (`src/account.cjs`, `src/vault.cjs`) and the device check (`src/device*.cjs`,
-`ui/device.*`, identical in HN Browser and HN Secure Network for Windows). Earlier versions: 2.0.0 (queue, a page
+`ui/device.*`, identical in HN Browser and HN Secure Gateway for Windows). Earlier versions: 2.0.0 (queue, a page
 per app) and 2.1.0 (HN Group Auth, device authorisation, Mac self-update fixes).
 
 ## What it does

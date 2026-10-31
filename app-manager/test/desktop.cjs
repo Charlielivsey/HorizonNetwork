@@ -74,8 +74,8 @@ const shots = path.join(__dirname, '..', 'screenshots');
 
     step('install, asked in the HN design');
     await page.locator('[data-app=network] [data-action=install]').click();
-    await page.locator('#sheet', { hasText: 'Install HN Secure Network 2.0.1?' }).waitFor(); await page.waitForTimeout(400); await shot('install-question');
-    await confirm('Install HN Secure Network 2.0.1?');
+    await page.locator('#sheet', { hasText: 'Install HN Secure Gateway 2.0.1?' }).waitFor(); await page.waitForTimeout(400); await shot('install-question');
+    await confirm('Install HN Secure Gateway 2.0.1?');
     await page.locator('#dock').waitFor(); await shot('installing');
     await page.locator('[data-app=network] .pill', { hasText: 'Up to date' }).waitFor({ timeout: 20000 });
 
@@ -100,7 +100,7 @@ const shots = path.join(__dirname, '..', 'screenshots');
     await page.locator('#menu').waitFor(); await page.waitForTimeout(250); await shot('menu');
     await page.locator('#menu button', { hasText: 'Remove' }).click();
     await page.locator('#sheet', { hasText: 'Disconnect the VPN first' }).waitFor();
-    await confirm('Remove HN Secure Network?');
+    await confirm('Remove HN Secure Gateway?');
     await page.locator('[data-app=network] .pill', { hasText: 'Not installed' }).waitFor({ timeout: 20000 });
     assert.deepEqual((await events()).at(-1), { uninstall: 'network' });
 
@@ -120,7 +120,7 @@ const shots = path.join(__dirname, '..', 'screenshots');
 
     step('activity');
     await page.locator('.nav[data-go=activity]').click();
-    for (const t of ['HN Browser was updated to 1.1.6.', 'HN Secure Network 2.0.1 was installed.', 'HN Browser settings changed', 'HN Secure Network was removed.', 'App Manager is updating to 9.0.0']) await page.locator('.event', { hasText: t }).first().waitFor();
+    for (const t of ['HN Browser was updated to 1.1.6.', 'HN Secure Gateway 2.0.1 was installed.', 'HN Browser settings changed', 'HN Secure Gateway was removed.', 'App Manager is updating to 9.0.0']) await page.locator('.event', { hasText: t }).first().waitFor();
     await shot('activity');
 
     step('settings and diagnostics');

@@ -103,14 +103,14 @@ function stopFind(){const wc=tabs.find(t=>t.id===active)?.view.webContents;if(fi
 function shortcut(key){try{if(key==='d')toggleBookmark();else if(key==='p')tabs.find(t=>t.id===active)?.view.webContents.print({},()=>{});else if(key==='f'){hidePopup();find.open=true;flush();overlay?.webContents.focus();overlay?.webContents.send('browser:find');}else if(key==='t')add();else if(key==='w')close(active);else if(key==='l'){win.webContents.focus();win.webContents.send('browser:focus-address');}else if(key==='r')tabs.find(t=>t.id===active)?.view.webContents.reload();}catch(e){report(e);}}
 // Connects the HN VPN when the browser account is unlocked, if the person asked for that.
 // HN Browser never turns the VPN on by itself (the user's request, 25 October 2026); it only connects when asked.
-// Quitting HN Browser turns the VPN off, unless HN Secure Network is open to look after it.
+// Quitting HN Browser turns the VPN off, unless HN Secure Gateway is open to look after it.
 function secureNetworkOpen(){return new Promise(resolve=>{
- if(process.platform==='darwin')execFile('/bin/ps',['-axo','comm='],{timeout:3000},(e,out)=>resolve(!e&&String(out).split('\n').some(l=>/\.app\/Contents\/MacOS\/(HN Secure Network|HN Group VPN)$/.test(l.trim()))));
+ if(process.platform==='darwin')execFile('/bin/ps',['-axo','comm='],{timeout:3000},(e,out)=>resolve(!e&&String(out).split('\n').some(l=>/\.app\/Contents\/MacOS\/(HN Secure Network|HN Secure Gateway|HN Group VPN)$/.test(l.trim()))));
  else if(process.platform==='win32')execFile('tasklist',['/FI','IMAGENAME eq HN Secure Network.exe','/FO','CSV','/NH'],{timeout:3000,windowsHide:true},(e,out)=>resolve(!e&&/"HN Secure Network\.exe"/i.test(String(out))));
- // Linux: HN Secure Network's program is called hn-secure-network (inside its AppImage).
+ // Linux: HN Secure Gateway's program is called hn-secure-network (inside its AppImage).
  else if(process.platform==='linux'){let found=false;try{for(const pid of fs.readdirSync('/proc')){if(!/^\d+$/.test(pid))continue;try{if(path.basename(fs.readFileSync('/proc/'+pid+'/cmdline','utf8').split('\0')[0])==='hn-secure-network'){found=true;break;}}catch{}}}catch{}resolve(found);}
  else resolve(false);});}
-async function vpnOffOnQuit(){let result='off already';try{await vpn?.poll().catch(()=>{});if(vpn?.connected){if(!app.isPackaged&&process.env.HN_BROWSER_TEST_SECURE_NETWORK_OPEN==='1'||await secureNetworkOpen())result='left on for HN Secure Network';else{await Promise.race([vpn.disconnect(),new Promise(r=>setTimeout(r,8000))]);result=vpn.connected?'still on':'turned off';}}}catch{result='still on';}
+async function vpnOffOnQuit(){let result='off already';try{await vpn?.poll().catch(()=>{});if(vpn?.connected){if(!app.isPackaged&&process.env.HN_BROWSER_TEST_SECURE_NETWORK_OPEN==='1'||await secureNetworkOpen())result='left on for HN Secure Gateway';else{await Promise.race([vpn.disconnect(),new Promise(r=>setTimeout(r,8000))]);result=vpn.connected?'still on':'turned off';}}}catch{result='still on';}
  if(!app.isPackaged&&process.env.HN_BROWSER_TEST_PROFILE){try{fs.writeFileSync(path.join(app.getPath('userData'),'vpn-on-quit.txt'),result);}catch{}}}
 function flushSession(){if(quitting)return;clearTimeout(sessionTimer);if(library&&(preferences.startup==='restore'||keepTabsOnce)&&tabs.length)library.saveSession(tabs.map(t=>({url:t.url,pinned:t.pinned})),tabs.findIndex(t=>t.id===active));quitting=true;library?.flush();}
 function persistPreferences(){preferencesStore?.save(preferences);changed();}

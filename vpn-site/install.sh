@@ -236,7 +236,7 @@ if systemctl list-unit-files certbot.timer --no-legend 2>/dev/null | grep -q cer
 # Is anything reaching the VPN? Devices that never complete a handshake usually mean UDP 51820 is
 # blocked before it reaches this server (often the hosting provider's own firewall).
 PEERS=$(wg show wg-hn peers 2>/dev/null | wc -l); SEEN=$(wg show wg-hn latest-handshakes 2>/dev/null | awk '$2>0' | wc -l)
-if ! ss -ltn 2>/dev/null | grep -qE '(0\.0\.0\.0|\*|10\.88\.0\.1|\[::\]):22 '; then echo 'Warning: SSH (sshd) is not listening on port 22 for the VPN address, so Secure Network can’t open a session.'; fi
+if ! ss -ltn 2>/dev/null | grep -qE '(0\.0\.0\.0|\*|10\.88\.0\.1|\[::\]):22 '; then echo 'Warning: SSH (sshd) is not listening on port 22 for the VPN address, so Secure Gateway can’t open a session.'; fi
 if [ "$PEERS" -gt 0 ] && [ "$SEEN" -eq 0 ]; then echo "Warning: none of the $PEERS VPN devices has connected yet. Check that UDP port 51820 is allowed in your hosting provider's firewall (for example the IONOS Cloud Panel)."; else echo "VPN devices connected at least once: $SEEN of $PEERS."; fi
 echo 'HN Group VPN installed: https://vpn.hngroup.org.uk · PM2 hn-vpn · port 5000 · WireGuard wg-hn on UDP 51820.'
 echo 'If your hosting provider has its own firewall (for example the IONOS Cloud Panel), allow incoming UDP port 51820 there too.'

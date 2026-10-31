@@ -34,7 +34,7 @@ class WindowsPlatform {
   }
   async find(id) {
     const a = entry(id);
-    const r = await ps("$items=@(Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*','HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*','HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -eq " + psq(a.name) + " } | Select-Object DisplayVersion,InstallLocation,UninstallString,QuietUninstallString); ConvertTo-Json -Compress -InputObject $items");
+    const r = await ps("$items=@(Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*','HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*','HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' -ErrorAction SilentlyContinue | Where-Object { @(" + [a.name, ...(a.nameOld || [])].map(psq).join(',') + ") -contains $_.DisplayName } | Select-Object DisplayVersion,InstallLocation,UninstallString,QuietUninstallString); ConvertTo-Json -Compress -InputObject $items");
     if (r.code !== 0) throw fail('Installed apps couldn’t be checked.', { detail: r.err.trim() });
     let items = []; try { items = JSON.parse(r.out.trim() || '[]'); } catch {}
     for (const v of Array.isArray(items) ? items : [items]) {
