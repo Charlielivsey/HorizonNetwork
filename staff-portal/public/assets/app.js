@@ -7881,10 +7881,9 @@
             (d.canManage ? '<div class="page-actions"><button type="button" class="btn btn-primary" id="jb-new">' + icon("plus") + "Post a vacancy</button></div>" : "") + "</div>" +
             (d.vacancies.length ? '<div class="job-list">' + d.vacancies.map(function (v) {
                 return '<article class="job-card' + (v.open ? "" : " job-closed") + '" data-job="' + v.id + '"><div class="job-head"><div><h2>' + esc(v.title) + "</h2>" +
-                    '<div class="job-meta"><span>' + icon("building") + esc(v.company) + "</span>" + (v.location ? "<span>" + icon("pin") + esc(v.location) + "</span>" : "") +
-                    "<span>" + icon("clock") + esc(v.contractLabel) + "</span>" + (v.salary ? "<span>" + icon("pound") + esc(v.salary) + "</span>" : "") +
+                    '<div class="job-meta"><span>' + icon("building") + esc(v.company) + "</span>" +
                     (v.publicListing && d.canManage ? "<span>" + icon("monitor") + "On the website</span>" : "") + "</div></div>" +
-                    (v.open ? (v.closingDate ? '<span class="badge badge-soft">Closes ' + esc(fmtDate(v.closingDate + "T12:00:00")) + "</span>" : '<span class="badge badge-green">Open</span>') : '<span class="badge">' + (v.status === "filled" ? "Filled" : "Closed") + "</span>") + "</div>" +
+                    (v.open ? '<span class="badge badge-green">Open</span>' : '<span class="badge">' + (v.status === "filled" ? "Filled" : "Closed") + "</span>") + "</div>" +
                     (v.description ? '<div class="job-desc">' + richText(v.description) + "</div>" : "") +
                     '<div class="job-foot">' + (v.hiringManagerName ? '<span class="muted small">Hiring manager: ' + esc(v.hiringManagerName) + "</span>" : "<span></span>") +
                     '<div class="btn-row">' + (v.myApplication ? '<span class="badge badge-soft">You applied · ' + esc(v.myApplication.stageLabel) + "</span>" : "") +
@@ -7901,7 +7900,7 @@
             if (act === "edit") return openVacancyForm(d, v);
             if (act === "applicant") return openApplicant(d, v, v.applicants.find(function (a) { return a.id === b.dataset.id; }));
             try {
-                if (act === "delete" && !(await confirmDialog({ title: "Delete this vacancy?", message: "Its applicants and CVs will be deleted too.", confirmLabel: "Delete", danger: true }))) return;
+                if (act === "delete" && !(await confirmDialog({ title: "Delete this vacancy?", message: "Its applicants will be deleted too.", confirmLabel: "Delete", danger: true }))) return;
                 await api("/api/jobs/" + v.id + (act === "delete" ? "/delete" : "/status"), { status: act });
                 toast(act === "delete" ? "Vacancy deleted." : "Vacancy " + (act === "open" ? "reopened." : act + "."));
                 render();
@@ -7926,18 +7925,14 @@
     }
 
     function openVacancyForm(d, v) {
-        v = v || { title: "", company: d.companies[0], location: "", contract: "full-time", salary: "", description: "", closingDate: "", hiringManagerId: "" };
+        v = v || { title: "", company: d.companies[0], description: "", hiringManagerId: "" };
         const m = openModal(
             '<h2 class="modal-title">' + (v.id ? "Edit vacancy" : "Post a vacancy") + "</h2><form id=\"vf-form\" novalidate>" +
             '<label for="vf-title">Job title</label><input type="text" id="vf-title" maxlength="120" value="' + esc(v.title) + '">' +
             '<div class="grid-2"><div><label for="vf-company">Company</label><select id="vf-company">' + d.companies.map(function (c) { return "<option" + (c === v.company ? " selected" : "") + ">" + esc(c) + "</option>"; }).join("") + "</select></div>" +
-            '<div><label for="vf-contract">Contract</label><select id="vf-contract">' + Object.keys(d.contracts).map(function (k) { return '<option value="' + k + '"' + (k === v.contract ? " selected" : "") + ">" + esc(d.contracts[k]) + "</option>"; }).join("") + "</select></div></div>" +
-            '<div class="grid-2"><div><label for="vf-loc">Location</label><input type="text" id="vf-loc" maxlength="120" value="' + esc(v.location) + '" placeholder="e.g. Manchester / Remote"></div>' +
-            '<div><label for="vf-salary">Salary</label><input type="text" id="vf-salary" maxlength="80" value="' + esc(v.salary) + '" placeholder="e.g. £24,000 – £28,000"></div></div>' +
-            '<div class="grid-2"><div><label for="vf-close">Closing date <span class="muted small">(optional)</span></label><input type="date" id="vf-close" value="' + esc(v.closingDate || "") + '"></div>' +
             '<div><label for="vf-mgr">Hiring manager</label><select id="vf-mgr"><option value="">None</option>' + d.people.map(function (p) { return '<option value="' + p.id + '"' + (p.id === v.hiringManagerId ? " selected" : "") + ">" + esc(p.displayName) + "</option>"; }).join("") + "</select></div></div>" +
             '<label for="vf-desc">Description</label><textarea id="vf-desc" rows="7" maxlength="6000" placeholder="What the role involves, who you’re looking for…">' + esc(v.description) + "</textarea>" +
-            '<label class="inline-check"><input type="checkbox" id="vf-public"' + (v.publicListing ? " checked" : "") + "> Advertise on HN Group Careers (careers.hngroup.org.uk), where anyone can apply with a CV and check how their application is going</label>" +
+            '<label class="inline-check"><input type="checkbox" id="vf-public"' + (v.publicListing ? " checked" : "") + "> Advertise on HN Group Careers (careers.hngroup.org.uk), where anyone can apply and check how their application is going</label>" +
             '<div class="form-error" id="vf-error" hidden></div>' +
             '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">' + (v.id ? "Save" : "Post vacancy") + "</button></div></form>",
             { wide: true }
@@ -7946,8 +7941,7 @@
             e.preventDefault();
             try {
                 await api(v.id ? "/api/jobs/" + v.id : "/api/jobs", {
-                    title: $("#vf-title", m.el).value, company: $("#vf-company", m.el).value, contract: $("#vf-contract", m.el).value, location: $("#vf-loc", m.el).value,
-                    salary: $("#vf-salary", m.el).value, closingDate: $("#vf-close", m.el).value, hiringManagerId: $("#vf-mgr", m.el).value, description: $("#vf-desc", m.el).value,
+                    title: $("#vf-title", m.el).value, company: $("#vf-company", m.el).value, hiringManagerId: $("#vf-mgr", m.el).value, description: $("#vf-desc", m.el).value,
                     publicListing: $("#vf-public", m.el).checked,
                 });
                 closeModal();
@@ -7958,7 +7952,6 @@
     }
 
     function openApplyForm(v, self, d) {
-        let file = null;
         const m = openModal(
             '<h2 class="modal-title">' + (self ? "Apply for " : "Refer someone for ") + esc(v.title) + "</h2><form id=\"ap-form\" novalidate>" +
             (self ? '<p class="muted">Your name and current role are sent to the recruiters. Add a note about why you’d like the job.</p>'
@@ -7966,18 +7959,16 @@
                   '<label for="ap-phone">Phone <span class="muted small">(optional)</span></label><input type="tel" id="ap-phone" maxlength="40">' +
                   (d.canManage ? '<label for="ap-source">Source</label><select id="ap-source">' + Object.keys(d.sources).filter(function (k) { return k !== "internal"; }).map(function (k) { return '<option value="' + k + '">' + esc(d.sources[k]) + "</option>"; }).join("") + "</select>" : "")) +
             '<label for="ap-msg">' + (self ? "Why you’d be great" : "Why you’re recommending them") + '</label><textarea id="ap-msg" rows="4" maxlength="3000"></textarea>' +
-            '<label>CV <span class="muted small">(optional)</span></label><label class="drop-zone"><input type="file" id="ap-file" accept=".pdf,.doc,.docx,.odt,.rtf,.txt" hidden>' + icon("upload") + '<span id="ap-file-name">Add a CV (PDF or Word)</span></label>' +
             '<div class="form-error" id="ap-error" hidden></div>' +
             '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">' + (self ? "Send application" : "Send referral") + "</button></div></form>"
         );
-        $("#ap-file", m.el).addEventListener("change", function (e) { file = e.target.files[0] || null; $("#ap-file-name", m.el).textContent = file ? file.name : "Add a CV (PDF or Word)"; });
         $("#ap-form", m.el).addEventListener("submit", async function (e) {
             e.preventDefault();
             try {
                 await uploadJson("/api/jobs/" + v.id + "/apply", "X-Applicant", {
                     self: self, name: self ? "" : $("#ap-name", m.el).value, email: self ? "" : $("#ap-email", m.el).value, phone: self ? "" : $("#ap-phone", m.el).value,
-                    source: $("#ap-source", m.el) ? $("#ap-source", m.el).value : "", message: $("#ap-msg", m.el).value, fileName: file ? file.name : "",
-                }, file);
+                    source: $("#ap-source", m.el) ? $("#ap-source", m.el).value : "", message: $("#ap-msg", m.el).value,
+                }, null);
                 closeModal();
                 toast(self ? "Application sent. Good luck!" : "Referral sent. Thank you!");
                 render();
@@ -8388,7 +8379,7 @@
                 return "<li><strong>" + esc(e.title) + '</strong><span class="muted small">' + esc(dateRange(e.startDate, e.endDate)) + (e.location ? " · " + esc(e.location) : "") + "</span></li>";
             }).join("") + "</ul>" : '<p class="muted small">No events coming up.</p>') + "</section>" +
             (d.vacancies.length ? '<section class="panel"><h2 class="panel-title">' + icon("briefcase") + "We’re hiring</h2><ul class=\"team-list\">" + d.vacancies.map(function (v) {
-                return '<li><a href="/jobs" data-link><strong>' + esc(v.title) + "</strong></a>" + (v.location ? '<span class="muted small">' + esc(v.location) + "</span>" : "") + "</li>";
+                return '<li><a href="/jobs" data-link><strong>' + esc(v.title) + "</strong></a>" + '<span class="muted small">' + esc(v.company || "") + "</span>" + "</li>";
             }).join("") + "</ul></section>" : "") +
             "</aside></div>";
         root.addEventListener("click", function (e) {

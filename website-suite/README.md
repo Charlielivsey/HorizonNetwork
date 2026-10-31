@@ -21,7 +21,7 @@ Home page (about, news from HN Group News, a contact form that goes to the staff
 
 ## HN Group Careers
 
-Vacancies come from the staff portal's Jobs page: a role ticked "Advertise on HN Group Careers" appears here at once. The home page has open roles (search, company and type filters), the group's companies, how hiring works and links for staff (internal vacancies) and questions. Each role has its own page (`/jobs/<id>`) with the details and the application form (CV up to 10 MB, PDF or Word). Applying gives a private reference; `/application` shows the stage the hiring team set on the staff portal (Received, Being reviewed, Interview, Offer, Hired, or Not progressing). hngroup.org.uk/careers redirects here. Only the jobs, apply, application status and enquiry routes reach the staff portal.
+Vacancies come from the staff portal's Jobs page: a role ticked "Advertise on HN Group Careers" appears here at once. The home page has open roles (search and company filter), the group's companies, how hiring works and links for staff (internal vacancies) and questions. Each role has its own page (`/jobs/<id>`) with the description and the application form (no CV; vacancies have no location, contract type, salary or closing date). Applying gives a private reference; `/application` shows the stage the hiring team set on the staff portal (Received, Being reviewed, Interview, Offer, Hired, or Not progressing). hngroup.org.uk/careers redirects here. Only the jobs, apply, application status and enquiry routes reach the staff portal.
 
 ## HN Group News
 
@@ -41,7 +41,7 @@ For a single website use `sudo bash media-site/install.sh` (substitute its direc
 node --test website-suite/test.cjs website-suite/integration.test.cjs brand/web/test.cjs
 ```
 
-`integration.test.cjs` runs the real staff portal with Media and Careers: a support request, a staff reply seen with the reference, an imported old reference, and a job application with a CV whose stage is then checked.
+`integration.test.cjs` runs the real staff portal with Media and Careers: a support request, a staff reply seen with the reference, an imported old reference, and a job application (no CV) whose stage is then checked.
 
 ## Announcements (HN Group News)
 

@@ -37,24 +37,20 @@ function saveVacancy(input, by, existing) {
   const title = str(input.title, 120);
   if (!title) throw new store.ValidationError("Enter the job title.");
   if (!store.COMPANIES.includes(input.company)) throw new store.ValidationError("Choose the company.");
-  const closingDate = str(input.closingDate, 10);
-  if (closingDate && !/^\d{4}-\d{2}-\d{2}$/.test(closingDate)) throw new store.ValidationError("Choose a valid closing date.");
   const manager = input.hiringManagerId ? store.getPerson(input.hiringManagerId) : null;
   const v = existing || { id: newId(), status: "open", createdBy: by.id, createdAt: new Date().toISOString() };
   Object.assign(v, {
     title,
     company: input.company,
-    location: str(input.location, 120),
-    contract: CONTRACTS[input.contract] ? input.contract : "full-time",
-    salary: str(input.salary, 80),
     description: str(input.description, 6000),
-    closingDate: closingDate || null,
     hiringManagerId: manager && !manager.system ? manager.id : null,
     internalOnly: !!input.internalOnly,
     // Shown on careers.hngroup.org.uk, where anyone can apply.
     publicListing: !!input.publicListing,
     updatedAt: new Date().toISOString(),
   });
+  // Vacancies no longer have a location, contract type, salary or closing date (the user's request, 31 October 2026).
+  for (const k of ["location", "contract", "salary", "closingDate"]) delete v[k];
   if (!existing) db.data.vacancies.push(v);
   db.save();
   return v;
@@ -78,7 +74,7 @@ function deleteVacancy(v) {
 }
 
 function isOpen(v) {
-  return v.status === "open" && (!v.closingDate || v.closingDate >= today());
+  return v.status === "open";
 }
 
 // Adds an applicant. Staff applying themselves are "internal"; staff referring someone are
@@ -108,13 +104,6 @@ function addApplicant(v, meta, buffer, by) {
     createdAt: new Date().toISOString(),
     stageChangedAt: new Date().toISOString(),
   };
-  if (buffer && buffer.length) {
-    const fileName = str(meta.fileName, 200);
-    const ext = workplace.fileExt(fileName);
-    if (!["pdf", "doc", "docx", "odt", "txt", "rtf"].includes(ext)) throw new store.ValidationError("CVs can be a PDF or Word document.");
-    fs.writeFileSync(path.join(dir, a.id), buffer, { mode: 0o600 });
-    a.cv = { fileName: workplace.cleanFileName(fileName), ext, size: buffer.length };
-  }
   db.data.applicants.push(a);
   db.save();
   return a;
@@ -126,20 +115,16 @@ function addApplicant(v, meta, buffer, by) {
 function publicVacancies() {
   return db.data.vacancies.filter((v) => v.publicListing && isOpen(v))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .map((v) => ({ id: v.id, title: v.title, company: v.company, location: v.location, contract: CONTRACTS[v.contract], salary: v.salary, description: v.description, closingDate: v.closingDate, postedAt: v.createdAt.slice(0, 10) }));
+    .map((v) => ({ id: v.id, title: v.title, company: v.company, description: v.description, postedAt: v.createdAt.slice(0, 10) }));
 }
 
-// An application from the website: name, email and a CV are required.
+// An application from the website: name and email are required. CVs are no longer taken (the user's request, 31 October 2026).
 function addWebsiteApplicant(v, meta, buffer) {
   if (!v || !v.publicListing || !isOpen(v)) throw new store.ValidationError("This job is no longer open.");
   const name = str(meta.name, 120), email = str(meta.email, 160);
   if (!name) throw new store.ValidationError("Enter your name.");
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new store.ValidationError("Enter a valid email address.");
-  if (!buffer || !buffer.length) throw new store.ValidationError("Attach your CV.");
   if (db.data.applicants.some((a) => a.vacancyId === v.id && a.email.toLowerCase() === email.toLowerCase() && a.stage !== "withdrawn")) throw new store.ValidationError("You've already applied for this job. We'll be in touch.");
-  const fileName = str(meta.fileName, 200);
-  const ext = workplace.fileExt(fileName);
-  if (!["pdf", "doc", "docx", "odt", "txt", "rtf"].includes(ext)) throw new store.ValidationError("Your CV needs to be a PDF or Word document.");
   const now = new Date().toISOString();
   const a = {
     id: newId(), vacancyId: v.id, personId: null, name, email, phone: str(meta.phone, 40), source: "website", referredBy: null,
@@ -148,8 +133,6 @@ function addWebsiteApplicant(v, meta, buffer) {
   // A private reference lets the applicant check where their application is on careers.hngroup.org.uk (only its hash is kept).
   const reference = crypto.randomBytes(32).toString("hex");
   a.reference = crypto.createHash("sha256").update(reference).digest("hex");
-  fs.writeFileSync(path.join(dir, a.id), buffer, { mode: 0o600 });
-  a.cv = { fileName: workplace.cleanFileName(fileName), ext, size: buffer.length };
   db.data.applicants.push(a);
   db.save();
   return Object.assign(Object.create(a), { plainReference: reference });
@@ -261,10 +244,12 @@ function vacancyView(v, viewer) {
   const apps = db.data.applicants.filter((a) => a.vacancyId === v.id);
   const out = {
     ...v,
-    contractLabel: CONTRACTS[v.contract], hiringManagerName: nameOf(v.hiringManagerId), open: isOpen(v),
+    hiringManagerName: nameOf(v.hiringManagerId), open: isOpen(v),
     applied: !!viewer && apps.some((a) => a.personId === viewer.id && a.stage !== "withdrawn"),
     myApplication: viewer ? (apps.find((a) => a.personId === viewer.id) || null) : null,
   };
+  // Older vacancies may still hold a location, contract type, salary or closing date; they aren't shown any more.
+  for (const k of ["location", "contract", "salary", "closingDate"]) delete out[k];
   if (out.myApplication) out.myApplication = { stage: out.myApplication.stage, stageLabel: STAGES[out.myApplication.stage] };
   if (viewer && canManage(viewer)) {
     out.applicants = apps.sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map(applicantView);

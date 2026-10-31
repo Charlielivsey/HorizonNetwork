@@ -75,18 +75,18 @@ test('support requests and job applications go through to the staff portal and b
     // Careers: public roles only; apply with a CV; check its stage.
     const jobs = (await (await fetch('http://127.0.0.1:' + careersPort + '/api/public/jobs')).json()).jobs;
     assert.deepEqual(jobs.map((j) => j.title), ['Platform Engineer']);
+    for (const k of ['location', 'contract', 'salary', 'closingDate']) assert.ok(!(k in jobs[0]), k + ' is no longer published');
     assert.equal((await fetch('http://127.0.0.1:' + careersPort + '/jobs/' + vacancy.id)).status, 200);
     assert.equal((await fetch('http://127.0.0.1:' + careersPort + '/application')).status, 200);
     assert.equal((await post(mediaPort, 'media', '/api/public/jobs/application', { reference })).status, 404, 'company sites do not proxy careers routes');
-    const cv = Buffer.from('%PDF-1.4 fixture CV');
-    r = await fetch('http://127.0.0.1:' + careersPort + '/api/public/jobs/' + vacancy.id + '/apply', { method: 'POST', headers: { Origin: 'https://careers.hngroup.org.uk', 'Content-Type': 'application/octet-stream', 'X-Application': encodeURIComponent(JSON.stringify({ name: 'Ada Applicant', email: 'ada@example.test', message: 'Hello', fileName: 'cv.pdf' })) }, body: cv });
+    r = await fetch('http://127.0.0.1:' + careersPort + '/api/public/jobs/' + vacancy.id + '/apply', { method: 'POST', headers: { Origin: 'https://careers.hngroup.org.uk', 'Content-Type': 'application/octet-stream', 'X-Application': encodeURIComponent(JSON.stringify({ name: 'Ada Applicant', email: 'ada@example.test', message: 'Hello' })) } });
     assert.equal(r.status, 201); const applied = await r.json(); assert.match(applied.reference, /^[a-f0-9]{64}$/);
     let status = (await (await post(careersPort, 'careers', '/api/public/jobs/application', { reference: applied.reference })).json()).application;
     assert.equal(status.title, 'Platform Engineer'); assert.equal(status.stage, 'Received'); assert.equal(status.company, 'Horizon Network');
     await stop(staff);
     recruitment.init(staffData);
     const data = JSON.parse(fs.readFileSync(path.join(staffData, 'recruitment.json'), 'utf8'));
-    const a = data.applicants.find((x) => x.email === 'ada@example.test'); assert.ok(a && a.reference && a.reference !== applied.reference, 'only a hash is kept');
+    const a = data.applicants.find((x) => x.email === 'ada@example.test'); assert.ok(a && a.reference && a.reference !== applied.reference, 'only a hash is kept'); assert.equal(a.cv, null, 'no CV is taken');
     recruitment.setStage(recruitment.getApplicant(a.id), 'interview', owner);
     staff = await start(path.join(ROOT, 'staff-portal/server.js'), staffEnv, staffPort);
     status = (await (await post(careersPort, 'careers', '/api/public/jobs/application', { reference: applied.reference })).json()).application;
