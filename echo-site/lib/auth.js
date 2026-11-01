@@ -1,6 +1,6 @@
 'use strict';
 // HN Group Auth's fixed "echo" client. Only the specified sign-in
-// account may enter; impersonated sessions are refused. The browser cookie points
+// accounts may enter; impersonated sessions are refused. The browser cookie points
 // to a private server-side application session, rechecked before every private request.
 const fs = require('node:fs');
 const crypto = require('node:crypto');
@@ -18,7 +18,7 @@ const fail = (status, message) => Object.assign(new Error(message), { status });
 function cookie(req, name) { return (req.headers.cookie || '').split(';').map((x) => x.trim()).find((x) => x.startsWith(name + '='))?.slice(name.length + 1) || ''; }
 function setCookie(name, value, maxAge) { return `${name}=${value}; Path=/; HttpOnly;${SECURE ? ' Secure;' : ''} SameSite=Lax${maxAge === undefined ? '' : '; Max-Age=' + maxAge}`; }
 // Current sign-in account, chosen profile, permissions and impersonation state.
-const permitted = u => String(u?.username || '').trim().toLowerCase() === 'catnap@hngroup.org.uk' && u.impersonated !== true;
+const permitted = u => ['catnap@hngroup.org.uk', 'charlie.livsey@hngroup.org.uk'].includes(String(u?.username || '').trim().toLowerCase()) && u.impersonated !== true;
 function userOf(u) {
   return { id: u.id, accountId: u.accountId, username: u.username, email: u.email,
     displayName: u.displayName, firstName: u.firstName, lastName: u.lastName,
@@ -54,7 +54,7 @@ function createAuth(store) {
       catch (e) { if ([401, 403].includes(e.status)) { store.endSession(token); return null; } throw e; }
     }
     const now = store.session(token);
-    if (!permitted(now.user)) throw fail(403, 'Echo is private to its authorised HN Group account.');
+    if (!permitted(now.user)) throw fail(403, 'Echo is private to its authorised HN Group accounts.');
     return { user: now.user, token, authSession: now.authSession };
   }
   function redirect(res, location, cookies) { res.writeHead(302, { Location: location, 'Cache-Control': 'no-store', 'Set-Cookie': cookies || [] }); res.end(); }
@@ -72,7 +72,7 @@ function createAuth(store) {
       let result;
       try { result = await authApi('exchange', { code: url.searchParams.get('code'), state }); }
       catch (e) { showPage(res, e.status === 403 ? 403 : 503, 'Sign-in failed', e.message, [clear]); return true; }
-      if (!permitted(result.user)) { showPage(res, 403, 'Access restricted', 'Echo is private to its authorised HN Group account.', [clear]); return true; }
+      if (!permitted(result.user)) { showPage(res, 403, 'Access restricted', 'Echo is private to its authorised HN Group accounts.', [clear]); return true; }
       const old = cookie(req, SESSION_COOKIE); if (old) store.endSession(old);
       const token = store.createSession(userOf(result.user), result.session, result.expires);
       let next = '/'; try { next = safeNext(Buffer.from(nextRaw || '', 'base64url').toString('utf8')); } catch {}

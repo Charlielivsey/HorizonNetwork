@@ -10,7 +10,7 @@ const {createDiscord}=require('./discord');
 const ORIGIN = 'https://auth.hngroup.org.uk';
 // Registered applications: fixed callbacks and who may use them.
 const CLIENTS = {
-  echo: { name: 'Echo', callback: 'https://echo.hngroup.org.uk/auth/callback', allowed: u => String(u.username || '').trim().toLowerCase() === 'catnap@hngroup.org.uk' && !u.impersonated, denied: 'Echo is private to its authorised HN Group account.' },
+  echo: { name: 'Echo', callback: 'https://echo.hngroup.org.uk/auth/callback', allowed: u => ['catnap@hngroup.org.uk', 'charlie.livsey@hngroup.org.uk'].includes(String(u.username || '').trim().toLowerCase()) && !u.impersonated, denied: 'Echo is private to its authorised HN Group accounts.' },
   bots: {name:'HN Group Bots',callback:'https://bots.hngroup.org.uk/auth/callback',allowed:u=>!!(u.ownerAccess||u.statusAdminAllowed)&&!u.impersonated,denied:'Only owner-level accounts and Super Admin members can manage bots.'},
   browser: { name: 'HN Browser', native: true, allowed: () => true, denied: 'This account cannot use HN Browser.' },
   'app-manager': { name: 'HN Group App Manager', native: true, allowed: () => true, denied: 'This account cannot use HN Group App Manager.' },
