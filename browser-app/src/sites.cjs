@@ -1,6 +1,7 @@
 'use strict';
 // Public destinations only. Shortcuts never grant sign-in or website permissions.
 const SITES=[
+ ['https://echo.hngroup.org.uk/',['echo','hn echo','hn group echo','character library']],
  ['https://mail.google.com/',['mail','gmail','email']],
  ['https://hngroup.org.uk/',['hn','hn group','hn group website','hn group home']],
  ['https://network.hngroup.org.uk/',['horizon network','network','hn network']],

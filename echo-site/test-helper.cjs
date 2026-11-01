@@ -1,0 +1,13 @@
+'use strict';
+const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
+const PNG=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=','base64');
+async function fixture(){
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-echo-test-')),secret=path.join(dir,'secret');fs.writeFileSync(secret,'a'.repeat(64));process.env.STATUS_SSO_SECRET_FILE=secret;
+ const state={user:{id:'profile-one',accountId:'account-one',username:'catnap@hngroup.org.uk',email:'different-profile@hngroup.org.uk',displayName:'Catnap from Auth',company:'HN Group',jobTitle:'Chairman',ownerAccess:true,statusAdminAllowed:true},enabled:true,avatarCalls:0};
+ const backend=http.createServer(async(req,res)=>{let text='';for await(const c of req)text+=c;const data=JSON.parse(text||'{}');assert.equal(req.headers.authorization,'Bearer '+'a'.repeat(64));assert.equal(data.client_id,'echo');if(!state.enabled){res.writeHead(401,{'Content-Type':'application/json'});return res.end(JSON.stringify({error:'Account disabled.'}));}if(req.url==='/api/sso/avatar'){state.avatarCalls++;res.writeHead(200,{'Content-Type':'image/png'});return res.end(PNG);}res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({session:'b'.repeat(64),expires:Date.now()+30*86400000,user:state.user}));});await new Promise(r=>backend.listen(0,'127.0.0.1',r));process.env.AUTH_BACKEND='http://127.0.0.1:'+backend.address().port;
+ const reserve=http.createServer();await new Promise(r=>reserve.listen(0,'127.0.0.1',r));const port=reserve.address().port;await new Promise(r=>reserve.close(r));const base='http://127.0.0.1:'+port;process.env.ECHO_ORIGIN=base;
+ const{createServer}=require('./server'),server=createServer({dir});await new Promise(r=>server.listen(port,'127.0.0.1',r));
+ async function login(){const r=await fetch(base+'/auth/login',{redirect:'manual'}),url=new URL(r.headers.get('location')),stateCookie=r.headers.getSetCookie()[0].split(';')[0];const callback='/auth/callback?code='+'c'.repeat(64)+'&state='+url.searchParams.get('state');const accepted=await fetch(base+callback,{headers:{Cookie:stateCookie},redirect:'manual'});return{accepted,callback,stateCookie,cookie:accepted.headers.getSetCookie().find(c=>c.startsWith('hn_echo_session='))?.split(';')[0]};}
+ return{dir,base,state,login,PNG,async close(){server.closeAllConnections();backend.closeAllConnections();await new Promise(r=>server.close(r));await new Promise(r=>backend.close(r));fs.rmSync(dir,{recursive:true,force:true});}};
+}
+module.exports={fixture,PNG};

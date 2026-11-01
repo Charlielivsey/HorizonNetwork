@@ -88,6 +88,7 @@ else
     changed hngroup-site/ && run 'hngroup.org.uk' bash "$ROOT/hngroup-site/install.sh" "$EMAIL"
     changed auth-site/ status-site/install-portal-sso.sh && run 'HN Group Auth' bash "$ROOT/auth-site/install.sh" "$EMAIL"
 fi
+changed echo-site/ && run 'Echo (echo.hngroup.org.uk)' bash "$ROOT/echo-site/install.sh" "$EMAIL"
 changed bots-site/ && run 'HN Group Bots (bots.hngroup.org.uk)' bash "$ROOT/bots-site/install.sh" "$EMAIL"
 changed status-site/ admin-site/catalog.json && run 'Status' bash "$ROOT/status-site/install.sh" "$EMAIL"
 changed horizon-network-site/ && run 'Horizon Network (network.hngroup.org.uk)' bash "$ROOT/horizon-network-site/install.sh" "$EMAIL"

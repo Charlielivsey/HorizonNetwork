@@ -1,5 +1,14 @@
 [
   {
+    "id": "echo",
+    "name": "Echo",
+    "process": "hn-echo",
+    "port": 5630,
+    "hosts": [
+      "echo.hngroup.org.uk"
+    ]
+  },
+  {
     "id": "bots",
     "name": "HN Group Bots",
     "process": "hn-bots",
