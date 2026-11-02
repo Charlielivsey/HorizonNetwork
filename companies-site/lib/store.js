@@ -103,6 +103,11 @@ function runGroupMigrations() {
   // Horizon Advertising, and Horizon Network appointed to manage Horizon Advertising. One step per company, so a
   // company that can't be changed (missing, or no officer to issue Class C shares) doesn't hold up the others.
   for (const [name, fn] of Object.entries(SHAREHOLDINGS_20261030)) atomically('shareholdings-2026-10-30-' + name, fn);
+  // The user's request (2 November 2026): HN Group Limited's holdings in Horizon Network and Horizon Media Group pass,
+  // like for like, to HN Group Investments Limited. One step per company; a step that can't run yet (for example
+  // HN Group Investments Limited isn't on the register) changes nothing and is tried again at the next start.
+  for (const [name, legal] of [['horizon-network', 'Horizon Network Limited'], ['horizon-media-group', 'Horizon Media Group Limited']])
+    atomically('hn-group-investments-2026-11-02-' + name, transferToInvestments(legal));
 }
 
 // ----- 30 October 2026 shareholdings -----
@@ -212,6 +217,37 @@ const SHAREHOLDINGS_20261030 = {
     }
   }),
 };
+
+// ----- 2 November 2026: HN Group Investments Limited -----
+// HN Group Limited's holding in the company passes to HN Group Investments Limited exactly as it is: same type, share,
+// classes, Class C issuer and natures of control, so the share capital and the votes don't change (no statement of
+// capital). HN Group Limited ceases as a person with significant control (Cessation filing, nobody deleted), HN Group
+// Investments Limited is notified (Notification filing) and becomes the company's parent. Everyone else is unchanged.
+function transferToInvestments(legal) {
+  return () => {
+    const today = now().slice(0, 10), actor = 'system:hn-group-investments-2026-11-02', c = byLegalName(legal);
+    if (!c) { audit(actor, 'skipped', legal + ' is not on the register'); return; }
+    const inv = byLegalName('HN Group Investments Limited');
+    if (!inv) throw new Error('HN Group Investments Limited is not on the register');
+    const from = c.psc.filter((p) => !p.ceased && sameName(p.name, 'HN Group Limited'));
+    const already = c.psc.some((p) => !p.ceased && sameName(p.name, inv.legalName));
+    if (!from.length) { audit(actor, 'skipped', legal + ': ' + (already ? 'already held by ' + inv.legalName : 'HN Group Limited holds none of its shares')); return; }
+    if (already) throw new Error(inv.legalName + ' and HN Group Limited both hold shares in ' + c.legalName + '; staff must sort this out');
+    if (from.length > 1) throw new Error(c.legalName + ' has more than one current holding by HN Group Limited');
+    const was = from[0];
+    was.ceased = today;
+    newGeneratedFiling(c, today, 'Persons with significant control', 'Cessation of ' + was.name + ' as a person with significant control on ' + longDate(today), { code: FORM_CODES.psc_cease, heading: CHANGE_TYPES.psc_cease.label,
+      rows: [['Name', was.name], ['Type', was.kind], ['Ceased on', longDate(today)]] });
+    audit(actor, 'psc.cease', c.slug + ' ' + was.name);
+    c.psc.push({ id: id(), name: inv.legalName, kind: was.kind, share: was.share || '', control: [...(was.control || [])],
+      classA: was.classA || '', classB: was.classB || '', classC: was.classC || '', classCIssuedBy: was.classCIssuedBy || '', notified: today, ceased: '' });
+    audit(actor, 'psc.add', c.slug + ' ' + inv.legalName + ' ' + (was.share || '?') + '%');
+    setParentCompany(c, inv, actor);
+    c.description = String(c.description || '').replace(/subsidiary of HN Group Limited/g, 'subsidiary of HN Group Investments Limited');
+    c.updatedAt = now();
+    generateFilings(c); // the Notification filing for HN Group Investments Limited
+  };
+}
 
 // The user's request (28 October 2026): "CLivsey Holdings is the parent company of HN Group". CLivsey Holdings Limited
 // goes on the register (only what's known: its name and that it's active; its officers, owners, number and dates are

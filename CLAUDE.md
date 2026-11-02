@@ -53,5 +53,5 @@ Removed (don't bring back unless asked): holding.hngroup.org.uk, the client port
 - Exception: the Company register (public and private) is styled like Companies House, not the HN theme.
 - Always show profile pictures for signed-in people and staff.
 
-## Group (latest: 30 October 2026 shareholdings)
-CLivsey Holdings → HN Group Limited → Horizon Network Limited (includes Horizon Development; manages Horizon Advertising), Horizon Media Group Limited (→ Horizon Advertising Limited) and HN Group Management Limited. Ownership lives on the Company Register; never hard-code or invent it.
+## Group (latest: 2 November 2026)
+CLivsey Holdings → HN Group Limited (→ HN Group Management Limited). HN Group Investments Limited (its own ownership: whatever the register records) → Horizon Network Limited (70%; includes Horizon Development; manages Horizon Advertising) and Horizon Media Group Limited (55%, → Horizon Advertising Limited). Ownership lives on the Company Register; never hard-code or invent it.
