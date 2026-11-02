@@ -79,7 +79,7 @@ function channelSpec(c, where, category) {
 function parseLayout(raw, id) {
   const at = 'Layout "' + id + '"';
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw fail(at + ' is not a JSON object.');
-  for (const k of Object.keys(raw)) if (!['server', 'guildId', 'description', 'removeUnlisted', 'everyone', 'roles', 'categories', 'channels'].includes(k)) throw fail(at + ': unknown field "' + k + '".');
+  for (const k of Object.keys(raw)) if (!['server', 'guildId', 'description', 'removeUnlisted', 'everyone', 'roles', 'categories', 'channels', 'roleGrants'].includes(k)) throw fail(at + ': unknown field "' + k + '".');
   if (typeof raw.server !== 'string' || !raw.server.trim()) throw fail(at + ': "server" must be the Discord server’s name.');
   if (raw.guildId !== undefined && !ID.test(String(raw.guildId))) throw fail(at + ': guildId must be a Discord server ID.');
   const roles = (raw.roles || []).map((r, i) => {
@@ -100,9 +100,18 @@ function parseLayout(raw, id) {
   unique(roles, 'roles', (r) => roleName(r.name));
   unique(categories, 'categories', (c) => roleName(c.name));
   for (const group of [channels, ...categories.map((c) => c.channels)]) unique(group, 'channels in the same place', (c) => channelName(c.name, c.type) + '/' + (c.type === 2 || c.type === 13 ? 'v' : 't'));
+  // roleGrants: { "Role they have" (or "@everyone" for every member who isn't a bot): ["Role they also get", …] }.
+  const roleGrants = [];
+  if (raw.roleGrants !== undefined) {
+    if (!raw.roleGrants || typeof raw.roleGrants !== 'object' || Array.isArray(raw.roleGrants)) throw fail(at + ': roleGrants must be an object of role name → list of role names.');
+    for (const [from, to] of Object.entries(raw.roleGrants)) {
+      if (!Array.isArray(to) || !to.length || to.some((x) => typeof x !== 'string' || !x.trim() || roleName(x) === EVERYONE)) throw fail(at + ': roleGrants "' + from + '" must list the roles to give.');
+      roleGrants.push({ from: from.trim(), to: to.map((x) => x.trim()) });
+    }
+  }
   const rm = raw.removeUnlisted || {};
   return { id, server: raw.server.trim(), guildId: raw.guildId ? String(raw.guildId) : '', description: typeof raw.description === 'string' ? raw.description.slice(0, 100) : '',
-    removeRoles: rm.roles === true, removeChannels: rm.channels === true, everyone: bits(raw.everyone, at + ' @everyone'), roles, categories, channels };
+    removeRoles: rm.roles === true, removeChannels: rm.channels === true, everyone: bits(raw.everyone, at + ' @everyone'), roles, categories, channels, roleGrants };
 }
 function loadLayouts(dir) {
   const out = [], errors = [];
@@ -173,6 +182,8 @@ function plan(layout, guild, roles, channels, botUserId, botRoleIds) {
     items.push({ spec: ch, have, parent: c.name, categoryOverwrites: c.overwrites });
   }
   for (const it of items) steps.push({ kind: 'channel', ...it, op: it.have ? 'update' : 'create' });
+  for (const g of layout.roleGrants) for (const n of [g.from, ...g.to]) if (!knownRole(n)) problems.push('roleGrants uses "' + n + '", which isn’t a role in the layout or the server.');
+  if (layout.roleGrants.length) steps.push({ kind: 'grants', grants: layout.roleGrants });
   steps.push({ kind: 'channel-order', categories: layout.categories.map((c) => c.name), top: layout.channels.map((c) => c.name) });
 
   // Removals, only when the layout asks for them.
@@ -196,6 +207,7 @@ function describe(steps) {
     else if (s.kind === 'channel') lines.push((s.op === 'create' ? '➕ Create ' : '🔧 Check ') + label(s) + (s.parent ? ' in "' + s.parent + '"' : ''));
     else if (s.kind === 'remove-channel') lines.push('🗑️ Delete channel "' + s.name + '"');
     else if (s.kind === 'remove-role') lines.push('🗑️ Delete role "' + s.name + '"');
+    else if (s.kind === 'grants') for (const g of s.grants) lines.push('👥 Give ' + g.to.map((n) => '"' + n + '"').join(', ') + ' to ' + (roleName(g.from) === EVERYONE ? 'every member (not bots)' : 'everyone with "' + g.from + '"') + ' who doesn’t have it');
   }
   return lines;
 }
@@ -221,7 +233,7 @@ function createServerSetup({ config, fetcher = fetch, dir = path.join(__dirname,
     const { layouts, errors } = layoutsNow(), boundIds = bound();
     const guildOf = (l) => l.guildId || boundIds[l.id] || '';
     if (name) {
-      const l = layouts.find((x) => x.id === name);
+      const l = layouts.find((x) => x.id === name) || layouts.find((x) => roleName(x.server) === roleName(name));
       if (!l) throw fail(errors.find((e) => e.includes('"' + name + '"')) || 'There is no layout called "' + name + '".');
       if (guildOf(l) && guildOf(l) !== guild.id) throw fail('Layout "' + l.id + '" belongs to another server (' + guildOf(l) + ').');
       if (!guildOf(l) && roleName(l.server) !== roleName(guild.name)) throw fail('Layout "' + l.id + '" is for the server "' + l.server + '", but this server is called "' + guild.name + '".');
@@ -257,6 +269,32 @@ function createServerSetup({ config, fetcher = fetch, dir = path.join(__dirname,
         const ids = order.names.map((n) => roleIds.get(roleName(n))).filter(Boolean);
         const positions = ids.map((id, i) => ({ id, position: Math.max(1, top - 1 - i) }));
         if (await attempt('Order roles', () => request('PATCH', '/guilds/' + g + '/roles', positions, reason)) !== FAILED) done.push('Ordered ' + ids.length + ' roles');
+      }
+    }
+    // Give members the roles that go with the roles they have (only ever adds roles).
+    const grants = p.steps.find((x) => x.kind === 'grants');
+    if (grants) {
+      const members = [];
+      let after = '0', ok = true;
+      for (let page = 0; page < 50; page++) {
+        const rows = await attempt('List members (turn on Server Members Intent: Discord Developer Portal → Bot → Privileged Gateway Intents)', () => request('GET', '/guilds/' + g + '/members?limit=1000&after=' + after));
+        if (rows === FAILED) { ok = false; break; }
+        members.push(...rows);
+        if (rows.length < 1000) break;
+        after = rows.at(-1).user.id;
+      }
+      if (ok) {
+        let given = 0;
+        for (const m of members) {
+          const has = new Set(m.roles || []);
+          const want = new Set();
+          for (const gr of grants.grants) {
+            const from = roleName(gr.from) === EVERYONE ? (m.user?.bot ? null : true) : has.has(roleIds.get(roleName(gr.from)));
+            if (from) for (const n of gr.to) { const rid = roleIds.get(roleName(n)); if (rid && !has.has(rid)) want.add(rid); }
+          }
+          for (const rid of want) if (await attempt('Give a role to ' + (m.user?.username || m.user?.id), () => request('PUT', '/guilds/' + g + '/members/' + m.user.id + '/roles/' + rid, undefined, reason)) !== FAILED) given++;
+        }
+        if (given) done.push('Gave ' + given + ' role' + (given === 1 ? '' : 's') + ' to members');
       }
     }
     // Categories first (channels need their ids), then channels.
@@ -313,7 +351,7 @@ function createServerSetup({ config, fetcher = fetch, dir = path.join(__dirname,
     const sub = event.data?.options?.[0], name = sub?.options?.find((o) => o.name === 'layout')?.value;
     if (sub?.name === 'layouts') {
       const { layouts, errors } = layoutsNow(), b = bound();
-      return text('**Server layouts** (' + layouts.length + ')', [...layouts.map((l) => '`' + l.id + '` → ' + l.server + ((l.guildId || b[l.id]) ? ' (' + (l.guildId || b[l.id]) + ')' : '') + (l.description ? ' — ' + l.description : '')), ...errors.map((e) => '⚠️ ' + e)]);
+      return text('**Server layouts** (' + layouts.length + ')', [...layouts.map((l) => '**' + l.server + '** (layout `' + l.id + '`' + ((l.guildId || b[l.id]) ? ', server ID ' + (l.guildId || b[l.id]) : '') + ')' + (l.description ? ' — ' + l.description : '')), ...errors.map((e) => '⚠️ ' + e)]);
     }
     if (running) return 'A server setup is already running. Try again when it has finished.';
     running = true;
@@ -341,11 +379,21 @@ function createServerSetup({ config, fetcher = fetch, dir = path.join(__dirname,
     const content = await run(event);
     await reply(API + '/webhooks/' + (event.application_id || config()?.id) + '/' + encodeURIComponent(event.token) + '/messages/@original', 'PATCH', { content, allowed_mentions: { parse: [] } });
   }
+  // Suggestions while typing the layout option: matches the server name or the layout name (only for allowed users).
+  async function autocomplete(event) {
+    const user = event.member?.user || event.user || {};
+    const typed = String(event.data?.options?.[0]?.options?.find((o) => o.focused)?.value || '').trim().toLowerCase();
+    const { layouts } = ALLOWED_USERS.has(String(user.id)) ? layoutsNow() : { layouts: [] };
+    const hit = (l) => !typed || l.server.toLowerCase().includes(typed) || l.id.includes(typed);
+    const here = (l) => (l.guildId || bound()[l.id]) === event.guild_id ? 0 : 1;
+    const choices = layouts.filter(hit).sort((a, b) => here(a) - here(b) || a.server.localeCompare(b.server)).slice(0, 25)
+      .map((l) => ({ name: (l.server + (l.description ? ' — ' + l.description : '')).slice(0, 100), value: l.id }));
+    const r = await fetcher(API + '/interactions/' + event.id + '/' + encodeURIComponent(event.token) + '/callback', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 8, data: { choices } }), signal: AbortSignal.timeout(2500), redirect: 'error' });
+    if (!r.ok) throw Error('Discord refused the suggestions.');
+  }
   // The command as registered with Discord: server-only, with the layouts as choices for the layout option.
   function definition() {
-    const { layouts } = layoutsNow();
-    const layout = { type: 3, name: 'layout', description: 'Which layout (leave empty to use the one for this server)', required: false,
-      ...(layouts.length && layouts.length <= 25 ? { choices: layouts.map((l) => ({ name: (l.id + ' — ' + l.server).slice(0, 100), value: l.id })) } : {}) };
+    const layout = { type: 3, name: 'layout', description: 'Search by server name (leave empty to use the one for this server)', required: false, autocomplete: true };
     return { name: COMMAND, description: 'Set this server’s roles, channels and permissions from an HN Group layout', type: 1, contexts: [0], integration_types: [0],
       options: [
         { type: 1, name: 'preview', description: 'Show what would change, without changing anything', options: [layout] },
@@ -353,7 +401,7 @@ function createServerSetup({ config, fetcher = fetch, dir = path.join(__dirname,
         { type: 1, name: 'layouts', description: 'List the server layouts' },
       ] };
   }
-  return { interaction, run, definition, name: COMMAND };
+  return { interaction, autocomplete, run, definition, name: COMMAND };
 }
 
 module.exports = { createServerSetup, parseLayout, loadLayouts, plan, bits, ALLOWED_USERS, COMMAND };

@@ -14,7 +14,8 @@ Only the Discord accounts in `ALLOWED_USERS` in `auth-site/server-setup.js` can 
 - `/server-setup preview` shows everything that would change. Nothing is changed.
 - `/server-setup apply` sets the server up.
 
-`layout` is optional: without it the bot uses the layout that belongs to this server.
+`layout` is optional: without it the bot uses the layout that belongs to this server. While you type, it searches the
+layouts by server name (and layout name); you can also type a server name in full instead of choosing.
 
 The server ID is taken from where you run the command. The first time a layout is used, the server's name must match
 the layout's `server`. After a successful `apply` the bot remembers that server's ID, so renaming the server later
@@ -31,6 +32,7 @@ names the way Discord stores them: lower case, dashes for spaces). Anything not 
 {
   "server": "Exact Discord server name",
   "description": "Optional short note shown in /server-setup layouts",
+  "guildId": "Optional: the server ID, if you know it",
   "removeUnlisted": { "roles": false, "channels": false },
   "everyone": ["ViewChannel", "ReadMessageHistory", "AddReactions", "Connect", "Speak"],
   "roles": [
@@ -63,6 +65,11 @@ names the way Discord stores them: lower case, dashes for spaces). Anything not 
   `allow` / `deny` lists. They replace the channel's role overwrites exactly; per-member overwrites are kept. A
   channel in a category with no `permissions` copies the category's (synced). Roles named here may be layout roles
   or roles already on the server.
+- **roleGrants** gives members extra roles that go with roles they already have, e.g.
+  `{ "President": ["Network Permission Level 5"], "@everyone": ["Network Permission Level 1"] }` (`@everyone` means
+  every member who isn't a bot). It only ever adds roles, never removes them. The bot has to list the server's
+  members, so turn on **Server Members Intent** (Discord Developer Portal → the application → Bot → Privileged
+  Gateway Intents). Run `apply` again whenever people get new roles.
 - **removeUnlisted** deletes roles/channels the layout doesn't list. It never touches @everyone, roles managed by
   integrations or above the bot, or the server's rules/updates channels. `preview` lists every deletion first.
 
@@ -78,3 +85,14 @@ UseSoundboard, CreateGuildExpressions, CreateEvents, UseExternalSounds, SendVoic
 The bot needs Administrator in the server (or at least Manage Roles and Manage Channels, plus every permission it
 grants), and its role must be above every role the layout changes. Discord records each change in the server's audit
 log as "HN Group server setup (<layout>) by <user>".
+
+## Layouts here
+
+- `hn-hq.json`: **HN HQ** (server ID 1360208008755413227). It sets up the user's roles of 2 November 2026: the
+  divider roles, Leadership, Founder, Network Permission Levels 1–5, Network and Members, with colours and hoisting.
+  Positions carry no permissions themselves: the permission levels do, and roleGrants gives each position its level
+  (President/Vice President → 5, Executive Assistant/Chief of Staff → 4, Internal Relations Director/Advisor/Founder →
+  3, everyone → 1). Level 4 has everything except Administrator, Kick Members, Ban Members and Manage Roles: without
+  Manage Roles, nobody on Level 4 can give themselves Level 5 or change a role's permissions. Level 2 (Trial Staff) is
+  given by hand. @everyone has the same baseline as Level 1. B | Bots has no permissions; give each bot its own. The
+  reporting lines can't be stored in Discord; the role order reflects them. No channels are set up yet.

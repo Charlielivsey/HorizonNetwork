@@ -1,0 +1,284 @@
+{
+  "server": "HN HQ",
+  "guildId": "1360208008755413227",
+  "description": "Leadership, permission levels, network and member roles",
+  "everyone": [
+    "ViewChannel",
+    "SendMessages",
+    "SendMessagesInThreads",
+    "CreatePublicThreads",
+    "ReadMessageHistory",
+    "AddReactions",
+    "EmbedLinks",
+    "AttachFiles",
+    "UseExternalEmojis",
+    "UseExternalStickers",
+    "UseApplicationCommands",
+    "UseExternalApps",
+    "SendVoiceMessages",
+    "SendPolls",
+    "Connect",
+    "Speak",
+    "Stream",
+    "UseVAD",
+    "UseEmbeddedActivities",
+    "UseSoundboard",
+    "UseExternalSounds",
+    "RequestToSpeak"
+  ],
+  "roles": [
+    {
+      "name": "────────── LEADERSHIP ──────────",
+      "permissions": []
+    },
+    {
+      "name": "President",
+      "color": "#B99AF2",
+      "hoist": true,
+      "permissions": []
+    },
+    {
+      "name": "Vice President",
+      "color": "#9674D4",
+      "hoist": false,
+      "permissions": []
+    },
+    {
+      "name": "Executive Assistant",
+      "color": "#D99DBB",
+      "hoist": false,
+      "permissions": []
+    },
+    {
+      "name": "Chief of Staff",
+      "color": "#8D9FE0",
+      "hoist": false,
+      "permissions": []
+    },
+    {
+      "name": "Internal Relations Director",
+      "color": "#65B8B0",
+      "hoist": false,
+      "permissions": []
+    },
+    {
+      "name": "Advisor",
+      "color": "#7FAACB",
+      "hoist": false,
+      "permissions": []
+    },
+    {
+      "name": "────────── FOUNDER ──────────",
+      "permissions": []
+    },
+    {
+      "name": "Founder",
+      "color": "#D9BE7A",
+      "hoist": false,
+      "permissions": []
+    },
+    {
+      "name": "────────── PERMISSION LEVELS ──────────",
+      "permissions": []
+    },
+    {
+      "name": "Network Permission Level 5",
+      "permissions": [
+        "Administrator"
+      ]
+    },
+    {
+      "name": "Network Permission Level 4",
+      "permissions": [
+        "CreateInstantInvite",
+        "ManageChannels",
+        "ManageGuild",
+        "AddReactions",
+        "ViewAuditLog",
+        "PrioritySpeaker",
+        "Stream",
+        "ViewChannel",
+        "SendMessages",
+        "SendTTSMessages",
+        "ManageMessages",
+        "EmbedLinks",
+        "AttachFiles",
+        "ReadMessageHistory",
+        "MentionEveryone",
+        "UseExternalEmojis",
+        "ViewGuildInsights",
+        "Connect",
+        "Speak",
+        "MuteMembers",
+        "DeafenMembers",
+        "MoveMembers",
+        "UseVAD",
+        "ChangeNickname",
+        "ManageNicknames",
+        "ManageWebhooks",
+        "ManageGuildExpressions",
+        "UseApplicationCommands",
+        "RequestToSpeak",
+        "ManageEvents",
+        "ManageThreads",
+        "CreatePublicThreads",
+        "CreatePrivateThreads",
+        "UseExternalStickers",
+        "SendMessagesInThreads",
+        "UseEmbeddedActivities",
+        "ModerateMembers",
+        "ViewCreatorMonetizationAnalytics",
+        "UseSoundboard",
+        "CreateGuildExpressions",
+        "CreateEvents",
+        "UseExternalSounds",
+        "SendVoiceMessages",
+        "SendPolls",
+        "UseExternalApps"
+      ]
+    },
+    {
+      "name": "Network Permission Level 3",
+      "permissions": [
+        "ViewChannel",
+        "SendMessages",
+        "SendMessagesInThreads",
+        "CreatePublicThreads",
+        "ReadMessageHistory",
+        "AddReactions",
+        "EmbedLinks",
+        "AttachFiles",
+        "UseExternalEmojis",
+        "UseExternalStickers",
+        "UseApplicationCommands",
+        "UseExternalApps",
+        "SendVoiceMessages",
+        "SendPolls",
+        "Connect",
+        "Speak",
+        "Stream",
+        "UseVAD",
+        "UseEmbeddedActivities",
+        "UseSoundboard",
+        "UseExternalSounds",
+        "RequestToSpeak",
+        "ChangeNickname",
+        "ManageMessages",
+        "ManageThreads",
+        "ModerateMembers",
+        "MuteMembers",
+        "DeafenMembers",
+        "MoveMembers",
+        "ManageNicknames"
+      ]
+    },
+    {
+      "name": "Network Permission Level 2",
+      "permissions": [
+        "ViewChannel",
+        "SendMessages",
+        "SendMessagesInThreads",
+        "CreatePublicThreads",
+        "ReadMessageHistory",
+        "AddReactions",
+        "EmbedLinks",
+        "AttachFiles",
+        "UseExternalEmojis",
+        "UseExternalStickers",
+        "UseApplicationCommands",
+        "UseExternalApps",
+        "SendVoiceMessages",
+        "SendPolls",
+        "Connect",
+        "Speak",
+        "Stream",
+        "UseVAD",
+        "UseEmbeddedActivities",
+        "UseSoundboard",
+        "UseExternalSounds",
+        "RequestToSpeak",
+        "ChangeNickname",
+        "ManageMessages"
+      ]
+    },
+    {
+      "name": "Network Permission Level 1",
+      "permissions": [
+        "ViewChannel",
+        "SendMessages",
+        "SendMessagesInThreads",
+        "CreatePublicThreads",
+        "ReadMessageHistory",
+        "AddReactions",
+        "EmbedLinks",
+        "AttachFiles",
+        "UseExternalEmojis",
+        "UseExternalStickers",
+        "UseApplicationCommands",
+        "UseExternalApps",
+        "SendVoiceMessages",
+        "SendPolls",
+        "Connect",
+        "Speak",
+        "Stream",
+        "UseVAD",
+        "UseEmbeddedActivities",
+        "UseSoundboard",
+        "UseExternalSounds",
+        "RequestToSpeak"
+      ]
+    },
+    {
+      "name": "────────── NETWORK ──────────",
+      "permissions": []
+    },
+    {
+      "name": "NA | Network Administration",
+      "color": "#9B85C9",
+      "hoist": true,
+      "permissions": []
+    },
+    {
+      "name": "B | Bots",
+      "color": "#72B8AD",
+      "hoist": true,
+      "permissions": []
+    },
+    {
+      "name": "────────── MEMBERS ──────────",
+      "permissions": []
+    },
+    {
+      "name": "M | Member",
+      "color": "#A3B4CC",
+      "hoist": true,
+      "permissions": []
+    }
+  ],
+  "roleGrants": {
+    "President": [
+      "Network Permission Level 5"
+    ],
+    "Vice President": [
+      "Network Permission Level 5"
+    ],
+    "Executive Assistant": [
+      "Network Permission Level 4"
+    ],
+    "Chief of Staff": [
+      "Network Permission Level 4"
+    ],
+    "Internal Relations Director": [
+      "Network Permission Level 3"
+    ],
+    "Advisor": [
+      "Network Permission Level 3"
+    ],
+    "Founder": [
+      "Network Permission Level 3"
+    ],
+    "@everyone": [
+      "Network Permission Level 1"
+    ]
+  }
+}

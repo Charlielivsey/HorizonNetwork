@@ -26,6 +26,8 @@ function fakeDiscord(servers) {
     let m;
     if (method !== 'GET') writes.push({ method, p, body });
     if ((m = /^\/guilds\/(\d+)$/.exec(p))) return json(s(m[1]).guild);
+    if ((m = /^\/guilds\/(\d+)\/members\?limit=1000&after=(\d+)$/.exec(p))) { const g = s(m[1]); if (!g.members) return json({ message: 'Missing Access' }, 403); return json(g.members.filter((x) => BigInt(x.user.id) > BigInt(m[2]))); }
+    if ((m = /^\/guilds\/(\d+)\/members\/(\d+)\/roles\/(\d+)$/.exec(p)) && method === 'PUT') { s(m[1]).members.find((x) => x.user.id === m[2]).roles.push(m[3]); return new Response(null, { status: 204 }); }
     if ((m = /^\/guilds\/(\d+)\/members\/(\d+)$/.exec(p))) return json({ roles: [s(m[1]).botRole] });
     if ((m = /^\/guilds\/(\d+)\/roles$/.exec(p))) {
       const g = s(m[1]);
@@ -157,7 +159,7 @@ test('the server name is checked the first time, then the server ID is remembere
     assert.match(await t.run('preview'), /Preview of `test` for "Renamed"/, 'still found after a rename');
     t.servers[OTHER].guild.name = 'HN Group Test';
     assert.match(await t.run('apply', { guild: OTHER, layout: 'test' }), /belongs to another server \(222222222222222222\)/);
-    assert.match(await t.run('layouts'), /`test` → HN Group Test \(222222222222222222\)/);
+    assert.match(await t.run('layouts'), /\*\*HN Group Test\*\* \(layout `test`, server ID 222222222222222222\)/);
   } finally { t.close(); }
 });
 
@@ -188,10 +190,68 @@ test('the command is registered on connect and kept when the dashboard republish
     await t.manager.registerBuiltins();
     const reg = t.discord.writes.find((w) => w.method === 'POST' && w.p === '/applications/' + APP + '/commands');
     assert.equal(reg.body.name, 'server-setup'); assert.deepEqual(reg.body.contexts, [0]);
-    assert.deepEqual(reg.body.options[0].options[0].choices, [{ name: 'test — HN Group Test', value: 'test' }]);
+    assert.equal(reg.body.options[0].options[0].autocomplete, true, 'the layout option searches as you type');
     await t.manager.handle('save-commands', { commands: [{ name: 'hello', description: 'Hi', response: 'Hello', ephemeral: false }, { name: 'server-setup', description: 'old copy' }] });
     const put = t.discord.writes.find((w) => w.method === 'PUT');
     assert.deepEqual(put.body.map((c) => c.name), ['hello', 'server-setup']);
     assert.equal(put.body[1].options.length, 3, 'the built-in definition, not the dashboard copy');
   } finally { t.close(); }
+});
+
+test('the layout option searches by server name, and a server name can be typed instead of the layout name', async () => {
+  const t = setup({ test: LAYOUT, other: { ...LAYOUT, server: 'Someone else', description: 'Other' } });
+  try {
+    const suggest = async (typed, user = ALLOWED) => {
+      const before = t.discord.replies.length;
+      await t.manager.interaction({ id: '600000000000000999', token: 'ticket', type: 4, application_id: APP, guild_id: GUILD, member: { user: { id: user } },
+        data: { name: 'server-setup', options: [{ type: 1, name: 'apply', options: [{ name: 'layout', value: typed, focused: true }] }] } });
+      const reply = t.discord.replies[before].body; assert.equal(reply.type, 8); return reply.data.choices;
+    };
+    assert.deepEqual(await suggest('some'), [{ name: 'Someone else — Other', value: 'other' }]);
+    assert.deepEqual((await suggest('')).map((c) => c.value), ['test', 'other'], 'nothing typed: every layout, by server name');
+    assert.deepEqual(await suggest('hn', STRANGER), [], 'nobody else sees the layouts');
+    assert.match(await t.run('preview', { layout: 'hn group test' }), /Preview of `test` for "HN Group Test"/, 'typing the server name works');
+    assert.match(await t.run('layouts'), /\*\*HN Group Test\*\* \(layout `test`\)/);
+  } finally { t.close(); }
+});
+
+test('roleGrants give members the roles that go with theirs, and only add roles', async () => {
+  const t = setup({ test: { ...LAYOUT, categories: [], channels: [], roleGrants: { Owner: ['Staff'], '@everyone': ['Old role'] } } });
+  try {
+    const g = t.servers[GUILD];
+    g.members = [{ user: { id: '300000000000000001', username: 'boss' }, roles: [] }, { user: { id: '300000000000000002', username: 'helper', bot: true }, roles: [] }];
+    assert.match(await t.run('preview'), /Give "Staff" to everyone with "Owner"[\s\S]*Give "Old role" to every member \(not bots\)/);
+    await t.run('apply');
+    const owner = g.roles.find((r) => r.name === 'Owner').id, staff = g.roles.find((r) => r.name === 'Staff').id, old = g.roles.find((r) => r.name === 'Old role').id;
+    assert.deepEqual(g.members[0].roles, [old], 'not an Owner yet, so only the everyone grant');
+    assert.deepEqual(g.members[1].roles, [], 'bots are not given @everyone grants');
+    g.members[0].roles.push(owner);
+    const r = await t.run('apply');
+    assert.match(r, /Gave 1 role to members/, r);
+    assert.deepEqual(g.members[0].roles.sort(), [old, owner, staff].sort());
+    assert.match(await t.run('apply'), /everything already matched/);
+    delete g.members;
+    assert.match(await t.run('apply'), /Server Members Intent/, 'explains the missing intent');
+  } finally { t.close(); }
+});
+
+test('the HN HQ layout is valid and fits a fresh server', async () => {
+  const dir = path.join(__dirname, 'discord-layouts');
+  const { loadLayouts, plan: makePlan } = require('./server-setup');
+  const { layouts, errors } = loadLayouts(dir);
+  assert.deepEqual(errors, []);
+  const hq = layouts.find((l) => l.id === 'hn-hq');
+  assert.equal(hq.server, 'HN HQ'); assert.equal(hq.guildId, '1360208008755413227');
+  const role = (n) => hq.roles.find((r) => r.name === n), has = (n, flag) => (BigInt(role(n).permissions) & (1n << BigInt(flag))) !== 0n;
+  assert.equal(role('Network Permission Level 5').permissions, bits(['Administrator']));
+  for (const flag of [3, 1, 2, 28]) assert.ok(!has('Network Permission Level 4', flag), 'Level 4 has no Administrator, Kick, Ban or Manage Roles');
+  for (const n of ['Network Permission Level 3', 'Network Permission Level 2', 'Network Permission Level 1', 'B | Bots', 'M | Member', 'NA | Network Administration', 'President'])
+    for (const flag of [3, 1, 2, 4, 5, 28]) assert.ok(!has(n, flag), n + ' has no administrative or server-management powers');
+  assert.equal(role('B | Bots').permissions, '0'); assert.equal(hq.everyone, role('Network Permission Level 1').permissions);
+  assert.deepEqual(hq.roles.filter((r) => r.hoist).map((r) => r.name), ['President', 'NA | Network Administration', 'B | Bots', 'M | Member']);
+  const g = server('1360208008755413227', 'HN HQ');
+  g.roles[1].position = 99;
+  const p = makePlan(hq, g.guild, g.roles, g.channels, BOT, [g.botRole]);
+  assert.deepEqual(p.problems, []);
+  assert.equal(p.steps.filter((x) => x.kind === 'role' && x.op === 'create').length, 20);
 });
