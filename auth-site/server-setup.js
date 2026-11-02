@@ -14,8 +14,8 @@ const path = require('node:path');
 const API = 'https://discord.com/api/v10';
 const ID = /^\d{15,22}$/;
 const COMMAND = 'server-setup';
-// Discord user IDs allowed to run /server-setup (the user's request, 2 November 2026).
-const ALLOWED_USERS = new Set(['1449876557035475085']);
+// Discord user IDs allowed to run /server-setup (the user's requests, 2 November 2026).
+const ALLOWED_USERS = new Set(['1449876557035475085', '1256504335110635531']);
 const fail = (message) => Object.assign(new Error(message), { layout: true });
 
 // Discord permission flags (https://discord.com/developers/docs/topics/permissions).

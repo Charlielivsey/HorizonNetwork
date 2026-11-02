@@ -8,7 +8,7 @@ the command (with the layouts as choices) every time it connects.
 ## Using it in Discord
 
 Only the Discord accounts in `ALLOWED_USERS` in `auth-site/server-setup.js` can run it (currently
-`1449876557035475085`). Run it inside the server you want to set up. Every reply is visible only to you.
+`1449876557035475085` and `1256504335110635531`). Run it inside the server you want to set up. Every reply is visible only to you.
 
 - `/server-setup layouts` lists the layouts and the server each one belongs to.
 - `/server-setup preview` shows everything that would change. Nothing is changed.

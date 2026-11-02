@@ -109,6 +109,7 @@ test('only allowed Discord accounts can run it, and only inside a server', async
   const t = setup({ test: LAYOUT });
   try {
     assert.match(await t.run('apply', { user: STRANGER }), /aren’t allowed/);
+    assert.match(await t.run('preview', { user: '1256504335110635531' }), /Preview of `test`/, 'the second allowed account can run it too');
     assert.match(await t.run('apply', { guild: null }), /inside the server/);
     assert.equal(t.discord.writes.filter((w) => !w.p.startsWith('/applications/')).length, 0, 'nothing changed');
   } finally { t.close(); }
