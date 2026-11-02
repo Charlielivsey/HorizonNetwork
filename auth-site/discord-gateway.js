@@ -63,7 +63,7 @@ function connect({ host, path, port, tlsOptions }, { onOpen, onMessage, onClose 
 
 // Keeps the bot online for as long as `token()` returns a token (checked every minute, so adding or changing the
 // token in discord.json takes effect without a restart).
-function startPresence(token, { log = console, gateway = GATEWAY, settings = () => ({enabled:true,status:'online',activity:'HN Group sign-ins',activityType:3}), transport = connect, onInteraction = () => {} } = {}) {
+function startPresence(token, { log = console, gateway = GATEWAY, settings = () => ({enabled:true,status:'online',activity:'HN Group sign-ins',activityType:3}), transport = connect, onInteraction = () => {}, onReady = () => {} } = {}) {
   let ws=null,heartbeat=null,timer=null,current=null,fatal=null,generation=0,stopped=false,retry=0,seq=null,acked=true,sentAt=0;
   const state={phase:'offline',connectedAt:null,lastAck:null,latency:null,username:null,userId:null,reconnects:0,closeCode:null};
   const presenceData=()=>{const s=settings();return{status:s.status||'online',afk:false,since:null,activities:s.activity?[{name:s.activity,type:s.activityType??3}]:[]};};
@@ -74,7 +74,7 @@ function startPresence(token, { log = console, gateway = GATEWAY, settings = () 
       if(msg.op===10){const every=Math.max(5000,Number(msg.d?.heartbeat_interval)||41250);clearInterval(heartbeat);heartbeat=setInterval(()=>{if(!acked){disconnect();schedule();return;}acked=false;sentAt=Date.now();ws?.send(JSON.stringify({op:1,d:seq}));},every);heartbeat.unref();ws.send(JSON.stringify({op:2,d:{token:t,intents:0,properties:{os:'linux',browser:'hn-group-auth',device:'hn-group-auth'},presence:presenceData()}}));}
       else if(msg.op===11){acked=true;state.lastAck=new Date().toISOString();state.latency=sentAt?Date.now()-sentAt:null;}
       else if(msg.op===1)ws?.send(JSON.stringify({op:1,d:seq}));
-      else if(msg.op===0&&msg.t==='READY'){retry=0;state.phase='online';state.connectedAt=new Date().toISOString();state.username=msg.d?.user?.username||null;state.userId=msg.d?.user?.id||null;state.closeCode=null;log.log('Discord bot connected.');}
+      else if(msg.op===0&&msg.t==='READY'){retry=0;state.phase='online';state.connectedAt=new Date().toISOString();state.username=msg.d?.user?.username||null;state.userId=msg.d?.user?.id||null;state.closeCode=null;log.log('Discord bot connected.');Promise.resolve().then(onReady).catch(()=>{});}
       else if(msg.op===0&&msg.t==='INTERACTION_CREATE')Promise.resolve(onInteraction(msg.d)).catch(()=>log.log('Discord command response failed.'));
       else if(msg.op===7||msg.op===9){disconnect();schedule(msg.op===9?5000:1000);}
     },onClose(code){if(epoch!==generation)return;clearInterval(heartbeat);heartbeat=null;ws=null;state.connectedAt=null;state.closeCode=code;if(stopped)return;if(FATAL.has(code)){fatal=current;state.phase='error';log.log('Discord bot connection refused (code '+code+').');return;}schedule();}});

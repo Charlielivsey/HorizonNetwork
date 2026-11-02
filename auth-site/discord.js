@@ -105,7 +105,7 @@ function createDiscord({ origin, staff, send, profile, entryFor, setCookie, cook
   let presence=null;
   const manager=createBotManager({file:path.join(path.dirname(file),'discord-bot.json'),configFile:file,config,fetcher,refresh:()=>refreshNames(true),staff,presence:()=>presence});
   if(refreshEvery>0){setTimeout(()=>{const tick=()=>{const s=manager.settings();if(s.enabled&&s.syncEnabled&&!manager.syncState.running&&(!(manager.syncState.lastAttemptAt||manager.syncState.lastAt)||Date.now()-Date.parse(manager.syncState.lastAttemptAt||manager.syncState.lastAt)>=s.syncMinutes*60000))manager.sync().catch(()=>{});};tick();setInterval(tick,60000).unref();},20000).unref();}
-  presence=process.env.HN_DISCORD_PRESENCE==='0'?null:startPresence(()=> (config()||{}).bot||null,{settings:manager.settings,onInteraction:manager.interaction,log:{log:message=>{console.log(message);manager.record(null,'gateway.event',{message});}}});
+  presence=process.env.HN_DISCORD_PRESENCE==='0'?null:startPresence(()=> (config()||{}).bot||null,{settings:manager.settings,onInteraction:manager.interaction,onReady:manager.registerBuiltins,log:{log:message=>{console.log(message);manager.record(null,'gateway.event',{message});}}});
 
   async function discord(req, res, route, data) {
     if (route === '/api/discord' && req.method === 'GET') { send(res, 200, { enabled: !!client() }); return true; }
