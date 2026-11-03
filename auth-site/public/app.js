@@ -249,15 +249,15 @@ async function startGoogle(mode) {
 function googleOnly(on, { google = true, discord = false } = {}) {
   $('pin').classList.toggle('google-only', on);
   if (on) { $('google-resume').hidden = !(google && googleEnabled); $('discord-resume').hidden = !discord; }
-  $('google-resume').querySelector('span').textContent = on ? 'Continue with Google' : 'Continue with Google instead';
-  $('discord-resume').querySelector('span').textContent = on ? 'Continue with Discord' : 'Continue with Discord instead';
+  $('google-resume').querySelector('span').textContent = on ? 'Continue with Google' : 'Use Google';
+  $('discord-resume').querySelector('span').textContent = on ? 'Continue with Discord' : 'Use Discord';
 }
 $('google-login').onclick = () => busy($('google-login'), () => startGoogle('login'), 'Opening Google…');
 $('google-resume').onclick = () => busy($('google-resume'), () => startGoogle('login'), 'Opening Google…');
 // The signed-in panel: turn Sign in with Google on (a trip to Google) or off.
 function showGoogle(user) {
   $('google-row').hidden = !googleEnabled && !user.google;
-  $('google-status').textContent = user.google ? 'On for ' + user.google.email + '. Continue with Google signs you straight in, and this browser remembers you for next time.' : 'Sign in with your Google account instead of your password and PIN.';
+  $('google-status').textContent = user.google ? 'On for ' + user.google.email : 'Use Google instead of your password and PIN.';
   $('google-toggle').textContent = user.google ? 'Turn off' : 'Turn on';
   $('google-toggle').classList.toggle('off', !!user.google);
   $('google-toggle').onclick = () => busy($('google-toggle'), async () => {
@@ -276,7 +276,7 @@ $('discord-login').onclick = () => busy($('discord-login'), () => startDiscord('
 $('discord-resume').onclick = () => busy($('discord-resume'), () => startDiscord('login'), 'Opening Discord…');
 function showDiscord(user) {
   $('discord-row').hidden = !discordEnabled && !user.discord;
-  $('discord-status').textContent = user.discord ? 'Connected to @' + user.discord.username + '. Continue with Discord signs you straight in, and this browser remembers you for next time.' : 'Sign in with your Discord account instead of your password and PIN. Use the Discord account on your staff profile.';
+  $('discord-status').textContent = user.discord ? 'Connected to @' + user.discord.username : 'Use the Discord account on your staff profile.';
   $('discord-toggle').textContent = user.discord ? 'Disconnect' : 'Connect';
   $('discord-toggle').classList.toggle('off', !!user.discord);
   $('discord-toggle').onclick = () => busy($('discord-toggle'), async () => {
@@ -392,7 +392,7 @@ rememberedRequest.catch(() => {});
 })();
 
 // Fit the card on the screen without scrolling (the user's request, 3 November 2026): when a step is taller than the
-// space between the header and footer, the card is zoomed down (to no less than 62%) so it fits; it's measured at full
+// space between the header and footer, the card is zoomed down slightly (never below 90%, so text stays readable; the user's correction, 3 November 2026: "unreadable. scale properly") and the page scrolls only if it still doesn't fit; it's measured at full
 // size each time, so it grows back when there's room. Waits for view() transitions to finish before measuring.
 (() => {
   const card = document.querySelector('.side main > .card'), main = card && card.parentElement;
@@ -401,15 +401,16 @@ rememberedRequest.catch(() => {});
   function fitCard() {
     frame = 0;
     if ($('auth-stage').classList.contains('transitioning')) return;
-    const cs = getComputedStyle(main);
-    const room = main.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    const side = main.parentElement, cs = getComputedStyle(main);
+    const others = [...side.children].filter(el => el !== main).reduce((sum, el) => sum + el.getBoundingClientRect().height, 0);
+    const room = side.clientHeight - others - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
     card.style.zoom = '';
     const natural = card.getBoundingClientRect().height;
-    const zoom = natural > room && room > 0 ? Math.max(0.62, Math.floor(room / natural * 1000) / 1000) : 1;
+    const zoom = natural > room && room > 0 ? Math.max(0.9, Math.floor(room / natural * 1000) / 1000) : 1;
     card.style.zoom = zoom < 1 ? String(zoom) : '';
   }
   const schedule = () => { if (!frame) frame = requestAnimationFrame(fitCard); };
-  new ResizeObserver(schedule).observe(main);
+  new ResizeObserver(schedule).observe(main.parentElement);
   new MutationObserver(schedule).observe(card, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['hidden', 'class'] });
   if (document.fonts) document.fonts.ready.then(schedule);
   window.addEventListener('load', schedule);

@@ -175,3 +175,66 @@ footer .footer-brand .on-dark { display: none; }
   .side footer{padding:clamp(8px,1.6svh,16px) 18px;font-size:10px}
   .side footer .footer-brand{display:none}
 }
+
+/* Signed-in view, compact and readable (the user's correction, 3 November 2026: "unreadable. scale properly"): laid out
+   to fit instead of being shrunk; no text on the card is smaller than 12px. */
+.side .card #subtitle{font-size:14px}
+.side .card .success-banner{padding:9px 12px;font-size:13px;gap:10px}
+.side .card .success-detail{font-size:12px}
+.side .card .success-check{width:26px;height:26px}
+.side .card .profile{flex-direction:row;align-items:center;text-align:left;gap:14px;margin:clamp(12px,2svh,20px) 0}
+.side .card .profile .avatar-ring{width:clamp(60px,8.5svh,76px);height:clamp(60px,8.5svh,76px);margin:0;padding:4px}
+.side .card .profile .avatar-ring img,.side .card .profile .avatar-ring .initials{width:100%;height:100%}
+.side .card .profile .avatar-check{width:22px;height:22px;font-size:10px;right:-2px;bottom:0}
+.side .card .profile>h3,.side .card .profile>p{grid-column:2}
+.side .card .profile{display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-rows:auto auto;column-gap:14px;row-gap:2px}
+.side .card .profile .avatar-ring{grid-row:1/3;align-self:center}
+.side .card .profile h3{font-size:clamp(19px,2.6svh,22px);align-self:end;line-height:1.25}
+.side .card .profile p{font-size:13px;margin:0;align-self:start}
+.side .card .identity-details{gap:8px;margin-bottom:clamp(10px,1.6svh,16px)}
+.side .card .identity-details>div{padding:9px 12px}
+.side .card .identity-details dt{font-size:12px;margin:0}
+.side .card .identity-details dd{font-size:14px;margin-top:2px}
+.side .card .google-row{margin:8px 0;padding:10px 12px;gap:12px}
+.side .card .google-mark{width:34px;height:34px}
+.side .card .google-copy strong{font-size:14px}
+.side .card .google-copy small{font-size:12px;line-height:1.45;margin-top:1px}
+.side .card .google-toggle{font-size:13px;padding:7px 12px}
+.side .card .root-account-note{font-size:12.5px;line-height:1.5;padding:10px 12px;margin-top:10px}
+.side .card .account-actions{padding-top:12px;margin-top:clamp(10px,1.8svh,16px)}
+.side .card .account-actions a,.side .card .account-actions .text-button{font-size:13px}
+.side .card .session-note{font-size:12px;margin-top:8px}
+.side .card .application-heading .eyebrow{font-size:11px}
+.side .card .application-heading h4{font-size:14px}
+.side .card .access-badge{font-size:12px}
+.side .card .application-panel .account-note{font-size:13px}
+.side .card .card-foot{font-size:12px}
+.side .card .text-button{font-size:13px}
+.side .card .pin-note,.side .card .pin-help{font-size:13px}
+.side .card label{font-size:13px}
+/* The signed-in view already says how the session works, so its footer line is left out to save room. */
+.side .card:has(#account:not([hidden])) .card-foot{display:none}
+/* The main area grows with the card, so when a step can't fit even slightly scaled the page scrolls instead of the card
+   running over the header and footer. */
+.side main{min-height:auto}
+.side .card #account .success-detail{display:none}
+.side .card #account .success-banner{padding:8px 12px}
+
+/* More room for the card (the user's correction, 3 November 2026): the card carries the logo and "Secure sign-in", so the
+   page header steps aside and the footer is one line; the Google/Discord alternatives sit side by side under a PIN, and
+   the account links share a row. */
+.side header{display:none}
+.side main{padding-top:clamp(10px,3svh,32px)}
+.side .card .card-top{justify-content:space-between;gap:12px}
+.card-secure{font-size:12px;white-space:nowrap}
+.side footer{padding:clamp(8px,1.6svh,16px) 36px;font-size:12px}
+.side footer .footer-brand{display:none}
+#pin:not(.google-only) .alt-row:has(> :not([hidden])){display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:8px;margin-top:10px}
+#pin:not(.google-only) .alt-row .google-button{margin-top:0}
+#pin .alt-row .google-button[hidden]{display:none}
+.pin-links{display:flex;flex-wrap:wrap;justify-content:center;column-gap:18px;row-gap:6px;margin-top:clamp(10px,1.8svh,18px)}
+.side .card .pin-links .back{margin:0}
+@media(max-height:820px){.side .card:has(#pin:not([hidden])) .card-foot,.side .card:has(#login:not([hidden])) .card-foot{display:none}}
+@media(max-width:900px){.side footer{padding:clamp(6px,1.4svh,14px) 18px;font-size:11px}}
+/* Short screens, signed in: "You're in." already says it, so the verified banner and the general note step aside. */
+@media(max-height:760px){.side .card #account .success-banner,.side .card #account .root-account-note{display:none}.side .card #account .profile{margin-top:12px}}
