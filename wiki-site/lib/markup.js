@@ -30,8 +30,10 @@ function safeUrl(url) {
 
 // Images for [[File:...]] and infobox logos: the brand files (copied from brand/logos) and images staff
 // have uploaded. The resolver answers { src, dark } for a file name, or null.
-let fileExists = () => false, resolveFile = null;
+let fileExists = () => false, resolveFile = null, darkExists = null;
 function setFileCheck(fn) { fileExists = fn; }
+// Which white variants may stand in for a logo in dark mode (only ones that keep their colours; see server.js).
+function setDarkCheck(fn) { darkExists = fn; }
 function setFileResolver(fn) { resolveFile = fn; }
 function findImage(name) {
   const file = String(name || '').trim().replace(/^File:/i, '');
@@ -39,7 +41,7 @@ function findImage(name) {
   if (resolveFile) { const found = resolveFile(file); if (found) return found; }
   if (!fileExists(file)) return null;
   const white = file.replace(/\.(svg|png)$/i, '-white.$1');
-  return { src: '/assets/brand/' + file, dark: white !== file && fileExists(white) ? '/assets/brand/' + white : null };
+  return { src: '/assets/brand/' + file, dark: white !== file && (darkExists || fileExists)(white) ? '/assets/brand/' + white : null };
 }
 function pictureHtml(found, alt, cls) {
   if (found.dark) return '<img class="on-light ' + (cls || '') + '" src="' + esc(found.src) + '" alt="' + esc(alt) + '" loading="lazy"><img class="on-dark ' + (cls || '') + '" src="' + esc(found.dark) + '" alt="' + esc(alt) + '" loading="lazy">';
@@ -514,4 +516,4 @@ function infoboxImage(source) {
 // The company a page's {{Company infobox}} is about, if it has one.
 function companyOfSource(source) { const m = /\{\{\s*company infobox\s*\|([^|}]+)/i.exec(String(source || '')); return m ? companyOf(m[1].trim()) : null; }
 
-module.exports = { shortDescription, infoboxImage, render, plainText, normaliseTitle, pageUrl, anchorId, esc, setFileCheck, setFileResolver, setCompanySource, companyOfSource, imageHtml, findImage };
+module.exports = { shortDescription, infoboxImage, render, plainText, normaliseTitle, pageUrl, anchorId, esc, setFileCheck, setDarkCheck, setFileResolver, setCompanySource, companyOfSource, imageHtml, findImage };

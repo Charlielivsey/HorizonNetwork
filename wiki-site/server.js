@@ -22,6 +22,17 @@ const MIME = { '.css': 'text/css; charset=utf-8', '.js': 'application/javascript
 const brandDir = path.join(PUBLIC, 'assets', 'brand');
 const brandFiles = new Set(fs.existsSync(brandDir) ? fs.readdirSync(brandDir) : []);
 markup.setFileCheck((f) => brandFiles.has(f));
+// Use the coloured logo wherever there is one (the user's request, 3 November 2026: "for logos where colours options are
+// available, use the coloured versions"): a white variant is only used in dark mode when it keeps colours of its own (the
+// wordmarks' stripe); an all-white roundel/logo is skipped, so dark mode shows the coloured original.
+function onlyWhite(file) {
+  try {
+    const fills = fs.readFileSync(path.join(brandDir, file), 'utf8').match(/#[0-9a-f]{3,8}\b/gi) || [];
+    return fills.every((c) => /^#f{3}(f{3})?(f{2})?$/i.test(c));
+  } catch { return false; }
+}
+const darkVariants = new Set([...brandFiles].filter((f) => /-white\.(svg|png)$/i.test(f) && !onlyWhite(f.replace(/\.png$/i, '.svg'))));
+markup.setDarkCheck((f) => darkVariants.has(f));
 store.init(DATA_DIR, SEED_DIR);
 media.init(DATA_DIR);
 register.init(DATA_DIR);
@@ -33,7 +44,7 @@ markup.setFileResolver((name) => { const f = media.image(name); return f ? { src
 const slugOf = (text) => String(text).toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 function brandLogo(c) {
   const base = slugOf(register.displayName(c));
-  for (const name of [base + '-wordmark.svg', base + '-logo.svg']) if (brandFiles.has(name)) { const white = name.replace('.svg', '-white.svg'); return { src: '/assets/brand/' + name, dark: brandFiles.has(white) ? '/assets/brand/' + white : null }; }
+  for (const name of [base + '-wordmark.svg', base + '-logo.svg']) if (brandFiles.has(name)) { const white = name.replace('.svg', '-white.svg'); return { src: '/assets/brand/' + name, dark: darkVariants.has(white) ? '/assets/brand/' + white : null }; }
   return null;
 }
 function companyLogo(c) {

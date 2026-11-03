@@ -212,6 +212,10 @@ test('HN Group Wiki: reading, editing, history, protection and safety', async ()
     const mediaPage = (await anon.go('/wiki/Horizon_Media_Group')).text;
     assert.equal(subRow(mediaPage, 'Parent'), '<a href="/wiki/HN_Group">HN Group</a>');
     assert.match(subRow(mediaPage, 'Owner'), /^<a href="\/wiki\/HN_Group_Investments">HN Group Investments<\/a>/);
+    // Coloured logos everywhere they exist: the all-white roundel logo isn't swapped in for dark mode (the user's request,
+    // 3 November 2026), while white wordmarks that keep the coloured stripe still are.
+    assert.ok(mediaPage.includes('/assets/brand/horizon-media-group-logo.svg') && !mediaPage.includes('horizon-media-group-logo-white.svg'));
+    assert.ok(networkPage.includes('/assets/brand/horizon-network-wordmark-white.svg'));
     const advertising = (await anon.go('/wiki/Horizon_Advertising')).text;
     assert.match(advertising, /Managed by<\/th><td><a href="\/wiki\/Horizon_Network">/);
     assert.match(advertising, /Owner<\/th><td><a href="\/wiki\/Horizon_Media_Group">Horizon Media Group<\/a> \(100%\)/);
