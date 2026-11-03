@@ -59,6 +59,10 @@ const TEXTLIKE = new Set([0, 5, 15]);
 const channelName = (name, type) => TEXTLIKE.has(type) ? String(name).trim().toLowerCase().replace(/\s+/g, '-') : String(name).trim().toLowerCase();
 const roleName = (name) => String(name).trim().toLowerCase();
 const EVERYONE = '@everyone';
+// Roles every member who isn't a bot always gets, whatever the layout: separator roles (names that start and end with a
+// line, like "────────── LEADERSHIP ──────────"), Network Permission Level 1 and M | Member.
+const ALWAYS_GIVE = new Set(['network permission level 1', 'm | member']);
+const isSeparator = (name) => /^[─━—–=_-]{2,}.*[─━—–=_-]{2,}$/.test(String(name).trim());
 
 // ----- Layouts -----
 function overwrites(spec, where) {
@@ -198,7 +202,14 @@ function plan(layout, guild, roles, channels, botUserId, botRoleIds) {
   }
   for (const it of items) steps.push({ kind: 'channel', ...it, op: it.have ? 'update' : 'create' });
   for (const g of layout.roleGrants) for (const n of [g.from, ...g.to]) if (!knownRole(n)) problems.push('roleGrants uses "' + n + '", which isn’t ' + (wipe ? 'one of the layout’s roles (every other role is deleted).' : 'a role in the layout or the server.'));
-  if (layout.roleGrants.length) steps.push({ kind: 'grants', grants: layout.roleGrants });
+  // Built in, for every layout and server (the user's request, 3 November 2026: "the separater roles, permission level 1,
+  // and member should be auto added to everyone everytime no matter what server or template is used"): every member
+  // who isn't a bot gets each separator role, Network Permission Level 1 and M | Member that the layout has.
+  const always = layout.roles.filter((r) => isSeparator(r.name) || ALWAYS_GIVE.has(roleName(r.name))).map((r) => r.name);
+  const grants = layout.roleGrants.filter((g) => roleName(g.from) !== EVERYONE);
+  const forEveryone = [...new Set([...layout.roleGrants.filter((g) => roleName(g.from) === EVERYONE).flatMap((g) => g.to), ...always])];
+  if (forEveryone.length) grants.push({ from: EVERYONE, to: forEveryone });
+  if (grants.length) steps.push({ kind: 'grants', grants });
   steps.push({ kind: 'channel-order', categories: layout.categories.map((c) => c.name), top: layout.channels.map((c) => c.name) });
 
   // Removals, only when the layout asks for them.

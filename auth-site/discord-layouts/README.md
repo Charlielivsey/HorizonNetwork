@@ -67,6 +67,10 @@ nobody keeps a role from before: give people their roles again afterwards. Chann
   `allow` / `deny` lists. They replace the channel's role overwrites exactly; per-member overwrites are kept. A
   channel in a category with no `permissions` copies the category's (synced). Roles named here may be layout roles
   or roles already on the server.
+- **Always given, in every layout:** on every `apply`, every member who isn't a bot gets each **separator role** (a
+  name that starts and ends with a line, like `────────── MEMBERS ──────────`), **Network Permission Level 1** and
+  **M | Member**, if the layout has them. No `roleGrants` entry is needed. Like roleGrants, this needs Server Members
+  Intent. Include these roles in every layout so everyone gets them.
 - **roleGrants** gives members extra roles that go with roles they already have, e.g.
   `{ "President": ["Network Permission Level 5"], "@everyone": ["Network Permission Level 1"] }` (`@everyone` means
   every member who isn't a bot). It only ever adds roles, never removes them. The bot has to list the server's

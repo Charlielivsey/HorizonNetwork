@@ -283,3 +283,20 @@ test('every role is deleted and made again, apart from @everyone, managed roles 
     assert.ok(t.servers[OTHER].roles.some((r) => r.name === 'Keep me'));
   } finally { t.close(); }
 });
+
+test('every member (not bots) always gets the separator roles, Network Permission Level 1 and M | Member, in any layout', async () => {
+  const roles = [{ name: '────────── MEMBERS ──────────' }, { name: 'M | Member', color: '#A3B4CC' }, { name: 'Network Permission Level 1', permissions: ['ViewChannel'] }, { name: 'Other' }];
+  const t = setup({ plain: { server: 'HN Group Test', roles } });
+  try {
+    const g = t.servers[GUILD];
+    g.members = [{ user: { id: '300000000000000001', username: 'person' }, roles: [] }, { user: { id: '300000000000000002', username: 'a bot', bot: true }, roles: [] }];
+    assert.match(await t.run('preview'), /Give "Network Permission Level 1"|Give "────────── MEMBERS ──────────"/);
+    await t.run('apply');
+    const id = (n) => g.roles.find((r) => r.name === n).id;
+    assert.deepEqual(g.members[0].roles.sort(), [id('────────── MEMBERS ──────────'), id('M | Member'), id('Network Permission Level 1')].sort(), 'not "Other"');
+    assert.deepEqual(g.members[1].roles, [], 'bots get none of them');
+    // Every time: after the roles are made again, they're given again.
+    await t.run('apply');
+    assert.ok(g.members[0].roles.includes(id('M | Member')) && g.members[0].roles.includes(id('Network Permission Level 1')));
+  } finally { t.close(); }
+});
