@@ -1418,7 +1418,7 @@
     // ================= Employee management =================
 
     function accountBadge(emp) {
-        if (!emp.account) return '<span class="badge badge-grey">No account</span>';
+        if (!emp.account) return '<span class="badge badge-yellow">No account</span>';
         if (!emp.account.enabled) return '<span class="badge badge-red">Disabled</span>';
         if (emp.account.passwordTemporary) return '<span class="badge badge-yellow">Awaiting first sign-in</span>';
         if (!emp.account.hasCode) return '<span class="badge badge-yellow">Code not set</span>';
@@ -1432,21 +1432,42 @@
         const byId = {};
         employees.forEach(function (e) { byId[e.id] = e; });
 
+        // Rebuilt (the user's report, 3 November 2026: "redo the entire employee management view … it looks like
+        // dogshit"): headline counts that filter, company tabs and search, and a card per person instead of a table.
+        const filters = { company: "", login: "all" };
+        const loginState = function (e) { return !e.account ? "none" : !e.account.enabled ? "disabled" : "active"; };
+        const companies = state.meta.companies.filter(function (c) { return employees.some(function (e) { return e.company === c || e.otherRoles.some(function (r) { return r.company === c; }); }); });
+        const count = function (st) { return employees.filter(function (e) { return st === "all" || loginState(e) === st; }).length; };
+        const stat = function (key, label, n, tone) {
+            return '<button type="button" class="emp-stat ' + tone + '" data-login="' + key + '" aria-pressed="false"><span class="emp-stat-num">' + n + '</span><span class="emp-stat-label">' + label + "</span></button>";
+        };
+
         root.innerHTML =
             '<div class="page-head"><div><h1>Employee Management</h1><p class="muted">Add staff, manage their details and set up their login accounts.</p></div>' +
             '<div class="page-actions">' +
             (can("access.manage") ? '<a class="btn btn-ghost" href="/roles" data-link>' + icon("shield") + "Roles & permissions</a>" : "") +
+            '<a class="btn btn-ghost" href="https://accounts.hngroup.org.uk/#accounts" target="_blank" rel="noopener">' + icon("key") + "HN Account</a>" +
             '<button type="button" class="btn btn-primary" id="add-employee">' + icon("plus") + "Add employee</button></div></div>" +
-            '<div class="toolbar"><label class="search">' + icon("search") +
-            '<input type="search" id="emp-search" placeholder="Search employees" aria-label="Search employees"></label></div>' +
-            '<div class="table-card"><table class="table"><thead><tr><th>Employee</th><th>Job title</th><th>Company</th><th>Reports to</th><th>Login</th><th class="col-actions"><span class="sr-only">Actions</span></th></tr></thead>' +
-            '<tbody id="emp-body"></tbody></table></div>';
+            '<div class="emp-stats">' + stat("all", "Staff", count("all"), "") + stat("active", "Can sign in", count("active"), "ok") +
+            stat("none", "No sign-in account", count("none"), "warn") + stat("disabled", "Sign-in disabled", count("disabled"), "bad") + "</div>" +
+            '<div class="emp-toolbar"><label class="search">' + icon("search") +
+            '<input type="search" id="emp-search" placeholder="Search by name, job, department, company or email" aria-label="Search employees"></label>' +
+            '<div class="company-tabs emp-companies-filter" role="tablist" aria-label="Company"><button type="button" data-company="" class="active">All <span class="tab-count">' + employees.length + "</span></button>" +
+            companies.map(function (c) {
+                const n = employees.filter(function (e) { return e.company === c || e.otherRoles.some(function (r) { return r.company === c; }); }).length;
+                return '<button type="button" data-company="' + esc(c) + '">' + esc(c) + ' <span class="tab-count">' + n + "</span></button>";
+            }).join("") + "</div></div>" +
+            '<p class="muted small emp-showing" id="emp-showing"></p>' +
+            '<div class="emp-grid" id="emp-body"></div>';
 
         function draw() {
             const q = $("#emp-search").value.trim().toLowerCase();
             const list = employees.filter(function (e) {
-                return !q || [e.displayName, e.jobTitle, e.department, e.company, e.loginUsername].join(" ").toLowerCase().indexOf(q) !== -1;
+                if (filters.company && e.company !== filters.company && !e.otherRoles.some(function (r) { return r.company === filters.company; })) return false;
+                if (filters.login !== "all" && loginState(e) !== filters.login) return false;
+                return !q || [e.displayName, e.jobTitle, e.department, e.company, e.loginUsername].concat(e.otherRoles.map(function (r) { return r.company + " " + (r.jobTitle || ""); }), e.emails.map(function (x) { return x.address; })).join(" ").toLowerCase().indexOf(q) !== -1;
             });
+            $("#emp-showing").textContent = list.length === employees.length ? "Showing everyone (" + list.length + ")" : "Showing " + list.length + " of " + employees.length;
             $("#emp-body").innerHTML = list.length ? list.map(function (e) {
                 const sup = byId[e.supervisorId];
                 const isMe = e.id === state.me.id;
@@ -1475,19 +1496,42 @@
                     if (e.account && can("storage.access")) actions.push('<a class="menu-item compact" href="/document-storage?view=' + encodeURIComponent(e.id) + '" data-link>' + icon("lock") + "<span>Document storage</span></a>");
                     actions.push('<div class="menu-sep"></div><button type="button" class="menu-item compact danger" data-act="delete">' + icon("trash") + "<span>Delete employee</span></button>");
                 }
-                return '<tr data-id="' + e.id + '">' +
-                    '<td><div class="emp-cell">' + avatar(e, "sm") + '<div><div class="emp-name">' + esc(e.displayName) + ownerBadge(e) + (isMe ? ' <span class="muted small">(you)</span>' : "") +
-                    '</div><div class="muted small">' + esc(e.loginUsername) + (e.emails.length > 1 ? ' <span class="count-pill">+' + (e.emails.length - 1) + "</span>" : "") + "</div></div></div></td>" +
-                    '<td data-label="Job title">' + esc(e.jobTitle) + (e.department ? '<div class="muted small">' + esc(e.department) + "</div>" : "") + "</td>" +
-                    '<td data-label="Company">' + esc(e.company) + (e.otherRoles.length ? ' <span class="count-pill" title="' + esc(e.otherRoles.map(function (r) { return r.company + (r.jobTitle ? " — " + r.jobTitle : ""); }).join(", ")) + '">+' + e.otherRoles.length + "</span>" : "") + "</td>" +
-                    '<td data-label="Reports to">' + (sup ? esc(sup.displayName) : '<span class="muted">—</span>') + "</td>" +
-                    '<td data-label="Login">' + accountBadge(e) + "</td>" +
-                    (locked && e.account ? '<td class="col-actions"><span class="icon-btn" title="Only the system owner can change this record">' + icon("lock") + "</span></td></tr>" :
-                    '<td class="col-actions"><div class="nav-item row-menu"><button type="button" class="icon-btn" data-menu aria-haspopup="true" aria-expanded="false" aria-label="Actions for ' + esc(e.displayName) + '">' + icon("more") + "</button>" +
-                    '<div class="menu menu-right menu-row" role="menu" hidden>' + actions.join("") + "</div></div></td></tr>");
-            }).join("") : '<tr><td colspan="6"><div class="empty">' +
-                (employees.length ? "No employees match your search." : 'No employees yet. Click <strong>Add employee</strong> to add the first one.') + "</div></td></tr>";
+                const menu = locked && e.account
+                    ? '<span class="icon-btn" title="Only the system owner can change this record">' + icon("lock") + "</span>"
+                    : '<div class="nav-item row-menu"><button type="button" class="icon-btn" data-menu aria-haspopup="true" aria-expanded="false" aria-label="Actions for ' + esc(e.displayName) + '">' + icon("more") + "</button>" +
+                      '<div class="menu menu-right menu-row" role="menu" hidden>' + actions.join("") + "</div></div>";
+                return '<article class="emp-card' + (locked ? " locked" : "") + '" data-id="' + e.id + '">' + bannerHtml(e, "emp-band") +
+                    '<div class="emp-card-top">' + avatar(e, "lg") + '<div class="emp-card-menu">' + menu + "</div></div>" +
+                    '<div class="emp-card-id"><h3>' + esc(e.displayName) + (isMe ? ' <span class="muted small">(you)</span>' : "") + "</h3>" +
+                    '<div class="emp-job">' + esc(e.jobTitle) + (e.department ? '<span class="muted"> \u00b7 ' + esc(e.department) + "</span>" : "") + "</div>" +
+                    (e.isOwner ? '<span class="badge badge-owner">System owner</span>' : "") + "</div>" +
+                    '<div class="emp-chips"><span class="emp-chip main" title="Main company">' + icon("building") + esc(e.company) + "</span>" +
+                    e.otherRoles.map(function (r) { return '<span class="emp-chip" title="' + esc(r.jobTitle || "") + '">' + esc(r.company) + "</span>"; }).join("") + "</div>" +
+                    '<dl class="emp-facts">' +
+                    '<div><dt>Reports to</dt><dd>' + (sup ? '<span class="emp-sup">' + avatar(sup, "xs") + esc(sup.displayName) + "</span>" : '<span class="muted">Top of ' + esc(e.company) + "</span>") + "</dd></div>" +
+                    '<div><dt>Sign-in</dt><dd>' + accountBadge(e) + "</dd></div>" +
+                    '<div class="wide"><dt>Email</dt><dd class="emp-email">' + esc(e.loginUsername) + (e.emails.length > 1 ? ' <span class="count-pill">+' + (e.emails.length - 1) + "</span>" : "") + "</dd></div></dl>" +
+                    (locked ? '<p class="muted small emp-locked">' + icon("lock") + "Only the system owner can change this record</p>" :
+                        '<div class="emp-card-actions"><button type="button" class="btn btn-ghost btn-small" data-act="edit">' + icon("edit") + "Edit details</button></div>") +
+                    "</article>";
+            }).join("") : '<div class="empty emp-empty">' +
+                (employees.length ? "Nobody matches these filters." : 'No employees yet. Click <strong>Add employee</strong> to add the first one.') + "</div>";
         }
+
+        $$(".emp-stat", root).forEach(function (b) {
+            b.addEventListener("click", function () {
+                filters.login = filters.login === b.dataset.login ? "all" : b.dataset.login;
+                $$(".emp-stat", root).forEach(function (x) { const on = x.dataset.login === filters.login && filters.login !== "all"; x.classList.toggle("active", on); x.setAttribute("aria-pressed", String(on)); });
+                draw();
+            });
+        });
+        $$(".emp-companies-filter [data-company]", root).forEach(function (b) {
+            b.addEventListener("click", function () {
+                filters.company = b.dataset.company;
+                $$(".emp-companies-filter [data-company]", root).forEach(function (x) { x.classList.toggle("active", x === b); });
+                draw();
+            });
+        });
 
         const reload = function () { navigate("/employees", true); };
 
@@ -1497,15 +1541,15 @@
         $("#emp-body").addEventListener("click", async function (ev) {
             const btn = ev.target.closest("[data-act]");
             if (!btn) {
-                // Clicking anywhere else on a row opens that employee's edit panel.
-                const tr = ev.target.closest("tr[data-id]");
+                // Clicking anywhere else on a card opens that employee's edit panel.
+                const tr = ev.target.closest("[data-id]");
                 if (!tr || ev.target.closest(".row-menu, a, button")) return;
                 const target = byId[tr.dataset.id];
                 if (target && !(target.isOwner && !state.me.isOwner)) openEmployeeForm(target, employees, reload);
                 return;
             }
             closeMenus();
-            const emp = byId[btn.closest("tr").dataset.id];
+            const emp = byId[btn.closest("[data-id]").dataset.id];
             const act = btn.dataset.act;
             try {
                 if (act === "edit") return openEmployeeForm(emp, employees, reload);

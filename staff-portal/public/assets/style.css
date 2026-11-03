@@ -4131,3 +4131,49 @@ footer .footer-brand .footer-parent { opacity: .82; font-size: .88rem; }
     .modal-profile .profile-actions { padding: 0.7rem 1.1rem; }
 }
 
+/* ---------- Employee Management, rebuilt (the user's request, 3 November 2026) ---------- */
+.emp-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.85rem; margin-bottom: 1.25rem; }
+.emp-stat { display: flex; flex-direction: column; align-items: flex-start; gap: 0.15rem; padding: 1rem 1.15rem; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; text-align: left; cursor: pointer; position: relative; overflow: hidden; transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease; }
+.emp-stat::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--primary); }
+.emp-stat.ok::before { background: var(--green, #5FAE7B); }
+.emp-stat.warn::before { background: var(--yellow, #E3E65B); }
+.emp-stat.bad::before { background: var(--raspberry, #C2306B); }
+.emp-stat:hover { border-color: var(--primary); transform: translateY(-2px); }
+.emp-stat.active { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 25%, transparent); }
+.emp-stat-num { font-size: 1.9rem; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.emp-stat-label { color: var(--text-muted); font-size: 0.85rem; font-weight: 600; }
+.emp-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1rem; margin-bottom: 0.4rem; }
+.emp-toolbar .search { flex: 1 1 320px; margin: 0; }
+.emp-toolbar .company-tabs { margin: 0; padding: 0; flex: 0 1 auto; }
+.emp-showing { margin: 0.4rem 0 0.9rem; }
+.emp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 1rem; }
+.emp-card { position: relative; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: 18px; overflow: hidden; padding: 0 1.15rem 1.1rem; cursor: pointer; transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease; }
+.emp-card:hover { transform: translateY(-3px); border-color: var(--primary-soft-border, var(--primary)); box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2); }
+.emp-card.locked { cursor: default; }
+.emp-band { display: block; height: 64px; margin: 0 -1.15rem; background: radial-gradient(160px 80px at 85% 0%, color-mix(in srgb, var(--primary) 55%, transparent), transparent), linear-gradient(120deg, #1c2135, #3d1a6e); position: relative; overflow: hidden; }
+.emp-card-top { display: flex; align-items: flex-end; justify-content: space-between; margin-top: -32px; position: relative; }
+.emp-card-top .avatar { box-shadow: 0 0 0 4px var(--surface), 0 6px 16px rgba(0, 0, 0, 0.2); }
+.emp-card-menu { position: absolute; top: -26px; right: -0.4rem; }
+.emp-card-menu .icon-btn { background: color-mix(in srgb, var(--surface) 70%, transparent); border-color: transparent; color: #fff; backdrop-filter: blur(6px); }
+.emp-card-menu .icon-btn:hover { background: var(--surface); color: var(--text); }
+.emp-card-id { margin-top: 0.6rem; display: flex; flex-direction: column; align-items: flex-start; gap: 0.2rem; }
+.emp-card-id h3 { margin: 0; font-size: 1.12rem; line-height: 1.25; }
+.emp-job { font-size: 0.9rem; font-weight: 600; }
+.emp-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.75rem 0 0.2rem; }
+.emp-chip { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.2rem 0.6rem; border-radius: 999px; border: 1px solid var(--border); font-size: 0.76rem; font-weight: 600; color: var(--text-muted); }
+.emp-chip.main { background: var(--primary-tint); border-color: var(--primary-soft-border, var(--border)); color: var(--primary); }
+.emp-chip .icon { width: 13px; height: 13px; }
+.emp-facts { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.6rem 1rem; margin: 0.8rem 0 0; padding-top: 0.8rem; border-top: 1px solid var(--border); }
+.emp-facts dt { font-size: 0.7rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.2rem; }
+.emp-facts dd { margin: 0; font-size: 0.88rem; min-width: 0; }
+.emp-facts .wide { grid-column: 1 / -1; }
+.emp-sup { display: inline-flex; align-items: center; gap: 0.4rem; }
+.emp-email { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-muted); }
+.emp-card-actions { margin-top: auto; padding-top: 0.9rem; display: flex; gap: 0.5rem; }
+.emp-locked { display: flex; align-items: center; gap: 0.35rem; margin: auto 0 0; padding-top: 0.9rem; }
+.emp-locked .icon { width: 14px; height: 14px; }
+.emp-empty { grid-column: 1 / -1; }
+@media (max-width: 900px) { .emp-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .emp-grid { grid-template-columns: minmax(0, 1fr); } .emp-stat-num { font-size: 1.5rem; } }
+@media (prefers-reduced-motion: reduce) { .emp-card, .emp-stat { transition: none; } .emp-card:hover, .emp-stat:hover { transform: none; } }
+
