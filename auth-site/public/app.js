@@ -172,7 +172,7 @@ $('login').addEventListener('submit', event => { event.preventDefault(); busy(ev
     await googleReady; await discordReady;
     const withDiscord = !!data.discord && discordEnabled;
     googleOnly(true, { discord: withDiscord }); $('pin-identity').textContent = identity;
-    $('card-title').textContent = 'One more step'; $('subtitle').textContent = 'Your account signs in with Google' + (withDiscord ? ' or Discord' : '') + '. No PIN needed.';
+    $('card-title').textContent = 'One more step'; $('subtitle').textContent = 'Your account signs in with Google' + (withDiscord ? ' or Discord' : '') + '.';
     await view('pin','google-resume');
   } else if (data.codeRequired) {
     googleOnly(false); resetPin(); $('pin').querySelector('[type=submit]').innerHTML = 'Verify &amp; sign in <span aria-hidden="true">→</span>'; $('pin-identity').textContent = identity;
@@ -340,7 +340,7 @@ async function startResume() {
   googleOnly(viaGoogle, { google: hasGoogle, discord: hasDiscord });
   $('card-title').textContent = 'Welcome back, ' + (remembered.displayName || remembered.firstName);
   const ways = [hasGoogle && 'Google', hasDiscord && 'Discord'].filter(Boolean).join(' or ');
-  $('subtitle').textContent = viaGoogle ? 'Your account signs in with ' + ways + '. No PIN needed.' : 'Enter your six-digit PIN to resume your session.';
+  $('subtitle').textContent = viaGoogle ? 'Your account signs in with ' + ways + '.' : 'Enter your six-digit PIN to resume your session.';
   $('pin-identity').textContent = remembered.username;
   $('pin').querySelector('[type=submit]').innerHTML = 'Resume session <span aria-hidden="true">→</span>';
   await view('pin', viaGoogle ? (hasGoogle ? 'google-resume' : 'discord-resume') : 'code');
@@ -389,4 +389,29 @@ rememberedRequest.catch(() => {});
     }
   }
   if (note) message(note[0], note[1]);
+})();
+
+// Fit the card on the screen without scrolling (the user's request, 3 November 2026): when a step is taller than the
+// space between the header and footer, the card is zoomed down (to no less than 62%) so it fits; it's measured at full
+// size each time, so it grows back when there's room. Waits for view() transitions to finish before measuring.
+(() => {
+  const card = document.querySelector('.side main > .card'), main = card && card.parentElement;
+  if (!main || !('zoom' in document.body.style)) return;
+  let frame = 0;
+  function fitCard() {
+    frame = 0;
+    if ($('auth-stage').classList.contains('transitioning')) return;
+    const cs = getComputedStyle(main);
+    const room = main.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    card.style.zoom = '';
+    const natural = card.getBoundingClientRect().height;
+    const zoom = natural > room && room > 0 ? Math.max(0.62, Math.floor(room / natural * 1000) / 1000) : 1;
+    card.style.zoom = zoom < 1 ? String(zoom) : '';
+  }
+  const schedule = () => { if (!frame) frame = requestAnimationFrame(fitCard); };
+  new ResizeObserver(schedule).observe(main);
+  new MutationObserver(schedule).observe(card, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['hidden', 'class'] });
+  if (document.fonts) document.fonts.ready.then(schedule);
+  window.addEventListener('load', schedule);
+  schedule();
 })();
