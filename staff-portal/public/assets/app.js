@@ -875,10 +875,11 @@
             '<div class="gc-sub">' + clock(UK_TZ, "zone") + " \u00b7 " + esc(tzDifference(UK_TZ, profileTz, "you")) + "</div></div>") +
             "</div></section>" +
 
-            '<div class="home-layout">' +
+            '<div class="home-layout"><div class="home-main">' +
             '<section class="home-announcements"><div class="panel-head tight"><h2 class="section-title">' + icon("bell") + "Announcements</h2>" +
             '<a class="small link-arrow" href="/announcements" data-link>View all</a></div>' +
             '<div id="home-news" class="announcements wide"><p class="muted small">Loading\u2026</p></div></section>' +
+            homeMainExtras() + "</div>" +
 
             '<aside class="home-side" id="home-side">' +
             '<section class="panel" id="home-todo" data-widget="todo" hidden></section>' +
@@ -937,6 +938,7 @@
             });
         });
         if ($("#home-coming")) loadComingUp($("#home-coming"));
+        loadHomeColleagues($("#home-colleagues"));
         loadCelebrations($("#home-celebrate"));
         if ($("#home-pulse")) api("/api/pulse").then(function (p) {
             const box = $("#home-pulse");
@@ -8995,6 +8997,64 @@
     // ================= Pulse =================
 
     const PULSE_FACES = ["😞", "😕", "😐", "🙂", "😀"];
+
+    // ---- The rest of the home page's main column (the user's request, 3 November 2026: "too much blank space, fill
+    // it with stuff"): shortcuts to the pages you use, your colleagues at a glance, and the other HN Group websites.
+    const HOME_SHORTCUTS = ["/directory", "/leave", "/calendar", "/documents", "/payslips", "/rotas", "/expenses", "/helpdesk", "/chat", "/kudos", "/wiki", "/polls"];
+    const HN_SITES = [
+        { title: "HN Group Docs", desc: "Write and store documents", href: "https://docs.hngroup.org.uk/", icon: "file" },
+        { title: "Contracts", desc: "Send and sign contracts", href: "https://contract.hngroup.org.uk/", icon: "edit" },
+        { title: "Wiki", desc: "The companies of HN Group", href: "https://wiki.hngroup.org.uk/", icon: "book" },
+        { title: "Service status", desc: "Is everything up?", href: "https://status.hngroup.org.uk/", icon: "activity" },
+        { title: "HN Account", desc: "Your sign-in, PIN and devices", href: "https://accounts.hngroup.org.uk/", icon: "user" },
+        { title: "Devices", desc: "Approve your computers", href: "https://devices.hngroup.org.uk/", icon: "monitor" },
+        { title: "Downloads", desc: "HN Browser and HN Secure Gateway", href: "https://downloads.hngroup.org.uk/", icon: "download" },
+        { title: "News", desc: "The HN Group newsroom", href: "https://news.hngroup.org.uk/", icon: "bell" },
+        { title: "Brand centre", desc: "Logos, colours and rules", href: "https://branding.hngroup.org.uk/", icon: "palette" },
+    ];
+    function homeMainExtras() {
+        const all = [];
+        NAV.forEach(function (sec) { visibleItems(sec).forEach(function (it) { all.push(it); }); });
+        const picks = HOME_SHORTCUTS.map(function (h) { return all.find(function (it) { return it.href === h && !it.soon; }); }).filter(Boolean).slice(0, 9);
+        return (picks.length ? '<section class="home-block"><div class="panel-head tight"><h2 class="section-title">' + icon("grid") + "Jump back in</h2>" +
+            '</div><div class="quick-grid">' +
+            picks.map(function (it) {
+                const count = it.badge ? state.me[it.badge] || 0 : 0;
+                return '<a class="quick-tile" href="' + it.href + '" data-link><span class="qt-icon">' + icon(it.icon) + '</span><span class="qt-text"><span class="qt-title">' + esc(it.title) +
+                    (count ? ' <span class="count-badge">' + count + "</span>" : "") + '</span><span class="qt-desc">' + esc(it.desc) + "</span></span></a>";
+            }).join("") + "</div></section>" : "") +
+            '<section class="home-block" id="home-colleagues" hidden></section>' +
+            '<section class="home-block"><div class="panel-head tight"><h2 class="section-title">' + icon("building") + "HN Group websites</h2>" +
+            '<a class="small link-arrow" href="https://links.hngroup.org.uk/" target="_blank" rel="noopener">All links</a></div><div class="quick-grid sites">' +
+            HN_SITES.map(function (w) {
+                return '<a class="quick-tile site" href="' + w.href + '" target="_blank" rel="noopener"><span class="qt-icon">' + icon(w.icon) + '</span><span class="qt-text"><span class="qt-title">' + esc(w.title) +
+                    '</span><span class="qt-desc">' + esc(w.desc) + "</span></span></a>";
+            }).join("") + "</div></section>";
+    }
+    // Headcount, companies and who joined most recently, from the staff directory.
+    function loadHomeColleagues(box) {
+        if (!box) return;
+        api("/api/directory").then(function (d) {
+            const people = (d.people || []).filter(function (p) { return !p.leftAt && !p.disabled; });
+            if (!people.length || !document.body.contains(box)) return;
+            const companies = new Set();
+            people.forEach(function (p) { companiesOf(p).forEach(function (c) { if (c) companies.add(c); }); });
+            const now = Date.now(), day = 86400000;
+            const recent = people.filter(function (p) { return p.startDate && now - new Date(p.startDate + "T12:00:00").getTime() <= 90 * day && new Date(p.startDate + "T12:00:00").getTime() <= now; });
+            const newest = people.slice().sort(function (a, b) { return String(b.startDate || "").localeCompare(String(a.startDate || "")); }).slice(0, 6);
+            box.hidden = false;
+            box.innerHTML = '<div class="panel-head tight"><h2 class="section-title">' + icon("users") + "Your colleagues</h2>" +
+                '<a class="small link-arrow" href="/directory" data-link>Staff directory</a></div>' +
+                '<div class="colleague-stats">' +
+                '<div class="cs-stat"><span class="cs-num">' + people.length + '</span><span class="muted small">' + (people.length === 1 ? "person" : "people") + "</span></div>" +
+                '<div class="cs-stat"><span class="cs-num">' + companies.size + '</span><span class="muted small">' + (companies.size === 1 ? "company" : "companies") + "</span></div>" +
+                '<div class="cs-stat"><span class="cs-num">' + recent.length + '</span><span class="muted small">joined in the last 90 days</span></div></div>' +
+                '<div class="newest"><span class="muted small">' + (newest.some(function (p) { return p.startDate; }) ? "Newest colleagues" : "Colleagues") + '</span><div class="newest-row">' +
+                newest.map(function (p) {
+                    return '<a class="newest-person" href="/directory" data-link>' + avatar(p, "md") + '<span><strong>' + esc(p.displayName) + '</strong><span class="muted small">' + esc(p.jobTitle || p.company || "") + "</span></span></a>";
+                }).join("") + "</div></div>";
+        }).catch(function () {});
+    }
 
     function pulseCardHtml(question) {
         return '<div class="pulse-card"><h2 class="section-title">' + icon("activity") + "This week’s pulse</h2><p class=\"pulse-q\">" + esc(question) + '</p><div class="pulse-faces">' +

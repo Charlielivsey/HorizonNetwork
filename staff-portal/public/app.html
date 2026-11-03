@@ -32,7 +32,20 @@
 
     <main class="container" id="view" tabindex="-1"></main>
 
-    <footer class="footer muted"><div class="footer-brand"><img src="/assets/brand/hn-group-wordmark-white.svg" alt="" height="38" loading="lazy"></div><p>&copy; <span id="year"></span> HN Group Limited. Internal use only.</p></footer>
+    <footer class="footer portal-footer">
+        <div class="pf-inner">
+            <div class="pf-brand">
+                <img class="logo-light-theme" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" height="46" loading="lazy">
+                <img class="logo-dark-theme" src="/assets/brand/hn-group-wordmark-white.svg" alt="HN Group" height="46" loading="lazy">
+                <p class="pf-tag">The staff portal for everyone across HN Group, Horizon Network and Horizon Media Group.</p>
+            </div>
+            <nav class="pf-col" aria-label="Your work"><h2>Your work</h2><a href="/leave" data-link>Leave &amp; absence</a><a href="/rotas" data-link>Rotas &amp; timesheets</a><a href="/payslips" data-link>Payslips</a><a href="/expenses" data-link>Expenses</a><a href="/training" data-link>Training</a></nav>
+            <nav class="pf-col" aria-label="Workplace"><h2>Workplace</h2><a href="/announcements" data-link>Announcements</a><a href="/documents" data-link>Documents &amp; policies</a><a href="/calendar" data-link>Calendar</a><a href="/directory" data-link>Staff directory</a><a href="/wiki" data-link>Knowledge base</a></nav>
+            <nav class="pf-col" aria-label="HN Group websites"><h2>HN Group</h2><a href="https://docs.hngroup.org.uk/" target="_blank" rel="noopener">HN Group Docs</a><a href="https://contract.hngroup.org.uk/" target="_blank" rel="noopener">Contracts</a><a href="https://wiki.hngroup.org.uk/" target="_blank" rel="noopener">Wiki</a><a href="https://status.hngroup.org.uk/" target="_blank" rel="noopener">Service status</a><a href="https://accounts.hngroup.org.uk/" target="_blank" rel="noopener">HN Account</a></nav>
+            <nav class="pf-col" aria-label="Help"><h2>Help</h2><a href="/helpdesk" data-link>IT Helpdesk</a><a href="/on-call" data-link>On call</a><a href="/settings" data-link>Settings</a><a href="/about" data-link>About the portal</a></nav>
+        </div>
+        <div class="pf-bottom"><p>&copy; <span id="year"></span> HN Group Limited. Internal use only.</p><a href="https://hngroup.org.uk/" target="_blank" rel="noopener">hngroup.org.uk</a></div>
+    </footer>
 
     <div id="modal-root"></div>
     <div class="toast" id="toast" role="status" hidden></div>

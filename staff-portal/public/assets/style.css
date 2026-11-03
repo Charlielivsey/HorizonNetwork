@@ -2020,6 +2020,32 @@ a.hero-chip:hover { background: rgba(255, 255, 255, 0.2); transform: translateY(
     .home-side { position: static; }
 }
 .home-announcements { margin-bottom: 0; }
+/* The home page's main column below Announcements (3 November 2026): shortcuts, colleagues and the HN Group websites. */
+.home-main { display: flex; flex-direction: column; gap: 1.75rem; min-width: 0; }
+.home-block .section-title { display: flex; align-items: center; gap: 0.45rem; }
+.home-block .section-title .icon { width: 16px; height: 16px; color: var(--primary); }
+.quick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 0.75rem; }
+.quick-tile { display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.9rem 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); text-decoration: none; transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease; }
+.quick-tile:hover { transform: translateY(-2px); border-color: var(--primary-soft-border, var(--primary)); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18); color: var(--text); }
+.qt-icon { width: 36px; height: 36px; flex-shrink: 0; display: grid; place-items: center; border-radius: 11px; background: var(--primary-tint); color: var(--primary); }
+.qt-icon .icon { width: 18px; height: 18px; }
+.qt-text { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.qt-title { font-weight: 700; font-size: 0.93rem; display: flex; align-items: center; gap: 0.35rem; }
+.qt-desc { color: var(--muted); font-size: 0.8rem; line-height: 1.35; }
+.quick-tile.site { position: relative; padding-right: 2rem; }
+.quick-tile.site::after { content: "\2197"; position: absolute; top: 0.8rem; right: 0.9rem; font-size: 0.85rem; color: var(--muted); transition: color 0.18s ease; }
+.quick-tile.site:hover::after { color: var(--primary); }
+.colleague-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; }
+.cs-stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.9rem 1rem; display: flex; flex-direction: column; gap: 0.1rem; }
+.cs-num { font-size: 1.7rem; font-weight: 800; line-height: 1.1; color: var(--primary); font-variant-numeric: tabular-nums; }
+.newest { margin-top: 0.9rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.newest-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.6rem; }
+.newest-person { display: flex; align-items: center; gap: 0.65rem; padding: 0.6rem 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); text-decoration: none; min-width: 0; transition: border-color 0.18s ease; }
+.newest-person:hover { border-color: var(--primary); color: var(--text); }
+.newest-person > span:not(.avatar) { display: flex; flex-direction: column; min-width: 0; }
+.newest-person strong, .newest-person .small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 640px) { .colleague-stats { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .cs-stat:last-child { grid-column: 1 / -1; } .quick-grid, .newest-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.55rem; } .quick-tile { flex-direction: column; gap: 0.5rem; padding: 0.8rem; } .qt-desc { display: none; } .qt-title { font-size: 0.88rem; } }
+@media (prefers-reduced-motion: reduce) { .quick-tile, .newest-person { transition: none; } .quick-tile:hover { transform: none; } }
 .link-arrow::after { content: " \2192"; }
 .me-panel .me-card { margin-bottom: 0.25rem; }
 .me-email { display: flex; align-items: center; gap: 0.45rem; margin-top: 0.85rem; font-size: 0.875rem; color: var(--text-muted); overflow-wrap: anywhere; }
@@ -4038,3 +4064,22 @@ footer .footer-brand img { height: 38px; width: auto; margin: 0 0 .8rem; }
 footer .footer-brand .footer-company { margin: 0; display: grid; gap: .1rem; line-height: 1.4; max-width: none; font-size: inherit; }
 footer .footer-brand .footer-company strong { font-size: 1.02rem; font-weight: 700; }
 footer .footer-brand .footer-parent { opacity: .82; font-size: .88rem; }
+
+/* The portal footer (the user's report, 3 November 2026: "far too small and doesn't match the theme of the staff
+   portal"): bigger, with link columns, in the current portal theme's own colours. The HN stripe stays on top. */
+.footer.portal-footer { margin-top: 4rem; padding: calc(8px + 2.75rem) max(1.5rem, calc((100% - 1240px) / 2)) 1.5rem; background: color-mix(in srgb, var(--surface) 86%, var(--primary) 14%); color: var(--text); border-top: 1px solid var(--border); font-size: 0.95rem; text-align: left; }
+.portal-footer .pf-inner { display: grid; grid-template-columns: minmax(240px, 1.4fr) repeat(4, minmax(0, 1fr)); gap: 2rem 2.5rem; }
+.portal-footer .pf-brand { display: grid; align-content: start; gap: 0.9rem; }
+.portal-footer .pf-brand img { height: 46px; width: auto; margin: 0; }
+.portal-footer .pf-tag { margin: 0; color: var(--text-muted); line-height: 1.55; max-width: 30ch; }
+.portal-footer .pf-col { display: flex; flex-direction: column; gap: 0.55rem; }
+.portal-footer .pf-col h2 { margin: 0 0 0.35rem; font-size: 0.78rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--primary); }
+.portal-footer a { color: var(--text); text-decoration: none; width: fit-content; transition: color 0.15s ease; }
+.portal-footer a:hover { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; }
+.portal-footer .pf-col a[target="_blank"]::after { content: " \2197"; color: var(--text-muted); font-size: 0.8em; }
+.portal-footer .pf-bottom { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.5rem 1rem; margin-top: 2.5rem; padding-top: 1.2rem; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 0.88rem; }
+.portal-footer .pf-bottom p { margin: 0; }
+.portal-footer .pf-bottom a { color: var(--text-muted); }
+@media (max-width: 1000px) { .portal-footer .pf-inner { grid-template-columns: repeat(2, minmax(0, 1fr)); } .portal-footer .pf-brand { grid-column: 1 / -1; } }
+@media (max-width: 520px) { .portal-footer .pf-inner { grid-template-columns: minmax(0, 1fr); } }
+
