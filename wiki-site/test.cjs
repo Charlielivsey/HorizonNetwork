@@ -266,6 +266,9 @@ test('HN Group Wiki: reading, editing, history, protection and safety', async ()
     assert.match(classed, /<th scope="row">Share classes<\/th><td>Class A 60%<br>Class B 20%<br>Class C 15%<\/td>/);
     assert.match(classed, /<th scope="row">Voting control<\/th><td>Zara Special \(51% of votes, through Class C shares\)<\/td>/);
     assert.ok(classed.includes('so the votes are held as follows: Zara Special 51% (the largest holder of Class C shares, with more than 10% of them, holds 51% of the votes or more)'));
+    // Classes with no shares issued are left out of the Share classes row (the user's request, 3 November 2026).
+    regFeed = { version: 'v5b', companies: regFeed.companies.map((c) => c.slug === 'horizon-media-group' ? { ...c, shareClasses: { classA: 0, classB: 0, classC: 55 } } : c) };
+    await until(async () => /Share classes<\/th><td>Class C 55%<\/td>/.test((await anon.go('/wiki/Horizon_Media_Group')).text), 'only issued share classes');
 
     // ---------- Images and logos ----------
     const png = 'data:image/png;base64,' + Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000000', 'hex').toString('base64');

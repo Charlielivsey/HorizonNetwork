@@ -233,7 +233,8 @@ function companyInfobox(params, ctx) {
   // subsidiary is shown by the Owner and Parent rows instead.
   add('Type', typeOf(c));
   add(own.length > 1 ? 'Owners' : 'Owner', own.map((o) => ownerText(o, hasClasses(c))).join('<br>'));
-  if (hasClasses(c)) add('Share classes', ['A', 'B', 'C'].map((k) => 'Class ' + k + ' ' + c.shareClasses['class' + k] + '%').join('<br>'));
+  // Only classes with shares issued (the user's request, 3 November 2026: "If 0, don't show them").
+  if (hasClasses(c)) add('Share classes', ['A', 'B', 'C'].filter((k) => Number(c.shareClasses['class' + k] || 0) > 0).map((k) => 'Class ' + k + ' ' + c.shareClasses['class' + k] + '%').join('<br>'));
   const ctrl = own.find((o) => o.votingControl);
   const sharing = own.filter((o) => o.sharedVotingControl), nameOf = (o) => (o.company ? link(o.name) : o.name);
   if (ctrl) add('Voting control', nameOf(ctrl) + ' (' + ctrl.votes + '% of votes, through Class C shares)');
