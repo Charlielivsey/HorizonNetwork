@@ -25,6 +25,13 @@ const TOKEN = DISCORD_API + '/oauth2/token';
 const BINDING = '__Host-hn_auth_discord', TICKET = '__Host-hn_auth_discord_result';
 const ID = /^\d{15,22}$/;
 
+let offlineHooked=false;
+function goOfflineOnStop(presence){
+  if(offlineHooked)return;offlineHooked=true;
+  const stop=()=>{const live=['online','connecting','reconnecting'].includes(presence.snapshot().phase);try{presence.stop();}catch{}setTimeout(()=>process.exit(0),live?800:0);};
+  process.once('SIGTERM',stop);process.once('SIGINT',stop);
+}
+
 function createDiscord({ origin, staff, send, profile, entryFor, setCookie, cookie, finishLogin, destination, random, hash, fail, fetcher = fetch,
   file = process.env.DISCORD_OAUTH_FILE || path.join(process.env.DATA_DIR || '/var/lib/hn-auth', 'discord.json'), refreshEvery = 30 * 60000 }) {
   const REDIRECT = origin + '/discord/callback';
@@ -106,6 +113,10 @@ function createDiscord({ origin, staff, send, profile, entryFor, setCookie, cook
   const manager=createBotManager({file:path.join(path.dirname(file),'discord-bot.json'),configFile:file,config,fetcher,refresh:()=>refreshNames(true),staff,presence:()=>presence});
   if(refreshEvery>0){setTimeout(()=>{const tick=()=>{const s=manager.settings();if(s.enabled&&s.syncEnabled&&!manager.syncState.running&&(!(manager.syncState.lastAttemptAt||manager.syncState.lastAt)||Date.now()-Date.parse(manager.syncState.lastAttemptAt||manager.syncState.lastAt)>=s.syncMinutes*60000))manager.sync().catch(()=>{});};tick();setInterval(tick,60000).unref();},20000).unref();}
   presence=process.env.HN_DISCORD_PRESENCE==='0'?null:startPresence(()=> (config()||{}).bot||null,{settings:manager.settings,onInteraction:manager.interaction,onReady:manager.registerBuiltins,log:{log:message=>{console.log(message);manager.record(null,'gateway.event',{message});}}});
+  // When Auth is stopped (website control's power off runs `pm2 stop hn-auth`, which sends SIGINT/SIGTERM), the bot goes
+  // fully offline at once (the user's request, 3 November 2026): it turns invisible and closes its Discord connection
+  // normally, so Discord shows it offline straight away instead of after the connection times out.
+  if(presence)goOfflineOnStop(presence);
 
   async function discord(req, res, route, data) {
     if (route === '/api/discord' && req.method === 'GET') { send(res, 200, { enabled: !!client() }); return true; }
@@ -165,4 +176,4 @@ function createDiscord({ origin, staff, send, profile, entryFor, setCookie, cook
   discord.manager = manager;
   return discord;
 }
-module.exports = { createDiscord, BINDING, TICKET };
+module.exports = { createDiscord, BINDING, TICKET, goOfflineOnStop };

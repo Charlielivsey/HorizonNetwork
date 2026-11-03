@@ -81,7 +81,7 @@ function startPresence(token, { log = console, gateway = GATEWAY, settings = () 
   }
   function check(){if(stopped)return;const t=token();if(!settings().enabled||!t){disconnect();current=null;state.phase=!t?'not-configured':'offline';return;}if(t===fatal)return;if(t!==current||(!ws&&!timer)){fatal=null;start(t);}}
   check();const watcher=setInterval(check,60000);watcher.unref();
-  return{check,snapshot:()=>({...state}),apply(){check();if(ws&&state.phase==='online')ws.send(JSON.stringify({op:3,d:presenceData()}));},restart(){disconnect();fatal=null;current=null;retry=0;check();},stop(){stopped=true;clearInterval(watcher);disconnect();state.phase='offline';}};
+  return{check,snapshot:()=>({...state}),apply(){check();if(ws&&state.phase==='online')ws.send(JSON.stringify({op:3,d:presenceData()}));},restart(){disconnect();fatal=null;current=null;retry=0;check();},stop(){stopped=true;clearInterval(watcher);if(ws&&state.phase==='online')ws.send(JSON.stringify({op:3,d:{status:'invisible',afk:false,since:null,activities:[]}}));disconnect();state.phase='offline';}};
 }
 
 module.exports = { startPresence, connect };
