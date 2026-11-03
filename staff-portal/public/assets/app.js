@@ -1297,19 +1297,6 @@
     const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
     // Birthday (if they share it) and how long they've been with HN Group.
-    function celebrationCard(p) {
-        const lines = [];
-        if (p.birthday) lines.push('<div class="info-sub">' + icon("gift") + "Birthday " + p.birthday.day + " " + MONTHS[p.birthday.month - 1] + "</div>");
-        if (p.startDate) {
-            const start = new Date(p.startDate + "T12:00:00");
-            const months = (new Date().getFullYear() - start.getFullYear()) * 12 + new Date().getMonth() - start.getMonth() - (new Date().getDate() < start.getDate() ? 1 : 0);
-            const len = months < 1 ? "Just joined" : months < 12 ? months + (months === 1 ? " month" : " months") : Math.floor(months / 12) + (Math.floor(months / 12) === 1 ? " year" : " years");
-            lines.push('<div class="info-sub">' + icon("star") + "Joined " + esc(fmtDate(p.startDate + "T12:00:00")) + '<span class="muted"> \u00b7 ' + len + "</span></div>");
-        }
-        if (!lines.length) return "";
-        return '<div class="info-card"><div class="info-label">' + icon("calendar") + "Dates</div>" + lines.join("") + "</div>";
-    }
-
     function openPersonModal(key, ctx) {
         const e = ctx.byKey[key];
         if (!e) return;
@@ -1324,70 +1311,89 @@
                 (x.company !== e.company ? " \u00b7 " + esc(x.company) : "") + "</span></span>" + icon("chevron", "pr-chev") + "</button>";
         };
 
+        // Rebuilt from scratch (the user's request, 3 November 2026: "completely rebuild the view when you click on someone"):
+        // a fixed identity column on the left (who they are, how to reach them, their time and dates) and tabbed detail
+        // on the right, each scrolling on its own.
+        const supRow = supervisor ? personRow(supervisor) : '<div class="pv-top-of-org">' + icon("tree") + "Top of " + esc(e.company) + "</div>";
+        const dates = [];
+        if (p.birthday) dates.push(['gift', "Birthday", p.birthday.day + " " + MONTHS[p.birthday.month - 1]]);
+        if (p.startDate) {
+            const start = new Date(p.startDate + "T12:00:00"), now = new Date();
+            const months = (now.getFullYear() - start.getFullYear()) * 12 + now.getMonth() - start.getMonth() - (now.getDate() < start.getDate() ? 1 : 0);
+            const len = months < 1 ? "Just joined" : months < 12 ? months + (months === 1 ? " month" : " months") : Math.floor(months / 12) + (Math.floor(months / 12) === 1 ? " year" : " years");
+            dates.push(["star", "Joined", fmtDate(p.startDate + "T12:00:00") + " \u00b7 " + len]);
+        }
+        const tags = function (list) { return '<div class="tag-list">' + list.map(function (t) { return '<span class="tag">' + esc(t) + "</span>"; }).join("") + "</div>"; };
+        const card = function (iconName, title, body, extra) { return '<section class="pv-card">' + '<div class="pv-card-head"><h3>' + (iconName === "discord" ? DISCORD_MARK : icon(iconName)) + title + "</h3>" + (extra || "") + "</div>" + body + "</section>"; };
+        // Other people at the same company (not this person, their manager or their team), so the overview is never empty.
+        const colleagues = ctx.entries.filter(function (x) {
+            return x.company === e.company && x.person.id !== p.id && x !== supervisor && reports.indexOf(x) === -1;
+        }).sort(function (a, b) { return a.person.displayName.localeCompare(b.person.displayName); });
+        const seeAll = function (panel, label) { return '<button type="button" class="pv-link" data-panel="' + panel + '">' + label + " \u2192</button>"; };
+
+        const overview =
+            '<div class="pv-overview">' +
+            card("tree", "Reports to", supRow) +
+            (reports.length ? card("users", "Team <span class=\"tab-count\">" + reports.length + "</span>", '<div class="pv-team">' + reports.slice(0, 4).map(personRow).join("") + "</div>", reports.length > 4 ? seeAll("team", "See all " + reports.length) : "") : "") +
+            (p.bio || (p.skills || []).length ? card("user", "About", (p.bio ? '<div class="pv-bio clamp">' + richText(p.bio) + "</div>" : "") + ((p.skills || []).length ? tags(p.skills.slice(0, 8)) : ""), seeAll("about", "More")) : "") +
+            (roles.length > 1 ? card("briefcase", "Also works at", '<div class="pv-roles-mini">' + roles.filter(function (r) { return r.key !== key; }).map(function (r) {
+                return '<button type="button" class="pv-role-mini" data-entry="' + esc(r.key) + '"><strong>' + esc(r.company) + "</strong><span>" + esc(r.jobTitle) + "</span></button>";
+            }).join("") + "</div>") : "") +
+            (p.discord ? discordCard(p) : "") +
+            (colleagues.length ? card("building", "Colleagues at " + esc(e.company), '<div class="pv-team">' + colleagues.slice(0, 5).map(personRow).join("") + "</div>") : "") +
+            "</div>";
+        const rolesPanel = roles.length > 1 ? '<div class="pv-role-list">' + roles.map(function (r) {
+            return '<button type="button" class="pv-role' + (r.key === key ? " current" : "") + '" data-entry="' + esc(r.key) + '">' + icon("building") +
+                '<span><strong>' + esc(r.company) + "</strong><span>" + esc(r.jobTitle) + (r.department ? " \u00b7 " + esc(r.department) : "") + "</span></span>" +
+                (r.main ? '<span class="badge">Main role</span>' : "") + (r.key === key ? '<span class="badge badge-soft">Viewing</span>' : "") + "</button>";
+        }).join("") + "</div>" : "";
+        const teamPanel = reports.length ? '<div class="pv-team pv-team-full">' + reports.map(personRow).join("") + "</div>" : "";
+        const aboutPanel = (p.bio ? card("user", "About", '<div class="pv-bio">' + richText(p.bio) + "</div>") : "") +
+            ((p.skills || []).length ? card("star", "Skills", tags(p.skills)) : "") +
+            ((p.languages || []).length ? card("message", "Languages", tags(p.languages)) : "");
+        const panels = [
+            ["overview", "Overview", "home", overview],
+            ["roles", "Roles", "briefcase", rolesPanel, roles.length],
+            ["team", "Team", "users", teamPanel, reports.length],
+            ["about", "About", "user", aboutPanel],
+            ["discord", "Discord", "", p.discord ? discordProfile(p) : ""],
+        ].filter(function (x) { return x[3]; });
+
         const m = openModal(
-            bannerHtml(p, "profile-cover", "div") +
-            '<div class="profile-top">' +
-            '<div class="profile-avatar">' + avatar(p, "xl") + "</div>" +
-            '<div class="profile-id"><h2 class="modal-title">' + esc(p.displayName) + "</h2>" +
-            '<div class="profile-role">' + esc(e.jobTitle) + "</div>" +
-            (e.department ? '<div class="profile-dept">' + icon("users") + esc(e.department) + "</div>" : "") +
-            '<div class="profile-company">' + icon("building") + esc(e.company) + "</div></div>" +
-            '<div class="profile-badges">' + (roles.length > 1 ? (e.main ? '<span class="badge">Main role</span>' : '<span class="badge badge-soft">Additional role</span>') : "") +
-            (p.isOwner ? '<span class="badge badge-owner">System owner</span>' : "") +
-            // The status sits with the badges, beside the name, so the header stays short (the user's report, 3 November 2026).
-            (p.status ? '<span class="profile-status">' + statusPill(p.status) + "</span>" : "") + "</div>" +
-            "</div>" +
-
-            // A big profile with a menu (the user's request, 28 October 2026): Overview, Roles, Team and About.
-            (function () {
-                const roleTabs = roles.length > 1
-                    ? '<div class="role-tabs" role="tablist" aria-label="Roles">' + roles.map(function (r) {
-                        return '<button type="button" role="tab" class="role-tab' + (r.key === key ? " active" : "") + '" aria-selected="' + (r.key === key) + '" data-entry="' + esc(r.key) + '">' +
-                            '<span class="rt-company">' + esc(r.company) + '</span><span class="rt-title">' + esc(r.jobTitle) + (r.department ? " \u00b7 " + esc(r.department) : "") + "</span></button>";
-                    }).join("") + "</div>"
-                    : "";
-                const overview =
-                    '<div class="profile-grid">' +
-                    '<div class="info-card"><div class="info-label">' + icon("mail") + "Email</div>" +
-                    p.emails.map(function (x) {
-                        return '<div class="email-line"><a href="mailto:' + esc(x.address) + '">' + esc(x.address) + "</a>" +
-                            '<button type="button" class="icon-btn icon-btn-sm" data-copy="' + esc(x.address) + '" aria-label="Copy ' + esc(x.address) + '">' + icon("copy") + "</button></div>";
-                    }).join("") +
-                    (p.phone ? '<div class="info-sub">' + icon("phone") + '<a href="tel:' + esc(p.phone.replace(/\s+/g, "")) + '">' + esc(p.phone) + "</a></div>" : "") +
-                    "</div>" +
-                    discordCard(p) +
-                    '<div class="info-card"><div class="info-label">' + icon("clock") + "Local time</div>" +
-                    '<div class="info-time">' + clock(p.timezone, "short") + "</div>" +
-                    '<div class="info-sub">' + icon("pin") + esc(p.location || tzCity(p.timezone)) + "</div>" +
-                    '<div class="muted small">' + esc(tzDifference(p.timezone)) + "</div></div>" +
-                    celebrationCard(p) +
-                    "</div>" +
-                    '<div class="profile-section"><h3 class="detail-head">Reports to</h3>' +
-                    (supervisor ? personRow(supervisor) : '<div class="top-of-org">' + icon("tree") + "Top of " + esc(e.company) + "</div>") + "</div>";
-                const team = reports.length ? '<div class="profile-section"><h3 class="detail-head">Team <span class="tab-count">' + reports.length + "</span></h3>" +
-                    '<div class="team-grid">' + reports.map(personRow).join("") + "</div></div>" : "";
-                const about = (p.bio ? '<div class="profile-section"><h3 class="detail-head">About</h3><div class="profile-bio">' + richText(p.bio) + "</div></div>" : "") +
-                    ((p.skills || []).length ? '<div class="profile-section"><h3 class="detail-head">Skills</h3><div class="tag-list">' + p.skills.map(function (t) { return '<span class="tag">' + esc(t) + "</span>"; }).join("") + "</div></div>" : "") +
-                    ((p.languages || []).length ? '<div class="profile-section"><h3 class="detail-head">Languages</h3><div class="tag-list">' + p.languages.map(function (t) { return '<span class="tag">' + esc(t) + "</span>"; }).join("") + "</div></div>" : "");
-                const panels = [
-                    ["overview", "Overview", "home", overview],
-                    ["roles", "Roles", "briefcase", roleTabs ? '<div class="profile-section"><h3 class="detail-head">Roles <span class="tab-count">' + roles.length + "</span></h3>" + roleTabs + "</div>" : ""],
-                    ["team", "Team", "users", team],
-                    ["about", "About", "user", about],
-                    ["discord", "Discord", "", p.discord ? discordProfile(p) : ""],
-                ].filter(function (x) { return x[3]; });
-                return '<div class="profile-body">' +
-                    '<nav class="profile-menu" aria-label="Profile">' + panels.map(function (x, i) {
-                        return '<button type="button" class="profile-menu-item' + (i ? "" : " active") + '" data-panel="' + x[0] + '"' + (i ? "" : ' aria-current="true"') + ">" + (x[0] === "discord" ? DISCORD_MARK : icon(x[2])) + "<span>" + x[1] + "</span></button>";
-                    }).join("") + "</nav>" +
-                    '<div class="profile-panels">' + panels.map(function (x, i) {
-                        return '<section class="profile-panel" data-panel-body="' + x[0] + '"' + (i ? " hidden" : "") + ">" + x[3] + "</section>";
-                    }).join("") + "</div></div>";
-            })() +
-
-            '<div class="profile-actions">' + (p.id !== state.me.id && !p.system ? '<button type="button" class="btn btn-ghost" data-message-person="' + esc(p.id) + '">' + icon("message") + "Message</button>" : "") +
-            (email ? '<a class="btn btn-primary" href="mailto:' + esc(email) + '">' + icon("mail") + "Email " + esc(p.displayName || p.firstName) + "</a>" : "") + "</div>",
-            { cls: "modal-profile" }
+            '<div class="pv">' +
+            '<aside class="pv-side">' + bannerHtml(p, "pv-banner", "div") +
+            '<div class="pv-ident">' + avatar(p, "xl") +
+            '<h2 class="pv-name">' + esc(p.displayName) + "</h2>" +
+            '<div class="pv-job">' + esc(e.jobTitle) + "</div>" +
+            '<div class="pv-where">' + (e.department ? "<span>" + icon("users") + esc(e.department) + "</span>" : "") + "<span>" + icon("building") + esc(e.company) + "</span></div>" +
+            '<div class="pv-badges">' + (roles.length > 1 ? (e.main ? '<span class="badge">Main role</span>' : '<span class="badge badge-soft">Additional role</span>') : "") +
+            (p.isOwner ? '<span class="badge badge-owner">System owner</span>' : "") + (p.status ? statusPill(p.status) : "") + "</div>" +
+            '<div class="pv-actions">' +
+            (email ? '<a class="btn btn-primary" href="mailto:' + esc(email) + '">' + icon("mail") + "Email</a>" : "") +
+            (p.id !== state.me.id && !p.system ? '<button type="button" class="btn btn-ghost" data-message-person="' + esc(p.id) + '">' + icon("message") + "Message</button>" : "") + "</div></div>" +
+            '<div class="pv-facts">' +
+            '<div class="pv-fact"><h4>' + icon("mail") + "Contact</h4>" +
+            p.emails.map(function (x) {
+                return '<div class="pv-line"><a href="mailto:' + esc(x.address) + '">' + esc(x.address) + "</a>" +
+                    '<button type="button" class="icon-btn icon-btn-sm" data-copy="' + esc(x.address) + '" aria-label="Copy ' + esc(x.address) + '">' + icon("copy") + "</button></div>";
+            }).join("") +
+            (p.phone ? '<div class="pv-line"><a href="tel:' + esc(p.phone.replace(/\s+/g, "")) + '">' + icon("phone") + esc(p.phone) + "</a></div>" : "") + "</div>" +
+            '<div class="pv-fact"><h4>' + icon("clock") + "Local time</h4>" +
+            '<div class="pv-clock">' + clock(p.timezone, "short") + "</div>" +
+            '<div class="muted small">' + icon("pin") + esc(p.location || tzCity(p.timezone)) + " \u00b7 " + esc(tzDifference(p.timezone)) + "</div></div>" +
+            (dates.length ? '<div class="pv-fact"><h4>' + icon("calendar") + "Dates</h4>" + dates.map(function (d) {
+                return '<div class="pv-date">' + icon(d[0]) + '<span class="pv-date-text"><span class="pv-date-label">' + d[1] + '</span><span class="pv-date-value">' + esc(d[2]) + "</span></span></div>";
+            }).join("") + "</div>" : "") +
+            "</div></aside>" +
+            '<div class="pv-main">' +
+            '<nav class="pv-tabs" aria-label="Profile">' + panels.map(function (x, i) {
+                return '<button type="button" class="pv-tab' + (i ? "" : " active") + '" data-panel="' + x[0] + '"' + (i ? "" : ' aria-current="true"') + ">" +
+                    (x[0] === "discord" ? DISCORD_MARK : icon(x[2])) + "<span>" + x[1] + "</span>" + (x[4] > 1 || (x[0] === "team" && x[4]) ? '<span class="tab-count">' + x[4] + "</span>" : "") + "</button>";
+            }).join("") + "</nav>" +
+            '<div class="pv-panels">' + panels.map(function (x, i) {
+                return '<section class="pv-panel" data-panel-body="' + x[0] + '"' + (i ? " hidden" : "") + ">" + x[3] + "</section>";
+            }).join("") + "</div></div></div>",
+            { cls: "modal-person" }
         );
         m.el.addEventListener("click", async function (ev) {
             const copy = ev.target.closest("[data-copy]");
@@ -1404,10 +1410,10 @@
             }
             const tab = ev.target.closest("[data-panel]");
             if (tab) {
-                m.el.querySelectorAll("[data-panel]").forEach(function (b) { const on = b === tab; b.classList.toggle("active", on); if (on) b.setAttribute("aria-current", "true"); else b.removeAttribute("aria-current"); });
-                m.el.querySelectorAll("[data-panel-body]").forEach(function (sec) { sec.hidden = sec.dataset.panelBody !== tab.dataset.panel; });
-                // The Discord profile fills the window: the staff header folds away while it's open.
-                m.el.classList.toggle("show-discord", tab.dataset.panel === "discord");
+                const panel = tab.dataset.panel;
+                m.el.querySelectorAll(".pv-tab[data-panel]").forEach(function (b) { const on = b.dataset.panel === panel; b.classList.toggle("active", on); if (on) b.setAttribute("aria-current", "true"); else b.removeAttribute("aria-current"); });
+                const main = m.el.querySelector(".pv-panels"); if (main) main.scrollTop = 0;
+                m.el.querySelectorAll("[data-panel-body]").forEach(function (sec) { sec.hidden = sec.dataset.panelBody !== panel; });
                 return;
             }
             const target = ev.target.closest("[data-entry]");
