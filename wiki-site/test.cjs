@@ -201,6 +201,17 @@ test('HN Group Wiki: reading, editing, history, protection and safety', async ()
     assert.match(networkPage, /<th scope="row">Owners<\/th><td><a href="\/wiki\/HN_Group_Investments">HN Group Investments<\/a> \(100%\)<br>Jack Example<\/td>/);
     assert.ok(networkPage.includes('Horizon Network is owned by'), 'ownership sentence');
     assert.ok(networkPage.includes('Jack Example. HN Group Investments is owned by <a href="/wiki/HN_Group">HN Group</a> (100%), which is owned by Charlie Livsey (100%).'), 'ownership chain');
+    // HN Group Investments is shown as HN Group's division; its companies are HN Group's subsidiaries with HN Group as
+    // their parent, while HN Group Investments stays their owner (the user's request, 3 November 2026).
+    const subRow = (html, key) => ((new RegExp('<th scope="row">' + key + '</th><td>(.*?)</td>').exec(html) || [])[1] || '');
+    assert.equal(subRow(hnPage, 'Divisions'), '<a href="/wiki/HN_Group_Investments">HN Group Investments</a>');
+    assert.equal(subRow(hnPage, 'Subsidiaries'), '<a href="/wiki/Horizon_Media_Group">Horizon Media Group</a><br><a href="/wiki/Horizon_Network">Horizon Network</a><br><a href="/wiki/HN_Group_Management">HN Group Management</a>');
+    assert.ok(hnPage.includes('<a href="/wiki/HN_Group_Investments">HN Group Investments</a> is a division of HN Group.'));
+    assert.equal(subRow(networkPage, 'Parent'), '<a href="/wiki/HN_Group">HN Group</a>');
+    assert.ok(networkPage.includes('It is a subsidiary of <a href="/wiki/HN_Group">HN Group</a>.'));
+    const mediaPage = (await anon.go('/wiki/Horizon_Media_Group')).text;
+    assert.equal(subRow(mediaPage, 'Parent'), '<a href="/wiki/HN_Group">HN Group</a>');
+    assert.match(subRow(mediaPage, 'Owner'), /^<a href="\/wiki\/HN_Group_Investments">HN Group Investments<\/a>/);
     const advertising = (await anon.go('/wiki/Horizon_Advertising')).text;
     assert.match(advertising, /Managed by<\/th><td><a href="\/wiki\/Horizon_Network">/);
     assert.match(advertising, /Owner<\/th><td><a href="\/wiki\/Horizon_Media_Group">Horizon Media Group<\/a> \(100%\)/);
