@@ -111,7 +111,7 @@ function parseLayout(raw, id) {
   }
   const rm = raw.removeUnlisted || {};
   return { id, server: raw.server.trim(), guildId: raw.guildId ? String(raw.guildId) : '', description: typeof raw.description === 'string' ? raw.description.slice(0, 100) : '',
-    removeRoles: rm.roles === true, removeChannels: rm.channels === true, everyone: bits(raw.everyone, at + ' @everyone'), roles, categories, channels, roleGrants };
+    removeRoles: rm.roles !== false, removeChannels: rm.channels === true, everyone: bits(raw.everyone, at + ' @everyone'), roles, categories, channels, roleGrants };
 }
 function loadLayouts(dir) {
   const out = [], errors = [];
@@ -191,9 +191,17 @@ function plan(layout, guild, roles, channels, botUserId, botRoleIds) {
     const keep = new Set([guild.rules_channel_id, guild.public_updates_channel_id, guild.safety_alerts_channel_id].filter(Boolean));
     for (const c of channels) if (!claimed.has(c.id) && !keep.has(c.id)) steps.push({ kind: 'remove-channel', id: c.id, name: c.name, type: c.type });
   }
+  // Every role the layout doesn't use is deleted (the user's request, 3 November 2026: "it should delete all of the
+  // currently existing roles"), unless the layout sets removeUnlisted.roles to false. Roles the layout defines are kept
+  // (so people keep them) and set exactly as the layout says; so are roles it names in permissions or roleGrants.
   if (layout.removeRoles) {
-    const wanted = new Set(layout.roles.map((r) => roleName(r.name)));
-    for (const r of roles) if (r.id !== guild.id && !r.managed && r.position < botTop && !wanted.has(roleName(r.name))) steps.push({ kind: 'remove-role', id: r.id, name: r.name });
+    const wanted = new Set([...layout.roles.map((r) => r.name), ...layout.roleGrants.flatMap((g) => [g.from, ...g.to]),
+      ...[...layout.categories, ...layout.channels, ...layout.categories.flatMap((c) => c.channels)].flatMap((x) => (x.overwrites || []).map((o) => o.role))].map(roleName));
+    for (const r of roles) {
+      if (r.id === guild.id || r.managed || wanted.has(roleName(r.name))) continue;
+      if (r.position >= botTop) steps.push({ kind: 'keep-role', name: r.name });
+      else steps.push({ kind: 'remove-role', id: r.id, name: r.name });
+    }
   }
   return { problems, steps, roleIds, botTop };
 }
@@ -207,6 +215,7 @@ function describe(steps) {
     else if (s.kind === 'channel') lines.push((s.op === 'create' ? '➕ Create ' : '🔧 Check ') + label(s) + (s.parent ? ' in "' + s.parent + '"' : ''));
     else if (s.kind === 'remove-channel') lines.push('🗑️ Delete channel "' + s.name + '"');
     else if (s.kind === 'remove-role') lines.push('🗑️ Delete role "' + s.name + '"');
+    else if (s.kind === 'keep-role') lines.push('⚠️ Can’t delete role "' + s.name + '": it’s above the bot’s own role (move the bot’s role to the top first)');
     else if (s.kind === 'grants') for (const g of s.grants) lines.push('👥 Give ' + g.to.map((n) => '"' + n + '"').join(', ') + ' to ' + (roleName(g.from) === EVERYONE ? 'every member (not bots)' : 'everyone with "' + g.from + '"') + ' who doesn’t have it');
   }
   return lines;
@@ -256,6 +265,9 @@ function createServerSetup({ config, fetcher = fetch, dir = path.join(__dirname,
     const FAILED = Symbol('failed');
     const attempt = async (what, fn) => { try { return await fn(); } catch (e) { errors.push(what + ': ' + (e.layout ? e.message : 'failed')); return FAILED; } };
     const resolve = (list) => (list || []).filter((o) => roleIds.has(roleName(o.role))).map((o) => ({ id: roleIds.get(roleName(o.role)), type: 0, allow: o.allow, deny: o.deny }));
+    // Old roles go first, so the layout's roles are then ordered among what remains.
+    for (const step of p.steps.filter((x) => x.kind === 'remove-role')) if (await attempt('Delete role "' + step.name + '"', () => request('DELETE', '/guilds/' + g + '/roles/' + step.id, undefined, reason)) !== FAILED) done.push('Deleted role "' + step.name + '"');
+    for (const step of p.steps.filter((x) => x.kind === 'keep-role')) errors.push('Couldn’t delete role "' + step.name + '": it’s above the bot’s own role');
     for (const step of p.steps.filter((x) => x.kind === 'role')) {
       if (step.op === 'create') { const r = await attempt('Create role "' + step.name + '"', () => request('POST', '/guilds/' + g + '/roles', step.body, reason)); if (r !== FAILED) { roleIds.set(roleName(step.name), r.id); done.push('Created role "' + step.name + '"'); } }
       else if (await attempt('Update role "' + step.name + '"', () => request('PATCH', '/guilds/' + g + '/roles/' + step.id, step.body, reason)) !== FAILED) done.push('Updated role "' + step.name + '"');
@@ -338,7 +350,6 @@ function createServerSetup({ config, fetcher = fetch, dir = path.join(__dirname,
       if (positions.length && await attempt('Order channels', () => request('PATCH', '/guilds/' + g + '/channels', positions, reason)) !== FAILED) done.push('Ordered channels');
     }
     for (const step of p.steps.filter((x) => x.kind === 'remove-channel')) if (await attempt('Delete channel "' + step.name + '"', () => request('DELETE', '/channels/' + step.id, undefined, reason)) !== FAILED) done.push('Deleted channel "' + step.name + '"');
-    for (const step of p.steps.filter((x) => x.kind === 'remove-role')) if (await attempt('Delete role "' + step.name + '"', () => request('DELETE', '/guilds/' + g + '/roles/' + step.id, undefined, reason)) !== FAILED) done.push('Deleted role "' + step.name + '"');
     return { done, errors };
   }
   const text = (head, lines, max = 1900) => { let out = head; for (let i = 0; i < lines.length; i++) { const l = '\n• ' + lines[i]; if ((out + l).length > max) { out += '\n…and ' + (lines.length - i) + ' more.'; break; } out += l; } return out.slice(0, 2000); };

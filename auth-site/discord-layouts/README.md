@@ -23,8 +23,9 @@ doesn't matter, and the layout can't be applied to any other server. To fix a la
 `"guildId"`.
 
 Running `apply` again only changes what differs from the layout. Roles and channels are matched by name (text channel
-names the way Discord stores them: lower case, dashes for spaces). Anything not in the layout is left alone, unless
-`removeUnlisted` says otherwise.
+names the way Discord stores them: lower case, dashes for spaces). **Every role the layout doesn't use is deleted**
+(the default since 3 November 2026); roles the layout defines are kept, with their members, and set exactly as the
+layout says. Channels not in the layout are left alone unless `removeUnlisted.channels` is true.
 
 ## Format
 
@@ -33,7 +34,7 @@ names the way Discord stores them: lower case, dashes for spaces). Anything not 
   "server": "Exact Discord server name",
   "description": "Optional short note shown in /server-setup layouts",
   "guildId": "Optional: the server ID, if you know it",
-  "removeUnlisted": { "roles": false, "channels": false },
+  "removeUnlisted": { "roles": true, "channels": false },
   "everyone": ["ViewChannel", "ReadMessageHistory", "AddReactions", "Connect", "Speak"],
   "roles": [
     { "name": "Owner", "color": "#5514B4", "hoist": true, "mentionable": false, "permissions": ["Administrator"] },
@@ -70,7 +71,9 @@ names the way Discord stores them: lower case, dashes for spaces). Anything not 
   every member who isn't a bot). It only ever adds roles, never removes them. The bot has to list the server's
   members, so turn on **Server Members Intent** (Discord Developer Portal → the application → Bot → Privileged
   Gateway Intents). Run `apply` again whenever people get new roles.
-- **removeUnlisted** deletes roles/channels the layout doesn't list. It never touches @everyone, roles managed by
+- **removeUnlisted**: `roles` (default **true**) deletes every role the layout doesn't use: not in `roles`, and not
+  named in any `permissions` or `roleGrants`. Old roles are deleted first. Set it to `false` to keep them. `channels`
+  (default false) deletes channels the layout doesn't list. Neither ever touches @everyone, roles managed by
   integrations or above the bot, or the server's rules/updates channels. `preview` lists every deletion first.
 
 Permission names are Discord's (any case, spaces allowed): CreateInstantInvite, KickMembers, BanMembers,

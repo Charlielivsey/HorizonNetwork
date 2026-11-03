@@ -256,3 +256,25 @@ test('the HN HQ layout is valid and fits a fresh server', async () => {
   assert.deepEqual(p.problems, []);
   assert.equal(p.steps.filter((x) => x.kind === 'role' && x.op === 'create').length, 20);
 });
+
+test('every role the layout doesn’t use is deleted by default; layout roles keep their members', async () => {
+  const t = setup({ test: { ...LAYOUT, categories: [], channels: [] }, keep: { ...LAYOUT, server: 'Someone else', categories: [], channels: [], removeUnlisted: { roles: false } } });
+  try {
+    const g = t.servers[GUILD];
+    g.roles.push({ id: '222222222222222227', name: 'Staff', permissions: '0', position: 1, managed: false, color: 0, hoist: false, mentionable: false },
+      { id: '222222222222222228', name: 'Way up', permissions: '0', position: 5, managed: false, color: 0, hoist: false, mentionable: false },
+      { id: '222222222222222229', name: 'Server Booster', permissions: '0', position: 1, managed: true, color: 0, hoist: false, mentionable: false });
+    const preview = await t.run('preview');
+    assert.match(preview, /Delete role "Old role"/); assert.match(preview, /Can’t delete role "Way up"/);
+    assert.doesNotMatch(preview, /Delete role "(Staff|Server Booster|HN Group Auth|@everyone)"/);
+    const result = await t.run('apply');
+    assert.match(result, /Couldn’t delete role "Way up"/, result);
+    assert.deepEqual(g.roles.map((r) => r.name).sort(), ['@everyone', 'HN Group Auth', 'Owner', 'Server Booster', 'Staff', 'Way up'].sort());
+    assert.equal(g.roles.find((r) => r.name === 'Staff').id, '222222222222222227', 'the existing Staff role is kept (and its members), not recreated');
+    assert.ok(t.discord.writes.findIndex((w) => w.method === 'DELETE') < t.discord.writes.findIndex((w) => w.method === 'POST' && w.p.endsWith('/roles')), 'old roles go first');
+    // A layout can opt out.
+    t.servers[OTHER].roles.push({ id: '777777777777777770', name: 'Keep me', permissions: '0', position: 1, managed: false, color: 0, hoist: false, mentionable: false });
+    await t.run('apply', { guild: OTHER, layout: 'keep' });
+    assert.ok(t.servers[OTHER].roles.some((r) => r.name === 'Keep me'));
+  } finally { t.close(); }
+});

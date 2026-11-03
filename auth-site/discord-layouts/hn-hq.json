@@ -2,6 +2,10 @@
   "server": "HN HQ",
   "guildId": "1360208008755413227",
   "description": "Leadership, permission levels, network and member roles",
+  "removeUnlisted": {
+    "roles": true,
+    "channels": false
+  },
   "everyone": [
     "ViewChannel",
     "SendMessages",
