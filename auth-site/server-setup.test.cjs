@@ -1,5 +1,5 @@
 'use strict';
-// /server-setup against a pretend Discord server: allowlist, preview, apply, a second run that changes nothing,
+// /server-setup against a pretend Discord server: allowlist, preview, apply, every role deleted and made again,
 // server-name and server-ID checks, removals only when asked, and the command surviving dashboard republishing.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -76,7 +76,7 @@ const LAYOUT = {
   roles: [{ name: 'Owner', color: '#5514B4', hoist: true, permissions: ['Administrator'] }, { name: 'Staff', color: '#3E9BA3', permissions: ['View Channel', 'send messages'] }],
   channels: [{ name: 'Welcome Here', topic: 'Start here', permissions: { '@everyone': { deny: ['SendMessages'] } } }],
   categories: [{ name: 'Staff Area', permissions: { '@everyone': { deny: ['ViewChannel'] }, Staff: { allow: ['ViewChannel'] } },
-    channels: [{ name: 'staff-chat', slowmode: 5 }, { name: 'Staff Voice', type: 'voice', userLimit: 5 }, { name: 'general', permissions: { 'Old role': { allow: ['ViewChannel'] } } }] }],
+    channels: [{ name: 'staff-chat', slowmode: 5 }, { name: 'Staff Voice', type: 'voice', userLimit: 5 }, { name: 'general', permissions: { Staff: { allow: ['ViewChannel'] } } }] }],
 };
 function setup(layouts) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-server-setup-')), layoutsDir = path.join(dir, 'layouts');
@@ -91,8 +91,10 @@ function setup(layouts) {
     await manager.interaction({ id: String(n++), token: 'ticket', type: 2, application_id: APP, guild_id: guild || undefined, member: { user: { id: user, username: 'catnap' } },
       data: { name: 'server-setup', options: [{ type: 1, name: sub, options: layout ? [{ name: 'layout', value: layout }] : [] }] } });
     const mine = discord.replies.slice(before);
-    assert.equal(mine[0].kind, 'defer'); assert.equal(mine[0].body.data.flags, 64, 'only the person running it sees the reply');
-    return mine[1].body.content;
+    assert.equal(mine[0].kind, 'defer'); assert.equal(mine[0].body.data.flags, undefined, 'everyone in the channel sees the reply');
+    const card = mine[1].body.embeds[0];
+    assert.equal(mine[1].body.content, ''); assert.equal(card.footer.text, 'HN Group'); assert.equal(typeof card.color, 'number');
+    return (card.title || '') + '\n' + (card.description || '');
   };
   return { dir, servers, discord, manager, run, close: () => fs.rmSync(dir, { recursive: true, force: true }) };
 }
@@ -115,11 +117,11 @@ test('only allowed Discord accounts can run it, and only inside a server', async
   } finally { t.close(); }
 });
 
-test('preview changes nothing; apply sets the server up exactly; a second apply changes nothing', async () => {
+test('preview changes nothing; apply sets the server up exactly; a second apply makes every role again', async () => {
   const t = setup({ test: LAYOUT });
   try {
     const preview = await t.run('preview');
-    assert.match(preview, /Preview of `test`.*server ID 222222222222222222/s);
+    assert.match(preview, /Preview of `test`.*server ID 222222222222222222/is);
     assert.match(preview, /Create role "Owner"/); assert.match(preview, /Create category "Staff Area"/);
     assert.equal(t.discord.writes.length, 0, 'preview writes nothing');
 
@@ -129,7 +131,7 @@ test('preview changes nothing; apply sets the server up exactly; a second apply 
     assert.equal(role('@everyone').permissions, bits(['ViewChannel', 'ReadMessageHistory']));
     assert.equal(role('Owner').color, 0x5514B4); assert.equal(role('Owner').hoist, true); assert.equal(role('Staff').permissions, bits(['ViewChannel', 'SendMessages']));
     assert.ok(role('Owner').position > role('Staff').position && role('Owner').position < role('HN Group Auth').position, 'roles in order under the bot');
-    assert.ok(role('Old role'), 'unlisted roles are kept');
+    assert.ok(!role('Old role'), 'every other role is deleted');
     const cat = chan('Staff Area');
     assert.equal(cat.type, 4);
     assert.deepEqual(cat.permission_overwrites.map((o) => [o.id, o.allow, o.deny]).sort(), [[GUILD, '0', bits(['ViewChannel'])], [role('Staff').id, bits(['ViewChannel']), '0']].sort());
@@ -139,14 +141,19 @@ test('preview changes nothing; apply sets the server up exactly; a second apply 
     assert.equal(chan('welcome-here').topic, 'Start here');
     assert.equal(chan('general').id, GUILD + '1', 'the existing #general is moved, not duplicated');
     assert.equal(chan('general').parent_id, cat.id);
-    assert.deepEqual(chan('general').permission_overwrites, [{ id: GUILD.slice(0, -1) + '6', type: 0, allow: bits(['ViewChannel']), deny: '0' }], 'existing server roles can be used');
+    assert.deepEqual(chan('general').permission_overwrites, [{ id: role('Staff').id, type: 0, allow: bits(['ViewChannel']), deny: '0' }]);
     assert.ok(chan('welcome-here').position < cat.position);
     assert.ok(t.discord.writes.every((w) => !w.p.includes(OTHER)), 'the other server is untouched');
 
-    const writes = t.discord.writes.length;
+    // A second run deletes every role again and makes them again; channels stay, pointing at the new roles.
+    const oldIds = ['Owner', 'Staff'].map((n) => role(n).id), channelCount = g.channels.length;
     const again = await t.run('apply');
-    assert.match(again, /everything already matched/, again);
-    assert.equal(t.discord.writes.length, writes, 'a second run makes no changes');
+    assert.match(again, /Deleted role "Owner"[\s\S]*Deleted role "Staff"[\s\S]*Created role "Owner"/, again);
+    assert.deepEqual(g.roles.map((r) => r.name).sort(), ['@everyone', 'HN Group Auth', 'Owner', 'Staff'].sort(), 'no duplicates');
+    assert.ok(['Owner', 'Staff'].every((n, i) => role(n).id !== oldIds[i]), 'made again');
+    assert.equal(g.channels.length, channelCount, 'no channels duplicated');
+    assert.equal(chan('general').permission_overwrites[0].id, role('Staff').id);
+    assert.equal(chan('Staff Area').permission_overwrites.find((o) => o.id !== GUILD).id, role('Staff').id);
   } finally { t.close(); }
 });
 
@@ -180,7 +187,7 @@ test('problems are reported before anything changes', async () => {
   const t = setup({ test: { ...LAYOUT, roles: [{ name: 'HN Group Auth' }], channels: [{ name: 'x', permissions: { Ghosts: { allow: ['ViewChannel'] } } }], categories: [] } });
   try {
     const r = await t.run('apply');
-    assert.match(r, /Nothing was changed/); assert.match(r, /managed by an integration/); assert.match(r, /"Ghosts", which isn’t a role/);
+    assert.match(r, /Nothing was changed/); assert.match(r, /managed by an integration/); assert.match(r, /"Ghosts", which isn’t one of the layout’s roles/);
     assert.equal(t.discord.writes.length, 0);
   } finally { t.close(); }
 });
@@ -216,21 +223,19 @@ test('the layout option searches by server name, and a server name can be typed 
   } finally { t.close(); }
 });
 
-test('roleGrants give members the roles that go with theirs, and only add roles', async () => {
-  const t = setup({ test: { ...LAYOUT, categories: [], channels: [], roleGrants: { Owner: ['Staff'], '@everyone': ['Old role'] } } });
+test('roleGrants give members their roles again after every role is made again', async () => {
+  const t = setup({ test: { ...LAYOUT, categories: [], channels: [], roleGrants: { '@everyone': ['Staff'] } } });
   try {
     const g = t.servers[GUILD];
     g.members = [{ user: { id: '300000000000000001', username: 'boss' }, roles: [] }, { user: { id: '300000000000000002', username: 'helper', bot: true }, roles: [] }];
-    assert.match(await t.run('preview'), /Give "Staff" to everyone with "Owner"[\s\S]*Give "Old role" to every member \(not bots\)/);
+    assert.match(await t.run('preview'), /Give "Staff" to every member \(not bots\)/);
     await t.run('apply');
-    const owner = g.roles.find((r) => r.name === 'Owner').id, staff = g.roles.find((r) => r.name === 'Staff').id, old = g.roles.find((r) => r.name === 'Old role').id;
-    assert.deepEqual(g.members[0].roles, [old], 'not an Owner yet, so only the everyone grant');
+    const staff = () => g.roles.find((r) => r.name === 'Staff').id;
+    assert.deepEqual(g.members[0].roles, [staff()]);
     assert.deepEqual(g.members[1].roles, [], 'bots are not given @everyone grants');
-    g.members[0].roles.push(owner);
     const r = await t.run('apply');
     assert.match(r, /Gave 1 role to members/, r);
-    assert.deepEqual(g.members[0].roles.sort(), [old, owner, staff].sort());
-    assert.match(await t.run('apply'), /everything already matched/);
+    assert.ok(g.members[0].roles.includes(staff()), 'the new Staff role is given again');
     delete g.members;
     assert.match(await t.run('apply'), /Server Members Intent/, 'explains the missing intent');
   } finally { t.close(); }
@@ -257,7 +262,7 @@ test('the HN HQ layout is valid and fits a fresh server', async () => {
   assert.equal(p.steps.filter((x) => x.kind === 'role' && x.op === 'create').length, 20);
 });
 
-test('every role the layout doesn’t use is deleted by default; layout roles keep their members', async () => {
+test('every role is deleted and made again, apart from @everyone, managed roles and roles above the bot', async () => {
   const t = setup({ test: { ...LAYOUT, categories: [], channels: [] }, keep: { ...LAYOUT, server: 'Someone else', categories: [], channels: [], removeUnlisted: { roles: false } } });
   try {
     const g = t.servers[GUILD];
@@ -265,14 +270,14 @@ test('every role the layout doesn’t use is deleted by default; layout roles ke
       { id: '222222222222222228', name: 'Way up', permissions: '0', position: 5, managed: false, color: 0, hoist: false, mentionable: false },
       { id: '222222222222222229', name: 'Server Booster', permissions: '0', position: 1, managed: true, color: 0, hoist: false, mentionable: false });
     const preview = await t.run('preview');
-    assert.match(preview, /Delete role "Old role"/); assert.match(preview, /Can’t delete role "Way up"/);
-    assert.doesNotMatch(preview, /Delete role "(Staff|Server Booster|HN Group Auth|@everyone)"/);
+    assert.match(preview, /Delete role "Old role"/); assert.match(preview, /Delete role "Staff"/); assert.match(preview, /Can’t delete role "Way up"/);
+    assert.doesNotMatch(preview, /Delete role "(Server Booster|HN Group Auth|@everyone)"/);
     const result = await t.run('apply');
     assert.match(result, /Couldn’t delete role "Way up"/, result);
     assert.deepEqual(g.roles.map((r) => r.name).sort(), ['@everyone', 'HN Group Auth', 'Owner', 'Server Booster', 'Staff', 'Way up'].sort());
-    assert.equal(g.roles.find((r) => r.name === 'Staff').id, '222222222222222227', 'the existing Staff role is kept (and its members), not recreated');
+    assert.notEqual(g.roles.find((r) => r.name === 'Staff').id, '222222222222222227', 'the old Staff role is deleted and made again');
     assert.ok(t.discord.writes.findIndex((w) => w.method === 'DELETE') < t.discord.writes.findIndex((w) => w.method === 'POST' && w.p.endsWith('/roles')), 'old roles go first');
-    // A layout can opt out.
+    // A layout can opt out: then nothing else is deleted and same-named roles are updated in place.
     t.servers[OTHER].roles.push({ id: '777777777777777770', name: 'Keep me', permissions: '0', position: 1, managed: false, color: 0, hoist: false, mentionable: false });
     await t.run('apply', { guild: OTHER, layout: 'keep' });
     assert.ok(t.servers[OTHER].roles.some((r) => r.name === 'Keep me'));

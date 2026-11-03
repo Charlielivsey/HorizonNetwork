@@ -8,7 +8,8 @@ the command (with the layouts as choices) every time it connects.
 ## Using it in Discord
 
 Only the Discord accounts in `ALLOWED_USERS` in `auth-site/server-setup.js` can run it (currently
-`1449876557035475085` and `1256504335110635531`). Run it inside the server you want to set up. Every reply is visible only to you.
+`1449876557035475085` and `1256504335110635531`). Run it inside the server you want to set up. Every reply is an HN Group embed that everyone in the channel can see (as are
+all the bot's messages).
 
 - `/server-setup layouts` lists the layouts and the server each one belongs to.
 - `/server-setup preview` shows everything that would change. Nothing is changed.
@@ -23,9 +24,9 @@ doesn't matter, and the layout can't be applied to any other server. To fix a la
 `"guildId"`.
 
 Running `apply` again only changes what differs from the layout. Roles and channels are matched by name (text channel
-names the way Discord stores them: lower case, dashes for spaces). **Every role the layout doesn't use is deleted**
-(the default since 3 November 2026); roles the layout defines are kept, with their members, and set exactly as the
-layout says. Channels not in the layout are left alone unless `removeUnlisted.channels` is true.
+names the way Discord stores them: lower case, dashes for spaces). **Every role is deleted and the layout's roles are made
+again** on every `apply` (the default since 3 November 2026), including roles with the same names as the layout's, so
+nobody keeps a role from before: give people their roles again afterwards. Channels not in the layout are left alone unless `removeUnlisted.channels` is true.
 
 ## Format
 
@@ -71,10 +72,11 @@ layout says. Channels not in the layout are left alone unless `removeUnlisted.ch
   every member who isn't a bot). It only ever adds roles, never removes them. The bot has to list the server's
   members, so turn on **Server Members Intent** (Discord Developer Portal → the application → Bot → Privileged
   Gateway Intents). Run `apply` again whenever people get new roles.
-- **removeUnlisted**: `roles` (default **true**) deletes every role the layout doesn't use: not in `roles`, and not
-  named in any `permissions` or `roleGrants`. Old roles are deleted first. Set it to `false` to keep them. `channels`
-  (default false) deletes channels the layout doesn't list. Neither ever touches @everyone, roles managed by
-  integrations or above the bot, or the server's rules/updates channels. `preview` lists every deletion first.
+- **removeUnlisted**: `roles` (default **true**) deletes every role first, including ones named like the layout's, and
+  then makes the layout's roles again; `permissions` and `roleGrants` may then only name the layout's roles or
+  `@everyone`. Set it to `false` to keep existing roles (layout roles are then updated in place and nothing else is
+  deleted). `channels` (default false) deletes channels the layout doesn't list. Neither ever touches @everyone or roles
+  Discord manages (bots, Server Booster, integrations); roles above the bot's own role can't be deleted and are reported.
 
 Permission names are Discord's (any case, spaces allowed): CreateInstantInvite, KickMembers, BanMembers,
 Administrator, ManageChannels, ManageGuild (Manage Server), AddReactions, ViewAuditLog, PrioritySpeaker, Stream,

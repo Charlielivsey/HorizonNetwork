@@ -17,6 +17,13 @@ const COMMAND = 'server-setup';
 // Discord user IDs allowed to run /server-setup (the user's requests, 2 November 2026).
 const ALLOWED_USERS = new Set(['1449876557035475085', '1256504335110635531']);
 const fail = (message) => Object.assign(new Error(message), { layout: true });
+// The bot's embeds: HN Group colours (purple for information, green when done, yellow for warnings, raspberry for
+// problems), the HN Group footer and the time. Used for every message the bot sends (bot-manager.js too).
+const TONES = { info: 0x5514B4, ok: 0x5FAE7B, warn: 0xE3E65B, error: 0xC2306B };
+function embed({ tone = 'info', title = '', description = '' } = {}) {
+  return { ...(title ? { title: String(title).slice(0, 256) } : {}), ...(description ? { description: String(description).slice(0, 4096) } : {}),
+    color: TONES[tone] ?? TONES.info, footer: { text: 'HN Group' }, timestamp: new Date().toISOString() };
+}
 
 // Discord permission flags (https://discord.com/developers/docs/topics/permissions).
 const FLAGS = {
@@ -139,10 +146,18 @@ function plan(layout, guild, roles, channels, botUserId, botRoleIds) {
   // @everyone
   if (layout.everyone !== undefined && everyoneRole && String(everyoneRole.permissions) !== layout.everyone)
     steps.push({ kind: 'role', op: 'update', id: guild.id, name: EVERYONE, body: { permissions: layout.everyone }, why: 'permissions' });
-  // Roles
-  const roleIds = new Map([...roles.filter((r) => r.id !== guild.id).map((r) => [roleName(r.name), r.id]), [EVERYONE, guild.id]]);
+  // Roles. By default every role is deleted and the layout's are created fresh (the user's request, 3 November 2026:
+  // "all roles will be deleted and must be recreated"), so only @everyone and the layout's roles can be used.
+  const wipe = layout.removeRoles;
+  const roleIds = new Map([...(wipe ? [] : roles.filter((r) => r.id !== guild.id).map((r) => [roleName(r.name), r.id])), [EVERYONE, guild.id]]);
   for (const r of layout.roles) {
     const have = byRole.get(roleName(r.name));
+    if (wipe) {
+      if (have && have.managed) { problems.push('"' + have.name + '" is managed by an integration, so it can’t be deleted and made again; rename the layout’s role.'); continue; }
+      if (have && have.position >= botTop) { problems.push('"' + have.name + '" is above (or level with) the bot’s own role, so it can’t be deleted; move the bot’s role to the top in Server Settings → Roles.'); continue; }
+      steps.push({ kind: 'role', op: 'create', name: r.name, body: { name: r.name, permissions: r.permissions || '0', ...(r.color !== undefined ? { color: r.color } : {}), ...(r.hoist !== undefined ? { hoist: r.hoist } : {}), ...(r.mentionable !== undefined ? { mentionable: r.mentionable } : {}) } });
+      continue;
+    }
     if (have && have.managed) { problems.push('"' + have.name + '" is managed by an integration and can’t be changed.'); continue; }
     if (have && have.position >= botTop) { problems.push('"' + have.name + '" is above (or level with) the bot’s own role; move the bot’s role higher in Server Settings → Roles.'); continue; }
     const body = {};
@@ -156,11 +171,11 @@ function plan(layout, guild, roles, channels, botUserId, botRoleIds) {
   // Role order: the layout's roles, top first, directly under the bot's own role.
   const listed = layout.roles.map((r) => byRole.get(roleName(r.name))).filter(Boolean);
   const inOrder = listed.every((r, i) => i === 0 || listed[i - 1].position > r.position);
-  if (layout.roles.length > 1 && (!inOrder || listed.length < layout.roles.length)) steps.push({ kind: 'role-order', names: layout.roles.map((r) => r.name), top: botTop });
+  if (layout.roles.length > 1 && (wipe || !inOrder || listed.length < layout.roles.length)) steps.push({ kind: 'role-order', names: layout.roles.map((r) => r.name), top: botTop });
 
   // Overwrites: role names → role ids (roles the layout creates are resolved when they exist).
-  const knownRole = (name) => roleName(name) === EVERYONE || byRole.has(roleName(name)) || layout.roles.some((r) => roleName(r.name) === roleName(name));
-  const check = (list, where) => { for (const o of list || []) if (!knownRole(o.role)) problems.push(where + ' gives permissions to "' + o.role + '", which isn’t a role in the layout or the server.'); };
+  const knownRole = (name) => roleName(name) === EVERYONE || (!wipe && byRole.has(roleName(name))) || layout.roles.some((r) => roleName(r.name) === roleName(name));
+  const check = (list, where) => { for (const o of list || []) if (!knownRole(o.role)) problems.push(where + ' gives permissions to "' + o.role + '", which isn’t ' + (wipe ? 'one of the layout’s roles (every other role is deleted).' : 'a role in the layout or the server.')); };
 
   // Categories and channels, matched by name (and type) so a second run changes only what differs.
   const claimed = new Set();
@@ -182,7 +197,7 @@ function plan(layout, guild, roles, channels, botUserId, botRoleIds) {
     items.push({ spec: ch, have, parent: c.name, categoryOverwrites: c.overwrites });
   }
   for (const it of items) steps.push({ kind: 'channel', ...it, op: it.have ? 'update' : 'create' });
-  for (const g of layout.roleGrants) for (const n of [g.from, ...g.to]) if (!knownRole(n)) problems.push('roleGrants uses "' + n + '", which isn’t a role in the layout or the server.');
+  for (const g of layout.roleGrants) for (const n of [g.from, ...g.to]) if (!knownRole(n)) problems.push('roleGrants uses "' + n + '", which isn’t ' + (wipe ? 'one of the layout’s roles (every other role is deleted).' : 'a role in the layout or the server.'));
   if (layout.roleGrants.length) steps.push({ kind: 'grants', grants: layout.roleGrants });
   steps.push({ kind: 'channel-order', categories: layout.categories.map((c) => c.name), top: layout.channels.map((c) => c.name) });
 
@@ -191,17 +206,13 @@ function plan(layout, guild, roles, channels, botUserId, botRoleIds) {
     const keep = new Set([guild.rules_channel_id, guild.public_updates_channel_id, guild.safety_alerts_channel_id].filter(Boolean));
     for (const c of channels) if (!claimed.has(c.id) && !keep.has(c.id)) steps.push({ kind: 'remove-channel', id: c.id, name: c.name, type: c.type });
   }
-  // Every role the layout doesn't use is deleted (the user's request, 3 November 2026: "it should delete all of the
-  // currently existing roles"), unless the layout sets removeUnlisted.roles to false. Roles the layout defines are kept
-  // (so people keep them) and set exactly as the layout says; so are roles it names in permissions or roleGrants.
-  if (layout.removeRoles) {
-    const wanted = new Set([...layout.roles.map((r) => r.name), ...layout.roleGrants.flatMap((g) => [g.from, ...g.to]),
-      ...[...layout.categories, ...layout.channels, ...layout.categories.flatMap((c) => c.channels)].flatMap((x) => (x.overwrites || []).map((o) => o.role))].map(roleName));
-    for (const r of roles) {
-      if (r.id === guild.id || r.managed || wanted.has(roleName(r.name))) continue;
-      if (r.position >= botTop) steps.push({ kind: 'keep-role', name: r.name });
-      else steps.push({ kind: 'remove-role', id: r.id, name: r.name });
-    }
+  // Every existing role is deleted first (except @everyone and roles Discord manages for bots, boosts and integrations),
+  // including ones with the same names as the layout's, which are then made again. removeUnlisted.roles: false opts out
+  // (then roles the layout defines are updated in place and nothing else is deleted).
+  if (wipe) for (const r of roles) {
+    if (r.id === guild.id || r.managed) continue;
+    if (r.position >= botTop) { if (!layout.roles.some((x) => roleName(x.name) === roleName(r.name))) steps.push({ kind: 'keep-role', name: r.name }); }
+    else steps.push({ kind: 'remove-role', id: r.id, name: r.name });
   }
   return { problems, steps, roleIds, botTop };
 }
@@ -352,43 +363,53 @@ function createServerSetup({ config, fetcher = fetch, dir = path.join(__dirname,
     for (const step of p.steps.filter((x) => x.kind === 'remove-channel')) if (await attempt('Delete channel "' + step.name + '"', () => request('DELETE', '/channels/' + step.id, undefined, reason)) !== FAILED) done.push('Deleted channel "' + step.name + '"');
     return { done, errors };
   }
-  const text = (head, lines, max = 1900) => { let out = head; for (let i = 0; i < lines.length; i++) { const l = '\n• ' + lines[i]; if ((out + l).length > max) { out += '\n…and ' + (lines.length - i) + ' more.'; break; } out += l; } return out.slice(0, 2000); };
+  // Every reply is an embed everyone in the channel can see (the user's request, 3 November 2026: "all messages sent by
+  // the bot will be in the embed and will be visible to all").
+  const card = (tone, title, intro, lines = []) => {
+    let out = intro || '';
+    for (let i = 0; i < lines.length; i++) {
+      const l = (out ? '\n' : '') + '• ' + lines[i];
+      if ((out + l).length > 3900) { out += '\n…and ' + (lines.length - i) + ' more.'; break; }
+      out += l;
+    }
+    return { tone, title, description: out };
+  };
 
-  // Runs a /server-setup interaction (already answered with "thinking…"); returns the message to show.
+  // Runs a /server-setup interaction (already answered with "thinking…"); returns the embed to show.
   async function run(event) {
     const user = event.member?.user || event.user || {};
-    if (!event.guild_id) return 'Run /server-setup inside the server you want to set up.';
-    if (!ALLOWED_USERS.has(String(user.id))) { record(user, 'server-setup.refused', { guild: event.guild_id }); return 'You aren’t allowed to run /server-setup.'; }
+    if (!event.guild_id) return card('error', 'Server setup', 'Run /server-setup inside the server you want to set up.');
+    if (!ALLOWED_USERS.has(String(user.id))) { record(user, 'server-setup.refused', { guild: event.guild_id }); return card('error', 'Server setup', 'You aren’t allowed to run /server-setup.'); }
     const sub = event.data?.options?.[0], name = sub?.options?.find((o) => o.name === 'layout')?.value;
     if (sub?.name === 'layouts') {
       const { layouts, errors } = layoutsNow(), b = bound();
-      return text('**Server layouts** (' + layouts.length + ')', [...layouts.map((l) => '**' + l.server + '** (layout `' + l.id + '`' + ((l.guildId || b[l.id]) ? ', server ID ' + (l.guildId || b[l.id]) : '') + ')' + (l.description ? ' — ' + l.description : '')), ...errors.map((e) => '⚠️ ' + e)]);
+      return card('info', 'Server layouts (' + layouts.length + ')', '', [...layouts.map((l) => '**' + l.server + '** (layout `' + l.id + '`' + ((l.guildId || b[l.id]) ? ', server ID ' + (l.guildId || b[l.id]) : '') + ')' + (l.description ? ' — ' + l.description : '')), ...errors.map((e) => '⚠️ ' + e)]);
     }
-    if (running) return 'A server setup is already running. Try again when it has finished.';
+    if (running) return card('warn', 'Server setup', 'A server setup is already running. Try again when it has finished.');
     running = true;
     try {
       const s = await snapshot(event.guild_id);
       const layout = choose(name, s.guild);
       const p = plan(layout, s.guild, s.roles, s.channels, s.me.id, s.botRoles);
-      if (p.problems.length) return text('**Can’t set up "' + s.guild.name + '" with `' + layout.id + '` yet.** Nothing was changed:', p.problems);
-      if (sub?.name === 'preview') return text('**Preview of `' + layout.id + '` for "' + s.guild.name + '"** (server ID ' + s.guild.id + '). Nothing has been changed; run `/server-setup apply` to do it.', describe(p.steps));
+      if (p.problems.length) return card('error', 'Can’t set up "' + s.guild.name + '" with `' + layout.id + '` yet', 'Nothing was changed:', p.problems);
+      if (sub?.name === 'preview') return card('info', 'Preview of `' + layout.id + '` for "' + s.guild.name + '"', 'Server ID ' + s.guild.id + '. Nothing has been changed; run `/server-setup apply` to do it.', describe(p.steps));
       const who = (user.username || 'unknown') + ' (' + user.id + ')';
       record(user, 'server-setup.start', { guild: s.guild.id, layout: layout.id });
       const r = await execute(layout, s, p, who);
       if (!layout.guildId) bind(layout.id, s.guild.id);
       record(user, r.errors.length ? 'server-setup.partial' : 'server-setup.done', { guild: s.guild.id, layout: layout.id, changes: r.done.length, errors: r.errors.slice(0, 20) });
-      const head = (r.errors.length ? '**⚠️ Set up "' + s.guild.name + '" with `' + layout.id + '`, with ' + r.errors.length + ' problem(s).**' : '**✅ "' + s.guild.name + '" is set up with `' + layout.id + '`.**') + ' Server ID ' + s.guild.id + '; ' + (r.done.length ? r.done.length + ' change(s).' : 'everything already matched.');
-      return text(head, [...r.errors.map((e) => '❌ ' + e), ...r.done]);
+      const title = r.errors.length ? '⚠️ Set up "' + s.guild.name + '" with `' + layout.id + '`, with ' + r.errors.length + ' problem(s)' : '✅ "' + s.guild.name + '" is set up with `' + layout.id + '`';
+      return card(r.errors.length ? 'warn' : 'ok', title, 'Server ID ' + s.guild.id + '; ' + (r.done.length ? r.done.length + ' change(s).' : 'everything already matched.'), [...r.errors.map((e) => '❌ ' + e), ...r.done]);
     } catch (e) {
-      return e.layout ? e.message : 'Server setup failed. Check the bot is in this server and try again.';
+      return card('error', 'Server setup', e.layout ? e.message : 'Server setup failed. Check the bot is in this server and try again.');
     } finally { running = false; }
   }
-  // Answers the interaction at once (only the person running it sees the reply), then edits it with the result.
+  // Answers the interaction at once ("thinking…", visible to everyone), then edits it with the result as an embed.
   async function interaction(event) {
     const reply = async (url, method, data) => { const r = await fetcher(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data), signal: AbortSignal.timeout(10000), redirect: 'error' }); if (!r.ok) throw Error('Discord refused the reply.'); };
-    await reply(API + '/interactions/' + event.id + '/' + encodeURIComponent(event.token) + '/callback', 'POST', { type: 5, data: { flags: 64 } });
-    const content = await run(event);
-    await reply(API + '/webhooks/' + (event.application_id || config()?.id) + '/' + encodeURIComponent(event.token) + '/messages/@original', 'PATCH', { content, allowed_mentions: { parse: [] } });
+    await reply(API + '/interactions/' + event.id + '/' + encodeURIComponent(event.token) + '/callback', 'POST', { type: 5, data: {} });
+    const result = await run(event);
+    await reply(API + '/webhooks/' + (event.application_id || config()?.id) + '/' + encodeURIComponent(event.token) + '/messages/@original', 'PATCH', { content: '', embeds: [embed(result)], allowed_mentions: { parse: [] } });
   }
   // Suggestions while typing the layout option: matches the server name or the layout name (only for allowed users).
   async function autocomplete(event) {
@@ -415,4 +436,4 @@ function createServerSetup({ config, fetcher = fetch, dir = path.join(__dirname,
   return { interaction, autocomplete, run, definition, name: COMMAND };
 }
 
-module.exports = { createServerSetup, parseLayout, loadLayouts, plan, bits, ALLOWED_USERS, COMMAND };
+module.exports = { embed, createServerSetup, parseLayout, loadLayouts, plan, bits, ALLOWED_USERS, COMMAND };
