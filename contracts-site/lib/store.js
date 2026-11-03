@@ -10,7 +10,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 
-const MAX_PDF = 25 * 1024 * 1024, MAX_SIGNERS = 20;
+const MAX_PDF = 25 * 1024 * 1024, MAX_SIGNERS = 20, MAX_FIELDS = 200;
+// What a placed box shows once its signer has signed.
+const FIELD_TYPES = ['signature', 'name', 'date', 'jobTitle'];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const fail = (status, message) => Object.assign(new Error(message), { status });
 const now = () => new Date().toISOString();
@@ -27,6 +29,11 @@ function init(dataDir) {
   catch (e) { if (e.code !== 'ENOENT') fs.renameSync(file, file + '.unreadable-' + Date.now()); db = {}; }
   for (const [k, v] of Object.entries({ version: 2, contracts: [], sessions: {}, audit: [] })) if (db[k] === undefined) db[k] = v;
   for (const [t, s] of Object.entries(db.sessions)) if (!(s.expires > Date.now())) delete db.sessions[t];
+  // Contracts from before signers had keys (and placed boxes) get them now.
+  for (const c of db.contracts) {
+    if (!Array.isArray(c.fields)) c.fields = [];
+    for (const x of c.signers) if (!x.key) { let k; do k = crypto.randomBytes(4).toString('hex'); while (c.signers.some((y) => y.key === k)); x.key = k; }
+  }
   save();
 }
 function save() { const tmp = file + '.' + process.pid + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(db), { mode: 0o600 }); fs.renameSync(tmp, file); }
@@ -67,10 +74,14 @@ const pageCount = (b) => (b.toString('latin1').match(/\/Type\s*\/Page[^s]/g) || 
 const canSend = (u) => !!u && !u.impersonated && (u.owner || u.permissions.includes('contracts.send') || u.permissions.includes('contracts.manage'));
 const canManage = (u) => !!u && !u.impersonated && (u.owner || u.permissions.includes('contracts.manage'));
 const isMe = (s, u) => !!u && (s.id === u.id || (!!u.accountId && (s.accountIds || []).includes(u.accountId)));
-const mySigner = (c, u) => c.signers.find((s) => isMe(s, u)) || null;
+// Someone can sign the same contract in more than one capacity, for example as the employee and on behalf of the
+// employer (the user's request, 3 November 2026: "when someone is the signatory for both fields it should actually
+// work"). One signature covers every place they sign, as soon as each one is their turn.
+const mySigners = (c, u) => c.signers.filter((s) => isMe(s, u));
+const mySigner = (c, u) => { const all = mySigners(c, u); return all.find((s) => canSignNow(c, s)) || all.find((s) => s.status === 'waiting') || all[0] || null; };
 const isSender = (c, u) => !!u && (c.sender.id === u.id || (!!u.accountId && c.sender.accountId === u.accountId));
 // Senders see their own contracts, signers see contracts once they're sent, and managers see everything.
-const canSee = (c, u) => isSender(c, u) || canManage(u) || (c.status !== 'draft' && !!mySigner(c, u));
+const canSee = (c, u) => isSender(c, u) || canManage(u) || (c.status !== 'draft' && mySigners(c, u).length > 0);
 // Signed one after another: only the first person still to sign can sign now.
 const nextUp = (c) => (c.order === 'sequence' ? c.signers.find((s) => s.status === 'waiting') || null : null);
 const canSignNow = (c, s) => c.status === 'out' && !!s && s.status === 'waiting' && (c.order !== 'sequence' || nextUp(c) === s);
@@ -82,32 +93,35 @@ const event = (c, who, text, onlySender) => c.events.push({ at: now(), who: who 
 
 // What a person sees of a contract.
 function view(c, u) {
-  const me = mySigner(c, u), manage = isSender(c, u) || canManage(u), next = nextUp(c);
+  const mine = mySigners(c, u), me = mySigner(c, u), manage = isSender(c, u) || canManage(u), next = nextUp(c);
   return {
     id: c.id, title: c.title, message: c.message, status: c.status, order: c.order, dueDate: c.dueDate, overdue: overdue(c),
     createdAt: c.createdAt, sentAt: c.sentAt || null, completedAt: c.completedAt || null, cancelledAt: c.cancelledAt || null,
     sender: { id: c.sender.id, name: c.sender.name }, mine: isSender(c, u), source: c.source,
     file: { name: c.file.name, size: c.file.size, pages: c.file.pages, sha256: c.file.sha256 }, certificate: !!c.certificate,
-    signers: c.signers.map((s, i) => ({ position: i + 1, id: s.id, name: s.name, jobTitle: s.jobTitle, company: s.company, role: s.role, status: s.status, me: s === me,
+    signers: c.signers.map((s, i) => ({ position: i + 1, key: s.key, id: s.id, name: s.name, jobTitle: s.jobTitle, company: s.company, role: s.role, status: s.status, me: mine.includes(s),
       viewedAt: s.viewedAt || null, signedAt: s.signedAt || null, declinedAt: s.declinedAt || null, remindedAt: s.remindedAt || null,
       signature: s.status === 'signed' ? s.signature.typed : '', reason: s.status === 'declined' ? s.reason : '', next: next === s })),
+    fields: (c.fields || []).map((f) => ({ ...f, signer: c.signers.findIndex((s) => s.key === f.signer) })).filter((f) => f.signer >= 0),
     events: manage ? c.events.slice() : c.events.filter((e) => !e.private),
     can: {
       edit: c.status === 'draft' && manage && canSend(u),
       cancel: ['draft', 'out', 'declined'].includes(c.status) && manage && !u.impersonated,
       remind: c.status === 'out' && manage && !u.impersonated,
-      sign: !u.impersonated && canSignNow(c, me),
-      mustOpen: !!me && c.status === 'out' && me.status === 'waiting' && !me.viewedAt,
-      waitingFor: me && me.status === 'waiting' && c.status === 'out' && c.order === 'sequence' && next && next !== me ? next.name : '',
+      sign: !u.impersonated && mine.some((s) => canSignNow(c, s)),
+      mustOpen: c.status === 'out' && mine.some((s) => s.status === 'waiting' && !s.viewedAt),
+      waitingFor: c.status === 'out' && c.order === 'sequence' && !mine.some((s) => canSignNow(c, s)) && mine.some((s) => s.status === 'waiting') && next ? next.name : '',
+      // Every capacity this person signs in that is theirs to sign now (one signature covers them all).
+      signAs: mine.filter((s) => canSignNow(c, s)).map((s) => s.role),
     },
   };
 }
 const summary = (c, u) => {
-  const me = mySigner(c, u);
+  const mine = mySigners(c, u), me = mySigner(c, u);
   return { id: c.id, title: c.title, status: c.status, order: c.order, dueDate: c.dueDate, overdue: overdue(c), createdAt: c.createdAt, sentAt: c.sentAt || null,
     completedAt: c.completedAt || null, sender: c.sender.name, senderId: c.sender.id, mine: isSender(c, u), signed: c.signers.filter((s) => s.status === 'signed').length, total: c.signers.length,
-    signers: c.signers.map((s) => ({ id: s.id, name: s.name, status: s.status })), needsMe: !u.impersonated && canSignNow(c, me), reminded: !!(me && me.remindedAt && me.status === 'waiting'),
-    myStatus: me ? me.status : null };
+    signers: c.signers.map((s) => ({ id: s.id, name: s.name, status: s.status })), needsMe: !u.impersonated && mine.some((s) => canSignNow(c, s)), reminded: mine.some((s) => s.remindedAt && s.status === 'waiting'),
+    myStatus: !mine.length ? null : mine.some((s) => s.status === 'declined') ? 'declined' : mine.some((s) => s.status === 'waiting') ? 'waiting' : 'signed' };
 };
 
 // Everything someone can see, sorted into the dashboard's lists.
@@ -133,7 +147,7 @@ function create(u, { title, pdf, fileName, source }) {
   const c = { id: crypto.randomUUID(), title: t, message: '', status: 'draft', order: 'any', dueDate: '', createdAt: now(),
     sender: { id: u.id, accountId: u.accountId || '', name: u.displayName },
     file: { blob: writeBlob(pdf), name, size: pdf.length, pages: pageCount(pdf), sha256: sha256(pdf) },
-    source: source && source.kind === 'docs' ? { kind: 'docs', docId: clean(source.docId, 64) } : { kind: 'upload' }, signers: [], events: [] };
+    source: source && source.kind === 'docs' ? { kind: 'docs', docId: clean(source.docId, 64) } : { kind: 'upload' }, signers: [], fields: [], events: [] };
   event(c, u, c.source.kind === 'docs' ? 'Sent from HN Group Docs' : 'Uploaded ' + name);
   db.contracts.push(c); audit(u, 'contract.create', c, t); save();
   return c;
@@ -159,16 +173,39 @@ function update(id, u, input, directory) {
   }
   if (Array.isArray(input.signers)) {
     if (input.signers.length > MAX_SIGNERS) throw fail(400, 'A contract can have at most ' + MAX_SIGNERS + ' people signing it.');
-    const seen = new Set();
-    c.signers = input.signers.map((x) => {
+    // The same person may sign more than once, each time as something different (employee and for the employer).
+    const seen = new Set(), used = new Set();
+    const next = input.signers.map((x) => {
       const p = directory.find((d) => d.id === String(x && x.id));
       if (!p) throw fail(400, 'Choose everyone who signs from the staff list.');
-      if (seen.has(p.id)) throw fail(400, p.name + ' is on the list twice.');
-      seen.add(p.id);
       // A role typed in before the list existed stays as it was; anything new comes from the list.
-      const role = clean(x.role, 80), before = c.signers.find((s) => s.id === p.id);
-      if (!ROLES.includes(role) && !(role && before && before.role === role)) throw fail(400, 'Choose what ' + p.name + ' signs as.');
-      return { id: p.id, accountIds: p.accountIds || [], name: p.name, jobTitle: p.jobTitle, company: p.company, role, status: 'waiting' };
+      const role = clean(x.role, 80), before = c.signers.find((s) => s.id === p.id && s.role === role);
+      if (!ROLES.includes(role) && !(role && before)) throw fail(400, 'Choose what ' + p.name + ' signs as.');
+      if (seen.has(p.id + '|' + role)) throw fail(400, p.name + ' is on the list twice as ' + role + '.');
+      seen.add(p.id + '|' + role);
+      let key = before && !used.has(before.key) ? before.key : '';
+      if (!key) do key = crypto.randomBytes(4).toString('hex'); while (used.has(key) || c.signers.some((s) => s.key === key && s !== before));
+      used.add(key);
+      return { key, id: p.id, accountIds: p.accountIds || [], name: p.name, jobTitle: p.jobTitle, company: p.company, role, status: 'waiting' };
+    });
+    // Boxes placed for someone no longer signing go with them.
+    c.fields = (c.fields || []).filter((f) => next.some((s) => s.key === f.signer));
+    c.signers = next;
+  }
+  // Where each person's signature, name, date and job title go (the user's request, 3 November 2026: "when uploading a
+  // document I want to be able to choose the boxes for the signature name and date etc. and put them where I want").
+  // Positions are fractions of the page (0 to 1 from the top left), so they don't depend on how big the page is drawn.
+  if (Array.isArray(input.fields)) {
+    if (input.fields.length > MAX_FIELDS) throw fail(400, 'A contract can have at most ' + MAX_FIELDS + ' boxes.');
+    const num = (v, lo, hi) => { const n = Number(v); if (!Number.isFinite(n)) throw fail(400, 'A box’s position isn’t valid.'); return Math.min(hi, Math.max(lo, Math.round(n * 10000) / 10000)); };
+    c.fields = input.fields.map((f) => {
+      const s = c.signers[Number(f && f.signer)];
+      if (!s || !Number.isInteger(Number(f.signer))) throw fail(400, 'Each box has to belong to someone who signs.');
+      if (!FIELD_TYPES.includes(f.type)) throw fail(400, 'Choose what each box is for.');
+      const page = Number(f.page);
+      if (!Number.isInteger(page) || page < 0 || page >= Math.max(c.file.pages, 1) + 50) throw fail(400, 'A box is on a page the contract doesn’t have.');
+      const w = num(f.w, 0.02, 1), h = num(f.h, 0.01, 1);
+      return { signer: s.key, type: f.type, page, x: num(f.x, 0, 1 - w), y: num(f.y, 0, 1 - h), w, h };
     });
   }
   save(); return c;
@@ -187,34 +224,43 @@ function send(id, u) {
 
 // Opening the PDF is recorded, and signers have to open it before they can sign.
 function opened(c, u) {
-  const s = mySigner(c, u);
-  if (s && c.status === 'out' && s.status === 'waiting' && !s.viewedAt) { s.viewedAt = now(); event(c, u, 'Opened the contract'); save(); }
+  const first = mySigners(c, u).filter((s) => c.status === 'out' && s.status === 'waiting' && !s.viewedAt);
+  if (!first.length) return;
+  for (const s of first) s.viewedAt = now();
+  event(c, u, 'Opened the contract'); save();
 }
 
 function sign(id, u, input, from) {
-  const c = get(id, u), s = mySigner(c, u);
+  const c = get(id, u), mine = mySigners(c, u), s = mySigner(c, u);
   if (u.impersonated) throw fail(403, 'You can’t sign while logged in as someone else.');
   if (!s || c.status !== 'out' || s.status !== 'waiting') throw fail(409, 'This contract isn’t waiting for your signature.');
   if (!canSignNow(c, s)) throw fail(409, 'This contract is signed in order. ' + nextUp(c).name + ' needs to sign before you.');
-  if (!s.viewedAt) throw fail(409, 'Open and read the contract before you sign it.');
+  if (mine.some((x) => x.status === 'waiting' && canSignNow(c, x) && !x.viewedAt)) throw fail(409, 'Open and read the contract before you sign it.');
   const typed = clean(input.name, 120);
   if (typed.length < 3) throw fail(400, 'Type your full name to sign.');
   if (input.agree !== true) throw fail(400, 'Tick the box to confirm you’ve read the contract and agree to sign it electronically.');
   if (input.sha256 !== c.file.sha256) throw fail(409, 'The contract has changed since you opened it. Open it again before signing.');
-  s.status = 'signed'; s.signedAt = now();
-  s.signature = { typed, accountId: u.accountId || '', profileId: u.id, email: u.email, ip: clean(from.ip, 64), agent: clean(from.agent, 300), sha256: c.file.sha256 };
-  event(c, u, 'Signed as “' + typed + '”'); audit(u, 'contract.sign', c, typed);
+  // Every place this person signs that is their turn now: all of them in any order, or each one as it comes round in
+  // order (so someone signing first and last signs their first place now and their last place when it's their turn).
+  const done = [];
+  for (let x = mine.find((y) => canSignNow(c, y)); x; x = mine.find((y) => canSignNow(c, y))) {
+    x.status = 'signed'; x.signedAt = now(); x.viewedAt = x.viewedAt || now();
+    x.signature = { typed, accountId: u.accountId || '', profileId: u.id, email: u.email, ip: clean(from.ip, 64), agent: clean(from.agent, 300), sha256: c.file.sha256 };
+    done.push(x.role);
+  }
+  event(c, u, 'Signed as “' + typed + '”' + (done.filter(Boolean).length ? ' (' + done.filter(Boolean).join('; ') + ')' : '')); audit(u, 'contract.sign', c, typed);
   if (c.signers.every((x) => x.status === 'signed')) { c.status = 'completed'; c.completedAt = now(); event(c, null, 'Everyone has signed. The contract is complete.'); }
   save(); return c;
 }
 
 function decline(id, u, input) {
-  const c = get(id, u), s = mySigner(c, u);
+  const c = get(id, u), s = mySigner(c, u), mine = mySigners(c, u);
   if (u.impersonated) throw fail(403, 'You can’t decline while logged in as someone else.');
   if (!s || c.status !== 'out' || s.status !== 'waiting') throw fail(409, 'This contract isn’t waiting for your signature.');
   const reason = clean(input.reason, 500);
   if (!reason) throw fail(400, 'Say why you’re not signing it, so the sender knows what to change.');
-  s.status = 'declined'; s.declinedAt = now(); s.reason = reason; c.status = 'declined';
+  for (const x of mine.filter((y) => y.status === 'waiting')) { x.status = 'declined'; x.declinedAt = now(); x.reason = reason; }
+  c.status = 'declined';
   event(c, u, 'Declined to sign: ' + reason); audit(u, 'contract.decline', c, reason); save();
   return c;
 }
@@ -243,4 +289,4 @@ const fileOf = (c) => readBlob(c.file.blob);
 const certificateOf = (c) => (c.certificate ? readBlob(c.certificate) : null);
 
 module.exports = { init, writable, createSession, session, updateSession, endSession, get, view, lists, create, update, send, opened, sign, decline, remind, cancel,
-  setCertificate, fileOf, certificateOf, canSend, canManage, MAX_PDF, ROLES, get db() { return db; } };
+  setCertificate, fileOf, certificateOf, canSend, canManage, MAX_PDF, ROLES, FIELD_TYPES, get db() { return db; } };

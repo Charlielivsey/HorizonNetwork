@@ -147,7 +147,88 @@
     if (!pdfjs) { pdfjs = await import('/assets/pdfjs/pdf.min.mjs'); pdfjs.GlobalWorkerOptions.workerSrc = '/assets/pdfjs/pdf.worker.min.mjs'; }
     return pdfjs;
   }
-  function pdfViewer(c, bar) {
+  // ---------- Signature boxes ----------
+  // The sender places each person's boxes on the contract (the user's request, 3 November 2026: "choose the boxes for the
+  // signature name and date etc. and put them where I want"): pick a person and a box, click where it goes, then drag it
+  // or its corner. Positions are kept as fractions of the page, so they don't depend on the zoom. Signers see where
+  // their boxes are; once they sign, their signature, name, date and job title are written into them on the PDF.
+  const BOX_TYPES = [['signature', 'Signature'], ['name', 'Full name'], ['date', 'Date signed'], ['jobTitle', 'Job title']];
+  const BOX_LABEL = Object.fromEntries(BOX_TYPES);
+  const BOX_SIZE = { signature: [190, 40], name: [170, 22], date: [120, 22], jobTitle: [170, 22] }; // PDF points
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  function makePlacement(c) {
+    const editable = c.can.edit;
+    const list = c.signers.map((s) => ({ key: s.key, id: s.id, name: s.name, jobTitle: s.jobTitle, company: s.company, role: s.role, status: s.status, me: s.me }));
+    let fields = c.fields.map((f) => ({ ...f, signer: list[f.signer] })).filter((f) => f.signer);
+    const sheets = [], P = { list, editable, tool: null, onChange: () => {}, onTool: () => {} };
+    const colour = (entry) => 'fc' + (list.indexOf(entry) % 6);
+    const first = (n) => String(n || '').split(/\s+/)[0];
+    function position(node, f) { node.style.left = f.x * 100 + '%'; node.style.top = f.y * 100 + '%'; node.style.width = f.w * 100 + '%'; node.style.height = f.h * 100 + '%'; }
+    function changed() { P.onChange(); }
+    function boxNode(f, sheet) {
+      const who = f.signer, shared = list.filter((x) => x.id === who.id).length > 1;
+      const label = BOX_LABEL[f.type] + ' · ' + (who.me && !editable ? 'you' : first(who.name)) + (shared ? ' (' + who.role.replace(/^On behalf of /, 'for ') + ')' : '');
+      const node = el('div', { class: 'field-box ' + colour(who) + (who.me && !editable ? ' mine' : ''), title: label + ' – ' + who.name, ...(editable ? { tabindex: '0', role: 'button', 'aria-label': label + '. Drag to move, arrow keys to nudge, Delete to remove.' } : {}) },
+        el('span', { class: 'field-label', text: label }));
+      position(node, f);
+      if (!editable) return node;
+      const remove = () => { fields = fields.filter((x) => x !== f); drawSheet(sheet); changed(); };
+      node.append(el('button', { class: 'field-x', type: 'button', 'aria-label': 'Remove this box', onclick: (e) => { e.stopPropagation(); remove(); } }, '×'), el('span', { class: 'field-grip', 'aria-hidden': 'true' }));
+      node.addEventListener('pointerdown', (e) => {
+        if (e.button > 0 || e.target.closest('.field-x')) return;
+        e.preventDefault(); e.stopPropagation(); node.focus({ preventScroll: true });
+        const rect = sheet.layer.getBoundingClientRect(), resize = !!e.target.closest('.field-grip'), start = { px: e.clientX, py: e.clientY, x: f.x, y: f.y, w: f.w, h: f.h };
+        node.setPointerCapture(e.pointerId); node.classList.add('dragging');
+        const move = (ev) => {
+          const dx = (ev.clientX - start.px) / rect.width, dy = (ev.clientY - start.py) / rect.height;
+          if (resize) { f.w = clamp(start.w + dx, 0.03, 1 - f.x); f.h = clamp(start.h + dy, 0.012, 1 - f.y); }
+          else { f.x = clamp(start.x + dx, 0, 1 - f.w); f.y = clamp(start.y + dy, 0, 1 - f.h); }
+          position(node, f);
+        };
+        const up = () => { node.removeEventListener('pointermove', move); node.removeEventListener('pointerup', up); node.removeEventListener('pointercancel', up); node.classList.remove('dragging'); changed(); };
+        node.addEventListener('pointermove', move); node.addEventListener('pointerup', up); node.addEventListener('pointercancel', up);
+      });
+      node.addEventListener('keydown', (e) => {
+        const step = e.shiftKey ? 0.02 : 0.004, moves = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+        if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); remove(); return; }
+        if (!moves[e.key]) return;
+        e.preventDefault(); f.x = clamp(f.x + moves[e.key][0], 0, 1 - f.w); f.y = clamp(f.y + moves[e.key][1], 0, 1 - f.h); position(node, f); changed();
+      });
+      return node;
+    }
+    function drawSheet(sheet) {
+      // Signers only see boxes still waiting for a signature; signed ones are written on the PDF itself.
+      const shown = fields.filter((f) => f.page === sheet.index && (editable || f.signer.status === 'waiting'));
+      sheet.layer.replaceChildren(...shown.map((f) => boxNode(f, sheet)));
+    }
+    P.attach = (index, size) => {
+      const layer = el('div', { class: 'field-layer' + (editable ? ' editable' : '') + (P.tool ? ' placing' : '') });
+      const sheet = { index, size, layer };
+      sheets[index] = sheet;
+      if (editable) layer.addEventListener('click', (e) => {
+        if (!P.tool || e.target !== layer) return;
+        const r = layer.getBoundingClientRect(), [pw, ph] = BOX_SIZE[P.tool.type];
+        const w = clamp(pw / size.width, 0.03, 1), h = clamp(ph / size.height, 0.012, 1);
+        fields.push({ signer: P.tool.signer, type: P.tool.type, page: index, x: clamp((e.clientX - r.left) / r.width - w / 2, 0, 1 - w), y: clamp((e.clientY - r.top) / r.height - h / 2, 0, 1 - h), w, h });
+        P.setTool(null); drawSheet(sheet); changed();
+        const placed = layer.lastElementChild; if (placed) placed.focus({ preventScroll: true });
+      });
+      drawSheet(sheet);
+      return layer;
+    };
+    P.setTool = (tool) => { P.tool = tool; for (const sh of sheets) if (sh) sh.layer.classList.toggle('placing', !!tool); P.onTool(tool); };
+    // After people are added, removed or reordered: drop boxes for anyone no longer signing and redraw.
+    P.refresh = () => { fields = fields.filter((f) => list.includes(f.signer)); if (P.tool && !list.includes(P.tool.signer)) P.setTool(null); for (const sh of sheets) if (sh) drawSheet(sh); };
+    P.count = (entry) => fields.filter((f) => f.signer === entry).length;
+    P.clear = () => { fields = []; for (const sh of sheets) if (sh) drawSheet(sh); changed(); };
+    P.total = () => fields.length;
+    P.payload = () => fields.filter((f) => list.includes(f.signer)).map((f) => ({ signer: list.indexOf(f.signer), type: f.type, page: f.page, x: f.x, y: f.y, w: f.w, h: f.h }));
+    P.colour = colour;
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && P.tool) P.setTool(null); });
+    return P;
+  }
+
+  function pdfViewer(c, bar, placement) {
     const url = '/api/contracts/' + c.id + '/file';
     const pages = el('div', { class: 'pages', tabindex: '0', role: 'region', 'aria-label': 'The contract: ' + c.title }, el('div', { class: 'pages-loading' }, el('span', { class: 'spinner', 'aria-hidden': 'true' }), 'Opening the contract…'));
     const pageNo = el('span', { class: 'page-no', 'aria-live': 'polite' });
@@ -164,7 +245,7 @@
       const ratio = Math.min(window.devicePixelRatio || 1, 2), view = page.getViewport({ scale: width / sizes[slot.n - 1].width * ratio });
       const canvas = el('canvas', { width: Math.floor(view.width), height: Math.floor(view.height), 'aria-hidden': 'true' });
       await page.render({ canvasContext: canvas.getContext('2d'), viewport: view }).promise;
-      if (slot.drawn === width) slot.node.replaceChildren(canvas);
+      if (slot.drawn === width) slot.node.replaceChildren(canvas, ...(slot.layer ? [slot.layer] : []));
     }
     function layout() {
       if (!doc) return;
@@ -188,7 +269,11 @@
         doc = await lib.getDocument({ url, isEvalSupported: false, withCredentials: true }).promise;
         for (let i = 1; i <= doc.numPages; i++) { const v = (await doc.getPage(i)).getViewport({ scale: 1 }); sizes.push({ width: v.width, height: v.height }); }
         observer = new IntersectionObserver((entries) => { for (const e of entries) { const slot = slots.find((x) => x.node === e.target); slot.visible = e.isIntersecting; if (e.isIntersecting) draw(slot); } }, { root: pages, rootMargin: '400px 0px' });
-        slots = sizes.map((_, i) => ({ n: i + 1, node: el('div', { class: 'sheet', 'aria-label': 'Page ' + (i + 1) }), drawn: 0, width: 0, visible: false }));
+        slots = sizes.map((size, i) => {
+          const slot = { n: i + 1, node: el('div', { class: 'sheet', 'aria-label': 'Page ' + (i + 1) }), drawn: 0, width: 0, visible: false };
+          if (placement) { slot.layer = placement.attach(i, size); slot.node.append(slot.layer); }
+          return slot;
+        });
         pages.replaceChildren(...slots.map((x) => x.node));
         slots.forEach((x) => observer.observe(x.node));
         layout(); track();
@@ -214,12 +299,14 @@
         el('a', { class: 'btn btn-small btn-ghost', href: '/api/contracts/' + c.id + '/file?download', download: true, text: 'Download' }),
         c.certificate ? el('a', { class: 'btn btn-small btn-primary', href: '/api/contracts/' + c.id + '/certificate?download', download: true, text: 'Signing certificate' }) : null));
     const viewer = el('section', { class: 'viewer' }, bar);
+    // Placed boxes: editable on a draft, and shown to signers while the contract is out for signing.
+    const placement = c.can.edit || (c.status === 'out' && c.fields.length) ? makePlacement(c) : null;
     const side = el('aside', { class: 'side' });
     // A signer has to open the contract before they can sign it; opening it is recorded.
     if (c.can.mustOpen) viewer.append(el('div', { class: 'viewer-closed' }, el('span', { class: 'doc-icon', 'aria-hidden': 'true' }), el('h3', { text: 'Read the contract before you sign' }),
       el('p', { class: 'muted', text: 'Opening it is recorded on the contract’s history.' }),
-      el('button', { class: 'btn btn-primary', type: 'button', onclick: () => { viewer.querySelector('.viewer-closed').replaceWith(pdfViewer(c, bar)); setTimeout(() => refreshSide(c.id, side), 1500); } }, 'Open the contract')));
-    else viewer.append(pdfViewer(c, bar));
+      el('button', { class: 'btn btn-primary', type: 'button', onclick: () => { viewer.querySelector('.viewer-closed').replaceWith(pdfViewer(c, bar, placement)); setTimeout(() => refreshSide(c.id, side), 1500); } }, 'Open the contract')));
+    else viewer.append(pdfViewer(c, bar, placement));
     const tags = el('div', { class: 'tags' }, tag(STATUS[c.status][0], STATUS[c.status][1]), c.overdue ? tag('Overdue', 'bad') : null, c.source.kind === 'docs' ? tag('From HN Group Docs', 'plain') : null,
       c.order === 'sequence' ? tag('Signed in order', 'plain') : null, c.dueDate ? tag('Sign by ' + day(c.dueDate), c.overdue ? 'bad' : 'plain') : null);
     const back = c.status === 'draft' ? ['/drafts', 'Drafts'] : c.can.sign ? ['/', 'To sign'] : ['completed', 'declined', 'cancelled'].includes(c.status) ? ['/completed', 'Finished'] : ['/waiting', 'In progress'];
@@ -228,20 +315,20 @@
       el('h1', { text: c.title }),
       el('div', { class: 'byline' }, face(c.sender.id, c.sender.name, 'tiny'), el('span', { text: (c.mine ? 'You' : c.sender.name) + (c.sentAt ? ' sent this on ' + day(c.sentAt) : ' uploaded this on ' + day(c.createdAt)) }), tags));
     main.replaceChildren(section(pageHead, el('div', { class: 'contract' }, viewer, side)));
-    fillSide(c, side);
+    fillSide(c, side, placement);
   }
   async function refreshSide(id, side) { try { fillSide((await api('/api/contracts/' + id)).contract, side); } catch (e) { toast(e.message, true); } }
 
-  function fillSide(c, side) {
-    const cards = [], mine = c.signers.find((s) => s.me);
+  function fillSide(c, side, placement) {
+    const cards = [], mineAll = c.signers.filter((s) => s.me), mine = mineAll.find((s) => s.status === 'waiting') || mineAll[0];
     if (c.status === 'completed') cards.push(el('div', { class: 'notice good', text: 'Everyone has signed. Download the contract and its signing certificate above.' }));
     if (c.status === 'declined') cards.push(el('div', { class: 'notice bad', text: 'Someone declined to sign. The sender can cancel it and send a new version.' }));
     if (c.status === 'cancelled') cards.push(el('div', { class: 'notice bad', text: 'This contract was cancelled, so it can no longer be signed.' }));
     if (c.can.waitingFor) cards.push(el('div', { class: 'notice wait', text: 'This contract is signed in order. You can sign once ' + c.can.waitingFor + ' has signed.' }));
     if (mine && mine.status === 'waiting' && mine.remindedAt && c.status === 'out') cards.push(el('div', { class: 'notice wait', text: 'Reminder from ' + c.sender.name + ': please sign this contract' + (c.dueDate ? ' by ' + day(c.dueDate) : '') + '.' }));
     if (c.can.sign) cards.push(signCard(c));
-    else if (mine && mine.status === 'signed') cards.push(el('div', { class: 'notice good', text: 'You signed this on ' + when(mine.signedAt) + '.' }));
-    cards.push(c.can.edit ? draftCard(c) : signersCard(c));
+    else if (mineAll.length && mineAll.every((s) => s.status === 'signed')) cards.push(el('div', { class: 'notice good', text: 'You signed this on ' + when(mineAll.map((s) => s.signedAt).sort().pop()) + '.' }));
+    cards.push(c.can.edit ? draftCard(c, placement) : signersCard(c));
     if (c.message && !c.can.edit) cards.push(el('div', { class: 'card' }, el('h2', { text: 'Message from ' + c.sender.name }), el('p', { text: c.message })));
     const actions = el('div', { class: 'button-row' },
       c.can.remind ? el('button', { class: 'btn btn-ghost btn-small', type: 'button', onclick: async () => { try { await api('/api/contracts/' + c.id + '/remind', { json: {} }); toast('Reminder shown to the people still to sign.'); refreshSide(c.id, side); } catch (e) { toast(e.message, true); } } }, 'Remind') : null,
@@ -282,6 +369,7 @@
       catch (err) { toast(err.message, true); button.disabled = false; }
     } }, el('h2', { text: 'Sign this contract' }),
       el('p', { class: 'muted small', text: c.can.mustOpen ? 'Open the contract and read it first.' : 'Type your full name. It becomes your signature on this contract.' }),
+      c.can.signAs.length > 1 ? el('p', { class: 'notice wait small', text: 'You sign this as ' + c.can.signAs.slice(0, -1).join(', ') + ' and ' + c.can.signAs[c.can.signAs.length - 1] + '. One signature covers them all.' }) : null,
       el('label', { for: 'sign-name', text: 'Your full name' }), name, typed,
       el('label', { class: 'check' }, agree, el('span', { text: 'I’ve read this contract and I agree to sign it electronically. I understand my typed name is my signature.' })),
       el('div', { class: 'button-row' }, button, el('button', { class: 'btn-link', type: 'button', onclick: async () => {
@@ -293,16 +381,51 @@
 
   // A draft: who signs (from the staff list, each with what they sign as, chosen from a list), the order, the title, a
   // date to sign by and a message.
-  function roleSelect(s) {
+  function roleSelect(s, changed) {
     const roles = me.roles.includes(s.role) || !s.role ? me.roles : [s.role, ...me.roles];
-    const pick = el('select', { 'aria-label': 'What ' + s.name + ' signs as', onchange: (e) => { s.role = e.target.value; } },
+    const pick = el('select', { 'aria-label': 'What ' + s.name + ' signs as', onchange: (e) => { s.role = e.target.value; if (changed) changed(); } },
       el('option', { value: '', text: 'Choose what they sign as', disabled: true, selected: !s.role }),
       el('optgroup', { label: 'Signs as' }, roles.filter((r) => !r.startsWith('On behalf of ')).map((r) => el('option', { value: r, text: r, selected: r === s.role }))),
       el('optgroup', { label: 'Signs for the employer' }, roles.filter((r) => r.startsWith('On behalf of ')).map((r) => el('option', { value: r, text: r, selected: r === s.role }))));
     return el('label', { class: 'role' }, el('span', { text: 'Signs as' }), pick);
   }
-  function draftCard(c) {
-    const list = c.signers.map((s) => ({ id: s.id, name: s.name, jobTitle: s.jobTitle, company: s.company, role: s.role }));
+  // Step 2 of a draft: whose box, what it's for, then click on the contract.
+  function boxesPart(P) {
+    const who = el('select', { 'aria-label': 'Whose box' });
+    const hint = el('p', { class: 'muted small', 'aria-live': 'polite' });
+    const counts = el('div', { class: 'box-counts' });
+    const typeButtons = BOX_TYPES.map(([type, label]) => el('button', { class: 'box-type', type: 'button', 'aria-pressed': 'false', 'data-type': type, onclick: () => {
+      const entry = P.list[Number(who.value)];
+      if (!entry) return toast('Add who signs first.', true);
+      P.setTool(P.tool && P.tool.type === type && P.tool.signer === entry ? null : { signer: entry, type });
+    } }, el('span', { class: 'box-swatch', 'aria-hidden': 'true' }), label));
+    const clearAll = el('button', { class: 'btn-link', type: 'button', onclick: async () => { if (P.total() && await ask('Remove every box?', 'Everyone will sign in the contract’s own signing blocks, or on a signatures page at the end.', 'Remove boxes', { danger: true })) P.clear(); } }, 'Remove all boxes');
+    const node = el('div', { class: 'boxes' },
+      el('p', { class: 'muted small', text: 'Optional. Choose whose box it is and what it’s for, then click on the contract where it goes. Drag a box to move it and its corner to resize it. Anyone without boxes signs in the contract’s signing block, or on a signatures page at the end.' }),
+      el('label', { class: 'role' }, el('span', { text: 'For' }), who), el('div', { class: 'box-types' }, typeButtons), hint, counts, clearAll);
+    function update() {
+      const keep = who.value;
+      who.replaceChildren(...P.list.map((s, i) => el('option', { value: String(i), text: s.name + (s.role ? ' – ' + s.role : '') })));
+      if (keep && Number(keep) < P.list.length) who.value = keep;
+      who.className = P.list.length ? P.colour(P.list[Number(who.value) || 0]) : '';
+      for (const b of typeButtons) b.disabled = !P.list.length;
+      counts.replaceChildren(...P.list.filter((s) => P.count(s)).map((s) => el('span', { class: 'box-count ' + P.colour(s) }, el('span', { class: 'box-swatch', 'aria-hidden': 'true' }), s.name.split(' ')[0] + ' ' + P.count(s))));
+      clearAll.hidden = !P.total();
+      tool(P.tool);
+    }
+    function tool(t) {
+      for (const b of typeButtons) b.setAttribute('aria-pressed', String(!!t && t.type === b.dataset.type));
+      hint.textContent = t ? 'Now click on the contract where ' + t.signer.name.split(' ')[0] + '’s ' + BOX_LABEL[t.type].toLowerCase() + ' goes. Esc cancels.' : P.list.length ? '' : 'Add who signs first.';
+      document.querySelector('.pages') && document.querySelector('.pages').classList.toggle('placing', !!t);
+    }
+    who.addEventListener('change', () => { who.className = P.colour(P.list[Number(who.value)]); if (P.tool) P.setTool(null); });
+    P.onTool = tool; P.onChange = update;
+    update();
+    return { node, update };
+  }
+
+  function draftCard(c, placement) {
+    const list = placement.list;
     const title = el('input', { id: 'c-title', value: c.title, maxlength: 160 });
     const message = el('textarea', { id: 'c-message', maxlength: 1000, rows: 3, placeholder: 'Optional. Everyone who signs sees it.' }); message.value = c.message || '';
     const due = el('input', { id: 'c-due', type: 'date', value: c.dueDate || '', min: new Date().toISOString().slice(0, 10) });
@@ -310,34 +433,37 @@
     const search = el('input', { id: 'c-search', type: 'search', placeholder: 'Search the staff list by name or job', autocomplete: 'off', 'aria-expanded': 'false', role: 'combobox', 'aria-controls': 'c-results' });
     const results = el('div', { class: 'results', id: 'c-results', role: 'listbox', hidden: true });
     const chosen = el('div', { class: 'chosen' });
-    const drawChosen = () => chosen.replaceChildren(...(list.length ? list.map((s, i) => el('div', { class: 'chosen-row' },
+    const boxes = boxesPart(placement);
+    const drawChosen = () => { placement.refresh(); boxes.update(); chosen.replaceChildren(...(list.length ? list.map((s, i) => el('div', { class: 'chosen-row' },
       el('span', { class: 'face-wrap' }, face(s.id, s.name, 'small'), el('span', { class: 'position', text: i + 1 })),
       el('span', { class: 'who-text' }, el('strong', { text: s.name }), el('small', { text: [s.jobTitle, s.company].filter(Boolean).join(' · ') })),
       el('span', { class: 'order-buttons' },
         el('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Move ' + s.name + ' up', disabled: i === 0, onclick: () => { [list[i - 1], list[i]] = [list[i], list[i - 1]]; drawChosen(); } }, '↑'),
         el('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Move ' + s.name + ' down', disabled: i === list.length - 1, onclick: () => { [list[i + 1], list[i]] = [list[i], list[i + 1]]; drawChosen(); } }, '↓'),
         el('button', { class: 'icon-btn remove', type: 'button', 'aria-label': 'Remove ' + s.name, onclick: () => { list.splice(i, 1); drawChosen(); } }, '×')),
-      roleSelect(s)))
-      : [el('div', { class: 'chosen-empty' }, el('strong', { text: 'Nobody yet' }), el('span', { text: 'Add the employee and the person signing on behalf of HN Group.' }))]));
+      roleSelect(s, () => { boxes.update(); placement.refresh(); })))
+      : [el('div', { class: 'chosen-empty' }, el('strong', { text: 'Nobody yet' }), el('span', { text: 'Add the employee and the person signing on behalf of HN Group.' }))])); };
     drawChosen();
     search.addEventListener('input', async () => {
       try { people = people || (await api('/api/people')).people; } catch (e) { toast(e.message, true); return; }
       const q = search.value.trim().toLowerCase();
-      const hits = q ? people.filter((p) => !list.some((s) => s.id === p.id) && (p.name + ' ' + p.jobTitle + ' ' + p.company).toLowerCase().includes(q)).slice(0, 8) : [];
+      // Someone already on the list can be added again to sign as something else (as the employee and for the employer).
+      const hits = q ? people.filter((p) => (p.name + ' ' + p.jobTitle + ' ' + p.company).toLowerCase().includes(q)).slice(0, 8) : [];
       // The first person added is usually the employee, and anyone after them signs for the employer.
       results.replaceChildren(...hits.map((p) => el('button', { type: 'button', role: 'option', onclick: () => { list.push({ ...p, role: list.some((s) => s.role === 'Employee') ? 'On behalf of HN Group Limited' : 'Employee' }); search.value = ''; results.hidden = true; search.setAttribute('aria-expanded', 'false'); drawChosen(); search.focus(); } },
-        face(p.id, p.name, 'small'), el('span', {}, el('strong', { text: p.name }), el('small', { text: [p.jobTitle, p.company].filter(Boolean).join(' · ') })))));
+        face(p.id, p.name, 'small'), el('span', {}, el('strong', { text: p.name }), el('small', { text: list.some((s) => s.id === p.id) ? 'Already signing as ' + list.filter((s) => s.id === p.id).map((s) => s.role).join(', ') + '. Add again to sign as something else.' : [p.jobTitle, p.company].filter(Boolean).join(' · ') })))));
       results.hidden = !hits.length; search.setAttribute('aria-expanded', String(!!hits.length));
     });
-    const save = () => api('/api/contracts/' + c.id, { method: 'PUT', json: { title: title.value, message: message.value, dueDate: due.value, order: orderSeq.checked ? 'sequence' : 'any', signers: list.map((s) => ({ id: s.id, role: s.role || '' })) } });
+    const save = () => api('/api/contracts/' + c.id, { method: 'PUT', json: { title: title.value, message: message.value, dueDate: due.value, order: orderSeq.checked ? 'sequence' : 'any', signers: list.map((s) => ({ id: s.id, role: s.role || '' })), fields: placement.payload() } });
     const part = (n, heading, ...kids) => el('div', { class: 'part' }, el('h3', {}, el('span', { class: 'step', text: n }), heading), ...kids);
     return el('div', { class: 'card draft' },
       el('div', { class: 'draft-head' }, el('h2', { text: 'Get it signed' }), el('p', { text: 'Each person signs in with their own HN Group Auth account to read and sign it. Nobody can see it until you send it.' })),
       part(1, 'Who signs', el('div', { class: 'picker' }, search, results), chosen),
-      part(2, 'Order',
+      part(2, 'Signature boxes', boxes.node),
+      part(3, 'Order',
         el('div', { class: 'segmented' }, el('label', {}, orderAny, el('span', {}, el('strong', { text: 'Any order' }), el('small', { text: 'Everyone can sign at once' }))),
           el('label', {}, orderSeq, el('span', {}, el('strong', { text: 'In order' }), el('small', { text: 'Top to bottom, one at a time' }))))),
-      part(3, 'Details',
+      part(4, 'Details',
         el('label', { for: 'c-title', text: 'Title' }), title,
         el('label', { for: 'c-due', text: 'Sign by' }, el('span', { class: 'optional', text: ' (optional)' })), due,
         el('label', { for: 'c-message', text: 'Message' }, el('span', { class: 'optional', text: ' (optional)' })), message),

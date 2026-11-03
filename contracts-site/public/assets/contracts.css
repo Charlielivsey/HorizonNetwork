@@ -210,3 +210,35 @@ dialog.ask::backdrop { background: rgba(14, 16, 32, 0.6); backdrop-filter: blur(
 .site-nav a:not(.btn)::after { content: ""; position: absolute; left: 0; right: 0; bottom: -8px; height: 2px; border-radius: 2px; background: var(--accent); transform: scaleX(0); transform-origin: left; transition: transform .3s var(--hn-ease); }
 .site-nav a[aria-current="page"]::after, .site-nav a:not(.btn):hover::after { transform: scaleX(1); }
 @media (max-width: 820px) { .page-head .head-steps { display: none; } .site-nav a:not(.btn)::after { display: none; } }
+
+/* Signature boxes placed on the contract (the user's request, 3 November 2026). Each person has a colour. */
+.fc0 { --fc: #5514B4; } .fc1 { --fc: #3E9BA3; } .fc2 { --fc: #C2306B; } .fc3 { --fc: #5FAE7B; } .fc4 { --fc: #7A1F6C; } .fc5 { --fc: #E0A800; }
+.sheet { position: relative; }
+.field-layer { position: absolute; inset: 0; z-index: 1; }
+.field-layer.placing { cursor: crosshair; background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.pages.placing .sheet { box-shadow: 0 0 0 2px var(--accent-soft), 0 10px 30px rgba(14, 16, 32, 0.12); }
+.field-box { position: absolute; display: flex; align-items: center; min-width: 0; border: 2px dashed var(--fc, #5514B4); border-radius: 5px; background: color-mix(in srgb, var(--fc, #5514B4) 14%, rgba(255, 255, 255, 0.55)); color: #12101F; overflow: visible; }
+.field-layer.editable .field-box { cursor: grab; touch-action: none; }
+.field-box.dragging { cursor: grabbing; box-shadow: 0 8px 22px rgba(14, 16, 32, 0.25); }
+.field-box:focus-visible { outline: 3px solid var(--fc); outline-offset: 2px; }
+.field-box.mine { border-style: solid; animation: box-pulse 1.8s ease-in-out infinite; }
+.field-label { padding: 0 6px; font-size: clamp(9px, 1.1vw, 12px); font-weight: 700; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+.field-x { position: absolute; top: -11px; right: -11px; width: 22px; height: 22px; border-radius: 50%; border: 0; background: var(--fc); color: #fff; font: 700 14px/22px inherit; text-align: center; padding: 0; cursor: pointer; opacity: 0; transition: opacity 0.15s; }
+.field-box:hover .field-x, .field-box:focus-within .field-x, .field-box:focus .field-x { opacity: 1; }
+.field-grip { position: absolute; right: -6px; bottom: -6px; width: 12px; height: 12px; border-radius: 3px; background: var(--fc); cursor: nwse-resize; }
+@media (hover: none) { .field-x { opacity: 1; } .field-grip { width: 18px; height: 18px; right: -9px; bottom: -9px; } }
+@keyframes box-pulse { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--fc) 30%, transparent); } }
+.boxes { display: grid; gap: 0.7rem; }
+.box-types { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+.box-type { display: inline-flex; align-items: center; gap: 0.45rem; padding: 0.45rem 0.85rem; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); font: inherit; font-size: 0.85rem; font-weight: 700; cursor: pointer; transition: border-color 0.15s, background 0.15s, transform 0.15s; }
+.box-type:hover:not(:disabled) { border-color: var(--accent); transform: translateY(-1px); }
+.box-type[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.box-type:disabled { opacity: 0.5; cursor: not-allowed; }
+.box-swatch { width: 10px; height: 10px; border-radius: 3px; border: 2px dashed currentColor; }
+.boxes select.fc0, .boxes select.fc1, .boxes select.fc2, .boxes select.fc3, .boxes select.fc4, .boxes select.fc5 { border-left: 5px solid var(--fc); }
+.box-counts { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.box-counts:empty { display: none; }
+.box-count { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.2rem 0.6rem; border-radius: 999px; background: color-mix(in srgb, var(--fc) 14%, transparent); font-size: 0.8rem; font-weight: 700; }
+.box-count .box-swatch { color: var(--fc); }
+.boxes .btn-link { justify-self: start; }
+@media (prefers-reduced-motion: reduce) { .field-box.mine { animation: none; } .box-type, .field-x { transition: none; } }

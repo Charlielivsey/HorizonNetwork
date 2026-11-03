@@ -79,18 +79,39 @@ function draw(page, font, text, x, y, size, max, color) {
   page.drawText(text, { x, y, size: s, font, color });
 }
 
+// A placed box, filled in. Boxes are stored as fractions of the page as people see it (PDF.js draws the crop box), from
+// the top left; PDF points count from the bottom left of the crop box.
+function fillBox(page, f, s, fonts) {
+  const box = page.getCropBox ? page.getCropBox() : { x: 0, y: 0, width: page.getWidth(), height: page.getHeight() };
+  const x = box.x + f.x * box.width, w = f.w * box.width, h = f.h * box.height, y = box.y + (1 - f.y - f.h) * box.height;
+  const text = f.type === 'signature' || f.type === 'name' ? s.signature.typed : f.type === 'date' ? longDay(s.signedAt) : s.jobTitle || '';
+  if (!text) return;
+  const font = f.type === 'signature' ? fonts.italic : fonts.regular, color = f.type === 'signature' ? PURPLE : INK;
+  const fitted = fit(font, text);
+  let size = Math.min(h * (f.type === 'signature' ? 0.72 : 0.62), f.type === 'signature' ? 28 : 16);
+  while (size > 5 && font.widthOfTextAtSize(fitted, size) > w - 4) size -= 0.5;
+  page.drawText(fitted, { x: x + 2, y: y + (h - size) / 2 + size * 0.22, size, font, color });
+}
+
 // The signed copy, or null when nobody has signed yet.
 const copies = new Map();
 async function signedCopy(bytes, c) {
   const signed = c.signers.filter((s) => s.status === 'signed' && s.signature);
   if (!signed.length) return null;
-  const key = c.id + ':' + c.file.sha256 + ':' + signed.map((s) => s.id + '@' + s.signedAt).join(',');
+  const key = c.id + ':' + c.file.sha256 + ':' + signed.map((s) => s.key + '@' + s.signedAt).join(',') + ':' + JSON.stringify(c.fields || []);
   if (copies.has(key)) return copies.get(key);
   const found = await blocks(bytes, c.file.sha256).catch(() => []);
   const doc = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false });
   const regular = await doc.embedFont(PDFLib.StandardFonts.Helvetica), bold = await doc.embedFont(PDFLib.StandardFonts.HelveticaBold), italic = await doc.embedFont(PDFLib.StandardFonts.HelveticaBoldOblique);
   const pages = doc.getPages(), free = found.slice(), rest = [];
   for (const s of c.signers) {
+    // Boxes the sender placed for this person (signature, name, date, job title) take the place of the signing block.
+    const boxes = (c.fields || []).filter((f) => f.signer === s.key);
+    if (boxes.length) {
+      if (s.status !== 'signed' || !s.signature) continue;
+      for (const f of boxes) if (pages[f.page]) fillBox(pages[f.page], f, s, { regular, italic });
+      continue;
+    }
     const b = match(s.role, free);
     if (b) free.splice(free.indexOf(b), 1);
     if (s.status !== 'signed' || !s.signature) continue;

@@ -68,7 +68,7 @@ test('HN Group Contracts', async () => {
     for (let i = 0; i < 50; i++) { try { if ((await fetch(SITE + '/healthz')).ok) break; } catch {} await new Promise((r) => setTimeout(r, 100)); }
     // The health check says what the site needs, and nothing private.
     let r = await call('/healthz');
-    assert.deepEqual(r.body, { ok: true, service: 'hn-contracts', version: '2.0.0', checks: { data: true, auth: true, pages: true } });
+    assert.deepEqual(r.body, { ok: true, service: 'hn-contracts', version: '2.1.0', checks: { data: true, auth: true, pages: true } });
     // Signed out: only the sign-in; pages are in the HN Group website theme.
     assert.equal((await call('/')).status, 302);
     assert.equal((await call('/api/contracts')).status, 401);
@@ -177,6 +177,44 @@ test('HN Group Contracts', async () => {
     pages = await textOf((await open(hr, c)).body);
     assert.equal(pages.length, base + 1, 'the witness goes on an Electronic signatures page');
     assert.match(pages[base - 1], /Harriet Reed/); assert.match(pages[base], /Electronic signatures.*Sam Lee/);
+
+    // One person signing in two capacities (the user's request, 3 November 2026): Harriet signs as the employee and for
+    // the employer. In order, her first place is signed when she signs, and her last when it comes round to her again.
+    // Boxes the sender places (signature, name, date, job title) are filled in where they were put.
+    c = (await upload(hr, contractPdf)).body.contract;
+    const both = [{ id: 'p-hr', role: 'Employee' }, { id: 'p-jo', role: 'Witness' }, { id: 'p-hr', role: 'On behalf of HN Group Limited' }];
+    assert.equal((await call('/api/contracts/' + c.id, { cookie: hr, method: 'PUT', json: { signers: [{ id: 'p-hr', role: 'Employee' }, { id: 'p-hr', role: 'Employee' }] } })).status, 400, 'not twice as the same thing');
+    assert.equal((await call('/api/contracts/' + c.id, { cookie: hr, method: 'PUT', json: { signers: both, fields: [{ signer: 7, type: 'signature', page: 0, x: 0.1, y: 0.1, w: 0.3, h: 0.05 }] } })).status, 400, 'boxes belong to someone signing');
+    assert.equal((await call('/api/contracts/' + c.id, { cookie: hr, method: 'PUT', json: { signers: both, fields: [{ signer: 1, type: 'stamp', page: 0, x: 0.1, y: 0.1, w: 0.3, h: 0.05 }] } })).status, 400, 'only known box types');
+    const fields = [{ signer: 1, type: 'signature', page: 0, x: 0.12, y: 0.2, w: 0.35, h: 0.05 }, { signer: 1, type: 'name', page: 0, x: 0.12, y: 0.27, w: 0.35, h: 0.03 }, { signer: 1, type: 'date', page: 0, x: 0.55, y: 0.27, w: 0.3, h: 0.03 }, { signer: 1, type: 'jobTitle', page: 0, x: 0.12, y: 0.32, w: 0.35, h: 0.03 }];
+    r = await call('/api/contracts/' + c.id, { cookie: hr, method: 'PUT', json: { order: 'sequence', signers: both, fields } });
+    assert.equal(r.status, 200); assert.equal(r.body.contract.fields.length, 4); assert.ok(r.body.contract.fields.every((f) => f.signer === 1));
+    assert.equal(new Set(r.body.contract.signers.map((s) => s.key)).size, 3, 'each place has its own key');
+    // Saving the same people again keeps the boxes; taking Jo off removes Jo's boxes.
+    r = await call('/api/contracts/' + c.id, { cookie: hr, method: 'PUT', json: { signers: both } }); assert.equal(r.body.contract.fields.length, 4);
+    c = (await call('/api/contracts/' + c.id + '/send', { cookie: hr, json: {} })).body.contract;
+    await open(hr, c);
+    let view = (await call('/api/contracts/' + c.id, { cookie: hr })).body.contract;
+    assert.deepEqual([view.can.sign, view.can.signAs], [true, ['Employee']]);
+    r = await sign(hr, c, 'Harriet Reed'); assert.equal(r.status, 200);
+    assert.deepEqual(r.body.contract.signers.map((s) => s.status), ['signed', 'waiting', 'waiting'], 'her second place waits for Jo');
+    assert.equal(r.body.contract.can.waitingFor, 'Jo');
+    await open(jo, c); await sign(jo, c, 'Jo Bloggs');
+    view = (await call('/api/contracts/' + c.id, { cookie: hr })).body.contract;
+    assert.deepEqual([view.can.sign, view.can.signAs], [true, ['On behalf of HN Group Limited']]);
+    r = await sign(hr, c, 'Harriet Reed'); assert.equal(r.body.contract.status, 'completed', 'she can sign again for her second place');
+    pages = await textOf((await open(hr, c)).body);
+    assert.equal(pages.length, base, 'Jo has boxes, so no signatures page');
+    assert.match(pages[0], /Jo Bloggs.*Jo Bloggs/s, 'signature and name boxes'); assert.match(pages[0], /Designer/, 'job title box');
+    assert.equal((pages[base - 1].match(/Harriet Reed/g) || []).length >= 4, true, 'Harriet’s name and signature in both signing blocks');
+    // In any order, one signature covers every place at once.
+    c = (await upload(hr, contractPdf)).body.contract;
+    await call('/api/contracts/' + c.id, { cookie: hr, method: 'PUT', json: { signers: [{ id: 'p-hr', role: 'Employee' }, { id: 'p-hr', role: 'On behalf of HN Group Limited' }] } });
+    c = (await call('/api/contracts/' + c.id + '/send', { cookie: hr, json: {} })).body.contract;
+    await open(hr, c);
+    assert.deepEqual((await call('/api/contracts/' + c.id, { cookie: hr })).body.contract.can.signAs, ['Employee', 'On behalf of HN Group Limited']);
+    r = await sign(hr, c, 'Harriet Reed'); assert.equal(r.body.contract.status, 'completed');
+    assert.ok(r.body.contract.events.some((e) => /Signed as “Harriet Reed” \(Employee; On behalf of HN Group Limited\)/.test(e.text)));
 
     // HN Group Docs sends documents over loopback with the service secret, never through nginx.
     const importBody = (by) => JSON.stringify({ by, title: 'Employee Agreement', fileName: 'Employee Agreement.pdf', docId: crypto.randomUUID(), pdf: PDF.toString('base64') });

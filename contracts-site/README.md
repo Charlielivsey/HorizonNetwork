@@ -14,6 +14,14 @@ copy of hngroup-site's) plus `contracts.css` for the app's own parts.
   (each a profile of a sign-in account; any profile of that account can sign), choose what each signs as from a list (`ROLES` in lib/store.js: Employee, On behalf of HN Group Limited or
   another group company, Witness), choose **any
   order** or **one after another**, an optional date to sign by and a message, then send. Drafts can be deleted.
+  The same person can be added more than once to sign as different things (for example as the Employee and On behalf
+  of HN Group Limited); one signature covers every place that is theirs to sign at that moment (all of them in any
+  order; each as it comes round when signed in order). Each place on the list has its own `key`.
+- **Signature boxes** (2.1.0): on a draft the sender can place boxes on the PDF (Signature, Full name, Date signed,
+  Job title) for each person: choose whose box and what it's for, click on the page, then drag it or its corner
+  (arrow keys nudge, Delete removes). Positions are fractions of the page (`fields` on the contract). Signers see their
+  boxes; once they sign, their typed signature, name, date and job title are written into them. Anyone without boxes
+  still uses the template's signing block or the Electronic signatures page.
 - **Reading**: the PDF is drawn on the page by PDF.js 4.10.38 (`public/assets/pdfjs/`, Apache-2.0, LICENSE.txt
   beside it), with zoom and a page counter, the same in every browser and in light and dark; if it can't open a PDF
   the browser's own viewer is used.
