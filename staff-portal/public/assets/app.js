@@ -891,6 +891,10 @@
             '<section class="panel" data-widget="quick">' + homeQuickActions() + "</section>" +
             '<section class="panel" id="home-around" data-widget="around" hidden></section>' +
             '<section class="panel" data-widget="services">' + homeServices(me) + "</section>" +
+            // A private note for the system owner only (the user's request, 3 November 2026: "a message telling evan to go
+            // fuck himself and his gap … even if it is only visible to me"). Never shown to anyone else, or while logged in as
+            // someone else.
+            (me.isOwner && !me.impersonatedBy ? '<section class="panel evan-note" aria-label="A note for Evan"><span class="evan-emoji" aria-hidden="true">\ud83d\udd95</span><div><h2 class="section-title">A note for Evan</h2><p>Evan, go fuck yourself and your gap.</p><p class="muted small">Only you can see this.</p></div></section>' : "") +
             '<section class="panel" data-widget="questions" hidden></section>' +
             '<section class="panel me-panel" data-widget="me"><div class="me-card">' + avatar(me, "lg") + '<div><div class="me-name">' + esc(me.displayName) + "</div>" +
             '<div class="muted small">' + esc(me.jobTitle) + "</div>" + (me.isOwner ? '<span class="badge badge-owner">System owner</span>' : "") + "</div></div>" +
@@ -1329,9 +1333,10 @@
             (e.department ? '<div class="profile-dept">' + icon("users") + esc(e.department) + "</div>" : "") +
             '<div class="profile-company">' + icon("building") + esc(e.company) + "</div></div>" +
             '<div class="profile-badges">' + (roles.length > 1 ? (e.main ? '<span class="badge">Main role</span>' : '<span class="badge badge-soft">Additional role</span>') : "") +
-            (p.isOwner ? '<span class="badge badge-owner">System owner</span>' : "") + "</div>" +
+            (p.isOwner ? '<span class="badge badge-owner">System owner</span>' : "") +
+            // The status sits with the badges, beside the name, so the header stays short (the user's report, 3 November 2026).
+            (p.status ? '<span class="profile-status">' + statusPill(p.status) + "</span>" : "") + "</div>" +
             "</div>" +
-            (p.status ? '<div class="profile-status">' + statusPill(p.status) + "</div>" : "") +
 
             // A big profile with a menu (the user's request, 28 October 2026): Overview, Roles, Team and About.
             (function () {
