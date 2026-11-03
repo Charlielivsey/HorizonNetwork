@@ -4083,3 +4083,19 @@ footer .footer-brand .footer-parent { opacity: .82; font-size: .88rem; }
 @media (max-width: 1000px) { .portal-footer .pf-inner { grid-template-columns: repeat(2, minmax(0, 1fr)); } .portal-footer .pf-brand { grid-column: 1 / -1; } }
 @media (max-width: 520px) { .portal-footer .pf-inner { grid-template-columns: minmax(0, 1fr); } }
 
+/* Right-hand column panels on the home page (3 November 2026): quick actions, who's around and services. */
+.qa-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; margin-top: 0.4rem; }
+.qa-btn { display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 0.7rem; border-radius: 12px; border: 1px solid var(--border); background: color-mix(in srgb, var(--surface) 80%, var(--primary) 20%); color: var(--text); text-decoration: none; font-size: 0.84rem; font-weight: 650; line-height: 1.25; transition: border-color 0.15s ease, transform 0.15s ease; }
+.qa-btn .icon { width: 16px; height: 16px; color: var(--primary); flex-shrink: 0; }
+.qa-btn:hover { border-color: var(--primary); color: var(--text); transform: translateY(-1px); }
+.around-list { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.6rem; }
+.around-row { display: flex; align-items: center; gap: 0.6rem; padding: 0.4rem 0.45rem; border-radius: 10px; color: var(--text); text-decoration: none; }
+.around-row:hover { background: var(--row-hover, var(--primary-tint)); color: var(--text); }
+.around-text { display: flex; flex-direction: column; align-items: flex-start; gap: 0.15rem; min-width: 0; }
+.around-text strong { font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.around-text .status-pill { font-size: 0.72rem; }
+.svc-line { display: flex; align-items: center; gap: 0.55rem; font-weight: 650; margin: 0.3rem 0 0.5rem; }
+.svc-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--green, #5FAE7B); box-shadow: 0 0 0 4px color-mix(in srgb, var(--green, #5FAE7B) 25%, transparent); flex-shrink: 0; }
+.svc-line.down .svc-dot { background: var(--raspberry, #C2306B); box-shadow: 0 0 0 4px color-mix(in srgb, var(--raspberry, #C2306B) 25%, transparent); }
+@media (prefers-reduced-motion: reduce) { .qa-btn { transition: none; } .qa-btn:hover { transform: none; } }
+

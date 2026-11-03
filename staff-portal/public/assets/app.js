@@ -888,6 +888,9 @@
             (me.system ? "" : '<section class="panel" data-widget="leave" hidden></section>') +
             '<section class="panel" id="home-celebrate" data-widget="celebrate" hidden></section>' +
             '<section class="panel" id="home-coming" data-widget="coming"><p class="muted small">Loading\u2026</p></section>' +
+            '<section class="panel" data-widget="quick">' + homeQuickActions() + "</section>" +
+            '<section class="panel" id="home-around" data-widget="around" hidden></section>' +
+            '<section class="panel" data-widget="services">' + homeServices(me) + "</section>" +
             '<section class="panel" data-widget="questions" hidden></section>' +
             '<section class="panel me-panel" data-widget="me"><div class="me-card">' + avatar(me, "lg") + '<div><div class="me-name">' + esc(me.displayName) + "</div>" +
             '<div class="muted small">' + esc(me.jobTitle) + "</div>" + (me.isOwner ? '<span class="badge badge-owner">System owner</span>' : "") + "</div></div>" +
@@ -939,6 +942,7 @@
         });
         if ($("#home-coming")) loadComingUp($("#home-coming"));
         loadHomeColleagues($("#home-colleagues"));
+        loadWhosAround($("#home-around"));
         loadCelebrations($("#home-celebrate"));
         if ($("#home-pulse")) api("/api/pulse").then(function (p) {
             const box = $("#home-pulse");
@@ -9031,6 +9035,44 @@
                     '</span><span class="qt-desc">' + esc(w.desc) + "</span></span></a>";
             }).join("") + "</div></section>";
     }
+    // Side panels that fill the right-hand column (the user's request, 3 November 2026: "fill in that gap").
+    function homeQuickActions() {
+        const acts = [["/leave", "sun", "Book leave"], ["/helpdesk", "lifebuoy", "Raise an IT ticket"], ["/expenses", "pound", "Claim an expense"],
+            ["/kudos", "heart", "Give kudos"], ["/questions", "help", "Ask a question"], ["/ideas", "flag", "Share an idea"]];
+        return '<h2 class="section-title">' + icon("tick") + "Quick actions</h2>" + '<div class="qa-grid">' +
+            acts.map(function (a) { return '<a class="qa-btn" href="' + a[0] + '" data-link>' + icon(a[1]) + "<span>" + a[2] + "</span></a>"; }).join("") + "</div>";
+    }
+    function homeServices(me) {
+        const down = me.servicesDown || 0;
+        return '<div class="panel-head tight"><h2 class="section-title">' + icon("activity") + "Services</h2>" +
+            '<a class="small link-arrow" href="/status" data-link>Status</a></div>' +
+            '<div class="svc-line ' + (down ? "down" : "up") + '"><span class="svc-dot"></span><span>' +
+            (down ? down + (down === 1 ? " service is" : " services are") + " down right now" : "All HN Group services are running") + "</span></div>" +
+            '<a class="small muted" href="https://status.hngroup.org.uk/" target="_blank" rel="noopener">status.hngroup.org.uk \u2197</a>';
+    }
+    // Colleagues who've set a status (available first), from the staff directory.
+    function loadWhosAround(box) {
+        if (!box) return;
+        api("/api/directory").then(function (d) {
+            if (!document.body.contains(box)) return;
+            const order = { available: 0, busy: 1, away: 2, ooo: 3 };
+            const people = (d.people || []).filter(function (p) { return !p.leftAt && !p.disabled && p.id !== state.me.id; });
+            const withStatus = people.filter(function (p) { return p.status && STATUSES[p.status.type]; })
+                .sort(function (a, b) { return order[a.status.type] - order[b.status.type] || a.displayName.localeCompare(b.displayName); });
+            const available = withStatus.filter(function (p) { return p.status.type === "available"; }).length;
+            const shown = (withStatus.length ? withStatus : people).slice(0, 5);
+            if (!shown.length) { box.remove(); return; }
+            box.hidden = false;
+            box.innerHTML = '<div class="panel-head tight"><h2 class="section-title">' + icon("users") + "Who\u2019s around</h2>" +
+                '<a class="small link-arrow" href="/directory" data-link>Everyone</a></div>' +
+                '<p class="muted small">' + (withStatus.length ? available + " of " + people.length + " colleague" + (people.length === 1 ? "" : "s") + " available" : "Nobody has set a status yet.") + "</p>" +
+                '<div class="around-list">' + shown.map(function (p) {
+                    return '<a class="around-row" href="/directory" data-link>' + avatar(p, "sm") + '<span class="around-text"><strong>' + esc(p.displayName) + "</strong>" +
+                        (p.status && STATUSES[p.status.type] ? statusPill(p.status) : '<span class="muted small">' + esc(p.jobTitle || "") + "</span>") + "</span></a>";
+                }).join("") + "</div>";
+        }).catch(function () { box.remove(); });
+    }
+
     // Headcount, companies and who joined most recently, from the staff directory.
     function loadHomeColleagues(box) {
         if (!box) return;
@@ -9917,6 +9959,9 @@
         { key: "leave", label: "Leave balance", desc: "Days left this year and what’s booked", off: true },
         { key: "celebrate", label: "Celebrations", desc: "Birthdays and work anniversaries" },
         { key: "coming", label: "Coming up", desc: "Events and holidays in the next few weeks" },
+        { key: "quick", label: "Quick actions", desc: "Book leave, raise a ticket, claim an expense and more" },
+        { key: "around", label: "Who’s around", desc: "Colleagues’ statuses right now" },
+        { key: "services", label: "Services", desc: "Whether HN Group’s services are running" },
         { key: "questions", label: "Unanswered questions", desc: "Q&A questions waiting for an answer", off: true },
         { key: "me", label: "Your profile", desc: "Your status, roles and settings" },
         { key: "help", label: "Need help? / On call", desc: "IT contact and who’s on call" },
