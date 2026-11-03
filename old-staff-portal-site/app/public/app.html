@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>HN Group Staff Portal</title>
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/assets/style.css">
+    <script src="/assets/theme-boot.js"></script>
+</head>
+<body class="app-loading">
+    <header class="topbar">
+        <a href="/home" data-link class="brand">
+            <img src="/assets/hn-group-logo.png" alt="HN Group" class="brand-logo logo-light-theme">
+            <img src="/assets/hn-group-logo-white.png" alt="HN Group" class="brand-logo logo-dark-theme">
+            <span class="brand-sub">Staff Portal</span>
+        </a>
+        <nav class="mainnav" id="mainnav" aria-label="Main"></nav>
+        <div class="topbar-right">
+            <button type="button" class="search-btn" id="search-btn" data-action="search" aria-label="Search (Ctrl+K)"></button>
+            <div class="nav-item bell-menu" id="bell-menu"></div>
+            <div class="nav-item user-menu" id="user-menu"></div>
+            <button type="button" class="icon-btn nav-toggle" id="nav-toggle" aria-label="Open menu" aria-expanded="false"></button>
+        </div>
+    </header>
+
+    <div class="imp-banner" id="imp-banner" role="status" hidden></div>
+    <div class="status-banner" id="status-banner" role="alert" hidden></div>
+
+    <main class="container" id="view" tabindex="-1"></main>
+
+    <footer class="footer muted">&copy; <span id="year"></span> HN Group. Internal use only.</footer>
+
+    <div id="modal-root"></div>
+    <div class="toast" id="toast" role="status" hidden></div>
+
+    <script src="/assets/app.js"></script>
+</body>
+</html>

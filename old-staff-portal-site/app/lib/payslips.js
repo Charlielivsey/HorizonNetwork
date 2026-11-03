@@ -1,0 +1,858 @@
+// Payslips and payroll. Only people with "payroll.manage" (the Human Resources role) can see pay
+// details, generate payslips and issue them. Employees only ever see their own issued payslips.
+// Every payslip is paid by HN Group Limited.
+//
+// Income tax, National Insurance, pension and student loan are always worked out automatically
+// from the payments on the payslip (HR adds payments and any other deductions; the statutory ones
+// can't be typed over). Income tax is cumulative across the tax year, the way HMRC payroll works,
+// unless the tax code is an emergency (W1/M1/X) code. Rates are for 2025/26, rest of the UK.
+//
+// Generating payslips takes their cost (total pay plus employer NI and pension) out of the
+// payroll fund; changing or deleting a payslip adjusts it. Stored in DATA_DIR/payslips.json.
+
+const crypto = require("crypto");
+const store = require("./store");
+const rotas = require("./rotas");
+const funds = require("./funds");
+const datafile = require("./datafile");
+
+const MANAGE = "payroll.manage";
+const EMPLOYER = "HN Group Limited";
+const STANDARD_MONTHLY_SALARY = 10;
+
+const RATES = {
+  label: "2025/26",
+  basicBand: 37700,
+  higherLimit: 125140,
+  personalAllowance: 12570,
+  basicRate: 0.2,
+  higherRate: 0.4,
+  additionalRate: 0.45,
+  niMainRate: 0.08,
+  niUpperRate: 0.02,
+  employerNiRate: 0.15,
+  // HMRC's published monthly thresholds.
+  monthly: { niPrimaryThreshold: 1048, niUpperEarningsLimit: 4189, employerNiThreshold: 417 },
+  studentLoans: {
+    plan1: { label: "Plan 1", threshold: 26065, rate: 0.09 },
+    plan2: { label: "Plan 2", threshold: 28470, rate: 0.09 },
+    plan4: { label: "Plan 4", threshold: 32745, rate: 0.09 },
+    plan5: { label: "Plan 5", threshold: 25000, rate: 0.09 },
+    postgrad: { label: "Postgraduate loan", threshold: 21000, rate: 0.06 },
+  },
+};
+
+const AUTO_KINDS = ["tax", "ni", "pension", "studentLoan"];
+
+let db;
+
+function init(dataDir) {
+  db = datafile.open(dataDir, "payslips.json", () => ({ payDetails: {}, payslips: [], payChanges: {}, payHistory: {}, bands: [], extras: {}, settings: { requireApproval: true } }));
+  // Company pension: 5% from the employee and 10% from HN Group, for everyone. Applied once to
+  // anyone whose pay details were already saved; HR can change individuals afterwards.
+  if (!db.data.pensionRatesSet) {
+    for (const d of Object.values(db.data.payDetails)) {
+      d.pensionEmployeePct = 5;
+      d.pensionEmployerPct = 10;
+    }
+    db.data.pensionRatesSet = true;
+    db.save();
+  }
+}
+
+// Payroll can't run while company money is overdrawn (after a payroll the payroll fund couldn't
+// fully cover, the main balance can be below zero).
+function assertCanRun() {
+  const b = funds.balances();
+  if (b.main < 0 || b.payroll < 0) {
+    const which = b.main < 0 ? "main balance" : "payroll fund";
+    const amount = b.main < 0 ? b.main : b.payroll;
+    throw new store.ValidationError(`The ${which} is overdrawn by ${funds.fmt(Math.round(-amount * 100))}, so payroll can't run. Add funds first.`);
+  }
+}
+
+const newId = () => crypto.randomBytes(8).toString("hex");
+const money = (n) => Math.round(Number(n) * 100) / 100;
+const str = (v, max) => String(v == null ? "" : v).trim().slice(0, max);
+const sum = (list) => money(list.reduce((n, l) => n + l.amount, 0));
+
+function validPeriod(v) {
+  const s = String(v || "").trim();
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(s)) throw new store.ValidationError("Choose a valid pay month.");
+  return s;
+}
+
+function validDay(v, label) {
+  const s = String(v || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || isNaN(Date.parse(s + "T00:00:00Z"))) throw new store.ValidationError(`Choose a valid ${label}.`);
+  return s;
+}
+
+function periodBounds(period) {
+  const [y, m] = period.split("-").map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return { start: period + "-01", end: period + "-" + String(last).padStart(2, "0") };
+}
+
+function periodLabel(period) {
+  const [y, m] = period.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, 15)).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
+}
+
+// UK tax years run from 6 April; tax month 1 is 6 April to 5 May.
+function taxYearStart(date) {
+  const y = Number(date.slice(0, 4));
+  return date >= `${y}-04-06` ? `${y}-04-06` : `${y - 1}-04-06`;
+}
+
+function taxMonth(date) {
+  const [, m, d] = date.split("-").map(Number);
+  const mm = d < 6 ? m - 1 : m;
+  return ((mm - 4 + 12) % 12) + 1;
+}
+
+// ---------- Pay details ----------
+
+const PAY_DEFAULTS = {
+  employeeNumber: "", niNumber: "", taxCode: "1257L", niCategory: "A", payType: "salary",
+  monthlySalary: STANDARD_MONTHLY_SALARY, hourlyRate: 0, pensionEmployeePct: 5, pensionEmployerPct: 10, studentLoan: "",
+  // Pay and tax earlier in the current tax year that isn't on a portal payslip (from a P45, or an
+  // older payroll), so cumulative tax is right. Only counts in the tax year it was entered for.
+  previousPay: 0, previousTax: 0, previousTaxYear: "",
+};
+
+// Pay details as they apply to a month (YYYY-MM, default this month): the saved details with any
+// scheduled pay change that has taken effect by then laid on top.
+function payDetails(personId, period) {
+  const saved = db.data.payDetails[personId] || {};
+  const d = { ...PAY_DEFAULTS, ...saved };
+  // Older records stored an annual salary.
+  if (saved.monthlySalary === undefined && saved.annualSalary) d.monthlySalary = money(saved.annualSalary / 12);
+  const month = period || new Date().toISOString().slice(0, 7);
+  for (const c of payChangesOf(personId)) {
+    if (c.effective > month) break;
+    d.payType = c.payType;
+    d.monthlySalary = c.monthlySalary;
+    d.hourlyRate = c.hourlyRate;
+  }
+  delete d.annualSalary;
+  d.currentTaxYear = taxYearStart(new Date().toISOString().slice(0, 10));
+  if (d.previousTaxYear !== d.currentTaxYear) { d.previousPay = 0; d.previousTax = 0; }
+  delete d.company;
+  d.isStandard = d.payType === "salary" && d.monthlySalary === STANDARD_MONTHLY_SALARY;
+  return d;
+}
+
+// ---------- Scheduled pay changes ----------
+
+function payChangesOf(personId) {
+  return (db.data.payChanges[personId] || []).slice().sort((a, b) => a.effective.localeCompare(b.effective));
+}
+
+function addPayChange(personId, input, by) {
+  const person = store.getPerson(personId);
+  if (!person || person.system) throw new store.ValidationError("Choose an employee.");
+  const effective = validPeriod(input.effective);
+  const payType = input.payType === "hourly" ? "hourly" : "salary";
+  const n = (v, label, max) => {
+    const x = Number(v || 0);
+    if (!(x >= 0 && x <= max)) throw new store.ValidationError(`Enter a valid ${label}.`);
+    return money(x);
+  };
+  const change = {
+    id: newId(),
+    effective,
+    payType,
+    monthlySalary: payType === "salary" ? n(input.monthlySalary, "monthly salary", 1000000) : 0,
+    hourlyRate: payType === "hourly" ? n(input.hourlyRate, "hourly rate", 10000) : 0,
+    note: str(input.note, 200),
+    createdBy: by.id,
+    createdAt: new Date().toISOString(),
+  };
+  if (payType === "salary" && !change.monthlySalary) throw new store.ValidationError("Enter the new monthly salary.");
+  if (payType === "hourly" && !change.hourlyRate) throw new store.ValidationError("Enter the new hourly rate.");
+  const list = (db.data.payChanges[personId] || []).filter((c) => c.effective !== effective);
+  list.push(change);
+  db.data.payChanges[personId] = list;
+  db.save();
+  return change;
+}
+
+function deletePayChange(personId, id) {
+  const list = db.data.payChanges[personId] || [];
+  if (!list.some((c) => c.id === id)) throw new store.ValidationError("That pay change doesn't exist.");
+  db.data.payChanges[personId] = list.filter((c) => c.id !== id);
+  db.save();
+}
+
+function payChangesView(personId) {
+  const now = new Date().toISOString().slice(0, 7);
+  return payChangesOf(personId).map((c) => {
+    const by = store.getPerson(c.createdBy);
+    return { ...c, label: periodLabel(c.effective), applied: c.effective <= now, byName: by ? by.displayName : "Former staff" };
+  });
+}
+
+// Every pay change still to come, for the payroll page.
+function upcomingPayChanges() {
+  const now = new Date().toISOString().slice(0, 7);
+  const out = [];
+  for (const [personId, list] of Object.entries(db.data.payChanges)) {
+    const p = store.getPerson(personId);
+    if (!p) continue;
+    for (const c of list) if (c.effective > now) out.push({ ...c, personId, displayName: p.displayName, label: periodLabel(c.effective) });
+  }
+  return out.sort((a, b) => a.effective.localeCompare(b.effective));
+}
+
+function savePayDetails(personId, input, by) {
+  const before = payDetails(personId);
+  const num = (v, label, max) => {
+    const n = Number(v || 0);
+    if (!(n >= 0 && n <= max)) throw new store.ValidationError(`Enter a valid ${label}.`);
+    return money(n);
+  };
+  const ni = str(input.niNumber, 13).toUpperCase().replace(/\s+/g, "");
+  if (ni && !/^[A-CEGHJ-PR-TW-Z]{2}\d{6}[A-D]$/.test(ni)) throw new store.ValidationError("Enter a valid National Insurance number, like AB123456C.");
+  const taxCode = str(input.taxCode, 12).toUpperCase().replace(/\s+/g, "") || "1257L";
+  if (!/^[SC]?(\d{1,6}[LMNT]|K\d{1,6}|BR|D0|D1|D2|NT|0T)(W1|M1|X)?$/.test(taxCode)) throw new store.ValidationError("Enter a valid tax code, like 1257L.");
+  db.data.payDetails[personId] = {
+    employeeNumber: str(input.employeeNumber, 20),
+    niNumber: ni,
+    taxCode,
+    niCategory: /^[A-Z]$/.test(str(input.niCategory, 1).toUpperCase()) ? str(input.niCategory, 1).toUpperCase() : "A",
+    payType: input.payType === "hourly" ? "hourly" : "salary",
+    monthlySalary: num(input.monthlySalary, "monthly salary", 1000000),
+    hourlyRate: num(input.hourlyRate, "hourly rate", 10000),
+    pensionEmployeePct: num(input.pensionEmployeePct, "employee pension %", 100),
+    pensionEmployerPct: num(input.pensionEmployerPct, "employer pension %", 100),
+    studentLoan: RATES.studentLoans[input.studentLoan] ? input.studentLoan : "",
+    previousPay: num(input.previousPay, "earlier pay this tax year", 10000000),
+    previousTax: num(input.previousTax, "earlier tax this tax year", 10000000),
+    previousTaxYear: taxYearStart(new Date().toISOString().slice(0, 10)),
+  };
+  const after = db.data.payDetails[personId];
+  if (before.payType !== after.payType || before.monthlySalary !== after.monthlySalary || before.hourlyRate !== after.hourlyRate) {
+    recordPayHistory(personId, after, by, "Pay details changed");
+  }
+  db.save();
+  return payDetails(personId);
+}
+
+// ---------- Pay history and salary bands ----------
+
+function recordPayHistory(personId, d, by, note) {
+  const list = db.data.payHistory[personId] || (db.data.payHistory[personId] = []);
+  list.push({ at: new Date().toISOString(), payType: d.payType, monthlySalary: d.monthlySalary, hourlyRate: d.hourlyRate, by: by ? by.id : null, note: str(note, 120) });
+}
+
+function payHistoryView(personId) {
+  const name = (id) => { const p = id ? store.getPerson(id) : null; return p ? p.displayName : id ? "Former staff" : "System"; };
+  const changes = (db.data.payHistory[personId] || []).map((h) => ({ ...h, byName: name(h.by) }));
+  // Scheduled changes that have taken effect count as history too.
+  const now = new Date().toISOString().slice(0, 7);
+  for (const c of payChangesOf(personId)) if (c.effective <= now) changes.push({ at: c.effective + "-01T00:00:00.000Z", payType: c.payType, monthlySalary: c.monthlySalary, hourlyRate: c.hourlyRate, by: c.createdBy, byName: name(c.createdBy), note: c.note || "Scheduled pay change" });
+  changes.sort((a, b) => b.at.localeCompare(a.at));
+  const slips = db.data.payslips.filter((s) => s.personId === personId && s.status === "issued").sort((a, b) => a.payDate.localeCompare(b.payDate))
+    .map((s) => ({ period: s.period, label: periodLabel(s.period), payDate: s.payDate, gross: sum(s.payments), net: totals(s).net }));
+  return { changes, payslips: slips.slice(-24), band: bandFor(personId) };
+}
+
+function cleanBand(input) {
+  const jobTitle = str(input.jobTitle, 100);
+  if (!jobTitle) throw new store.ValidationError("Enter the job title the band is for.");
+  const min = Number(input.min), max = Number(input.max);
+  if (!(min >= 0) || !(max > 0) || max < min) throw new store.ValidationError("Enter a monthly minimum and maximum (the maximum can't be below the minimum).");
+  return { jobTitle, min: money(min), max: money(max) };
+}
+
+function saveBand(input) {
+  const fields = cleanBand(input);
+  const existing = input.id ? db.data.bands.find((b) => b.id === input.id) : null;
+  if (db.data.bands.some((b) => b !== existing && b.jobTitle.toLowerCase() === fields.jobTitle.toLowerCase())) throw new store.ValidationError("There's already a band for that job title.");
+  if (existing) Object.assign(existing, fields);
+  else db.data.bands.push({ id: newId(), ...fields });
+  db.save();
+}
+
+function deleteBand(id) {
+  db.data.bands = db.data.bands.filter((b) => b.id !== id);
+  db.save();
+}
+
+// Where someone's monthly pay sits in the band for their job title (hourly pay is compared as
+// a 37.5-hour week, about 162.5 hours a month).
+function bandFor(personId) {
+  const p = store.getPerson(personId);
+  if (!p) return null;
+  const band = db.data.bands.find((b) => b.jobTitle.toLowerCase() === String(p.jobTitle || "").toLowerCase());
+  if (!band) return null;
+  const d = payDetails(personId);
+  const monthly = d.payType === "hourly" ? money(d.hourlyRate * 162.5) : d.monthlySalary;
+  return { ...band, monthly, position: monthly < band.min ? "below" : monthly > band.max ? "above" : "within" };
+}
+
+function bands() {
+  return db.data.bands.slice().sort((a, b) => a.jobTitle.localeCompare(b.jobTitle));
+}
+
+// ---------- Bonuses and commission ----------
+// A bonus is paid once, on the person's next payslip. Commission is paid every month from one
+// month to another (or until it's stopped). Both are taxable pay.
+
+function addExtra(personId, input, by) {
+  const p = store.getPerson(personId);
+  if (!p || p.system) throw new store.ValidationError("Choose an employee.");
+  const kind = input.kind === "commission" ? "commission" : "bonus";
+  const amount = Number(input.amount);
+  if (!(amount > 0 && amount <= 1000000)) throw new store.ValidationError("Enter an amount.");
+  const label = str(input.label, 80) || (kind === "bonus" ? "Bonus" : "Commission");
+  const x = { id: newId(), kind, label, amount: money(amount), note: str(input.note, 200), createdBy: by.id, createdAt: new Date().toISOString() };
+  if (kind === "commission") {
+    x.from = validPeriod(input.from || new Date().toISOString().slice(0, 7));
+    x.to = input.to ? validPeriod(input.to) : null;
+    if (x.to && x.to < x.from) throw new store.ValidationError("The last month can't be before the first.");
+  } else {
+    x.paidSlipId = null;
+  }
+  (db.data.extras[personId] = db.data.extras[personId] || []).push(x);
+  db.save();
+  return x;
+}
+
+function deleteExtra(personId, id) {
+  const list = db.data.extras[personId] || [];
+  const x = list.find((e) => e.id === id);
+  if (!x) throw new store.ValidationError("Not found.");
+  if (x.kind === "bonus" && x.paidSlipId) throw new store.ValidationError("That bonus has already been paid. Delete the payslip first.");
+  db.data.extras[personId] = list.filter((e) => e.id !== id);
+  db.save();
+}
+
+function extrasView(personId) {
+  return (db.data.extras[personId] || []).map((x) => {
+    const by = store.getPerson(x.createdBy);
+    return { ...x, byName: by ? by.displayName : "Former staff", fromLabel: x.from ? periodLabel(x.from) : null, toLabel: x.to ? periodLabel(x.to) : null, paid: !!x.paidSlipId };
+  }).reverse();
+}
+
+// Commission lines for a month (used for the standard payments).
+function commissionFor(personId, period) {
+  return (db.data.extras[personId] || []).filter((x) => x.kind === "commission" && x.from <= period && (!x.to || x.to >= period))
+    .map((x) => ({ label: x.label, amount: x.amount }));
+}
+
+// Unpaid bonuses (shown on the next payslip).
+function pendingBonuses(personId) {
+  return (db.data.extras[personId] || []).filter((x) => x.kind === "bonus" && !x.paidSlipId);
+}
+
+// ---------- Approval ----------
+// With approval on, a payslip can only be issued once someone other than the person who made it
+// (and who also runs payroll) has approved it. Changing a draft clears its approval.
+
+function approvalRequired() {
+  return db.data.settings.requireApproval !== false;
+}
+
+function setApprovalRequired(on) {
+  db.data.settings.requireApproval = !!on;
+  db.save();
+}
+
+function approve(slip, by) {
+  if (slip.status !== "draft") throw new store.ValidationError("Only drafts need approving.");
+  if (slip.createdBy === by.id || slip.updatedBy === by.id) throw new store.ValidationError("Someone else has to approve a payslip you made or changed.");
+  slip.approvedBy = by.id;
+  slip.approvedAt = new Date().toISOString();
+  db.save();
+}
+
+function unapprove(slip) {
+  slip.approvedBy = null;
+  slip.approvedAt = null;
+  db.save();
+}
+
+// ---------- Tax and National Insurance ----------
+
+function parseTaxCode(raw) {
+  const full = String(raw || "1257L").toUpperCase().replace(/^[SC]/, "");
+  const emergency = /(W1|M1|X)$/.test(full);
+  const code = full.replace(/(W1|M1|X)$/, "");
+  let m;
+  if (code === "NT") return { flat: 0, emergency };
+  if (code === "BR") return { flat: RATES.basicRate, emergency };
+  if (code === "D0") return { flat: RATES.higherRate, emergency };
+  if (code === "D1" || code === "D2") return { flat: RATES.additionalRate, emergency };
+  if ((m = /^(\d+)[LMNT]$/.exec(code))) return { allowance: Number(m[1]) * 10 + 9, emergency };
+  if ((m = /^K(\d+)$/.exec(code))) return { allowance: -(Number(m[1]) * 10), emergency };
+  return { allowance: 0, emergency }; // 0T
+}
+
+// Tax due on a taxable amount for `months` twelfths of the year's bands.
+function bandTax(taxable, months) {
+  const f = months / 12;
+  const basic = RATES.basicBand * f;
+  const higher = (RATES.higherLimit - RATES.personalAllowance) * f;
+  let tax = Math.min(taxable, basic) * RATES.basicRate;
+  if (taxable > basic) tax += (Math.min(taxable, higher) - basic) * RATES.higherRate;
+  if (taxable > higher) tax += (taxable - higher) * RATES.additionalRate;
+  return tax;
+}
+
+// PAYE for this payslip. Cumulative: tax due on everything paid this tax year so far, less the
+// tax already taken. Emergency codes work on this month alone. Tax can't be more than half the pay.
+function payeTax(taxablePay, code, payDate, previous) {
+  const c = parseTaxCode(code);
+  if (c.flat !== undefined) return money(Math.max(0, taxablePay) * c.flat);
+  const cumulative = !c.emergency;
+  const months = cumulative ? taxMonth(payDate) : 1;
+  const paidSoFar = cumulative ? previous.taxable : 0;
+  const taxSoFar = cumulative ? previous.tax : 0;
+  const freePay = (c.allowance * months) / 12;
+  const taxableToDate = Math.max(0, Math.floor(paidSoFar + taxablePay - freePay));
+  let tax = Math.floor(bandTax(taxableToDate, months) * 100) / 100 - taxSoFar;
+  tax = Math.min(tax, Math.max(0, taxablePay) * 0.5);
+  return money(tax);
+}
+
+function employeeNi(gross, category) {
+  const cat = String(category || "A").toUpperCase();
+  if (cat === "C" || cat === "X") return 0;
+  const pt = RATES.monthly.niPrimaryThreshold;
+  const uel = RATES.monthly.niUpperEarningsLimit;
+  const main = ["J", "Z", "L"].includes(cat) ? RATES.niUpperRate : RATES.niMainRate;
+  let ni = 0;
+  if (gross > pt) ni += (Math.min(gross, uel) - pt) * main;
+  if (gross > uel) ni += (gross - uel) * RATES.niUpperRate;
+  return money(ni);
+}
+
+function employerNi(gross) {
+  const st = RATES.monthly.employerNiThreshold;
+  return gross > st ? money((gross - st) * RATES.employerNiRate) : 0;
+}
+
+function taxablePayOf(slip) {
+  return money(sum(slip.payments) - sum(slip.deductions.filter((l) => l.kind === "pension")));
+}
+
+// Earlier payslips in the same tax year (any status), for cumulative tax.
+// Earlier payslips are those paid on an earlier date, or on the same date but made before this one
+// (an additional payslip in the same month counts the first one).
+function previousInYear(personId, payDate, excludeId) {
+  const from = taxYearStart(payDate);
+  const self = excludeId ? db.data.payslips.find((s) => s.id === excludeId) : null;
+  const createdAt = self ? self.createdAt : null;
+  const earlierThis = (s) => s.payDate < payDate || (s.payDate === payDate && (!createdAt || s.createdAt < createdAt));
+  const list = db.data.payslips.filter((s) => s.personId === personId && s.id !== excludeId && s.payDate >= from && earlierThis(s));
+  const d = payDetails(personId);
+  const earlier = d.previousTaxYear === from ? d : { previousPay: 0, previousTax: 0 };
+  return {
+    taxable: money(earlier.previousPay + list.reduce((n, s) => n + taxablePayOf(s), 0)),
+    tax: money(earlier.previousTax + list.reduce((n, s) => n + sum(s.deductions.filter((l) => l.kind === "tax")), 0)),
+  };
+}
+
+// Works out the automatic deductions and employer contributions for a set of payments.
+function calculate(personId, payments, payDate, excludeId) {
+  const d = payDetails(personId);
+  const gross = sum(payments);
+  const pension = money((gross * d.pensionEmployeePct) / 100);
+  const previous = previousInYear(personId, payDate, excludeId);
+  const deductions = [
+    { label: `Income tax (PAYE, ${d.taxCode})`, amount: payeTax(gross - pension, d.taxCode, payDate, previous), kind: "tax", auto: true },
+    { label: `National Insurance (category ${d.niCategory})`, amount: employeeNi(gross, d.niCategory), kind: "ni", auto: true },
+  ];
+  if (pension) deductions.push({ label: `Pension (${d.pensionEmployeePct}%)`, amount: pension, kind: "pension", auto: true });
+  const loan = RATES.studentLoans[d.studentLoan];
+  if (loan) {
+    const amount = Math.max(0, Math.floor((gross - loan.threshold / 12) * loan.rate));
+    deductions.push({ label: `Student loan (${loan.label})`, amount, kind: "studentLoan", auto: true });
+  }
+  const employer = [{ label: "Employer National Insurance", amount: employerNi(gross) }];
+  if (d.pensionEmployerPct) employer.push({ label: `Employer pension (${d.pensionEmployerPct}%)`, amount: money((gross * d.pensionEmployerPct) / 100) });
+  return { deductions, employer, details: d };
+}
+
+function approvedHours(personId, period) {
+  const { start, end } = periodBounds(period);
+  let hours = 0;
+  for (let w = rotas.weekStart(start); w <= end; w = rotas.addDays(w, 7)) {
+    const sheet = rotas.findSheet(personId, w);
+    if (!sheet || sheet.status !== "approved") continue;
+    for (const day of sheet.days) if (day.date >= start && day.date <= end) hours += rotas.hoursOf(day.start, day.end, day.breakMins);
+  }
+  return Math.round(hours * 100) / 100;
+}
+
+function standardPayments(personId, period) {
+  const d = payDetails(personId, period);
+  if (d.payType === "hourly") {
+    const hours = approvedHours(personId, period);
+    return [{ label: `Basic pay (${hours} hrs at £${d.hourlyRate.toFixed(2)})`, amount: money(hours * d.hourlyRate) }].concat(commissionFor(personId, period));
+  }
+  return [{ label: "Basic salary", amount: d.monthlySalary }].concat(commissionFor(personId, period));
+}
+
+// Suggested payslip for a person and month (used by the editor).
+function estimate(personId, period, payDate) {
+  const person = store.getPerson(personId);
+  if (!person) throw new store.ValidationError("Choose an employee.");
+  const payments = standardPayments(personId, period);
+  const date = payDate || periodBounds(period).end;
+  return { payments, ...calculate(personId, payments, date, null) };
+}
+
+// What a month's payroll would cost at everyone's current pay, for the funds forecast.
+function forecastMonthlyCost() {
+  let total = 0;
+  const period = new Date().toISOString().slice(0, 7);
+  for (const p of store.employees()) {
+    const payments = standardPayments(p.id, period);
+    const gross = sum(payments);
+    const c = calculate(p.id, payments, periodBounds(period).end, null);
+    total += gross + sum(c.employer);
+  }
+  return money(total);
+}
+
+// Payroll still to run for a month: everyone without a payslip for it, at their current pay.
+function remainingForPeriod(period) {
+  const end = periodBounds(period).end;
+  let cost = 0;
+  let people = 0;
+  for (const p of store.employees()) {
+    if (db.data.payslips.some((s) => s.personId === p.id && s.period === period)) continue;
+    const payments = standardPayments(p.id, period);
+    const c = calculate(p.id, payments, end, null);
+    cost += sum(payments) + sum(c.employer);
+    people++;
+  }
+  return { people, cost: money(cost) };
+}
+
+// ---------- Payslips ----------
+
+function cleanLines(list) {
+  return (Array.isArray(list) ? list : []).slice(0, 30).map((l) => {
+    const label = str(l && l.label, 80);
+    const amount = Number(l && l.amount);
+    if (!label) return null;
+    if (!(amount >= -1000000 && amount <= 10000000)) throw new store.ValidationError(`Enter a valid amount for “${label}”.`);
+    return { label, amount: money(amount) };
+  }).filter(Boolean);
+}
+
+// Payments and any extra deductions come from HR; tax, NI, pension and student loan are worked out.
+function applyLines(slip, input) {
+  slip.payments = cleanLines(input.payments);
+  const extra = cleanLines((Array.isArray(input.deductions) ? input.deductions : []).filter((l) => l && !l.auto && !AUTO_KINDS.includes(l.kind)))
+    .map((l) => ({ ...l, kind: "other" }));
+  const calc = calculate(slip.personId, slip.payments, slip.payDate, slip.id);
+  slip.deductions = calc.deductions.concat(extra);
+  slip.employerItems = calc.employer;
+  slip.taxCode = calc.details.taxCode;
+  slip.niCategory = calc.details.niCategory;
+  slip.employeeNumber = calc.details.employeeNumber;
+  slip.niNumber = calc.details.niNumber;
+}
+
+// Approved expense claims paid with a payslip. expenses.js plugs in here (it needs payslips itself).
+let reimbursementSource = null;
+function useReimbursements(source) {
+  reimbursementSource = source;
+}
+
+// The cost to the company: total pay plus employer contributions and repaid expenses, in pence.
+function costPence(slip) {
+  return funds.pence(sum(slip.payments) + sum(slip.employerItems) + sum(slip.reimbursements || []));
+}
+
+function createDraft(personId, input, by, opts) {
+  if (!(opts && opts.deferCharge)) assertCanRun();
+  const person = store.getPerson(personId);
+  if (!person || person.system) throw new store.ValidationError("Choose an employee.");
+  const period = validPeriod(input.period);
+  // HR can deliberately make an additional payslip for a month that already has one.
+  const existing = db.data.payslips.some((s) => s.personId === personId && s.period === period);
+  if (existing && !input.override) {
+    throw new store.ValidationError(`${person.displayName} already has a payslip for ${periodLabel(period)}. Tick “Make an additional payslip anyway” to make another one.`);
+  }
+  const now = new Date().toISOString();
+  const slip = {
+    id: newId(),
+    personId,
+    period,
+    payDate: validDay(input.payDate || periodBounds(period).end, "pay date"),
+    employer: EMPLOYER,
+    note: str(input.note, 500),
+    status: "draft",
+    createdBy: by.id,
+    createdAt: now,
+    updatedAt: now,
+    issuedAt: null,
+    issuedBy: null,
+    additional: !!existing,
+  };
+  // One-off bonuses waiting to be paid go on this payslip.
+  const bonuses = input.payments ? [] : pendingBonuses(personId);
+  applyLines(slip, { payments: input.payments || standardPayments(personId, period).concat(bonuses.map((x) => ({ label: x.label, amount: x.amount }))), deductions: input.deductions });
+  for (const x of bonuses) x.paidSlipId = slip.id;
+  // Expenses waiting to be repaid with pay go on the person's next payslip (tax free).
+  slip.reimbursements = reimbursementSource ? reimbursementSource.claim(personId, slip.id) : [];
+  slip.charged = costPence(slip);
+  db.data.payslips.push(slip);
+  db.save();
+  if (!(opts && opts.deferCharge)) funds.chargePayroll(slip.charged, `Payroll – ${person.displayName}, ${periodLabel(period)}`, by);
+  return slip;
+}
+
+function updateDraft(slip, input, by) {
+  if (slip.status !== "draft") throw new store.ValidationError("Issued payslips can't be edited. Withdraw it first.");
+  slip.payDate = validDay(input.payDate || slip.payDate, "pay date");
+  slip.employer = EMPLOYER;
+  slip.note = str(input.note, 500);
+  slip.updatedBy = by.id;
+  slip.approvedBy = null;
+  slip.approvedAt = null;
+  applyLines(slip, input);
+  if (!slip.payments.length) throw new store.ValidationError("Add at least one payment.");
+  slip.updatedAt = new Date().toISOString();
+  const cost = costPence(slip);
+  const diff = cost - (slip.charged || 0);
+  slip.charged = cost;
+  db.save();
+  const p = store.getPerson(slip.personId);
+  if (diff) funds.chargePayroll(diff, `Payslip changed – ${p ? p.displayName : "former staff"}, ${periodLabel(slip.period)}`, by);
+  return slip;
+}
+
+function setIssued(slip, issued, by) {
+  if (issued && !slip.payments.length) throw new store.ValidationError("Add at least one payment before issuing.");
+  if (issued && approvalRequired() && !slip.approvedBy) throw new store.ValidationError("This payslip needs approving by a second person before it can be issued.");
+  slip.status = issued ? "issued" : "draft";
+  slip.issuedAt = issued ? new Date().toISOString() : null;
+  slip.issuedBy = issued ? by.id : null;
+  db.save();
+}
+
+function getPayslip(id) {
+  return db.data.payslips.find((s) => s.id === id) || null;
+}
+
+function deletePayslip(slip, by) {
+  db.data.payslips = db.data.payslips.filter((s) => s.id !== slip.id);
+  // Bonuses that were on it go back to waiting for the next payslip.
+  for (const x of db.data.extras[slip.personId] || []) if (x.paidSlipId === slip.id) x.paidSlipId = null;
+  db.save();
+  if (reimbursementSource && (slip.reimbursements || []).length) reimbursementSource.release(slip.id);
+  const p = store.getPerson(slip.personId);
+  if (slip.charged) funds.chargePayroll(-slip.charged, `Payslip deleted – ${p ? p.displayName : "former staff"}, ${periodLabel(slip.period)}`, by);
+}
+
+function totals(slip) {
+  const gross = sum(slip.payments);
+  const deductions = sum(slip.deductions);
+  const byKind = (k) => sum(slip.deductions.filter((l) => l.kind === k));
+  const reimbursed = sum(slip.reimbursements || []);
+  return { gross, deductions, reimbursed, net: money(gross - deductions + reimbursed), tax: byKind("tax"), ni: byKind("ni"), pension: byKind("pension"), employer: sum(slip.employerItems), cost: money(gross + sum(slip.employerItems) + reimbursed) };
+}
+
+// Year-to-date totals: issued payslips in the same tax year, up to and including this one.
+function yearToDate(slip) {
+  const from = taxYearStart(slip.payDate);
+  const list = db.data.payslips.filter((s) => s.personId === slip.personId && s.payDate >= from && s.payDate <= slip.payDate && (s.status === "issued" || s.id === slip.id));
+  const ytd = { gross: 0, tax: 0, ni: 0, pension: 0, net: 0 };
+  for (const s of list) {
+    const t = totals(s);
+    for (const k of Object.keys(ytd)) ytd[k] = money(ytd[k] + t[k]);
+  }
+  return { ...ytd, from, taxMonth: taxMonth(slip.payDate) };
+}
+
+function summaryView(slip) {
+  const p = store.getPerson(slip.personId);
+  const t = totals(slip);
+  return {
+    id: slip.id,
+    personId: slip.personId,
+    person: p ? { id: p.id, displayName: p.displayName, jobTitle: p.jobTitle, avatarUrl: store.publicView(p).avatarUrl } : { displayName: "Former staff" },
+    period: slip.period,
+    periodLabel: periodLabel(slip.period),
+    payDate: slip.payDate,
+    employer: slip.employer,
+    status: slip.status,
+    additional: !!slip.additional,
+    approvedBy: slip.approvedBy ? ((store.getPerson(slip.approvedBy) || {}).displayName || "Former staff") : null,
+    createdBy: slip.createdBy,
+    updatedBy: slip.updatedBy || null,
+    gross: t.gross,
+    net: t.net,
+    cost: t.cost,
+    issuedAt: slip.issuedAt,
+  };
+}
+
+function fullView(slip) {
+  const p = store.getPerson(slip.personId);
+  return {
+    ...summaryView(slip),
+    employeeName: p ? `${p.firstName || ""} ${p.lastName || ""}`.trim() || p.displayName : "Former staff",
+    jobTitle: p ? p.jobTitle : "",
+    employeeNumber: slip.employeeNumber,
+    niNumber: slip.niNumber,
+    taxCode: slip.taxCode,
+    niCategory: slip.niCategory,
+    periodStart: periodBounds(slip.period).start,
+    periodEnd: periodBounds(slip.period).end,
+    payments: slip.payments,
+    deductions: slip.deductions,
+    employerItems: slip.employerItems,
+    reimbursements: slip.reimbursements || [],
+    note: slip.note,
+    totals: totals(slip),
+    ytd: yearToDate(slip),
+  };
+}
+
+function mine(person) {
+  return db.data.payslips.filter((s) => s.personId === person.id && s.status === "issued")
+    .sort((a, b) => b.payDate.localeCompare(a.payDate)).map(summaryView);
+}
+
+function forPeriod(period) {
+  return db.data.payslips.filter((s) => s.period === period).map(summaryView)
+    .sort((a, b) => a.person.displayName.localeCompare(b.person.displayName));
+}
+
+function peopleList() {
+  return store.employees().map((p) => {
+    const d = payDetails(p.id);
+    return {
+      id: p.id, displayName: p.displayName, jobTitle: p.jobTitle, company: p.company,
+      avatarUrl: store.publicView(p).avatarUrl,
+      payType: d.payType, monthlySalary: d.monthlySalary, hourlyRate: d.hourlyRate, isStandard: d.isStandard,
+      pensionEmployerPct: d.pensionEmployerPct,
+      band: bandFor(p.id),
+      pendingBonuses: pendingBonuses(p.id).length,
+      commission: commissionFor(p.id, new Date().toISOString().slice(0, 7)).length,
+    };
+  }).sort((a, b) => a.displayName.localeCompare(b.displayName));
+}
+
+// ---------- Year end ----------
+
+function taxYearLabel(start) {
+  const y = Number(start.slice(0, 4));
+  return `${y}/${String(y + 1).slice(2)}`;
+}
+
+function taxYearEnd(start) {
+  return `${Number(start.slice(0, 4)) + 1}-04-05`;
+}
+
+// Tax years that have payslips, newest first (always including the current one).
+function taxYears() {
+  const set = new Set([taxYearStart(new Date().toISOString().slice(0, 10))]);
+  for (const s of db.data.payslips) set.add(taxYearStart(s.payDate));
+  return [...set].sort().reverse().map((start) => ({ start, end: taxYearEnd(start), label: taxYearLabel(start) }));
+}
+
+function yearSlips(start, personId) {
+  const end = taxYearEnd(start);
+  return db.data.payslips.filter((s) => s.status === "issued" && s.payDate >= start && s.payDate <= end && (!personId || s.personId === personId))
+    .sort((a, b) => a.payDate.localeCompare(b.payDate));
+}
+
+function yearFigures(list) {
+  const f = { payslips: list.length, gross: 0, taxable: 0, tax: 0, ni: 0, pension: 0, studentLoan: 0, net: 0, employerNi: 0, employerPension: 0, reimbursed: 0, cost: 0 };
+  for (const s of list) {
+    const t = totals(s);
+    f.gross += t.gross;
+    f.taxable += taxablePayOf(s);
+    f.tax += t.tax;
+    f.ni += t.ni;
+    f.pension += t.pension;
+    f.studentLoan += sum(s.deductions.filter((l) => l.kind === "studentLoan"));
+    f.net += t.net;
+    f.employerNi += sum(s.employerItems.filter((l) => /National Insurance/i.test(l.label)));
+    f.employerPension += sum(s.employerItems.filter((l) => /pension/i.test(l.label)));
+    f.reimbursed += t.reimbursed;
+    f.cost += t.cost;
+  }
+  for (const k of Object.keys(f)) f[k] = money(f[k]);
+  return f;
+}
+
+// Everyone's totals for a tax year (issued payslips only), for HR's year-end page.
+function yearEnd(start) {
+  if (!/^\d{4}-04-06$/.test(String(start || ""))) throw new store.ValidationError("Choose a tax year.");
+  const byPerson = {};
+  for (const s of yearSlips(start)) (byPerson[s.personId] = byPerson[s.personId] || []).push(s);
+  const people = Object.entries(byPerson).map(([personId, list]) => {
+    const p = store.getPerson(personId);
+    return { personId, displayName: p ? p.displayName : "Former staff", jobTitle: p ? p.jobTitle : "", ...yearFigures(list) };
+  }).sort((a, b) => a.displayName.localeCompare(b.displayName));
+  return { start, end: taxYearEnd(start), label: taxYearLabel(start), people, totals: yearFigures(yearSlips(start)), employer: EMPLOYER };
+}
+
+// A P60-style end of year certificate for one person.
+function p60(personId, start) {
+  if (!/^\d{4}-04-06$/.test(String(start || ""))) throw new store.ValidationError("Choose a tax year.");
+  const p = store.getPerson(personId);
+  const list = yearSlips(start, personId);
+  const last = list[list.length - 1];
+  const d = payDetails(personId);
+  return {
+    label: taxYearLabel(start), start, end: taxYearEnd(start), employer: EMPLOYER,
+    employeeName: p ? `${p.firstName || ""} ${p.lastName || ""}`.trim() || p.displayName : "Former staff",
+    jobTitle: p ? p.jobTitle : "",
+    employeeNumber: last ? last.employeeNumber : d.employeeNumber,
+    niNumber: last ? last.niNumber : d.niNumber,
+    taxCode: last ? last.taxCode : d.taxCode,
+    complete: taxYearEnd(start) < new Date().toISOString().slice(0, 10),
+    ...yearFigures(list),
+  };
+}
+
+// Every issued payslip in a tax year as CSV rows, for spreadsheets.
+function yearCsv(start) {
+  const cell = (v) => {
+    const t = String(v == null ? "" : v);
+    return /[",\n]/.test(t) || /^[=+\-@]/.test(t) ? `"${t.replace(/^([=+\-@])/, "'$1").replace(/"/g, '""')}"` : t;
+  };
+  const rows = [["Employee", "Employee number", "NI number", "Tax code", "Period", "Pay date", "Gross pay", "Taxable pay", "Income tax", "Employee NI", "Employee pension", "Student loan", "Other deductions", "Expenses repaid", "Net pay", "Employer NI", "Employer pension", "Total cost"]];
+  for (const s of yearSlips(start)) {
+    const p = store.getPerson(s.personId);
+    const t = totals(s);
+    const other = sum(s.deductions.filter((l) => !AUTO_KINDS.includes(l.kind)));
+    rows.push([p ? p.displayName : "Former staff", s.employeeNumber, s.niNumber, s.taxCode, periodLabel(s.period), s.payDate, t.gross, taxablePayOf(s), t.tax, t.ni, t.pension,
+      sum(s.deductions.filter((l) => l.kind === "studentLoan")), other, t.reimbursed, t.net,
+      sum(s.employerItems.filter((l) => /National Insurance/i.test(l.label))), sum(s.employerItems.filter((l) => /pension/i.test(l.label))), t.cost]);
+  }
+  return rows.map((r) => r.map(cell).join(",")).join("\r\n") + "\r\n";
+}
+
+// Payroll cost in a date range (issued or draft), for the activity reports.
+function costBetween(from, to) {
+  const list = db.data.payslips.filter((s) => s.payDate >= from && s.payDate <= to);
+  return { payslips: list.length, cost: money(list.reduce((n, s) => n + totals(s).cost, 0)), net: money(list.reduce((n, s) => n + totals(s).net, 0)) };
+}
+
+function removePerson(personId) {
+  // Payslips are kept (they're payroll records); only stored pay details go.
+  if (db.data.payDetails[personId]) {
+    delete db.data.payDetails[personId];
+    db.save();
+  }
+}
+
+module.exports = {
+  MANAGE, RATES, EMPLOYER, STANDARD_MONTHLY_SALARY, init, payDetails, savePayDetails, estimate, calculate, createDraft,
+  updateDraft, setIssued, getPayslip, deletePayslip, fullView, summaryView, mine, forPeriod, peopleList, periodLabel,
+  removePerson, forecastMonthlyCost, addPayChange, deletePayChange, payChangesView, upcomingPayChanges, useReimbursements,
+  taxYears, yearEnd, p60, yearCsv, costBetween, taxYearStart,
+  payHistoryView, saveBand, deleteBand, bands, bandFor, addExtra, deleteExtra, extrasView, approvalRequired, setApprovalRequired, approve, unapprove, remainingForPeriod, payeTax, employeeNi, taxMonth, assertCanRun,
+};

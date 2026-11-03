@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Install only oldstaffportal.hngroup.org.uk: the oldest staff portal (8 October 2026, commit 563ad67), exactly as it
-# was, beside everything else. It shares nothing with the real staff portal (own folder, port 5640, PM2
+# Install only oldstaffportal.hngroup.org.uk: the staff portal as it was just before its sign-in moved to HN Group Auth
+# (13 October 2026, commit 68caec7), exactly as it was, beside everything else (the user's request, 3 November 2026). It shares nothing with the real staff portal (own folder, port 5640, PM2
 # hn-old-staff-portal, data in /var/lib/hn-old-staff-portal) and is deliberately not on website control, Links, Status,
 # the browser or anywhere else (the user's request, 3 November 2026). Other websites are untouched.
 set -euo pipefail
@@ -17,7 +17,7 @@ CHALLENGE_DIR=/var/www/hn-old-staff-portal-acme
 LE_DIR="/etc/letsencrypt/live/$DOMAIN"
 [ "$(id -u)" = 0 ] || { echo 'Run with sudo.'; exit 1; }
 for tool in node pm2 nginx certbot curl python3 openssl; do command -v "$tool" >/dev/null || { echo "Required tool missing: $tool"; exit 1; }; done
-node --check "$SCRIPT_DIR/app/server.js"
+for f in "$SCRIPT_DIR/app/server.js" "$SCRIPT_DIR"/app/lib/*.js; do node --check "$f"; done
 if python3 -c "import socket;s=socket.socket();s.settimeout(2);exit(s.connect_ex(('127.0.0.1',$PORT)))"; then
     pm2 describe "$NAME" >/dev/null 2>&1 || { echo "Port $PORT belongs to another service. No changes made."; exit 1; }
 fi
@@ -29,21 +29,23 @@ for config in /etc/nginx/sites-enabled/* /etc/nginx/conf.d/*.conf; do
     fi
 done
 
-mkdir -p "$APP/public" "$CHALLENGE_DIR" /etc/nginx/sites-available /etc/nginx/sites-enabled
+mkdir -p "$CHALLENGE_DIR" /etc/nginx/sites-available /etc/nginx/sites-enabled
 install -d -m 700 "$DATA"
-cp "$SCRIPT_DIR/app/server.js" "$APP/server.js"
-cp -r "$SCRIPT_DIR/app/public/." "$APP/public/"
+# The app folder is replaced as a whole, so nothing from an earlier old-portal version is left behind.
+rm -rf "$APP.new" && mkdir -p "$APP.new"
+cp -r "$SCRIPT_DIR/app/." "$APP.new/"
+rm -rf "$APP.old" && { [ ! -d "$APP" ] || mv "$APP" "$APP.old"; } && mv "$APP.new" "$APP" && rm -rf "$APP.old"
 
-# The old portal makes an admin / admin account the first time it starts. On a public address that would let anyone in,
-# so the account is made here first with a random password (same scrypt format the old portal uses), shown once below.
+# This version makes admin@hngroup.org.uk / admin the first time it starts. On a public address that would let anyone
+# in, so the account is made here first (with the portal's own code) with a random password, shown once below.
 NEW_PASSWORD=""
-if [ ! -f "$DATA/users.json" ]; then
+if [ ! -f "$DATA/people.json" ]; then
+    pm2 stop "$NAME" >/dev/null 2>&1 || true
     NEW_PASSWORD="$(openssl rand -base64 18 | tr -d '/+=' | cut -c1-16)"
-    HN_PASSWORD="$NEW_PASSWORD" node -e '
-const crypto=require("crypto"),fs=require("fs");
-const salt=crypto.randomBytes(16).toString("hex"),hash=crypto.scryptSync(process.env.HN_PASSWORD,salt,64).toString("hex");
-fs.writeFileSync(process.argv[1],JSON.stringify([{username:"admin",displayName:"Administrator",role:"Administrator",company:"HN Group",mustChangePassword:true,salt,hash}],null,2),{mode:0o600});
-' "$DATA/users.json"
+    (cd "$APP" && HN_PASSWORD="$NEW_PASSWORD" DATA_DIR="$DATA" node -e '
+const store=require("./lib/store");store.init(process.env.DATA_DIR);
+const admin=store.findSystemAccount(store.ADMIN_USERNAME);if(!admin){console.error("No admin account was made.");process.exit(1);}
+store.setPassword(admin,process.env.HN_PASSWORD);admin.account.enabled=true;admin.account.mustChangePassword=true;delete admin.account.code;store.savePeople();process.exit(0);')
 fi
 
 pm2 startOrRestart "$SCRIPT_DIR/ecosystem.config.cjs" --update-env
@@ -87,7 +89,7 @@ show_password() {
     if [ -n "$NEW_PASSWORD" ]; then
         echo
         echo '  Old staff portal sign-in (shown once; you will be asked to change it):'
-        echo '    Username: admin'
+        echo '    Email: admin@hngroup.org.uk'
         echo "    Password: $NEW_PASSWORD"
         echo
     fi
