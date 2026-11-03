@@ -72,14 +72,19 @@
 .byline .tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-left: 0.3rem; }
 .contract { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 1.5rem; align-items: start; }
 .viewer { border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow); position: sticky; top: calc(var(--header-h) + 1rem); }
-.viewer-bar { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 0.8rem; padding: 0.7rem 0.9rem 0.7rem 1rem; border-bottom: 1px solid var(--border); }
-.viewer-bar .file { display: flex; align-items: center; gap: 0.7rem; min-width: 0; }
+.viewer-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 0.8rem; padding: 0.7rem 0.9rem 0.7rem 1rem; border-bottom: 1px solid var(--border); }
+/* Two rows (the user's report, 3 November 2026: the toolbar was squashed and overlapping): the file and its buttons on
+   top, the zoom controls and page number underneath, so nothing wraps letter by letter or sits on anything else. */
+.viewer-bar .file { display: flex; align-items: center; gap: 0.7rem; min-width: 12rem; flex: 1 1 14rem; }
 .viewer-bar .file > span:last-child { min-width: 0; }
 .viewer-bar strong { display: block; font-size: 0.93rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.viewer-bar small { display: block; color: var(--muted); font-size: 0.78rem; }
-.viewer-bar .actions { display: flex; align-items: center; gap: 0.4rem; }
+.viewer-bar small { display: block; color: var(--muted); font-size: 0.78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.viewer-bar .actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0.4rem; margin-left: auto; }
+.viewer-bar .btn, .viewer-bar .btn-text { white-space: nowrap; }
+.viewer-bar .btn-small { padding: 0.4rem 0.95rem; font-size: 0.84rem; line-height: 1.3; }
 .viewer-bar .actions .btn-text { text-decoration: none; }
-.zoom { display: flex; align-items: center; gap: 0.3rem; }
+.zoom { order: 3; flex: 1 0 100%; display: flex; align-items: center; gap: 0.3rem; padding-top: 0.55rem; border-top: 1px solid var(--border); }
+.zoom .page-no { margin-left: auto; }
 .zoom:empty { display: none; }
 .zoom .icon-btn { width: 30px; height: 30px; font-size: 1rem; line-height: 1; }
 .zoom-text { min-width: 3rem; text-align: center; font-weight: 700; font-size: 0.82rem; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -130,7 +135,7 @@ select { appearance: none; -webkit-appearance: none; padding-right: 2.2rem !impo
 .history div { display: grid; gap: 0.1rem; padding-left: 0.9rem; border-left: 3px solid var(--accent-soft); }
 .history time { color: var(--muted); font-size: 0.78rem; }
 @media (max-width: 1080px) { .contract { grid-template-columns: minmax(0, 1fr); } .viewer { position: static; } .pages, .viewer iframe { height: 72vh; min-height: 420px; } }
-@media (max-width: 640px) { .viewer-bar { grid-template-columns: minmax(0, 1fr) auto; } .zoom { grid-column: 1 / -1; grid-row: 2; justify-content: center; } .pages { padding: 0.9rem; } .byline .tags { margin-left: 0; } }
+@media (max-width: 640px) { .viewer-bar .actions { margin-left: 0; justify-content: flex-start; } .pages { padding: 0.9rem; } .byline .tags { margin-left: 0; } }
 
 /* Getting a draft signed */
 .draft { padding: 0 !important; overflow: visible; }
