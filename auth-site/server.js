@@ -11,6 +11,8 @@ const ORIGIN = 'https://auth.hngroup.org.uk';
 // Registered applications: fixed callbacks and who may use them.
 const CLIENTS = {
   echo: { name: 'Echo', callback: 'https://echo.hngroup.org.uk/auth/callback', allowed: u => ['catnap@hngroup.org.uk', 'charlie.livsey@hngroup.org.uk'].includes(String(u.username || '').trim().toLowerCase()) && !u.impersonated, denied: 'Echo is private to its authorised HN Group accounts.' },
+  // evan.hngroup.org.uk (the user's request, 4 November 2026): private to the same two sign-in accounts as Echo.
+  evan: { name: 'Private page', callback: 'https://evan.hngroup.org.uk/auth/callback', allowed: u => ['catnap@hngroup.org.uk', 'charlie.livsey@hngroup.org.uk'].includes(String(u.username || '').trim().toLowerCase()) && !u.impersonated, denied: 'This page is private.' },
   bots: {name:'HN Group Bots',callback:'https://bots.hngroup.org.uk/auth/callback',allowed:u=>!!(u.ownerAccess||u.statusAdminAllowed)&&!u.impersonated,denied:'Only owner-level accounts and Super Admin members can manage bots.'},
   browser: { name: 'HN Browser', native: true, allowed: () => true, denied: 'This account cannot use HN Browser.' },
   'app-manager': { name: 'HN Group App Manager', native: true, allowed: () => true, denied: 'This account cannot use HN Group App Manager.' },
