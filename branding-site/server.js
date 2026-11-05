@@ -37,6 +37,7 @@ const COLOURS = [
 // The multicolour stripe, left to right, with each colour's share of the width.
 const STRIPE = [['pink', 14], ['purple', 14], ['yellow', 6], ['teal', 20], ['plum', 10], ['raspberry', 10], ['green', 13], ['navy', 13]];
 
+const DISCORD_SERVERS = [['horizon-network-hq', 'Horizon Network HQ'], ['horizon-advertising', 'Horizon Advertising'], ['horizon-development', 'Horizon Development'], ['horizon-network-staff', 'Horizon Network | Staff Server']];
 const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ');
 
 function downloads(file) {
@@ -58,12 +59,18 @@ function homePage(user) {
     '<span class="mono">' + hex + '</span><span class="mono muted">RGB ' + rgb(hex) + '</span>' + (use ? '<span class="muted small">' + esc(use) + '</span>' : '') + '</span><span class="copy-hint">Copy</span></button>').join('');
   const stripe = '<div class="stripe-demo" role="img" aria-label="The HN multicolour stripe">' + STRIPE.map(([id, w]) => '<i class="c-' + id + ' f' + w + '"></i>').join('') + '</div>' +
     '<ol class="stripe-list">' + STRIPE.map(([id, w]) => { const c = COLOURS.find((x) => x[0] === id); return '<li><span class="dot c-' + id + '"></span>' + esc(c[1]) + ' <span class="mono muted">' + c[2] + '</span> · ' + w + '%</li>'; }).join('') + '</ol>';
+  // Discord logos (the user's request, 5 November 2026): the server icons and the HN Group Auth bot's picture and banner,
+  // shown round as Discord shows them. Copies of brand/discord-servers and brand/discord-bot.
+  const discordTile = (file, label, kind) => '<figure class="tile discord-tile' + (kind === 'banner' ? ' wide' : '') + '"><div class="preview discord ' + kind + '"><img src="/assets/brand/png/' + file + '.png" alt="' + esc(label) + '" loading="lazy"></div>' +
+    '<figcaption><span>' + esc(label) + '</span><span class="dls">' + downloads(file) + '</span></figcaption></figure>';
+  const discord = '<h3 class="sub">Server icons</h3><div class="tiles">' + DISCORD_SERVERS.map(([f, l]) => discordTile('discord-server-' + f, l, 'icon')).join('') + '</div>' +
+    '<h3 class="sub">HN Group Auth bot</h3><div class="tiles">' + discordTile('discord-bot-avatar', 'Bot profile picture', 'icon') + discordTile('discord-bot-banner', 'Bot banner', 'banner') + '</div>';
   const emailLogos = COMPANIES.filter((c) => has('png', c.id + '-email-logo.png')).map((c) => tile(c.id + '-email-logo', c.name, false)).join('');
 
   const body =
     '<section class="hero"><p class="eyebrow">HN Group · Staff only</p><h1>Brand centre.</h1>' +
     '<p class="lede">The approved logos, colours and type for HN Group and its companies. Download what you need, and follow the guidance below so everything we make looks like it belongs together.</p>' +
-    '<nav class="jump" aria-label="On this page"><a href="#logos">Logos</a><a href="#colours">Colours</a><a href="#stripe">Stripe</a><a href="#type">Typography</a><a href="#rules">Using the logos</a><a href="#email">Email signatures</a><a href="#icon">Tab icon</a></nav></section>' +
+    '<nav class="jump" aria-label="On this page"><a href="#logos">Logos</a><a href="#colours">Colours</a><a href="#stripe">Stripe</a><a href="#type">Typography</a><a href="#rules">Using the logos</a><a href="#email">Email signatures</a><a href="#discord">Discord logos</a><a href="#icon">Tab icon</a></nav></section>' +
 
     '<section class="block" id="logos"><h2>Logos</h2><p class="intro">Every file is the original artwork supplied for the group. Use the regular version on light backgrounds and the white version on dark ones. SVG is best for websites and print; PNG is for apps that don’t accept SVG.</p>' + logos + '</section>' +
 
@@ -83,6 +90,7 @@ function homePage(user) {
     '<section class="block" id="email"><h2>Email signatures</h2><p class="intro">Make your own branded signature in the staff portal. It fills in your details from your staff profile and works in Gmail, Outlook and Apple Mail.</p>' +
     '<p><a class="button" href="https://staff.hngroup.org.uk/signature">Open the signature maker →</a></p><h3 class="sub">Signature logos</h3><div class="tiles">' + emailLogos + '</div></section>' +
 
+    '<section class="block" id="discord"><h2>Discord logos</h2><p class="intro">Icons for our Discord servers and the picture and banner of the HN Group Auth bot. Upload them as they are (1024 × 1024 for icons): Discord shows icons as a circle, as below.</p>' + discord + '</section>' +
     '<section class="block" id="icon"><h2>Tab icon</h2><div class="icon-row"><div class="preview icon-preview"><img src="/assets/favicon.svg" alt="HN Group tab icon" width="64" height="64"></div>' +
     '<p class="muted">The browser tab icon used across HN Group websites. Use it for new HN Group sites and tools.</p><p class="dls"><a class="dl" href="/assets/favicon.svg" download="hn-group-tab-icon.svg">SVG</a></p></div></section>';
   return layout({ title: 'Brand centre', user, body });

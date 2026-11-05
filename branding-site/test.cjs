@@ -104,6 +104,14 @@ test('brand centre: staff only, sign-in, downloads and sign-out', async () => {
       assert.equal(f.status, 200, href);
       await f.arrayBuffer();
     }
+    // Discord logos: the four server icons and the bot's picture and banner, each the same file as in brand/.
+    assert.match(html, /id="discord"><h2>Discord logos<\/h2>/);
+    for (const [served, source] of [['discord-server-horizon-network-hq', 'discord-servers/horizon-network-hq'], ['discord-server-horizon-advertising', 'discord-servers/horizon-advertising'], ['discord-server-horizon-development', 'discord-servers/horizon-development'],
+      ['discord-server-horizon-network-staff', 'discord-servers/horizon-network-staff'], ['discord-bot-avatar', 'discord-bot/hn-group-bot-avatar'], ['discord-bot-banner', 'discord-bot/hn-group-bot-banner']]) {
+      assert.ok(html.includes('/assets/brand/png/' + served + '.png'), served);
+      const bytes = Buffer.from(await (await get('/assets/brand/png/' + served + '.png', session)).arrayBuffer());
+      assert.ok(bytes.equals(require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'brand', source + '.png'))), served + ' matches brand/' + source);
+    }
     const logo = await get('/assets/brand/png/horizon-advertising-logo.png', session);
     assert.equal(logo.headers.get('content-type'), 'image/png');
     assert.equal(logo.headers.get('cache-control'), 'private, no-store');
