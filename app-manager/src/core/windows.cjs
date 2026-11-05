@@ -67,7 +67,8 @@ class WindowsPlatform {
     if (r.code !== 0) throw fail('Installed apps couldn’t be checked.', { detail: r.err.trim() });
     let items = []; try { items = JSON.parse(r.out.trim() || '[]'); } catch {}
     const local = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
-    const fallbacks = names.flatMap((n) => [path.win32.join(local, 'Programs', n), ...[process.env.ProgramFiles, process.env['ProgramFiles(x86)']].filter(Boolean).map((p) => path.win32.join(p, n))]);
+    // A one-click per-user install goes in %LOCALAPPDATA%\\Programs\\<package name> (winDir), others in a folder named after the app.
+    const fallbacks = [...(a.winDir ? [path.win32.join(local, 'Programs', a.winDir)] : []), ...names.flatMap((n) => [path.win32.join(local, 'Programs', n), ...[process.env.ProgramFiles, process.env['ProgramFiles(x86)']].filter(Boolean).map((p) => path.win32.join(p, n))])];
     const hit = locate(Array.isArray(items) ? items : [items], a, fallbacks, (f) => fs.existsSync(f));
     if (!hit) return null;
     const { dir, exe, registered } = hit;

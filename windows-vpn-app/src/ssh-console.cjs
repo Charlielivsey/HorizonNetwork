@@ -13,6 +13,8 @@ const net=require('node:net'),crypto=require('node:crypto'),{Client}=require('ss
 const fingerprint=key=>'SHA256:'+crypto.createHash('sha256').update(key).digest('base64').replace(/=+$/,'');
 const out=text=>process.stdout.write(text);
 const tty=!!(process.stdin.isTTY&&process.stdout.isTTY);
+// The window's title says HN Secure Gateway, not the helper's file name ("HN Secure Network SSH.exe").
+if(process.stdout.isTTY)process.stdout.write('\x1b]0;HN Secure Gateway · SSH\x07');
 const C={dim:'\x1b[2m',violet:'\x1b[38;2;201;180;255m',green:'\x1b[38;2;124;211;160m',amber:'\x1b[38;2;242;199;107m',red:'\x1b[38;2;242;138;168m',bold:'\x1b[1m',reset:'\x1b[0m'};
 
 // One JSON message per line, both ways.
