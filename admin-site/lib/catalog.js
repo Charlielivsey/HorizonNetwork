@@ -9,7 +9,7 @@ const sites=[
 ['network','Horizon Network','hn-network',3600,['network.hngroup.org.uk','horizon-network.co.uk','www.horizon-network.co.uk','horizonetwork.com','www.horizonetwork.com']],
 ['staff','Staff portal','hn-staff-portal',3200,['staff.hngroup.org.uk']],
 ['status','Service status','hn-status',3300,['status.hngroup.org.uk']],
-['links','HN Group Links','hn-links',3700,['links.hngroup.org.uk']],
+['links','HN Group Sites','hn-links',3700,['sites.hngroup.org.uk','links.hngroup.org.uk']],
 ['wiki','HN Group Wiki','hn-wiki',3800,['wiki.hngroup.org.uk']],
 ['branding','Brand centre','hn-branding',4800,['branding.hngroup.org.uk']],
 ['companies','Company register','hn-companies',4900,['companies.hngroup.org.uk']],

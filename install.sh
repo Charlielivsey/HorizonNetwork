@@ -117,7 +117,7 @@ if pm2 describe ha-website >/dev/null 2>&1 || [ -e /etc/nginx/sites-enabled/ha-w
     if nginx -t >/dev/null 2>&1; then systemctl reload nginx; fi
     echo "Removed the Horizon Advertising website (ha-website)."
 fi
-changed links-site/ && run 'Links' bash "$ROOT/links-site/install.sh" "$EMAIL"
+changed links-site/ && run 'HN Group Sites (sites.hngroup.org.uk)' bash "$ROOT/links-site/install.sh" "$EMAIL"
 changed branding-site/ && run 'Brand centre (branding.hngroup.org.uk)' bash "$ROOT/branding-site/install.sh" "$EMAIL"
 changed companies-site/ && run 'Company register (companies.hngroup.org.uk)' bash "$ROOT/companies-site/install.sh" "$EMAIL"
 changed accounts-site/ && run 'HN Account (accounts.hngroup.org.uk)' bash "$ROOT/accounts-site/install.sh" "$EMAIL"

@@ -9135,7 +9135,7 @@
             }).join("") + "</div></section>" : "") +
             '<section class="home-block" id="home-colleagues" hidden></section>' +
             '<section class="home-block"><div class="panel-head tight"><h2 class="section-title">' + icon("building") + "HN Group websites</h2>" +
-            '<a class="small link-arrow" href="https://links.hngroup.org.uk/" target="_blank" rel="noopener">All links</a></div><div class="quick-grid sites">' +
+            '<a class="small link-arrow" href="https://sites.hngroup.org.uk/" target="_blank" rel="noopener">All sites</a></div><div class="quick-grid sites">' +
             HN_SITES.map(function (w) {
                 return '<a class="quick-tile site" href="' + w.href + '" target="_blank" rel="noopener"><span class="qt-icon">' + icon(w.icon) + '</span><span class="qt-text"><span class="qt-title">' + esc(w.title) +
                     '</span><span class="qt-desc">' + esc(w.desc) + "</span></span></a>";

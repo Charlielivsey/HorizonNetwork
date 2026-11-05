@@ -9,7 +9,7 @@ Full project history and rules (always read and follow):
 - **HN Secure Enclave (`hn-terminal/`) is old: ignore it.** The current desktop apps are HN Secure Gateway (formerly HN Secure Network; `mac-vpn-app/`, `windows-vpn-app/` for Windows and Linux), HN Browser (`browser-app/`) and HN Group App Manager (`app-manager/`).
 - The old root files from before HN Group (`website/`, `nginx-horizon.conf`, `setup-websites.sh`, `welcome.sh`, `setup-welcome.sh`) are not the current websites or welcome screen; the welcome is `vps-welcome/`.
 - VPS: 217.154.34.205 (inside the VPN: 10.88.0.1). Update command: `cd /root/HorizonNetwork && git pull && sudo bash install.sh` (welcome-only changes: `sudo bash vps-welcome/install.sh`).
-- Every new website goes, in the same change, into Links, website control's catalogue (`admin-site/lib/catalog.js`, `admin-site/catalog.json`, `admin-site/integrate-nginx.py`, site count in `admin-site/test.cjs`), the root `install.sh`, HN Group Auth if it signs staff in, and Cloudflare DNS (A record to 217.154.34.205, DNS only).
+- Every new website goes, in the same change, into HN Group Sites (`links-site/sites.json`), website control's catalogue (`admin-site/lib/catalog.js`, `admin-site/catalog.json`, `admin-site/integrate-nginx.py`, site count in `admin-site/test.cjs`), the root `install.sh`, HN Group Auth if it signs staff in, and Cloudflare DNS (A record to 217.154.34.205, DNS only).
 
 ## Websites (source of truth: `admin-site/catalog.json`)
 | Site | Address | PM2 : port | Folder |
@@ -24,7 +24,7 @@ Full project history and rules (always read and follow):
 | Staff portal | staff.hngroup.org.uk | hn-staff-portal :3200 (private hn-accounts :3250) | staff-portal |
 | HN Account | accounts.hngroup.org.uk | hn-account-web :5300 | accounts-site |
 | Service status | status.hngroup.org.uk | hn-status :3300 | status-site |
-| HN Group Links | links.hngroup.org.uk | hn-links :3700 | links-site |
+| HN Group Sites | sites.hngroup.org.uk (links.hngroup.org.uk redirects) | hn-links :3700 | links-site |
 | HN Group Wiki | wiki.hngroup.org.uk | hn-wiki :3800 | wiki-site |
 | HN Group Private Wiki | private.wiki.hngroup.org.uk | hn-private-wiki :5620 | private-wiki-site |
 | Company register | companies.hngroup.org.uk | hn-companies :4900 | companies-site |

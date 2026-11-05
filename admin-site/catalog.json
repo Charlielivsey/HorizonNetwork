@@ -78,10 +78,11 @@
   },
   {
     "id": "links",
-    "name": "HN Group Links",
+    "name": "HN Group Sites",
     "process": "hn-links",
     "port": 3700,
     "hosts": [
+      "sites.hngroup.org.uk",
       "links.hngroup.org.uk"
     ]
   },

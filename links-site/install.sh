@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
-# Install only links.hngroup.org.uk. Existing websites, Auth and staff services are untouched.
+# Install only HN Group Sites at sites.hngroup.org.uk (until 5 November 2026 HN Group Links at links.hngroup.org.uk, which
+# now redirects there once sites.hngroup.org.uk has its certificate; the user's request: "change the domain to sites").
+# Internal names stay: PM2 hn-links, port 3700, /opt/hn-links. Existing websites, Auth and staff services are untouched.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DOMAIN=links.hngroup.org.uk
+DOMAIN=sites.hngroup.org.uk
+OLD_DOMAIN=links.hngroup.org.uk
+OLD_LE_DIR="/etc/letsencrypt/live/$OLD_DOMAIN"
 EMAIL="${1:-}"
 SITE=/etc/nginx/sites-available/hn-links
 ENABLED=/etc/nginx/sites-enabled/hn-links
@@ -12,18 +16,20 @@ LE_DIR="/etc/letsencrypt/live/$DOMAIN"
 for tool in node pm2 nginx certbot curl python3 openssl; do command -v "$tool" >/dev/null || { echo "Required tool missing: $tool"; exit 1; }; done
 node --check "$SCRIPT_DIR/server.js"
 node --check "$SCRIPT_DIR/public/app.js"
+node -e 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).sites.length||process.exit(1)' "$SCRIPT_DIR/sites.json"
 if python3 -c 'import socket;s=socket.socket();s.settimeout(2);exit(s.connect_ex(("127.0.0.1",3700)))'; then
     pm2 describe hn-links >/dev/null 2>&1 || { echo 'Port 3700 belongs to another service. No changes made.'; exit 1; }
 fi
 for config in /etc/nginx/sites-enabled/* /etc/nginx/conf.d/*.conf; do
     [ -f "$config" ] || continue
     [ "$config" = "$ENABLED" ] && continue
-    if grep -Eq 'server_name[^;]*[[:space:]]links\.hngroup\.org\.uk([[:space:];]|$)' "$config"; then
-        echo "Another host serves $DOMAIN: $config. No changes made."; exit 1
+    if grep -Eq 'server_name[^;]*[[:space:]](sites|links)\.hngroup\.org\.uk([[:space:];]|$)' "$config"; then
+        echo "Another host serves $DOMAIN or $OLD_DOMAIN: $config. No changes made."; exit 1
     fi
 done
 mkdir -p /opt/hn-links/public "$CHALLENGE_DIR" /etc/nginx/sites-available /etc/nginx/sites-enabled
-cp "$SCRIPT_DIR/server.js" /opt/hn-links/server.js
+rm -rf /opt/hn-links/public && mkdir -p /opt/hn-links/public
+cp "$SCRIPT_DIR/server.js" "$SCRIPT_DIR/sites.json" /opt/hn-links/
 cp -r "$SCRIPT_DIR/public/." /opt/hn-links/public/
 pm2 startOrRestart "$SCRIPT_DIR/ecosystem.config.cjs" --update-env
 healthy=0
@@ -31,7 +37,7 @@ for attempt in {1..15}; do
     if curl -fsS --max-time 2 http://127.0.0.1:3700/healthz >/dev/null; then healthy=1; break; fi
     sleep 1
 done
-[ "$healthy" = 1 ] || { echo 'Links service did not start. Nginx was left unchanged.'; exit 1; }
+[ "$healthy" = 1 ] || { echo 'HN Group Sites did not start. Nginx was left unchanged.'; exit 1; }
 BACKUP="$(mktemp -d)"
 trap 'rm -rf "$BACKUP"' EXIT
 [ ! -f "$SITE" ] || cp "$SITE" "$BACKUP/site"
@@ -43,16 +49,28 @@ write_config() {
         python3 - "$SITE" <<'PYCONF'
 from pathlib import Path
 import sys
-p=Path(sys.argv[1]);s=p.read_text();s=s[:s.index('    location / {')]+'    location / { return 301 https://links.hngroup.org.uk$request_uri; }\n}\n';p.write_text(s)
+p=Path(sys.argv[1]);s=p.read_text();s=s[:s.index('    location / {')]+'    location / { return 301 https://sites.hngroup.org.uk$request_uri; }\n}\n';p.write_text(s)
 PYCONF
         cat "$SCRIPT_DIR/nginx-https.conf" >> "$SITE"
+    fi
+    # The old address keeps its certificate: it redirects to the new one when that's ready, and serves the directory until then.
+    if [ -f "$OLD_LE_DIR/fullchain.pem" ]; then
+        if [ -f "$LE_DIR/fullchain.pem" ]; then
+            python3 - "$SCRIPT_DIR/nginx-https-old.conf" >> "$SITE" <<'PYOLD'
+from pathlib import Path
+import sys
+s=Path(sys.argv[1]).read_text();print(s[:s.index('    location / {')]+'    location / { return 301 https://sites.hngroup.org.uk$request_uri; }\n}')
+PYOLD
+        else
+            cat "$SCRIPT_DIR/nginx-https-old.conf" >> "$SITE"
+        fi
     fi
     if [ ! -s /proc/net/if_inet6 ]; then sed -i '/listen \[::\]/d' "$SITE"; fi
     ln -sfn "$SITE" "$ENABLED"
     if ! nginx -t; then
         if [ -f "$BACKUP/site" ]; then cp "$BACKUP/site" "$SITE"; else rm -f "$SITE"; fi
         [ "$WAS_ENABLED" = 1 ] || rm -f "$ENABLED"
-        echo 'Links nginx configuration rolled back.'; exit 1
+        echo 'HN Group Sites nginx configuration rolled back.'; exit 1
     fi
     systemctl reload nginx
 }
@@ -98,8 +116,9 @@ PYDNS
 }
 
 if ! has_web_dns "$DOMAIN"; then
-    echo 'Links installed and running in PM2. Public DNS and SSL are pending.'
-    echo 'Add A links -> 217.154.34.205 in the hngroup.org.uk DNS zone.'
+    echo 'HN Group Sites installed and running in PM2. Public DNS and SSL for sites.hngroup.org.uk are pending;'
+    echo 'links.hngroup.org.uk keeps working meanwhile.'
+    echo 'Add A sites -> 217.154.34.205 (DNS only) in the hngroup.org.uk DNS zone.'
     echo 'Then rerun: sudo bash links-site/install.sh'
     exit 0
 fi
@@ -107,7 +126,7 @@ CERT_ARGS=()
 if [ -n "$EMAIL" ]; then CERT_ARGS+=(--email "$EMAIL"); fi
 certbot certonly --webroot -w "$CHALLENGE_DIR" -d "$DOMAIN" --cert-name "$DOMAIN" \
     --non-interactive --agree-tos --keep-until-expiring "${CERT_ARGS[@]}" \
-    --deploy-hook 'nginx -t && systemctl reload nginx' || { echo 'SSL issuance failed. Check DNS and rerun the links installer.'; exit 1; }
+    --deploy-hook 'nginx -t && systemctl reload nginx' || { echo 'SSL issuance for sites.hngroup.org.uk failed. Check DNS and rerun: sudo bash links-site/install.sh'; exit 1; }
 write_config
 if systemctl list-unit-files certbot.timer --no-legend 2>/dev/null | grep -q certbot.timer; then systemctl enable --now certbot.timer; fi
-echo 'Links installed with HTTPS: https://links.hngroup.org.uk · PM2 hn-links · port 3700.'
+echo 'HN Group Sites installed with HTTPS: https://sites.hngroup.org.uk (links.hngroup.org.uk redirects there) · PM2 hn-links · port 3700.'

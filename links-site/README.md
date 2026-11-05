@@ -1,17 +1,27 @@
-# HN Group Links
+# HN Group Sites (sites.hngroup.org.uk)
 
-Branded public directory at https://links.hngroup.org.uk. Uses the original approved company logos, locally hosted Plus Jakarta Sans, HN colours and multicolour stripe, responsive cards, light/dark themes and reduced-motion support. Search and category filters work locally; links remain usable without JavaScript. `/` focuses search and Escape clears it.
+Every HN Group website in one searchable directory. Until 5 November 2026 this was HN Group Links at
+links.hngroup.org.uk; that address now redirects here (the user's request: "improve the links website please, and change
+the domain to sites"). Internal names are unchanged: folder `links-site`, PM2 `hn-links`, loopback port 3700,
+`/opt/hn-links`, website control id `links`.
 
-The directory links to existing public companies, staff services, service status, careers and contact. Advertising and Development are identified as part of Horizon Network and link to its services page. Horizon Media Group currently links via the group’s company directory. The staff portal destination starts its existing Auth sign-in; no credentials or staff data are handled here. Links are maintained in `public/index.html`.
-
-- PM2: `hn-links`, loopback port 3700, automatically starts after reboot.
-- Installed application: `/opt/hn-links`; no database or shared runtime files.
-- Dedicated nginx host: `hn-links`; certificate: `links.hngroup.org.uk`.
-- Requires A `links` → `217.154.34.205` in the hngroup.org.uk DNS zone (direct or Cloudflare).
-- Installer checks public DNS when a local negative answer is stale, uses Certbot webroot, enables automatic renewal, and changes only its own hosting configuration. No other website installer is invoked.
+- **The list** lives in `sites.json` (group companies / staff / services, access public / staff / restricted, a company
+  logo from `public/assets/brand` or a line icon). `server.js` draws every card into the page from it, so the directory
+  works without JavaScript and search engines see it. Private pages that aren't meant to be found (the old staff portal,
+  evan.hngroup.org.uk) are never listed. Every website in website control's catalogue must be in it (the test checks).
+- **Theme:** the unchanged HN Group stylesheet (`public/assets/site.css`, copied from hngroup-site) and the shared
+  motion kit (`hn-motion.*`, listed in `brand/web/copies.json`), plus `assets/sites.css`.
+- **On the page** (`public/app.js`): search across names, descriptions and keywords (press `/`, Enter opens the first
+  match, Esc clears), section filters with counts, pinned sites kept in this browser (localStorage), and live status
+  dots and a header summary from `GET /api/status`, which passes on only each listed site's status from the Status
+  site (`STATUS_BACKEND`, default http://127.0.0.1:3300, cached a minute).
+- **Addresses:** nginx serves sites.hngroup.org.uk and links.hngroup.org.uk (website control gates both). The installer
+  gets a certificate for sites.hngroup.org.uk; links.hngroup.org.uk keeps its existing certificate and redirects to
+  sites only once sites has its certificate, so nothing breaks while DNS is being set up.
+- **DNS:** A `sites` → 217.154.34.205 (DNS only). Keep the `links` record so old links keep redirecting.
 
 ```bash
-cd /root/HorizonNetwork && git pull && sudo bash links-site/install.sh
+cd /root/HorizonNetwork && git pull && sudo bash install.sh
 ```
 
-Optional browser validation: `PLAYWRIGHT_MODULE=/path/to/playwright node links-site/browser-smoke.cjs`. Checks local responsive layouts, original logo loads, themes, search, filters, empty state, keyboard shortcuts and private-path rejection without visiting external destinations.
+Test (local servers only, needs Playwright's Chromium): `node --test links-site/test.cjs`.

@@ -23,7 +23,7 @@
         ["Sign-in, password and PIN", "Manage your HN Group account, password, PIN and signed-in devices.", "https://accounts.hngroup.org.uk", "HN Account"],
         ["Is something down?", "Live availability, maintenance and incident updates for every HN Group service.", "https://status.hngroup.org.uk", "Service status"],
         ["Apps and downloads", "Download HN Browser, HN Secure Gateway and the HN Group App Manager.", "https://downloads.hngroup.org.uk", "Downloads"],
-        ["Find a website", "Every HN Group company, website and service in one place.", "https://links.hngroup.org.uk", "HN Group Links"]
+        ["Find a website", "Every HN Group company, website and service in one place.", "https://sites.hngroup.org.uk", "HN Group Sites"]
     ];
     var FAQ = [
         ["How do I check on my request?", "When you send a request you get a private reference. Paste it into “Check a request” below to read replies, see its status and answer. Replies appear here; we don’t send them by email."],
