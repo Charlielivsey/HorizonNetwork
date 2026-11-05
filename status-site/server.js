@@ -14,8 +14,28 @@ const catalogueChanged = reconcile(db);
 const states = ['operational', 'degraded', 'outage', 'maintenance'];
 function save() { fs.writeFileSync(file + '.tmp', JSON.stringify(db), { mode: 0o600 }); fs.renameSync(file + '.tmp', file); }
 if (catalogueChanged) save();
+// Website control's maintenance mode and power, by host (loopback, refreshed with every round of checks). A website in
+// maintenance shows Under maintenance and a switched-off one shows as offline (status outage, reason switched-off), whatever
+// its checks say (the user's request, 5 November 2026).
+const CONTROL_BACKEND = process.env.CONTROL_BACKEND || 'http://127.0.0.1:4700';
+let control = { at: 0, hosts: new Map() };
+async function refreshControl() {
+  try {
+    const r = await fetch(CONTROL_BACKEND + '/_status/sites', { signal: AbortSignal.timeout(4000), redirect: 'error' });
+    if (!r.ok) throw new Error('control ' + r.status);
+    const v = await r.json(), hosts = new Map();
+    for (const site of Array.isArray(v.sites) ? v.sites : []) {
+      const hold = site.power === 'off' ? 'switched-off' : site.maintenance === true ? 'maintenance' : null;
+      if (hold) for (const h of Array.isArray(site.hosts) ? site.hosts : []) if (typeof h === 'string') hosts.set(h.toLowerCase(), hold);
+    }
+    control = { at: Date.now(), hosts };
+  } catch { if (Date.now() - control.at > 120000) control = { at: control.at, hosts: new Map() }; }
+}
+function heldBy(s) { const h = hostOf(s.url); return h ? control.hosts.get(h.toLowerCase()) || null : null; }
 function effective(s) {
   if (s.override !== 'auto') return s.override;
+  const hold = heldBy(s);
+  if (hold) return hold === 'maintenance' ? 'maintenance' : 'outage';
   const last = s.checks.at(-1);
   if (!last || Date.now() - Date.parse(last.at) > 60000) return 'unknown';
   return last.ok ? 'operational' : 'outage';
@@ -24,7 +44,7 @@ function effective(s) {
 function hostOf(url) { try { return url ? new URL(url).hostname : null; } catch { return null; } }
 function snapshot() {
   return { updatedAt: new Date().toISOString(), services: db.services.map(s => ({
-    id: s.id, name: s.name, host: hostOf(s.url), status: effective(s), lastChecked: s.checks.at(-1)?.at || null,
+    id: s.id, name: s.name, host: hostOf(s.url), status: effective(s), reason: s.override === 'auto' ? heldBy(s) : null, lastChecked: s.checks.at(-1)?.at || null,
     latency: s.checks.at(-1)?.latency ?? null,
     uptime: Object.values(s.days).reduce((a, d) => a + d.total, 0) ?
       100 * Object.values(s.days).reduce((a, d) => a + d.ok, 0) / Object.values(s.days).reduce((a, d) => a + d.total, 0) : null,
@@ -36,8 +56,11 @@ async function checkAll() {
   if (checking) return;
   checking = true;
   try {
+    await refreshControl();
     await Promise.all(db.services.map(async s => {
       if (!s.url) return;
+      // Planned maintenance and switched-off websites aren't counted against their availability.
+      if (s.override === 'auto' && heldBy(s)) return;
       const start = Date.now(); let ok = false;
       try { const r = await fetch(s.url, { signal: AbortSignal.timeout(10000), redirect: 'follow', headers: { 'User-Agent': 'HN-Status/1.0' } }); ok = r.ok; if (r.body) await r.body.cancel(); } catch {}
       if (!db.services.includes(s)) return;
@@ -130,4 +153,4 @@ if (require.main === module) {
   // Every website is checked every 15 seconds (the user's request, 5 November 2026).
   setInterval(() => void checkAll(), 15000).unref();
 }
-module.exports = { server, checkAll, snapshot };
+module.exports = { server, checkAll, snapshot, refreshControl };

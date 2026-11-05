@@ -40,6 +40,9 @@ const relative=route.slice('/__hn_control'.length),target=path.resolve(PUBLIC,'.
 if(req.headers['x-hn-control-render']==='1')return maintenance(res,site,host,state,req.headers['x-hn-original-uri']||'/');
 throw fail(404,'Not found.');}
 if(route==='/healthz'&&req.method==='GET')return json(res,200,{ok:true});
+// Each website's maintenance mode and power, for the Status site over loopback only (never through nginx, which sets X-Real-IP), so
+// Status and HN Group Sites show maintenance and switched-off websites (the user's request, 5 November 2026).
+if(route==='/_status/sites'&&req.method==='GET'){const local=['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress);if(!local||req.headers['x-real-ip']||req.headers['x-forwarded-for'])throw fail(404,'Not found.');const all=store.state.sites;return json(res,200,{sites:sites.map(site=>({id:site.id,hosts:site.hosts,maintenance:all[site.id]?.mode!=='off',power:all[site.id]?.power==='off'?'off':'on'}))});}
 if(route==='/auth/login'&&req.method==='GET')return await identity.begin(res);
 if(route==='/auth/callback'||route==='/bypass/callback')throw fail(410,'Use the control panel’s own sign-in page.');
 if(route==='/bypass/start'&&req.method==='GET'){const site=sites.find(s=>s.id===url.searchParams.get('site')),host=url.searchParams.get('host'),back=url.searchParams.get('back')||'/';if(!site||!site.hosts.includes(host)||!back.startsWith('/')||back.startsWith('//')||back.includes(String.fromCharCode(92))||new URL(back,'https://'+host).origin!=='https://'+host||/[\r\n]/.test(back)||back.length>1500)throw fail(400,'Invalid maintenance sign-in request.');const state=store.state.sites[site.id];if(state.power!=='on'||state.mode!=='admins')throw fail(403,'This website does not currently allow a maintenance bypass.');return await identity.begin(res,{site:site.id,host,back});}
