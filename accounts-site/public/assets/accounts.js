@@ -129,7 +129,14 @@
     const photo = section('Photo', 'Shown on your staff profile, in HN Browser and on HN Group websites you sign in to.',
       h('div', { class: 'photo-row' }, avatar(me, 'xl'), h('div', { class: 'buttons' },
         h('label', { class: 'button secondary', for: 'photo-file', text: me.avatarUrl ? 'Change photo' : 'Add photo' }), photoInput,
-        me.avatarUrl ? h('button', { class: 'button secondary', type: 'button', onclick: async () => { if (!(await confirmDialog('Remove your photo?', 'Your initials will be shown instead.', 'Remove', true))) return; me = (await api('/api/me/avatar/remove', {})).user; render('profile'); toast('Photo removed.'); } }, 'Remove') : null)));
+        me.avatarUrl ? h('button', { class: 'button secondary', type: 'button', onclick: async () => { if (!(await confirmDialog('Remove your photo?', 'Your initials will be shown instead.', 'Remove', true))) return; me = (await api('/api/me/avatar/remove', {})).user; render('profile'); toast('Photo removed.'); } }, 'Remove') : null)),
+      // Follow my Discord picture (the user's request, 5 November 2026): on by default; the bot copies the picture onto the
+      // staff profile whenever it changes on Discord. A photo uploaded here stays until the Discord picture next changes.
+      me.system ? null : h('label', { class: 'check discord-photo' }, h('input', { type: 'checkbox', checked: me.discordPhotoSync !== false, disabled: !(me.discord && me.discord.id), onchange: async (e) => {
+        const on = e.target.checked; e.target.disabled = true;
+        try { me = (await api('/api/me/discord-photo', { on })).user; render('profile'); toast(on ? 'Your photo now follows your Discord picture.' : 'Your photo will stay as it is.'); }
+        catch (err) { e.target.checked = !on; e.target.disabled = false; toast(err.message, true); }
+      } }), h('span', {}, h('b', { text: 'Use my Discord profile picture' }), h('span', { class: 'muted small', text: me.discord && me.discord.id ? 'Your photo changes whenever you change your picture on Discord' + (me.discord.username ? ' (@' + me.discord.username + ')' : '') + '. Turn this off to keep a photo you upload.' : 'Your staff profile isn’t linked to a Discord account yet. Ask someone who manages staff to add your Discord user ID.' }))));
     const details = section('Details', 'Your job title, company and email addresses come from your staff record.', form([
       h('div', { class: 'grid-form' },
         field('Display name', 'displayName', me.displayName, { max: 80, required: true, hint: 'Shown everywhere in HN Group.' }),

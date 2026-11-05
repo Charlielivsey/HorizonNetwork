@@ -27,7 +27,7 @@ function serviceRequest(req) {
 function loginNext(value) {
   return typeof value === 'string' && /^\/status-admin\/authorize\?state=[a-f0-9]{64}$/.test(value) ? value : null;
 }
-function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent, handleChangePassword, handleSetCode, verifyBrowserPin, verifyVpnPin, issueSession, googleLogin, discordLogin }) {
+function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent, handleChangePassword, handleSetCode, verifyBrowserPin, verifyVpnPin, issueSession, googleLogin, discordLogin, syncDiscordPhotos }) {
   const codes = new Map();
   function current(token) {
     const data = sessions.get(token);
@@ -136,8 +136,9 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       discordLogin(req, res, { id: body.id, username: typeof body.username === 'string' ? body.username.slice(0, 64) : '' }); return true;
     }
     // HN Group Auth's Discord bot keeps the stored usernames up to date.
-    if (pathname === '/api/auth/discord-accounts') { sendJson(res, 200, { ids: store.discordIds() }); return true; }
-    if (pathname === '/api/auth/discord-update') { sendJson(res, 200, { changed: store.updateDiscordNames(body.updates) }); return true; }
+    if (pathname === '/api/auth/discord-accounts') { sendJson(res, 200, { ids: store.discordIds(body.pending === true) }); return true; }
+    // New Discord details from the bot; changed pictures are then copied onto the profiles that follow Discord.
+    if (pathname === '/api/auth/discord-update') { sendJson(res, 200, { changed: store.updateDiscordNames(body.updates) }); if (syncDiscordPhotos) syncDiscordPhotos().catch(() => {}); return true; }
     // Lets HN Group services (such as the VPN) check that staff accounts they serve are still enabled.
     if (pathname === '/api/auth/account-status') {
       const ids = Array.isArray(body.ids) ? body.ids.filter((x) => typeof x === 'string').slice(0, 5000) : [];

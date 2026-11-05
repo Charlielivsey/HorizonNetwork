@@ -4232,3 +4232,16 @@ footer .footer-brand .footer-parent { opacity: .82; font-size: .88rem; }
 }
 @media (prefers-reduced-motion: reduce) { .pv-panel { animation: none; } .pv-tab { transition: none; } }
 
+
+/* Link Discord accounts: the sign-in prompt for people who manage staff (the user's request, 5 November 2026). */
+.modal-discord { max-width: 680px; }
+.modal-discord .md-head p { margin-top: .4rem; line-height: 1.55; }
+.modal-discord .md-list { display: grid; gap: .6rem; margin: 1.2rem 0 .4rem; max-height: min(52vh, 460px); overflow: auto; padding-right: .2rem; }
+.modal-discord .md-row { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(150px, 210px) auto; align-items: center; gap: .75rem; padding: .65rem .8rem; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); transition: border-color .2s, background .2s; }
+.modal-discord .md-row:focus-within { border-color: var(--accent, var(--purple)); }
+.modal-discord .md-who { display: grid; min-width: 0; }
+.modal-discord .md-who strong, .modal-discord .md-who small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.modal-discord .md-row input { margin: 0; }
+.modal-discord .md-row.md-done { border-color: #5FAE7B; background: color-mix(in srgb, #5FAE7B 8%, var(--surface)); }
+@media (max-width: 620px) { .modal-discord .md-row { grid-template-columns: auto minmax(0, 1fr); } .modal-discord .md-row input, .modal-discord .md-row button { grid-column: 1 / -1; } }
+@media (prefers-reduced-motion: reduce) { .modal-discord .md-row { transition: none; } }

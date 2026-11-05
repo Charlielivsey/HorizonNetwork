@@ -28,7 +28,7 @@ const fail = (status, message) => Object.assign(new Error(message), { status });
 // membership (as Auth reports it); the account service then applies its own permission checks too.
 const ROUTES = [
   ['GET', /^\/api\/me$/], ['POST', /^\/api\/me\/profile$/], ['POST', /^\/api\/me\/password$/], ['POST', /^\/api\/me\/code$/],
-  ['POST', /^\/api\/me\/avatar$/, 2.5 * 1024 * 1024], ['POST', /^\/api\/me\/avatar\/remove$/],
+  ['POST', /^\/api\/me\/avatar$/, 2.5 * 1024 * 1024], ['POST', /^\/api\/me\/avatar\/remove$/], ['POST', /^\/api\/me\/discord-photo$/],
   ['GET', /^\/api\/me\/sessions$/], ['POST', /^\/api\/me\/sessions\/(?:[a-f0-9]{12}\/end|end-others)$/],
   ['GET', /^\/api\/avatars\/[a-f0-9]{16}$/],
   ['GET', /^\/api\/employees$/, 0, true], ['GET', /^\/api\/roles$/, 0, true],

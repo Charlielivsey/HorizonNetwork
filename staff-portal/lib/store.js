@@ -545,8 +545,10 @@ function setDiscord(person, link) {
   }
   savePeople();
 }
-// Every linked Discord id, for the bot to look up.
-function discordIds() {
+// Every linked Discord id, for the bot to look up. With `pending`, only ids the bot hasn't filled in yet (a Discord ID
+// just added to a staff profile), which it checks every minute so the profile fills in straight away.
+function discordIds(pending) {
+  if (pending) return [...new Set(people.filter((p) => p.discord && p.discord.id && !p.discord.username).map((p) => p.discord.id))];
   return [...new Set([...logins.filter((l) => l.account && l.account.discord).map((l) => l.account.discord.id), ...people.filter((p) => p.discord && p.discord.id).map((p) => p.discord.id)])];
 }
 // New usernames from Discord (the bot): updates the sign-in accounts and the staff records that hold them.
@@ -577,6 +579,38 @@ function updateDiscordNames(updates) {
   }
   if (changed) savePeople();
   return changed;
+}
+
+// Every staff profile needs a Discord account (the user's request, 5 November 2026: "all staff profiles need a discord
+// ID and username linked to them"). These records don't have one yet; people who manage staff are asked to add them.
+function missingDiscord() { return people.filter((p) => !p.system && !(p.discord && p.discord.id)); }
+// Sets a staff record's Discord user ID; the bot fills in the username, display name, picture and the rest.
+function setRecordDiscord(person, id) {
+  id = String(id || "").trim();
+  if (!DISCORD_ID.test(id)) throw new ValidationError("Enter their Discord user ID: 15 to 22 digits (in Discord, turn on Developer Mode, then right-click their name and choose Copy User ID).");
+  if (people.some((p) => p.id !== person.id && !p.system && p.discord && p.discord.id === id)) throw new ValidationError("That Discord user ID is already on another staff record.");
+  if (!person.discord || person.discord.id !== id) { person.discord = { id, username: null, updatedAt: new Date().toISOString() }; person.discordPhotoApplied = null; }
+  savePeople();
+}
+// The profile picture follows the person's Discord picture (the user's request, 5 November 2026): on unless they turn it
+// off on HN Account. It changes whenever their Discord picture changes; a photo they upload stays until then.
+const discordPhotoSync = (p) => !!p && p.discordPhotoSync !== false;
+function setDiscordPhotoSync(person, on) {
+  person.discordPhotoSync = !!on;
+  if (on) person.discordPhotoApplied = null; // turning it on uses their current Discord picture straight away
+  savePeople();
+}
+// Records whose Discord picture has changed since it was last copied onto their profile.
+function discordPhotoTargets() {
+  return people.filter((p) => !p.system && discordPhotoSync(p) && p.discord && p.discord.avatar && p.discordPhotoApplied !== p.discord.avatar);
+}
+function saveDiscordPhoto(person, buffer, hash) {
+  if (!Buffer.isBuffer(buffer) || buffer.length > 1024 * 1024 || !IMAGE_TYPES.png.magic(buffer)) throw new ValidationError("That Discord picture couldn't be used.");
+  removeAvatar(person, false);
+  fs.writeFileSync(path.join(avatarDir, `${person.id}.png`), buffer, { mode: 0o600 });
+  person.avatar = { ext: "png", version: Date.now(), source: "discord" };
+  person.discordPhotoApplied = hash;
+  savePeople();
 }
 
 function findByLogin(login) {
@@ -757,6 +791,7 @@ function meView(p) {
     passwordMinLength: require("./security").policy().minLength,
     codeSetupRequired: !hasCode(p),
     homeLayout: p.homeLayout || null,
+    discordPhotoSync: discordPhotoSync(p),
   };
 }
 
@@ -928,8 +963,8 @@ function saveEmployee(input, existing) {
     if (id && !DISCORD_ID.test(id)) throw new ValidationError("Enter their Discord user ID: 15 to 22 digits (in Discord, turn on Developer Mode, then right-click their name and choose Copy User ID).");
     if (id && people.some((p) => p !== existing && p.discord && p.discord.id === id)) throw new ValidationError("That Discord user ID is already on another staff record.");
     const current = existing && existing.discord;
-    if (!id) { if (existing) delete existing.discord; }
-    else if (!current || current.id !== id) fields.discord = { id, username: null, updatedAt: now };
+    if (!id) { if (existing && existing.discord) throw new ValidationError("Every staff profile needs a Discord account. Enter their Discord user ID."); }
+    else if (!current || current.id !== id) { fields.discord = { id, username: null, updatedAt: now }; fields.discordPhotoApplied = null; }
   }
 
   if (existing) {
@@ -1537,6 +1572,12 @@ module.exports = {
   findByDiscord,
   setDiscord,
   discordIds,
+  missingDiscord,
+  setRecordDiscord,
+  discordPhotoSync,
+  setDiscordPhotoSync,
+  discordPhotoTargets,
+  saveDiscordPhoto,
   updateDiscordNames,
   ownsEmail,
   setGoogle,

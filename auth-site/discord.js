@@ -89,12 +89,14 @@ function createDiscord({ origin, staff, send, profile, entryFor, setCookie, cook
 
   // The bot: looks up every connected Discord account and stores any changed username.
   let refreshing = false;
-  async function refreshNames(strict = false) {
+  // With `pending`, only Discord IDs just added to a staff profile (checked every minute, so the username, display name,
+  // picture and the rest fill in straight away; the user's request, 5 November 2026).
+  async function refreshNames(strict = false, pending = false) {
     const c = config();
     if (!c || !c.bot || refreshing) return 0;
     refreshing = true;
     try {
-      const { value } = await staff('/api/auth/discord-accounts', {});
+      const { value } = await staff('/api/auth/discord-accounts', pending ? { pending: true } : {});
       const updates = [];
       for (const id of (value.ids || []).filter((x) => ID.test(x))) {
         let r;
@@ -112,6 +114,7 @@ function createDiscord({ origin, staff, send, profile, entryFor, setCookie, cook
   let presence=null;
   const manager=createBotManager({file:path.join(path.dirname(file),'discord-bot.json'),configFile:file,config,fetcher,refresh:()=>refreshNames(true),staff,presence:()=>presence});
   if(refreshEvery>0){setTimeout(()=>{const tick=()=>{const s=manager.settings();if(s.enabled&&s.syncEnabled&&!manager.syncState.running&&(!(manager.syncState.lastAttemptAt||manager.syncState.lastAt)||Date.now()-Date.parse(manager.syncState.lastAttemptAt||manager.syncState.lastAt)>=s.syncMinutes*60000))manager.sync().catch(()=>{});};tick();setInterval(tick,60000).unref();},20000).unref();}
+  if(refreshEvery>0)setInterval(()=>{const s=manager.settings();if(s.enabled)refreshNames(false,true).catch(()=>{});},60000).unref();
   presence=process.env.HN_DISCORD_PRESENCE==='0'?null:startPresence(()=> (config()||{}).bot||null,{settings:manager.settings,onInteraction:manager.interaction,onReady:manager.registerBuiltins,log:{log:message=>{console.log(message);manager.record(null,'gateway.event',{message});}}});
   // When Auth is stopped (website control's power off runs `pm2 stop hn-auth`, which sends SIGINT/SIGTERM), the bot goes
   // fully offline at once (the user's request, 3 November 2026): it turns invisible and closes its Discord connection

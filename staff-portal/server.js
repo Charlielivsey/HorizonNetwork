@@ -203,6 +203,24 @@ class SessionStore extends Map {
 const sessions = new SessionStore(SESSIONS_FILE); // tokenHash -> { id, personId, expires, ip, userAgent, createdAt, lastSeen, impersonatorId?, returnKey? }
 const failedAttempts = new Map(); // ip -> { count, first }
 const pinFailures = new Map(); // personId -> { count, first }
+// Profile pictures follow Discord (the user's request, 5 November 2026): whenever someone's Discord picture changes (the
+// bot reports it), it's copied onto their staff profile, unless they've turned that off on HN Account.
+let photoSync = null;
+function syncDiscordPhotos() {
+  if (photoSync) return photoSync;
+  photoSync = (async () => {
+    for (const p of store.discordPhotoTargets().slice(0, 200)) {
+      const hash = p.discord.avatar;
+      try {
+        const r = await fetch("https://cdn.discordapp.com/avatars/" + p.discord.id + "/" + hash + ".png?size=256", { signal: AbortSignal.timeout(8000), redirect: "error" });
+        if (!r.ok || !/^image\/png/.test(r.headers.get("content-type") || "")) continue;
+        const bytes = Buffer.from(await r.arrayBuffer());
+        if (store.getPerson(p.id) && store.discordPhotoSync(p) && p.discord && p.discord.avatar === hash) store.saveDiscordPhoto(p, bytes, hash);
+      } catch (e) { /* tried again when the bot next reports */ }
+    }
+  })().finally(() => { photoSync = null; });
+  return photoSync;
+}
 const discordAvatars = new Map(); // "<id>/<hash>" -> { body, expires }: Discord profile pictures, cached
 const codeChallenges = new Map(); // challenge -> { personId, expires, attempts } (password accepted, waiting for the code)
 const CODE_CHALLENGE_MS = 5 * 60 * 1000;
@@ -1325,6 +1343,14 @@ async function routeApi(req, res, pathname, session) {
     logEvent(req, session, "banner-removed");
     return sendJson(res, 200, { user: meResponse(session) });
   }
+  // Use my Discord profile picture (on unless turned off; HN Account has the switch).
+  if (method === "POST" && pathname === "/api/me/discord-photo") {
+    const { on } = await readJsonBody(req);
+    store.setDiscordPhotoSync(me, on === true);
+    logEvent(req, session, on === true ? "discord-photo-on" : "discord-photo-off");
+    if (on === true) await syncDiscordPhotos();
+    return sendJson(res, 200, { user: meResponse(session) });
+  }
   if (method === "POST" && pathname === "/api/me/avatar/remove") {
     store.removeAvatar(me);
     logEvent(req, session, "photo-removed");
@@ -1458,6 +1484,12 @@ async function routeApi(req, res, pathname, session) {
     if (method === "GET" && pathname === "/api/employees") {
       return sendJson(res, 200, { employees: store.employees().map(store.manageView) });
     }
+    // Staff profiles without a Discord account (the user's request, 5 November 2026: every profile needs one, and people
+    // who can change it are asked when they sign in). The owner's record only for those who can change it.
+    if (method === "GET" && pathname === "/api/employees/missing-discord") {
+      const mine = store.hasOwnerAccess(me);
+      return sendJson(res, 200, { people: store.missingDiscord().filter((p) => mine || !store.isOwner(p)).map((p) => ({ id: p.id, displayName: p.displayName, jobTitle: p.jobTitle, company: p.company, avatarUrl: store.publicView(p).avatarUrl })) });
+    }
     if (method === "POST" && pathname === "/api/employees/preview-emails") {
       const body = await readJsonBody(req);
       return sendJson(res, 200, store.resolveEmails(body.firstName, body.lastName, body.emails, body.excludeId));
@@ -1470,13 +1502,22 @@ async function routeApi(req, res, pathname, session) {
       logEvent(req, session, "employee-added", { target: person.displayName, detail: `${person.jobTitle}, ${person.company}` });
       return sendJson(res, 201, { employee: store.manageView(person) });
     }
-    if (method === "POST" && (m = /^\/api\/employees\/([a-f0-9]{16})(?:\/(delete|account|account\/disable|account\/enable|code\/reset))?$/.exec(pathname))) {
+    if (method === "POST" && (m = /^\/api\/employees\/([a-f0-9]{16})(?:\/(delete|discord|account|account\/disable|account\/enable|code\/reset))?$/.exec(pathname))) {
       const action = m[2];
       const person = requireEmployee(m[1], me, action);
 
+      if (action === "discord") {
+        const { discordId } = await readJsonBody(req);
+        store.setRecordDiscord(person, discordId);
+        logEvent(req, session, "employee-updated", { target: person.displayName, detail: "Discord account" });
+        return sendJson(res, 200, { employee: store.manageView(person) });
+      }
       if (!action) {
         const before = snapshot(person);
-        store.saveEmployee(await readJsonBody(req), person);
+        const body = await readJsonBody(req);
+        // Every staff profile needs a Discord account, so saving one without needs its Discord user ID.
+        if (!String(body.discordId !== undefined ? body.discordId : (person.discord && person.discord.id) || "").trim()) throw httpError(400, "Enter their Discord user ID. Every staff profile needs a Discord account.");
+        store.saveEmployee(body, person);
         const changed = changedFields(before, person);
         if (changed.length) logEvent(req, session, "employee-updated", { target: person.displayName, detail: changed.join(", ") });
         return sendJson(res, 200, { employee: store.manageView(person) });
@@ -2337,7 +2378,7 @@ extraRoutes.init({
 // A new staff session for an HN Group service acting for this person (HN Account), from where they are.
 // Sessions for HN Account (accounts.hngroup.org.uk) are marked: only HN Account makes and manages sign-in accounts.
 const issueSession = (personId, ip, userAgent) => createSession(personId, { socket: { remoteAddress: "127.0.0.1" }, headers: { "x-real-ip": ip || "127.0.0.1", "user-agent": userAgent || "HN Account" } }, { via: "accounts" });
-const statusSso = createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent, handleChangePassword, handleSetCode, verifyBrowserPin, verifyVpnPin, issueSession, googleLogin, discordLogin });
+const statusSso = createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent, handleChangePassword, handleSetCode, verifyBrowserPin, verifyVpnPin, issueSession, googleLogin, discordLogin, syncDiscordPhotos });
 const portalAuth = portalAuthLib.createPortalAuth({ store, sessions, resume, createSession, cookieFor, parseCookies, send, redirect, logEvent, loginNext, clientIp });
 
 async function route(req, res) {

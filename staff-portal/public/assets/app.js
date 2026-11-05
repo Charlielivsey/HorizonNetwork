@@ -1699,7 +1699,7 @@
             '<div><label for="f-location">Location</label><input type="text" id="f-location" maxlength="80" value="' + esc(v.location) + '" placeholder="e.g. Manchester, UK"></div>' +
             '<div><label for="f-tz">Time zone</label><select id="f-tz">' + timezoneOptions(v.timezone || meta.defaultTimezone) + "</select></div>" +
             "</div>" +
-            '<div class="grid-2"><div><label for="f-discord">Discord user ID' + (isEdit ? ' <span class="muted small">(optional)</span>' : "") + '</label><input type="text" id="f-discord" inputmode="numeric" pattern="[0-9]{15,22}" maxlength="22" autocomplete="off"' + (isEdit ? "" : " required") + ' value="' + esc((v.discord && v.discord.id) || "") + '" placeholder="e.g. 123456789012345678">' +
+            '<div class="grid-2"><div><label for="f-discord">Discord user ID</label><input type="text" id="f-discord" inputmode="numeric" pattern="[0-9]{15,22}" maxlength="22" autocomplete="off" required value="' + esc((v.discord && v.discord.id) || "") + '" placeholder="e.g. 123456789012345678">' +
             '<p class="muted small">In Discord, turn on Developer Mode (Settings → Advanced), then right-click their name and choose Copy User ID.' + (v.discord && v.discord.username ? " Currently @" + esc(v.discord.username) + "." : "") + "</p></div>" +
             '<div></div></div>' +
             '<div class="grid-2"><div><label for="f-phone">Phone <span class="muted small">(optional)</span></label><input type="tel" id="f-phone" maxlength="40" value="' + esc(v.phone) + '"></div>' +
@@ -7004,6 +7004,8 @@
             toast("Signed in as " + mainRole.jobTitle + ", " + mainRole.company);
         }
 
+        if (state.me.canManage && !state.me.impersonatedBy && !state.me.passwordTemporary && !state.me.passwordExpired && !state.me.codeSetupRequired) missingDiscordPrompt();
+
         // Notice quickly if this session is ended from the system panel.
         setInterval(function () {
             if (document.hidden) return;
@@ -7019,6 +7021,36 @@
         }, 30000);
     }
 
+
+    // ================= Discord accounts on every staff profile =================
+    // Every staff profile needs a Discord account (the user's request, 5 November 2026). People who can change staff
+    // records are asked, each time they sign in, to add the Discord user ID of any profile without one. HN Group Auth's bot
+    // then fills in the username, display name, picture and the rest within a minute.
+    async function missingDiscordPrompt() {
+        let list;
+        try { list = (await api("/api/employees/missing-discord")).people; } catch (e) { return; }
+        if (!list.length || activeModal) return;
+        const row = function (p) {
+            return '<form class="md-row" data-id="' + esc(p.id) + '">' + avatar(p, "sm") +
+                '<span class="md-who"><strong>' + esc(p.displayName) + '</strong><small class="muted">' + esc([p.jobTitle, p.company].filter(Boolean).join(" · ")) + "</small></span>" +
+                '<input type="text" inputmode="numeric" pattern="[0-9]{15,22}" maxlength="22" required autocomplete="off" placeholder="Discord user ID" aria-label="Discord user ID for ' + esc(p.displayName) + '">' +
+                '<button type="submit" class="btn btn-primary btn-small">Save</button></form>';
+        };
+        const modal = openModal('<div class="md-head"><h2>Link Discord accounts</h2><p class="muted">Every staff profile needs a Discord account. ' +
+            (list.length === 1 ? "This profile doesn’t" : "These " + list.length + " profiles don’t") + ' have one yet. Add each person’s Discord user ID: in Discord, turn on Developer Mode (Settings → Advanced), then right-click their name and choose Copy User ID. Their Discord username, name and picture are filled in automatically.</p></div>' +
+            '<div class="md-list">' + list.map(row).join("") + "</div>" +
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Remind me next time</button></div>', { cls: "modal-discord" });
+        modal.el.addEventListener("submit", async function (e) {
+            e.preventDefault();
+            const form = e.target, input = form.querySelector("input"), button = form.querySelector("button");
+            button.disabled = true;
+            try {
+                await api("/api/employees/" + form.dataset.id + "/discord", { discordId: input.value.trim() });
+                form.classList.add("md-done"); input.disabled = true; button.textContent = "Saved";
+                if (!modal.el.querySelector(".md-row:not(.md-done)")) { toast("Every staff profile now has a Discord account."); setTimeout(closeModal, 700); }
+            } catch (err) { toast(err.message, true); button.disabled = false; input.focus(); }
+        });
+    }
 
     // ================= Expense claims =================
 
