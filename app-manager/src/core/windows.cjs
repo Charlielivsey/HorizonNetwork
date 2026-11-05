@@ -24,6 +24,33 @@ function uninstaller(command, dir) {
   if (!exe || !path.win32.isAbsolute(exe) || !/^Uninstall[^\\/]*\.exe$/i.test(path.win32.basename(exe)) || path.win32.dirname(exe).toLowerCase() !== path.win32.resolve(dir).toLowerCase()) return null;
   return exe;
 }
+// Is this Windows "installed apps" name one of the app's names, alone or followed by a version ("HN Browser 1.2.7")?
+function namedAs(displayName, names) {
+  const n = String(displayName || '').trim();
+  return names.some((name) => n === name || (n.startsWith(name + ' ') && /^v?\d+(\.\d+){0,3}([-+][\w.]+)?$/.test(n.slice(name.length + 1))));
+}
+// The folder an installed-apps entry points at: InstallLocation, else the folder of its icon or uninstaller.
+function folderOf(v) {
+  const clean = (x) => (typeof x === 'string' ? x.trim().replace(/^"([^"]+)".*$/, '$1').replace(/,\s*-?\d+$/, '').replace(/^"|"$/g, '') : '');
+  const loc = clean(v.InstallLocation);
+  if (path.win32.isAbsolute(loc)) return path.win32.resolve(loc);
+  for (const f of [clean(v.DisplayIcon), clean(v.QuietUninstallString), clean(v.UninstallString)]) {
+    const exe = /^(.+?\.exe)(\s|$)/i.exec(f); if (exe && path.win32.isAbsolute(exe[1])) return path.win32.dirname(exe[1]);
+  }
+  return null;
+}
+// Where the app is: the first installed-apps entry with its name whose folder holds the app's .exe, else a usual
+// install folder (per-user %LOCALAPPDATA%\Programs\<name>, Program Files) that holds it.
+function locate(items, a, fallbacks, exists) {
+  const names = [a.name, ...(a.nameOld || [])];
+  for (const v of items) {
+    if (!v || !namedAs(v.DisplayName, names)) continue;
+    const dir = folderOf(v); if (!dir) continue;
+    const exe = path.win32.join(dir, a.exe); if (exists(exe)) return { dir, exe, registered: v };
+  }
+  for (const dir of fallbacks) { const exe = path.win32.join(dir, a.exe); if (exists(exe)) return { dir, exe, registered: {} }; }
+  return null;
+}
 const folderPrefix = (dir) => path.win32.resolve(dir).replace(/[\\/]+$/, '') + '\\';
 
 class WindowsPlatform {
@@ -33,22 +60,24 @@ class WindowsPlatform {
     this.supported = process.arch === 'x64' || !packaged;
   }
   async find(id) {
-    const a = entry(id);
-    const r = await ps("$items=@(Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*','HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*','HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' -ErrorAction SilentlyContinue | Where-Object { @(" + [a.name, ...(a.nameOld || [])].map(psq).join(',') + ") -contains $_.DisplayName } | Select-Object DisplayVersion,InstallLocation,UninstallString,QuietUninstallString); ConvertTo-Json -Compress -InputObject $items");
+    const a = entry(id), names = [a.name, ...(a.nameOld || [])];
+    // Windows lists apps under their installer's display name, which electron-builder writes as "<name> <version>"
+    // (for example "HN Browser 1.2.7"), so match the name with or without a version and pick the exact entry in JS.
+    const r = await ps("$items=@(Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*','HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*','HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' -ErrorAction SilentlyContinue | Where-Object { $n=[string]$_.DisplayName; @(" + names.map(psq).join(',') + ") | Where-Object { $n -like ($_ + '*') } } | Select-Object DisplayName,DisplayVersion,InstallLocation,DisplayIcon,UninstallString,QuietUninstallString); ConvertTo-Json -Compress -InputObject $items");
     if (r.code !== 0) throw fail('Installed apps couldn’t be checked.', { detail: r.err.trim() });
     let items = []; try { items = JSON.parse(r.out.trim() || '[]'); } catch {}
-    for (const v of Array.isArray(items) ? items : [items]) {
-      const dir = typeof v.InstallLocation === 'string' ? v.InstallLocation.replace(/^"|"$/g, '') : '';
-      if (!path.win32.isAbsolute(dir)) continue;
-      const exe = path.win32.join(dir, a.exe);
-      if (!fs.existsSync(exe)) continue;
-      let version = String(v.DisplayVersion || '0.0.0'), build = 0;
-      // Electron reads inside app.asar, so the app's own version and build number can be used.
-      try { const pkg = JSON.parse(fs.readFileSync(path.join(dir, 'resources', 'app.asar', 'package.json'), 'utf8')); if (/^\d+\.\d+\.\d+$/.test(pkg.version)) version = pkg.version; } catch {}
-      for (const b of ['src/build.json', 'build.json']) { try { build = Number(JSON.parse(fs.readFileSync(path.join(dir, 'resources', 'app.asar', b), 'utf8')).build) || build; } catch {} }
-      return { path: dir, exe, version, build, uninstall: uninstaller(v.QuietUninstallString || v.UninstallString, dir) };
-    }
-    return null;
+    const local = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
+    const fallbacks = names.flatMap((n) => [path.win32.join(local, 'Programs', n), ...[process.env.ProgramFiles, process.env['ProgramFiles(x86)']].filter(Boolean).map((p) => path.win32.join(p, n))]);
+    const hit = locate(Array.isArray(items) ? items : [items], a, fallbacks, (f) => fs.existsSync(f));
+    if (!hit) return null;
+    const { dir, exe, registered } = hit;
+    let version = String(registered.DisplayVersion || '0.0.0'), build = 0;
+    // Electron reads inside app.asar, so the app's own version and build number can be used.
+    try { const pkg = JSON.parse(fs.readFileSync(path.join(dir, 'resources', 'app.asar', 'package.json'), 'utf8')); if (/^\d+\.\d+\.\d+$/.test(pkg.version)) version = pkg.version; } catch {}
+    for (const b of ['src/build.json', 'build.json']) { try { build = Number(JSON.parse(fs.readFileSync(path.join(dir, 'resources', 'app.asar', b), 'utf8')).build) || build; } catch {} }
+    let uninstall = uninstaller(registered.QuietUninstallString || registered.UninstallString, dir);
+    if (!uninstall) for (const n of names) { const f = path.win32.join(dir, 'Uninstall ' + n + '.exe'); if (fs.existsSync(f)) { uninstall = f; break; } }
+    return { path: dir, exe, version, build, uninstall };
   }
   async running(found) {
     if (!found) return false;
@@ -86,4 +115,4 @@ class WindowsPlatform {
     child.unref();
   }
 }
-module.exports = { WindowsPlatform, uninstaller, folderPrefix };
+module.exports = { WindowsPlatform, uninstaller, folderPrefix, namedAs, folderOf, locate };

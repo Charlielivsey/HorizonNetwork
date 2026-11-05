@@ -226,3 +226,25 @@ test('Mac update scripts: wait, swap with rollback, admin only when needed, alwa
   assert.match(s.main, /rm -rf '\/tmp\/w'\nexit \$status/, 'the work folder is removed before exiting');
   assert.match(s.swap, /then \/bin\/rm -rf .*hn-old.*else \[ -e .*hn-old.* \] && \/bin\/mv .*hn-old/s, 'the old copy comes back if the swap fails');
 });
+
+// The user's report, 5 November 2026: App Manager on Windows said HN Browser was "Not installed" although it was.
+// electron-builder lists apps in Windows as "<name> <version>", so the name must match with a version too.
+test('Windows: installed apps are found under their versioned names, icon/uninstaller folders and usual folders', () => {
+  const { namedAs, folderOf, locate } = require('../src/core/windows.cjs');
+  const { APPS } = require('../src/core/catalog.cjs');
+  assert.ok(namedAs('HN Browser 1.2.7', ['HN Browser']));
+  assert.ok(namedAs('HN Browser', ['HN Browser']));
+  assert.ok(namedAs('HN Secure Network 2.2.0', ['HN Secure Gateway', 'HN Secure Network']));
+  assert.ok(!namedAs('HN Browser Helper', ['HN Browser']));
+  assert.ok(!namedAs('Not HN Browser 1.0.0', ['HN Browser']));
+  const dir = 'C:\\Users\\Kay\\AppData\\Local\\Programs\\HN Browser';
+  assert.equal(folderOf({ InstallLocation: dir }), dir);
+  assert.equal(folderOf({ DisplayIcon: '"' + dir + '\\HN Browser.exe",0' }), dir);
+  assert.equal(folderOf({ UninstallString: '"' + dir + '\\Uninstall HN Browser.exe" /currentuser' }), dir);
+  const present = new Set([dir + '\\HN Browser.exe']), exists = (f) => present.has(f);
+  const hit = locate([{ DisplayName: 'HN Browser 1.2.7', DisplayVersion: '1.2.7', UninstallString: '"' + dir + '\\Uninstall HN Browser.exe" /currentuser' }], APPS.browser, [], exists);
+  assert.equal(hit.dir, dir); assert.equal(hit.registered.DisplayVersion, '1.2.7');
+  // No usable installed-apps entry: the usual per-user folder still finds it.
+  assert.equal(locate([], APPS.browser, [dir], exists).dir, dir);
+  assert.equal(locate([{ DisplayName: 'HN Browser 1.2.7', InstallLocation: 'C:\\Elsewhere' }], APPS.browser, [], exists), null, 'only a folder holding the app counts');
+});
