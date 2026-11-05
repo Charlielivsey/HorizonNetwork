@@ -4245,3 +4245,9 @@ footer .footer-brand .footer-parent { opacity: .82; font-size: .88rem; }
 .modal-discord .md-row.md-done { border-color: #5FAE7B; background: color-mix(in srgb, #5FAE7B 8%, var(--surface)); }
 @media (max-width: 620px) { .modal-discord .md-row { grid-template-columns: auto minmax(0, 1fr); } .modal-discord .md-row input, .modal-discord .md-row button { grid-column: 1 / -1; } }
 @media (prefers-reduced-motion: reduce) { .modal-discord .md-row { transition: none; } }
+
+/* Employee Management: sign-in account access on each card (the user's request, 5 November 2026). */
+.emp-access { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .55rem; }
+.emp-access .badge { margin: 0; }
+.badge-role { display: inline-flex; align-items: center; gap: .3rem; background: var(--primary-tint); color: var(--primary); border-color: var(--primary-soft-border); }
+.badge-role svg { width: 13px; height: 13px; }

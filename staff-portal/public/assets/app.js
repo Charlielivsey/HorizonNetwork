@@ -1466,16 +1466,35 @@
             '<p class="muted small emp-showing" id="emp-showing"></p>' +
             '<div class="emp-grid" id="emp-body"></div>';
 
+        // All shows everyone with their main company; a company tab shows only the people at that company, each with
+        // their staff profile there (job title, department and who they report to at that company; the user's request,
+        // 5 November 2026).
+        function profileFor(e) {
+            const other = filters.company && e.company !== filters.company ? e.otherRoles.find(function (r) { return r.company === filters.company; }) : null;
+            if (!other) return { company: e.company, jobTitle: e.jobTitle, department: e.department, supervisorId: e.supervisorId, main: true };
+            return { company: other.company, jobTitle: other.jobTitle || e.jobTitle, department: other.department || e.department, supervisorId: other.supervisorId || e.supervisorId, main: false };
+        }
+        // Their sign-in account's access, like the System owner badge: owner-level and each permission role.
+        function accessBadges(e) {
+            const a = e.access, out = [];
+            if (e.isOwner || (a && a.owner === "system")) out.push('<span class="badge badge-owner">System owner</span>');
+            else if (a && a.owner === "level") out.push('<span class="badge badge-owner">Owner-level</span>');
+            (a ? a.roles : []).forEach(function (r) { out.push('<span class="badge badge-role" title="Permission role on their sign-in account">' + icon("shield") + esc(r) + "</span>"); });
+            return out.length ? '<div class="emp-access">' + out.join("") + "</div>" : "";
+        }
+
         function draw() {
             const q = $("#emp-search").value.trim().toLowerCase();
             const list = employees.filter(function (e) {
                 if (filters.company && e.company !== filters.company && !e.otherRoles.some(function (r) { return r.company === filters.company; })) return false;
                 if (filters.login !== "all" && loginState(e) !== filters.login) return false;
-                return !q || [e.displayName, e.jobTitle, e.department, e.company, e.loginUsername].concat(e.otherRoles.map(function (r) { return r.company + " " + (r.jobTitle || ""); }), e.emails.map(function (x) { return x.address; })).join(" ").toLowerCase().indexOf(q) !== -1;
+                const pr = profileFor(e);
+                return !q || [e.displayName, pr.jobTitle, pr.department, pr.company, e.loginUsername].concat((e.access ? e.access.roles : []), e.otherRoles.map(function (r) { return r.company + " " + (r.jobTitle || ""); }), e.emails.map(function (x) { return x.address; })).join(" ").toLowerCase().indexOf(q) !== -1;
             });
             $("#emp-showing").textContent = list.length === employees.length ? "Showing everyone (" + list.length + ")" : "Showing " + list.length + " of " + employees.length;
             $("#emp-body").innerHTML = list.length ? list.map(function (e) {
-                const sup = byId[e.supervisorId];
+                const pr = profileFor(e);
+                const sup = byId[pr.supervisorId];
                 const isMe = e.id === state.me.id;
                 const locked = e.isOwner && !state.me.isOwner;
                 const actions = [
@@ -1509,12 +1528,12 @@
                 return '<article class="emp-card' + (locked ? " locked" : "") + '" data-id="' + e.id + '">' + bannerHtml(e, "emp-band") +
                     '<div class="emp-card-top">' + avatar(e, "lg") + '<div class="emp-card-menu">' + menu + "</div></div>" +
                     '<div class="emp-card-id"><h3>' + esc(e.displayName) + (isMe ? ' <span class="muted small">(you)</span>' : "") + "</h3>" +
-                    '<div class="emp-job">' + esc(e.jobTitle) + (e.department ? '<span class="muted"> \u00b7 ' + esc(e.department) + "</span>" : "") + "</div>" +
-                    (e.isOwner ? '<span class="badge badge-owner">System owner</span>' : "") + "</div>" +
-                    '<div class="emp-chips"><span class="emp-chip main" title="Main company">' + icon("building") + esc(e.company) + "</span>" +
-                    e.otherRoles.map(function (r) { return '<span class="emp-chip" title="' + esc(r.jobTitle || "") + '">' + esc(r.company) + "</span>"; }).join("") + "</div>" +
+                    '<div class="emp-job">' + esc(pr.jobTitle) + (pr.department ? '<span class="muted"> \u00b7 ' + esc(pr.department) + "</span>" : "") + "</div>" +
+                    accessBadges(e) + "</div>" +
+                    '<div class="emp-chips"><span class="emp-chip main" title="' + (pr.main ? "Main company" : "Their staff profile at " + esc(pr.company)) + '">' + icon("building") + esc(pr.company) + "</span>" +
+                    (pr.main ? "" : '<span class="emp-chip" title="Main company: ' + esc(e.company) + '">Profile at ' + esc(pr.company) + "</span>") + "</div>" +
                     '<dl class="emp-facts">' +
-                    '<div><dt>Reports to</dt><dd>' + (sup ? '<span class="emp-sup">' + avatar(sup, "xs") + esc(sup.displayName) + "</span>" : '<span class="muted">Top of ' + esc(e.company) + "</span>") + "</dd></div>" +
+                    '<div><dt>Reports to</dt><dd>' + (sup ? '<span class="emp-sup">' + avatar(sup, "xs") + esc(sup.displayName) + "</span>" : '<span class="muted">Top of ' + esc(pr.company) + "</span>") + "</dd></div>" +
                     '<div><dt>Sign-in</dt><dd>' + accountBadge(e) + "</dd></div>" +
                     '<div class="wide"><dt>Email</dt><dd class="emp-email">' + esc(e.loginUsername) + (e.emails.length > 1 ? ' <span class="count-pill">+' + (e.emails.length - 1) + "</span>" : "") + "</dd></div></dl>" +
                     (locked ? '<p class="muted small emp-locked">' + icon("lock") + "Only the system owner can change this record</p>" :

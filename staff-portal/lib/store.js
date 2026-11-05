@@ -721,11 +721,20 @@ function cleanTagList(v, max) {
   return [...new Set(list.map((x) => str(x, 40)).filter(Boolean).map((x) => x.charAt(0).toUpperCase() + x.slice(1)))].slice(0, max);
 }
 
+function accessOf(p) {
+  const l = !p.system && primaryLogin(p);
+  if (!l || !l.account) return null;
+  const v = viewOf(l, defaultProfile(l));
+  return { owner: isOwner(v) ? "system" : hasOwnerAccess(v) ? "level" : null, roles: (l.roleIds || []).map((id) => (getRole(id) || {}).name).filter(Boolean) };
+}
 function manageView(p) {
   return {
     ...publicView(p),
     roleIds: p.roleIds || [],
     loginUsername: loginName(p),
+    // What their sign-in account can do (the user's request, 5 November 2026: Employee Management shows "any auth account
+    // permissions that they have", like the System owner badge): system owner / owner-level and its permission roles.
+    access: accessOf(p),
     account: p.account
       ? {
           enabled: p.account.enabled,
