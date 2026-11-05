@@ -17,12 +17,14 @@ if (catalogueChanged) save();
 function effective(s) {
   if (s.override !== 'auto') return s.override;
   const last = s.checks.at(-1);
-  if (!last || Date.now() - Date.parse(last.at) > 180000) return 'unknown';
+  if (!last || Date.now() - Date.parse(last.at) > 60000) return 'unknown';
   return last.ok ? 'operational' : 'outage';
 }
+// The address a monitor checks (just the host name), so HN Group Sites can show each site's status.
+function hostOf(url) { try { return url ? new URL(url).hostname : null; } catch { return null; } }
 function snapshot() {
   return { updatedAt: new Date().toISOString(), services: db.services.map(s => ({
-    id: s.id, name: s.name, status: effective(s), lastChecked: s.checks.at(-1)?.at || null,
+    id: s.id, name: s.name, host: hostOf(s.url), status: effective(s), lastChecked: s.checks.at(-1)?.at || null,
     latency: s.checks.at(-1)?.latency ?? null,
     uptime: Object.values(s.days).reduce((a, d) => a + d.total, 0) ?
       100 * Object.values(s.days).reduce((a, d) => a + d.ok, 0) / Object.values(s.days).reduce((a, d) => a + d.total, 0) : null,
@@ -41,7 +43,7 @@ async function checkAll() {
       if (!db.services.includes(s)) return;
       const at = new Date().toISOString(), day = at.slice(0, 10);
       s.checks.push({ at, ok, latency: Date.now() - start });
-      s.checks = s.checks.slice(-90);
+      s.checks = s.checks.slice(-240);
       s.days[day] ||= { total: 0, ok: 0 };
       s.days[day].total++; if (ok) s.days[day].ok++;
       const cutoff = new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);
@@ -125,6 +127,7 @@ const server = http.createServer(async (req, res) => {
 });
 if (require.main === module) {
   server.listen(Number(process.env.PORT || 3300), process.env.HOST || '127.0.0.1', () => { void checkAll(); });
-  setInterval(() => void checkAll(), 60000).unref();
+  // Every website is checked every 15 seconds (the user's request, 5 November 2026).
+  setInterval(() => void checkAll(), 15000).unref();
 }
 module.exports = { server, checkAll, snapshot };

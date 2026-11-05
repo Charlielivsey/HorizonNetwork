@@ -52,7 +52,7 @@ function card(s) {
   const search = [s.name, s.label, s.desc, shown, s.keywords, accessText].join(' ').toLowerCase();
   return '<article class="site-card' + (s.logo ? ' has-logo' : '') + (s.wide ? ' wide' : '') + '" data-id="' + esc(s.id) + '" data-group="' + esc(s.group) + '" data-host="' + esc(s.host) + '" data-search="' + esc(search) + '">' +
     '<div class="card-head"><span class="card-mark' + (s.logo ? ' logo' : ' icon') + '">' + mark + '</span>' +
-    '<button type="button" class="pin" aria-pressed="false" aria-label="Pin ' + esc(s.name) + '" title="Pin to the top"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg></button></div>' +
+    '<span class="state" hidden></span><button type="button" class="pin" aria-pressed="false" aria-label="Pin ' + esc(s.name) + '" title="Pin to the top"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg></button></div>' +
     '<p class="card-label">' + esc(s.label) + '</p><h3><a class="card-link" href="' + esc(s.url) + '"><span class="name">' + esc(s.name) + '</span></a></h3><p class="card-desc">' + esc(s.desc) + '</p>' +
     '<div class="card-foot"><span class="card-host"><span class="dot" aria-hidden="true"></span><span class="host-text">' + esc(shown) + '</span><span class="sr-only status-text"></span></span>' +
     '<span class="access ' + accessKind + '">' + esc(accessText) + '</span></div></article>';
@@ -93,17 +93,18 @@ function page() {
 }
 const HTML = page();
 
-// Live status: each listed host's status, from the Status site's public snapshot (its monitors are keyed by host).
+// Live status: each listed host's status, from the Status site's public snapshot (by each monitor's host), at most 15 s old
+// (Status checks every site every 15 s; the user's request, 5 November 2026: "when a site is offline it should say the site is offline").
 const HOSTS = new Set(DATA.map((s) => s.host));
 let statusCache = { at: 0, body: null };
 async function liveStatus() {
-  if (statusCache.body && Date.now() - statusCache.at < 60000) return statusCache.body;
+  if (statusCache.body && Date.now() - statusCache.at < 15000) return statusCache.body;
   let hosts = {};
   try {
     const r = await fetch(STATUS_BACKEND + '/api/status', { signal: AbortSignal.timeout(4000), redirect: 'error' });
     const v = r.ok ? await r.json() : null;
     for (const s of (v && Array.isArray(v.services) ? v.services : [])) {
-      const host = String(s.id || '').split(':').pop();
+      const host = typeof s.host === 'string' && s.host ? s.host : String(s.id || '').split(':').pop();
       if (HOSTS.has(host) && typeof s.status === 'string' && /^[a-z-]{1,20}$/.test(s.status)) hosts[host] = s.status;
     }
   } catch { hosts = {}; }

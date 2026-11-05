@@ -61,7 +61,9 @@
   });
 
   // ---------- Live status ----------
-  const LABEL = { operational: 'Working normally', degraded: 'Running slowly', outage: 'Having problems', maintenance: 'Under maintenance', unknown: 'Status unknown' };
+  const LABEL = { operational: 'Working normally', degraded: 'Running slowly', outage: 'Offline', maintenance: 'Under maintenance', unknown: 'Status unknown' };
+  // A site that's down says so on its card (the user's request, 5 November 2026).
+  const BADGE = { outage: 'Offline', maintenance: 'Under maintenance', degraded: 'Running slowly' };
   let hosts = {};
   function paintStatus() {
     for (const c of document.querySelectorAll('.site-card')) {
@@ -69,15 +71,18 @@
       c.dataset.status = st;
       c.querySelector('.status-text').textContent = st ? ' (' + (LABEL[st] || st) + ')' : '';
       c.querySelector('.dot').title = st ? LABEL[st] || st : '';
+      const badge = c.querySelector('.state');
+      if (badge) { badge.textContent = BADGE[st] || ''; badge.hidden = !BADGE[st]; badge.dataset.state = st; }
     }
-    const values = Object.values(hosts), bad = values.filter((v) => v === 'outage' || v === 'degraded').length, upkeep = values.filter((v) => v === 'maintenance').length;
+    const values = Object.values(hosts), down = values.filter((v) => v === 'outage').length, bad = values.filter((v) => v === 'outage' || v === 'degraded').length, upkeep = values.filter((v) => v === 'maintenance').length;
     const pill = $('status-pill');
     pill.dataset.status = !values.length ? '' : bad ? 'outage' : upkeep ? 'maintenance' : 'operational';
-    $('status-pill-text').textContent = !values.length ? 'Service status' : bad ? bad + (bad === 1 ? ' site having problems' : ' sites having problems') : upkeep ? upkeep + ' under maintenance' : 'All sites working';
+    $('status-pill-text').textContent = !values.length ? 'Service status' : down ? down + (down === 1 ? ' site offline' : ' sites offline') : bad ? bad + (bad === 1 ? ' site running slowly' : ' sites running slowly') : upkeep ? upkeep + ' under maintenance' : 'All sites working';
   }
   async function refresh() {
     try { const r = await fetch('/api/status', { cache: 'no-store' }); if (r.ok) { hosts = (await r.json()).hosts || {}; paintStatus(); } } catch { /* keep the last answer */ }
   }
 
-  drawPins(); refresh(); setInterval(() => { if (!document.hidden) refresh(); }, 60000);
+  drawPins(); refresh(); setInterval(() => { if (!document.hidden) refresh(); }, 15000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
 })();

@@ -14,7 +14,7 @@ test('HN Group Sites: every catalogue website, search, filters, pins, live statu
 
   const status = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ services: [{ id: 'website:vpn:vpn.hngroup.org.uk', status: 'outage' }, { id: 'website:docs:docs.hngroup.org.uk', status: 'operational' }, { id: 'manual:somewhere.example', status: 'outage' }] }));
+    res.end(JSON.stringify({ services: [{ id: 'website:vpn:vpn.hngroup.org.uk', status: 'outage' }, { id: 'website:docs:docs.hngroup.org.uk', status: 'operational' }, { id: 'manual:somewhere.example', status: 'outage' }, { id: 'staff-made', host: 'wiki.hngroup.org.uk', status: 'maintenance' }] }));
   });
   await new Promise((r) => status.listen(0, '127.0.0.1', r));
   process.env.STATUS_BACKEND = 'http://127.0.0.1:' + status.address().port;
@@ -29,7 +29,7 @@ test('HN Group Sites: every catalogue website, search, filters, pins, live statu
     assert.equal((html.match(/<article class="site-card/g) || []).length, data.length);
     assert.match(html, /<link rel="canonical" href="https:\/\/sites\.hngroup\.org\.uk\/">/);
     assert.match(html, /assets\/site\.css/, 'the approved HN Group stylesheet');
-    assert.deepEqual(JSON.parse(await (await fetch(base + '/api/status')).text()).hosts, { 'vpn.hngroup.org.uk': 'outage', 'docs.hngroup.org.uk': 'operational' });
+    assert.deepEqual(JSON.parse(await (await fetch(base + '/api/status')).text()).hosts, { 'vpn.hngroup.org.uk': 'outage', 'docs.hngroup.org.uk': 'operational', 'wiki.hngroup.org.uk': 'maintenance' });
     assert.equal((await fetch(base + '/nope')).status, 404);
     assert.equal((await fetch(base + '/../server.js')).status, 404);
     assert.equal((await fetch(base + '/sites.json')).status, 404, 'the data file is not served');
@@ -46,7 +46,11 @@ test('HN Group Sites: every catalogue website, search, filters, pins, live statu
     }
     // Live status: the VPN's dot shows a problem and the header says so.
     await page.waitForFunction(() => document.querySelector('.site-card[data-id="vpn"]').dataset.status === 'outage');
-    assert.equal(await page.textContent('#status-pill-text'), '1 site having problems');
+    assert.equal(await page.textContent('#status-pill-text'), '1 site offline');
+    assert.equal(await page.textContent('.directory .group:not(.pinned) .site-card[data-id="vpn"] .state'), 'Offline', 'an offline site says so');
+    assert.ok(await page.isVisible('.directory .group:not(.pinned) .site-card[data-id="vpn"] .state'));
+    assert.equal(await page.textContent('.directory .group:not(.pinned) .site-card[data-id="wiki"] .state'), 'Under maintenance');
+    assert.equal(await page.isVisible('.directory .group:not(.pinned) .site-card[data-id="docs"] .state'), false, 'working sites show no badge');
     // Filters and search (words in any order, across name, description and keywords).
     await page.click('[data-filter="companies"]');
     assert.equal(await page.locator('.directory .group:not(.pinned) .site-card:visible').count(), data.filter((s) => s.group === 'companies').length);
