@@ -1,26 +1,26 @@
 {
- "tag": "browser-v1.2.8-54",
- "publishedAt": "2026-11-06T01:16:41.552Z",
+ "tag": "browser-v1.2.9-55",
+ "publishedAt": "2026-11-06T04:38:54.840Z",
  "assets": {
   "linux-x64": {
-   "name": "HN-Browser-1.2.8-linux-x86_64.AppImage",
+   "name": "HN-Browser-1.2.9-linux-x86_64.AppImage",
    "size": 126023884,
-   "sha256": "1519bb152f2f0de4b024413aa14e06a90d8b63fb4cb4aaaada6155335e7ae630"
+   "sha256": "a58b3ff671b81f226b35dd8fb5cf727d24698725d3cadf2b2d8e3755cc83c592"
   },
   "mac-arm64": {
-   "name": "HN-Browser-1.2.8-mac-arm64.dmg",
-   "size": 128707458,
-   "sha256": "b45e80cf4d7dcc9afab5bf003c9cbd562fd32500d34bbc16881a96888f1275f1"
+   "name": "HN-Browser-1.2.9-mac-arm64.dmg",
+   "size": 128707443,
+   "sha256": "c5d2bfb634ca1e162f3faa02d8f97974deb7d4fb9740f5b1fa3040d60658ae8f"
   },
   "mac-arm64-zip": {
-   "name": "HN-Browser-1.2.8-mac-arm64.zip",
-   "size": 128859227,
-   "sha256": "a440df55548d95f5607f040f88dc8dc5a30c90e9a132cd5a08f124ebbeaf1584"
+   "name": "HN-Browser-1.2.9-mac-arm64.zip",
+   "size": 128859417,
+   "sha256": "7fedd7197cb6d40ba2b75b9b2a12a8172b73e637fcf4101b541a139e26bbd3bf"
   },
   "windows-x64": {
-   "name": "HN-Browser-1.2.8-win-x64.exe",
-   "size": 113010392,
-   "sha256": "21e433c4f75cd2a15645a2e1cc7f6c3776824bcfd6f85b93099632c6bf7e24bd"
+   "name": "HN-Browser-1.2.9-win-x64.exe",
+   "size": 113010756,
+   "sha256": "2c7627349efee83f4c64af3c60441d0d9b706f0614ebe67333a9d9fac19a989f"
   }
  }
 }
