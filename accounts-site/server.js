@@ -160,7 +160,7 @@ async function handle(req, res) {
   if (req.method === 'GET' && (route.startsWith('/assets/') || route === '/robots.txt')) {
     const file = path.normalize(path.join(PUBLIC, route));
     if ((file.startsWith(path.join(PUBLIC, 'assets') + path.sep) || route === '/robots.txt') && fs.existsSync(file) && fs.statSync(file).isFile()) {
-      res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'public, max-age=3600' });
+      res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': /\.(js|css)$/.test(file) ? 'no-cache' : 'public, max-age=3600' }); // scripts and styles are checked each load, so updates show at once
       return fs.createReadStream(file).pipe(res);
     }
     return send(res, 404, 'Not found', { 'Content-Type': 'text/plain; charset=utf-8' });

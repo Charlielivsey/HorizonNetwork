@@ -348,22 +348,38 @@
     d.onclose = null; d.classList.add('wide'); d.addEventListener('close', () => d.classList.remove('wide'), { once: true });
     d.showModal();
   }
-  // A small "More" menu of actions (the danger ones in red).
+  // A small "More" menu of actions (the danger ones in red). The menu is attached to the page itself, not inside the
+  // table: the table's rows animate with transforms, which would otherwise move or clip a fixed menu (the user's
+  // report, 6 November 2026: "more just doesnt work").
+  function closeMore() { for (const p of document.querySelectorAll('.more-pop')) { if (p._button) p._button.setAttribute('aria-expanded', 'false'); p.remove(); } }
   function moreMenu(items) {
-    const pop = h('div', { class: 'more-pop', role: 'menu' }, items.filter(Boolean).map(([label, run, danger]) => h('button', { type: 'button', role: 'menuitem', class: danger ? 'danger' : '', onclick: () => { menu.open = false; run(); } }, label)));
-    const summary = h('summary', { class: 'button secondary small' }, 'More');
-    const menu = h('details', { class: 'more' }, summary, pop);
-    // Drawn above the page (fixed), so the table's scrolling area never cuts it off; opens upwards near the bottom.
-    menu.addEventListener('toggle', () => {
-      if (!menu.open) return;
-      const r = summary.getBoundingClientRect(), height = pop.offsetHeight || 160, below = window.innerHeight - r.bottom > height + 12;
-      pop.style.left = Math.max(8, r.right - Math.max(pop.offsetWidth, 170)) + 'px';
-      pop.style.top = (below ? r.bottom + 6 : r.top - height - 6) + 'px';
+    const button = h('button', { type: 'button', class: 'button secondary small more', 'aria-haspopup': 'menu', 'aria-expanded': 'false' }, 'More');
+    button.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const wasOpen = button.getAttribute('aria-expanded') === 'true';
+      closeMore();
+      if (wasOpen) return;
+      const pop = h('div', { class: 'more-pop', role: 'menu' }, items.filter(Boolean).map(([label, run, danger]) => h('button', { type: 'button', role: 'menuitem', class: danger ? 'danger' : '', onclick: () => { closeMore(); run(); } }, label)));
+      pop._button = button;
+      pop.addEventListener('click', (ev) => ev.stopPropagation());
+      pop.addEventListener('keydown', (ev) => {
+        const list = [...pop.querySelectorAll('button')], at = list.indexOf(document.activeElement);
+        if (ev.key === 'Escape') { ev.preventDefault(); closeMore(); button.focus(); }
+        else if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') { ev.preventDefault(); list[(at + (ev.key === 'ArrowDown' ? 1 : list.length - 1)) % list.length].focus(); }
+      });
+      document.body.appendChild(pop);
+      button.setAttribute('aria-expanded', 'true');
+      const r = button.getBoundingClientRect(), height = pop.offsetHeight, width = Math.max(pop.offsetWidth, 170), below = window.innerHeight - r.bottom > height + 12;
+      pop.style.left = Math.max(8, Math.min(window.innerWidth - width - 8, r.right - width)) + 'px';
+      pop.style.top = Math.max(8, below ? r.bottom + 6 : r.top - height - 6) + 'px';
+      const first = pop.querySelector('button'); if (first) first.focus({ preventScroll: true });
     });
-    return menu;
+    return button;
   }
-  document.addEventListener('click', (e) => { for (const m of document.querySelectorAll('details.more[open]')) if (!m.contains(e.target)) m.open = false; });
-  window.addEventListener('scroll', () => { for (const m of document.querySelectorAll('details.more[open]')) m.open = false; }, true);
+  document.addEventListener('click', closeMore);
+  window.addEventListener('scroll', closeMore, true);
+  window.addEventListener('resize', closeMore);
+  window.addEventListener('hashchange', closeMore);
   async function accounts() {
     if (!loginData) loginData = await api('/api/logins');
     const search = h('input', { type: 'search', placeholder: 'Search by name, username, profile or company', 'aria-label': 'Search sign-in accounts', class: 'search' });
