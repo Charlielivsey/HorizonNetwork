@@ -78,6 +78,12 @@ test('sign-in accounts: made on HN Account, several profiles with a default, own
     const refused = await fetch(staffBase + '/api/employees/' + nia.id + '/account', { method: 'POST', headers: { Cookie: portal, 'Content-Type': 'application/json' }, body: '{}' });
     assert.equal(refused.status, 403); assert.match((await refused.json()).error, /HN Account/);
     assert.equal((await fetch(staffBase + '/api/logins', { headers: { Cookie: portal } })).status, 403);
+    // The real staff directory websites use (Contracts' "Who signs") answers, with legal names (the user's report,
+    // 6 November 2026: "The staff list is unavailable").
+    const dirRes = await fetch(staffBase + '/api/auth/staff-directory', { method: 'POST', headers: { Authorization: 'Bearer ' + 'e'.repeat(64), 'Content-Type': 'application/json' }, body: '{}' });
+    assert.equal(dirRes.status, 200, await dirRes.clone().text());
+    const dir = (await dirRes.json()).people;
+    assert.equal(dir.find((p) => /Ada/.test(p.displayName)).legalName, 'Ada Test');
     // "Open HN Account" from the staff portal signs straight in to HN Account and lands on the new person (the user's
     // request, 6 November 2026); the ticket works once and only for a place on HN Account.
     const handoff = await (await fetch(staffBase + '/api/accounts-handoff', { method: 'POST', headers: { Cookie: portal, 'Content-Type': 'application/json' }, body: JSON.stringify({ next: '/#staff/create/' + nia.id }) })).json();
