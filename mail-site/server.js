@@ -20,14 +20,11 @@ const TYPES = { '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg
 const MAX_ATTACH = 25 * 1024 * 1024;
 const fail = (status, message, code) => Object.assign(new Error(message), { status, code });
 const GOOGLE_COOKIE = 'hn_mail_google';
-// Emails keep their own colours in both themes (the user's request, 6 November 2026, about a signature: "things like this
-// should not change with the theme. the colours are the colours and shoiuld stay the same"), so nothing is ever turned
-// or recoloured. Light shows every email as it is on the page's background. Lavender Dusk shows an email with no colours
-// of its own (plain text, simple HTML) in the theme's text colours on the dark background, and one that sets its own
-// colours (signatures, newsletters) as it is on white paper, since its dark text can't be read on a dark page.
-const OWN_COLOURS = /<style\b|\sstyle\s*=\s*["'][^"']*(?:color|background)|\sbgcolor\s*=|<font\b[^>]*\scolor\s*=/i;
-const DUSK_PLAIN = 'html,body{color:#efe9fb}a{color:#b79cf2}blockquote{border-left-color:#43374f;color:#a99cbf}';
-const DUSK_PAPER = 'body{background:#ffffff!important;color:#1c2135;border-radius:14px;padding:18px 20px 22px!important}';
+// Emails in Lavender Dusk (the user's requests, 6 November 2026: no white box around emails, and "the coloured bars should
+// sta the same colour"): public/assets/dusk.js, inlined into the email's page, turns only the colourless parts dark
+// (white/grey backgrounds dark, black/grey text and borders light); colours of the email's own, such as a signature's
+// stripe and divider, stay exactly as they are, and HN Group logos are shown from their Lavender Dusk copies.
+const DUSK_JS = fs.readFileSync(path.join(PUBLIC, 'assets', 'dusk.js'), 'utf8');
 
 async function readJson(req, limit) {
   const chunks = []; let size = 0;
@@ -60,7 +57,7 @@ function createServer({ dir = process.env.MAIL_DATA_DIR || '/var/lib/hn-mail', f
     // box around them in Midnight Lavender.
     html = html.replace(/<img\b[^>]*>/gi, (tag) => {
       const m = /\ssrc\s*=\s*["']?https:\/\/staff\.hngroup\.org\.uk\/assets\/brand\/png\/([a-z-]+-email-logo)\.png["']?/i.exec(tag);
-      const file = m && path.join(PUBLIC, 'assets', 'brand', 'png', m[1].toLowerCase() + '-clear.png');
+      const file = m && path.join(PUBLIC, 'assets', 'brand', 'png', m[1].toLowerCase() + (theme === 'dark' ? '-dusk.png' : '-clear.png'));
       if (!file || !fs.existsSync(file)) return tag;
       return tag.replace(m[0], ' data-hn-logo="1" src="data:image/png;base64,' + fs.readFileSync(file).toString('base64') + '"');
     });
@@ -71,8 +68,8 @@ function createServer({ dir = process.env.MAIL_DATA_DIR || '/var/lib/hn-mail', f
       try { const p = await gmail.part(user, id, info.partId, m); budget -= p.bytes.length; if (/^image\/(png|jpe?g|gif|webp)$/.test(p.type)) html = html.split('cid:' + cid).join('data:' + p.type + ';base64,' + p.bytes.toString('base64')); } catch {}
     }
     const nonce = crypto.randomBytes(16).toString('base64');
-    const dusk = theme === 'dark' ? (parsed.html && (OWN_COLOURS.test(parsed.html) || html.includes('data-hn-logo="1"')) ? DUSK_PAPER : DUSK_PLAIN) : '';
-    const doc = '<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>html,body{margin:0;background:transparent!important;color:#1c2135}body{padding:2px 2px 8px;font:15px/1.55 "Plus Jakarta Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}.plain{white-space:pre-wrap}a{color:#5514b4}blockquote{margin:0 0 0 .6em;padding-left:.8em;border-left:3px solid #d8d2e6;color:#4d4766}' + dusk + '</style></head><body>' + html +
+    const doc = '<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>html,body{margin:0;background:transparent!important;color:#1d1d1f}body{padding:2px 2px 8px;font:15px/1.55 "Plus Jakarta Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}.plain{white-space:pre-wrap}a{color:#5514b4}blockquote{margin:0 0 0 .6em;padding-left:.8em;border-left:3px solid #d8d2e6;color:#4d4766}</style></head><body>' + html +
+      (theme === 'dark' ? '<script nonce="' + nonce + '">' + DUSK_JS + ';hnDusk.apply(document.documentElement);</script>' : '') +
       '<script nonce="' + nonce + '">(function(){var last=0;function post(){var h=Math.ceil(document.documentElement.scrollHeight);if(h!==last){last=h;parent.postMessage({hnMailHeight:h},"*");}}if(window.ResizeObserver)new ResizeObserver(post).observe(document.documentElement);addEventListener("load",post);setTimeout(post,50);post();})();</script></body></html>';
     const csp = "default-src 'none'; style-src 'unsafe-inline'; img-src data:" + (images ? ' https: http:' : '') + '; font-src data:' + (images ? ' https:' : '') + "; script-src 'nonce-" + nonce + "'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'; sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox";
     return { doc, csp };

@@ -165,7 +165,9 @@ test('HN Mail: labels, conversations, a locked-down body page and downloads', as
   assert.doesNotMatch(html, /invert/, 'Light Lavender shows emails as they are');
   const dusk = await (await req('/api/messages/aaaaaaaa11/body?theme=dark')).text();
   assert.doesNotMatch(dusk, /invert|hue-rotate/, 'Lavender Dusk never recolours an email: the colours are the colours');
-  assert.match(dusk, /background:#ffffff!important/, 'an email with HN Group branding is shown as it is, on white paper, in Lavender Dusk');
+  assert.match(dusk, /hnDusk\.apply\(document\.documentElement\)/, 'Lavender Dusk darkens only the colourless parts of an email (assets/dusk.js)');
+  assert.doesNotMatch(dusk, /background:#ffffff!important/, 'no white box around emails');
+  assert.match(html.length ? dusk : '', /data-hn-logo="1" src="data:image\/png;base64,/, 'HN Group logos are shown from their Lavender Dusk copies');
   // Signature pictures: only HN Group's sites and Google's image hosts, only real images.
   assert.equal((await req('/api/img?u=' + encodeURIComponent('https://evil.example/x.png'))).status, 404);
   assert.equal((await req('/api/img?u=' + encodeURIComponent('http://staff.hngroup.org.uk/x.png'))).status, 404);

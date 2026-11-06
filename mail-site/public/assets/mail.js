@@ -139,6 +139,7 @@
     const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = t === 'light' ? '#f3eefa' : '#120f1e';
     // Open emails are drawn for the theme, so they're reloaded in the new one.
     if (redraw) for (const f of $$('.msg-frame')) f.src = f.src.replace(/theme=(dark|light)/, 'theme=' + t);
+    if (redraw && typeof duskEditor === 'function') duskEditor();
   }
   document.addEventListener('hn-theme', () => applyTheme());
   applyTheme(false);
@@ -476,6 +477,7 @@
     $('#c-to').value = fill.to || ''; $('#c-cc').value = fill.cc || ''; $('#c-bcc').value = fill.bcc || ''; $('#c-subject').value = fill.subject || '';
     $('#c-cc-row').hidden = !fill.cc && !fill.bcc; $('#c-bcc-row').hidden = !fill.cc && !fill.bcc; $('#c-show-cc').hidden = !!(fill.cc || fill.bcc);
     editor.innerHTML = fill.html != null ? fill.html : signature();
+    duskEditor();
     $('#composer-title').textContent = fill.title || 'New message';
     $('#composer-state').textContent = fill.draftId ? 'Draft' : ''; $('#c-error').hidden = true;
     const box = $('#composer'); box.hidden = false; box.classList.remove('min'); $('#composer-backdrop').hidden = false;
@@ -516,8 +518,16 @@
     }
     changed(); drawFiles();
   }
+  // In Lavender Dusk the message's colourless parts are shown dark and its own colours (the signature's stripe and
+  // divider) exactly as they are (assets/dusk.js); it's undone on the copy that's saved or sent.
+  function duskEditor() {
+    if (!window.hnDusk) return;
+    window.hnDusk.undo(editor);
+    if (currentTheme() === 'dark') window.hnDusk.apply(editor, { own: true, logoSrc: (src) => (/-clear\.png$/.test(src) ? src.replace(/-clear\.png$/, '-dusk.png') : null) });
+  }
   async function payload() {
     const copy = editor.cloneNode(true);
+    if (window.hnDusk) window.hnDusk.undo(copy);
     for (const img of copy.querySelectorAll('img[data-hn-src]')) { img.setAttribute('src', img.getAttribute('data-hn-src')); img.removeAttribute('data-hn-src'); img.removeAttribute('data-hn-logo'); }
     return { to: $('#c-to').value, cc: $('#c-cc').value, bcc: $('#c-bcc').value, subject: $('#c-subject').value, html: copy.innerHTML, threadId: C.threadId, inReplyTo: C.inReplyTo, references: C.references,
       draftId: C.draftId, include: C.include.map(({ messageId, partId }) => ({ messageId, partId })), attachments: await Promise.all(C.files.map(async (f) => ({ name: f.name, type: f.type, data: await readFile(f) }))) };
@@ -551,7 +561,7 @@
   function closeComposer() { C.open = false; clearTimeout(C.timer); $('#composer').hidden = true; $('#composer-backdrop').hidden = true; $('#composer').classList.remove('max', 'min'); }
   $('#composer-form').addEventListener('input', changed);
   $('#c-attach').addEventListener('change', (e) => { addFiles([...e.target.files]); e.target.value = ''; });
-  editor.addEventListener('paste', (e) => { const html = e.clipboardData.getData('text/html'); if (html) { e.preventDefault(); document.execCommand('insertHTML', false, sanitize(html)); } });
+  editor.addEventListener('paste', (e) => { const html = e.clipboardData.getData('text/html'); if (html) { e.preventDefault(); document.execCommand('insertHTML', false, sanitize(html)); duskEditor(); } });
   $('#composer').addEventListener('dragover', (e) => { if ([...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
   $('#composer').addEventListener('drop', (e) => { if (e.dataTransfer.files.length) { e.preventDefault(); addFiles([...e.dataTransfer.files]); } });
   $('#c-show-cc').addEventListener('click', () => { $('#c-cc-row').hidden = false; $('#c-bcc-row').hidden = false; $('#c-show-cc').hidden = true; $('#c-cc').focus(); });
