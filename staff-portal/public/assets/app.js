@@ -107,6 +107,26 @@
         if (window.hnApplyTheme) window.hnApplyTheme(theme);
     }
 
+    // Opens HN Account already signed in, at `next` (the user's request, 6 November 2026): the staff portal asks for a
+    // one-time ticket and HN Account swaps it for its own sign-in. The tab is opened straight away (so pop-up blockers
+    // allow it) and pointed at HN Account once the ticket arrives; without one it falls back to HN Account's sign-in.
+    function openHnAccount(next) {
+        const w = window.open("about:blank", "_blank");
+        if (w) w.opener = null;
+        api("/api/accounts-handoff", { next: next }).then(function (r) {
+            if (w) w.location.href = r.url; else location.href = r.url;
+        }).catch(function () {
+            const fallback = "https://accounts.hngroup.org.uk/" + next.replace(/^\//, "");
+            if (w) w.location.href = fallback; else location.href = fallback;
+        });
+    }
+    document.addEventListener("click", function (ev) {
+        const a = ev.target.closest && ev.target.closest("a[data-hn-account]");
+        if (!a || ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey) return;
+        ev.preventDefault();
+        openHnAccount(a.getAttribute("data-hn-account"));
+    });
+
     async function api(path, body) {
         const res = await fetch(path, body === undefined ? { headers: { Accept: "application/json" } } : {
             method: "POST",
@@ -1452,7 +1472,7 @@
             '<div class="page-head"><div><h1>Employee Management</h1><p class="muted">Add staff, manage their details and set up their login accounts.</p></div>' +
             '<div class="page-actions">' +
             (can("access.manage") ? '<a class="btn btn-ghost" href="/roles" data-link>' + icon("shield") + "Roles & permissions</a>" : "") +
-            '<a class="btn btn-ghost" href="https://accounts.hngroup.org.uk/#accounts" target="_blank" rel="noopener">' + icon("key") + "HN Account</a>" +
+            '<a class="btn btn-ghost" href="https://accounts.hngroup.org.uk/#accounts" target="_blank" rel="noopener" data-hn-account="/#accounts">' + icon("key") + "HN Account</a>" +
             '<button type="button" class="btn btn-primary" id="add-employee">' + icon("plus") + "Add employee</button></div></div>" +
             '<div class="emp-stats">' + stat("all", "Staff", count("all"), "") + stat("active", "Can sign in", count("active"), "ok") +
             stat("none", "No sign-in account", count("none"), "warn") + stat("disabled", "Sign-in disabled", count("disabled"), "bad") + "</div>" +
@@ -1502,7 +1522,7 @@
                     '<button type="button" class="menu-item compact" data-act="edit">' + icon("edit") + "<span>Edit details</span></button>",
                 ];
                 // Sign-in accounts are created on HN Account (the user's request, 28 October 2026).
-                const onHnAccount = '<a class="menu-item compact" href="https://accounts.hngroup.org.uk/#accounts" target="_blank" rel="noopener">' + icon("key") + "<span>Create sign-in account on HN Account</span></a>";
+                const onHnAccount = '<a class="menu-item compact" href="https://accounts.hngroup.org.uk/#accounts" target="_blank" rel="noopener" data-hn-account="/#staff/create/' + esc(e.id) + '">' + icon("key") + "<span>Create sign-in account on HN Account</span></a>";
                 if (locked && !e.account) {
                     actions.length = 0;
                     actions.push(onHnAccount);
@@ -2016,7 +2036,7 @@
             '<h2 class="modal-title center">' + esc(emp.displayName) + " has been added</h2>" +
             '<p class="muted center">Sign-in accounts are created on HN Account. Give them one there when they need to sign in; each company they work at is its own profile.</p>' +
             '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Not now</button>' +
-            '<a class="btn btn-primary" href="https://accounts.hngroup.org.uk/#accounts" target="_blank" rel="noopener" data-create>Open HN Account</a></div>',
+            '<a class="btn btn-primary" href="https://accounts.hngroup.org.uk/#staff" target="_blank" rel="noopener" data-create data-hn-account="/#staff/create/' + esc(emp.id) + '">Open HN Account</a></div>',
             { onClose: onDone }
         );
         $("[data-create]", m.el).addEventListener("click", function () { closeModal(); });

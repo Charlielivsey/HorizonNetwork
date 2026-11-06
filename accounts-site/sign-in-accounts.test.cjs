@@ -78,6 +78,23 @@ test('sign-in accounts: made on HN Account, several profiles with a default, own
     const refused = await fetch(staffBase + '/api/employees/' + nia.id + '/account', { method: 'POST', headers: { Cookie: portal, 'Content-Type': 'application/json' }, body: '{}' });
     assert.equal(refused.status, 403); assert.match((await refused.json()).error, /HN Account/);
     assert.equal((await fetch(staffBase + '/api/logins', { headers: { Cookie: portal } })).status, 403);
+    // "Open HN Account" from the staff portal signs straight in to HN Account and lands on the new person (the user's
+    // request, 6 November 2026); the ticket works once and only for a place on HN Account.
+    const handoff = await (await fetch(staffBase + '/api/accounts-handoff', { method: 'POST', headers: { Cookie: portal, 'Content-Type': 'application/json' }, body: JSON.stringify({ next: '/#staff/create/' + nia.id }) })).json();
+    const hand = new URL(handoff.url);
+    assert.equal(hand.origin + hand.pathname, 'https://accounts.hngroup.org.uk/auth/handoff');
+    assert.equal(hand.searchParams.get('return'), '/#staff/create/' + nia.id);
+    const landed = await fetch(ACC + hand.pathname + hand.search, { redirect: 'manual' });
+    assert.equal(landed.status, 302); assert.equal(landed.headers.get('location'), '/#staff/create/' + nia.id);
+    const handCookie = cookieOf(landed, 'hn_account');
+    const handSession = await (await fetch(ACC + '/api/session', { headers: { Cookie: handCookie } })).json();
+    assert.equal(handSession.admin, true); assert.match(handSession.user.displayName, /Ada/);
+    assert.equal((await fetch(ACC + '/', { headers: { Cookie: handCookie } })).status, 200, 'opens the app, no sign-in');
+    const again = await fetch(ACC + hand.pathname + hand.search, { redirect: 'manual' });
+    assert.match(again.headers.get('location'), /^\/auth\/login\?return=/, 'a used ticket falls back to signing in, to the same place');
+    const odd = await (await fetch(staffBase + '/api/accounts-handoff', { method: 'POST', headers: { Cookie: portal, 'Content-Type': 'application/json' }, body: JSON.stringify({ next: 'https://evil.example/' }) })).json();
+    assert.equal(new URL(odd.url).searchParams.get('return'), '/#overview', 'only places on HN Account');
+    assert.equal((await fetch(staffBase + '/api/auth/accounts-handoff', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ticket: 'a'.repeat(64) }) })).status === 200, false, 'the swap needs the service secret');
     // ...but HN Account can, for a staff record (its own account) or as a separate account.
     const niaOwn = await admin.post('/api/employees/' + nia.id + '/account', {});
     assert.equal(niaOwn.status, 200); assert.equal((await niaOwn.json()).username, 'nia.test@hngroup.org.uk');

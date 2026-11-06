@@ -44,7 +44,7 @@ const security = require("./lib/security");
 const enquiries = require("./lib/enquiries");
 const storageAccess = require("./lib/storage-access");
 const retention = require("./lib/retention");
-const { createStatusSso, loginNext, serviceRequest } = require("./lib/status-sso");
+const { createStatusSso, loginNext, serviceRequest, accountsHandoff } = require("./lib/status-sso");
 const networkLeadership = require("./lib/network-leadership");
 const portalAuthLib = require("./lib/portal-auth");
 
@@ -1398,6 +1398,15 @@ async function routeApi(req, res, pathname, session) {
   // ----- Sign-in accounts (HN Account only) -----
   // The user's request, 28 October 2026: sign-in accounts are made and managed on HN Account. Each has its own
   // password, PIN and permissions (roles), and any number of profiles (a company on a staff record) or none.
+  // "Open HN Account" from the staff portal without signing in again (the user's request, 6 November 2026): a one-time
+  // ticket for whoever is signed in here, which HN Account swaps for its own session and then opens `next`.
+  if (method === "POST" && pathname === "/api/accounts-handoff") {
+    if (session.data.impersonatorId) throw httpError(403, "Stop logging in as someone else first.");
+    const body = await readJsonBody(req);
+    const next = typeof body.next === "string" && /^\/#(?:accounts|staff|overview)(?:\/create\/[a-f0-9]{16})?$/.test(body.next) ? body.next : "/#overview";
+    const ticket = accountsHandoff(session.data.personId);
+    return sendJson(res, 200, { url: "https://accounts.hngroup.org.uk/auth/handoff?ticket=" + ticket + "&return=" + encodeURIComponent(next) });
+  }
   if (pathname.startsWith("/api/logins")) {
     requireManager(session);
     if (session.data.via !== "accounts") throw httpError(403, "Sign-in accounts are managed on HN Account at accounts.hngroup.org.uk.");

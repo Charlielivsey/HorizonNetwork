@@ -253,6 +253,17 @@
       }));
     }
     search.addEventListener('input', draw); draw();
+    // Opened from the staff portal straight after adding someone (#staff/create/<record id>): show them and offer to
+    // create their sign-in account (the user's request, 6 November 2026).
+    const wanted = /^#staff\/create\/([a-f0-9]{16})$/.exec(location.hash);
+    if (wanted) {
+      history.replaceState(null, '', '#staff');
+      const e = staffList.find((x) => x.id === wanted[1]);
+      if (e) setTimeout(() => {
+        search.value = e.displayName; draw();
+        if (!e.account) act(e, 'account', 'Create a login for ' + e.displayName + '?', 'They’ll get a username and temporary password, and choose their own password and PIN when they first sign in.', 'Create login');
+      }, 50);
+    }
     const counts = { all: staffList.length, active: staffList.filter((e) => e.account && e.account.enabled).length, disabled: staffList.filter((e) => e.account && !e.account.enabled).length };
     return [h('h1', { text: 'Staff records' }), h('p', { class: 'lede', text: 'Every staff record and its own sign-in account. To give someone more accounts, accounts at other profiles, or an account with no staff record, use Sign-in accounts.' }),
       h('div', { class: 'stats' }, h('div', { class: 'stat' }, h('b', { text: counts.all }), ' people'), h('div', { class: 'stat' }, h('b', { text: counts.active }), ' active'), h('div', { class: 'stat' }, h('b', { text: counts.disabled }), ' disabled')),
@@ -417,6 +428,7 @@
   const VIEWS = { overview, profile, security, devices, websites, accounts, staff };
   let seq = 0;
   async function render(name) {
+    name = String(name || '').split('/')[0];
     if (!VIEWS[name] || ((name === 'staff' || name === 'accounts') && !session.admin)) name = 'overview';
     const mine = ++seq, main = $('#content');
     nav(name); main.classList.add('leaving');

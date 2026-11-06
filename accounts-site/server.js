@@ -129,6 +129,25 @@ async function handle(req, res) {
       return redirect(res, safeBack(Buffer.from(back || '', 'base64url').toString()), [clear, setCookie(COOKIE, token, 12 * 3600)]);
     } catch (e) { return messagePage(res, e.status === 403 ? 403 : 503, 'Sign-in failed', e.message, [clear]); }
   }
+  // Opened from the staff portal with a one-time ticket (the user's request, 6 November 2026: "Open HN Account" after
+  // adding someone shouldn't ask them to sign in again and should take them where they need to be).
+  if (route === '/auth/handoff' && req.method === 'GET') {
+    const ticket = url.searchParams.get('ticket') || '';
+    if (!HEX.test(ticket)) return redirect(res, '/auth/login?return=' + encodeURIComponent(safeBack(url.searchParams.get('return'))));
+    try {
+      const result = await service(STAFF_BACKEND, '/api/auth/accounts-handoff', { ticket, ip: clientIp(req), userAgent: String(req.headers['user-agent'] || '') });
+      if (!HEX.test(result.token || '')) throw fail(503, 'The account service didn’t start a session.');
+      for (const [k, v] of sessions) if (v.expires <= Date.now()) sessions.delete(k);
+      if (sessions.size > 5000) throw fail(503, 'Please try again shortly.');
+      const old = cookieOf(req, COOKIE); if (old) sessions.delete(old);
+      const token = crypto.randomBytes(32).toString('hex');
+      sessions.set(token, { staff: result.token, user: result.user, csrf: crypto.randomBytes(24).toString('hex'), expires: Date.now() + 12 * 3600000, fresh: true });
+      return redirect(res, safeBack(url.searchParams.get('return')), [setCookie(COOKIE, token, 12 * 3600)]);
+    } catch (e) {
+      // An expired or used link: sign in the usual way and still end up in the same place.
+      return redirect(res, '/auth/login?return=' + encodeURIComponent(safeBack(url.searchParams.get('return'))));
+    }
+  }
   if (route === '/auth/logout' && req.method === 'POST') {
     const s = current(req), form = new URLSearchParams((await readBody(req, 4096)).toString());
     if (s && form.get('csrf') === s.csrf) {

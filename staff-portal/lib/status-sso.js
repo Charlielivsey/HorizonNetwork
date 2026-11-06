@@ -27,6 +27,18 @@ function serviceRequest(req) {
 function loginNext(value) {
   return typeof value === 'string' && /^\/status-admin\/authorize\?state=[a-f0-9]{64}$/.test(value) ? value : null;
 }
+// One-time hand-offs from the staff portal to HN Account (the user's request, 6 November 2026: after adding someone,
+// "Open HN Account" shouldn't ask them to sign in again and should take them where they need to be). The portal makes
+// a ticket for whoever is signed in there (valid for 60 seconds, used once); HN Account swaps it, with the service
+// secret over loopback, for its own staff session, exactly as after an HN Group Auth sign-in.
+const handoffs = new Map();
+function accountsHandoff(personId) {
+  for (const [k, v] of handoffs) if (v.expires <= Date.now()) handoffs.delete(k);
+  if (handoffs.size > 1000) throw Object.assign(new Error('Please try again shortly.'), { status: 503 });
+  const ticket = require('node:crypto').randomBytes(32).toString('hex');
+  handoffs.set(ticket, { personId, expires: Date.now() + 60000 });
+  return ticket;
+}
 function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, logEvent, handleChangePassword, handleSetCode, verifyBrowserPin, verifyVpnPin, issueSession, googleLogin, discordLogin, syncDiscordPhotos }) {
   const codes = new Map();
   function current(token) {
@@ -86,7 +98,7 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       logEvent(req, session, 'status-admin-sign-in');
       redirect(res, `${STATUS_ORIGIN}/auth/callback?code=${code}&state=${state}`); return true;
     }
-    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/password', '/api/auth/code', '/api/auth/network-leadership', '/api/auth/network-avatar', '/api/auth/account-status', '/api/auth/staff-directory', '/api/auth/directory-avatar', '/api/auth/vpn-pin', '/api/auth/accounts-session', '/api/auth/profile-select', '/api/auth/profile-avatar', '/api/auth/browser-issue', '/api/auth/browser-profile', '/api/auth/browser-avatar', '/api/auth/browser-offer', '/api/auth/browser-logout', '/api/auth/browser-unlock', '/api/auth/browser-lock', '/api/auth/browser-account', '/api/auth/browser-account-update', '/api/auth/browser-account-status', '/api/auth/browser-account-photo', '/api/auth/google-login', '/api/auth/google-link', '/api/auth/google-unlink', '/api/auth/discord-positions', '/api/auth/discord-login', '/api/auth/discord-link', '/api/auth/discord-unlink', '/api/auth/discord-accounts', '/api/auth/discord-update'].includes(pathname)) return false;
+    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/password', '/api/auth/code', '/api/auth/network-leadership', '/api/auth/network-avatar', '/api/auth/account-status', '/api/auth/staff-directory', '/api/auth/directory-avatar', '/api/auth/vpn-pin', '/api/auth/accounts-session', '/api/auth/profile-select', '/api/auth/profile-avatar', '/api/auth/browser-issue', '/api/auth/browser-profile', '/api/auth/browser-avatar', '/api/auth/browser-offer', '/api/auth/browser-logout', '/api/auth/browser-unlock', '/api/auth/browser-lock', '/api/auth/browser-account', '/api/auth/browser-account-update', '/api/auth/browser-account-status', '/api/auth/browser-account-photo', '/api/auth/google-login', '/api/auth/google-link', '/api/auth/google-unlink', '/api/auth/discord-positions', '/api/auth/accounts-handoff', '/api/auth/discord-login', '/api/auth/discord-link', '/api/auth/discord-unlink', '/api/auth/discord-accounts', '/api/auth/discord-update'].includes(pathname)) return false;
     if (req.method !== 'POST') { sendJson(res, 405, { error: 'Method not allowed.' }); return true; }
     if (!credentials(req)) { sendJson(res, 401, { error: 'Status integration not authenticated.' }); return true; }
     const body = await readJsonBody(req, pathname === '/api/auth/browser-account-photo' ? 2 * 1024 * 1024 : undefined);
@@ -136,6 +148,17 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
     if (pathname === '/api/auth/discord-login') {
       if (typeof body.id !== 'string') { sendJson(res, 400, { error: 'Invalid Discord sign-in.' }); return true; }
       discordLogin(req, res, { id: body.id, username: typeof body.username === 'string' ? body.username.slice(0, 64) : '' }); return true;
+    }
+    // HN Account swaps a one-time hand-off ticket from the staff portal for its own staff session.
+    if (pathname === '/api/auth/accounts-handoff') {
+      const t = typeof body.ticket === 'string' && handoffs.get(body.ticket);
+      if (t) handoffs.delete(body.ticket);
+      const person = t && t.expires > Date.now() && store.getPerson(t.personId);
+      if (!person || !person.account || !person.account.enabled) { sendJson(res, 401, { error: 'That link has expired. Open HN Account from the staff portal again, or sign in.' }); return true; }
+      const ip = typeof body.ip === 'string' ? body.ip.slice(0, 64) : '', ua = typeof body.userAgent === 'string' ? body.userAgent.slice(0, 300) : '';
+      const raw = issueSession(t.personId, ip, ua);
+      logEvent({ socket: { remoteAddress: '127.0.0.1' }, headers: { 'x-real-ip': ip, 'user-agent': ua } }, null, 'signed-in', { actor: store.loginName(person), detail: 'HN Account (from the staff portal)', ua });
+      sendJson(res, 200, { token: raw, user: identity({ person, data: { personId: t.personId } }) }); return true;
     }
     // HN Group Auth's Discord bot keeps the stored usernames up to date.
     // Job titles by company for each linked Discord ID: the bot keeps Discord roles in step with positions.
@@ -274,4 +297,4 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
     return true;
   };
 }
-module.exports = { createStatusSso, allowed, loginNext, serviceRequest };
+module.exports = { createStatusSso, allowed, loginNext, serviceRequest, accountsHandoff };
