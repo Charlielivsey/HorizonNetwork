@@ -39,6 +39,13 @@ const CLIENTS = {
   'private-wiki': { name: 'HN Group Private Wiki', callback: 'https://private.wiki.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use the private wiki.' },
   contracts: { name: 'HN Group Contracts', callback: 'https://contract.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use HN Group Contracts.' },
 };
+// Guest accounts (the user's request, 6 November 2026) only get the websites and apps ticked for them on HN Account
+// (`guestSites` from the staff identity), on top of each website's own rule, here and everywhere a client is checked.
+for (const [id, client] of Object.entries(CLIENTS)) {
+  const own = client.allowed;
+  client.allowed = (user) => !!((!user.guest || (Array.isArray(user.guestSites) && user.guestSites.includes(id))) && own(user));
+}
+const guestDenied = (id, user) => user && user.guest && !(user.guestSites || []).includes(id) ? 'This guest account hasn’t been given access to ' + CLIENTS[id].name + '.' : CLIENTS[id].denied;
 const HEX = /^[a-f0-9]{64}$/;
 const COOKIE = '__Host-hn_auth_session', FLOW = '__Host-hn_auth_flow', REMEMBER = '__Host-hn_auth_resume';
 const secretFile = process.env.STATUS_SSO_SECRET_FILE || '/var/lib/hn-status-sso/secret';
@@ -191,7 +198,7 @@ const server = http.createServer(async (req, res) => {
       const user = await profile(entry, !!detachedEntry);
       if (detachedEntry) { const application = applicationSessions.get(hash(applicationToken)); if (application && application.expires !== entry.expires) { application.expires = entry.expires; saveAppSessions(); } }
       requireReady(user);
-      if (!CLIENTS[clientId].allowed(user)) throw fail(403, CLIENTS[clientId].denied);
+      if (!CLIENTS[clientId].allowed(user)) throw fail(403, guestDenied(clientId, user));
       if (clientId === 'portal' || clientId === 'accounts') {
         // The application starts its own session (HN Account swaps this one for its own on the staff
         // account service); this Auth sign-in has done its job.
@@ -341,4 +348,4 @@ const server = http.createServer(async (req, res) => {
 });
 setInterval(() => { for (const [key, value] of applicationSessions) if (value.expires <= Date.now() || !value.entry && !sessions.has(value.session)) { applicationSessions.delete(key); saveAppSessions(); } for (const map of [sessions, challenges, codes]) for (const [key, value] of map) if (value.expires <= Date.now()) map.delete(key); }, 60000).unref();
 if (require.main === module) server.listen(Number(process.env.PORT || 3400), process.env.HOST || '127.0.0.1');
-module.exports = { server, discord };
+module.exports = { server, discord, CLIENTS };

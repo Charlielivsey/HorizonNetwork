@@ -46,6 +46,8 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       // Every profile this sign-in account can use, so HN Group Auth can ask which one (the default first chosen).
       profileKey:p.profile?p.profile.key:null,profiles:profiles.map(x=>({key:x.key,company:x.company,jobTitle:x.jobTitle,displayName:x.displayName,photo:!!x.avatarUrl,default:!!login&&store.defaultProfile(login)?.key===x.key})),
       ...(p.standalone?{standalone:true}:{}),
+      // Guest accounts only get the websites ticked for them (HN Group Auth checks guestSites for every website and app).
+      ...(p.__login&&p.__login.guest?{guest:true,guestSites:p.__login.guest.sites.slice()}:{}),
       jobTitle:p.jobTitle||'',company:p.company||'',companies:[...new Set([p.company,...(p.otherRoles||[]).map(r=>r.company)].filter(Boolean))],avatarUrl:store.avatarFile(p)?'/api/avatar':null,
       ...(p.account.passwordTemporary?{passwordChangeRequired:true,passwordMinLength:store.meView(p).passwordMinLength}:{}),
       ...(!store.hasCode(p)?{codeSetupRequired:true}:{}),statusAdminAllowed:allowed(active,store),

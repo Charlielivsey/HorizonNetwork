@@ -695,6 +695,7 @@ function publicView(p) {
     jobTitle: p.jobTitle,
     department: p.department || "",
     company: p.company,
+    temporary: !!p.temporary,
     otherRoles: p.otherRoles || [],
     supervisorId: p.supervisorId,
     supervisorCompany: p.supervisorCompany || null,
@@ -973,6 +974,9 @@ function saveEmployee(input, existing) {
     startDate: validDate(input.startDate),
     updatedAt: now,
   };
+  // A temporary position (the user's request, 6 November 2026): guest sign-in accounts can use a temporary record, and
+  // are moved onto a permanent one with "Make permanent" on HN Account.
+  if (input.temporary !== undefined) fields.temporary = input.temporary === true;
 
   // Their Discord user id (the user's request, 28 October 2026: required when a staff record is made; the staff
   // portal enforces that). HN Group Auth's Discord bot fills in the username from it.
@@ -1056,7 +1060,7 @@ function roleAt(rec, company) {
   return { company, jobTitle: r.jobTitle || rec.jobTitle || "", supervisorId: r.supervisorId || rec.supervisorId || null, supervisorCompany: r.supervisorCompany || null };
 }
 function profileInfo(rec, company) {
-  return { key: profileKey(rec.id, company), personId: rec.id, company, profileId: profileIdOf(rec, company), displayName: rec.displayName, jobTitle: roleAt(rec, company).jobTitle, avatarUrl: avatarUrl(rec) };
+  return { key: profileKey(rec.id, company), personId: rec.id, company, profileId: profileIdOf(rec, company), displayName: rec.displayName, jobTitle: roleAt(rec, company).jobTitle, avatarUrl: avatarUrl(rec), temporary: !!rec.temporary };
 }
 function loginProfiles(l) {
   const out = [], seen = new Set();
@@ -1194,6 +1198,7 @@ function loginView(l) {
     id: l.id, username: loginName({ __login: l }), displayName: rec ? rec.displayName : (l.self && l.self.displayName) || l.displayName || l.username,
     ownLoginOf: rec ? { id: rec.id, displayName: rec.displayName } : null,
     profiles: list.map((p) => ({ ...p, default: !!def && p.key === def.key, automatic: !!rec && p.personId === rec.id })),
+    guest: l.guest ? { sites: l.guest.sites.slice() } : null,
     roleIds: l.roleIds || [], ownerAccess: hasOwnerAccess({ __login: l, account: l.account }), systemOwner: isOwner({ __login: l }), owner: l.owner || false,
     account: l.account ? { enabled: !!l.account.enabled, hasCode: !!l.account.code, passwordTemporary: !!l.account.passwordTemporary, lastLoginAt: l.account.lastLoginAt || null, google: l.account.google ? l.account.google.email : null } : null,
     createdAt: l.createdAt,
@@ -1224,12 +1229,29 @@ function createLogin(input) {
   if (username.length > 120 || !/^[a-z0-9][a-z0-9._+-]{1,62}(@[a-z0-9-]+(\.[a-z0-9-]+)+)?$/.test(username)) throw new ValidationError("Enter a username or email address (letters, numbers, dots and dashes).");
   if (loginTaken(username)) throw Object.assign(new Error("That username or email address is already used by another account."), { status: 409 });
   const now = new Date().toISOString();
-  const l = { id: newId(), username, displayName, primaryFor: null, matchEmails: false, profiles: validProfiles(input.profiles), defaultProfile: null, roleIds: cleanRoleIds(input.roleIds), owner: false, account: null, createdAt: now, self: { displayName, firstName: "", lastName: "", phone: "", location: "", timezone: DEFAULT_TIMEZONE, avatar: null, createdAt: now, updatedAt: now } };
+  const guest = cleanGuest(input.guest);
+  const l = { id: newId(), username, displayName, primaryFor: null, matchEmails: false, guest, profiles: validProfiles(input.profiles), defaultProfile: null, roleIds: cleanRoleIds(input.roleIds), owner: false, account: null, createdAt: now, self: { displayName, firstName: "", lastName: "", phone: "", location: "", timezone: DEFAULT_TIMEZONE, avatar: null, createdAt: now, updatedAt: now } };
   const def = loginProfiles(l).find((p) => p.key === input.defaultProfile);
   l.defaultProfile = def ? def.key : null;
   logins.push(l);
   const credentials = issueTemporaryPassword(viewOf(l, null));
   return { login: l, credentials };
+}
+// Guest accounts (the user's request, 6 November 2026: "guest accounts … not neccessarlily linked to a permanant staff
+// record, but have access to toggles that will be specified when the account is created"): a guest can only sign in to
+// the websites and apps ticked for it; HN Group Auth checks this as well as each website's own rules. The ids are
+// HN Group Auth's client ids (auth-site/server.js CLIENTS; the test checks they exist there).
+const GUEST_SITES = [
+  ["portal", "Staff portal"], ["accounts", "HN Account"], ["docs", "HN Group Docs"], ["contracts", "HN Group Contracts"],
+  ["devices", "HN Group Devices"], ["vpn", "HN Group VPN"], ["browser", "HN Browser"], ["app-manager", "HN Group App Manager"],
+  ["wiki", "HN Group Wiki (editing)"], ["branding", "Brand centre"], ["private-companies", "Private company register"],
+  ["private-wiki", "Private wiki"], ["news", "HN Group News"], ["investors", "HN Group Investors"],
+].map(([id, name]) => ({ id, name }));
+function cleanGuest(input) {
+  if (!input) return null;
+  const sites = [...new Set((Array.isArray(input.sites) ? input.sites : []).map(String))].filter((id) => GUEST_SITES.some((x) => x.id === id));
+  if (!sites.length) throw new ValidationError("Choose at least one website or app the guest account can use.");
+  return { sites };
 }
 function cleanRoleIds(list) {
   return [...new Set((Array.isArray(list) ? list : []).map(String))].filter((id) => getRole(id));
@@ -1242,6 +1264,9 @@ function updateLogin(l, input) {
     l.defaultProfile = def ? def.key : null;
   }
   if (input.roleIds !== undefined) l.roleIds = cleanRoleIds(input.roleIds);
+  // A guest account's websites can change; an account becomes a guest only when it's made (or stops being one with
+  // Make permanent), and a staff record's own account is never a guest.
+  if (input.guest !== undefined && l.guest) l.guest = cleanGuest(input.guest);
   // Owner-level access ("level") or system owner ("system"); only the system owner sets this (server.js checks).
   if (input.owner !== undefined) l.owner = input.owner === "system" ? "system" : input.owner === "level" || input.owner === true ? "level" : false;
   if (input.displayName !== undefined && !l.primaryFor) {
@@ -1249,6 +1274,29 @@ function updateLogin(l, input) {
     if (!name) throw new ValidationError("Enter a name for the account.");
     l.displayName = name; if (l.self) l.self.displayName = name;
   }
+  savePeople();
+  return l;
+}
+// Make permanent: a guest account becomes an ordinary sign-in account (the user's request, 6 November 2026: a guest "should
+// be able to moved to a full staff record if they move to a permanant position"). With `personId`, it moves onto that
+// existing permanent staff record (as the record's own account if it has none, otherwise using its profiles); without,
+// the temporary records it uses become permanent (and the record becomes its own if it was the only one and has none).
+function makePermanent(l, input = {}) {
+  if (!l.guest) throw new ValidationError("This isn't a guest account.");
+  const linked = [...new Set(loginProfiles(l).map((p) => p.personId))].map(getRecord).filter(Boolean);
+  if (input.personId) {
+    const rec = getRecord(String(input.personId));
+    if (!rec || rec.system) throw new ValidationError("Choose a staff record.");
+    if (rec.temporary) throw new ValidationError("That staff record is temporary too. Choose a permanent one, or make this one permanent.");
+    if (!primaryLogin(rec)) { l.primaryFor = rec.id; l.matchEmails = true; l.profiles = []; l.displayName = rec.displayName; }
+    else l.profiles = companiesOf(rec).map((company) => ({ personId: rec.id, company }));
+    l.defaultProfile = profileKey(rec.id, rec.company);
+  } else {
+    if (!linked.length) throw new ValidationError("This guest account has no staff record. Choose the permanent staff record to move it to.");
+    for (const rec of linked) rec.temporary = false;
+    if (linked.length === 1 && !primaryLogin(linked[0])) { l.primaryFor = linked[0].id; l.matchEmails = true; l.profiles = []; }
+  }
+  l.guest = null;
   savePeople();
   return l;
 }
@@ -1590,6 +1638,8 @@ module.exports = {
   findByDiscord,
   setDiscord,
   discordIds,
+  GUEST_SITES,
+  makePermanent,
   discordPositions,
   missingDiscord,
   setRecordDiscord,

@@ -269,3 +269,9 @@ footer .footer-brand .footer-parent { opacity: .82; font-size: .88rem; }
 .discord-photo { align-items: flex-start; margin-top: 1rem; }
 .discord-photo input { margin-top: .15rem; flex: none; }
 .discord-photo > span { display: grid; gap: .1rem; }
+
+/* Guest accounts (6 November 2026) */
+.pill.guest { margin-left: .45rem; background: color-mix(in srgb, var(--accent, #5514B4) 14%, transparent); color: var(--accent, #5514B4); border-color: transparent; vertical-align: middle; }
+.guest-part { margin: .4rem 0 .2rem; }
+.guest-sites { margin-top: .6rem; }
+.guest-sites[hidden] { display: none !important; }

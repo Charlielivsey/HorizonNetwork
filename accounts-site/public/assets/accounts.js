@@ -275,6 +275,18 @@
     let def = account ? (account.profiles.find((p) => p.default) || {}).key || null : null;
     const roles = new Set(account ? account.roleIds : []);
     const status = h('p', { class: 'form-status', role: 'status', 'aria-live': 'polite' });
+    // Guest accounts (the user's request, 6 November 2026): only the websites and apps ticked here; chosen when the
+    // account is made, changeable later; Make permanent turns a guest into an ordinary account.
+    const guestSites = new Set(account && account.guest ? account.guest.sites : []);
+    const canGuest = creating || (account && account.guest);
+    const guestBox = creating ? h('input', { type: 'checkbox', id: 'guest-toggle' }) : null;
+    const siteBoxes = h('div', { class: 'role-pick guest-sites' }, (loginData.guestSites || []).map((x) => h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: guestSites.has(x.id), onchange: (e) => { if (e.target.checked) guestSites.add(x.id); else guestSites.delete(x.id); } }), h('span', {}, h('b', { text: x.name })))));
+    const guestPart = canGuest ? h('div', { class: 'guest-part' },
+      h('h3', { text: 'Guest account' }),
+      creating ? h('label', { class: 'check' }, guestBox, h('span', {}, h('b', { text: 'This is a guest account' }), h('span', { class: 'muted small', text: ' It doesn’t need a permanent staff record, and can only use the websites and apps ticked below. Link it to a temporary staff record under Profiles if they have one.' })))
+        : h('p', { class: 'muted small', text: 'This guest account can only use the websites and apps ticked below. Use “Make permanent” when they move to a permanent position.' }),
+      siteBoxes) : null;
+    if (guestBox) { const show = () => { siteBoxes.hidden = !guestBox.checked; }; guestBox.addEventListener('change', show); show(); }
     const name = creating || !own ? field('Name', 'displayName', account ? account.displayName : '', { max: 80, required: true, hint: 'How this account is shown when it isn’t using a staff profile.' }) : null;
     const user = creating ? field('Username or email address', 'username', '', { max: 120, required: true, auto: 'off', hint: 'What they type to sign in. It can be any email address, including a personal one.' }) : null;
     const filter = h('input', { type: 'search', class: 'search', placeholder: 'Find a profile by name or company', 'aria-label': 'Find a profile' });
@@ -288,7 +300,7 @@
         const auto = own && account.profiles.some((x) => x.key === p.key && x.automatic);
         const box = h('input', { type: 'checkbox', checked: chosen.has(p.key), disabled: auto, onchange: () => { if (box.checked) chosen.set(p.key, p); else chosen.delete(p.key); drawProfiles(); } });
         const star = h('input', { type: 'radio', name: 'default-profile', checked: def === p.key, disabled: !chosen.has(p.key), 'aria-label': 'Default profile', onchange: () => { def = p.key; } });
-        return h('div', { class: 'profile-row' + (chosen.has(p.key) ? ' on' : '') }, h('label', { class: 'check' }, box, avatar(p, 'sm'), h('span', {}, h('b', { text: p.displayName }), h('span', { class: 'muted small', text: p.company + (p.jobTitle ? ' · ' + p.jobTitle : '') + (auto ? ' · their own record' : '') }))),
+        return h('div', { class: 'profile-row' + (chosen.has(p.key) ? ' on' : '') }, h('label', { class: 'check' }, box, avatar(p, 'sm'), h('span', {}, h('b', { text: p.displayName }), h('span', { class: 'muted small', text: p.company + (p.jobTitle ? ' · ' + p.jobTitle : '') + (p.temporary ? ' · temporary' : '') + (auto ? ' · their own record' : '') }))),
           h('label', { class: 'default-pick small' }, star, 'Default'));
       }) : [h('p', { class: 'muted small', text: 'No profiles match.' })]));
     }
@@ -305,6 +317,10 @@
         if (name) body.displayName = name.querySelector('input').value;
         if (ownerPick) body.owner = ownerPick.querySelector('select').value || false;
         if (creating) body.username = user.querySelector('input').value;
+        if ((creating && guestBox.checked) || (account && account.guest)) {
+          if (!guestSites.size) throw new Error('Tick at least one website or app the guest account can use.');
+          body.guest = { sites: [...guestSites] };
+        }
         const r = creating ? await api('/api/logins', body) : await api('/api/logins/' + account.id, body);
         d.close('ok'); loginData = null; done();
         if (r.temporaryPassword) credentialsDialog(r.account.displayName, r); else toast('Saved.');
@@ -313,7 +329,7 @@
     });
     $('#dialog-title').textContent = creating ? 'New sign-in account' : 'Edit ' + account.displayName;
     $('#dialog-body').replaceChildren(h('div', { class: 'account-editor' },
-      name, user,
+      name, user, guestPart,
       h('h3', { text: 'Profiles' }), h('p', { class: 'muted small', text: 'Each company someone works at is its own profile. Tick the profiles this account can use and choose its default; they’ll pick one each time they sign in. With none, the account works on HN Group websites but not as a member of staff.' }),
       filter, list,
       h('h3', { text: 'Permissions' }), h('p', { class: 'muted small', text: loginData.canManageRoles ? 'This account’s own permissions, whichever profile it uses.' : 'You need the “Manage roles” permission to change these.' }), roleBoxes, ownerPick, status));
@@ -344,6 +360,26 @@
     const roleName = (id) => (loginData.roles.find((r) => r.id === id) || {}).name;
     const status = (a) => !a.account ? ['No password', ''] : !a.account.enabled ? ['Disabled', 'warn'] : a.account.passwordTemporary ? ['Temporary password', ''] : !a.account.hasCode ? ['PIN not set', ''] : ['Active', 'ok'];
     const reload = async () => { loginData = await api('/api/logins'); draw(); };
+    // Make permanent: keep their temporary staff record (it becomes permanent) or move them onto an existing permanent one.
+    function makePermanent(a) {
+      const d = $('#dialog');
+      const temps = a.profiles.filter((p) => p.temporary);
+      const records = [...new Map(loginData.profiles.filter((p) => !p.temporary).map((p) => [p.personId, p])).values()].sort((x, y) => x.displayName.localeCompare(y.displayName));
+      const choice = field('Where they go', 'target', temps.length ? '' : (records[0] || {}).personId || '', { options: [
+        ...(temps.length ? [['', 'Keep their staff record (' + [...new Set(temps.map((p) => p.displayName))].join(', ') + ') and make it permanent']] : []),
+        ...records.map((p) => [p.personId, 'Move to ' + p.displayName + ' (' + p.company + (p.jobTitle ? ', ' + p.jobTitle : '') + ')'])], hint: 'The account keeps its username, password and PIN, stops being a guest and can then use HN Group websites like any member of staff (with its own permissions).' });
+      const status = h('p', { class: 'form-status', role: 'status', 'aria-live': 'polite' });
+      const go = h('button', { class: 'button', type: 'button', text: 'Make permanent' });
+      go.addEventListener('click', async () => {
+        if (go.disabled) return; go.disabled = true; status.textContent = '';
+        try { const personId = choice.querySelector('select').value; await api('/api/logins/' + a.id + '/permanent', personId ? { personId } : {}); d.close('ok'); toast(a.displayName + ' is now a permanent account.'); await reload(); }
+        catch (err) { status.textContent = err.message; status.className = 'form-status bad'; } finally { go.disabled = false; }
+      });
+      $('#dialog-title').textContent = 'Make ' + a.displayName + ' permanent';
+      $('#dialog-body').replaceChildren(h('p', { text: 'Use this when a guest moves to a permanent position.' }), choice, status);
+      $('#dialog-buttons').replaceChildren(h('button', { class: 'button secondary', value: 'cancel', text: 'Cancel', formnovalidate: true }), go);
+      d.onclose = null; d.classList.add('wide'); d.addEventListener('close', () => d.classList.remove('wide'), { once: true }); d.showModal();
+    }
     async function act(a, action, title, text, label, danger) {
       if (!(await confirmDialog(title, text, label, danger))) return;
       try {
@@ -356,7 +392,7 @@
       const q = search.value.trim().toLowerCase();
       body.replaceChildren(...loginData.accounts.filter((a) => !q || [a.displayName, a.username, ...a.profiles.map((p) => p.displayName + ' ' + p.company)].join(' ').toLowerCase().includes(q)).map((a) => {
         const [label, cls] = status(a), self = a.id === me.accountId && !loginData.ownerLevel;
-        return h('tr', {}, h('td', {}, h('span', { class: 'person' }, avatar(a.profiles.find((p) => p.default) || a, 'sm'), h('span', {}, h('b', { text: a.displayName }), h('span', { class: 'muted small', text: a.username })))),
+        return h('tr', {}, h('td', {}, h('span', { class: 'person' }, avatar(a.profiles.find((p) => p.default) || a, 'sm'), h('span', {}, h('b', { text: a.displayName }, a.guest ? h('span', { class: 'pill guest', text: 'Guest' }) : null), h('span', { class: 'muted small', text: a.username })))),
           h('td', {}, a.profiles.length ? h('div', { class: 'chips' }, a.profiles.map((p) => h('span', { class: 'chip' + (p.default ? ' default' : ''), title: p.default ? 'Default profile' : null, text: (a.profiles.some((x) => x.personId !== p.personId) ? p.displayName + ' · ' : '') + p.company + (p.default ? ' ★' : '') }))) : h('span', { class: 'muted small', text: 'No staff profile' })),
           h('td', {}, a.systemOwner ? h('span', { class: 'pill ok', text: 'System owner' }) : a.ownerAccess ? h('span', { class: 'pill ok', text: 'Owner-level' }) : a.roleIds.length ? h('span', { class: 'small', text: a.roleIds.map(roleName).filter(Boolean).join(', ') }) : h('span', { class: 'muted small', text: 'None' })),
           h('td', {}, h('span', { class: 'pill ' + cls, text: label })), h('td', { class: 'small nowrap', text: a.account && a.account.lastLoginAt ? new Date(a.account.lastLoginAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Never' }),
@@ -366,14 +402,15 @@
               [a.account ? 'Reset password' : 'Set password', () => act(a, 'reset', 'Reset the password for ' + a.username + '?', 'They’ll be signed out everywhere and get a temporary password.', 'Reset password')],
               a.account && a.account.hasCode ? ['Reset PIN', () => act(a, 'code/reset', 'Reset the PIN for ' + a.username + '?', 'They’ll be signed out and asked to set a new PIN when they next sign in.', 'Reset PIN')] : null,
               a.account ? [a.account.enabled ? 'Disable' : 'Enable', () => act(a, a.account.enabled ? 'disable' : 'enable', (a.account.enabled ? 'Disable ' : 'Enable ') + a.username + '?', a.account.enabled ? 'It’ll be signed out everywhere and can’t sign in to any HN Group website until it’s enabled again.' : 'It’ll be able to sign in again.', a.account.enabled ? 'Disable' : 'Enable', a.account.enabled), a.account.enabled] : null,
+              a.guest ? ['Make permanent…', () => makePermanent(a)] : null,
               a.ownLoginOf ? null : ['Delete', () => act(a, 'delete', 'Delete ' + a.username + '?', 'The account is removed and signed out everywhere. Staff records and their data aren’t affected.', 'Delete account', true), true]]))));
       }));
     }
     search.addEventListener('input', draw); draw();
-    const list = loginData.accounts, counts = { all: list.length, linked: list.filter((a) => a.profiles.length).length, none: list.filter((a) => !a.profiles.length).length };
+    const list = loginData.accounts, counts = { all: list.length, linked: list.filter((a) => a.profiles.length).length, none: list.filter((a) => !a.profiles.length).length, guests: list.filter((a) => a.guest).length };
     return [h('div', { class: 'page-head' }, h('div', {}, h('h1', { text: 'Sign-in accounts' }), h('p', { class: 'lede', text: 'Every account people sign in with. Each has its own password, PIN and permissions, and the profiles it can use. Accounts are only created here.' })),
       h('button', { class: 'button', type: 'button', onclick: () => editAccount(null, async () => { await reload(); }) }, 'New sign-in account')),
-      h('div', { class: 'stats' }, h('div', { class: 'stat' }, h('b', { text: counts.all }), ' accounts'), h('div', { class: 'stat' }, h('b', { text: counts.linked }), ' with staff profiles'), h('div', { class: 'stat' }, h('b', { text: counts.none }), ' without')),
+      h('div', { class: 'stats' }, h('div', { class: 'stat' }, h('b', { text: counts.all }), ' accounts'), h('div', { class: 'stat' }, h('b', { text: counts.linked }), ' with staff profiles'), h('div', { class: 'stat' }, h('b', { text: counts.none }), ' without'), h('div', { class: 'stat' }, h('b', { text: counts.guests }), ' guest' + (counts.guests === 1 ? '' : 's'))),
       h('section', { class: 'card' }, search, h('div', { class: 'table-wrap' }, h('table', { class: 'staff-table accounts-table' }, h('thead', {}, h('tr', {}, ['Account', 'Profiles', 'Permissions', 'Status', 'Last sign-in', ''].map((t) => h('th', { text: t })))), body)))];
   }
 

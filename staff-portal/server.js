@@ -1414,7 +1414,7 @@ async function routeApi(req, res, pathname, session) {
       }
     };
     if (method === "GET" && pathname === "/api/logins") {
-      return sendJson(res, 200, { accounts: store.listLogins(), profiles: store.allProfiles(), roles: store.listRoles().map((r) => ({ id: r.id, name: r.name, permissions: r.permissions })), canManageRoles: store.can(me, "access.manage"), ownerLevel: store.hasOwnerAccess(me), systemOwner: store.isOwner(me) });
+      return sendJson(res, 200, { accounts: store.listLogins(), profiles: store.allProfiles(), guestSites: store.GUEST_SITES, roles: store.listRoles().map((r) => ({ id: r.id, name: r.name, permissions: r.permissions })), canManageRoles: store.can(me, "access.manage"), ownerLevel: store.hasOwnerAccess(me), systemOwner: store.isOwner(me) });
     }
     if (method === "POST" && pathname === "/api/logins") {
       const body = await readJsonBody(req);
@@ -1423,7 +1423,7 @@ async function routeApi(req, res, pathname, session) {
       logEvent(req, session, "login-created", { target: credentials.username, detail: store.loginProfiles(login).map((p) => p.displayName + " (" + p.company + ")").join(", ") || "No staff profile" });
       return sendJson(res, 201, { ...credentials, account: store.loginView(login) });
     }
-    if (method === "POST" && (m = /^\/api\/logins\/([a-f0-9]{16})(?:\/(reset|code\/reset|disable|enable|delete))?$/.exec(pathname))) {
+    if (method === "POST" && (m = /^\/api\/logins\/([a-f0-9]{16})(?:\/(reset|code\/reset|disable|enable|delete|permanent))?$/.exec(pathname))) {
       const l = store.getLogin(m[1]), action = m[2];
       if (!l) throw httpError(404, "Account not found.");
       const own = l.primaryFor && store.getPerson(l.primaryFor);
@@ -1443,6 +1443,13 @@ async function routeApi(req, res, pathname, session) {
         if (body.owner !== undefined && String(body.owner) !== String(l.owner || false) && !store.isOwner(me)) throw httpError(403, "Only the system owner can give or remove owner access.");
         store.updateLogin(l, body);
         logEvent(req, session, "login-updated", { target: label });
+        return sendJson(res, 200, { account: store.loginView(l) });
+      }
+      // Make permanent: a guest account becomes an ordinary account, on its record (now permanent) or an existing one.
+      if (action === "permanent") {
+        const body = await readJsonBody(req);
+        store.makePermanent(l, body);
+        logEvent(req, session, "login-updated", { target: label, detail: "Guest account made permanent" + (body.personId ? " (moved to " + ((store.getPerson(body.personId) || {}).displayName || "a staff record") + ")" : "") });
         return sendJson(res, 200, { account: store.loginView(l) });
       }
       if (self) throw httpError(400, "Change your own password and PIN on your own account page.");

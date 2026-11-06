@@ -4251,3 +4251,9 @@ footer .footer-brand .footer-parent { opacity: .82; font-size: .88rem; }
 .emp-access .badge { margin: 0; }
 .badge-role { display: inline-flex; align-items: center; gap: .3rem; background: var(--primary-tint); color: var(--primary); border-color: var(--primary-soft-border); }
 .badge-role svg { width: 13px; height: 13px; }
+
+/* Temporary staff records (6 November 2026) */
+.badge-temporary { background: rgba(224, 168, 0, .16); color: #8a6a00; border-color: transparent; }
+[data-theme="dark"] .badge-temporary, .theme-dark .badge-temporary { color: #E3E65B; }
+.check-field { align-self: end; }
+.check-field .check { display: inline-flex; align-items: center; gap: .5rem; font-weight: 600; }

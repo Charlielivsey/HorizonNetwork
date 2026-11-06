@@ -1477,6 +1477,7 @@
         // Their sign-in account's access, like the System owner badge: owner-level and each permission role.
         function accessBadges(e) {
             const a = e.access, out = [];
+            if (e.temporary) out.push('<span class="badge badge-temporary" title="Temporary position">Temporary</span>');
             if (e.isOwner || (a && a.owner === "system")) out.push('<span class="badge badge-owner">System owner</span>');
             else if (a && a.owner === "level") out.push('<span class="badge badge-owner">Owner-level</span>');
             (a ? a.roles : []).forEach(function (r) { out.push('<span class="badge badge-role" title="Permission role on their sign-in account">' + icon("shield") + esc(r) + "</span>"); });
@@ -1720,7 +1721,8 @@
             "</div>" +
             '<div class="grid-2"><div><label for="f-discord">Discord user ID</label><input type="text" id="f-discord" inputmode="numeric" pattern="[0-9]{15,22}" maxlength="22" autocomplete="off" required value="' + esc((v.discord && v.discord.id) || "") + '" placeholder="e.g. 123456789012345678">' +
             '<p class="muted small">In Discord, turn on Developer Mode (Settings → Advanced), then right-click their name and choose Copy User ID.' + (v.discord && v.discord.username ? " Currently @" + esc(v.discord.username) + "." : "") + "</p></div>" +
-            '<div></div></div>' +
+            '<div class="check-field"><label class="check"><input type="checkbox" id="f-temporary"' + (v.temporary ? " checked" : "") + '> Temporary position</label>' +
+            '<p class="muted small">For temporary or trial staff. Guest sign-in accounts can use this record, and HN Account’s “Make permanent” makes it permanent.</p></div></div>' +
             '<div class="grid-2"><div><label for="f-phone">Phone <span class="muted small">(optional)</span></label><input type="tel" id="f-phone" maxlength="40" value="' + esc(v.phone) + '"></div>' +
             '<div><label for="f-start">Start date <span class="muted small">(for work anniversaries)</span></label><input type="date" id="f-start" value="' + esc(v.startDate || "") + '"></div></div>' +
             "</fieldset>" +
@@ -1921,6 +1923,7 @@
                 phone: f("f-phone").value,
                 discordId: f("f-discord").value.trim(),
                 startDate: f("f-start").value,
+                temporary: f("f-temporary").checked,
             };
             const submit = f("f-submit");
             submit.disabled = true;
