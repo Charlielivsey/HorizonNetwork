@@ -11,14 +11,16 @@
     read: 'M4 9l8 5 8-5|M4 9v10h16V9l-8-5z', unread: 'M4 6h16v12H4z|M4 6l8 7 8-7', back: 'm15 6-6 6 6 6', reply: 'M10 8 5 12l5 4|M5 12h9a5 5 0 0 1 5 5v1', replyAll: 'M9 8 4 12l5 4|M13 8l-4 4 4 4|M9 12h6a5 5 0 0 1 5 5v1',
     forward: 'M14 8l5 4-5 4|M19 12h-9a5 5 0 0 0-5 5v1', clip: 'm20 11-8 8a5 5 0 0 1-7-7l8-8a3.5 3.5 0 0 1 5 5l-8 8a2 2 0 0 1-3-3l7-7', label: 'M3 12V4h8l10 10-8 8z|M7.5 7.5h.01', restore: 'M4 12a8 8 0 1 0 2.3-5.6|M4 4v5h5',
     more: 'M12 6h.01|M12 12h.01|M12 18h.01', edit: 'M4 20h4L19 9l-4-4L4 16v4z|M14 6l4 4', search: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14z|m20 20-3.5-3.5', x: 'm6 6 12 12|M18 6 6 18', eye: 'M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z|M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
-    up: 'm6 15 6-6 6 6', down: 'm6 9 6 6 6-6' };
+    up: 'm6 15 6-6 6 6', down: 'm6 9 6 6 6-6', moon: 'M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z', sun: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z|M12 2v2|M12 20v2|M4.9 4.9l1.4 1.4|M17.7 17.7l1.4 1.4|M2 12h2|M20 12h2|M4.9 19.1l1.4-1.4|M17.7 6.3l1.4-1.4',
+    auto: 'M3 5h18v12H3z|M8 21h8|M12 17v4', gear: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z|M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z',
+    user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z|M4 21a8 8 0 0 1 16 0', out: 'M15 4h4v16h-4|M10 17l5-5-5-5|M15 12H3' };
   const FOLDERS = [['INBOX', 'Inbox', 'inbox'], ['STARRED', 'Starred', 'star'], ['IMPORTANT', 'Important', 'important'], ['SENT', 'Sent', 'sent'], ['DRAFT', 'Drafts', 'draft'], ['ARCHIVE', 'Archive', 'archive'], ['ALL', 'All mail', 'all'], ['SPAM', 'Junk', 'spam'], ['TRASH', 'Bin', 'trash']];
   const PALETTE = ['#c3a2ff', '#7fd1d8', '#f2a0f0', '#ff8fb1', '#8fd6a5', '#e8e98a', '#9fb3ff', '#ffb38a'];
   const app = $('#app');
 
   // Preferences kept in this browser (none of them are secret).
   const store = { get(k, d) { try { const v = localStorage.getItem('hnmail.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem('hnmail.' + k, JSON.stringify(v)); } catch {} } };
-  const prefs = { images: store.get('images', false), signature: store.get('signature', true), compact: store.get('compact', false), collapsed: store.get('collapsed', false), folds: store.get('folds', {}) };
+  const prefs = { theme: store.get('theme', 'dark'), images: store.get('images', false), signature: store.get('signature', true), compact: store.get('compact', false), collapsed: store.get('collapsed', false), folds: store.get('folds', {}) };
 
   let session = null, labels = [], view = { label: 'INBOX', q: '', thread: null }, pages = [null], pageIndex = 0, list = [], selected = new Set(), current = null, contacts = new Set();
 
@@ -79,7 +81,10 @@
         if (!KEEP.has(el.tagName)) { el.replaceWith(...el.childNodes); continue; }
         for (const a of [...el.attributes]) {
           const n = a.name.toLowerCase(), v = a.value.trim();
-          const ok = (n === 'href' && el.tagName === 'A' && /^(https?:|mailto:)/i.test(v)) || (n === 'src' && el.tagName === 'IMG' && /^data:image\/(png|jpe?g|gif|webp);/i.test(v)) || ['alt', 'title', 'colspan', 'rowspan'].includes(n);
+          if (n === 'src' && el.tagName === 'IMG' && /^https:\/\//i.test(v)) { el.setAttribute('data-hn-src', v); el.setAttribute('src', '/api/img?u=' + encodeURIComponent(v)); continue; }
+          if (n === 'style') { if (/url\s*\(|expression|behavior|javascript:|position\s*:\s*(fixed|absolute|sticky)/i.test(v)) el.removeAttribute(a.name); continue; }
+          const ok = (n === 'href' && el.tagName === 'A' && /^(https?:|mailto:|tel:)/i.test(v)) || (n === 'src' && el.tagName === 'IMG' && /^data:image\/(png|jpe?g|gif|webp);/i.test(v)) || (n === 'data-hn-src' && /^https:\/\//i.test(v))
+            || ['alt', 'title', 'colspan', 'rowspan', 'width', 'height', 'align', 'valign', 'bgcolor', 'cellpadding', 'cellspacing', 'border', 'role'].includes(n);
           if (!ok) el.removeAttribute(a.name);
         }
         if (el.tagName === 'A') { el.setAttribute('target', '_blank'); el.setAttribute('rel', 'noopener noreferrer'); }
@@ -100,6 +105,25 @@
     $('#clock').replaceChildren(t, h('small', { text: zone }));
   }
   tick(); setInterval(tick, 1000);
+
+  // ---------- Themes: Midnight Lavender, Light Lavender, or the computer's choice ----------
+  const darkQuery = matchMedia('(prefers-color-scheme: dark)');
+  const currentTheme = () => (prefs.theme === 'auto' ? (darkQuery.matches ? 'dark' : 'light') : prefs.theme === 'light' ? 'light' : 'dark');
+  function applyTheme(redraw = true) {
+    const t = currentTheme();
+    document.documentElement.dataset.theme = t;
+    const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = t === 'light' ? '#f3eefa' : '#120f1e';
+    for (const seg of $$('.seg[data-theme-seg]')) for (const b of $$('button', seg)) b.setAttribute('aria-pressed', String(b.dataset.value === prefs.theme));
+    // Open emails are drawn for the theme, so they're reloaded in the new one.
+    if (redraw) for (const f of $$('.msg-frame')) f.src = f.src.replace(/theme=(dark|light)/, 'theme=' + t);
+  }
+  function setTheme(value) { prefs.theme = value; store.set('theme', value); applyTheme(); }
+  darkQuery.addEventListener('change', () => { if (prefs.theme === 'auto') applyTheme(); });
+  function themeSeg() {
+    return h('div', { class: 'seg', 'data-theme-seg': '', role: 'group', 'aria-label': 'Theme' }, ...[['dark', 'Midnight', 'moon'], ['light', 'Light', 'sun'], ['auto', 'Computer', 'auto']].map(([value, name, icon]) =>
+      h('button', { type: 'button', 'data-value': value, 'aria-pressed': String(prefs.theme === value), onclick: () => setTheme(value) }, svg(I[icon]), name)));
+  }
+  applyTheme(false);
 
   // ---------- Routing (#INBOX, #INBOX/<thread>, #search/<words>) ----------
   function parseHash() {
@@ -122,16 +146,19 @@
   }
 
   // ---------- Folders, labels, saved searches ----------
-  function folderLink(href, name, icon, { count, dot, current: on, remove } = {}) {
+  function folderLink(href, name, icon, { count, dot, current: on, remove, i } = {}) {
     const a = h('a', { class: 'folder', href, 'aria-current': on ? 'page' : null, title: name },
       dot !== undefined ? (() => { const s = h('span', { class: 'dot' }); if (dot) s.style.background = dot; return s; })() : svg(I[icon]),
       h('span', { class: 'name', text: name }), count ? h('span', { class: 'count', text: count > 999 ? '999+' : count }) : null);
+    if (i !== undefined) a.style.setProperty('--i', i);
     if (remove) a.append(h('button', { class: 'icon-btn small remove', type: 'button', title: 'Remove', 'aria-label': 'Remove ' + name, onclick: (e) => { e.preventDefault(); e.stopPropagation(); remove(); } }, svg(I.x)));
     return a;
   }
+  let foldersShown = false;
   function drawFolders() {
     const byId = Object.fromEntries(labels.map((l) => [l.id, l]));
-    $('#folders').replaceChildren(...FOLDERS.map(([id, name, icon]) => folderLink('#' + id, name, icon, { current: !view.q && view.label === id,
+    if (!foldersShown) { foldersShown = true; $('#side').classList.add('intro'); setTimeout(() => $('#side').classList.remove('intro'), 900); }
+    $('#folders').replaceChildren(...FOLDERS.map(([id, name, icon], i) => folderLink('#' + id, name, icon, { i, current: !view.q && view.label === id,
       count: id === 'INBOX' || id === 'SPAM' ? (byId[id] || {}).unread : id === 'DRAFT' ? (byId[id] || {}).drafts : 0 })));
     const saved = savedSearches();
     $('#saved').replaceChildren(...(saved.length ? saved.map((s, i) => folderLink('#search/' + encodeURIComponent(s.q), s.name, 'search', { current: view.q === s.q, remove: () => { const all = savedSearches(); all.splice(i, 1); store.set(savedKey(), all); drawFolders(); } })) : [h('p', { class: 'empty', text: 'None yet' })]));
@@ -161,11 +188,11 @@
       $('#prev-page').disabled = pageIndex === 0; $('#next-page').disabled = !r.next;
       const first = pageIndex * 25 + 1, last = pageIndex * 25 + list.length;
       $('#list-count').textContent = !list.length ? '' : pageIndex === 0 && !r.next ? list.length + (list.length === 1 ? ' conversation' : ' conversations') : first + '–' + last + (r.next ? ' of ' + (r.estimate > last ? 'about ' + r.estimate.toLocaleString('en-GB') : 'many') : '');
-      drawList();
+      drawList(!quiet);
     } catch (e) { if (!quiet) ul.replaceChildren(h('li', { class: 'list-note' }, h('b', { text: 'Couldn’t load your mail.' }), e.handled ? '' : e.message)); report(e); }
     app.setAttribute('aria-busy', 'false');
   }
-  function drawList() {
+  function drawList(animate = false) {
     const ul = $('#threads');
     for (const id of [...selected]) if (!list.some((t) => t.id === id)) selected.delete(id);
     ul.classList.toggle('compact', prefs.compact);
@@ -173,7 +200,7 @@
       const empty = view.q ? ['No messages match your search.', 'Try different words, or search for from:name or has:attachment.'] : view.label === 'INBOX' ? ['You’re all caught up.', 'Nothing in your inbox.'] : ['Nothing here.', ''];
       ul.replaceChildren(h('li', { class: 'list-note' }, h('b', { text: empty[0] }), empty[1])); updateBulk(); return;
     }
-    ul.replaceChildren(...list.map(row));
+    ul.replaceChildren(...list.map((t, i) => { const li = row(t); if (animate && i < 18) { li.classList.add('enter'); li.style.setProperty('--i', i); } return li; }));
     updateBulk(); markActive();
   }
   function row(t) {
@@ -232,7 +259,11 @@
     if (!ids.length) return;
     const leaves = { archive: view.label === 'INBOX', trash: true, untrash: view.label === 'TRASH', spam: true, notspam: view.label === 'SPAM', inbox: view.label === 'ARCHIVE' }[what] || false;
     const before = list.map((t) => ({ ...t }));
-    if (leaves) { list = list.filter((t) => !ids.includes(t.id)); for (const id of ids) selected.delete(id); }
+    if (leaves) {
+      for (const li of $$('.thread')) if (ids.includes(li.dataset.id)) li.classList.add('leaving');
+      await new Promise((r) => setTimeout(r, matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 240));
+      list = list.filter((t) => !ids.includes(t.id)); for (const id of ids) selected.delete(id);
+    }
     else for (const t of list) if (ids.includes(t.id)) { if (what === 'read') t.unread = false; if (what === 'unread') t.unread = true; if (what === 'archive') t.labels = t.labels.filter((l) => l !== 'INBOX'); if (what === 'inbox') t.labels = [...t.labels, 'INBOX']; }
     drawList();
     if (ids.includes(view.thread) && (leaves || what === 'unread')) go({ thread: null });
@@ -283,7 +314,8 @@
     if (inSpam) chips.unshift(h('span', { class: 'chip sys', text: 'Junk' }));
     if (inTrash) chips.unshift(h('span', { class: 'chip sys', text: 'Bin' }));
     const openIds = new Set(t.messages.filter((m, i) => i === t.messages.length - 1 || m.unread || t.messages.length <= 2).map((m) => m.id));
-    const msgs = t.messages.map((m) => message(m, openIds.has(m.id)));
+    const msgs = t.messages.map((m, i) => { const el = message(m, openIds.has(m.id)); el.style.setProperty('--i', Math.min(i, 8)); return el; });
+    reader.classList.toggle('still', quiet);
     const replyable = [...t.messages].reverse().find((m) => !m.draft);
     reader.replaceChildren(bar, h('div', { class: 'reader-inner' }, h('h1', { text: subject }), chips.length ? h('div', { class: 'chips' }, ...chips) : null, ...msgs,
       replyable ? h('div', { class: 'reply-row' }, h('button', { class: 'pill', type: 'button', onclick: () => reply(replyable, 'reply') }, svg(I.reply), 'Reply'),
@@ -305,9 +337,9 @@
   function body(m) {
     if (m.draft) return [h('div', { class: 'draft-note' }, 'Draft', h('button', { class: 'pill', type: 'button', onclick: () => openDraft(m.id) }, svg(I.edit), 'Edit draft'))];
     const wrap = h('div', { class: 'msg-body' }), show = prefs.images || shownImages.has(m.id);
-    const frame = h('iframe', { class: 'msg-frame', title: 'Message from ' + nameOf(m.from), sandbox: 'allow-scripts allow-popups allow-popups-to-escape-sandbox', referrerpolicy: 'no-referrer', src: '/api/messages/' + m.id + '/body' + (show ? '?images=1' : '') });
+    const frame = h('iframe', { class: 'msg-frame', title: 'Message from ' + nameOf(m.from), sandbox: 'allow-scripts allow-popups allow-popups-to-escape-sandbox', referrerpolicy: 'no-referrer', src: bodyUrl(m.id, show) });
     if (m.remoteImages && !show) {
-      const note = h('p', { class: 'images-note' }, svg(I.eye), 'Pictures from the web are hidden to protect your privacy.', h('button', { class: 'link-btn', type: 'button', onclick: () => { shownImages.add(m.id); frame.src = '/api/messages/' + m.id + '/body?images=1'; note.remove(); } }, 'Show images'));
+      const note = h('p', { class: 'images-note' }, svg(I.eye), 'Pictures from the web are hidden to protect your privacy.', h('button', { class: 'link-btn', type: 'button', onclick: () => { shownImages.add(m.id); frame.src = bodyUrl(m.id, true); note.remove(); } }, 'Show images'));
       wrap.append(note);
     }
     wrap.append(frame);
@@ -315,6 +347,7 @@
     return [wrap];
   }
   const shownImages = new Set();
+  const bodyUrl = (id, images) => '/api/messages/' + id + '/body?theme=' + currentTheme() + (images ? '&images=1' : '');
   // Email frames report their height (they can't touch this page).
   window.addEventListener('message', (e) => {
     if (!e.data || typeof e.data.hnMailHeight !== 'number') return;
@@ -345,7 +378,14 @@
   // ---------- Writing ----------
   const C = { open: false, draftId: null, threadId: null, inReplyTo: '', references: '', files: [], include: [], dirty: false, saving: null, timer: null };
   const editor = $('#c-editor');
-  function signature() { const s = prefs.signature && session && session.gmail.sender && session.gmail.sender.signature; return s ? '<br><br><div>-- <br>' + sanitize(s) + '</div>' : ''; }
+  // "Use my Gmail signature" on: the signature set in Gmail (or the HN one if Gmail has none); off: the HN Group signature
+  // made for whoever is signed in (the user's request, 6 November 2026).
+  function signature() {
+    if (!session) return '';
+    const gmail = session.gmail.sender && session.gmail.sender.signature;
+    const s = prefs.signature && gmail ? gmail : session.hnSignature;
+    return s ? '<br><br><div class="hn-sig">' + sanitize(s) + '</div>' : '';
+  }
   async function openComposer(fill = {}) {
     if (C.open && C.dirty) { await saveDraft(); if (C.saving) await C.saving.catch(() => {}); }
     Object.assign(C, { open: true, draftId: fill.draftId || null, threadId: fill.threadId || null, inReplyTo: fill.inReplyTo || '', references: fill.references || '', files: [], include: fill.include || [], dirty: false, saving: null });
@@ -354,7 +394,7 @@
     editor.innerHTML = fill.html != null ? fill.html : signature();
     $('#composer-title').textContent = fill.title || 'New message';
     $('#composer-state').textContent = fill.draftId ? 'Draft' : ''; $('#c-error').hidden = true;
-    const box = $('#composer'); box.hidden = false; box.classList.remove('min');
+    const box = $('#composer'); box.hidden = false; box.classList.remove('min'); $('#composer-backdrop').hidden = false;
     drawFiles();
     setTimeout(() => (fill.focus === 'editor' ? caretStart(editor) : !$('#c-to').value ? $('#c-to').focus() : !$('#c-subject').value ? $('#c-subject').focus() : caretStart(editor)), 30);
   }
@@ -393,7 +433,9 @@
     changed(); drawFiles();
   }
   async function payload() {
-    return { to: $('#c-to').value, cc: $('#c-cc').value, bcc: $('#c-bcc').value, subject: $('#c-subject').value, html: editor.innerHTML, threadId: C.threadId, inReplyTo: C.inReplyTo, references: C.references,
+    const copy = editor.cloneNode(true);
+    for (const img of copy.querySelectorAll('img[data-hn-src]')) { img.setAttribute('src', img.getAttribute('data-hn-src')); img.removeAttribute('data-hn-src'); }
+    return { to: $('#c-to').value, cc: $('#c-cc').value, bcc: $('#c-bcc').value, subject: $('#c-subject').value, html: copy.innerHTML, threadId: C.threadId, inReplyTo: C.inReplyTo, references: C.references,
       draftId: C.draftId, include: C.include.map(({ messageId, partId }) => ({ messageId, partId })), attachments: await Promise.all(C.files.map(async (f) => ({ name: f.name, type: f.type, data: await readFile(f) }))) };
   }
   function changed() { if (!C.open) return; C.dirty = true; $('#composer-state').textContent = ''; clearTimeout(C.timer); C.timer = setTimeout(saveDraft, 3000); }
@@ -422,7 +464,7 @@
     })();
     return C.saving;
   }
-  function closeComposer() { C.open = false; clearTimeout(C.timer); $('#composer').hidden = true; $('#composer').classList.remove('max', 'min'); }
+  function closeComposer() { C.open = false; clearTimeout(C.timer); $('#composer').hidden = true; $('#composer-backdrop').hidden = true; $('#composer').classList.remove('max', 'min'); }
   $('#composer-form').addEventListener('input', changed);
   $('#c-attach').addEventListener('change', (e) => { addFiles([...e.target.files]); e.target.value = ''; });
   editor.addEventListener('paste', (e) => { const html = e.clipboardData.getData('text/html'); if (html) { e.preventDefault(); document.execCommand('insertHTML', false, sanitize(html)); } });
@@ -459,9 +501,10 @@
   });
   async function closeAndSave() { const pending = saveDraft(); closeComposer(); const r = await pending; if (r) { toast('Draft saved.'); if (view.label === 'DRAFT') loadList(true); loadLabels(); } }
   $('#composer-close').addEventListener('click', closeAndSave);
-  $('#composer-min').addEventListener('click', () => $('#composer').classList.toggle('min'));
+  function toggleMin() { const min = $('#composer').classList.toggle('min'); $('#composer').classList.remove('max'); $('#composer-backdrop').hidden = min; }
+  $('#composer-min').addEventListener('click', (e) => { e.stopPropagation(); toggleMin(); });
+  $('.composer-head').addEventListener('click', (e) => { if ($('#composer').classList.contains('min') && !e.target.closest('button')) toggleMin(); });
   $('#composer-max').addEventListener('click', () => $('#composer').classList.toggle('max'));
-  $('.composer-head').addEventListener('dblclick', (e) => { if (!e.target.closest('button')) $('#composer').classList.toggle('min'); });
   $('#c-discard').addEventListener('click', async () => {
     clearTimeout(C.timer); C.dirty = false;
     if (C.saving) await C.saving.catch(() => {});
@@ -509,8 +552,28 @@
     const all = savedSearches().filter((s) => s.q !== r.extra); all.push({ name: r.value.slice(0, 60), q: r.extra.slice(0, 500) }); store.set(savedKey(), all.slice(-30)); drawFolders(); toast('Search saved.');
   });
   for (const b of $$('[data-fold]')) b.addEventListener('click', () => { const k = b.dataset.fold; prefs.folds[k] = prefs.folds[k] === false; store.set('folds', prefs.folds); drawFolders(); });
-  $('#account-button').addEventListener('click', () => $('#account').showModal());
-  $('#settings-btn').addEventListener('click', () => { $('#set-images').checked = prefs.images; $('#set-signature').checked = prefs.signature; $('#set-compact').checked = prefs.compact; $('#settings').showModal(); });
+  // Account menu under the profile picture, with settings (the user's request).
+  function closeAccount() { const p = $('.account-pop'); if (p) p.remove(); $('#account-button').setAttribute('aria-expanded', 'false'); }
+  function openSettings() { closeAccount(); $('#set-images').checked = prefs.images; $('#set-signature').checked = prefs.signature; $('#set-compact').checked = prefs.compact; $('#set-theme').replaceChildren(themeSeg()); $('#settings').showModal(); }
+  $('#account-button').addEventListener('click', (e) => {
+    e.stopPropagation();
+    if ($('.account-pop')) return closeAccount();
+    closePop();
+    const u = (session && session.user) || {}, g = (session && session.gmail) || {};
+    const pop = h('div', { class: 'account-pop', role: 'dialog', 'aria-label': 'Your account' },
+      h('div', { class: 'who-card' }, h('img', { src: '/api/avatar', alt: '' }), h('b', { text: u.displayName || 'Your account' }), h('span', { text: u.username || u.email || '' }), h('small', { text: g.connected ? 'Gmail: ' + g.email : 'Gmail isn’t connected' })),
+      h('h3', { text: 'Theme' }), themeSeg(),
+      h('div', { class: 'menu-list' },
+        h('button', { type: 'button', onclick: openSettings }, svg(I.gear), 'Settings'),
+        h('a', { href: 'https://accounts.hngroup.org.uk/', target: '_blank', rel: 'noopener' }, svg(I.user), 'HN Account'),
+        h('form', { action: '/auth/logout', method: 'post' }, h('button', { type: 'submit' }, svg(I.out), 'Sign out'))));
+    pop.addEventListener('click', (ev) => ev.stopPropagation());
+    document.body.append(pop);
+    $('#account-button').setAttribute('aria-expanded', 'true');
+    const first = pop.querySelector('.seg button[aria-pressed="true"]') || pop.querySelector('button'); if (first) first.focus();
+  });
+  document.addEventListener('click', closeAccount);
+  $('#settings-btn').addEventListener('click', (e) => { e.stopPropagation(); openSettings(); });
   function setImages(on) { prefs.images = on; store.set('images', on); const b = $('#images-toggle'); b.setAttribute('aria-pressed', String(on)); b.title = on ? 'Pictures from the web: always shown' : 'Pictures from the web: hidden until you ask'; if (current && view.thread) openThread(current.id, true); }
   $('#images-toggle').addEventListener('click', () => { setImages(!prefs.images); toast(prefs.images ? 'Pictures from the web will always be shown.' : 'Pictures from the web are hidden until you choose Show images.'); });
   $('#set-images').addEventListener('change', (e) => setImages(e.target.checked));
@@ -526,7 +589,7 @@
   document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && C.open && $('#composer').contains(document.activeElement)) { e.preventDefault(); $('#composer-form').requestSubmit(); return; }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
-    if (e.key === 'Escape') { if ($('.pop')) return closePop(); if (C.open && $('#composer').contains(document.activeElement)) { e.preventDefault(); closeAndSave(); } return; }
+    if (e.key === 'Escape') { if ($('.account-pop')) { closeAccount(); $('#account-button').focus(); return; } if ($('.pop')) return closePop(); if (C.open && $('#composer').contains(document.activeElement)) { e.preventDefault(); closeAndSave(); } return; }
     if (e.target.closest('input, textarea, [contenteditable], select') || document.querySelector('dialog[open]') || app.classList.contains('connecting')) return;
     const idx = list.findIndex((t) => t.id === view.thread), last = current && [...current.messages].reverse().find((m) => !m.draft);
     const keys = { c: () => openComposer(), '/': () => $('#search-input').focus(), j: () => { const t = list[idx + 1]; if (t) go({ thread: t.id }); }, k: () => { const t = list[idx - 1]; if (t) go({ thread: t.id }); }, u: () => go({ thread: null }),
@@ -542,9 +605,6 @@
     app.classList.toggle('collapsed', prefs.collapsed); $('#menu-btn').setAttribute('aria-expanded', String(!prefs.collapsed));
     setImages(prefs.images);
     try { session = await api('GET', '/api/session'); } catch (e) { report(e); return; }
-    $('#account-title').textContent = session.user.displayName || '';
-    $('#account-email').textContent = session.user.username || session.user.email || '';
-    $('#account-gmail').textContent = session.gmail.connected ? 'Gmail: ' + session.gmail.email : 'Gmail isn’t connected yet.';
     $('#settings-gmail').textContent = session.gmail.connected ? 'Connected as ' + session.gmail.email + '. Disconnecting stops HN Mail showing your mail; nothing is deleted from Gmail.' : 'Gmail isn’t connected.';
     $('#disconnect').hidden = !session.gmail.connected;
     $('#mailbox').replaceChildren(h('img', { src: '/api/avatar', alt: '' }), h('span', { text: session.gmail.email || session.gmail.linkedEmail || '' }));

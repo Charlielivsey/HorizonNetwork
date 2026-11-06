@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><meta name="theme-color" content="#151222"><meta name="color-scheme" content="dark"><title>HN Mail · HN Group</title><link rel="icon" href="/assets/favicon.svg"><link rel="preload" href="/assets/fonts/plus-jakarta-sans.woff2" as="font" type="font/woff2" crossorigin><link rel="stylesheet" href="/assets/site.css"><link rel="stylesheet" href="/assets/mail.css?v=4"><script src="/assets/mail.js?v=4" defer></script></head>
+<html lang="en-GB" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><meta name="theme-color" content="#151222"><meta name="color-scheme" content="dark light"><title>HN Mail · HN Group</title><link rel="icon" href="/assets/favicon.svg"><link rel="preload" href="/assets/fonts/plus-jakarta-sans.woff2" as="font" type="font/woff2" crossorigin><link rel="stylesheet" href="/assets/site.css"><link rel="stylesheet" href="/assets/mail.css?v=5"><script src="/assets/mail.js?v=5" defer></script></head>
 <body class="mail-body"><a class="skip" href="#threads">Skip to your mail</a>
 <header class="topbar">
   <button class="icon-btn" id="menu-btn" type="button" aria-label="Show or hide folders" aria-expanded="true" title="Folders"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
-  <a class="brand" href="#INBOX" id="home-link" aria-label="HN Mail inbox"><img src="/assets/brand/hn-group-wordmark-white.svg" alt="HN Group" width="104" height="36"><span>Mail</span></a>
+  <a class="brand" href="#INBOX" id="home-link" aria-label="HN Mail inbox"><img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="HN Group" width="96" height="33"><img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="96" height="33"><span>Mail</span></a>
   <form class="search" id="search" role="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="search-input" type="search" placeholder="Search mail · from: to: in: has: before: after: is:" aria-label="Search mail" autocomplete="off" maxlength="500" list="search-hints"><button class="icon-btn small" type="button" id="search-clear" aria-label="Clear search" title="Clear search" hidden><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></form>
   <datalist id="search-hints"><option value="is:unread"><option value="is:starred"><option value="has:attachment"><option value="from:"><option value="to:"><option value="newer_than:7d"><option value="older_than:1y"><option value="larger:10M"></datalist>
   <div class="top-tools">
@@ -11,7 +11,7 @@
     <button class="icon-btn" type="button" id="images-toggle" aria-pressed="false" title="Pictures from the web: hidden until you ask" aria-label="Always show pictures from the web"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
     <span class="clock" id="clock" aria-label="Time in the UK"></span>
     <button class="icon-btn" type="button" id="settings-btn" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
-    <button class="avatar-btn" id="account-button" type="button" aria-haspopup="dialog" aria-label="Your account" title="Your account"><img id="account-avatar" src="/api/avatar" alt="" width="40" height="40"></button>
+    <button class="avatar-btn" id="account-button" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Your account and settings" title="Your account and settings"><img id="account-avatar" src="/api/avatar" alt="" width="40" height="40"></button>
   </div>
 </header>
 <div class="topstripe" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
@@ -41,6 +41,7 @@
 </div>
 <button class="compose-fab" id="compose-fab" type="button" aria-label="Compose"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4"/></svg></button>
 
+<div class="composer-backdrop" id="composer-backdrop" hidden></div>
 <div class="composer" id="composer" role="dialog" aria-labelledby="composer-title" hidden>
   <div class="composer-head"><h2 id="composer-title">New message</h2><span class="composer-state" id="composer-state" role="status"></span>
     <button class="icon-btn small" type="button" id="composer-min" title="Minimise" aria-label="Minimise"><svg viewBox="0 0 24 24"><path d="M6 15h12"/></svg></button>
@@ -72,10 +73,12 @@
 </div>
 <datalist id="contacts"></datalist>
 
-<dialog id="account" aria-labelledby="account-title"><div class="dialog-heading"><p class="eyebrow">HN GROUP AUTH</p><button type="button" class="icon-btn small" data-close="account" aria-label="Close"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><img class="profile-photo" src="/api/avatar" width="72" height="72" alt="Your profile picture"><h2 id="account-title"></h2><p id="account-email" class="muted"></p><p id="account-gmail" class="muted small"></p><div class="dialog-actions"><a class="btn-plain" href="https://accounts.hngroup.org.uk/">HN Account ↗</a><form action="/auth/logout" method="post"><button class="btn-solid">Sign out</button></form></div></dialog>
+
 <dialog id="settings" aria-labelledby="settings-title"><div class="dialog-heading"><h2 id="settings-title">Settings</h2><button type="button" class="icon-btn small" data-close="settings" aria-label="Close"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
   <label class="switch-row"><span><b>Always show pictures from the web</b><small>Otherwise they stay hidden (and senders can’t tell you’ve opened their email) until you choose Show images.</small></span><input type="checkbox" id="set-images"></label>
-  <label class="switch-row"><span><b>Add my Gmail signature</b><small>To new messages, replies and forwards.</small></span><input type="checkbox" id="set-signature"></label>
+  <h3>Theme</h3><div class="seg" id="set-theme"></div>
+  <h3>Signature</h3>
+  <label class="switch-row"><span><b>Use my Gmail signature</b><small>Off: your HN Group signature (name, job title and company from your staff profile) is added instead.</small></span><input type="checkbox" id="set-signature"></label>
   <label class="switch-row"><span><b>Compact list</b><small>Fit more conversations on the screen.</small></span><input type="checkbox" id="set-compact"></label>
   <h3>Keyboard shortcuts</h3>
   <dl class="keys"><dt>c</dt><dd>Compose</dd><dt>/</dt><dd>Search</dd><dt>j / k</dt><dd>Next / previous conversation</dd><dt>e</dt><dd>Archive</dd><dt>#</dt><dd>Delete</dd><dt>r · a · f</dt><dd>Reply · Reply all · Forward</dd><dt>s</dt><dd>Star</dd><dt>u</dt><dd>Back to the list</dd><dt>Ctrl/⌘ Enter</dt><dd>Send</dd></dl>

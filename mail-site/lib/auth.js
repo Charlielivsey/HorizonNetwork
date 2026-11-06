@@ -83,6 +83,7 @@ function createAuth(store) {
       if (!permitted(result.user)) { showPage(res, 403, 'Link a Google account first', NO_GOOGLE, [clear], true); return true; }
       const old = cookie(req, SESSION_COOKIE); if (old) store.endSession(old);
       const token = store.createSession(userOf(result.user), result.session, result.expires);
+      store.updateSession(token, { fresh: true }); // the first page load after signing in opens HN Mail
       let next = '/'; try { next = safeNext(Buffer.from(nextRaw || '', 'base64url').toString('utf8')); } catch {}
       redirect(res, next, [clear, setCookie(SESSION_COOKIE, token, 30 * 86400)]);
       return true;

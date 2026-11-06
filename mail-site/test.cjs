@@ -41,6 +41,7 @@ async function fakeFetch(url, opts = {}) {
     return json(200, { access_token: 'access-1', expires_in: 3600, refresh_token: 'refresh-ada', scope: googleAnswer.scope,
       id_token: idToken({ iss: 'https://accounts.google.com', aud: 'test.apps.googleusercontent.com', exp: Date.now() / 1000 + 600, nonce, sub: googleAnswer.sub, email: googleAnswer.email, email_verified: true }) });
   }
+  if (u.hostname === 'staff.hngroup.org.uk') return u.pathname.endsWith('.png') ? new Response(Buffer.from('PNG!'), { status: 200, headers: { 'Content-Type': 'image/png' } }) : new Response('<html>', { status: 200, headers: { 'Content-Type': 'text/html' } });
   if (u.origin === 'https://oauth2.googleapis.com' && u.pathname === '/revoke') { revoked.push(u.searchParams.get('token')); return json(200, {}); }
   assert.ok(String(opts.headers && opts.headers.Authorization).startsWith('Bearer access-'), 'Gmail calls carry the access token');
   const p = u.pathname.replace('/gmail/v1/users/me', '').replace('/upload', '');
@@ -90,6 +91,13 @@ test('HN Mail: only accounts with a linked Google account, never while impersona
   assert.equal((await signIn(ADA)).status, 302);
   const s = await (await req('/api/session')).json();
   assert.equal(s.gmail.connected, false); assert.equal(s.gmail.linkedEmail, 'ada@hngroup.org.uk');
+  assert.match(s.hnSignature, /hn-group-email-logo\.png/, 'the HN Group signature is made for whoever is signed in');
+  // HN Mail asks for HN Group Auth on every reload (the user's request, 6 November 2026).
+  assert.equal((await req('/')).status, 200, 'the page straight after signing in opens');
+  const reload = await req('/');
+  assert.equal(reload.status, 302); assert.match(reload.headers.get('location'), /^\/auth\/login/);
+  assert.equal((await req('/api/session')).status, 401, 'reloading ended that sign-in');
+  assert.equal((await signIn(ADA)).status, 302);
   assert.equal((await req('/api/labels')).status, 409, 'Gmail must be connected first');
 });
 
@@ -134,6 +142,15 @@ test('HN Mail: labels, conversations, a locked-down body page and downloads', as
   assert.match(csp, /script-src 'nonce-/); assert.doesNotMatch(html, /alert\(1\)/); assert.doesNotMatch(html, /http-equiv/);
   assert.match(html, /data:image\/png;base64,UE5HIQ==/, 'inline images are embedded');
   assert.match((await req('/api/messages/aaaaaaaa11/body?images=1')).headers.get('content-security-policy'), /img-src data: https:/);
+  assert.doesNotMatch(html, /invert/, 'Light Lavender shows emails as they are');
+  assert.match(await (await req('/api/messages/aaaaaaaa11/body?theme=dark')).text(), /html\{filter:invert\(1\)/, 'Midnight Lavender turns emails dark (no white box)');
+  // Signature pictures: only HN Group's sites and Google's image hosts, only real images.
+  assert.equal((await req('/api/img?u=' + encodeURIComponent('https://evil.example/x.png'))).status, 404);
+  assert.equal((await req('/api/img?u=' + encodeURIComponent('http://staff.hngroup.org.uk/x.png'))).status, 404);
+  const logo = await req('/api/img?u=' + encodeURIComponent('https://staff.hngroup.org.uk/assets/brand/png/hn-group-email-logo.png'));
+  assert.equal(logo.status, 200); assert.equal(logo.headers.get('content-type'), 'image/png'); assert.match(logo.headers.get('content-security-policy'), /sandbox/);
+  assert.deepEqual(Buffer.from(await logo.arrayBuffer()).subarray(0, 4), Buffer.from([0x89, 0x50, 0x4e, 0x47]), 'HN Group signature logos come from HN Mail’s own copy');
+  assert.equal((await req('/api/img?u=' + encodeURIComponent('https://staff.hngroup.org.uk/page.html'))).status, 404, 'not an image');
   const file = await req('/api/messages/aaaaaaaa11/parts/2');
   assert.equal(file.headers.get('content-type'), 'application/octet-stream'); assert.match(file.headers.get('content-disposition'), /^attachment; filename="report.pdf"/);
   assert.equal(await file.text(), 'PDF');

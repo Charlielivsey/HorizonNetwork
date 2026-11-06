@@ -8,6 +8,7 @@
 const http = require('node:http'), fs = require('node:fs'), path = require('node:path'), crypto = require('node:crypto');
 const { createAuth, NO_GOOGLE } = require('./lib/auth'), { sessions } = require('./lib/sessions'), { createGoogle } = require('./lib/google'), { createGmail } = require('./lib/gmail');
 const mime = require('./lib/mime');
+const { hnSignature, allowedImage } = require('./lib/signature');
 
 const escape = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const PUBLIC = path.join(__dirname, 'public');
@@ -15,6 +16,11 @@ const TYPES = { '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg
 const MAX_ATTACH = 25 * 1024 * 1024;
 const fail = (status, message, code) => Object.assign(new Error(message), { status, code });
 const GOOGLE_COOKIE = 'hn_mail_google';
+// Emails in the Midnight Lavender theme (the user's request, 6 November 2026: emails "all show in a white box, i do not
+// like it"): the email page is turned dark (white becomes dark grey, dark text becomes light) and pictures are turned
+// back so they keep their real colours (the inner filter is the exact inverse of the outer one). The light theme shows
+// emails as they are, on the page's own background.
+const DARK_EMAIL = 'html{filter:invert(1) hue-rotate(180deg) contrast(.82)}img,video,picture,canvas,svg,[background],[style*="background-image"],[style*="background:url"],[style*="background: url"]{filter:contrast(1.22) hue-rotate(180deg) invert(1)}';
 
 async function readJson(req, limit) {
   const chunks = []; let size = 0;
@@ -23,7 +29,9 @@ async function readJson(req, limit) {
 }
 
 function createServer({ dir = process.env.MAIL_DATA_DIR || '/var/lib/hn-mail', fetcher = fetch, googleFile } = {}) {
-  const auth = createAuth(sessions(dir));
+  const store = sessions(dir);
+  const auth = createAuth(store);
+  const pictures = new Map(); // signature pictures shown inside HN Mail, kept an hour
   const google = createGoogle({ dir, origin: auth.ORIGIN, fetcher, ...(googleFile ? { file: googleFile } : {}) });
   const gmail = createGmail({ token: google.accessToken, fetcher });
   const secure = auth.ORIGIN.startsWith('https://');
@@ -34,7 +42,7 @@ function createServer({ dir = process.env.MAIL_DATA_DIR || '/var/lib/hn-mail', f
   // One email's body as its own locked-down page, shown in a sandboxed frame: no scripts of its own (only a tiny
   // script with this response's nonce that tells HN Mail how tall it is), an opaque origin with no access to HN Mail
   // or its cookies, links open in a new tab, and outside images only when asked for ("Show images").
-  async function bodyPage(user, id, images) {
+  async function bodyPage(user, id, images, theme) {
     const m = await gmail.message(user, id), parsed = mime.parse(m.payload);
     let html = parsed.html;
     if (!html) html = '<div class="plain">' + escape(parsed.text || '').replace(/(https?:\/\/[^\s<>"']+)/g, '<a href="$1">$1</a>') + '</div>';
@@ -46,7 +54,7 @@ function createServer({ dir = process.env.MAIL_DATA_DIR || '/var/lib/hn-mail', f
       try { const p = await gmail.part(user, id, info.partId, m); budget -= p.bytes.length; if (/^image\/(png|jpe?g|gif|webp)$/.test(p.type)) html = html.split('cid:' + cid).join('data:' + p.type + ';base64,' + p.bytes.toString('base64')); } catch {}
     }
     const nonce = crypto.randomBytes(16).toString('base64');
-    const doc = '<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>html,body{margin:0;background:#fff;color:#1c2135}body{padding:2px 2px 8px;font:15px/1.55 "Plus Jakarta Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}.plain{white-space:pre-wrap}a{color:#5514b4}blockquote{margin:0 0 0 .6em;padding-left:.8em;border-left:3px solid #d8d2e6;color:#4d4766}</style></head><body>' + html +
+    const doc = '<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>html,body{margin:0;background:transparent!important;color:#1c2135}' + (theme === 'dark' ? DARK_EMAIL : '') + 'body{padding:2px 2px 8px;font:15px/1.55 "Plus Jakarta Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}.plain{white-space:pre-wrap}a{color:#5514b4}blockquote{margin:0 0 0 .6em;padding-left:.8em;border-left:3px solid #d8d2e6;color:#4d4766}</style></head><body>' + html +
       '<script nonce="' + nonce + '">(function(){var last=0;function post(){var h=Math.ceil(document.documentElement.scrollHeight);if(h!==last){last=h;parent.postMessage({hnMailHeight:h},"*");}}if(window.ResizeObserver)new ResizeObserver(post).observe(document.documentElement);addEventListener("load",post);setTimeout(post,50);post();})();</script></body></html>';
     const csp = "default-src 'none'; style-src 'unsafe-inline'; img-src data:" + (images ? ' https: http:' : '') + '; font-src data:' + (images ? ' https:' : '') + "; script-src 'nonce-" + nonce + "'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'; sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox";
     return { doc, csp };
@@ -78,6 +86,8 @@ function createServer({ dir = process.env.MAIL_DATA_DIR || '/var/lib/hn-mail', f
   const server = http.createServer(async (req, res) => {
     for (const [k, v] of Object.entries({ 'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self'; frame-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
       'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow, noarchive', 'Permissions-Policy': 'camera=(), microphone=(), geolocation=()' })) res.setHeader(k, v);
+    // Inline styles are allowed so signatures and saved drafts keep their layout in the composer (scripts still aren't).
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self'; frame-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
     const json = (status, value) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(value)); };
     const page = (response, status, title, message, cookies = [], linkGoogle = false) => {
       response.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8', 'Set-Cookie': cookies });
@@ -118,10 +128,20 @@ function createServer({ dir = process.env.MAIL_DATA_DIR || '/var/lib/hn-mail', f
         try { await google.finish(user, url.searchParams.get('state') || '', url.searchParams.get('code') || '', bound); }
         catch (e) { return page(res, e.status || 503, 'Gmail wasn’t connected', e.message, [clear]); }
         senders.delete(user.accountId);
+        store.updateSession(active.token, { fresh: true });
         res.writeHead(302, { Location: '/', 'Set-Cookie': clear }); return res.end();
       }
 
+      // HN Mail asks you to sign in every time you open or reload it (the user's request, 6 November 2026: "its not
+      // making me sign in again via auth on reload"): the page straight after signing in opens; loading it again ends
+      // that sign-in and goes back through HN Group Auth.
       if (route === '/' && req.method === 'GET') {
+        const held = store.session(active.token);
+        if (!held || !held.fresh) {
+          store.endSession(active.token);
+          res.writeHead(302, { Location: '/auth/login?next=/', 'Set-Cookie': (secure ? '__Host-' : '') + 'hn_mail_session=; Path=/; HttpOnly;' + (secure ? ' Secure;' : '') + ' SameSite=Lax; Max-Age=0' }); return res.end();
+        }
+        store.updateSession(active.token, { fresh: false });
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         return res.end(fs.readFileSync(path.join(PUBLIC, 'index.html'), 'utf8'));
       }
@@ -133,7 +153,9 @@ function createServer({ dir = process.env.MAIL_DATA_DIR || '/var/lib/hn-mail', f
         const status = google.status(user);
         let sender = null;
         if (status.connected) { try { sender = await senderOf(user); } catch (e) { if (e.code === 'connect') status.connected = false; } }
-        return json(200, { user: { displayName: user.displayName, username: user.username, email: user.email, jobTitle: user.jobTitle, company: user.company }, gmail: { ...google.status(user), sender } });
+        const status2 = google.status(user);
+        return json(200, { user: { displayName: user.displayName, username: user.username, email: user.email, jobTitle: user.jobTitle, company: user.company }, gmail: { ...status2, sender },
+          hnSignature: hnSignature({ ...user, email: (sender && sender.email) || status2.email || status2.linkedEmail || user.email }) });
       }
       if (route === '/api/avatar' && req.method === 'GET') {
         const held = avatars.get(user.accountId);
@@ -141,6 +163,28 @@ function createServer({ dir = process.env.MAIL_DATA_DIR || '/var/lib/hn-mail', f
         if (!picture) { picture = await auth.ownPicture(active.authSession); avatars.set(user.accountId, { at: Date.now(), picture }); }
         if (!picture) { res.writeHead(200, { 'Content-Type': 'image/svg+xml' }); return fs.createReadStream(path.join(PUBLIC, 'assets', 'avatar.svg')).pipe(res); }
         res.writeHead(200, { 'Content-Type': picture.type, 'Cache-Control': 'private, max-age=600' }); return res.end(picture.bytes);
+      }
+      // Pictures in signatures and drafts, shown inside HN Mail (its own pages only show its own images): only HN Group's
+      // sites and Google's image hosts, https, no redirects, real images under 2 MB, always as a download-safe image.
+      if (route === '/api/img' && req.method === 'GET') {
+        const u = url.searchParams.get('u') || '';
+        if (!allowedImage(u)) return json(404, { error: 'Not found.' });
+        // HN Group's signature logos are kept in HN Mail itself, so they always show (no fetch from the staff portal).
+        const own = /^https:\/\/staff\.hngroup\.org\.uk\/assets\/brand\/png\/([a-z-]+-email-logo)\.png$/.exec(u);
+        if (own && fs.existsSync(path.join(PUBLIC, 'assets', 'brand', 'png', own[1] + '.png'))) {
+          res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'private, max-age=86400', 'Content-Security-Policy': "default-src 'none'; sandbox" });
+          return fs.createReadStream(path.join(PUBLIC, 'assets', 'brand', 'png', own[1] + '.png')).pipe(res);
+        }
+        let pic = pictures.get(u);
+        if (!pic || pic.at < Date.now() - 3600000) {
+          let r;
+          try { r = await fetcher(u, { redirect: 'error', signal: AbortSignal.timeout(6000), headers: { 'User-Agent': 'HN-Mail' } }); } catch { return json(404, { error: 'Not found.' }); }
+          const type = String(r.headers.get('content-type') || '').split(';')[0].trim().toLowerCase(), bytes = r.ok ? Buffer.from(await r.arrayBuffer()) : null;
+          if (!bytes || !/^image\/(png|jpeg|gif|webp)$/.test(type) || bytes.length > 2 * 1024 * 1024) return json(404, { error: 'Not found.' });
+          pic = { at: Date.now(), type, bytes }; pictures.set(u, pic);
+          if (pictures.size > 200) pictures.delete(pictures.keys().next().value);
+        }
+        res.writeHead(200, { 'Content-Type': pic.type, 'Cache-Control': 'private, max-age=3600', 'Content-Security-Policy': "default-src 'none'; sandbox" }); return res.end(pic.bytes);
       }
       if (route === '/api/google/disconnect' && req.method === 'POST') { await google.disconnect(user); senders.delete(user.accountId); return json(200, { ok: true }); }
       if (route === '/api/labels' && req.method === 'GET') return json(200, { labels: await gmail.labels(user) });
@@ -153,7 +197,7 @@ function createServer({ dir = process.env.MAIL_DATA_DIR || '/var/lib/hn-mail', f
       }
       if ((m = /^\/api\/messages\/([a-f0-9]{8,32})\/modify$/i.exec(route)) && req.method === 'POST') { const v = await readJson(req, 8192); await gmail.modifyMessage(user, m[1], v.add, v.remove); return json(200, { ok: true }); }
       if ((m = /^\/api\/messages\/([a-f0-9]{8,32})\/body$/i.exec(route)) && req.method === 'GET') {
-        const { doc, csp } = await bodyPage(user, m[1], url.searchParams.get('images') === '1');
+        const { doc, csp } = await bodyPage(user, m[1], url.searchParams.get('images') === '1', url.searchParams.get('theme') === 'dark' ? 'dark' : 'light');
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Security-Policy': csp, 'X-Frame-Options': 'SAMEORIGIN', 'Cache-Control': 'private, no-store' });
         return res.end(doc);
       }
