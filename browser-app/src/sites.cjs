@@ -2,7 +2,8 @@
 // Public destinations only. Shortcuts never grant sign-in or website permissions.
 const SITES=[
  ['https://echo.hngroup.org.uk/',['echo','hn echo','hn group echo','character library']],
- ['https://mail.google.com/',['mail','gmail','email']],
+ // HN Mail (the user's choice, 6 November 2026): "mail" and "gmail" open HN Group's own Gmail app.
+ ['https://mail.hngroup.org.uk/',['mail','gmail','email','hn mail','hn group mail','google mail']],
  ['https://hngroup.org.uk/',['hn','hn group','hn group website','hn group home']],
  ['https://network.hngroup.org.uk/',['horizon network','network','hn network']],
  ['https://staff.hngroup.org.uk/',['staff','staff portal','hn staff','hn group staff portal','staff portal login']],

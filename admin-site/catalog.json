@@ -1,5 +1,14 @@
 [
   {
+    "id": "mail",
+    "name": "HN Mail",
+    "process": "hn-mail",
+    "port": 5660,
+    "hosts": [
+      "mail.hngroup.org.uk"
+    ]
+  },
+  {
     "id": "echo",
     "name": "Echo",
     "process": "hn-echo",

@@ -10,6 +10,9 @@ const {createDiscord}=require('./discord');
 const ORIGIN = 'https://auth.hngroup.org.uk';
 // Registered applications: fixed callbacks and who may use them.
 const CLIENTS = {
+  // HN Mail (the user's request, 6 November 2026): only sign-in accounts with a Google account linked, never while
+  // logged in as someone else.
+  mail: { name: 'HN Mail', callback: 'https://mail.hngroup.org.uk/auth/callback', allowed: u => !!(u.google && u.google.email) && !u.impersonated, denied: 'HN Mail only works with an account that has a Google account linked. Turn on Sign in with Google on this page first, then open HN Mail again.' },
   echo: { name: 'Echo', callback: 'https://echo.hngroup.org.uk/auth/callback', allowed: u => ['catnap@hngroup.org.uk', 'charlie.livsey@hngroup.org.uk'].includes(String(u.username || '').trim().toLowerCase()) && !u.impersonated, denied: 'Echo is private to its authorised HN Group accounts.' },
   // evan.hngroup.org.uk (the user's request, 4 November 2026): private to the same two sign-in accounts as Echo.
   evan: { name: 'Private page', callback: 'https://evan.hngroup.org.uk/auth/callback', allowed: u => ['catnap@hngroup.org.uk', 'charlie.livsey@hngroup.org.uk'].includes(String(u.username || '').trim().toLowerCase()) && !u.impersonated, denied: 'This page is private.' },

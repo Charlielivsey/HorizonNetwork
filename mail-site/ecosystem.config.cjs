@@ -1,0 +1,1 @@
+module.exports={apps:[{name:'hn-mail',script:'/opt/hn-mail/server.js',cwd:'/opt/hn-mail',instances:1,exec_mode:'fork',autorestart:true,max_memory_restart:'384M',env:{NODE_ENV:'production',PORT:5660,MAIL_DATA_DIR:'/var/lib/hn-mail'}}]};

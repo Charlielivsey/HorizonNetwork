@@ -64,7 +64,7 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       ...(p.account.passwordTemporary?{passwordChangeRequired:true,passwordMinLength:store.meView(p).passwordMinLength}:{}),
       ...(!store.hasCode(p)?{codeSetupRequired:true}:{}),statusAdminAllowed:allowed(active,store),
       // "Sign in with Google": the connected Google account's email, if the person has turned it on.
-      google:p.account.google?{email:p.account.google.email,linkedAt:p.account.google.linkedAt}:null,
+      google:p.account.google?{email:p.account.google.email,sub:p.account.google.sub,linkedAt:p.account.google.linkedAt}:null,
       discord:p.account.discord?{id:p.account.discord.id,username:p.account.discord.username,linkedAt:p.account.discord.linkedAt}:null,ownerAccess:store.hasOwnerAccess(p)&&!active.data.impersonatorId,
       // Who may open other people's document storage on docs.hngroup.org.uk (never while logged in as someone else).
       ...(active.data.impersonatorId?{storageAccess:false,storageGrants:[]}:storageAccess.forIdentity(p)),

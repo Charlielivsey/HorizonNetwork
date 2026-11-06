@@ -1245,7 +1245,7 @@ const GUEST_SITES = [
   ["portal", "Staff portal"], ["accounts", "HN Account"], ["docs", "HN Group Docs"], ["contracts", "HN Group Contracts"],
   ["devices", "HN Group Devices"], ["vpn", "HN Group VPN"], ["browser", "HN Browser"], ["app-manager", "HN Group App Manager"],
   ["wiki", "HN Group Wiki (editing)"], ["branding", "Brand centre"], ["private-companies", "Private company register"],
-  ["private-wiki", "Private wiki"], ["news", "HN Group News"], ["investors", "HN Group Investors"],
+  ["private-wiki", "Private wiki"], ["news", "HN Group News"], ["investors", "HN Group Investors"], ["mail", "HN Mail"],
 ].map(([id, name]) => ({ id, name }));
 function cleanGuest(input) {
   if (!input) return null;
