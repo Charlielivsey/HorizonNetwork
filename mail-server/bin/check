@@ -1,0 +1,113 @@
+#!/usr/bin/env python3
+"""HN Group mail: health check (`hn-mail-check`, `--json` for admin.mail.hngroup.org.uk, `--brief` for the installer).
+
+Checks the mail services are running and listening, the queue size, the TLS certificate, and (with --provider) outgoing
+port 25 and reverse DNS. Never prints message contents or secrets."""
+import json, socket, ssl, subprocess, sys, time, datetime
+
+HOST = 'mx.hngroup.org.uk'
+PUBLIC_IP = '217.154.34.205'
+PORTS = [(25, 'SMTP from the internet'), (465, 'Mail apps (TLS)'), (587, 'Mail apps (STARTTLS)'), (993, 'IMAP (TLS)'),
+         (143, 'IMAP for HN Mail (this server only)'), (10587, 'Sending for HN Mail (this server only)'),
+         (12340, 'Quota checks'), (11332, 'Spam filter (Rspamd)'), (6379, 'Redis')]
+SERVICES = ['postfix', 'dovecot', 'rspamd', 'redis-server', 'postsrsd']
+
+
+def run(cmd, timeout=10):
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        return r.returncode, r.stdout.strip()
+    except Exception as e:
+        return 1, str(e)
+
+
+def port_open(port, host='127.0.0.1'):
+    s = socket.socket(); s.settimeout(2)
+    try:
+        return s.connect_ex((host, port)) == 0
+    finally:
+        s.close()
+
+
+def service(name):
+    code, out = run(['systemctl', 'is-active', name], 5)
+    if code == 0 or out in ('active', 'inactive', 'failed', 'activating'):
+        return out or 'unknown'
+    # No systemd (test containers): look for the process.
+    proc = {'postfix': 'master', 'redis-server': 'redis-server', 'postsrsd': 'postsrsd'}.get(name, name)
+    return 'active' if run(['pgrep', '-x', proc])[0] == 0 or run(['pgrep', '-f', proc])[0] == 0 else 'inactive'
+
+
+def queue():
+    code, out = run(['postqueue', '-j'], 20)
+    if code != 0:
+        return None
+    items = [json.loads(l) for l in out.splitlines() if l.strip()]
+    return {'total': len(items), 'deferred': sum(1 for i in items if i.get('queue_name') == 'deferred'),
+            'active': sum(1 for i in items if i.get('queue_name') == 'active'), 'hold': sum(1 for i in items if i.get('queue_name') == 'hold')}
+
+
+def certificate():
+    try:
+        ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
+        with socket.create_connection(('127.0.0.1', 993), timeout=4) as raw:
+            with ctx.wrap_socket(raw, server_hostname=HOST) as s:
+                der = s.getpeercert(binary_form=True)
+        p = subprocess.run(['openssl', 'x509', '-inform', 'DER', '-noout', '-enddate', '-issuer', '-subject'], input=der, capture_output=True, timeout=5)
+        info = dict(l.split('=', 1) for l in p.stdout.decode().splitlines() if '=' in l)
+        end = datetime.datetime.strptime(info.get('notAfter', '').strip(), '%b %d %H:%M:%S %Y %Z')
+        return {'issuer': info.get('issuer', '').strip(), 'subject': info.get('subject', '').strip(), 'expires': end.isoformat() + 'Z',
+                'days': (end - datetime.datetime.utcnow()).days, 'selfSigned': "Let's Encrypt" not in info.get('issuer', '')}
+    except Exception as e:
+        return {'error': str(e)[:200]}
+
+
+def provider():
+    out = {}
+    s = socket.socket(); s.settimeout(8)
+    try:
+        s.connect(('gmail-smtp-in.l.google.com', 25)); banner = s.recv(200).decode('ascii', 'replace')
+        out['outbound25'] = {'open': banner.startswith('220'), 'detail': banner.strip()[:120]}
+    except Exception as e:
+        out['outbound25'] = {'open': False, 'detail': str(e)[:120]}
+    finally:
+        s.close()
+    try:
+        ptr = socket.gethostbyaddr(PUBLIC_IP)[0]
+    except Exception:
+        ptr = ''
+    out['ptr'] = {'value': ptr, 'ok': ptr.rstrip('.') == HOST}
+    try:
+        fwd = socket.gethostbyname(HOST)
+    except Exception:
+        fwd = ''
+    out['forward'] = {'value': fwd, 'ok': fwd == PUBLIC_IP}
+    return out
+
+
+def main():
+    args = sys.argv[1:]
+    result = {'checked': datetime.datetime.utcnow().isoformat() + 'Z', 'services': {s: service(s) for s in SERVICES},
+              'ports': [{'port': p, 'name': n, 'listening': port_open(p)} for p, n in PORTS], 'queue': queue(), 'certificate': certificate()}
+    if '--provider' in args:
+        result['provider'] = provider()
+    result['ok'] = all(v == 'active' for v in result['services'].values()) and all(p['listening'] for p in result['ports'])
+    if '--json' in args:
+        print(json.dumps(result)); return
+    for s, state in result['services'].items():
+        print(f"  {s:13} {state}")
+    bad = [f"{p['port']} ({p['name']})" for p in result['ports'] if not p['listening']]
+    print('  ports        ' + ('all listening' if not bad else 'NOT listening: ' + ', '.join(bad)))
+    q = result['queue']
+    print('  queue        ' + (f"{q['total']} waiting ({q['deferred']} deferred)" if q else 'unknown'))
+    c = result['certificate']
+    print('  certificate  ' + (c.get('error') or f"{c['subject']} expires in {c['days']} days" + (' (self-signed, temporary)' if c['selfSigned'] else '')))
+    if 'provider' in result:
+        pr = result['provider']
+        print('  port 25 out  ' + ('open' if pr['outbound25']['open'] else 'BLOCKED: ' + pr['outbound25']['detail']))
+        print('  reverse DNS  ' + (pr['ptr']['value'] or 'none') + ('' if pr['ptr']['ok'] else f' (should be {HOST})'))
+    sys.exit(0 if result['ok'] else 1)
+
+
+if __name__ == '__main__':
+    main()
