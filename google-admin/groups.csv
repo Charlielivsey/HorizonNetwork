@@ -1,0 +1,31 @@
+Group name,Group email,Description,Kind,Who can post,Who can join,Who can view members,Collaborative inbox,Members
+All Staff,all-staff@hngroup.org.uk,Everyone who works at HN Group and its companies,Staff list,Organisation only,Invited only,Organisation,No,The four company groups below (nested)
+HN Group Staff,staff@hngroup.org.uk,Staff whose main company is HN Group,Staff list,Organisation only,Invited only,Organisation,No,HN Group staff
+Horizon Network Staff,staff@horizon-network.co.uk,Everyone at Horizon Network including Horizon Development,Staff list,Organisation only,Invited only,Organisation,No,Horizon Network staff + Horizon Development group
+Horizon Development Team,development@hngroup.org.uk,Horizon Development team and project enquiries,Team inbox,Anyone on the web,Invited only,Managers,Yes,Horizon Development staff
+Horizon Media Group Staff,staff@media.hngroup.org.uk,Everyone at Horizon Media Group,Staff list,Organisation only,Invited only,Organisation,No,Horizon Media Group staff + Horizon Advertising Staff group
+Horizon Advertising Staff,staff@horizonadvertising.co.uk,Everyone at Horizon Advertising,Staff list,Organisation only,Invited only,Organisation,No,Horizon Advertising staff
+Leadership,leadership@hngroup.org.uk,Group leadership and HR,Staff list,Organisation only,Invited only,Managers,No,Leadership & HR role members
+Directors,directors@hngroup.org.uk,Current directors of the group's companies (as on the Company Register),Staff list,Organisation only,Invited only,Managers,No,Current directors only
+Network Leadership,leadership@horizon-network.co.uk,Horizon Network's Network Leadership department,Staff list,Organisation only,Invited only,Managers,No,Network Leadership department
+General enquiries,hello@hngroup.org.uk,Public enquiries for HN Group,Shared inbox,Anyone on the web,Invited only,Managers,Yes,Leadership + whoever answers enquiries
+Support,support@hngroup.org.uk,Help with accounts websites and apps (matches the /support sections),Shared inbox,Anyone on the web,Invited only,Managers,Yes,Support staff
+Careers,careers@hngroup.org.uk,Recruitment and applications (careers.hngroup.org.uk),Shared inbox,Anyone on the web,Invited only,Managers,Yes,Hiring team + Leadership
+Human Resources,hr@hngroup.org.uk,HR: contracts of employment leave and staff records,Shared inbox,Anyone on the web,Invited only,Managers,Yes,Leadership & HR
+Press and News,press@hngroup.org.uk,Media enquiries and HN Group News,Shared inbox,Anyone on the web,Invited only,Managers,Yes,News writers + Leadership
+Investor Relations,investors@hngroup.org.uk,Investor enquiries (investors.hngroup.org.uk),Shared inbox,Anyone on the web,Invited only,Managers,Yes,HN Group leadership
+Contracts and Legal,legal@hngroup.org.uk,Contracts signing and legal correspondence,Shared inbox,Anyone on the web,Invited only,Managers,Yes,Contracts send/manage permission holders
+Company Register,register@hngroup.org.uk,Company Register filings and corrections (companies.hngroup.org.uk),Shared inbox,Anyone on the web,Invited only,Managers,Yes,Register staff
+Brand,brand@hngroup.org.uk,Logo and brand requests (branding.hngroup.org.uk),Shared inbox,Organisation only,Invited only,Managers,Yes,Brand owners
+Finance and Billing,billing@hngroup.org.uk,Invoices payments and subscriptions,Shared inbox,Anyone on the web,Invited only,Managers,Yes,Finance + Leadership
+Horizon Network enquiries,hello@horizon-network.co.uk,Public enquiries for Horizon Network,Shared inbox,Anyone on the web,Invited only,Managers,Yes,Network Leadership
+Horizon Network support,support@horizon-network.co.uk,Horizon Network customer support,Shared inbox,Anyone on the web,Invited only,Managers,Yes,Horizon Network support staff
+Horizon Media Group enquiries,hello@media.hngroup.org.uk,Public enquiries for Horizon Media Group,Shared inbox,Anyone on the web,Invited only,Managers,Yes,Horizon Media Group leadership
+Horizon Advertising enquiries,hello@horizonadvertising.co.uk,Advertising enquiries (managed by Horizon Network),Shared inbox,Anyone on the web,Invited only,Managers,Yes,Horizon Advertising staff + Network Leadership
+IT and Systems,it@hngroup.org.uk,Websites VPS VPN devices and the HN apps,Team inbox,Organisation only,Invited only,Managers,Yes,People who run the servers and websites
+Security,security@hngroup.org.uk,Security reports and incidents,Shared inbox,Anyone on the web,Invited only,Managers,Yes,IT and Systems + system owner
+Alerts,alerts@hngroup.org.uk,Automatic emails: certificates uptime GitHub Cloudflare,Alerts,Anyone on the web,Invited only,Managers,No,IT and Systems
+Domains and DNS,domains@hngroup.org.uk,Domain registrar and Cloudflare account email (HN Group Management),Accounts,Anyone on the web,Invited only,Managers,No,System owner + IT and Systems
+Discord,discord@hngroup.org.uk,Discord servers and the HN Group Auth bot's developer account,Accounts,Anyone on the web,Invited only,Managers,No,Discord server owners
+DMARC reports,dmarc@hngroup.org.uk,DMARC aggregate reports for every domain,Alerts,Anyone on the web,Invited only,Managers,No,IT and Systems
+Workspace Admins,workspace-admins@hngroup.org.uk,Security group: who gets Google Admin roles and admin-only settings,Security group,Owners only,Invited only,Managers,No,System owner + Google Admin super admins
