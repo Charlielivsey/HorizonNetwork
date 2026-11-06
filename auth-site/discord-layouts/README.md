@@ -97,11 +97,10 @@ log as "HN Group server setup (<layout>) by <user>".
 
 ## Layouts here
 
-- `hn-hq.json`: **HN HQ** (server ID 1360208008755413227). It sets up the user's roles of 2 November 2026: the
-  divider roles, Leadership, Founder, Network Permission Levels 1–5, Network and Members, with colours and hoisting.
-  Positions carry no permissions themselves: the permission levels do, and roleGrants gives each position its level
-  (President/Vice President → 5, Executive Assistant/Chief of Staff → 4, Internal Relations Director/Advisor/Founder →
-  3, everyone → 1). Level 4 has everything except Administrator, Kick Members, Ban Members and Manage Roles: without
-  Manage Roles, nobody on Level 4 can give themselves Level 5 or change a role's permissions. Level 2 (Trial Staff) is
-  given by hand. @everyone has the same baseline as Level 1. B | Bots has no permissions; give each bot its own. The
-  reporting lines can't be stored in Discord; the role order reflects them. No channels are set up yet.
+None at the moment. The HN Group roles for the HQ, Horizon Ads, Staff and dev servers are **not** a /server-setup
+layout (the user's correction, 6 November 2026: "dont use setup role list. the bot will do it automatically accross
+the servers i gave the IDs for"): they are in `../hn-roles.json`, which the bot applies by itself (`position-sync.js`):
+if any of those roles is missing in one of those servers it deletes every other role and creates the list in order,
+and it keeps each member's roles in step with their Horizon Network position on the staff portal (position role, its
+permission level, NA | Network Administration), while every human member gets the separator roles, Network
+Permission Level 1 and M | Member. Network Permission Level 2 (Trial Staff) and B | Bots are given by hand.

@@ -1,10 +1,10 @@
 {
-  "server": "HN HQ",
-  "guildId": "1360208008755413227",
-  "description": "Leadership, permission levels, network and member roles",
-  "removeUnlisted": {
-    "roles": true,
-    "channels": false
+  "_note": "HN Group Discord roles, kept up to date by HN Group Auth's bot by itself in every server below (position-sync.js; the user's request, 6 November 2026). Not a /server-setup layout. If any of these roles is missing in a server, the bot deletes every other role and creates these in this order; it gives each member linked to a staff record the roles of their Horizon Network position, and every human member the separator roles, Network Permission Level 1 and M | Member.",
+  "servers": {
+    "HQ": "1360208008755413227",
+    "Horizon Ads": "266973580900696065",
+    "Staff": "1448685232118038661",
+    "dev": "1358813446669602896"
   },
   "everyone": [
     "ViewChannel",
@@ -261,28 +261,75 @@
   ],
   "roleGrants": {
     "President": [
-      "Network Permission Level 5"
+      "Network Permission Level 5",
+      "NA | Network Administration"
     ],
     "Vice President": [
-      "Network Permission Level 5"
+      "Network Permission Level 5",
+      "NA | Network Administration"
     ],
     "Executive Assistant": [
-      "Network Permission Level 4"
+      "Network Permission Level 4",
+      "NA | Network Administration"
     ],
     "Chief of Staff": [
-      "Network Permission Level 4"
+      "Network Permission Level 4",
+      "NA | Network Administration"
     ],
     "Internal Relations Director": [
-      "Network Permission Level 3"
+      "Network Permission Level 3",
+      "NA | Network Administration"
     ],
     "Advisor": [
-      "Network Permission Level 3"
+      "Network Permission Level 3",
+      "NA | Network Administration"
     ],
     "Founder": [
-      "Network Permission Level 3"
+      "Network Permission Level 3",
+      "NA | Network Administration"
     ],
     "@everyone": [
       "Network Permission Level 1"
     ]
+  },
+  "positions": {
+    "company": "Horizon Network",
+    "roles": {
+      "President": [
+        "President",
+        "Network Permission Level 5",
+        "NA | Network Administration"
+      ],
+      "Vice President": [
+        "Vice President",
+        "Network Permission Level 5",
+        "NA | Network Administration"
+      ],
+      "Executive Assistant": [
+        "Executive Assistant",
+        "Network Permission Level 4",
+        "NA | Network Administration"
+      ],
+      "Chief of Staff": [
+        "Chief of Staff",
+        "Network Permission Level 4",
+        "NA | Network Administration"
+      ],
+      "Internal Relations Director": [
+        "Internal Relations Director",
+        "Network Permission Level 3",
+        "NA | Network Administration"
+      ],
+      "Advisor": [
+        "Advisor",
+        "Network Permission Level 3",
+        "NA | Network Administration"
+      ],
+      "Founder": [
+        "Founder",
+        "Network Permission Level 3",
+        "NA | Network Administration"
+      ]
+    }
   }
 }

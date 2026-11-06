@@ -21,6 +21,10 @@ test('Discord accounts on staff profiles and pictures that follow Discord', () =
     assert.deepEqual(store.missingDiscord(), []);
     // A profile's Discord account can be changed but not removed.
     assert.throws(() => store.saveEmployee({ firstName: 'Jo', lastName: 'Tester', jobTitle: 'Designer', company, emails: [{ domain, auto: true, primary: true }], discordId: '' }, jo), /needs a Discord account/);
+    // The bot reads job titles by company for every linked Discord ID, to keep Discord roles in step with positions.
+    const pos = store.discordPositions();
+    assert.deepEqual(pos.find((x) => x.id === '123456789012345678').titles, [{ company, title: 'Designer' }]);
+    assert.ok(pos.every((x) => /^\d{15,22}$/.test(x.id)) && !pos.some((x) => x.id === undefined), 'only records with a Discord ID');
     // Newly added IDs are "pending" until the bot has filled them in; then they aren't.
     assert.deepEqual(store.discordIds(true).sort(), ['123456789012345678', '223456789012345678']);
     const avatar = 'a'.repeat(32);

@@ -115,7 +115,9 @@ function createDiscord({ origin, staff, send, profile, entryFor, setCookie, cook
   const manager=createBotManager({file:path.join(path.dirname(file),'discord-bot.json'),configFile:file,config,fetcher,refresh:()=>refreshNames(true),staff,presence:()=>presence});
   if(refreshEvery>0){setTimeout(()=>{const tick=()=>{const s=manager.settings();if(s.enabled&&s.syncEnabled&&!manager.syncState.running&&(!(manager.syncState.lastAttemptAt||manager.syncState.lastAt)||Date.now()-Date.parse(manager.syncState.lastAttemptAt||manager.syncState.lastAt)>=s.syncMinutes*60000))manager.sync().catch(()=>{});};tick();setInterval(tick,60000).unref();},20000).unref();}
   if(refreshEvery>0)setInterval(()=>{const s=manager.settings();if(s.enabled)refreshNames(false,true).catch(()=>{});},60000).unref();
-  presence=process.env.HN_DISCORD_PRESENCE==='0'?null:startPresence(()=> (config()||{}).bot||null,{settings:manager.settings,onInteraction:manager.interaction,onReady:manager.registerBuiltins,log:{log:message=>{console.log(message);manager.record(null,'gateway.event',{message});}}});
+  // Discord roles follow Horizon Network positions on the staff portal: checked every minute, and straight after the bot connects.
+  if(refreshEvery>0)setInterval(()=>{manager.syncPositions().catch(()=>{});},60000).unref();
+  presence=process.env.HN_DISCORD_PRESENCE==='0'?null:startPresence(()=> (config()||{}).bot||null,{settings:manager.settings,onInteraction:manager.interaction,onReady:()=>{manager.registerBuiltins();manager.syncPositions(true).catch(()=>{});},log:{log:message=>{console.log(message);manager.record(null,'gateway.event',{message});}}});
   // When Auth is stopped (website control's power off runs `pm2 stop hn-auth`, which sends SIGINT/SIGTERM), the bot goes
   // fully offline at once (the user's request, 3 November 2026): it turns invisible and closes its Discord connection
   // normally, so Discord shows it offline straight away instead of after the connection times out.

@@ -41,7 +41,7 @@ bash "$SCRIPT_DIR/../status-site/install-portal-sso.sh"
 
 mkdir -p "$APP_DIR/public" "$DATA_DIR" "$SSL_DIR" "$CHALLENGE_DIR" /etc/nginx/sites-available /etc/nginx/sites-enabled
 chmod 700 "$DATA_DIR"
-cp "$SCRIPT_DIR/server.js" "$SCRIPT_DIR/native.js" "$SCRIPT_DIR/google.js" "$SCRIPT_DIR/discord.js" "$SCRIPT_DIR/discord-gateway.js" "$SCRIPT_DIR/bot-manager.js" "$SCRIPT_DIR/server-setup.js" "$SCRIPT_DIR/supervisor.js" "$APP_DIR/"
+cp "$SCRIPT_DIR/server.js" "$SCRIPT_DIR/native.js" "$SCRIPT_DIR/google.js" "$SCRIPT_DIR/discord.js" "$SCRIPT_DIR/discord-gateway.js" "$SCRIPT_DIR/bot-manager.js" "$SCRIPT_DIR/server-setup.js" "$SCRIPT_DIR/position-sync.js" "$SCRIPT_DIR/hn-roles.json" "$SCRIPT_DIR/supervisor.js" "$APP_DIR/"
 # Server layouts for /server-setup: replaced as a whole so removed layouts go too.
 rm -rf "$APP_DIR/discord-layouts"
 mkdir -p "$APP_DIR/discord-layouts"

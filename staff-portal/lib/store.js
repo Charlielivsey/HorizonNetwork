@@ -551,6 +551,15 @@ function discordIds(pending) {
   if (pending) return [...new Set(people.filter((p) => p.discord && p.discord.id && !p.discord.username).map((p) => p.discord.id))];
   return [...new Set([...logins.filter((l) => l.account && l.account.discord).map((l) => l.account.discord.id), ...people.filter((p) => p.discord && p.discord.id).map((p) => p.discord.id)])];
 }
+// Each staff record's Discord ID with its job titles at every company (main role and other roles), for HN Group Auth's
+// bot to keep Discord roles in step with positions (the user's request, 6 November 2026). System accounts are left out.
+function discordPositions() {
+  return people.filter((p) => !p.system && p.discord && DISCORD_ID.test(String(p.discord.id))).map((p) => ({
+    id: String(p.discord.id),
+    titles: [{ company: p.company || "", title: p.jobTitle || "" }, ...(p.otherRoles || []).map((r) => ({ company: r.company || "", title: r.jobTitle || "" }))]
+      .filter((t) => t.company && t.title).map((t) => ({ company: String(t.company).slice(0, 80), title: String(t.title).slice(0, 120) })),
+  }));
+}
 // New usernames from Discord (the bot): updates the sign-in accounts and the staff records that hold them.
 function updateDiscordNames(updates) {
   let changed = 0;
@@ -1581,6 +1590,7 @@ module.exports = {
   findByDiscord,
   setDiscord,
   discordIds,
+  discordPositions,
   missingDiscord,
   setRecordDiscord,
   discordPhotoSync,

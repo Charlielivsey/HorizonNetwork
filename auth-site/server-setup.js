@@ -90,7 +90,7 @@ function channelSpec(c, where, category) {
 function parseLayout(raw, id) {
   const at = 'Layout "' + id + '"';
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw fail(at + ' is not a JSON object.');
-  for (const k of Object.keys(raw)) if (!['server', 'guildId', 'description', 'removeUnlisted', 'everyone', 'roles', 'categories', 'channels', 'roleGrants'].includes(k)) throw fail(at + ': unknown field "' + k + '".');
+  for (const k of Object.keys(raw)) if (!['server', 'guildId', 'description', 'removeUnlisted', 'everyone', 'roles', 'categories', 'channels', 'roleGrants', 'positions'].includes(k)) throw fail(at + ': unknown field "' + k + '".');
   if (typeof raw.server !== 'string' || !raw.server.trim()) throw fail(at + ': "server" must be the Discord server’s name.');
   if (raw.guildId !== undefined && !ID.test(String(raw.guildId))) throw fail(at + ': guildId must be a Discord server ID.');
   const roles = (raw.roles || []).map((r, i) => {
@@ -120,9 +120,22 @@ function parseLayout(raw, id) {
       roleGrants.push({ from: from.trim(), to: to.map((x) => x.trim()) });
     }
   }
+  // positions: { "company": "Horizon Network", "roles": { "<job title on the staff portal>": ["Role", …] } }. The bot keeps
+  // each linked staff member's roles in step with their job title at that company (position-sync.js).
+  let positions = null;
+  if (raw.positions !== undefined) {
+    const ps = raw.positions;
+    if (!ps || typeof ps !== 'object' || typeof ps.company !== 'string' || !ps.company.trim() || !ps.roles || typeof ps.roles !== 'object' || Array.isArray(ps.roles)) throw fail(at + ': positions needs a company and roles (job title → list of roles).');
+    for (const k of Object.keys(ps)) if (!['company', 'roles'].includes(k)) throw fail(at + ' positions: unknown field "' + k + '".');
+    const titles = Object.entries(ps.roles).map(([title, list]) => {
+      if (!title.trim() || !Array.isArray(list) || !list.length || list.some((x) => typeof x !== 'string' || !x.trim() || roleName(x) === EVERYONE)) throw fail(at + ': positions "' + title + '" must list its roles.');
+      return { title: title.trim(), roles: list.map((x) => x.trim()) };
+    });
+    positions = { company: ps.company.trim(), titles };
+  }
   const rm = raw.removeUnlisted || {};
   return { id, server: raw.server.trim(), guildId: raw.guildId ? String(raw.guildId) : '', description: typeof raw.description === 'string' ? raw.description.slice(0, 100) : '',
-    removeRoles: rm.roles !== false, removeChannels: rm.channels === true, everyone: bits(raw.everyone, at + ' @everyone'), roles, categories, channels, roleGrants };
+    removeRoles: rm.roles !== false, removeChannels: rm.channels === true, everyone: bits(raw.everyone, at + ' @everyone'), roles, categories, channels, roleGrants, positions };
 }
 function loadLayouts(dir) {
   const out = [], errors = [];
@@ -201,6 +214,7 @@ function plan(layout, guild, roles, channels, botUserId, botRoleIds) {
     items.push({ spec: ch, have, parent: c.name, categoryOverwrites: c.overwrites });
   }
   for (const it of items) steps.push({ kind: 'channel', ...it, op: it.have ? 'update' : 'create' });
+  for (const t of layout.positions?.titles || []) for (const n of t.roles) if (!layout.roles.some((r) => roleName(r.name) === roleName(n))) problems.push('positions "' + t.title + '" uses "' + n + '", which isn’t one of the layout’s roles.');
   for (const g of layout.roleGrants) for (const n of [g.from, ...g.to]) if (!knownRole(n)) problems.push('roleGrants uses "' + n + '", which isn’t ' + (wipe ? 'one of the layout’s roles (every other role is deleted).' : 'a role in the layout or the server.'));
   // Built in, for every layout and server (the user's request, 3 November 2026: "the separater roles, permission level 1,
   // and member should be auto added to everyone everytime no matter what server or template is used"): every member
@@ -254,7 +268,7 @@ function createServerSetup({ config, fetcher = fetch, dir = path.join(__dirname,
       if (r.status === 204) return null;
       const value = await r.json().catch(() => ({}));
       if (r.status === 429 && attempt < 6) { await sleep(Math.min(60, Math.max(0.5, Number(value.retry_after) || 1)) * 1000); continue; }
-      if (!r.ok) throw fail('Discord: ' + String(value.message || 'request refused (' + r.status + ')').slice(0, 200));
+      if (!r.ok) throw Object.assign(fail('Discord: ' + String(value.message || 'request refused (' + r.status + ')').slice(0, 200)), { status: r.status, code: value.code });
       return value;
     }
   }
@@ -444,7 +458,29 @@ function createServerSetup({ config, fetcher = fetch, dir = path.join(__dirname,
         { type: 1, name: 'layouts', description: 'List the server layouts' },
       ] };
   }
-  return { interaction, autocomplete, run, definition, name: COMMAND };
+  // Sets a server up by itself when the HN Group role list (hn-roles.json, position-sync.js) isn't there (the user's
+  // request, 6 November 2026: "if this role list does not exist in the servers aswell it should delete every other role
+  // and add these roles in this order").
+  // Only when one of the layout's roles is missing, never when they're all there, and nothing at all if the plan has
+  // problems (the bot's role too low, missing permissions).
+  async function autoApply(guildId, given) {
+    if (running) return { busy: true };
+    running = true;
+    try {
+      const s = await snapshot(guildId), layout = given || choose(null, s.guild);
+      const have = new Set(s.roles.map((r) => roleName(r.name)));
+      const missing = layout.roles.filter((r) => !have.has(roleName(r.name))).map((r) => r.name);
+      if (!missing.length) return { applied: false };
+      const p = plan(layout, s.guild, s.roles, s.channels, s.me.id, s.botRoles);
+      const bot = { username: 'HN Group Auth bot (automatic)', id: s.me.id };
+      if (p.problems.length) { record(bot, 'server-setup.auto.blocked', { guild: guildId, layout: layout.id, missing, problems: p.problems }); return { applied: false, problems: p.problems }; }
+      record(bot, 'server-setup.auto.start', { guild: guildId, layout: layout.id, missing });
+      const r = await execute(layout, s, p, 'HN Group Auth bot (roles were missing)');
+      record(bot, r.errors.length ? 'server-setup.auto.partial' : 'server-setup.auto.done', { guild: guildId, layout: layout.id, changes: r.done.length, errors: r.errors.slice(0, 20) });
+      return { applied: true, ...r };
+    } finally { running = false; }
+  }
+  return { interaction, autocomplete, run, definition, name: COMMAND, request, autoApply, busy: () => running };
 }
 
-module.exports = { embed, createServerSetup, parseLayout, loadLayouts, plan, bits, ALLOWED_USERS, COMMAND };
+module.exports = { embed, createServerSetup, parseLayout, loadLayouts, plan, bits, ALLOWED_USERS, COMMAND, ALWAYS_GIVE, isSeparator, roleName, EVERYONE };
