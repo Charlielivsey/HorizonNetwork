@@ -443,7 +443,7 @@
   window.addEventListener('hashchange', () => { render(location.hash.slice(1)); $('#content').focus({ preventScroll: true }); });
   (async function start() {
     try { session = await (await fetch('/api/session')).json(); if (!session.csrf) throw 0; me = (await api('/api/me')).user; }
-    catch { location.href = '/auth/login'; return; }
+    catch { location.href = '/auth/login?return=' + encodeURIComponent('/' + location.hash); return; }
     header(); render(location.hash.slice(1) || 'overview');
   })();
 })();

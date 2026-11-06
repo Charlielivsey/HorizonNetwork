@@ -191,7 +191,10 @@ test('sign-in accounts: made on HN Account, several profiles with a default, own
     // again ends that sign-in and goes back through HN Group Auth.
     assert.equal((await samSite.get('/')).status, 200);
     const reopened = await samSite.get('/');
-    assert.ok(reopened.redirected && new URL(reopened.url).hostname !== new URL(ACC).hostname || reopened.url.includes('/authorize'), 'reopening goes back to HN Group Auth');
+    // Reopening ends the sign-in and goes back through HN Group Auth, via the sign-in page's script (?continue=1), which
+    // keeps the part after # so you still land where the link pointed.
+    assert.ok(reopened.redirected && new URL(reopened.url).searchParams.get('continue') === '1', 'reopening goes back to HN Group Auth');
+    assert.match(await reopened.text(), /landing\.js/);
     assert.equal((await samSite.get('/api/session')).status, 401);
     assert.equal((await fetch(ACC + '/')).status, 200, 'signed-out visitors see the landing page');
   } finally {

@@ -381,3 +381,8 @@ footer .footer-brand img { height: 38px; width: auto; margin: 0 0 .8rem; }
 footer .footer-brand .footer-company { margin: 0; display: grid; gap: .1rem; line-height: 1.4; max-width: none; font-size: inherit; }
 footer .footer-brand .footer-company strong { font-size: 1.02rem; font-weight: 700; }
 footer .footer-brand .footer-parent { opacity: .82; font-size: .88rem; }
+
+/* Right-click menu on documents and files (6 November 2026) */
+.ctx-menu{position:fixed;right:auto;top:0;left:0;min-width:210px;z-index:60}
+.ctx-menu button[disabled]{opacity:.45;cursor:default}
+.ctx-sep{height:1px;background:var(--border);margin:5px 6px}

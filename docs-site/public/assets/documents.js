@@ -176,10 +176,11 @@
           el('div', { class: 'card-meta' }, el('span', { text: 'Edited ' + ago(d.updatedAt) + ' by ' + d.updatedBy }))));
       card.style.animationDelay = Math.min(i, 12) * 25 + 'ms';
       selectable(card, 'documents', d.id, d.canDelete, d.protected ? 'Protected from deletion' : 'Only the author can delete it');
+      onMenu(card, () => docMenu(d));
       return card;
     }));
     $('files').hidden = !files.length;
-    $('file-list').replaceChildren(...files.map((x) => { const row = fileRow(x, S.scope === 'mine'); selectable(row, 'files', x.id, x.canManage, 'Only the owner can delete it'); return row; }));
+    $('file-list').replaceChildren(...files.map((x) => { const row = fileRow(x, S.scope === 'mine'); selectable(row, 'files', x.id, x.canManage, 'Only the owner can delete it'); onMenu(row, () => fileMenu(x, S.scope === 'mine')); return row; }));
     S.visible = { documents: docs.filter((d) => d.canDelete).map((d) => d.id), files: files.filter((x) => x.canManage).map((x) => x.id) };
     drawBulk();
     $('doc-empty').hidden = n > 0;
@@ -233,6 +234,70 @@
     endSelect();
   });
 
+  // ---------- Right-click menus (the user's request, 6 November 2026: "right click docs and it fetch a right click menu") ----------
+  // A menu at the pointer (or under the item for the keyboard's menu key / Shift+F10) with what can be done to that
+  // document or file. Arrow keys move, Enter chooses, Escape or a click elsewhere closes it.
+  let ctx = null;
+  function closeCtx() { if (!ctx) return; const m = ctx; ctx = null; m.remove(); }
+  function ctxMenu(items, x, y, from) {
+    closeCtx();
+    // Drop missing items, then separators at the ends or next to each other.
+    const list = items.filter(Boolean).filter((it, i, all) => it !== '-' || (i > 0 && i < all.length - 1 && all[i - 1] !== '-'));
+    const menu = el('div', { class: 'menu ctx-menu', role: 'menu' }, ...list.map((it) => it === '-' ? el('div', { class: 'ctx-sep', role: 'separator' })
+      : el('button', { type: 'button', role: 'menuitem', class: it.danger ? 'danger-text' : '', disabled: it.disabled || null, title: it.why || '', onclick: () => { closeCtx(); it.run(); } }, it.label)));
+    document.body.append(menu); ctx = menu;
+    const r = menu.getBoundingClientRect();
+    if (from && !x && !y) { const b = from.getBoundingClientRect(); x = b.left + 16; y = b.top + 24; }
+    menu.style.left = Math.max(8, Math.min(x, innerWidth - r.width - 8)) + 'px';
+    menu.style.top = Math.max(8, Math.min(y, innerHeight - r.height - 8)) + 'px';
+    const buttons = [...menu.querySelectorAll('button:not([disabled])')];
+    if (buttons[0]) buttons[0].focus({ preventScroll: true });
+    menu.addEventListener('keydown', (e) => {
+      const i = buttons.indexOf(document.activeElement);
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); buttons[(i + (e.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length].focus(); }
+      else if (e.key === 'Escape' || e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); closeCtx(); if (from) from.focus({ preventScroll: true }); }
+    });
+  }
+  document.addEventListener('mousedown', (e) => { if (ctx && !ctx.contains(e.target)) closeCtx(); }, true);
+  window.addEventListener('scroll', closeCtx, true); window.addEventListener('resize', closeCtx); window.addEventListener('blur', closeCtx);
+  const onMenu = (node, build) => node.addEventListener('contextmenu', (e) => { if (S.selecting) return; e.preventDefault(); ctxMenu(build(), e.clientX, e.clientY, node); });
+  const copyLink = async (url) => { try { await navigator.clipboard.writeText(url); toast('Link copied.'); } catch { toast('Couldn’t copy the link.', true); } };
+  function docMenu(d) {
+    const view = S.scope === 'person', url = location.origin + '/doc/' + d.id;
+    const update = async (change, done) => { try { await api('PUT', '/api/documents/' + d.id, { ...change, version: d.version }); toast(done); loadDocuments(); } catch (e) { toast(e.message, true); } };
+    return [
+      { label: 'Open', run: () => go('/doc/' + d.id) },
+      { label: 'Open in a new tab', run: () => window.open('/doc/' + d.id, '_blank', 'noopener') },
+      view ? null : { label: 'Copy link', run: () => copyLink(url) },
+      '-',
+      { label: 'Download PDF', run: () => { const a = el('a', { href: '/api/documents/' + d.id + '/pdf', download: '' }); document.body.append(a); a.click(); a.remove(); toast('Downloading “' + d.title + '.pdf”…'); } },
+      view ? null : { label: 'Make a copy', run: async () => { try { await api('POST', '/api/documents/' + d.id + '/duplicate'); toast('Copy made.'); loadDocuments(); } catch (e) { toast(e.message, true); } } },
+      view ? null : { label: 'Send for signing…', run: async () => {
+        if (!(await ask({ title: 'Send “' + d.title + '” for signing?', text: 'A PDF of this document, exactly as it is now, goes to HN Group Contracts. Next you choose who signs it.', ok: 'Send to Contracts' }))) return;
+        const tab = window.open('', '_blank');
+        try { const r = await api('POST', '/api/documents/' + d.id + '/send-for-signing', {}); toast('Sent to HN Group Contracts.'); if (tab) tab.location.href = r.url; else location.href = r.url; } catch (e) { if (tab) tab.close(); toast(e.message, true); }
+      } },
+      view || d.readOnly ? null : '-',
+      view || d.readOnly ? null : { label: 'Rename…', run: async () => { const title = await ask({ title: 'Rename document', ok: 'Rename', input: { label: 'Title', value: d.title } }); if (title && title !== d.title) update({ title }, 'Renamed.'); } },
+      view || !d.canManage ? null : d.sharing === 'private'
+        ? { label: 'Share with staff', run: () => update({ sharing: 'staff' }, 'Shared with staff.') }
+        : { label: 'Move to my private storage', run: () => update({ sharing: 'private' }, 'Moved to your private storage.') },
+      view ? null : '-',
+      view ? null : { label: 'Delete…', danger: true, disabled: !d.canDelete, why: d.canDelete ? '' : d.protected ? 'Protected from deletion' : 'Only the author can delete it', run: async () => {
+        if (!(await ask({ title: 'Delete “' + d.title + '”?', text: 'It will be removed for everyone. This can’t be undone.', ok: 'Delete document', danger: true }))) return;
+        try { await api('DELETE', '/api/documents/' + d.id); toast('Document deleted.'); loadDocuments(); } catch (e) { toast(e.message, true); }
+      } },
+    ];
+  }
+  function fileMenu(f, own) {
+    return [
+      { label: 'Open', run: () => window.open('/api/files/' + f.id, '_blank', 'noopener') },
+      { label: 'Download', run: () => { const a = el('a', { href: '/api/files/' + f.id + '?download=1' }); document.body.append(a); a.click(); a.remove(); } },
+      own ? '-' : null,
+      own ? { label: 'Rename…', run: () => renameFile(f) } : null,
+      own ? { label: 'Delete…', danger: true, run: () => deleteFile(f) } : null,
+    ];
+  }
   async function renameFile(f) {
     const name = await ask({ title: 'Rename file', ok: 'Rename', input: { label: 'Name', value: f.name } });
     if (!name) return;

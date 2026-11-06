@@ -186,7 +186,9 @@ async function handle(req, res) {
     if (s) {
       sessions.delete(s.token);
       fetch(STAFF_BACKEND + '/api/logout', { method: 'POST', headers: { Cookie: 'hn_staff_session=' + s.staff, 'Content-Type': 'application/json' }, body: '{}', signal: AbortSignal.timeout(5000) }).catch(() => {});
-      return redirect(res, '/auth/login', [setCookie(COOKIE, '', 0)]);
+      // Through the sign-in page's script, which adds the part after # (the server never sees it) so you still land
+      // where the link pointed, e.g. creating a login for someone just added on the staff portal.
+      return redirect(res, '/?continue=1', [setCookie(COOKIE, '', 0)]);
     }
     return page(res, 200, 'index.html');
   }
