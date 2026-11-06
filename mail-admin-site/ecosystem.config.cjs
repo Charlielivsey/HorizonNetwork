@@ -1,1 +1,0 @@
-module.exports={apps:[{name:'hn-mail-admin',script:'/opt/hn-mail-admin/server.js',cwd:'/opt/hn-mail-admin',instances:1,exec_mode:'fork',autorestart:true,max_memory_restart:'256M',env:{NODE_ENV:'production',PORT:5670,MAIL_ADMIN_DATA_DIR:'/var/lib/hn-mail-admin'}}]};

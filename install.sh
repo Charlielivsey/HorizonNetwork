@@ -89,10 +89,6 @@ else
     changed auth-site/ status-site/install-portal-sso.sh && run 'HN Group Auth' bash "$ROOT/auth-site/install.sh" "$EMAIL"
 fi
 changed echo-site/ && run 'Echo (echo.hngroup.org.uk)' bash "$ROOT/echo-site/install.sh" "$EMAIL"
-# HN Group's own mail server (Postfix, Dovecot, Rspamd; isolated, restarts only the mail services), then its
-# administration site, then HN Mail, which uses both.
-changed mail-server/ && run 'Mail server (mx.hngroup.org.uk)' bash "$ROOT/mail-server/install.sh" "$EMAIL"
-changed mail-admin-site/ && run 'Mail admin (admin.mail.hngroup.org.uk)' bash "$ROOT/mail-admin-site/install.sh" "$EMAIL"
 changed mail-site/ && run 'HN Mail (mail.hngroup.org.uk)' bash "$ROOT/mail-site/install.sh" "$EMAIL"
 changed evan-site/ && run 'Private page (evan.hngroup.org.uk)' bash "$ROOT/evan-site/install.sh" "$EMAIL"
 changed old-staff-portal-site/ && run 'Old staff portal (oldstaffportal.hngroup.org.uk)' bash "$ROOT/old-staff-portal-site/install.sh" "$EMAIL"
@@ -121,6 +117,11 @@ if pm2 describe ha-website >/dev/null 2>&1 || [ -e /etc/nginx/sites-enabled/ha-w
     rm -f /etc/nginx/sites-enabled/ha-website
     if nginx -t >/dev/null 2>&1; then systemctl reload nginx; fi
     echo "Removed the Horizon Advertising website (ha-website)."
+fi
+# HN Group's own mail server was removed (the user's request, 6 November 2026: "revert everything back to gmail"):
+# take it off the server (backup first) while any part of it is still there. Email stays with Google Workspace.
+if [ -d /etc/hn-mail ] || [ -d /var/vmail ] || pm2 describe hn-mail-admin >/dev/null 2>&1 || [ -e /etc/nginx/sites-enabled/hn-mail-admin ]; then
+    run 'Remove the HN Group mail server' bash "$ROOT/remove-mail-server.sh"
 fi
 changed links-site/ && run 'HN Group Sites (sites.hngroup.org.uk)' bash "$ROOT/links-site/install.sh" "$EMAIL"
 changed branding-site/ && run 'Brand centre (branding.hngroup.org.uk)' bash "$ROOT/branding-site/install.sh" "$EMAIL"

@@ -1,2 +1,0 @@
-# HN Group mail: recipients nobody outside may use (shared Sent copies are only made by Postfix itself).
-/\+hn-sent@/	REJECT This address cannot receive mail

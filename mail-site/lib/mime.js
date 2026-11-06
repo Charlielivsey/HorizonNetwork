@@ -51,7 +51,7 @@ function build({ from, to, cc, bcc, subject, html, text, inReplyTo, references, 
   if (!allowEmpty && !toList.length && !ccList.length && !bccList.length) { const e = new Error('Add at least one recipient.'); e.status = 400; throw e; }
   const boundary = () => '=_hnmail_' + crypto.randomBytes(12).toString('hex');
   const head = ['From: ' + formatAddress(from), toList.length ? 'To: ' + toList.map(formatAddress).join(', ') : null, ccList.length ? 'Cc: ' + ccList.map(formatAddress).join(', ') : null,
-    bccList.length ? 'Bcc: ' + bccList.map(formatAddress).join(', ') : null, 'Subject: ' + word(subject || ''), 'Date: ' + new Date().toUTCString().replace('GMT', '+0000'), 'Message-ID: <' + crypto.randomBytes(16).toString('hex') + '@' + (String(from.email).split('@')[1] || 'hngroup.org.uk') + '>', 'MIME-Version: 1.0',
+    bccList.length ? 'Bcc: ' + bccList.map(formatAddress).join(', ') : null, 'Subject: ' + word(subject || ''), 'Date: ' + new Date().toUTCString().replace('GMT', '+0000'), 'MIME-Version: 1.0',
     inReplyTo ? 'In-Reply-To: ' + clean(inReplyTo) : null, references ? 'References: ' + clean(references).slice(0, 4000) : null].filter(Boolean);
   const plain = text != null ? String(text) : String(html || '').replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|li|h\d|blockquote)>/gi, '\n').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
   const alt = boundary();

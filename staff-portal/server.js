@@ -388,11 +388,6 @@ function sendFile(res, filePath, extraHeaders = {}) {
   });
 }
 
-// Tells HN Group mail (admin.mail.hngroup.org.uk, on this server) that staff records changed, so a new person's mailbox
-// is made, or a changed address followed, within seconds instead of at its next one-minute check. Never waits or fails.
-function mailChanged() {
-  fetch((process.env.MAIL_ADMIN_BACKEND || "http://127.0.0.1:5670") + "/_hooks/staff-changed", { method: "POST", signal: AbortSignal.timeout(2000) }).catch(() => {});
-}
 function httpError(status, message) {
   return Object.assign(new Error(message), { status });
 }
@@ -1526,7 +1521,6 @@ async function routeApi(req, res, pathname, session) {
       if (!String(body.discordId || "").trim()) throw httpError(400, "Enter their Discord user ID.");
       const person = store.saveEmployee(body, null);
       logEvent(req, session, "employee-added", { target: person.displayName, detail: `${person.jobTitle}, ${person.company}` });
-      mailChanged();
       return sendJson(res, 201, { employee: store.manageView(person) });
     }
     if (method === "POST" && (m = /^\/api\/employees\/([a-f0-9]{16})(?:\/(delete|discord|permanent|account|account\/disable|account\/enable|code\/reset))?$/.exec(pathname))) {
@@ -1553,7 +1547,6 @@ async function routeApi(req, res, pathname, session) {
         store.saveEmployee(body, person);
         const changed = changedFields(before, person);
         if (changed.length) logEvent(req, session, "employee-updated", { target: person.displayName, detail: changed.join(", ") });
-        if (changed.length) mailChanged();
         return sendJson(res, 200, { employee: store.manageView(person) });
       }
       if (action === "delete") {

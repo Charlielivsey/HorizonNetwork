@@ -1,9 +1,8 @@
 'use strict';
-// HN Group Auth's fixed "mail" client (mail.hngroup.org.uk). HN Mail now uses HN Group's own mail server (the user's
-// request, 6 November 2026: "A linked Google account or Google consent must no longer be required"): any HN Group Auth
-// account may sign in, and HN Mail then opens only the mailboxes of that account's staff records (identity recordIds)
-// and the shared mailboxes they're members of. Checked again at least every 30 seconds; never while someone is logged
-// in as someone else. The browser cookie points to a private server-side session.
+// HN Group Auth's fixed "mail" client (mail.hngroup.org.uk, the user's request, 6 November 2026: "use HN Auth accounts.
+// And should only work if you have a google account linked already to the Auth account"). Auth itself refuses accounts
+// without a linked Google account; this site checks again before every page and request, and never while someone is
+// logged in as someone else. The browser cookie points to a private server-side session.
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 
@@ -19,12 +18,12 @@ const fail = (status, message, code) => Object.assign(new Error(message), { stat
 
 function cookie(req, name) { return (req.headers.cookie || '').split(';').map((x) => x.trim()).find((x) => x.startsWith(name + '='))?.slice(name.length + 1) || ''; }
 function setCookie(name, value, maxAge) { return `${name}=${value}; Path=/; HttpOnly;${SECURE ? ' Secure;' : ''} SameSite=Lax${maxAge === undefined ? '' : '; Max-Age=' + maxAge}`; }
-const permitted = (u) => !!u && u.impersonated !== true;
+// The Google account linked to the sign-in account on HN Group Auth, or null.
+const linkedGoogle = (u) => (u && u.google && typeof u.google.email === 'string' ? { email: u.google.email.toLowerCase(), sub: typeof u.google.sub === 'string' ? u.google.sub : '' } : null);
+const permitted = (u) => !!u && u.impersonated !== true && !!linkedGoogle(u);
 function userOf(u) {
   return { id: u.id, accountId: u.accountId || u.id, username: u.username, email: u.email, displayName: u.displayName,
-    firstName: u.firstName, lastName: u.lastName, company: u.company, jobTitle: u.jobTitle, impersonated: u.impersonated === true,
-    // The staff records behind this account: HN Mail opens exactly their mailboxes (and their shared mailboxes).
-    recordIds: Array.isArray(u.recordIds) ? u.recordIds.filter((x) => typeof x === 'string').slice(0, 20) : [] };
+    firstName: u.firstName, lastName: u.lastName, company: u.company, jobTitle: u.jobTitle, google: linkedGoogle(u), impersonated: u.impersonated === true };
 }
 const safeNext = (next) => (typeof next === 'string' && /^\/[A-Za-z0-9/_?=&.%#-]{0,300}$/.test(next) && !next.startsWith('//') ? next : '/');
 
@@ -46,7 +45,7 @@ async function authApi(endpoint, data) {
   return value;
 }
 
-const NO_GOOGLE = 'HN Mail can’t be opened with this HN Group Auth account (it can’t be used while you’re logged in as someone else).';
+const NO_GOOGLE = 'HN Mail only works with an HN Group Auth account that has a Google account linked. Sign in to auth.hngroup.org.uk and turn on Sign in with Google, then come back.';
 
 function createAuth(store) {
   async function current(req) {
@@ -75,13 +74,13 @@ function createAuth(store) {
     if (url.pathname === '/auth/callback' && req.method === 'GET') {
       const [expected, nextRaw] = cookie(req, STATE_COOKIE).split('.'), state = url.searchParams.get('state') || '', clear = setCookie(STATE_COOKIE, '', 0);
       if (!HEX.test(state) || !HEX.test(expected || '') || !crypto.timingSafeEqual(Buffer.from(state), Buffer.from(expected))) { showPage(res, 400, 'Sign-in expired', 'That sign-in has expired or was started in another browser. Please try again.', [clear]); return true; }
-      if (url.searchParams.get('error')) { showPage(res, 403, 'HN Mail isn’t available', NO_GOOGLE, [clear], true); return true; }
+      if (url.searchParams.get('error')) { showPage(res, 403, 'Link a Google account first', NO_GOOGLE, [clear], true); return true; }
       if (!HEX.test(url.searchParams.get('code') || '')) { showPage(res, 400, 'Sign-in failed', 'The sign-in code was missing or invalid.', [clear]); return true; }
       let result;
       try { result = await authApi('exchange', { code: url.searchParams.get('code'), state }); }
-      catch (e) { showPage(res, e.status === 403 ? 403 : 503, e.status === 403 ? 'HN Mail isn’t available' : 'Sign-in failed', e.status === 403 ? NO_GOOGLE : e.message, [clear], e.status === 403); return true; }
+      catch (e) { showPage(res, e.status === 403 ? 403 : 503, e.status === 403 ? 'Link a Google account first' : 'Sign-in failed', e.status === 403 ? NO_GOOGLE : e.message, [clear], e.status === 403); return true; }
       if (result.user.impersonated) { showPage(res, 403, 'Not while logged in as someone else', 'HN Mail can’t be used while you’re logged in as someone else.', [clear]); return true; }
-      if (!permitted(result.user)) { showPage(res, 403, 'HN Mail isn’t available', NO_GOOGLE, [clear], true); return true; }
+      if (!permitted(result.user)) { showPage(res, 403, 'Link a Google account first', NO_GOOGLE, [clear], true); return true; }
       const old = cookie(req, SESSION_COOKIE); if (old) store.endSession(old);
       const token = store.createSession(userOf(result.user), result.session, result.expires);
       store.updateSession(token, { fresh: true }); // the first page load after signing in opens HN Mail
@@ -110,4 +109,4 @@ function createAuth(store) {
   }
   return { current, handle, ownPicture, ORIGIN };
 }
-module.exports = { createAuth, safeNext, permitted, NO_GOOGLE };
+module.exports = { createAuth, safeNext, permitted, linkedGoogle, NO_GOOGLE };

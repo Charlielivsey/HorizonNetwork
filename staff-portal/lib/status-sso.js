@@ -56,10 +56,7 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       id:p.profileId||p.id,accountId:login?login.id:p.id,displayName:p.displayName,firstName:p.firstName||'',lastName:p.lastName||'',email:(p.emails||[]).find(e=>e.primary)?.address||p.emails?.[0]?.address||store.loginName(p),contactEmail:p.contactEmail||'',theme:typeof store.themeOf==='function'?store.themeOf(p):'light',
       username:store.loginName(p),
       // Every profile this sign-in account can use, so HN Group Auth can ask which one (the default first chosen).
-      profileKey:p.profile?p.profile.key:null,
-      // The staff records behind this sign-in account's profiles (several profiles of one record are one record), so HN
-      // Mail opens exactly the mailboxes of those records and nothing else.
-      recordIds:[...new Set(profiles.map(x=>x.personId).filter(Boolean))],profiles:profiles.map(x=>({key:x.key,company:x.company,jobTitle:x.jobTitle,displayName:x.displayName,photo:!!x.avatarUrl,default:!!login&&store.defaultProfile(login)?.key===x.key})),
+      profileKey:p.profile?p.profile.key:null,profiles:profiles.map(x=>({key:x.key,company:x.company,jobTitle:x.jobTitle,displayName:x.displayName,photo:!!x.avatarUrl,default:!!login&&store.defaultProfile(login)?.key===x.key})),
       ...(p.standalone?{standalone:true}:{}),
       // Guest accounts only get the websites ticked for them (HN Group Auth checks guestSites for every website and app).
       ...(p.__login&&p.__login.guest?{guest:true,guestSites:p.__login.guest.sites.slice()}:{}),
@@ -101,7 +98,7 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       logEvent(req, session, 'status-admin-sign-in');
       redirect(res, `${STATUS_ORIGIN}/auth/callback?code=${code}&state=${state}`); return true;
     }
-    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/password', '/api/auth/code', '/api/auth/network-leadership', '/api/auth/network-avatar', '/api/auth/account-status', '/api/auth/staff-directory', '/api/auth/directory-avatar', '/api/auth/vpn-pin', '/api/auth/accounts-session', '/api/auth/profile-select', '/api/auth/profile-avatar', '/api/auth/browser-issue', '/api/auth/browser-profile', '/api/auth/browser-avatar', '/api/auth/browser-offer', '/api/auth/browser-logout', '/api/auth/browser-unlock', '/api/auth/browser-lock', '/api/auth/browser-account', '/api/auth/browser-account-update', '/api/auth/browser-account-status', '/api/auth/browser-account-photo', '/api/auth/google-login', '/api/auth/google-link', '/api/auth/google-unlink', '/api/auth/discord-positions', '/api/auth/accounts-handoff', '/api/auth/discord-login', '/api/auth/discord-link', '/api/auth/discord-unlink', '/api/auth/discord-accounts', '/api/auth/discord-update', '/api/auth/mail-directory'].includes(pathname)) return false;
+    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/password', '/api/auth/code', '/api/auth/network-leadership', '/api/auth/network-avatar', '/api/auth/account-status', '/api/auth/staff-directory', '/api/auth/directory-avatar', '/api/auth/vpn-pin', '/api/auth/accounts-session', '/api/auth/profile-select', '/api/auth/profile-avatar', '/api/auth/browser-issue', '/api/auth/browser-profile', '/api/auth/browser-avatar', '/api/auth/browser-offer', '/api/auth/browser-logout', '/api/auth/browser-unlock', '/api/auth/browser-lock', '/api/auth/browser-account', '/api/auth/browser-account-update', '/api/auth/browser-account-status', '/api/auth/browser-account-photo', '/api/auth/google-login', '/api/auth/google-link', '/api/auth/google-unlink', '/api/auth/discord-positions', '/api/auth/accounts-handoff', '/api/auth/discord-login', '/api/auth/discord-link', '/api/auth/discord-unlink', '/api/auth/discord-accounts', '/api/auth/discord-update'].includes(pathname)) return false;
     if (req.method !== 'POST') { sendJson(res, 405, { error: 'Method not allowed.' }); return true; }
     if (!credentials(req)) { sendJson(res, 401, { error: 'Status integration not authenticated.' }); return true; }
     const body = await readJsonBody(req, pathname === '/api/auth/browser-account-photo' ? 2 * 1024 * 1024 : undefined);
@@ -178,20 +175,6 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       sendJson(res, 200, { accounts }); return true;
     }
     // HN Group Docs lists everyone's storage for people allowed to open it (names and job titles of enabled staff only).
-    // Staff records for HN Group mail (admin.mail.hngroup.org.uk provisions one mailbox per record from its addresses):
-    // one entry per staff record, never per profile or sign-in account, so linked accounts and extra profiles can't make
-    // duplicate mailboxes. Records without a sign-in account are included (their mailbox waits for an account).
-    if (pathname === '/api/auth/mail-directory') {
-      const logins = store.listLogins();
-      const records = store.employees().map((rec) => {
-        const accounts = logins.filter((l) => (l.ownLoginOf && l.ownLoginOf.id === rec.id) || (Array.isArray(l.profiles) && l.profiles.some((x) => x.personId === rec.id)))
-          .map((l) => ({ id: l.id, username: l.username, enabled: !!(l.account && l.account.enabled), own: !!(l.ownLoginOf && l.ownLoginOf.id === rec.id) }));
-        return { id: rec.id, displayName: rec.displayName || '', firstName: rec.firstName || '', lastName: rec.lastName || '', company: rec.company || '', temporary: !!rec.temporary,
-          emails: (rec.emails || []).map((e) => ({ address: String(e.address || '').toLowerCase(), primary: !!e.primary })).filter((e) => e.address.includes('@')),
-          contactEmail: rec.contactEmail || '', accounts };
-      });
-      sendJson(res, 200, { records }); return true;
-    }
     if (pathname === '/api/auth/staff-directory') {
       // One entry per profile (each company someone works at), for profiles an enabled sign-in account uses.
       const people = store.allProfiles().filter((x) => store.loginsForId(x.profileId).some((l) => l.account && l.account.enabled))

@@ -10,7 +10,7 @@ CHALLENGE_DIR=/var/www/hn-mail-acme
 LE_DIR="/etc/letsencrypt/live/$DOMAIN"
 [ "$(id -u)" = 0 ] || { echo 'Run with sudo.'; exit 1; }
 for tool in node pm2 nginx certbot curl python3 openssl; do command -v "$tool" >/dev/null || { echo "Required tool missing: $tool"; exit 1; }; done
-for file in server.js lib/auth.js lib/sessions.js lib/imap.js lib/rawmime.js lib/smtp.js lib/mailstore.js lib/mime.js lib/signature.js lib/people.js public/assets/mail.js; do node --check "$SCRIPT_DIR/$file"; done
+for file in server.js lib/auth.js lib/sessions.js lib/google.js lib/gmail.js lib/mime.js lib/signature.js lib/people.js public/assets/mail.js; do node --check "$SCRIPT_DIR/$file"; done
 if python3 -c 'import socket;s=socket.socket();s.settimeout(2);exit(s.connect_ex(("127.0.0.1",5660)))'; then
     if ! pm2 describe hn-mail >/dev/null 2>&1; then
         echo 'HN MAIL NOT INSTALLED: port 5660 is used by another program:'; ss -ltnp 'sport = :5660' 2>/dev/null || true
@@ -27,8 +27,7 @@ done
 mkdir -p /var/lib/hn-mail /opt/hn-mail "$CHALLENGE_DIR" /etc/nginx/sites-available /etc/nginx/sites-enabled
 chmod 700 /var/lib/hn-mail
 rm -rf /opt/hn-mail/lib /opt/hn-mail/public
-cp "$SCRIPT_DIR/server.js" /opt/hn-mail/
-rm -f /opt/hn-mail/mailboxes.json
+cp "$SCRIPT_DIR/server.js" "$SCRIPT_DIR/mailboxes.json" /opt/hn-mail/
 cp -r "$SCRIPT_DIR/lib" "$SCRIPT_DIR/public" /opt/hn-mail/
 pm2 startOrRestart "$SCRIPT_DIR/ecosystem.config.cjs" --update-env
 healthy=0
@@ -42,7 +41,9 @@ if [ "$healthy" != 1 ]; then
     exit 1
 fi
 [ -f /var/lib/hn-status-sso/secret ] || echo "Note: HN Group Auth isn’t integrated on this server yet, so signing in to HN Mail won’t work until auth-site/install.sh has run."
-[ -s /etc/hn-mail/hnmail-master.secret ] || echo 'Note: HN Group’s mail server isn’t installed yet (sudo bash mail-server/install.sh), so HN Mail can sign people in but can’t open mailboxes until it is.'
+if [ ! -f /var/lib/hn-auth/google-oauth.json ]; then
+    echo 'Note: Google isn’t set up for HN Group Auth yet (/var/lib/hn-auth/google-oauth.json), so nobody can connect Gmail until it is. See mail-site/README.md.'
+fi
 BACKUP="$(mktemp -d)"
 trap 'rm -rf "$BACKUP"' EXIT
 [ ! -f "$SITE" ] || cp "$SITE" "$BACKUP/site"
