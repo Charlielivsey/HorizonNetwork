@@ -45,7 +45,19 @@ const COMMANDS = [
 ];
 
 function createPositionSync({ setup, staff, rolesFile = ROLES_FILE, record = () => {}, enabled = () => true, now = () => Date.now(), fullEvery = 10 * 60000, fetcher = fetch, appId = () => null }) {
-  let lastDigest = null, lastFull = 0, running = false;
+  let lastDigest = null, lastFull = 0, running = false, stopping = false;
+  // The background sync can take a long time in a big server (every member gets the separators, Level 1 and Member, one
+  // request at a time, at Discord's pace), so the commands stop it rather than waiting (the user's report, 6 November
+  // 2026: /setup-server said "A setup or sync is already running" because of it). It checks between requests and picks up
+  // where it left off next time (it only ever adds what's missing).
+  const STOP = Symbol('stop');
+  const check = () => { if (stopping) throw STOP; };
+  async function stopSync() {
+    if (!running) return;
+    stopping = true;
+    for (let i = 0; running && i < 600; i++) await new Promise((r) => setTimeout(r, 200));
+    stopping = false;
+  }
   const state = { lastAt: null, changed: 0, errors: [] };
 
   // What a member should have and what the bot looks after, for one server's layout and live roles.
@@ -71,6 +83,7 @@ function createPositionSync({ setup, staff, rolesFile = ROLES_FILE, record = () 
     let after = '0';
     try {
       for (let page = 0; page < 50; page++) {
+        check();
         const rows = await setup.request('GET', '/guilds/' + guildId + '/members?limit=1000&after=' + after);
         out.push(...rows);
         if (rows.length < 1000) return out;
@@ -83,6 +96,7 @@ function createPositionSync({ setup, staff, rolesFile = ROLES_FILE, record = () 
     // No Server Members Intent: look up the linked staff members one by one.
     const found = [];
     for (const p of people) {
+      check();
       try { found.push(await setup.request('GET', '/guilds/' + guildId + '/members/' + p.id)); }
       catch (e) { if (e.status !== 404 && e.code !== 10007 && e.code !== 10013) throw e; }
     }
@@ -102,8 +116,17 @@ function createPositionSync({ setup, staff, rolesFile = ROLES_FILE, record = () 
       const id = String(m.user?.id || '');
       if (!ID.test(id)) continue;
       const { add, remove } = changesFor(m, linked.get(id), layout, sets);
-      for (const rid of add) { await setup.request('PUT', '/guilds/' + guildId + '/members/' + id + '/roles/' + rid, undefined, REASON); changed++; }
-      for (const rid of remove) { await setup.request('DELETE', '/guilds/' + guildId + '/members/' + id + '/roles/' + rid, undefined, REASON); changed++; }
+      check();
+      if (!add.length && !remove.length) continue;
+      if (add.length + remove.length === 1) {
+        if (add.length) await setup.request('PUT', '/guilds/' + guildId + '/members/' + id + '/roles/' + add[0], undefined, REASON);
+        else await setup.request('DELETE', '/guilds/' + guildId + '/members/' + id + '/roles/' + remove[0], undefined, REASON);
+      } else {
+        // Several changes for one member: one request with their whole new role list.
+        const roles = [...new Set([...(m.roles || []).filter((r) => !remove.includes(r)), ...add])];
+        await setup.request('PATCH', '/guilds/' + guildId + '/members/' + id, { roles }, REASON);
+      }
+      changed += add.length + remove.length;
     }
     return changed;
   }
@@ -120,7 +143,7 @@ function createPositionSync({ setup, staff, rolesFile = ROLES_FILE, record = () 
       const errors = [];
       for (const layout of loadRoles(rolesFile)) {
         try { changed += await syncGuild(layout, people); }
-        catch (e) { errors.push(layout.server + ' (' + layout.guildId + '): ' + (e.layout ? e.message : 'failed')); }
+        catch (e) { if (e === STOP) { record(null, 'positions.sync.stopped', { changed }); return { changed, errors, stopped: true }; } errors.push(layout.server + ' (' + layout.guildId + '): ' + (e.layout ? e.message : 'failed')); }
       }
       lastDigest = digest; lastFull = now();
       Object.assign(state, { lastAt: new Date(now()).toISOString(), changed, errors });
@@ -150,7 +173,9 @@ function createPositionSync({ setup, staff, rolesFile = ROLES_FILE, record = () 
   async function setupServer(event, who) {
     const layout = event.guild_id && loadRoles(rolesFile).find((l) => l.guildId === event.guild_id);
     if (!layout) return { tone: 'error', title: 'Set up server', description: 'This server isn’t one of the HN servers. The servers are: ' + loadRoles(rolesFile).map((l) => l.server + ' (' + l.guildId + ')').join(', ') + '.' };
-    if (running || setup.busy()) return { tone: 'warn', title: 'Set up server', description: 'A setup or sync is already running. Try again when it has finished.' };
+    if (setup.busy()) return { tone: 'warn', title: 'Set up server', description: 'A server setup is already running. Try again when it has finished.' };
+    await stopSync();
+    if (running) return { tone: 'warn', title: 'Set up server', description: 'The staff role sync didn’t stop in time. Try again in a minute.' };
     // Progress in the reply, at most every 3 seconds, so it's clear the bot is still working.
     let lastEdit = 0;
     const progress = (stage, n, total, item) => { if (now() - lastEdit < 3000 && n !== total) return; lastEdit = now(); edit(event, { tone: 'info', title: 'Setting up ' + layout.server + '…', description: stage + ': ' + n + ' of ' + total + (item ? ' (' + item + ')' : '') }).catch(() => {}); };
@@ -163,13 +188,15 @@ function createPositionSync({ setup, staff, rolesFile = ROLES_FILE, record = () 
       description: (r.done || []).filter((d) => d.startsWith('Deleted')).length + ' role(s) deleted, ' + (r.done || []).filter((d) => d.startsWith('Created')).length + ' created' + (synced ? '; ' + synced.changed + ' role change(s) for members from the staff portal.' : '.') + (errors.length ? '\n❌ ' + errors.slice(0, 10).join('\n❌ ') : '') };
   }
   async function forceSync(who) {
-    if (running || setup.busy()) return { tone: 'warn', title: 'Force sync', description: 'A setup or sync is already running. Try again when it has finished.' };
+    if (setup.busy()) return { tone: 'warn', title: 'Force sync', description: 'A server setup is running. Try again when it has finished.' };
+    await stopSync();
     record({ email: 'Discord @' + who }, 'positions.force-sync', {});
     const r = await sync(true);
     if (!r) return { tone: 'warn', title: 'Force sync', description: 'The bot is switched off or busy. Try again shortly.' };
+    if (r.stopped) return { tone: 'warn', title: 'Force sync', description: 'The sync was stopped by another command after ' + r.changed + ' change(s).' };
     return { tone: r.errors.length ? 'warn' : 'ok', title: (r.errors.length ? '⚠️ ' : '✅ ') + 'Staff roles synced', description: r.changed + ' role change(s) made across ' + loadRoles(rolesFile).length + ' servers.' + (r.errors.length ? '\n❌ ' + r.errors.join('\n❌ ') : '') };
   }
-  return { sync, state, rolesFor, changesFor, interaction, commands: COMMANDS, names: new Set(COMMANDS.map((c) => c.name)) };
+  return { sync, stopSync, busy: () => running, state, rolesFor, changesFor, interaction, commands: COMMANDS, names: new Set(COMMANDS.map((c) => c.name)) };
 }
 
 module.exports = { createPositionSync, loadRoles, ROLES_FILE };

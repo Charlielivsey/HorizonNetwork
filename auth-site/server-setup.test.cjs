@@ -29,6 +29,7 @@ function fakeDiscord(servers) {
     if ((m = /^\/guilds\/(\d+)\/members\?limit=1000&after=(\d+)$/.exec(p))) { const g = s(m[1]); if (!g.members) return json({ message: 'Missing Access' }, 403); return json(g.members.filter((x) => BigInt(x.user.id) > BigInt(m[2]))); }
     if ((m = /^\/guilds\/(\d+)\/members\/(\d+)\/roles\/(\d+)$/.exec(p)) && method === 'DELETE') { const mem = s(m[1]).members.find((x) => x.user.id === m[2]); mem.roles = mem.roles.filter((r) => r !== m[3]); return new Response(null, { status: 204 }); }
     if ((m = /^\/guilds\/(\d+)\/members\/(\d+)\/roles\/(\d+)$/.exec(p)) && method === 'PUT') { s(m[1]).members.find((x) => x.user.id === m[2]).roles.push(m[3]); return new Response(null, { status: 204 }); }
+    if ((m = /^\/guilds\/(\d+)\/members\/(\d+)$/.exec(p)) && method === 'PATCH') { const mem = s(m[1]).members.find((x) => x.user.id === m[2]); mem.roles = [...body.roles]; return json(mem); }
     if ((m = /^\/guilds\/(\d+)\/members\/(\d+)$/.exec(p))) return json({ roles: [s(m[1]).botRole] });
     if ((m = /^\/guilds\/(\d+)\/roles$/.exec(p))) {
       const g = s(m[1]);
@@ -328,7 +329,8 @@ test('roles follow Horizon Network positions; /setup-server sets a server up and
   let people = [{ id: ALICE, titles: [{ company: 'Horizon Network', title: 'President' }] }, { id: BOB, titles: [{ company: 'HN Group', title: 'Founder' }] }];
   const rolesFile = path.join(os.tmpdir(), 'hn-roles-' + process.pid + '.json');
   fs.writeFileSync(rolesFile, JSON.stringify({ servers: { Test: GUILD }, roles, positions }));
-  const t = setup({}, async (route) => { assert.equal(route, '/api/auth/discord-positions'); return { value: { people } }; }, rolesFile);
+  let delay = 0;
+  const t = setup({}, async (route) => { assert.equal(route, '/api/auth/discord-positions'); if (delay) await new Promise((r) => setTimeout(r, delay)); return { value: { people } }; }, rolesFile);
   try {
     const g = t.servers[GUILD];
     g.members = [{ user: { id: ALICE, username: 'alice' }, roles: [] }, { user: { id: BOB, username: 'bob' }, roles: [] }, { user: { id: CAROL, username: 'carol' }, roles: [] }, { user: { id: BOT2, username: 'other bot', bot: true }, roles: [] }];
@@ -379,6 +381,13 @@ test('roles follow Horizon Network positions; /setup-server sets a server up and
     assert.equal(t.discord.writes.filter((w) => w.method === 'DELETE' && /\/roles\/\d+$/.test(w.p) && !w.p.includes('/members/')).length, deletes, 'syncing never deletes server roles');
     const audit = JSON.parse(fs.readFileSync(path.join(t.dir, 'bot.json'), 'utf8')).audit.map((a) => a.action);
     assert.ok(audit.includes('server-setup.auto.done') && audit.includes('positions.sync') && audit.includes('positions.force-sync') && audit.includes('setup-server.refused'));
+    // A long background sync doesn't block the commands: they stop it and carry on (the user's report, 6 November 2026).
+    delay = 300;
+    const background = t.manager.syncPositions(true);
+    await new Promise((r) => setTimeout(r, 50));
+    delay = 0;
+    assert.match(await command('force-sync'), /Staff roles synced/, 'not "already running"');
+    assert.equal((await background).stopped, true, 'the background sync was stopped');
     // Both commands are registered with Discord alongside /server-setup.
     await t.manager.registerBuiltins();
     const registered = t.discord.writes.filter((w) => w.method === 'POST' && w.p.endsWith('/commands')).map((w) => w.body.name);
