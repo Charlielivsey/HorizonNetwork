@@ -1300,6 +1300,26 @@ function makePermanent(l, input = {}) {
   savePeople();
   return l;
 }
+// Make permanent from the staff portal (the user's request, 6 November 2026: "option to make permanant should eb under
+// the ... menu on the emplotee management screen"): the record stops being temporary, and a guest sign-in account
+// whose staff records are now all permanent becomes an ordinary account (username, password and PIN stay), taking
+// this record as its own when it was its only one and the record has no account of its own.
+function makeRecordPermanent(id) {
+  const rec = getRecord(String(id));
+  if (!rec || rec.system) throw new ValidationError("Employee not found.");
+  if (!rec.temporary) throw new ValidationError(rec.displayName + " isn't in a temporary position.");
+  rec.temporary = false;
+  let accounts = 0;
+  for (const l of logins) {
+    if (!l.guest) continue;
+    const linked = [...new Set(loginProfiles(l).map((p) => p.personId))].map(getRecord).filter(Boolean);
+    if (!linked.includes(rec) || linked.some((r) => r.temporary)) continue;
+    if (linked.length === 1 && !primaryLogin(rec)) { l.primaryFor = rec.id; l.matchEmails = true; l.profiles = []; }
+    l.guest = null; accounts++;
+  }
+  savePeople();
+  return { accounts };
+}
 function deleteLogin(l) {
   logins = logins.filter((x) => x !== l);
   savePeople();
@@ -1640,6 +1660,7 @@ module.exports = {
   discordIds,
   GUEST_SITES,
   makePermanent,
+  makeRecordPermanent,
   discordPositions,
   missingDiscord,
   setRecordDiscord,

@@ -1539,6 +1539,7 @@
                             ? '<button type="button" class="menu-item compact" data-act="disable">' + icon("ban") + "<span>Disable login</span></button>"
                             : '<button type="button" class="menu-item compact" data-act="enable">' + icon("check") + "<span>Enable login</span></button>");
                     }
+                    if (e.temporary) actions.push('<button type="button" class="menu-item compact" data-act="permanent">' + icon("check") + "<span>Make permanent</span></button>");
                     if (e.account && can("storage.access")) actions.push('<a class="menu-item compact" href="/document-storage?view=' + encodeURIComponent(e.id) + '" data-link>' + icon("lock") + "<span>Document storage</span></a>");
                     actions.push('<div class="menu-sep"></div><button type="button" class="menu-item compact danger" data-act="delete">' + icon("trash") + "<span>Delete employee</span></button>");
                 }
@@ -1628,6 +1629,16 @@
                     }))) return;
                     await api("/api/employees/" + emp.id + "/account/" + act, {});
                     toast(act === "disable" ? "Login disabled." : "Login enabled.");
+                    reload();
+                }
+                if (act === "permanent") {
+                    if (!(await confirmDialog({
+                        title: "Make " + emp.displayName + " permanent?",
+                        message: "Their staff record stops being temporary. If they sign in with a guest account, it becomes an ordinary account and keeps its username, password and PIN.",
+                        confirmLabel: "Make permanent",
+                    }))) return;
+                    const res = await api("/api/employees/" + emp.id + "/permanent", {});
+                    toast(emp.displayName + " is now permanent" + (res.accounts ? ", and their guest account is now an ordinary account." : "."));
                     reload();
                 }
                 if (act === "delete") {

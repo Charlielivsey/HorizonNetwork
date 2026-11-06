@@ -1518,9 +1518,15 @@ async function routeApi(req, res, pathname, session) {
       logEvent(req, session, "employee-added", { target: person.displayName, detail: `${person.jobTitle}, ${person.company}` });
       return sendJson(res, 201, { employee: store.manageView(person) });
     }
-    if (method === "POST" && (m = /^\/api\/employees\/([a-f0-9]{16})(?:\/(delete|discord|account|account\/disable|account\/enable|code\/reset))?$/.exec(pathname))) {
+    if (method === "POST" && (m = /^\/api\/employees\/([a-f0-9]{16})(?:\/(delete|discord|permanent|account|account\/disable|account\/enable|code\/reset))?$/.exec(pathname))) {
       const action = m[2];
       const person = requireEmployee(m[1], me, action);
+
+      if (action === "permanent") {
+        const done = store.makeRecordPermanent(person.id);
+        logEvent(req, session, "employee-updated", { target: person.displayName, detail: "Made permanent" + (done.accounts ? " (guest sign-in account made an ordinary account)" : "") });
+        return sendJson(res, 200, { employee: store.manageView(store.getPerson(person.id)), accounts: done.accounts });
+      }
 
       if (action === "discord") {
         const { discordId } = await readJsonBody(req);

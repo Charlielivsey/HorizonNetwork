@@ -47,5 +47,19 @@ test('guest accounts, temporary staff records and Make permanent', () => {
     const { login: g3 } = store.createLogin({ displayName: 'Helper', username: 'helper@example.com', guest: { sites: ['docs'] } });
     store.makePermanent(g3, { personId: owned.id });
     assert.equal(g3.primaryFor, null); assert.deepEqual(store.loginProfiles(g3).map((p) => p.personId), [owned.id]);
+    // Make permanent from the staff portal's ⋯ menu (the user's request, 6 November 2026): the record and its guest
+    // account together.
+    const temp3 = make('Una', { temporary: true });
+    const { login: g4 } = store.createLogin({ displayName: 'Una', username: 'una@example.com', guest: { sites: ['docs'] }, profiles: [{ personId: temp3.id, company }] });
+    assert.deepEqual(store.makeRecordPermanent(temp3.id), { accounts: 1 });
+    assert.equal(store.publicView(store.getPerson(temp3.id)).temporary, false);
+    assert.equal(g4.guest, null); assert.equal(g4.primaryFor, temp3.id, 'the guest account becomes Una’s own account');
+    assert.throws(() => store.makeRecordPermanent(temp3.id), /isn't in a temporary position/);
+    // A guest account that still uses another temporary record stays a guest.
+    const [a1, a2] = [make('Ann', { temporary: true }), make('Bea', { temporary: true })];
+    const { login: g5 } = store.createLogin({ displayName: 'Both', username: 'both@example.com', guest: { sites: ['docs'] }, profiles: [{ personId: a1.id, company }, { personId: a2.id, company }] });
+    assert.deepEqual(store.makeRecordPermanent(a1.id), { accounts: 0 });
+    assert.ok(g5.guest, 'still a guest while another of its records is temporary');
+    store.makeRecordPermanent(a2.id); assert.equal(g5.guest, null);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
