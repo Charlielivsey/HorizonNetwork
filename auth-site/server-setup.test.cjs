@@ -202,7 +202,7 @@ test('the command is registered on connect and kept when the dashboard republish
     assert.equal(reg.body.options[0].options[0].autocomplete, true, 'the layout option searches as you type');
     await t.manager.handle('save-commands', { commands: [{ name: 'hello', description: 'Hi', response: 'Hello', ephemeral: false }, { name: 'server-setup', description: 'old copy' }] });
     const put = t.discord.writes.find((w) => w.method === 'PUT');
-    assert.deepEqual(put.body.map((c) => c.name), ['hello', 'server-setup']);
+    assert.deepEqual(put.body.map((c) => c.name), ['hello', 'server-setup', 'setup-server', 'force-sync'], 'the built-in commands are always kept');
     assert.equal(put.body[1].options.length, 3, 'the built-in definition, not the dashboard copy');
   } finally { t.close(); }
 });
@@ -321,7 +321,7 @@ test('the bot looks after exactly the four HN servers, each with the role list i
   }
 });
 
-test('roles follow Horizon Network positions on the staff portal, and missing role lists are set up by themselves', async () => {
+test('roles follow Horizon Network positions; /setup-server sets a server up and /force-sync syncs now', async () => {
   const roles = SPEC.map(([name, color]) => ({ name, ...(color ? { color } : {}), permissions: name === 'Network Permission Level 5' ? ['Administrator'] : [] }));
   const positions = { company: 'Horizon Network', roles: Object.fromEntries(Object.entries(LEVEL).map(([t, n]) => [t, [t, 'Network Permission Level ' + n, 'NA | Network Administration']])) };
   const ALICE = '300000000000000001', BOB = '300000000000000002', CAROL = '300000000000000003', BOT2 = '300000000000000004';
@@ -334,8 +334,27 @@ test('roles follow Horizon Network positions on the staff portal, and missing ro
     g.members = [{ user: { id: ALICE, username: 'alice' }, roles: [] }, { user: { id: BOB, username: 'bob' }, roles: [] }, { user: { id: CAROL, username: 'carol' }, roles: [] }, { user: { id: BOT2, username: 'other bot', bot: true }, roles: [] }];
     const id = (n) => g.roles.find((r) => r.name === n).id, names = (m) => m.roles.map((r) => g.roles.find((x) => x.id === r)?.name).filter(Boolean).sort();
     const always = SPEC.map(([n]) => n).filter((n) => n.startsWith('──')).concat(['Network Permission Level 1', 'M | Member']);
+    // The automatic sync never deletes or creates server roles: a server that isn't set up is skipped.
     await t.manager.syncPositions(true);
-    assert.ok(!g.roles.some((r) => r.name === 'Old role'), 'the role list was missing, so every other role was deleted');
+    assert.ok(g.roles.some((r) => r.name === 'Old role') && !g.roles.some((r) => r.name === 'President'), 'nothing deleted or created without /setup-server');
+    assert.match(t.manager.positionsState.errors[0], /run \/setup-server/);
+    let n = 700000000000000000n;
+    const command = async (name, { user = ALLOWED, guild = GUILD } = {}) => {
+      const before = t.discord.replies.length;
+      await t.manager.interaction({ id: String(n++), token: 'ticket', type: 2, application_id: APP, guild_id: guild, member: { user: { id: user, username: 'catnap' } }, data: { name } });
+      const mine = t.discord.replies.slice(before);
+      assert.equal(mine[0].kind, 'defer');
+      const card = mine.at(-1).body.embeds[0];
+      return (card.title || '') + '\n' + (card.description || '');
+    };
+    assert.match(await command('setup-server', { user: STRANGER }), /aren’t allowed/);
+    assert.match(await command('setup-server', { guild: OTHER }), /isn’t one of the HN servers/);
+    assert.ok(t.servers[OTHER].roles.some((r) => r.name === 'Old role'), 'other servers are never touched');
+    const done = await command('setup-server');
+    assert.match(done, /is set up/);
+    assert.match(done, /1 role\(s\) deleted, 20 created/);
+    assert.ok(t.discord.replies.some((r) => r.kind === 'edit' && /Setting up/.test(r.body.embeds[0].title || '')), 'progress is shown while it works');
+    assert.ok(!g.roles.some((r) => r.name === 'Old role'), '/setup-server deleted every other role');
     assert.deepEqual(g.roles.filter((r) => r.name !== '@everyone' && r.name !== 'HN Group Auth').sort((a, b) => b.position - a.position).map((r) => r.name), SPEC.map(([n]) => n), 'and the roles were made in order');
     assert.deepEqual(names(g.members[0]), [...always, 'President', 'Network Permission Level 5', 'NA | Network Administration'].sort(), 'President');
     assert.deepEqual(names(g.members[1]), [...always].sort(), 'a Founder at another company has no Horizon Network position');
@@ -352,15 +371,18 @@ test('roles follow Horizon Network positions on the staff portal, and missing ro
     assert.deepEqual(names(g.members[1]), [...always, 'Chief of Staff', 'Network Permission Level 4', 'NA | Network Administration'].sort(), 'job titles match whatever their case');
     g.members[2].roles.push(id('President'));
     people = [{ id: ALICE, titles: [{ company: 'Horizon Network', title: 'Engineer' }] }, { id: BOB, titles: [{ company: 'Horizon Network', title: 'Chief of Staff' }] }];
-    await t.manager.syncPositions();
+    assert.match(await command('force-sync'), /Staff roles synced\n\d+ role change/);
     assert.deepEqual(names(g.members[0]), [...always, 'Network Permission Level 2'].sort(), 'no position: position, level and NA roles go; Level 2 stays');
     assert.ok(names(g.members[2]).includes('President'), 'members not linked to a staff record never lose roles');
-    // The roles are all there now, so the server isn't set up again.
     const deletes = t.discord.writes.filter((w) => w.method === 'DELETE' && /\/roles\/\d+$/.test(w.p) && !w.p.includes('/members/')).length;
     await t.manager.syncPositions(true);
-    assert.equal(t.discord.writes.filter((w) => w.method === 'DELETE' && /\/roles\/\d+$/.test(w.p) && !w.p.includes('/members/')).length, deletes, 'no roles deleted while the list is there');
+    assert.equal(t.discord.writes.filter((w) => w.method === 'DELETE' && /\/roles\/\d+$/.test(w.p) && !w.p.includes('/members/')).length, deletes, 'syncing never deletes server roles');
     const audit = JSON.parse(fs.readFileSync(path.join(t.dir, 'bot.json'), 'utf8')).audit.map((a) => a.action);
-    assert.ok(audit.includes('server-setup.auto.done') && audit.includes('positions.sync'));
+    assert.ok(audit.includes('server-setup.auto.done') && audit.includes('positions.sync') && audit.includes('positions.force-sync') && audit.includes('setup-server.refused'));
+    // Both commands are registered with Discord alongside /server-setup.
+    await t.manager.registerBuiltins();
+    const registered = t.discord.writes.filter((w) => w.method === 'POST' && w.p.endsWith('/commands')).map((w) => w.body.name);
+    for (const c of ['server-setup', 'setup-server', 'force-sync']) assert.ok(registered.includes(c), c);
     assert.ok(t.servers[OTHER].roles.some((r) => r.name === 'Old role'), 'servers that aren’t listed are never touched');
   } finally { t.close(); fs.rmSync(rolesFile, { force: true }); }
 });

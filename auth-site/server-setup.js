@@ -295,21 +295,26 @@ function createServerSetup({ config, fetcher = fetch, dir = path.join(__dirname,
     const member = await request('GET', '/guilds/' + guildId + '/members/' + me.id);
     return { guild, roles, channels, me, botRoles: member.roles || [] };
   }
-  async function execute(layout, s, p, who) {
+  async function execute(layout, s, p, who, progress = () => {}) {
     const g = s.guild.id, reason = 'HN Group server setup (' + layout.id + ') by ' + who, done = [], errors = [];
     const roleIds = new Map(p.roleIds);
     const FAILED = Symbol('failed');
     const attempt = async (what, fn) => { try { return await fn(); } catch (e) { errors.push(what + ': ' + (e.layout ? e.message : 'failed')); return FAILED; } };
     const resolve = (list) => (list || []).filter((o) => roleIds.has(roleName(o.role))).map((o) => ({ id: roleIds.get(roleName(o.role)), type: 0, allow: o.allow, deny: o.deny }));
     // Old roles go first, so the layout's roles are then ordered among what remains.
-    for (const step of p.steps.filter((x) => x.kind === 'remove-role')) if (await attempt('Delete role "' + step.name + '"', () => request('DELETE', '/guilds/' + g + '/roles/' + step.id, undefined, reason)) !== FAILED) done.push('Deleted role "' + step.name + '"');
+    const removals = p.steps.filter((x) => x.kind === 'remove-role'), creations = p.steps.filter((x) => x.kind === 'role');
+    let n = 0;
+    for (const step of removals) { progress('Deleting roles', ++n, removals.length, step.name); if (await attempt('Delete role "' + step.name + '"', () => request('DELETE', '/guilds/' + g + '/roles/' + step.id, undefined, reason)) !== FAILED) done.push('Deleted role "' + step.name + '"'); }
+    n = 0;
     for (const step of p.steps.filter((x) => x.kind === 'keep-role')) errors.push('Couldn’t delete role "' + step.name + '": it’s above the bot’s own role');
-    for (const step of p.steps.filter((x) => x.kind === 'role')) {
+    for (const step of creations) {
+      progress('Creating roles', ++n, creations.length, step.name);
       if (step.op === 'create') { const r = await attempt('Create role "' + step.name + '"', () => request('POST', '/guilds/' + g + '/roles', step.body, reason)); if (r !== FAILED) { roleIds.set(roleName(step.name), r.id); done.push('Created role "' + step.name + '"'); } }
       else if (await attempt('Update role "' + step.name + '"', () => request('PATCH', '/guilds/' + g + '/roles/' + step.id, step.body, reason)) !== FAILED) done.push('Updated role "' + step.name + '"');
     }
     const order = p.steps.find((x) => x.kind === 'role-order');
     if (order) {
+      progress('Ordering roles', 1, 1, '');
       // New roles arrive at the bottom and push the others (the bot's included) up, so read the positions again.
       const now = await attempt('Read roles', () => request('GET', '/guilds/' + g + '/roles'));
       if (now !== FAILED) {
@@ -463,21 +468,21 @@ function createServerSetup({ config, fetcher = fetch, dir = path.join(__dirname,
   // and add these roles in this order").
   // Only when one of the layout's roles is missing, never when they're all there, and nothing at all if the plan has
   // problems (the bot's role too low, missing permissions).
-  async function autoApply(guildId, given) {
+  async function autoApply(guildId, given, { force = false, who = 'HN Group Auth bot (roles were missing)', progress } = {}) {
     if (running) return { busy: true };
     running = true;
     try {
       const s = await snapshot(guildId), layout = given || choose(null, s.guild);
       const have = new Set(s.roles.map((r) => roleName(r.name)));
       const missing = layout.roles.filter((r) => !have.has(roleName(r.name))).map((r) => r.name);
-      if (!missing.length) return { applied: false };
+      if (!missing.length && !force) return { applied: false };
       const p = plan(layout, s.guild, s.roles, s.channels, s.me.id, s.botRoles);
       const bot = { username: 'HN Group Auth bot (automatic)', id: s.me.id };
-      if (p.problems.length) { record(bot, 'server-setup.auto.blocked', { guild: guildId, layout: layout.id, missing, problems: p.problems }); return { applied: false, problems: p.problems }; }
+      if (p.problems.length) { record(bot, 'server-setup.auto.blocked', { guild: guildId, layout: layout.id, missing, problems: p.problems }); return { applied: false, problems: p.problems, guild: s.guild }; }
       record(bot, 'server-setup.auto.start', { guild: guildId, layout: layout.id, missing });
-      const r = await execute(layout, s, p, 'HN Group Auth bot (roles were missing)');
+      const r = await execute(layout, s, p, who, progress);
       record(bot, r.errors.length ? 'server-setup.auto.partial' : 'server-setup.auto.done', { guild: guildId, layout: layout.id, changes: r.done.length, errors: r.errors.slice(0, 20) });
-      return { applied: true, ...r };
+      return { applied: true, guild: s.guild, ...r };
     } finally { running = false; }
   }
   return { interaction, autocomplete, run, definition, name: COMMAND, request, autoApply, busy: () => running };

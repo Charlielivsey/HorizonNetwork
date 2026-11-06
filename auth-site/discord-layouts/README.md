@@ -99,8 +99,7 @@ log as "HN Group server setup (<layout>) by <user>".
 
 None at the moment. The HN Group roles for the HQ, Horizon Ads, Staff and dev servers are **not** a /server-setup
 layout (the user's correction, 6 November 2026: "dont use setup role list. the bot will do it automatically accross
-the servers i gave the IDs for"): they are in `../hn-roles.json`, which the bot applies by itself (`position-sync.js`):
-if any of those roles is missing in one of those servers it deletes every other role and creates the list in order,
-and it keeps each member's roles in step with their Horizon Network position on the staff portal (position role, its
+the servers i gave the IDs for"): they are in `../hn-roles.json`, used by `position-sync.js`: `/setup-server` (run inside one of those servers, no options) deletes every other role
+and creates the list in order, `/force-sync` syncs everyone's roles now, and the bot keeps each member's roles in step with their Horizon Network position on the staff portal (position role, its
 permission level, NA | Network Administration), while every human member gets the separator roles, Network
 Permission Level 1 and M | Member. Network Permission Level 2 (Trial Staff) and B | Bots are given by hand.
