@@ -241,7 +241,7 @@ rspamadm configtest >/dev/null
 if [ "$TEST" != 1 ] && command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q 'Status: active'; then
     say 'Firewall'
     for port in 25 465 587 993; do ufw allow "$port/tcp" >/dev/null; done
-    echo 'Opened TCP 25, 465, 587 and 993 in ufw (the IONOS Cloud Panel firewall must allow them too).'
+    echo 'Opened TCP 25, 465, 587 and 993 in ufw (any Fasthosts firewall in front of the server must allow them too).'
 fi
 
 # ---------------------------------------------------------------- backups (nightly, private, 7 days)
@@ -276,12 +276,12 @@ sleep 2
 say 'Checks'
 "$LIB/check" --brief || true
 if [ "$TEST" != 1 ]; then
-    # Provider side: IONOS blocks outgoing port 25 on new servers until support unblocks it.
+    # Provider side: Fasthosts blocks outgoing port 25 on new servers until support unblocks it.
     if timeout 8 bash -c 'exec 3<>/dev/tcp/gmail-smtp-in.l.google.com/25' 2>/dev/null; then echo 'Outgoing port 25: open (other mail servers can be reached).'
-    else warn 'Outgoing port 25 is BLOCKED: this server cannot deliver mail to other providers. Ask IONOS support to unblock port 25 for this server (https://www.ionos.co.uk/help/server-cloud-infrastructure/firewall-policies/unblocking-port-25-for-sending-emails/).'; fi
+    else warn 'Outgoing port 25 is BLOCKED: this server cannot deliver mail to other providers. Ask Fasthosts support (fasthosts.co.uk/support, or the Fasthosts control panel) to unblock outgoing port 25 for this server ($PUBLIC_IP).'; fi
     ptr="$(dig +short -x "$PUBLIC_IP" 2>/dev/null | sed 's/\.$//' | head -1)"
     if [ "$ptr" = "$HOST" ]; then echo "Reverse DNS: $PUBLIC_IP -> $HOST (correct)."
-    else warn "Reverse DNS for $PUBLIC_IP is '${ptr:-none}', not $HOST. Set it in the IONOS Cloud Panel (Network > Public IP > Reverse DNS) to $HOST."; fi
+    else warn "Reverse DNS for $PUBLIC_IP is '${ptr:-none}', not $HOST. Ask Fasthosts support (or use the Fasthosts control panel's reverse DNS setting for the server) to set it to $HOST. A change can take a few hours to show."; fi
 fi
 echo
 python3 - "$ETC" "$SELECTOR" "${DOMAINS[@]}" <<'PY'

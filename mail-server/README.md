@@ -29,14 +29,13 @@ DKIM keys on the server (private keys never leave it), gets a Let's Encrypt cert
 25/465/587/993 in ufw, restarts **only** redis-server, rspamd, postsrsd, dovecot and postfix, and ends with checks and
 the DNS records to publish. `hn-mail-check` (or `--json --provider`) shows the server's health at any time.
 
-## Provider checks (IONOS) — must pass before the MX change
+## Provider checks (Fasthosts, the VPS host) — must pass before the MX change
 
-1. **Outgoing port 25.** IONOS blocks it on new servers until support unblocks it
-   ([IONOS: Unblocking port 25](https://www.ionos.co.uk/help/server-cloud-infrastructure/firewall-policies/unblocking-port-25-for-sending-emails/)).
-   The installer and `hn-mail-check --provider` test it. Without it no mail can be delivered to other providers.
-2. **Reverse DNS (PTR)** for 217.154.34.205 must be `mx.hngroup.org.uk` (IONOS Cloud Panel → Network → Public IP →
-   the address → Reverse DNS). Gmail and Microsoft reject or junk mail from addresses without matching reverse DNS.
-3. **IONOS Cloud Panel firewall** must allow TCP 25, 465, 587 and 993 in.
+1. **Outgoing port 25.** Fasthosts blocks it on new servers until support unblocks it (ask Fasthosts support for
+   217.154.34.205). The installer and `hn-mail-check --provider` test it. Without it no mail can be delivered to other providers.
+2. **Reverse DNS (PTR)** for 217.154.34.205 must be `mx.hngroup.org.uk` (set by Fasthosts: their control panel's reverse DNS
+   setting or a support request; it can take a few hours to show). Gmail and Microsoft reject or junk mail from addresses without matching reverse DNS.
+3. **Any Fasthosts firewall** in front of the server must allow TCP 25, 465, 587 and 993 in.
 4. **IP reputation**: check 217.154.34.205 on a blocklist checker (e.g. Spamhaus) before cutover; a listed address
    needs delisting first.
 
@@ -45,7 +44,8 @@ the DNS records to publish. `hn-mail-check` (or `--json --provider`) shows the s
 Backup of every record before any change: `dns-backup/2026-11-06-before-mail-server.json` (exact, from the Cloudflare
 API). Already added (harmless): `mx.hngroup.org.uk` and `admin.mail.hngroup.org.uk` A → 217.154.34.205.
 
-**Before the MX change (safe while Google still receives mail):**
+**Before the MX change (safe while Google still receives mail).** DKIM and SPF were published on 6 November 2026;
+DMARC waits for cutover (its reports go to dmarc-reports@, which only exists on the new server):
 - DKIM per domain: `hn2026._domainkey.<domain>` TXT = the value the installer prints (also in
   `/etc/hn-mail/dkim/public.json`, and on admin.mail.hngroup.org.uk → Domains). Keep `google._domainkey`: Google
   still signs Calendar/Drive mail it sends for the domain.
