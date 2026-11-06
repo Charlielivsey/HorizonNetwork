@@ -12,7 +12,11 @@ const ORIGIN = 'https://auth.hngroup.org.uk';
 const CLIENTS = {
   // HN Mail (the user's request, 6 November 2026): only sign-in accounts with a Google account linked, never while
   // logged in as someone else.
-  mail: { name: 'HN Mail', callback: 'https://mail.hngroup.org.uk/auth/callback', allowed: u => !!(u.google && u.google.email) && !u.impersonated, denied: 'HN Mail only works with an account that has a Google account linked. Turn on Sign in with Google on this page first, then open HN Mail again.' },
+  // HN Mail now runs on HN Group's own mail server (the user's request, 6 November 2026): no Google account needed. HN
+  // Mail itself only opens the mailboxes of this account's staff records and the shared mailboxes it's a member of.
+  mail: { name: 'HN Mail', callback: 'https://mail.hngroup.org.uk/auth/callback', allowed: u => !u.impersonated, denied: 'HN Mail can’t be used while you’re logged in as someone else.' },
+  // HN Group mail administration: the system owner, owner-level accounts and anyone with a mail permission.
+  'mail-admin': { name: 'HN Group Mail Admin', callback: 'https://admin.mail.hngroup.org.uk/auth/callback', allowed: u => !u.impersonated && (u.ownerAccess === true || (Array.isArray(u.permissions) && u.permissions.some(p => ['mail.view','mail.mailboxes','mail.groups','mail.shared','mail.settings'].includes(p)))), denied: 'Mail administration is only for HN Group mail administrators. Ask the system owner for a mail permission on the staff portal.' },
   echo: { name: 'Echo', callback: 'https://echo.hngroup.org.uk/auth/callback', allowed: u => ['catnap@hngroup.org.uk', 'charlie.livsey@hngroup.org.uk'].includes(String(u.username || '').trim().toLowerCase()) && !u.impersonated, denied: 'Echo is private to its authorised HN Group accounts.' },
   // evan.hngroup.org.uk (the user's request, 4 November 2026): private to the same two sign-in accounts as Echo.
   evan: { name: 'Private page', callback: 'https://evan.hngroup.org.uk/auth/callback', allowed: u => ['catnap@hngroup.org.uk', 'charlie.livsey@hngroup.org.uk'].includes(String(u.username || '').trim().toLowerCase()) && !u.impersonated, denied: 'This page is private.' },

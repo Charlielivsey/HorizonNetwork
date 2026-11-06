@@ -175,6 +175,13 @@ const PERMISSIONS = [
   { key: "storage.access", name: "Access staff document storage", description: "Open anyone's private storage on docs.hngroup.org.uk (view only) and give people access to someone's storage for a while. Only people who already have it can give it out." },
   { key: "contracts.send", name: "Send contracts for signing", description: "Upload contracts (or send them from HN Group Docs) to contract.hngroup.org.uk and invite people to sign them with their HN Group Auth account." },
   { key: "contracts.manage", name: "Manage all contracts", description: "See, chase and cancel every contract on contract.hngroup.org.uk, not just the ones you sent. Only people who already have it can give it out." },
+  // HN Group mail (admin.mail.hngroup.org.uk, the user's request, 6 November 2026). The system owner and owner-level
+  // accounts have every one; everyone else only what they're given here.
+  { key: "mail.view", name: "View the mail service", description: "See mailboxes and their storage, delivery failures, the mail queue, mail logs and the domains' email set-up on admin.mail.hngroup.org.uk." },
+  { key: "mail.mailboxes", name: "Manage mailboxes", description: "Create, edit and disable mailboxes, change their storage limits, and manage aliases and forwarding on admin.mail.hngroup.org.uk." },
+  { key: "mail.groups", name: "Manage distribution groups", description: "Create distribution groups and choose who's in them (including groups inside groups) on admin.mail.hngroup.org.uk." },
+  { key: "mail.shared", name: "Manage shared mailboxes", description: "Create shared mailboxes and choose who can open them and who can send as them on admin.mail.hngroup.org.uk." },
+  { key: "mail.settings", name: "Run the mail service", description: "Retry, hold or delete queued mail and change sending limits, spam settings and the default storage limit. Only people who already have it can give it out." },
   { key: "system.admin", name: "System Admin", description: "Open System Admin with the PIN: sessions, log in as, backups and the full activity log. Only people who already have it can give it out." },
 ];
 const SYSTEM_ADMIN = "system.admin";
@@ -182,7 +189,8 @@ const PAYROLL = "payroll.manage";
 // Permissions only someone who already has them can hand out.
 const STORAGE_ACCESS = "storage.access";
 const CONTRACTS_MANAGE = "contracts.manage";
-const GUARDED_PERMISSIONS = [SYSTEM_ADMIN, PAYROLL, STORAGE_ACCESS, CONTRACTS_MANAGE];
+const MAIL_SETTINGS = "mail.settings";
+const GUARDED_PERMISSIONS = [SYSTEM_ADMIN, PAYROLL, STORAGE_ACCESS, CONTRACTS_MANAGE, MAIL_SETTINGS];
 const PERMISSION_KEYS = PERMISSIONS.map((p) => p.key);
 
 // First run with roles: create sensible defaults, and give anyone who had access through their

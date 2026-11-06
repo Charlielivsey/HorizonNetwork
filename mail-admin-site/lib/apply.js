@@ -41,7 +41,10 @@ function createApplier({ etc = ETC, enabled = process.env.HN_MAIL_APPLY !== '0',
   }
   async function doveadm(args, opts) { return run('doveadm', args, opts); }
   async function ensureFolders(address) {
-    const r = await doveadm(['mailbox', 'create', '-u', address, '-s', ...FOLDERS.filter((f) => f !== 'INBOX')]);
+    let r = await doveadm(['mailbox', 'create', '-u', address, '-s', ...FOLDERS.filter((f) => f !== 'INBOX')]);
+    // Dovecot notices a rewritten users file by its timestamp (one-second steps), so a mailbox added a moment ago may
+    // not be known yet: wait and try again once (later applies keep retrying until it works).
+    if (!r.ok && /doesn't exist/i.test(r.stderr)) { await new Promise((ok) => setTimeout(ok, 1200)); r = await doveadm(['mailbox', 'create', '-u', address, '-s', ...FOLDERS.filter((f) => f !== 'INBOX')]); }
     if (!r.ok && !/exists/i.test(r.stderr)) return r;
     return { ok: true };
   }
