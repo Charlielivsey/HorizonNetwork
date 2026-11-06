@@ -46,13 +46,23 @@ if [ "$TEST" != 1 ]; then
         rspamd redis-server postsrsd swaks dnsutils python3 openssl ca-certificates
 fi
 for tool in postconf postfix doveadm doveconf sievec rspamadm python3 openssl; do command -v "$tool" >/dev/null || { echo "Missing $tool"; exit 1; }; done
+# Ubuntu installs Postfix "without configuration" (our debconf answer), which leaves no main.cf: start from Debian's.
+if [ ! -s /etc/postfix/main.cf ]; then
+    if [ -f /usr/share/postfix/main.cf.debian ]; then cp /usr/share/postfix/main.cf.debian /etc/postfix/main.cf; else : > /etc/postfix/main.cf; fi
+    echo 'Created /etc/postfix/main.cf (Postfix was installed without one).'
+fi
+[ -s /etc/postfix/master.cf ] || cp /usr/share/postfix/master.cf.dist /etc/postfix/master.cf
+DOVECOT_VERSION="$(dovecot --version | cut -d' ' -f1)"
+case "$DOVECOT_VERSION" in 2.3.*) DOVECOT_CONF=dovecot.conf ;; 2.4.*|2.5.*) DOVECOT_CONF=dovecot-2.4.conf ;; *) echo "Dovecot $DOVECOT_VERSION isn't supported yet (2.3 and 2.4 are)."; exit 1 ;; esac
+POSTSRSD_MAJOR="$(postsrsd -v 2>/dev/null | grep -oE '[0-9]+' | head -1 || true)"
+[ -n "$POSTSRSD_MAJOR" ] || POSTSRSD_MAJOR="$(dpkg-query -W -f '${Version}' postsrsd 2>/dev/null | cut -d. -f1)"
 echo "Postfix $(postconf -h mail_version), Dovecot $(dovecot --version | cut -d' ' -f1), $(rspamd --version 2>/dev/null | head -1)"
 
 # ---------------------------------------------------------------- backup of the current configuration
 say 'Backing up the current mail configuration'
 STAMP="$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$BACKUPS" && chmod 700 "$BACKUPS"
-tar -czf "$BACKUPS/config-$STAMP.tar.gz" --ignore-failed-read -C / etc/postfix etc/dovecot etc/rspamd etc/default/postsrsd etc/hn-mail 2>/dev/null || true
+tar -czf "$BACKUPS/config-$STAMP.tar.gz" --ignore-failed-read -C / etc/postfix etc/dovecot etc/rspamd etc/default/postsrsd etc/postsrsd.conf etc/hn-mail 2>/dev/null || true
 chmod 600 "$BACKUPS/config-$STAMP.tar.gz"
 echo "Saved $BACKUPS/config-$STAMP.tar.gz"
 [ -f /etc/postfix/main.cf.before-hn-mail ] || cp -a /etc/postfix/main.cf /etc/postfix/main.cf.before-hn-mail 2>/dev/null || true
@@ -79,7 +89,8 @@ cp "$SCRIPT_DIR/config/recipient-access" "$ETC/postfix/recipient-access"
 seed "$ETC/dovecot/users" 640 dovecot ''
 seed "$ETC/dovecot/denied" 640 dovecot ''
 seed "$ETC/dovecot/master-target" 640 dovecot ''
-seed "$ETC/dovecot/app-passwords.json" 640 dovecot '{"version":1,"mailboxes":{}}'
+for i in 1 2 3 4 5 6 7 8 9 10; do seed "$ETC/dovecot/app-$i" 640 dovecot ''; done
+rm -f "$ETC/dovecot/app-passwords.json" "$LIB/checkpassword"
 seed "$ETC/rspamd/senders.map" 640 _rspamd ''
 seed "$ETC/rspamd/ratelimit-user.inc" 640 _rspamd 'user = { bucket = { burst = 60; rate = "200 / 1h"; } }
 '
@@ -92,7 +103,6 @@ chmod 600 "$ETC/hnmail-master.secret"
 printf 'hnmail:%s\n' "$(doveadm pw -s SHA512-CRYPT -p "$(cat "$ETC/hnmail-master.secret")")" > "$ETC/dovecot/master-users.new"
 chmod 640 "$ETC/dovecot/master-users.new" && chgrp dovecot "$ETC/dovecot/master-users.new" && mv "$ETC/dovecot/master-users.new" "$ETC/dovecot/master-users"
 
-install -m 755 "$SCRIPT_DIR/bin/checkpassword" "$LIB/checkpassword"
 install -m 755 "$SCRIPT_DIR/bin/quota-warning" "$LIB/quota-warning"
 install -m 755 "$SCRIPT_DIR/bin/backup" "$LIB/backup"
 install -m 755 "$SCRIPT_DIR/bin/check" "$LIB/check"
@@ -152,7 +162,29 @@ p = Path('/etc/postfix/master.cf'); s = p.read_text()
 s = re.sub(r'# >>> HN Group mail.*?# <<< HN Group mail <<<\n', '', s, flags=re.S)
 p.write_text(s.rstrip('\n') + '\n' + block)
 PY
-cat > /etc/default/postsrsd <<SRS
+# Sender Rewriting Scheme, so forwarded mail still passes SPF. postsrsd 1.x (Ubuntu 24.04) answers on TCP 10001/10002;
+# postsrsd 2.x (Ubuntu 26.04) on a socketmap in Postfix's spool.
+if [ "${POSTSRSD_MAJOR:-1}" -ge 2 ] 2>/dev/null; then
+    [ -f /etc/postsrsd.conf.before-hn-mail ] || cp -a /etc/postsrsd.conf /etc/postsrsd.conf.before-hn-mail 2>/dev/null || true
+    cat > /etc/postsrsd.conf <<SRS
+# HN Group mail: Sender Rewriting Scheme (written by mail-server/install.sh).
+srs-domain = "hngroup.org.uk"
+domains = { $(printf '"%s", ' "${DOMAINS[@]}" | sed 's/, $//') }
+socketmap = unix:/var/spool/postfix/srs
+keep-alive = 30
+original-envelope = embedded
+secrets-file = "/etc/postsrsd.secret"
+separator = "="
+hash-length = 4
+hash-minimum = 4
+always-rewrite = off
+unprivileged-user = "postsrsd"
+chroot-dir = "/var/lib/postsrsd"
+syslog = on
+SRS
+    postconf -e 'sender_canonical_maps = socketmap:unix:srs:forward' 'recipient_canonical_maps = socketmap:unix:srs:reverse'
+else
+    cat > /etc/default/postsrsd <<SRS
 # HN Group mail: Sender Rewriting Scheme, so forwarded mail still passes SPF (written by mail-server/install.sh).
 SRS_DOMAIN=hngroup.org.uk
 SRS_EXCLUDE_DOMAINS=$(IFS=,; echo "${DOMAINS[*]}")
@@ -163,12 +195,16 @@ SRS_REVERSE_PORT=10002
 RUN_AS=postsrsd
 SRS_LISTEN_ADDR=127.0.0.1
 SRS
+fi
 newaliases 2>/dev/null || true
+# Postfix's own folders and files, owned the way it needs (fixes a half-finished package set-up).
+postfix set-permissions >/dev/null 2>&1 || true
 postfix check
 
 # ---------------------------------------------------------------- Dovecot
 say 'Dovecot'
-cp "$SCRIPT_DIR/config/dovecot.conf" /etc/dovecot/dovecot.conf
+echo "Dovecot $DOVECOT_VERSION: using config/$DOVECOT_CONF"
+cp "$SCRIPT_DIR/config/$DOVECOT_CONF" /etc/dovecot/dovecot.conf
 cp "$SCRIPT_DIR/config/before.sieve" "$ETC/sieve/before.sieve"
 sievec "$ETC/sieve/before.sieve"
 chmod 644 "$ETC/sieve/before.sieve" "$ETC/sieve/before.svbin"
@@ -223,7 +259,9 @@ if [ "$TEST" = 1 ]; then
     pgrep -x redis-server >/dev/null || redis-server --daemonize yes --bind 127.0.0.1 >/dev/null
     install -d -o _rspamd -g _rspamd /run/rspamd
     pkill -x rspamd 2>/dev/null || true; sleep 1; rspamd -u _rspamd -g _rspamd >/dev/null 2>&1
-    if pgrep -f 'postsrsd' >/dev/null; then :; else (set -a; . /etc/default/postsrsd; postsrsd -s "$SRS_SECRET" -d "$SRS_DOMAIN" -f "$SRS_FORWARD_PORT" -r "$SRS_REVERSE_PORT" -X"$SRS_EXCLUDE_DOMAINS" -u postsrsd -l 127.0.0.1 -D >/dev/null 2>&1 </dev/null) || true; fi
+    if pgrep -f 'postsrsd' >/dev/null; then :
+    elif [ "${POSTSRSD_MAJOR:-1}" -ge 2 ] 2>/dev/null; then postsrsd -D >/dev/null 2>&1 </dev/null || true
+    else (set -a; . /etc/default/postsrsd; postsrsd -s "$SRS_SECRET" -d "$SRS_DOMAIN" -f "$SRS_FORWARD_PORT" -r "$SRS_REVERSE_PORT" -X"$SRS_EXCLUDE_DOMAINS" -u postsrsd -l 127.0.0.1 -D >/dev/null 2>&1 </dev/null) || true; fi
     if doveadm service status >/dev/null 2>&1 || pgrep -x dovecot >/dev/null; then doveadm reload; else dovecot; fi
     if postfix status >/dev/null 2>&1; then postfix reload; else postfix start; fi
 else

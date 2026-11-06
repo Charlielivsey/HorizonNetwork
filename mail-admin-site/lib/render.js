@@ -8,7 +8,7 @@
 //   /etc/hn-mail/dovecot/users        mailbox → storage folder + quota       (Dovecot userdb)
 //   /etc/hn-mail/dovecot/master-target  people's mailboxes HN Mail may open  (Dovecot passdb, unusable password)
 //   /etc/hn-mail/dovecot/denied       mailboxes nobody may sign in to        (Dovecot deny passdb)
-//   /etc/hn-mail/dovecot/app-passwords.json  scrypt hashes of mail app passwords
+//   /etc/hn-mail/dovecot/app-1 … app-10   mail app passwords (salted SHA-512), the nth of each mailbox per file
 //   /etc/hn-mail/rspamd/senders.map   the From addresses each mailbox may use
 //   /etc/hn-mail/rspamd/ratelimit-user.inc  sending limit per mailbox
 // plus the rights each member has on each shared mailbox (applied with doveadm, see lib/apply.js).
@@ -65,8 +65,12 @@ function render(d) {
   const users = mailboxes.map((m) => m.address + ':::::/var/vmail/' + m.id + '::userdb_quota_rule=*:storage=' + Math.max(10, Math.round(m.quotaMB)) + 'M').join('\n') + (mailboxes.length ? '\n' : '');
   const masterTarget = mailboxes.filter((m) => m.kind === 'person' && active(m)).map((m) => m.address + ':{CRYPT}*').join('\n') + '\n';
   const denied = mailboxes.filter((m) => m.kind === 'shared' || !active(m)).map((m) => m.address).join('\n') + '\n';
-  const appPasswords = JSON.stringify({ version: 1, mailboxes: Object.fromEntries(mailboxes.filter((m) => m.kind === 'person' && active(m) && (m.appPasswords || []).length)
-    .map((m) => [m.address, m.appPasswords.map((p) => ({ id: p.id, salt: p.salt, hash: p.hash }))])) });
+  // Mail app passwords: the nth password of every mailbox goes in /etc/hn-mail/dovecot/app-<n> (Dovecot tries each).
+  const appFiles = {};
+  for (let n = 1; n <= 10; n++) {
+    const rows = mailboxes.filter((m) => m.kind === 'person' && active(m) && (m.appPasswords || [])[n - 1] && String(m.appPasswords[n - 1].hash || '').startsWith('{SSHA512}')).map((m) => m.address + ':' + m.appPasswords[n - 1].hash);
+    appFiles['dovecot/app-' + n] = rows.join('\n') + (rows.length ? '\n' : '');
+  }
   const rspamdSenders = [...allowed.entries()].sort().map(([login, set]) => login + ' ' + [...set].sort().join(',')).join('\n') + '\n';
   const ratelimit = 'user = { bucket = { burst = ' + Math.round(d.settings.sendBurst) + '; rate = "' + Math.round(d.settings.sendPerHour) + ' / 1h"; } }\n';
   const actions = 'reject = ' + Number(d.settings.spamReject) + ';\nadd_header = ' + Number(d.settings.spamJunk) + ';\ngreylist = null;\n';
@@ -84,7 +88,7 @@ function render(d) {
   return {
     files: {
       'postfix/domains': domains, 'postfix/mailboxes': mailboxMap, 'postfix/aliases': lines(aliasRows), 'postfix/senders': lines(senderRows), 'postfix/sender-bcc': lines(bccRows),
-      'dovecot/users': users, 'dovecot/master-target': masterTarget, 'dovecot/denied': denied, 'dovecot/app-passwords.json': appPasswords,
+      'dovecot/users': users, 'dovecot/master-target': masterTarget, 'dovecot/denied': denied, ...appFiles,
       'rspamd/senders.map': rspamdSenders, 'rspamd/ratelimit-user.inc': ratelimit, 'rspamd/actions.inc': actions,
     },
     acl, problems: uniq(problems),

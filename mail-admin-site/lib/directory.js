@@ -194,12 +194,14 @@ function createDirectory(dir) {
   function addAppPassword(actor, mid, label) {
     const m = mailbox(mid);
     if (m.kind !== 'person') throw fail(400, 'App passwords belong to people’s mailboxes.');
-    if ((m.appPasswords || []).length >= 20) throw fail(400, 'You can have 20 app passwords at most. Remove one you no longer use.');
+    if ((m.appPasswords || []).length >= 10) throw fail(400, 'You can have 10 app passwords at most. Remove one you no longer use.');
     const alphabet = 'abcdefghjkmnpqrstuvwxyz23456789', bytes = crypto.randomBytes(20);
     const secret = Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('').replace(/(.{5})(?=.)/g, '$1-');
+    // Salted SHA-512 in Dovecot's own format: the password is random (about 99 bits), so a fast hash is enough, and
+    // Dovecot 2.3 and 2.4 both check it with no extra software.
     const salt = crypto.randomBytes(16);
-    const hash = crypto.scryptSync(secret, salt, 32, { N: 16384, r: 8, p: 1 }).toString('hex');
-    const entry = { id: id(), label: clean(label, 60) || 'Mail app', salt: salt.toString('hex'), hash, createdAt: now() };
+    const hash = '{SSHA512}' + Buffer.concat([crypto.createHash('sha512').update(Buffer.concat([Buffer.from(secret), salt])).digest(), salt]).toString('base64');
+    const entry = { id: id(), label: clean(label, 60) || 'Mail app', hash, createdAt: now() };
     m.appPasswords = [...(m.appPasswords || []), entry]; save();
     audit(actor, 'app-password.create', m.address, { id: entry.id, label: entry.label });
     return { id: entry.id, label: entry.label, createdAt: entry.createdAt, password: secret };

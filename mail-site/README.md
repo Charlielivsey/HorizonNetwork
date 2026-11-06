@@ -15,7 +15,7 @@ is deleted once the move is settled).
 - Front end unchanged in look: folders, saved searches, Mailbox list (yours + shared, with unread counts and the
   current mailbox's storage), From picker, signatures (the HN Group signature), drafts, attachments, keyboard shortcuts,
   Light/Lavender Dusk. Settings → Mail apps: app passwords for Outlook/Apple Mail/phones (IMAP mx.hngroup.org.uk:993,
-  SMTP :465 or :587), shown once, stored only as scrypt hashes, removable.
+  SMTP :465 or :587), shown once, stored only as salted SHA-512 hashes (Dovecot passwd files app-1…app-10), removable.
 - Email bodies are their own sandboxed page with a strict CSP (unchanged); attachments always download.
 
 Test: `node --test mail-site/test.cjs` (add `HN_MAIL_LIVE=1` with the real mail server installed).
