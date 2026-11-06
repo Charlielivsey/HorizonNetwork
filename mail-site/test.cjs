@@ -41,10 +41,16 @@ async function fakeFetch(url, opts = {}) {
     return json(200, { access_token: 'access-1', expires_in: 3600, refresh_token: 'refresh-ada', scope: googleAnswer.scope,
       id_token: idToken({ iss: 'https://accounts.google.com', aud: 'test.apps.googleusercontent.com', exp: Date.now() / 1000 + 600, nonce, sub: googleAnswer.sub, email: googleAnswer.email, email_verified: true }) });
   }
+  if (u.port === '3250') {
+    assert.equal(opts.headers.Authorization, 'Bearer ' + 'a'.repeat(64), 'staff list calls carry the service secret');
+    if (u.pathname === '/api/auth/staff-directory') return json(200, { people: [{ id: 'p-jack', displayName: 'Jack', jobTitle: 'Chief Executive Officer', company: 'HN Group', timezone: 'Europe/London', photo: true, emails: ['jack.vinckx@hngroup.org.uk'] }] });
+    if (u.pathname === '/api/auth/directory-avatar') return JSON.parse(opts.body).id === 'p-jack' ? new Response(Buffer.from('JPG!'), { status: 200, headers: { 'Content-Type': 'image/jpeg' } }) : json(404, {});
+  }
   if (u.hostname === 'staff.hngroup.org.uk') return u.pathname.endsWith('.png') ? new Response(Buffer.from('PNG!'), { status: 200, headers: { 'Content-Type': 'image/png' } }) : new Response('<html>', { status: 200, headers: { 'Content-Type': 'text/html' } });
   if (u.origin === 'https://oauth2.googleapis.com' && u.pathname === '/revoke') { revoked.push(u.searchParams.get('token')); return json(200, {}); }
   assert.ok(String(opts.headers && opts.headers.Authorization).startsWith('Bearer access-'), 'Gmail calls carry the access token');
   const p = u.pathname.replace('/gmail/v1/users/me', '').replace('/upload', '');
+  if (p === '/profile') return json(200, { historyId: '4242', messagesTotal: 10 });
   if (p === '/labels') return json(200, { labels: [{ id: 'INBOX', type: 'system' }, { id: 'Label_1', name: 'Projects', type: 'user' }] });
   if (p.startsWith('/labels/')) return json(200, { id: decodeURIComponent(p.slice(8)), name: 'Projects', type: p.includes('INBOX') ? 'system' : 'user', threadsUnread: 2, threadsTotal: 9 });
   if (p === '/threads') return json(200, { threads: [{ id: 'bbbbbbbb22' }], resultSizeEstimate: 1 });
@@ -132,6 +138,16 @@ test('HN Mail: Gmail is only connected for the linked Google account, and its ke
 test('HN Mail: labels, conversations, a locked-down body page and downloads', async () => {
   const labels = (await (await req('/api/labels')).json()).labels;
   assert.deepEqual(labels.map((l) => l.name), ['Inbox'], 'only the built-in folders (labels were removed at the user’s request)'); assert.equal(labels[0].unread, 2);
+  // People with HN Group accounts: matched by email, with their pictures (the user's request, 6 November 2026).
+  const ppl = (await (await req('/api/people')).json()).people;
+  assert.deepEqual(ppl.map((p) => [p.email, p.jobTitle, p.photo]), [['jack.vinckx@hngroup.org.uk', 'Chief Executive Officer', true]]);
+  const face = await req('/api/people/p-jack/photo');
+  assert.equal(face.headers.get('content-type'), 'image/jpeg'); assert.equal(await face.text(), 'JPG!');
+  assert.equal((await req('/api/people/nobody/photo')).status, 404);
+  // Group inboxes with unread counts, and the cheap new-mail check.
+  const boxes = (await (await req('/api/mailboxes')).json()).mailboxes;
+  assert.equal(boxes.length, 22); assert.deepEqual(boxes[0], { name: 'Finance and Billing', email: 'billing@hngroup.org.uk', unread: 1 });
+  assert.deepEqual(await (await req('/api/pulse')).json(), { historyId: '4242', total: 10 });
   const list = await (await req('/api/threads?label=INBOX')).json();
   assert.equal(list.threads[0].subject, 'Welcome'); assert.equal(list.threads[0].unread, true); assert.equal(list.threads[0].snippet, 'Hello & welcome');
   const t = await (await req('/api/threads/bbbbbbbb22')).json();

@@ -1,0 +1,27 @@
+{
+  "note": "Group inboxes shown under Mailbox in HN Mail (the user's Google Admin groups, 6 November 2026). Clicking one shows the mail that reached you through it. Edit this list when groups change, then run the update.",
+  "mailboxes": [
+    ["Finance and Billing", "billing@hngroup.org.uk"],
+    ["General Enquiries", "enquiries@hngroup.org.uk"],
+    ["HA Enquiries", "enquiries@horizonadvertising.co.uk"],
+    ["HMG Enquiries", "enquiries@media.hngroup.org.uk"],
+    ["HMG Staff", "staff@media.hngroup.org.uk"],
+    ["HN Enquiries", "enquiries@horizon-network.co.uk"],
+    ["HN Group Board", "leadership@hngroup.org.uk"],
+    ["HN Group Brand", "brand@hngroup.org.uk"],
+    ["HN Group Careers", "careers@hngroup.org.uk"],
+    ["HN Group Company Directors", "directors@hngroup.org.uk"],
+    ["HN Group IT", "it@hngroup.org.uk"],
+    ["HN Group Security", "security@hngroup.org.uk"],
+    ["HN Group Staff", "staff@hngroup.org.uk"],
+    ["HN Group Support", "support@hngroup.org.uk"],
+    ["HN Support", "support@horizon-network.co.uk"],
+    ["Horizon Advertising Staff", "staff@horizonadvertising.co.uk"],
+    ["Horizon Development Team", "development@horizon-network.co.uk"],
+    ["Horizon Network Leadership", "leadership@horizon-network.co.uk"],
+    ["Horizon Network Staff", "staff@horizon-network.co.uk"],
+    ["Human Resources", "hr@hngroup.org.uk"],
+    ["Investor Relations", "investors@hngroup.org.uk"],
+    ["News", "news@hngroup.org.uk"]
+  ]
+}

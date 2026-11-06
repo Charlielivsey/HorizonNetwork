@@ -94,14 +94,22 @@ button { font: inherit; color: inherit; }
 .side-heading.static { cursor: default; padding-left: 8px; }
 .side-heading svg { width: 13px; height: 13px; transition: transform .2s var(--ease); }
 .side-heading[aria-expanded="false"] svg { transform: rotate(-90deg); }
-.mailbox { display: flex; align-items: center; gap: 10px; padding: 5px 8px; color: var(--ml-ink); }
-.mailbox img { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; flex: none; }
-.mailbox span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, Menlo, monospace; font-size: .78rem; }
+/* Mailbox: your inbox and the group inboxes, each with its address under the name */
+.mailbox { display: grid; gap: 1px; }
+.folder.mailbox-item { height: auto; min-height: 44px; padding-top: 5px; padding-bottom: 5px; }
+.mb-pic { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; flex: none; margin-left: -3px; }
+.mb-icon { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 8px; background: var(--ml-raised); color: var(--ml-muted); flex: none; margin-left: -3px; }
+.mb-icon svg { width: 14px; height: 14px; }
+.folder[aria-current="page"] .mb-icon { background: var(--ml-tint-2); color: var(--ml-accent); }
+.mb-text { display: grid; min-width: 0; line-height: 1.25; }
+.mb-text .name { font-size: .88rem; overflow: hidden; text-overflow: ellipsis; }
+.mb-text small { font-size: .72rem; color: var(--ml-muted); overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
 .mail-app.collapsed .side { padding: 14px 8px; }
 .mail-app.collapsed .compose-btn { width: 52px; height: 50px; padding: 0; }
-.mail-app.collapsed .compose-btn span, .mail-app.collapsed .folder .name, .mail-app.collapsed .folder .count, .mail-app.collapsed .side-section, .mail-app.collapsed .folders.sub, .mail-app.collapsed .mailbox span { display: none; }
+.mail-app.collapsed .compose-btn span, .mail-app.collapsed .folder .name, .mail-app.collapsed .folder .count, .mail-app.collapsed .side-section, .mail-app.collapsed .folders.sub, .mail-app.collapsed .mb-text { display: none; }
 .mail-app.collapsed .folder { justify-content: center; padding: 0; }
-.mail-app.collapsed .mailbox { justify-content: center; padding: 5px 0; }
+.mail-app.collapsed .mailbox-item { justify-content: center; }
+.mail-app.collapsed .mb-pic, .mail-app.collapsed .mb-icon { margin-left: 0; }
 
 /* Conversation list */
 .list { display: flex; flex-direction: column; min-height: 0; background: var(--ml-bg); border-left: 1px solid var(--ml-line); border-right: 1px solid var(--ml-line); }
@@ -238,6 +246,22 @@ button { font: inherit; color: inherit; }
 .steps-mini { display: flex; gap: 6px; margin-bottom: 20px; }
 .steps-mini span { height: 6px; border-radius: 3px; transform-origin: left; animation: stripe .6s var(--ease) both; }
 
+/* Profile card on hover (like Google's), for anyone in the list or a conversation, yourself included */
+[data-person] { cursor: default; }
+.person-card { position: fixed; z-index: 90; width: min(380px, calc(100vw - 16px)); padding: 18px; border-radius: 22px; background: var(--ml-surface); border: 1px solid var(--ml-line-2); box-shadow: var(--ml-shadow); transform-origin: top left; animation: menuIn .2s var(--ease) both; }
+.pc-top { display: flex; align-items: center; gap: 16px; }
+.card-pic { width: 76px; height: 76px; border-radius: 50%; object-fit: cover; display: grid; place-items: center; font-weight: 800; font-size: 1.5rem; background: var(--ml-raised); border: 1px solid var(--ml-line-2); flex: none; }
+.pc-id { display: grid; gap: 2px; min-width: 0; }
+.pc-id b { font-size: 1.2rem; color: var(--ml-ink); overflow-wrap: anywhere; }
+.pc-id span { color: var(--ml-muted); font-size: .9rem; overflow-wrap: anywhere; }
+.pc-badge { justify-self: start; margin-top: 4px; padding: 2px 9px; border-radius: 999px; background: var(--ml-tint-2); color: var(--ml-accent); font-size: .7rem; font-weight: 800; letter-spacing: .04em; }
+.pc-actions { display: flex; align-items: center; gap: 8px; margin: 16px 0 10px; }
+.pc-main { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 9px; height: 44px; border: 0; border-radius: 999px; background: var(--ml-tint-2); color: var(--ml-accent); font-weight: 800; cursor: pointer; transition: filter .2s, transform .2s var(--ease); }
+.pc-main:hover { filter: brightness(1.1); transform: translateY(-1px); }
+.pc-actions .icon-btn { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--ml-line-2); }
+.pc-row { display: flex; align-items: center; gap: 12px; margin-top: 8px; padding: 10px 14px; border-radius: 14px; background: var(--ml-bg); border: 1px solid var(--ml-line); color: var(--ml-ink); font-size: .9rem; }
+.pc-row svg { width: 18px; height: 18px; color: var(--ml-muted); }
+
 /* Composer: opens in the middle (the user's request) */
 .composer-backdrop { position: fixed; inset: 0; z-index: 69; background: rgba(8, 6, 14, .45); backdrop-filter: blur(2px); animation: fadeIn .2s ease both; }
 :root[data-theme="light"] .composer-backdrop { background: rgba(40, 24, 70, .22); }
@@ -356,7 +380,7 @@ dialog h3 { margin: 20px 0 8px; font-size: .7rem; letter-spacing: .14em; text-tr
   .side { position: fixed; z-index: 75; left: 0; top: 0; bottom: 0; width: min(280px, 86vw); padding-top: 18px; box-shadow: 0 0 80px rgba(0, 0, 0, .5); transform: translateX(-105%); transition: transform .28s var(--ease); animation: none; }
   .mail-app.side-open .side { transform: none; }
   .mail-app.collapsed .side .compose-btn { width: auto; padding: 0 20px; }
-  .mail-app.collapsed .side .compose-btn span, .mail-app.collapsed .side .folder .name, .mail-app.collapsed .side .folder .count, .mail-app.collapsed .side .side-section, .mail-app.collapsed .side .folders.sub, .mail-app.collapsed .side .mailbox span { display: revert; }
+  .mail-app.collapsed .side .compose-btn span, .mail-app.collapsed .side .folder .name, .mail-app.collapsed .side .folder .count, .mail-app.collapsed .side .side-section, .mail-app.collapsed .side .folders.sub, .mail-app.collapsed .side .mb-text { display: revert; }
   .mail-app.collapsed .side .folder { justify-content: flex-start; padding: 0 10px 0 14px; }
   .list { border: 0; }
   .reader { display: none; }

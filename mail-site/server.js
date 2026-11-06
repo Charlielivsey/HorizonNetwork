@@ -9,6 +9,10 @@ const http = require('node:http'), fs = require('node:fs'), path = require('node
 const { createAuth, NO_GOOGLE } = require('./lib/auth'), { sessions } = require('./lib/sessions'), { createGoogle } = require('./lib/google'), { createGmail } = require('./lib/gmail');
 const mime = require('./lib/mime');
 const { hnSignature, allowedImage } = require('./lib/signature');
+const { createPeople } = require('./lib/people');
+const MAILBOXES = (() => { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'mailboxes.json'), 'utf8')).mailboxes.filter((m) => Array.isArray(m) && /^[^\s@]+@[^\s@]+$/.test(m[1])).map(([name, email]) => ({ name: String(name), email: String(email).toLowerCase() })); } catch { return []; } })();
+// The Gmail search for mail that reached you through a group inbox.
+const mailboxQuery = (email) => '(list:' + email + ' OR to:' + email + ' OR cc:' + email + ')';
 
 const escape = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const PUBLIC = path.join(__dirname, 'public');
@@ -34,6 +38,8 @@ function createServer({ dir = process.env.MAIL_DATA_DIR || '/var/lib/hn-mail', f
   const pictures = new Map(); // signature pictures shown inside HN Mail, kept an hour
   const google = createGoogle({ dir, origin: auth.ORIGIN, fetcher, ...(googleFile ? { file: googleFile } : {}) });
   const gmail = createGmail({ token: google.accessToken, fetcher });
+  const people = createPeople({ fetcher });
+  const counts = new Map(); // unread counts per group inbox, per person, for a minute
   const secure = auth.ORIGIN.startsWith('https://');
   const googleCookie = (secure ? '__Host-' : '') + GOOGLE_COOKIE;
   const senders = new Map(), avatars = new Map();
@@ -194,6 +200,23 @@ function createServer({ dir = process.env.MAIL_DATA_DIR || '/var/lib/hn-mail', f
         }
         res.writeHead(200, { 'Content-Type': pic.type, 'Cache-Control': 'private, max-age=3600', 'Content-Security-Policy': "default-src 'none'; sandbox" }); return res.end(pic.bytes);
       }
+      // People HN Mail knows (staff with HN Group accounts) and their pictures.
+      if (route === '/api/people' && req.method === 'GET') return json(200, { people: await people.list() });
+      if ((m = /^\/api\/people\/([A-Za-z0-9_-]{1,64})\/photo$/.exec(route)) && req.method === 'GET') {
+        const pic = await people.picture(m[1]);
+        if (!pic) return json(404, { error: 'No picture.' });
+        res.writeHead(200, { 'Content-Type': pic.type, 'Cache-Control': 'private, max-age=600', 'Content-Security-Policy': "default-src 'none'; sandbox" }); return res.end(pic.bytes);
+      }
+      // Group inboxes with your unread count in each (the user's request, 6 November 2026).
+      if (route === '/api/mailboxes' && req.method === 'GET') {
+        const key = user.accountId, held = counts.get(key);
+        if (held && held.at > Date.now() - 60000 && url.searchParams.get('fresh') !== '1') return json(200, { mailboxes: held.list });
+        const list = await gmail.unreadCounts(user, MAILBOXES.map((x) => ({ ...x, q: mailboxQuery(x.email) })));
+        counts.set(key, { at: Date.now(), list });
+        return json(200, { mailboxes: list });
+      }
+      // A cheap check for new mail: Gmail's history id changes whenever the mailbox does.
+      if (route === '/api/pulse' && req.method === 'GET') return json(200, await gmail.pulse(user));
       if (route === '/api/google/disconnect' && req.method === 'POST') { await google.disconnect(user); senders.delete(user.accountId); return json(200, { ok: true }); }
       if (route === '/api/labels' && req.method === 'GET') return json(200, { labels: await gmail.labels(user) });
       if (route === '/api/threads' && req.method === 'GET') return json(200, await gmail.threads(user, { label: url.searchParams.get('label') || '', q: url.searchParams.get('q') || '', pageToken: url.searchParams.get('page') || '' }));

@@ -22,7 +22,7 @@
   const store = { get(k, d) { try { const v = localStorage.getItem('hnmail.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem('hnmail.' + k, JSON.stringify(v)); } catch {} } };
   const prefs = { theme: store.get('theme', 'dark'), images: store.get('images', false), signature: store.get('signature', true), compact: store.get('compact', false), collapsed: store.get('collapsed', false), folds: store.get('folds', {}) };
 
-  let session = null, labels = [], view = { label: 'INBOX', q: '', thread: null }, pages = [null], pageIndex = 0, list = [], selected = new Set(), current = null, contacts = new Set();
+  let session = null, people = new Map(), mailboxes = [], labels = [], view = { label: 'INBOX', q: '', thread: null }, pages = [null], pageIndex = 0, list = [], selected = new Set(), current = null, contacts = new Set();
 
   // ---------- Helpers ----------
   function toast(text, { error = false, action, onAction, ms = 4500 } = {}) {
@@ -48,9 +48,16 @@
   const initials = (name) => (String(name).replace(/[^\p{L}\p{N} ]/gu, ' ').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('') || '?').toUpperCase();
   const colour = (s) => { let n = 0; for (const c of String(s)) n = (n * 31 + c.codePointAt(0)) >>> 0; return PALETTE[n % PALETTE.length]; };
   const mine = (from) => !!(session && session.gmail.sender && emailOf(from) === session.gmail.sender.email);
+  // Profile pictures from HN Group accounts (the user's request, 6 November 2026), initials for everyone else.
+  function initialsBadge(from, cls) { const el = h('span', { class: cls, 'aria-hidden': 'true', text: initials(nameOf(from) || emailOf(from)) }); el.style.color = colour(emailOf(from)); return el; }
   function avatar(from, cls = 'avatar') {
-    if (mine(from)) return h('img', { class: cls, src: '/api/avatar', alt: '' });
-    const el = h('span', { class: cls, 'aria-hidden': 'true', text: initials(nameOf(from) || emailOf(from)) }); el.style.color = colour(emailOf(from)); return el;
+    const email = emailOf(from), person = people.get(email);
+    let el;
+    if (mine(from)) el = h('img', { class: cls, src: '/api/avatar', alt: '' });
+    else if (person && person.photo) { el = h('img', { class: cls, src: '/api/people/' + encodeURIComponent(person.id) + '/photo', alt: '' }); el.addEventListener('error', () => { const f = initialsBadge(from, cls); f.dataset.person = from; el.replaceWith(f); }, { once: true }); }
+    else el = initialsBadge(from, cls);
+    el.dataset.person = from;
+    return el;
   }
   function when(ms, long = false) {
     const d = new Date(ms), now = new Date();
@@ -135,16 +142,19 @@
   // ---------- Routing (#INBOX, #INBOX/<thread>, #search/<words>) ----------
   function parseHash() {
     const raw = decodeURIComponent(location.hash.slice(1));
+    if (raw.startsWith('mailbox/')) { const rest = raw.slice(8), i = rest.lastIndexOf('/t:'), email = (i >= 0 ? rest.slice(0, i) : rest).toLowerCase(); return { label: 'ALL', q: mailboxQuery(email), mailbox: email, thread: i >= 0 ? rest.slice(i + 3) : null }; }
     if (raw.startsWith('search/')) { const rest = raw.slice(7), i = rest.lastIndexOf('/t:'); return { label: 'ALL', q: i >= 0 ? rest.slice(0, i) : rest, thread: i >= 0 ? rest.slice(i + 3) : null }; }
     const [label, thread] = raw.split('/');
     return { label: label || 'INBOX', q: '', thread: thread || null };
   }
-  const hashFor = (v) => '#' + (v.q ? 'search/' + encodeURIComponent(v.q) + (v.thread ? '/t:' + v.thread : '') : encodeURIComponent(v.label) + (v.thread ? '/' + v.thread : ''));
+  const mailboxQuery = (email) => '(list:' + email + ' OR to:' + email + ' OR cc:' + email + ')';
+  const hashFor = (v) => '#' + (v.mailbox ? 'mailbox/' + encodeURIComponent(v.mailbox) + (v.thread ? '/t:' + v.thread : '') : v.q ? 'search/' + encodeURIComponent(v.q) + (v.thread ? '/t:' + v.thread : '') : encodeURIComponent(v.label) + (v.thread ? '/' + v.thread : ''));
   function go(v) { const target = hashFor({ ...view, ...v }); if (location.hash !== target) location.hash = target; else route(); }
   async function route() {
     const next = parseHash(), listChanged = next.label !== view.label || next.q !== view.q || !list.length;
     view = next;
-    $('#search-input').value = view.q; $('#search-clear').hidden = !view.q;
+    $('#search-input').value = view.mailbox ? '' : view.q; $('#search-clear').hidden = !view.q || !!view.mailbox;
+    drawMailboxes();
     app.classList.toggle('reading', !!view.thread);
     closeSide();
     drawFolders();
@@ -168,15 +178,27 @@
     $('#folders').replaceChildren(...FOLDERS.map(([id, name, icon], i) => folderLink('#' + id, name, icon, { i, current: !view.q && view.label === id,
       count: id === 'INBOX' || id === 'SPAM' ? (byId[id] || {}).unread : id === 'DRAFT' ? (byId[id] || {}).drafts : 0 })));
     const saved = savedSearches();
-    $('#saved').replaceChildren(...(saved.length ? saved.map((s, i) => folderLink('#search/' + encodeURIComponent(s.q), s.name, 'search', { current: view.q === s.q, remove: () => { const all = savedSearches(); all.splice(i, 1); store.set(savedKey(), all); drawFolders(); } })) : [h('p', { class: 'empty', text: 'None yet' })]));
+    $('#saved').replaceChildren(...(saved.length ? saved.map((s, i) => folderLink('#search/' + encodeURIComponent(s.q), s.name, 'search', { current: view.q === s.q && !view.mailbox, remove: () => { const all = savedSearches(); all.splice(i, 1); store.set(savedKey(), all); drawFolders(); } })) : [h('p', { class: 'empty', text: 'None yet' })]));
     for (const [k, el] of [['saved', '#saved']]) { const open = prefs.folds[k] !== false; $(el).hidden = !open; $('[data-fold="' + k + '"]').setAttribute('aria-expanded', String(open)); }
     const inbox = byId.INBOX;
     document.title = (inbox && inbox.unread ? '(' + inbox.unread + ') ' : '') + 'HN Mail · HN Group';
   }
   const savedKey = () => 'saved.' + ((session && session.gmail.email) || 'me');
   const savedSearches = () => { const v = store.get(savedKey(), []); return Array.isArray(v) ? v.filter((x) => x && x.q && x.name) : []; };
+  // Your own address and the group inboxes (the user's request, 6 November 2026); clicking one shows the mail that
+  // reached you through it.
+  function drawMailboxes() {
+    const box = $('#mailbox'); if (!box || !session) return;
+    const own = session.gmail.email || session.gmail.linkedEmail || '';
+    const ownLink = h('a', { class: 'folder mailbox-item', href: '#INBOX', title: own, 'aria-current': !view.q && view.label === 'INBOX' ? 'page' : null }, h('img', { class: 'mb-pic', src: '/api/avatar', alt: '' }), h('span', { class: 'mb-text' }, h('span', { class: 'name', text: 'My inbox' }), h('small', { text: own })));
+    box.replaceChildren(ownLink, ...mailboxes.map((m) => h('a', { class: 'folder mailbox-item', href: '#mailbox/' + encodeURIComponent(m.email), title: m.name + ' · ' + m.email, 'aria-current': view.mailbox === m.email ? 'page' : null },
+      h('span', { class: 'mb-icon' }, svg('M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1|M9 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6z|M22 19v-1a4 4 0 0 0-3-3.9|M16 4.1a3 3 0 0 1 0 5.8')),
+      h('span', { class: 'mb-text' }, h('span', { class: 'name', text: m.name }), h('small', { text: m.email })), m.unread ? h('span', { class: 'count', text: m.unread > 99 ? '99+' : m.unread }) : null)));
+  }
+  async function loadMailboxes(fresh) { try { mailboxes = (await api('GET', '/api/mailboxes' + (fresh ? '?fresh=1' : ''))).mailboxes; drawMailboxes(); if (view.mailbox) $('#list-title').textContent = titleFor(); } catch (e) { if (!e.handled) console.warn(e.message); } }
+  async function loadPeople() { try { const r = await api('GET', '/api/people'); people = new Map(r.people.map((p) => [p.email, p])); } catch {} }
   async function loadLabels() { try { labels = (await api('GET', '/api/labels')).labels; drawFolders(); } catch (e) { report(e); } }
-  const titleFor = () => (view.q ? 'Search results' : (FOLDERS.find((f) => f[0] === view.label) || [])[1] || 'Mail');
+  const titleFor = () => (view.mailbox ? ((mailboxes.find((x) => x.email === view.mailbox) || {}).name || view.mailbox) : view.q ? 'Search results' : (FOLDERS.find((f) => f[0] === view.label) || [])[1] || 'Mail');
 
   // ---------- Conversation list ----------
   async function loadList(quiet = false) {
@@ -190,16 +212,17 @@
     try {
       const r = await api('GET', '/api/threads?' + q);
       if (asked !== hashFor({ ...view, thread: null }) + '|' + pageIndex) return; // the person moved on meanwhile
+      const before = new Set(list.map((t) => t.id));
       list = r.threads; pages[pageIndex + 1] = r.next;
       for (const t of list) learnContacts(t.fromAddress, t.to);
       $('#prev-page').disabled = pageIndex === 0; $('#next-page').disabled = !r.next;
       const first = pageIndex * 25 + 1, last = pageIndex * 25 + list.length;
       $('#list-count').textContent = !list.length ? '' : pageIndex === 0 && !r.next ? list.length + (list.length === 1 ? ' conversation' : ' conversations') : first + '–' + last + (r.next ? ' of ' + (r.estimate > last ? 'about ' + r.estimate.toLocaleString('en-GB') : 'many') : '');
-      drawList(!quiet);
+      drawList(!quiet, quiet ? before : null);
     } catch (e) { if (!quiet) ul.replaceChildren(h('li', { class: 'list-note' }, h('b', { text: 'Couldn’t load your mail.' }), e.handled ? '' : e.message)); report(e); }
     app.setAttribute('aria-busy', 'false');
   }
-  function drawList(animate = false) {
+  function drawList(animate = false, known = null) {
     const ul = $('#threads');
     for (const id of [...selected]) if (!list.some((t) => t.id === id)) selected.delete(id);
     ul.classList.toggle('compact', prefs.compact);
@@ -207,7 +230,7 @@
       const empty = view.q ? ['No messages match your search.', 'Try different words, or search for from:name or has:attachment.'] : view.label === 'INBOX' ? ['You’re all caught up.', 'Nothing in your inbox.'] : ['Nothing here.', ''];
       ul.replaceChildren(h('li', { class: 'list-note' }, h('b', { text: empty[0] }), empty[1])); updateBulk(); return;
     }
-    ul.replaceChildren(...list.map((t, i) => { const li = row(t); if (animate && i < 18) { li.classList.add('enter'); li.style.setProperty('--i', i); } return li; }));
+    ul.replaceChildren(...list.map((t, i) => { const li = row(t); if ((animate && i < 18) || (known && known.size && !known.has(t.id))) { li.classList.add('enter'); li.style.setProperty('--i', animate ? i : 0); } return li; }));
     updateBulk(); markActive();
   }
   function row(t) {
@@ -215,9 +238,9 @@
     const box = h('input', { type: 'checkbox', 'aria-label': 'Select this conversation', checked: selected.has(t.id) ? true : null });
     box.addEventListener('click', (e) => e.stopPropagation());
     box.addEventListener('change', () => { if (box.checked) selected.add(t.id); else selected.delete(t.id); li.classList.toggle('selected', box.checked); updateBulk(); });
-    const people = view.label === 'SENT' || view.label === 'DRAFT' ? 'To: ' + (splitAddresses(t.to).map(nameOf).join(', ') || '(no recipients)') : t.from.join(', ') || '(unknown sender)';
+    const whoText = view.label === 'SENT' || view.label === 'DRAFT' ? 'To: ' + (splitAddresses(t.to).map(nameOf).join(', ') || '(no recipients)') : t.from.join(', ') || '(unknown sender)';
     li.append(h('div', { class: 'pic' }, avatar(view.label === 'SENT' ? t.to : t.fromAddress), h('label', { class: 'check', onclick: (e) => e.stopPropagation() }, box, h('span'))),
-      h('div', { class: 'lines' }, h('div', { class: 'who' }, t.draft ? h('span', { class: 'draft', text: 'Draft' }) : null, people, t.count > 1 ? h('span', { class: 'n', text: t.count }) : null),
+      h('div', { class: 'lines' }, h('div', { class: 'who' }, t.draft ? h('span', { class: 'draft', text: 'Draft' }) : null, h('span', { 'data-person': view.label === 'SENT' ? t.to : t.fromAddress, text: whoText }), t.count > 1 ? h('span', { class: 'n', text: t.count }) : null),
         h('div', { class: 'subj', text: t.subject }), h('div', { class: 'snip', text: t.snippet })),
       h('div', { class: 'meta' }, t.attachments ? svg(I.clip) : null, t.starred ? h('span', { class: 'star-on', title: 'Starred' }, svg(I.star)) : null, h('time', { datetime: new Date(t.date).toISOString(), title: when(t.date, true), text: when(t.date) })),
       h('div', { class: 'row-actions' }, ...rowActions(t)));
@@ -333,7 +356,7 @@
   function message(m, open) {
     const el = h('article', { class: 'msg' + (open ? ' open' : ''), 'data-id': m.id });
     const to = [m.to && 'to ' + splitAddresses(m.to).map(nameOf).join(', '), m.cc && 'cc ' + splitAddresses(m.cc).map(nameOf).join(', ')].filter(Boolean).join(' · ');
-    const head = h('div', { class: 'msg-head' }, avatar(m.from), h('div', { class: 'msg-from' }, h('b', { text: nameOf(m.from) || '(unknown)' }), h('span', { class: 'msg-addr', text: emailOf(m.from) && emailOf(m.from) !== nameOf(m.from).toLowerCase() ? '<' + emailOf(m.from) + '>' : '' }),
+    const head = h('div', { class: 'msg-head' }, avatar(m.from), h('div', { class: 'msg-from' }, h('b', { text: nameOf(m.from) || '(unknown)', 'data-person': m.from }), h('span', { class: 'msg-addr', text: emailOf(m.from) && emailOf(m.from) !== nameOf(m.from).toLowerCase() ? '<' + emailOf(m.from) + '>' : '' }),
       h('span', { class: open ? 'to' : 'msg-snippet', text: open ? to : m.snippet })),
       h('div', { class: 'msg-when' }, h('time', { datetime: new Date(m.date).toISOString(), text: when(m.date, open) }), open && !m.draft ? tool('reply', 'Reply', () => reply(m, 'reply')) : null, open && !m.draft ? tool('more', 'More', (e) => messageMenu(e.currentTarget, m)) : null));
     el.append(head);
@@ -534,6 +557,44 @@
     $('#connect').hidden = false;
   }
 
+  // ---------- Profile cards on hover (the user's request, 6 November 2026: "when i hover over things like that, even
+  // myself it should show something like that") ----------
+  let cardTimer = null, cardFor = null;
+  function hideCard(now) { clearTimeout(cardTimer); cardTimer = setTimeout(() => { const c = $('.person-card'); if (c) c.remove(); cardFor = null; }, now ? 0 : 220); }
+  function showCard(target) {
+    const from = target.dataset.person; if (!from) return;
+    const email = emailOf(from), person = people.get(email), self = mine(from), u = (session && session.user) || {};
+    const name = self ? (u.displayName || nameOf(from)) : (person && person.name) || nameOf(from) || email;
+    const job = self ? [u.jobTitle, u.company].filter(Boolean).join(' • ') : person ? [person.jobTitle, person.company].filter(Boolean).join(' • ') : '';
+    let local = '';
+    if (person && person.timezone) { try { local = new Date().toLocaleTimeString('en-GB', { timeZone: person.timezone, hour: '2-digit', minute: '2-digit' }) + ' ' + ((new Intl.DateTimeFormat('en-GB', { timeZone: person.timezone, timeZoneName: 'short' }).formatToParts(new Date()).find((p) => p.type === 'timeZoneName') || {}).value || ''); } catch {} }
+    const pic = avatar(from, 'card-pic'); delete pic.dataset.person;
+    const address = name && name !== email ? name + ' <' + email + '>' : email;
+    const card = h('div', { class: 'person-card', role: 'dialog', 'aria-label': name },
+      h('div', { class: 'pc-top' }, pic, h('div', { class: 'pc-id' }, h('b', { text: name }), h('span', { text: email }), person || self ? h('small', { class: 'pc-badge', text: 'HN Group' }) : null)),
+      h('div', { class: 'pc-actions' },
+        h('button', { type: 'button', class: 'pc-main', onclick: () => { hideCard(true); openComposer({ to: address }); } }, svg(I.edit), 'Email'),
+        h('button', { type: 'button', class: 'icon-btn', title: 'Copy email address', 'aria-label': 'Copy email address', onclick: async () => { try { await navigator.clipboard.writeText(email); toast('Email address copied.'); } catch { toast(email); } } }, svg('M9 9h11v11H9z|M5 15V4h11')),
+        h('button', { type: 'button', class: 'icon-btn', title: self ? 'Mail you sent' : 'Mail from ' + name, 'aria-label': 'Find mail from ' + name, onclick: () => { hideCard(true); go({ q: 'from:' + email, label: 'ALL', mailbox: null, thread: null }); } }, svg(I.search))),
+      local ? h('div', { class: 'pc-row' }, svg('M12 7v5l3 2|M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z'), 'Local time – ' + local) : null,
+      job ? h('div', { class: 'pc-row' }, svg('M4 21V5l8-2v18|M12 9h8v12|M8 8h.01|M8 12h.01|M8 16h.01|M16 13h.01|M16 17h.01'), job) : null);
+    card.addEventListener('mouseenter', () => clearTimeout(cardTimer));
+    card.addEventListener('mouseleave', () => hideCard());
+    const old = $('.person-card'); if (old) old.remove();
+    document.body.append(card); cardFor = target;
+    const r = target.getBoundingClientRect(), w = card.offsetWidth, hgt = card.offsetHeight;
+    card.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left)) + 'px';
+    card.style.top = (innerHeight - r.bottom > hgt + 12 ? r.bottom + 8 : Math.max(8, r.top - hgt - 8)) + 'px';
+  }
+  document.addEventListener('mouseover', (e) => {
+    if (e.target.closest('.person-card')) return;
+    const t = e.target.closest('[data-person]');
+    if (!t) { if (cardFor) hideCard(); return; }
+    if (t === cardFor) { clearTimeout(cardTimer); return; }
+    clearTimeout(cardTimer); cardTimer = setTimeout(() => showCard(t), 420);
+  });
+  document.addEventListener('scroll', () => hideCard(true), true);
+
   // ---------- Wiring ----------
   function closeSide() { app.classList.remove('side-open'); }
   const narrow = () => matchMedia('(max-width: 1000px)').matches;
@@ -543,10 +604,9 @@
     prefs.collapsed = !prefs.collapsed; store.set('collapsed', prefs.collapsed); app.classList.toggle('collapsed', prefs.collapsed); $('#menu-btn').setAttribute('aria-expanded', String(!prefs.collapsed));
   });
   document.addEventListener('click', (e) => { if (app.classList.contains('side-open') && !e.target.closest('#side')) closeSide(); });
-  $('#search').addEventListener('submit', (e) => { e.preventDefault(); const q = $('#search-input').value.trim(); $('#search-input').blur(); go(q ? { q, label: 'ALL', thread: null } : { q: '', label: 'INBOX', thread: null }); });
+  $('#search').addEventListener('submit', (e) => { e.preventDefault(); const q = $('#search-input').value.trim(); $('#search-input').blur(); go(q ? { q, label: 'ALL', mailbox: null, thread: null } : { q: '', label: 'INBOX', mailbox: null, thread: null }); });
   $('#search-input').addEventListener('input', () => { $('#search-clear').hidden = !$('#search-input').value; });
-  $('#search-clear').addEventListener('click', () => { $('#search-input').value = ''; $('#search-clear').hidden = true; if (view.q) go({ q: '', label: 'INBOX', thread: null }); else $('#search-input').focus(); });
-  $('#search-focus').addEventListener('click', () => $('#search-input').focus());
+  $('#search-clear').addEventListener('click', () => { $('#search-input').value = ''; $('#search-clear').hidden = true; if (view.q && !view.mailbox) go({ q: '', label: 'INBOX', mailbox: null, thread: null }); else $('#search-input').focus(); });
   $('#compose-btn').addEventListener('click', () => { closeSide(); openComposer(); });
   $('#compose-fab').addEventListener('click', () => openComposer());
   $('#refresh').addEventListener('click', () => { loadList(); loadLabels(); });
@@ -580,9 +640,7 @@
     const first = pop.querySelector('.seg button[aria-pressed="true"]') || pop.querySelector('button'); if (first) first.focus();
   });
   document.addEventListener('click', closeAccount);
-  $('#settings-btn').addEventListener('click', (e) => { e.stopPropagation(); openSettings(); });
-  function setImages(on) { prefs.images = on; store.set('images', on); const b = $('#images-toggle'); b.setAttribute('aria-pressed', String(on)); b.title = on ? 'Pictures from the web: always shown' : 'Pictures from the web: hidden until you ask'; if (current && view.thread) openThread(current.id, true); }
-  $('#images-toggle').addEventListener('click', () => { setImages(!prefs.images); toast(prefs.images ? 'Pictures from the web will always be shown.' : 'Pictures from the web are hidden until you choose Show images.'); });
+  function setImages(on) { prefs.images = on; store.set('images', on); if (current && view.thread) openThread(current.id, true); }
   $('#set-images').addEventListener('change', (e) => setImages(e.target.checked));
   $('#set-signature').addEventListener('change', (e) => { prefs.signature = e.target.checked; store.set('signature', prefs.signature); });
   $('#set-compact').addEventListener('change', (e) => { prefs.compact = e.target.checked; store.set('compact', prefs.compact); drawList(); });
@@ -605,8 +663,27 @@
     if (keys[e.key]) { e.preventDefault(); keys[e.key](); }
   });
   // New mail appears without a reload: the list and counts refresh every minute while the page is in view.
-  setInterval(() => { if (document.visibilityState === 'visible' && session && session.gmail.connected && !app.classList.contains('connecting') && pageIndex === 0 && !selected.size) { loadList(true); loadLabels(); } }, 60000);
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && session && session.gmail.connected && !app.classList.contains('connecting')) loadLabels(); });
+  // New mail shows up by itself (the user's request, 6 November 2026): every 15 seconds HN Mail asks Gmail whether the
+  // mailbox changed (a cheap check), and only then refreshes the list, counts and group inboxes; new rows slide in.
+  let lastHistory = '', pulsing = false;
+  async function pulse() {
+    if (pulsing || document.visibilityState !== 'visible' || !session || !session.gmail.connected || app.classList.contains('connecting')) return;
+    pulsing = true;
+    try {
+      const r = await api('GET', '/api/pulse');
+      if (lastHistory && r.historyId && r.historyId !== lastHistory) {
+        const inboxBefore = (labels.find((l) => l.id === 'INBOX') || {}).unread || 0;
+        if (pageIndex === 0 && !selected.size) await loadList(true);
+        await loadLabels(); loadMailboxes(true); loadPeople();
+        const inboxNow = (labels.find((l) => l.id === 'INBOX') || {}).unread || 0;
+        if (inboxNow > inboxBefore) { const newest = list.find((t) => t.unread); toast(newest ? 'New mail from ' + (newest.from[newest.from.length - 1] || 'someone') + ': ' + newest.subject : 'New mail.', { action: newest ? 'Open' : undefined, onAction: newest ? () => go({ thread: newest.id }) : undefined }); }
+        if (current && view.thread === current.id) openThread(current.id, true);
+      }
+      if (r.historyId) lastHistory = r.historyId;
+    } catch {} finally { pulsing = false; }
+  }
+  setInterval(pulse, 15000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pulse(); });
 
   (async function start() {
     app.classList.toggle('collapsed', prefs.collapsed); $('#menu-btn').setAttribute('aria-expanded', String(!prefs.collapsed));
@@ -614,8 +691,9 @@
     try { session = await api('GET', '/api/session'); } catch (e) { report(e); return; }
     $('#settings-gmail').textContent = session.gmail.connected ? 'Connected as ' + session.gmail.email + '. Disconnecting stops HN Mail showing your mail; nothing is deleted from Gmail.' : 'Gmail isn’t connected.';
     $('#disconnect').hidden = !session.gmail.connected;
-    $('#mailbox').replaceChildren(h('img', { src: '/api/avatar', alt: '' }), h('span', { text: session.gmail.email || session.gmail.linkedEmail || '' }));
     if (!session.gmail.connected) return showConnect();
-    await Promise.all([loadLabels(), route()]);
+    await loadPeople();
+    await Promise.all([loadLabels(), route(), loadMailboxes()]);
+    pulse();
   })();
 })();

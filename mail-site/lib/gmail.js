@@ -157,8 +157,15 @@ function createGmail({ token, fetcher = fetch }) {
     }
     throw fail(404, 'That draft no longer exists.');
   }
+  async function unreadCounts(user, boxes) {
+    return limited(boxes, 4, async (b) => {
+      const r = await call(user, 'GET', '/threads', { query: { maxResults: '1', q: b.q + ' is:unread' } }).catch(() => ({}));
+      return { name: b.name, email: b.email, unread: (r.threads || []).length ? Math.max(1, r.resultSizeEstimate || 1) : 0 };
+    });
+  }
+  async function pulse(user) { const p = await call(user, 'GET', '/profile'); return { historyId: String(p.historyId || ''), total: p.messagesTotal || 0 }; }
   const deleteDraft = (user, id) => { if (!/^[\w-]{1,64}$/.test(id)) throw fail(400, 'Unknown draft.'); return call(user, 'DELETE', '/drafts/' + id); };
-  return { labels, threads, thread, message, part, modify, modifyMessage, trash, untrash, sender, send, saveDraft, draftFor, deleteDraft, view };
+  return { labels, threads, thread, message, part, unreadCounts, pulse, modify, modifyMessage, trash, untrash, sender, send, saveDraft, draftFor, deleteDraft, view };
 }
 function decodeEntities(s) { return String(s).replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n))).replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&'); }
 module.exports = { createGmail };

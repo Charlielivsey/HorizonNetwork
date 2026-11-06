@@ -180,7 +180,11 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       const people = store.allProfiles().filter((x) => store.loginsForId(x.profileId).some((l) => l.account && l.account.enabled))
         .map((x) => { const rec = store.getPerson(x.personId) || {}; return { id: x.profileId, accountIds: store.loginsForId(x.profileId).filter((l) => l.account && l.account.enabled).map((l) => l.id), photo: !!x.avatarUrl, displayName: x.displayName,
           // Their legal name too, so people can be found by it (the user's request, 6 November 2026, for Contracts' "Who signs").
-          legalName: [rec.firstName, rec.lastName].filter(Boolean).join(' '), jobTitle: x.jobTitle || '', company: x.company }; });
+          legalName: [rec.firstName, rec.lastName].filter(Boolean).join(' '), jobTitle: x.jobTitle || '', company: x.company,
+          // Their email addresses (record + sign-in accounts + linked Google) and time zone, so HN Mail can show who sent a
+          // message with their picture and a profile card (the user's request, 6 November 2026).
+          emails: [...new Set([...(rec.emails || []).map((e) => e.address), ...store.loginsForId(x.profileId).flatMap((l) => [l.username, l.account && l.account.google && l.account.google.email])]
+            .map((e) => String(e || '').trim().toLowerCase()).filter((e) => e.includes('@')))], timezone: rec.timezone || '' }; });
       sendJson(res, 200, { people }); return true;
     }
     // HN Secure Gateway asks for the PIN before connecting the VPN (checked through vpn.hngroup.org.uk).
