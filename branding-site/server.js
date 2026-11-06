@@ -9,7 +9,7 @@ const auth = require('./lib/auth');
 
 const PUBLIC = process.env.BRANDING_PUBLIC_DIR || path.join(__dirname, 'public');
 const MIME = { '.css': 'text/css; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8' };
-const PUBLIC_FILES = new Set(['/assets/branding.css', '/assets/branding.js', '/assets/favicon.svg', '/assets/fonts/plus-jakarta-sans.woff2', '/robots.txt',
+const PUBLIC_FILES = new Set(['/assets/hn-theme.js', '/assets/branding.css', '/assets/branding.js', '/assets/favicon.svg', '/assets/fonts/plus-jakarta-sans.woff2', '/robots.txt',
   // The header wordmark is already public on every HN Group website.
   '/assets/brand/svg/hn-group-wordmark.svg', '/assets/brand/svg/hn-group-wordmark-white.svg']);
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -101,7 +101,7 @@ function layout(o) {
   return '<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
     '<meta name="theme-color" content="#5514B4"><meta name="robots" content="noindex, nofollow"><title>' + esc(o.title) + ' · HN Group</title>' +
     '<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="preload" href="/assets/fonts/plus-jakarta-sans.woff2" as="font" type="font/woff2" crossorigin>' +
-    '<link rel="stylesheet" href="/assets/branding.css?v=1"><script src="/assets/branding.js?v=1" defer></script></head><body>' +
+    '<link rel="stylesheet" href="/assets/branding.css?v=1"><script src="/assets/hn-theme.js"></script><script src="/assets/branding.js?v=1" defer></script></head><body>' +
     '<div class="stripe" aria-hidden="true">' + STRIPE.map(([id, w]) => '<i class="c-' + id + ' f' + w + '"></i>').join('') + '</div>' +
     '<header class="top"><a class="brand" href="/"><img class="on-light" src="/assets/brand/svg/hn-group-wordmark.svg" alt="HN Group" width="92" height="32"><img class="on-dark" src="/assets/brand/svg/hn-group-wordmark-white.svg" alt="" width="92" height="32"><span class="brand-name">Brand centre</span></a>' +
     (user ? '<div class="user"><span>' + esc(user.name) + '</span><form method="post" action="/auth/logout"><input type="hidden" name="csrf" value="' + esc(user.csrf) + '"><button type="submit" class="link">Sign out</button></form></div>' : '') +

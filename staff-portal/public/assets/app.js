@@ -92,19 +92,17 @@
     }
 
     // Themes on offer. Preview colours: page background, card, accent, and a text line.
+    // The two themes of every HN Group website (the user's request, 6 November 2026). The choice here is saved on your
+    // sign-in account and every HN website follows it (through HN Group Auth and the shared hn_theme cookie).
     const THEMES = [
-        { key: "system", name: "Match my device", preview: ["#f5f6f9", "#ffffff", "#5514b4", "#1a1a1a"], dark: ["#0f1117", "#171a22", "#9a6cf0", "#eceef4"] },
-        { key: "light", name: "HN Light", preview: ["#f5f6f9", "#ffffff", "#5514b4", "#1a1a1a"] },
-        { key: "dark", name: "HN Dark", preview: ["#0f1117", "#171a22", "#9a6cf0", "#eceef4"] },
-        { key: "lavender", name: "Lavender", preview: ["#f5f1fc", "#ffffff", "#7c5cc4", "#241b35"] },
+        { key: "light", name: "Light", preview: ["#faf8fd", "#ffffff", "#6731ad", "#1d1630"] },
         { key: "lavender-dusk", name: "Lavender Dusk", preview: ["#17121f", "#201a2b", "#b79cf2", "#efe9fb"] },
-        { key: "ocean", name: "Ocean", preview: ["#f0f6f8", "#ffffff", "#1f7a8c", "#12262c"] },
-        { key: "forest", name: "Forest", preview: ["#f2f6f1", "#ffffff", "#2f7d4f", "#17261c"] },
-        { key: "midnight", name: "Midnight", preview: ["#0a0f1c", "#111a2c", "#5ea8ff", "#e7eefb"] },
     ];
 
     function applyTheme(theme) {
+        theme = theme === "lavender-dusk" ? "lavender-dusk" : "light";
         if (window.hnApplyTheme) window.hnApplyTheme(theme);
+        if (window.hnTheme) window.hnTheme.apply(theme === "lavender-dusk" ? "dusk" : "light");
     }
 
     // Opens HN Account already signed in, at `next` (the user's request, 6 November 2026): the staff portal asks for a
@@ -6226,7 +6224,7 @@
             "</div>" +
 
             '<div data-pane="appearance" hidden><section class="panel"><h2 class="panel-title">' + icon("palette") + "Theme</h2>" +
-            '<p class="muted small">Choose how the portal looks for you. Your theme is saved to your account, so it follows you to any device.</p>' +
+            '<p class="muted small">Choose how every HN Group website looks for you: the staff portal, HN Mail, Docs, Contracts, HN Account and the rest. Your theme is saved to your sign-in account, so it follows you to any device once you sign in.</p>' +
             '<div class="theme-grid" role="radiogroup" aria-label="Theme">' + THEMES.map(function (t) {
                 return '<button type="button" class="theme-option" role="radio" data-theme-key="' + t.key + '">' +
                     '<span class="theme-preview' + (t.dark ? " split" : "") + '"><span class="tp-bar"></span><span class="tp-card"></span><span class="tp-line"></span><span class="tp-dot"></span>' +

@@ -3,10 +3,12 @@
    stripe runs under the top bar. Animations everywhere, all turned off for people who ask for reduced motion. */
 :root, :root[data-theme="dark"] {
   color-scheme: dark;
-  --ml-bg: #151222; --ml-side: #120f1e; --ml-surface: #201b31; --ml-raised: #2a2340; --ml-hover: #231d36; --ml-line: #2e2640; --ml-line-2: #3c3150;
-  --ml-ink: #f2edfc; --ml-muted: #b2a6c5; --ml-faint: #8a7fa0; --ml-accent: #c3a2ff; --ml-accent-2: #a47bf0; --ml-on-accent: #151222; --ml-danger: #ff8fb1; --ml-star: #ffcf5c;
-  --ml-reader: #191527; --ml-dot: rgba(195, 162, 255, .12); --ml-glass: rgba(21, 18, 34, .88); --ml-tint: rgba(195, 162, 255, .13); --ml-tint-2: rgba(195, 162, 255, .2);
-  --ml-shadow: 0 30px 80px -24px rgba(0, 0, 0, .85); --ml-glow: rgba(195, 162, 255, .55); --ml-toast: #f2edfc; --ml-toast-ink: #151222;
+  /* Lavender Dusk, the staff portal's theme (the user's request, 6 November 2026: every HN website has two themes,
+     Light and Lavender Dusk, chosen under Appearance on the staff portal). */
+  --ml-bg: #17121f; --ml-side: #1a1424; --ml-surface: #201a2b; --ml-raised: #281f35; --ml-hover: #261e31; --ml-line: #33293f; --ml-line-2: #43374f;
+  --ml-ink: #efe9fb; --ml-muted: #a99cbf; --ml-faint: #85799c; --ml-accent: #b79cf2; --ml-accent-2: #a586ec; --ml-on-accent: #1d1530; --ml-danger: #ff94bd; --ml-star: #ffcf5c;
+  --ml-reader: #1b1526; --ml-dot: rgba(183, 156, 242, .11); --ml-glass: rgba(23, 18, 31, .88); --ml-tint: rgba(183, 156, 242, .13); --ml-tint-2: rgba(183, 156, 242, .2);
+  --ml-shadow: 0 30px 80px -24px rgba(0, 0, 0, .85); --ml-glow: rgba(183, 156, 242, .5); --ml-toast: #efe9fb; --ml-toast-ink: #17121f;
 }
 :root[data-theme="light"] {
   color-scheme: light;
@@ -230,6 +232,9 @@ button { font: inherit; color: inherit; }
 .seg button svg { width: 18px; height: 18px; }
 .seg button[aria-pressed="true"] { background: var(--ml-surface); color: var(--ml-ink); box-shadow: 0 4px 12px -6px rgba(0, 0, 0, .4); }
 .seg button[aria-pressed="true"] svg { color: var(--ml-accent); }
+.theme-link { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border-radius: 12px; background: var(--ml-bg); border: 1px solid var(--ml-line); color: var(--ml-ink) !important; text-decoration: none !important; font-weight: 700; font-size: .9rem; }
+.theme-link svg { width: 18px; height: 18px; color: var(--ml-accent); }
+.theme-link small { flex-basis: 100%; font-weight: 500; color: var(--ml-muted); font-size: .76rem; }
 .menu-list { display: grid; gap: 2px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--ml-line); }
 .menu-list a, .menu-list button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; border: 0; border-radius: 10px; background: none; color: var(--ml-ink) !important; text-decoration: none !important; font-size: .92rem; font-weight: 600; text-align: left; cursor: pointer; transition: background .15s; }
 .menu-list a:hover, .menu-list button:hover { background: var(--ml-raised); }

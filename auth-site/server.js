@@ -73,7 +73,14 @@ const random = () => crypto.randomBytes(32).toString('hex');
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 function cookie(req, name) { return (req.headers.cookie || '').split(';').map(s => s.trim()).find(s => s.startsWith(name + '='))?.slice(name.length + 1) || ''; }
 function setCookie(name, value, age = 43200) { return `${name}=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${age}`; }
-function send(res, status, data, cookies = []) { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Set-Cookie': cookies }); res.end(JSON.stringify(data)); }
+// Every response carrying a signed-in account also sets the theme cookie that every *.hngroup.org.uk website reads
+// (light | dusk, brand/web/hn-theme.js; the user's request, 6 November 2026: themes "synced via auth accounts once
+// signed in"). Readable by pages (not HttpOnly) because it only says which colours to use.
+const themeCookie = (theme) => 'hn_theme=' + (theme === 'dusk' ? 'dusk' : 'light') + '; Path=/; Domain=hngroup.org.uk; Max-Age=31536000; Secure; SameSite=Lax';
+function send(res, status, data, cookies = []) {
+  if (data && data.user && (data.user.theme === 'light' || data.user.theme === 'dusk') && !data.user.impersonated) cookies = [...cookies, themeCookie(data.user.theme)];
+  res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Set-Cookie': cookies }); res.end(JSON.stringify(data));
+}
 function redirect(res, url) { res.writeHead(302, { Location: url, 'Cache-Control': 'no-store' }); res.end(); }
 function fail(status, message) { return Object.assign(new Error(message), { status }); }
 async function body(req, limit = 16384) {
@@ -160,7 +167,7 @@ const native=createNative({codes,applications:applicationSessions,profile,requir
 const google=createGoogle({origin:ORIGIN,staff,send,profile,entryFor,setCookie,cookie,finishLogin,destination,random,hash,fail});
 // "Continue with Discord" (discord.js): the same as Google, plus the bot that keeps Discord usernames current.
 const discord=createDiscord({origin:ORIGIN,staff,send,profile,entryFor,setCookie,cookie,finishLogin,destination,random,hash,fail});
-const staticFiles = { '/': 'index.html', '/authorize': 'index.html', '/style.css': 'style.css', '/app.js': 'app.js', '/assets/favicon.svg': 'assets/favicon.svg', '/assets/brand/hn-group-wordmark-white.svg': 'assets/brand/hn-group-wordmark-white.svg', '/assets/brand/hn-group-wordmark.svg': 'assets/brand/hn-group-wordmark.svg', '/assets/fonts/plus-jakarta-sans.woff2': 'assets/fonts/plus-jakarta-sans.woff2' };
+const staticFiles = { '/': 'index.html', '/authorize': 'index.html', '/style.css': 'style.css', '/hn-theme.js': 'hn-theme.js', '/app.js': 'app.js', '/assets/favicon.svg': 'assets/favicon.svg', '/assets/brand/hn-group-wordmark-white.svg': 'assets/brand/hn-group-wordmark-white.svg', '/assets/brand/hn-group-wordmark.svg': 'assets/brand/hn-group-wordmark.svg', '/assets/fonts/plus-jakarta-sans.woff2': 'assets/fonts/plus-jakarta-sans.woff2' };
 const mime = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'application/javascript', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' };
 const server = http.createServer(async (req, res) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');

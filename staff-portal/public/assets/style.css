@@ -3959,10 +3959,11 @@ input[type="range"] { width: 100%; accent-color: var(--primary); }
    Your chosen theme (Midnight, Ocean, …) keeps its colours.
    ================================================================= */
 :root[data-theme="light"] {
-    --primary: #5514B4; --primary-hover: #4710A0; --primary-tint: #EEE6FA; --on-primary: #FFFFFF;
-    --bg: #FFFFFF; --surface: #FFFFFF; --surface-2: #F6F3FB; --input-bg: #FFFFFF; --row-hover: #FAF8FD;
-    --text: #17161C; --text-muted: #5A5C6B; --border: #E5E0EE; --border-strong: #D3CBE2; --border-hover: #CFC6DF;
-    --focus-ring: rgba(85, 20, 180, .16); --primary-soft-border: #DCCDF3;
+    /* HN Mail's Light theme, shared by every HN Group website (the user's request, 6 November 2026). */
+    --primary: #6731AD; --primary-hover: #5514B4; --primary-tint: #EFE8F9; --on-primary: #FFFFFF;
+    --bg: #FAF8FD; --surface: #FFFFFF; --surface-2: #F3EEFA; --input-bg: #FFFFFF; --row-hover: #F6F2FC;
+    --text: #1D1630; --text-muted: #66597C; --border: #E8E0F2; --border-strong: #D9CDEA; --border-hover: #CFC2E3;
+    --focus-ring: rgba(103, 49, 173, .16); --primary-soft-border: #DCCDF3;
 }
 :root[data-theme="dark"] {
     --primary: #A47BF0; --primary-hover: #B994F5; --primary-tint: #2A2350; --on-primary: #12101F;

@@ -70,7 +70,7 @@ const server=http.createServer(async(req,res)=>{
     }
     const assets={
       '/_control/style.css':path.join(CONTROL,'style.css'),'/_control/app.js':path.join(CONTROL,'app.js'),
-      '/_maintenance/style.css':path.join(CONTROL,'style.css'),
+      '/_maintenance/style.css':path.join(CONTROL,'style.css'),'/_control/hn-theme.js':path.join(PUBLIC,'assets/hn-theme.js'),'/_maintenance/hn-theme.js':path.join(PUBLIC,'assets/hn-theme.js'),
       '/_maintenance/logo.svg':path.join(PUBLIC,'assets/brand/horizon-network-wordmark.svg'),
       '/_maintenance/logo-white.svg':path.join(PUBLIC,'assets/brand/horizon-network-wordmark-white.svg'),
       '/_maintenance/font.woff2':path.join(PUBLIC,'assets/fonts/plus-jakarta-sans.woff2'),

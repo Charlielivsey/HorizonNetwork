@@ -374,6 +374,12 @@ function redirect(res, location) {
   send(res, 302, "", { Location: location, "Cache-Control": "no-store" });
 }
 
+// The theme cookie every *.hngroup.org.uk website reads (brand/web/hn-theme.js): light or dusk.
+function themeCookie(req, theme) {
+  const host = String(req.headers["x-forwarded-host"] || req.headers.host || "").split(":")[0].toLowerCase();
+  const domain = host === "hngroup.org.uk" || host.endsWith(".hngroup.org.uk") ? "; Domain=hngroup.org.uk" : "";
+  return "hn_theme=" + (theme === "dusk" ? "dusk" : "light") + "; Path=/" + domain + "; Max-Age=31536000; SameSite=Lax" + (domain ? "; Secure" : "");
+}
 function sendFile(res, filePath, extraHeaders = {}) {
   fs.readFile(filePath, (err, content) => {
     if (err) return send(res, 404, "Not found", { "Content-Type": "text/plain" });
@@ -1276,7 +1282,8 @@ async function routeApi(req, res, pathname, session) {
   }
 
   if (method === "GET" && pathname === "/api/me") {
-    return sendJson(res, 200, { user: meResponse(session) });
+    // Keeps this browser's theme cookie in step with the account (every HN website reads it).
+    return sendJson(res, 200, { user: meResponse(session) }, session.data.impersonatorId ? {} : { "Set-Cookie": themeCookie(req, store.themeOf(me)) });
   }
   if (method === "POST" && pathname === "/api/stop-impersonating") return stopImpersonating(req, res, session);
   if (method === "POST" && pathname === "/api/me/password") return handleChangePassword(req, res, session);
@@ -1315,15 +1322,13 @@ async function routeApi(req, res, pathname, session) {
     store.updateOwnProfile(me, await readJsonBody(req));
     const changed = changedFields(before, me);
     if (changed.length) logEvent(req, session, "profile-updated", { detail: changed.join(", ") });
-    return sendJson(res, 200, { user: meResponse(session) });
+    return sendJson(res, 200, { user: meResponse(session) }, { "Set-Cookie": themeCookie(req, store.themeOf(me)) });
   }
   if (method === "POST" && pathname === "/api/me/theme") {
     const { theme } = await readJsonBody(req);
-    if (theme !== me.theme) {
-      store.setTheme(me, theme);
-      logEvent(req, session, "theme-changed", { target: theme });
-    }
-    return sendJson(res, 200, { user: meResponse(session) });
+    store.setTheme(me, theme);
+    logEvent(req, session, "theme-changed", { target: store.themeOf(me) === "dusk" ? "Lavender Dusk" : "Light" });
+    return sendJson(res, 200, { user: meResponse(session) }, { "Set-Cookie": themeCookie(req, store.themeOf(me)) });
   }
   if (method === "POST" && pathname === "/api/me/avatar") {
     const { image } = await readJsonBody(req, MAX_AVATAR_BODY_BYTES);

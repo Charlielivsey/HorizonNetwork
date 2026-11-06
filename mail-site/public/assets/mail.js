@@ -20,7 +20,7 @@
 
   // Preferences kept in this browser (none of them are secret).
   const store = { get(k, d) { try { const v = localStorage.getItem('hnmail.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem('hnmail.' + k, JSON.stringify(v)); } catch {} } };
-  const prefs = { theme: store.get('theme', 'dark'), images: store.get('images', false), signature: store.get('signature', true), compact: store.get('compact', false), collapsed: store.get('collapsed', false), folds: store.get('folds', {}) };
+  const prefs = { images: store.get('images', false), signature: store.get('signature', true), compact: store.get('compact', false), collapsed: store.get('collapsed', false), folds: store.get('folds', {}) };
 
   let session = null, people = new Map(), directory = [], mailboxes = [], labels = [], view = { label: 'INBOX', q: '', thread: null }, pages = [null], pageIndex = 0, list = [], selected = new Set(), current = null, contacts = new Set();
 
@@ -130,23 +130,17 @@
   }
   tick(); setInterval(tick, 1000);
 
-  // ---------- Themes: Midnight Lavender, Light Lavender, or the computer's choice ----------
-  const darkQuery = matchMedia('(prefers-color-scheme: dark)');
-  const currentTheme = () => (prefs.theme === 'auto' ? (darkQuery.matches ? 'dark' : 'light') : prefs.theme === 'light' ? 'light' : 'dark');
+  // ---------- Theme: Light or Lavender Dusk, the one chosen under Appearance on the staff portal (the user's request,
+  // 6 November 2026), shared by every HN website through the hn_theme cookie (brand/web/hn-theme.js) ----------
+  const currentTheme = () => ((window.hnTheme && window.hnTheme.get()) === 'dusk' || /(?:^|;\s*)hn_theme=dusk(?:;|$)/.test(document.cookie) ? 'dark' : 'light');
   function applyTheme(redraw = true) {
     const t = currentTheme();
     document.documentElement.dataset.theme = t;
     const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = t === 'light' ? '#f3eefa' : '#120f1e';
-    for (const seg of $$('.seg[data-theme-seg]')) for (const b of $$('button', seg)) b.setAttribute('aria-pressed', String(b.dataset.value === prefs.theme));
     // Open emails are drawn for the theme, so they're reloaded in the new one.
     if (redraw) for (const f of $$('.msg-frame')) f.src = f.src.replace(/theme=(dark|light)/, 'theme=' + t);
   }
-  function setTheme(value) { prefs.theme = value; store.set('theme', value); applyTheme(); }
-  darkQuery.addEventListener('change', () => { if (prefs.theme === 'auto') applyTheme(); });
-  function themeSeg() {
-    return h('div', { class: 'seg', 'data-theme-seg': '', role: 'group', 'aria-label': 'Theme' }, ...[['dark', 'Midnight', 'moon'], ['light', 'Light', 'sun'], ['auto', 'Computer', 'auto']].map(([value, name, icon]) =>
-      h('button', { type: 'button', 'data-value': value, 'aria-pressed': String(prefs.theme === value), onclick: () => setTheme(value) }, svg(I[icon]), name)));
-  }
+  document.addEventListener('hn-theme', () => applyTheme());
   applyTheme(false);
 
   // ---------- Routing (#INBOX, #INBOX/<thread>, #search/<words>) ----------
@@ -682,7 +676,7 @@
   for (const b of $$('[data-fold]')) b.addEventListener('click', () => { const k = b.dataset.fold; prefs.folds[k] = prefs.folds[k] === false; store.set('folds', prefs.folds); drawFolders(); });
   // Account menu under the profile picture, with settings (the user's request).
   function closeAccount() { const p = $('.account-pop'); if (p) p.remove(); $('#account-button').setAttribute('aria-expanded', 'false'); }
-  function openSettings() { closeAccount(); $('#set-images').checked = prefs.images; $('#set-signature').checked = prefs.signature; $('#set-compact').checked = prefs.compact; $('#set-theme').replaceChildren(themeSeg()); $('#settings').showModal(); }
+  function openSettings() { closeAccount(); $('#set-images').checked = prefs.images; $('#set-signature').checked = prefs.signature; $('#set-compact').checked = prefs.compact; $('#settings').showModal(); }
   $('#account-button').addEventListener('click', (e) => {
     e.stopPropagation();
     if ($('.account-pop')) return closeAccount();
@@ -690,7 +684,7 @@
     const u = (session && session.user) || {}, g = (session && session.gmail) || {};
     const pop = h('div', { class: 'account-pop', role: 'dialog', 'aria-label': 'Your account' },
       h('div', { class: 'who-card' }, h('img', { src: '/api/avatar', alt: '' }), h('b', { text: u.displayName || 'Your account' }), h('span', { text: u.username || u.email || '' }), h('small', { text: g.connected ? 'Gmail: ' + g.email : 'Gmail isn’t connected' })),
-      h('h3', { text: 'Theme' }), themeSeg(),
+      h('h3', { text: 'Theme' }), h('a', { class: 'theme-link', href: 'https://staff.hngroup.org.uk/settings', target: '_blank', rel: 'noopener' }, svg(currentTheme() === 'dark' ? I.moon : I.sun), currentTheme() === 'dark' ? 'Lavender Dusk' : 'Light', h('small', { text: 'Change on the staff portal (Appearance)' })),
       h('div', { class: 'menu-list' },
         h('button', { type: 'button', onclick: openSettings }, svg(I.gear), 'Settings'),
         h('a', { href: 'https://accounts.hngroup.org.uk/', target: '_blank', rel: 'noopener' }, svg(I.user), 'HN Account'),

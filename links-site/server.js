@@ -68,7 +68,7 @@ function page() {
     '<meta name="description" content="Every HN Group website in one place: our companies, staff services, help, status, careers and more.">' +
     '<title>HN Group Sites</title><link rel="canonical" href="' + ORIGIN + '/"><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">' +
     '<link rel="preload" href="/assets/fonts/plus-jakarta-sans.woff2" as="font" type="font/woff2" crossorigin>' +
-    '<link rel="stylesheet" href="/assets/site.css"><link rel="stylesheet" href="/assets/hn-motion.css"><link rel="stylesheet" href="/assets/sites.css?v=2">' +
+    '<link rel="stylesheet" href="/assets/site.css"><link rel="stylesheet" href="/assets/hn-motion.css"><link rel="stylesheet" href="/assets/sites.css?v=2"><script src="/assets/hn-theme.js"></script>' +
     '<script src="/assets/hn-motion.js" defer></script><script src="/app.js?v=2" defer></script></head><body>' +
     '<a class="skip" href="#directory">Skip to the sites</a>' +
     '<header class="site-header"><div class="wrap header-inner"><a class="brand" href="/" aria-label="HN Group Sites home"><img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="120" height="42"><img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="120" height="42"><span class="brand-label">Sites</span></a>' +

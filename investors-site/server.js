@@ -54,7 +54,7 @@ function layout(o) {
   return '<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
     '<meta name="theme-color" content="#5514B4"><meta name="robots" content="noindex, nofollow"><title>' + esc(o.title) + ' · HN Group Investors</title>' +
     '<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="preload" href="/assets/fonts/plus-jakarta-sans.woff2" as="font" type="font/woff2" crossorigin>' +
-    '<link rel="stylesheet" href="/assets/investors.css?v=6"><script src="/assets/investors.js?v=1" defer></script></head><body class="' + (who || 'public') + '">' +
+    '<link rel="stylesheet" href="/assets/investors.css?v=6"><script src="/assets/hn-theme.js"></script><script src="/assets/investors.js?v=1" defer></script></head><body class="' + (who || 'public') + '">' +
     '<a class="skip" href="#content">Skip to content</a><div class="stripe" aria-hidden="true">' + STRIPE.map(([id, w]) => '<i class="c-' + id + ' f' + w + '"></i>').join('') + '</div>' +
     '<header class="top"><a class="brand" href="' + (who === 'staff' ? '/staff' : '/') + '"><img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="92" height="32"><img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="92" height="32"><span class="brand-name">Investors</span></a>' +
     (nav.length ? '<nav class="nav" aria-label="Main">' + nav.map(([href, label]) => '<a href="' + href + '"' + (o.active === href ? ' aria-current="page"' : '') + '>' + label + (href === '/news' && o.unread ? ' <span class="badge">' + o.unread + '</span>' : '') + '</a>').join('') + '</nav>' : '') +
