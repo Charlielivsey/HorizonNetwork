@@ -430,7 +430,7 @@
     const message = el('textarea', { id: 'c-message', maxlength: 1000, rows: 3, placeholder: 'Optional. Everyone who signs sees it.' }); message.value = c.message || '';
     const due = el('input', { id: 'c-due', type: 'date', value: c.dueDate || '', min: new Date().toISOString().slice(0, 10) });
     const orderAny = el('input', { type: 'radio', name: 'order', value: 'any', checked: c.order !== 'sequence' }), orderSeq = el('input', { type: 'radio', name: 'order', value: 'sequence', checked: c.order === 'sequence' });
-    const search = el('input', { id: 'c-search', type: 'search', placeholder: 'Search the staff list by name or job', autocomplete: 'off', 'aria-expanded': 'false', role: 'combobox', 'aria-controls': 'c-results' });
+    const search = el('input', { id: 'c-search', type: 'search', placeholder: 'Search the staff list by name, legal name or job', autocomplete: 'off', 'aria-expanded': 'false', role: 'combobox', 'aria-controls': 'c-results' });
     const results = el('div', { class: 'results', id: 'c-results', role: 'listbox', hidden: true });
     const chosen = el('div', { class: 'chosen' });
     const boxes = boxesPart(placement);
@@ -448,10 +448,12 @@
       try { people = people || (await api('/api/people')).people; } catch (e) { toast(e.message, true); return; }
       const q = search.value.trim().toLowerCase();
       // Someone already on the list can be added again to sign as something else (as the employee and for the employer).
-      const hits = q ? people.filter((p) => (p.name + ' ' + p.jobTitle + ' ' + p.company).toLowerCase().includes(q)).slice(0, 8) : [];
+      // Their display name, legal name (first and last name), job or company; words in any order.
+      const words = q.split(/\s+/).filter(Boolean);
+      const hits = q ? people.filter((p) => { const hay = (p.name + ' ' + (p.legalName || '') + ' ' + p.jobTitle + ' ' + p.company).toLowerCase(); return words.every((w) => hay.includes(w)); }).slice(0, 8) : [];
       // The first person added is usually the employee, and anyone after them signs for the employer.
       results.replaceChildren(...hits.map((p) => el('button', { type: 'button', role: 'option', onclick: () => { list.push({ ...p, role: list.some((s) => s.role === 'Employee') ? 'On behalf of HN Group Limited' : 'Employee' }); search.value = ''; results.hidden = true; search.setAttribute('aria-expanded', 'false'); drawChosen(); search.focus(); } },
-        face(p.id, p.name, 'small'), el('span', {}, el('strong', { text: p.name }), el('small', { text: list.some((s) => s.id === p.id) ? 'Already signing as ' + list.filter((s) => s.id === p.id).map((s) => s.role).join(', ') + '. Add again to sign as something else.' : [p.jobTitle, p.company].filter(Boolean).join(' · ') })))));
+        face(p.id, p.name, 'small'), el('span', {}, el('strong', { text: p.name }, p.legalName && p.legalName.toLowerCase() !== p.name.toLowerCase() ? el('span', { class: 'legal-name', text: ' (' + p.legalName + ')' }) : null), el('small', { text: list.some((s) => s.id === p.id) ? 'Already signing as ' + list.filter((s) => s.id === p.id).map((s) => s.role).join(', ') + '. Add again to sign as something else.' : [p.jobTitle, p.company].filter(Boolean).join(' · ') })))));
       results.hidden = !hits.length; search.setAttribute('aria-expanded', String(!!hits.length));
     });
     const save = () => api('/api/contracts/' + c.id, { method: 'PUT', json: { title: title.value, message: message.value, dueDate: due.value, order: orderSeq.checked ? 'sequence' : 'any', signers: list.map((s) => ({ id: s.id, role: s.role || '' })), fields: placement.payload() } });

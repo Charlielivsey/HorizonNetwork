@@ -65,7 +65,7 @@ async function staffDirectory() {
   const value = await response.json().catch(() => ({}));
   if (!response.ok || !Array.isArray(value.people)) throw fail(503, 'The staff list is unavailable. Please try again shortly.');
   directory = { at: Date.now(), people: value.people.slice(0, 5000).map((p) => ({ id: String(p.id), accountIds: (Array.isArray(p.accountIds) ? p.accountIds : []).map(String).slice(0, 20),
-    name: String(p.displayName || ''), jobTitle: String(p.jobTitle || ''), company: String(p.company || '') })) };
+    name: String(p.displayName || ''), legalName: String(p.legalName || '').slice(0, 130), jobTitle: String(p.jobTitle || ''), company: String(p.company || '') })) };
   return directory.people;
 }
 
@@ -137,7 +137,7 @@ async function api(req, res, url) {
   }
   if (route === '/api/people' && method === 'GET') {
     if (!store.canSend(user)) throw fail(403, 'Only people who send contracts can see the staff list here.');
-    return send(res, 200, { people: (await staffDirectory()).map(({ id, name, jobTitle, company }) => ({ id, name, jobTitle, company })) });
+    return send(res, 200, { people: (await staffDirectory()).map(({ id, name, legalName, jobTitle, company }) => ({ id, name, legalName, jobTitle, company })) });
   }
   const m = /^\/api\/contracts\/([0-9a-f-]{36})(?:\/(send|sign|decline|cancel|remind|file|certificate))?$/.exec(route);
   if (!m) throw fail(404, 'Not found.');

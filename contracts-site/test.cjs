@@ -35,7 +35,7 @@ test('HN Group Contracts', async () => {
     let b = ''; req.on('data', (c) => { b += c; }); req.on('end', () => {
       const data = JSON.parse(b || '{}'), send = (status, value) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(value)); };
       if (req.headers.authorization !== 'Bearer ' + secret) return send(401, { error: 'No.' });
-      if (req.url === '/api/auth/staff-directory') return send(200, { people: [people.hr, people.jo, people.joOther, people.sam, people.boss].map((p) => ({ id: p.id, accountIds: [p.accountId], displayName: p.displayName, jobTitle: p.jobTitle, company: 'HN Group' })) });
+      if (req.url === '/api/auth/staff-directory') return send(200, { people: [people.hr, people.jo, people.joOther, people.sam, people.boss].map((p) => ({ id: p.id, accountIds: [p.accountId], displayName: p.displayName, legalName: p.firstName + ' ' + p.lastName, jobTitle: p.jobTitle, company: 'HN Group' })) });
       if (req.url === '/api/auth/directory-avatar') { if (data.id !== 'p-jo') return send(404, { error: 'None.' }); res.writeHead(200, { 'Content-Type': 'image/png' }); return res.end(PNG); }
       if (data.client_id !== 'contracts') return send(401, { error: 'No.' });
       if (req.url === '/api/sso/avatar') { if (sessions.get(data.session) !== 'hr') return send(404, { error: 'None.' }); res.writeHead(200, { 'Content-Type': 'image/png' }); return res.end(PNG); }
@@ -88,6 +88,9 @@ test('HN Group Contracts', async () => {
     // Only people with "Send contracts for signing" upload or see the staff list.
     assert.equal((await upload(jo)).status, 403);
     assert.equal((await call('/api/people', { cookie: jo })).status, 403);
+    // People can be found by their legal name as well as their display name (the user's request, 6 November 2026).
+    const staffList = (await call('/api/people', { cookie: hr })).body.people;
+    assert.equal(staffList.find((p) => p.id === 'p-jo').legalName, 'Jo Bloggs');
     assert.equal((await upload(hr, Buffer.from('not a pdf'))).status, 400);
     assert.equal((await upload(hr, PDF, { origin: 'https://evil.example' })).status, 403, 'changes must come from the site');
     r = await upload(hr); assert.equal(r.status, 201);
