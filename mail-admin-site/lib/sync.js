@@ -77,7 +77,8 @@ function createSync({ directory, fetcher = fetch, staffBackend = process.env.STA
     }
     directory.save();
     last = { at: new Date().toISOString(), ok: true, error: null, records: list.length };
-    onChange();
+    // The mail server is brought in line before this returns (so a retry shows its real result).
+    await onChange();
     return last;
   }
   async function run(actor = null, onlyRecord = null) {

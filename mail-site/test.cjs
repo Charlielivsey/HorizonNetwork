@@ -1,14 +1,16 @@
 'use strict';
-// HN Mail (the user's request, 6 November 2026). Runs the real server against stand-ins for HN Group Auth, Google and
-// Gmail.   node --test mail-site/test.cjs
+// HN Mail on HN Group's own mail server.   node --test mail-site/test.cjs
+// The first test needs nothing else. The second (HN_MAIL_LIVE=1, in a test container where mail-server/install.sh has
+// installed the real Postfix + Dovecot + Rspamd) runs HN Mail against the real mail server and the real mail
+// administration site (mail-admin-site) with a stand-in staff backend and a stand-in HN Group Auth.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs'), os = require('node:os'), path = require('node:path'), http = require('node:http');
+const fs = require('node:fs'), os = require('node:os'), path = require('node:path'), http = require('node:http'), { execFileSync } = require('node:child_process');
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-mail-'));
-const secretFile = path.join(dir, 'secret'); fs.writeFileSync(secretFile, 'a'.repeat(64));
-const googleFile = path.join(dir, 'google-oauth.json'); fs.writeFileSync(googleFile, JSON.stringify({ client_id: 'test.apps.googleusercontent.com', client_secret: 'secret-1234' }));
+const secretFile = path.join(dir, 'secret'); fs.writeFileSync(secretFile, 'a'.repeat(64)); process.env.STATUS_SSO_SECRET_FILE = secretFile;
 const hex = (c) => c.repeat(64);
+const LIVE = process.env.HN_MAIL_LIVE === '1';
 
 // ---- HN Group Auth stand-in: the account it hands over is set by each test ----
 let authUser = null;
@@ -21,51 +23,24 @@ const auth = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ session: hex('b'), user: authUser, expires: Date.now() + 86400000 }));
   });
 });
-
-// ---- Google and Gmail stand-ins (the server's fetch) ----
-const sent = [], revoked = [];
-let googleAnswer = { sub: 'g-ada', email: 'ada@hngroup.org.uk', scope: 'openid email https://www.googleapis.com/auth/gmail.modify' }, nonce = '';
-const idToken = (claims) => 'x.' + Buffer.from(JSON.stringify(claims)).toString('base64url') + '.y';
-const b64 = (s) => Buffer.from(s).toString('base64url');
-const MESSAGE = { id: 'aaaaaaaa11', threadId: 'bbbbbbbb22', labelIds: ['INBOX', 'UNREAD'], internalDate: String(Date.now()), snippet: 'Hello &amp; welcome',
-  payload: { mimeType: 'multipart/mixed', headers: [{ name: 'From', value: 'Bob Smith <bob@example.com>' }, { name: 'To', value: 'ada@hngroup.org.uk' }, { name: 'Subject', value: 'Welcome' }, { name: 'Message-ID', value: '<m1@example.com>' }, { name: 'Content-Type', value: 'multipart/mixed' }],
-    parts: [{ partId: '0', mimeType: 'text/html', headers: [{ name: 'Content-Type', value: 'text/html; charset=utf-8' }], body: { data: b64('<p>Hi <img src="https://tracker.example/p.gif"><img src="cid:logo1"></p><img alt="HN Group" src="https://staff.hngroup.org.uk/assets/brand/png/hn-group-email-logo.png"><script>alert(1)</script><meta http-equiv="refresh" content="0;url=https://evil.example">') } },
-      { partId: '1', mimeType: 'image/png', filename: 'logo.png', headers: [{ name: 'Content-ID', value: '<logo1>' }, { name: 'Content-Disposition', value: 'inline' }], body: { attachmentId: 'att-logo', size: 4 } },
-      { partId: '2', mimeType: 'application/pdf', filename: 'report.pdf', headers: [{ name: 'Content-Disposition', value: 'attachment; filename="report.pdf"' }], body: { attachmentId: 'att-pdf', size: 3 } }] } };
+// ---- the staff directory (people and pictures) and, without a live server, the mail directory ----
+let adminBase = '';
 async function fakeFetch(url, opts = {}) {
   const u = new URL(url), json = (status, v) => new Response(JSON.stringify(v), { status, headers: { 'Content-Type': 'application/json' } });
-  if (u.href === 'https://oauth2.googleapis.com/token') {
-    const form = new URLSearchParams(opts.body);
-    if (form.get('grant_type') === 'refresh_token') return form.get('refresh_token') === 'refresh-ada' ? json(200, { access_token: 'access-2', expires_in: 3600 }) : json(400, { error: 'invalid_grant' });
-    assert.ok(form.get('code_verifier')); assert.equal(form.get('client_secret'), 'secret-1234');
-    return json(200, { access_token: 'access-1', expires_in: 3600, refresh_token: 'refresh-ada', scope: googleAnswer.scope,
-      id_token: idToken({ iss: 'https://accounts.google.com', aud: 'test.apps.googleusercontent.com', exp: Date.now() / 1000 + 600, nonce, sub: googleAnswer.sub, email: googleAnswer.email, email_verified: true }) });
-  }
+  if (adminBase && url.startsWith(adminBase)) return fetch(url, opts);
+  if (u.port === '5670') return json(200, { mailboxes: [], blocked: [] });
   if (u.port === '3250') {
     assert.equal(opts.headers.Authorization, 'Bearer ' + 'a'.repeat(64), 'staff list calls carry the service secret');
-    if (u.pathname === '/api/auth/staff-directory') return json(200, { people: [{ id: 'p-jack', displayName: 'Jack', legalName: 'Jack Vinckx', jobTitle: 'Chief Executive Officer', company: 'HN Group', timezone: 'Europe/London', photo: true, emails: ['jack.vinckx@hngroup.org.uk'], email: 'jack.vinckx@hngroup.org.uk' }, { id: 'p-tom', displayName: 'Tom', legalName: 'Tom Guest', jobTitle: 'Helper', company: 'HN Group', photo: false, emails: ['tom@example.com', 'tom.guest@hngroup.org.uk'], contactEmail: 'tom@example.com', email: 'tom@example.com' }] });
-    if (u.pathname === '/api/auth/directory-avatar') return JSON.parse(opts.body).id === 'p-jack' ? new Response(Buffer.from('JPG!'), { status: 200, headers: { 'Content-Type': 'image/jpeg' } }) : json(404, {});
+    if (u.pathname === '/api/auth/staff-directory') return json(200, { people: [{ id: 'p-jack', displayName: 'Jack', legalName: 'Jack Vinckx', jobTitle: 'Chief Executive Officer', company: 'HN Group', photo: true, emails: ['jack.vinckx@hngroup.org.uk'], email: 'jack.vinckx@hngroup.org.uk' }] });
+    if (u.pathname === '/api/auth/directory-avatar') return new Response(Buffer.from('JPG!'), { status: 200, headers: { 'Content-Type': 'image/jpeg' } });
   }
-  if (u.hostname === 'staff.hngroup.org.uk') return u.pathname.endsWith('.png') ? new Response(Buffer.from('PNG!'), { status: 200, headers: { 'Content-Type': 'image/png' } }) : new Response('<html>', { status: 200, headers: { 'Content-Type': 'text/html' } });
-  if (u.origin === 'https://oauth2.googleapis.com' && u.pathname === '/revoke') { revoked.push(u.searchParams.get('token')); return json(200, {}); }
-  assert.ok(String(opts.headers && opts.headers.Authorization).startsWith('Bearer access-'), 'Gmail calls carry the access token');
-  const p = u.pathname.replace('/gmail/v1/users/me', '').replace('/upload', '');
-  if (p === '/profile') return json(200, { historyId: '4242', messagesTotal: 10 });
-  if (p === '/labels') return json(200, { labels: [{ id: 'INBOX', type: 'system' }, { id: 'Label_1', name: 'Projects', type: 'user' }] });
-  if (p.startsWith('/labels/')) return json(200, { id: decodeURIComponent(p.slice(8)), name: 'Projects', type: p.includes('INBOX') ? 'system' : 'user', threadsUnread: 2, threadsTotal: 9 });
-  if (p === '/threads') return json(200, { threads: [{ id: 'bbbbbbbb22' }], resultSizeEstimate: 1 });
-  if (p === '/threads/bbbbbbbb22') return json(200, { id: 'bbbbbbbb22', messages: [MESSAGE] });
-  if (p === '/messages/aaaaaaaa11') return json(200, MESSAGE);
-  if (p === '/messages/aaaaaaaa11/attachments/att-logo') return json(200, { data: b64('PNG!') });
-  if (p === '/messages/aaaaaaaa11/attachments/att-pdf') return json(200, { data: b64('PDF') });
-  if (p === '/settings/sendAs') return json(200, { sendAs: [{ sendAsEmail: 'ada@hngroup.org.uk', displayName: 'Ada Test', isDefault: true, signature: '<b>Ada</b>' }] });
-  if (p === '/threads/bbbbbbbb22/modify') return json(200, {});
-  if (p === '/messages/send') { sent.push({ url: u.href, body: Buffer.from(opts.body).toString('utf8'), type: opts.headers['Content-Type'] }); return json(200, { id: 'cccccccc33', threadId: 'bbbbbbbb22' }); }
-  return json(404, { error: { message: 'not found ' + p } });
+  if (u.hostname === 'staff.hngroup.org.uk') return new Response(Buffer.from('PNG!'), { status: 200, headers: { 'Content-Type': 'image/png' } });
+  return json(404, {});
 }
 
 let base = '', server, cookie = '';
 const req = (route, { method = 'GET', body, headers = {}, jar = true } = {}) => fetch(base + route, { method, redirect: 'manual', headers: { ...(jar && cookie ? { Cookie: cookie } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}), ...(method !== 'GET' ? { Origin: base } : {}), ...headers }, body: body ? JSON.stringify(body) : undefined });
+const getJson = async (route, opts) => { const r = await req(route, opts); return { status: r.status, body: await r.json().catch(() => ({})) }; };
 async function signIn(user) {
   authUser = user;
   const start = await req('/auth/login', { jar: false });
@@ -74,140 +49,149 @@ async function signIn(user) {
   const back = await fetch(base + '/auth/callback?state=' + state + '&code=' + hex('c'), { redirect: 'manual', headers: { Cookie: stateCookie } });
   const set = back.headers.getSetCookie().find((c) => c.startsWith('hn_mail_session='));
   cookie = set ? set.split(';')[0] : '';
+  if (set) await req('/'); // the page straight after signing in
   return back;
 }
-const ADA = { id: 'p1', accountId: 'acct-ada', username: 'ada@hngroup.org.uk', displayName: 'Ada', google: { email: 'ada@hngroup.org.uk', sub: 'g-ada' } };
 
-test('HN Mail: only accounts with a linked Google account, never while impersonating', async () => {
+test.before(async () => {
   await new Promise((r) => auth.listen(0, '127.0.0.1', r));
-  process.env.AUTH_BACKEND = 'http://127.0.0.1:' + auth.address().port; process.env.STATUS_SSO_SECRET_FILE = secretFile;
-  const probe = http.createServer(); await new Promise((r) => probe.listen(0, '127.0.0.1', r)); const port = probe.address().port; await new Promise((r) => probe.close(r));
-  base = 'http://127.0.0.1:' + port; process.env.MAIL_ORIGIN = base;
-  const { createServer } = require('./server');
-  server = createServer({ dir: path.join(dir, 'data'), fetcher: fakeFetch, googleFile });
-  await new Promise((r) => server.listen(port, '127.0.0.1', r));
-
-  assert.equal((await req('/api/session', { jar: false })).status, 401);
-  assert.match((await req('/', { jar: false })).headers.get('location'), /^\/auth\/login/);
-  const noGoogle = await signIn({ ...ADA, google: null });
-  assert.equal(noGoogle.status, 403); assert.match(await noGoogle.text(), /Link a Google account first/);
-  assert.equal(cookie, '', 'no session without a linked Google account');
-  const imp = await signIn({ ...ADA, impersonated: true });
-  assert.equal(imp.status, 403); assert.equal(cookie, '');
-  assert.equal((await signIn(ADA)).status, 302);
-  const s = await (await req('/api/session')).json();
-  assert.equal(s.gmail.connected, false); assert.equal(s.gmail.linkedEmail, 'ada@hngroup.org.uk');
-  assert.match(s.hnSignature, /hn-group-email-logo\.png/, 'the HN Group signature is made for whoever is signed in');
-  // HN Mail asks for HN Group Auth on every reload (the user's request, 6 November 2026).
-  assert.equal((await req('/')).status, 200, 'the page straight after signing in opens');
-  const reload = await req('/');
-  assert.equal(reload.status, 302); assert.match(reload.headers.get('location'), /^\/auth\/login/);
-  assert.equal((await req('/api/session')).status, 401, 'reloading ended that sign-in');
-  assert.equal((await signIn(ADA)).status, 302);
-  assert.equal((await req('/api/labels')).status, 409, 'Gmail must be connected first');
+  process.env.AUTH_BACKEND = 'http://127.0.0.1:' + auth.address().port;
+  process.env.MAIL_ORIGIN = 'http://127.0.0.1';
 });
+test.after(() => { auth.close(); if (server) server.close(); });
 
-async function connect() {
-  const go = await req('/google/connect');
-  assert.equal(go.status, 302);
-  const to = new URL(go.headers.get('location'));
-  assert.equal(to.origin + to.pathname, 'https://accounts.google.com/o/oauth2/v2/auth');
-  assert.match(to.searchParams.get('scope'), /gmail\.modify/); assert.equal(to.searchParams.get('login_hint'), 'ada@hngroup.org.uk'); assert.equal(to.searchParams.get('access_type'), 'offline');
-  nonce = to.searchParams.get('nonce');
-  const bound = go.headers.getSetCookie()[0].split(';')[0];
-  return req('/google/callback?state=' + to.searchParams.get('state') + '&code=abc', { headers: { Cookie: cookie + '; ' + bound } });
+async function start() {
+  if (server) server.close();
+  delete require.cache[require.resolve('./server')]; delete require.cache[require.resolve('./lib/auth')];
+  const { createServer } = require('./server');
+  server = createServer({ dir: path.join(dir, 'data'), fetcher: fakeFetch });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  base = 'http://127.0.0.1:' + server.address().port; process.env.MAIL_ORIGIN = base;
+  delete require.cache[require.resolve('./server')]; delete require.cache[require.resolve('./lib/auth')];
+  server.close(); server = require('./server').createServer({ dir: path.join(dir, 'data'), fetcher: fakeFetch });
+  await new Promise((r) => server.listen(Number(new URL(base).port), '127.0.0.1', r));
 }
 
-test('HN Mail: Gmail is only connected for the linked Google account, and its key is kept encrypted', async () => {
-  googleAnswer = { ...googleAnswer, sub: 'g-someone-else', email: 'other@gmail.com' };
-  const wrong = await connect();
-  assert.equal(wrong.status, 403); assert.match(await wrong.text(), /isn’t the Google account linked/);
-  googleAnswer = { ...googleAnswer, sub: 'g-ada', email: 'ada@hngroup.org.uk', scope: 'openid email' };
-  const noScope = await connect();
-  assert.equal(noScope.status, 403); assert.match(await noScope.text(), /Gmail access wasn’t allowed/);
-  googleAnswer.scope = 'openid email https://www.googleapis.com/auth/gmail.modify';
-  const forged = await req('/google/callback?state=' + 'd'.repeat(64) + '&code=abc');
-  assert.equal(forged.status, 400, 'a state this browser didn’t start is refused');
-  const ok = await connect();
-  assert.equal(ok.status, 302); assert.equal(ok.headers.get('location'), '/');
-  const stored = fs.readFileSync(path.join(dir, 'data', 'grants.json'), 'utf8');
-  assert.ok(!stored.includes('refresh-ada'), 'the refresh token is never stored in plain text');
-  assert.equal((await (await req('/api/session')).json()).gmail.connected, true);
-});
-
-test('HN Mail: labels, conversations, a locked-down body page and downloads', async () => {
-  const labels = (await (await req('/api/labels')).json()).labels;
-  assert.deepEqual(labels.map((l) => l.name), ['Inbox'], 'only the built-in folders (labels were removed at the user’s request)'); assert.equal(labels[0].unread, 2);
-  // People with HN Group accounts: matched by email, with their pictures (the user's request, 6 November 2026).
-  const everyone = await (await req('/api/people')).json(), ppl = everyone.people;
-  assert.deepEqual(ppl.filter((p) => p.id === 'p-jack').map((p) => [p.email, p.jobTitle, p.photo]), [['jack.vinckx@hngroup.org.uk', 'Chief Executive Officer', true]]);
-  assert.ok(ppl.some((p) => p.email === 'tom.guest@hngroup.org.uk' && p.name === 'Tom'), 'mail from any of their addresses shows who they are');
-  // The composer's suggestions use the contact email when someone has one (the user's request, 6 November 2026).
-  assert.deepEqual(everyone.directory.map((d) => [d.name, d.legalName, d.email]), [['Jack', 'Jack Vinckx', 'jack.vinckx@hngroup.org.uk'], ['Tom', 'Tom Guest', 'tom@example.com']]);
-  const face = await req('/api/people/p-jack/photo');
-  assert.equal(face.headers.get('content-type'), 'image/jpeg'); assert.equal(await face.text(), 'JPG!');
-  assert.equal((await req('/api/people/nobody/photo')).status, 404);
-  // Group inboxes with unread counts, and the cheap new-mail check.
-  const boxes = (await (await req('/api/mailboxes')).json()).mailboxes;
-  assert.equal(boxes.length, 22); assert.deepEqual(boxes[0], { name: 'Finance and Billing', email: 'billing@hngroup.org.uk', unread: 1 });
-  assert.deepEqual(await (await req('/api/pulse')).json(), { historyId: '4242', total: 10 });
-  const list = await (await req('/api/threads?label=INBOX')).json();
-  assert.equal(list.threads[0].subject, 'Welcome'); assert.equal(list.threads[0].unread, true); assert.equal(list.threads[0].snippet, 'Hello & welcome');
-  const t = await (await req('/api/threads/bbbbbbbb22')).json();
-  assert.equal(t.messages[0].remoteImages, true); assert.deepEqual(t.messages[0].attachments.map((a) => a.name), ['report.pdf']);
-  const body = await req('/api/messages/aaaaaaaa11/body');
-  const csp = body.headers.get('content-security-policy'), html = await body.text();
-  assert.match(csp, /sandbox allow-scripts allow-popups/); assert.match(csp, /img-src data:;/, 'no outside images until asked');
-  assert.match(csp, /script-src 'nonce-/); assert.doesNotMatch(html, /alert\(1\)/); assert.doesNotMatch(html, /http-equiv/);
-  assert.match(html, /data:image\/png;base64,UE5HIQ==/, 'inline images are embedded');
-  assert.match(html, /<img alt="HN Group" data-hn-logo="1" src="data:image\/png;base64,iVBOR/, 'HN Group signature logos use HN Mail’s see-through copy, shown even before Show images');
-  assert.match((await req('/api/messages/aaaaaaaa11/body?images=1')).headers.get('content-security-policy'), /img-src data: https:/);
-  assert.doesNotMatch(html, /invert/, 'Light Lavender shows emails as they are');
-  const dusk = await (await req('/api/messages/aaaaaaaa11/body?theme=dark')).text();
-  assert.doesNotMatch(dusk, /invert|hue-rotate/, 'Lavender Dusk never recolours an email: the colours are the colours');
-  assert.match(dusk, /hnDusk\.apply\(document\.documentElement\)/, 'Lavender Dusk darkens only the colourless parts of an email (assets/dusk.js)');
-  assert.doesNotMatch(dusk, /background:#ffffff!important/, 'no white box around emails');
-  assert.match(html.length ? dusk : '', /data-hn-logo="1" src="data:image\/png;base64,/, 'HN Group logos are shown from their Lavender Dusk copies');
-  // Signature pictures: only HN Group's sites and Google's image hosts, only real images.
+test('HN Mail: any HN Group Auth account signs in (no Google needed), never while impersonating; no mailbox is explained', async () => {
+  await start();
+  assert.equal((await req('/api/session', { jar: false })).status, 401);
+  assert.match((await req('/', { jar: false })).headers.get('location'), /^\/auth\/login/);
+  const imp = await signIn({ id: 'p9', accountId: 'acct-x', username: 'x@hngroup.org.uk', displayName: 'X', impersonated: true });
+  assert.equal(imp.status, 403); assert.equal(cookie, '');
+  assert.equal((await signIn({ id: 'p1', accountId: 'acct-ada', username: 'ada@hngroup.org.uk', displayName: 'Ada', recordIds: [] })).status, 302, 'no Google account needed');
+  const s = (await getJson('/api/session')).body;
+  assert.equal(s.gmail.connected, false); assert.match(s.gmail.problem, /don’t have a mailbox/);
+  assert.match(s.hnSignature, /hn-group-email-logo\.png/, 'the HN Group signature is made for whoever is signed in');
+  assert.equal(s.settings.imap.host, 'mx.hngroup.org.uk');
+  assert.equal((await getJson('/api/labels')).status, 403, 'no mailbox, nothing to open');
+  const reload = await req('/'); assert.equal(reload.status, 302, 'reloading signs in again through HN Group Auth');
+  assert.equal((await req('/api/session')).status, 401);
+  // Pictures in signatures are limited to HN Group's own logos and Google's image hosts.
+  await signIn({ id: 'p1', accountId: 'acct-ada', username: 'ada@hngroup.org.uk', displayName: 'Ada', recordIds: [] });
   assert.equal((await req('/api/img?u=' + encodeURIComponent('https://evil.example/x.png'))).status, 404);
-  assert.equal((await req('/api/img?u=' + encodeURIComponent('http://staff.hngroup.org.uk/x.png'))).status, 404);
   const logo = await req('/api/img?u=' + encodeURIComponent('https://staff.hngroup.org.uk/assets/brand/png/hn-group-email-logo.png'));
-  assert.equal(logo.status, 200); assert.equal(logo.headers.get('content-type'), 'image/png'); assert.match(logo.headers.get('content-security-policy'), /sandbox/);
-  assert.deepEqual(Buffer.from(await logo.arrayBuffer()).subarray(0, 4), Buffer.from([0x89, 0x50, 0x4e, 0x47]), 'HN Group signature logos come from HN Mail’s own copy');
-  assert.equal((await req('/api/img?u=' + encodeURIComponent('https://staff.hngroup.org.uk/page.html'))).status, 404, 'not an image');
-  const file = await req('/api/messages/aaaaaaaa11/parts/2');
-  assert.equal(file.headers.get('content-type'), 'application/octet-stream'); assert.match(file.headers.get('content-disposition'), /^attachment; filename="report.pdf"/);
-  assert.equal(await file.text(), 'PDF');
-  assert.equal((await req('/api/threads/bbbbbbbb22/modify', { method: 'POST', body: { remove: ['UNREAD'] } })).status, 200);
-  assert.equal((await req('/api/threads/bbbbbbbb22/modify', { method: 'POST', body: { remove: ['UNREAD'] }, headers: { Origin: 'https://evil.example' } })).status, 403, 'changes only from HN Mail itself');
+  assert.equal(logo.status, 200); assert.deepEqual(Buffer.from(await logo.arrayBuffer()).subarray(0, 4), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+  assert.equal((await req('/api/google/connect')).status, 404, 'no Google connection any more');
 });
 
-test('HN Mail: sending builds a proper email through Gmail’s upload address', async () => {
-  const bad = await req('/api/send', { method: 'POST', body: { to: 'not an address', subject: 'x', html: 'x' } });
-  assert.equal(bad.status, 400); assert.match((await bad.json()).error, /isn’t an email address/);
-  const big = await req('/api/send', { method: 'POST', body: { to: 'bob@example.com', attachments: [{ name: 'big.bin', type: 'application/octet-stream', data: Buffer.alloc(26 * 1024 * 1024).toString('base64') }] } });
-  assert.equal(big.status, 413);
-  const r = await req('/api/send', { method: 'POST', body: { to: 'Bob Smith <bob@example.com>', cc: 'carol@example.com', subject: 'Re: Welcome', html: '<p>Thanks!</p>', threadId: 'bbbbbbbb22', inReplyTo: '<m1@example.com>', references: '<m1@example.com>',
-    attachments: [{ name: 'notes.txt', type: 'text/plain', data: Buffer.from('notes').toString('base64') }], include: [{ messageId: 'aaaaaaaa11', partId: '2' }] } });
-  assert.equal(r.status, 200, await r.clone().text());
-  const last = sent[sent.length - 1];
-  assert.match(last.url, /\/upload\/gmail\/v1\/users\/me\/messages\/send\?uploadType=multipart/); assert.match(last.type, /^multipart\/related/);
-  assert.match(last.body, /"threadId":"bbbbbbbb22"/);
-  assert.match(last.body, /From: "Ada Test" <ada@hngroup\.org\.uk>/); assert.match(last.body, /To: "Bob Smith" <bob@example\.com>/); assert.match(last.body, /In-Reply-To: <m1@example\.com>/);
-  assert.match(last.body, /filename="notes.txt"/); assert.match(last.body, /filename="report.pdf"/, 'forwarded attachments come from Gmail');
-});
+test('HN Mail on the real mail server: folders, conversations, body page, attachments, sending, send-as, drafts, app passwords', { skip: !LIVE && 'needs the real mail server (HN_MAIL_LIVE=1)' }, async () => {
+  // The mail administration site, for real, with two staff records.
+  const records = [
+    { id: 'bbbbbbbbbbbbbbb1', displayName: 'Mail Test', emails: [{ address: 'mail.test@hngroup.org.uk', primary: true }], accounts: [{ id: 'acct-mt', username: 'mail.test@hngroup.org.uk', enabled: true }] },
+    { id: 'bbbbbbbbbbbbbbb2', displayName: 'Other Person', emails: [{ address: 'other.person@horizon-network.co.uk', primary: true }], accounts: [{ id: 'acct-op', username: 'other.person@horizon-network.co.uk', enabled: true }] },
+  ];
+  const staff = http.createServer((q, s) => { s.writeHead(200, { 'Content-Type': 'application/json' }); s.end(JSON.stringify({ records })); });
+  await new Promise((r) => staff.listen(0, '127.0.0.1', r)); process.env.STAFF_BACKEND = 'http://127.0.0.1:' + staff.address().port;
+  const admin = require('../mail-admin-site/server').createServer({ dir: path.join(dir, 'admin'), syncEvery: 0 });
+  await new Promise((r) => admin.listen(0, '127.0.0.1', r)); adminBase = 'http://127.0.0.1:' + admin.address().port; process.env.MAIL_ADMIN_BACKEND = adminBase;
+  await admin.sync.run(null);
+  const d = admin.directory, me = d.byRecord('bbbbbbbbbbbbbbb1'), billing = d.byAddress('billing@hngroup.org.uk');
+  d.setMembers(null, billing.id, [{ mailbox: me.id, access: 'full', sendAs: true }]);
+  await admin.sync.run(null);
+  // Wait until Dovecot has read the new users file (it checks the file's time, in whole seconds).
+  for (const [address, box] of [['mail.test@hngroup.org.uk', me], ['billing@hngroup.org.uk', billing]]) {
+    for (let i = 0; i < 20 && !execFileSync('doveadm', ['user', address]).toString().includes('/var/vmail/' + box.id); i++) await new Promise((r) => setTimeout(r, 500));
+  }
+  await start();
+  try {
+    // Mail arrives (straight into the mailbox, as LMTP would).
+    const mid = '<welcome-' + Date.now() + '@example.com>';
+    const msg = (subject, extra, body) => ['From: Bob Smith <bob@example.com>', 'To: mail.test@hngroup.org.uk', 'Subject: ' + subject, 'Message-ID: ' + extra.mid, ...(extra.irt ? ['In-Reply-To: ' + extra.irt, 'References: ' + extra.irt] : []), 'MIME-Version: 1.0', 'Content-Type: multipart/mixed; boundary="b1"', '', '--b1', 'Content-Type: multipart/related; boundary="b2"', '', '--b2', 'Content-Type: text/html; charset=utf-8', '',
+      body, '--b2', 'Content-Type: image/png', 'Content-ID: <logo1>', 'Content-Transfer-Encoding: base64', '', Buffer.from('PNG!').toString('base64'), '--b2--', '--b1', 'Content-Type: application/pdf; name="report.pdf"', 'Content-Disposition: attachment; filename="report.pdf"', 'Content-Transfer-Encoding: base64', '', Buffer.from('PDF').toString('base64'), '--b1--', ''].join('\r\n');
+    execFileSync('doveadm', ['save', '-u', 'mail.test@hngroup.org.uk'], { input: msg('Welcome', { mid }, '<p>Hi <img src="https://tracker.example/p.gif"><img src="cid:logo1"></p><img alt="HN Group" src="https://staff.hngroup.org.uk/assets/brand/png/hn-group-email-logo.png"><script>alert(1)</script><meta http-equiv="refresh" content="0;url=https://evil.example">') });
+    execFileSync('doveadm', ['save', '-u', 'mail.test@hngroup.org.uk'], { input: msg('Re: Welcome', { mid: '<reply-' + Date.now() + '@example.com>', irt: mid }, '<p>And another thing</p>') });
+    execFileSync('doveadm', ['save', '-u', 'billing@hngroup.org.uk'], { input: msg('Invoice question', { mid: '<inv-' + Date.now() + '@example.com>' }, '<p>Where is my invoice?</p>').replace('To: mail.test@hngroup.org.uk', 'To: billing@hngroup.org.uk') });
 
-test('HN Mail: a changed linked Google account drops the old grant; disconnecting revokes it', async () => {
-  authUser = { ...ADA, google: { email: 'ada@hngroup.org.uk', sub: 'g-ada' } };
-  assert.equal((await req('/api/google/disconnect', { method: 'POST' })).status, 200);
-  assert.deepEqual(revoked, ['refresh-ada']);
-  assert.equal((await (await req('/api/session')).json()).gmail.connected, false);
-  assert.equal((await connect()).status, 302);
-  // Someone links a different Google account on Auth: HN Mail stops using the old one at once (within its 30 s check).
-  authUser = { ...ADA, google: { email: 'ada.new@gmail.com', sub: 'g-new' } };
-  const fresh = await signIn(authUser);
-  assert.equal(fresh.status, 302);
-  assert.equal((await (await req('/api/session')).json()).gmail.connected, false);
-  server.close(); auth.close();
-  fs.rmSync(dir, { recursive: true, force: true });
+    await signIn({ id: 'bbbbbbbbbbbbbbb1', accountId: 'acct-mt', username: 'mail.test@hngroup.org.uk', displayName: 'Mail Test', recordIds: ['bbbbbbbbbbbbbbb1'] });
+    const s = (await getJson('/api/session')).body;
+    assert.equal(s.gmail.connected, true);
+    assert.deepEqual(s.mailboxes.map((m) => m.email).sort(), ['billing@hngroup.org.uk', 'mail.test@hngroup.org.uk'], 'own mailbox and the shared one they’re a member of');
+    const shared = s.mailboxes.find((m) => m.kind === 'shared');
+    const boxes = (await getJson('/api/mailboxes')).body.mailboxes;
+    assert.equal(boxes.find((m) => m.kind === 'shared').unread, 1); assert.equal(boxes.find((m) => m.kind === 'person').limitKB, 1048576, '1 GB quota shown');
+
+    const labels = (await getJson('/api/labels')).body.labels;
+    assert.equal(labels.find((l) => l.id === 'INBOX').unread, 2);
+    const list = (await getJson('/api/threads?label=INBOX')).body;
+    assert.equal(list.threads.length, 1, 'the reply joins its conversation'); assert.equal(list.threads[0].count, 2);
+    assert.equal(list.threads[0].subject, 'Welcome'); assert.equal(list.threads[0].attachments, true); assert.equal(list.threads[0].snippet, 'And another thing');
+    const t = (await getJson('/api/threads/' + list.threads[0].id)).body;
+    const first = t.messages[0];
+    assert.equal(first.remoteImages, true); assert.deepEqual(first.attachments.map((a) => a.name), ['report.pdf']);
+    // The email body: its own locked-down page.
+    const page = await req('/api/messages/' + first.id + '/body'), csp = page.headers.get('content-security-policy'), html = await page.text();
+    assert.match(csp, /sandbox allow-scripts allow-popups/); assert.match(csp, /img-src data:;/, 'no outside images until asked');
+    assert.doesNotMatch(html, /alert\(1\)/); assert.doesNotMatch(html, /http-equiv/);
+    assert.match(html, /data:image\/png;base64,UE5HIQ==/, 'inline images are embedded');
+    assert.match(html, /data-hn-logo="1" src="data:image\/png;base64,iVBOR/, 'HN Group logos use HN Mail’s own copies');
+    assert.match((await req('/api/messages/' + first.id + '/body?theme=dark')).headers.get('content-type'), /text\/html/);
+    assert.match(await (await req('/api/messages/' + first.id + '/body?theme=dark')).text(), /hnDusk\.apply/);
+    const file = await req('/api/messages/' + first.id + '/parts/' + first.attachments[0].partId);
+    assert.equal(file.headers.get('content-type'), 'application/octet-stream'); assert.match(file.headers.get('content-disposition'), /^attachment; filename="report.pdf"/); assert.equal(await file.text(), 'PDF');
+    // Star, read, archive, back.
+    assert.equal((await req('/api/threads/' + list.threads[0].id + '/modify', { method: 'POST', body: { add: ['STARRED'], remove: ['UNREAD'] } })).status, 200);
+    assert.equal((await req('/api/threads/' + list.threads[0].id + '/modify', { method: 'POST', body: { remove: ['UNREAD'] }, headers: { Origin: 'https://evil.example' } })).status, 403, 'other sites can’t make changes');
+    assert.equal((await getJson('/api/threads?label=STARRED')).body.threads.length, 2);
+    assert.equal((await getJson('/api/labels')).body.labels.find((l) => l.id === 'INBOX').unread, 0);
+    assert.equal((await req('/api/threads/' + list.threads[0].id + '/modify', { method: 'POST', body: { remove: ['INBOX'] } })).status, 200);
+    assert.equal((await getJson('/api/threads?label=ARCHIVE')).body.threads.length, 1, 'archived');
+    assert.equal((await getJson('/api/threads?label=ALL&q=' + encodeURIComponent('from:bob welcome'))).body.threads.length >= 2, true, 'search');
+
+    // The shared mailbox, through the member's own account.
+    const sharedList = (await getJson('/api/threads?label=INBOX&mb=' + shared.id)).body.threads;
+    assert.equal(sharedList[0].subject, 'Invoice question');
+    // Sending: as yourself, and as the shared mailbox only from it; anything else refused.
+    const bad = await req('/api/send', { method: 'POST', body: { to: 'not an address', subject: 'x', html: 'x' } }); assert.equal(bad.status, 400);
+    const okSend = await req('/api/send', { method: 'POST', body: { to: 'Bob Smith <bob@example.com>', subject: 'Hello Bob', html: '<p>Hi</p>' } });
+    assert.equal(okSend.status, 200, await okSend.clone().text());
+    assert.ok((await getJson('/api/threads?label=SENT')).body.threads.some((x) => x.subject === 'Hello Bob'), 'kept in Sent');
+    assert.equal((await req('/api/send', { method: 'POST', body: { from: 'billing@hngroup.org.uk', to: 'bob@example.com', subject: 'x', html: 'x' } })).status, 403, 'not from your own mailbox');
+    assert.equal((await req('/api/send', { method: 'POST', body: { mb: shared.id, from: 'billing@hngroup.org.uk', to: 'bob@example.com', subject: 'Re: Invoice question', html: '<p>Sent it</p>' } })).status, 200, 'send as the shared mailbox');
+    assert.equal((await req('/api/send', { method: 'POST', body: { mb: shared.id, from: 'mail.test@hngroup.org.uk', to: 'bob@example.com', subject: 'x', html: 'x' } })).status, 403, 'only the shared address from the shared mailbox');
+    await new Promise((r) => setTimeout(r, 2500));
+    assert.ok((await getJson('/api/threads?label=SENT&mb=' + shared.id)).body.threads.some((x) => x.subject === 'Re: Invoice question'), 'the shared mailbox keeps one shared Sent folder');
+    // Drafts (with an attachment), opened again, then deleted.
+    const draft = (await getJson('/api/drafts', { method: 'POST', body: { to: 'bob@example.com', subject: 'Draft one', html: '<p>Draft</p>', attachments: [{ name: 'notes.txt', type: 'text/plain', data: Buffer.from('notes').toString('base64') }] } })).body;
+    assert.match(draft.draftId, /^[a-f0-9]{24}$/);
+    const again = (await getJson('/api/drafts', { method: 'POST', body: { draftId: draft.draftId, to: 'bob@example.com', subject: 'Draft two', html: '<p>Draft</p>', include: [{ messageId: draft.draftId, partId: '2' }] } })).body;
+    const opened = (await getJson('/api/drafts/for/' + again.draftId)).body;
+    assert.equal(opened.subject, 'Draft two'); assert.deepEqual(opened.attachments.map((a) => a.name), ['notes.txt'], 'attachments kept when a draft is saved again');
+    assert.equal((await getJson('/api/labels')).body.labels.find((l) => l.id === 'DRAFT').drafts, 1, 'each save replaces the last');
+    assert.equal((await req('/api/drafts/' + again.draftId, { method: 'DELETE' })).status, 200);
+    // Mailboxes that aren't yours can't be opened.
+    const other = d.byRecord('bbbbbbbbbbbbbbb2');
+    assert.equal((await getJson('/api/threads?label=INBOX&mb=' + other.id)).status, 403);
+    // Mail app passwords: made here, they open the mailbox in a mail app (IMAP), and can be removed.
+    const made = (await getJson('/api/app-passwords', { method: 'POST', body: { label: 'Test phone' } })).body;
+    assert.match(made.password, /^[a-z2-9]{5}(-[a-z2-9]{5}){3}$/);
+    await new Promise((r) => setTimeout(r, 1500));
+    const { connect } = require('./lib/imap');
+    const c = await connect({ user: 'mail.test@hngroup.org.uk', pass: made.password }); await c.logout();
+    await assert.rejects(connect({ user: 'other.person@horizon-network.co.uk', pass: made.password }), 'an app password only opens its own mailbox');
+    const listed = (await getJson('/api/app-passwords')).body.appPasswords; assert.equal(listed.length, 1); assert.equal(listed[0].label, 'Test phone'); assert.ok(!('hash' in listed[0]));
+    assert.equal((await req('/api/app-passwords', { method: 'DELETE', body: { id: made.id } })).status, 200);
+    await new Promise((r) => setTimeout(r, 1500));
+    await assert.rejects(connect({ user: 'mail.test@hngroup.org.uk', pass: made.password }), 'a removed app password stops working');
+    assert.match((await getJson('/api/pulse')).body.historyId, /^[a-f0-9]{16}$/);
+  } finally { admin.close(); staff.close(); }
 });

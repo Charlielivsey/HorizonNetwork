@@ -427,3 +427,14 @@ dialog h3 { margin: 20px 0 8px; font-size: .7rem; letter-spacing: .14em; text-tr
   .account-pop { right: 8px; left: 8px; width: auto; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+/* HN Group mail: storage of the mailbox being looked at, app passwords, the From picker. */
+.mb-usage { padding: 8px 12px 4px; display: grid; gap: 5px; }
+.mb-usage small { color: var(--ml-muted); font-size: .74rem; }
+.mb-usage-bar { height: 6px; border-radius: 99px; background: var(--ml-tint); overflow: hidden; }
+.mb-usage-bar > span { display: block; height: 100%; background: var(--ml-accent); border-radius: 99px; transition: width .6s var(--ease); }
+.mb-usage.warn .mb-usage-bar > span { background: var(--ml-danger); }
+.collapsed .mb-usage { display: none; }
+.app-pw { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--ml-line); }
+.app-pw small { color: var(--ml-muted); }
+#c-from { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ml-ink); font: inherit; padding: 6px 0; }

@@ -30,14 +30,16 @@
     const b = $('#toast-action'); b.hidden = !action; b.textContent = action || ''; b.onclick = () => { t.hidden = true; if (onAction) onAction(); };
     t.hidden = false; clearTimeout(toast.timer); toast.timer = setTimeout(() => { t.hidden = true; }, ms);
   }
+  // Mailbox-specific calls carry the mailbox being looked at (yours unless you picked a shared one).
+  const MB_ROUTES = /^\/api\/(labels|threads|messages|drafts)/;
   async function api(method, path, body) {
+    if (MB_ROUTES.test(path) && view.mb && !/[?&]mb=/.test(path)) path += (path.includes('?') ? '&' : '?') + 'mb=' + view.mb;
     let r;
     try { r = await fetch(path, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined }); }
     catch { throw new Error('HN Mail couldn’t be reached. Check your connection and try again.'); }
     const value = await r.json().catch(() => ({}));
     if (r.status === 401) { location.href = '/auth/login?next=/'; throw Object.assign(new Error('Please sign in again.'), { handled: true }); }
     if (value.code === 'connect') { showConnect(value.error); throw Object.assign(new Error(value.error), { handled: true }); }
-    if (value.code === 'no-google') { location.reload(); throw Object.assign(new Error(value.error), { handled: true }); }
     if (!r.ok) throw new Error(value.error || 'Something went wrong. Please try again.');
     return value;
   }
@@ -145,20 +147,21 @@
   applyTheme(false);
 
   // ---------- Routing (#INBOX, #INBOX/<thread>, #search/<words>) ----------
+  // #INBOX, #INBOX/<conversation>, #search/<words>; a shared mailbox is #m/<mailbox id>/… in front of those.
   function parseHash() {
-    const raw = decodeURIComponent(location.hash.slice(1));
-    if (raw.startsWith('mailbox/')) { const rest = raw.slice(8), i = rest.lastIndexOf('/t:'), email = (i >= 0 ? rest.slice(0, i) : rest).toLowerCase(); return { label: 'ALL', q: mailboxQuery(email), mailbox: email, thread: i >= 0 ? rest.slice(i + 3) : null }; }
-    if (raw.startsWith('search/')) { const rest = raw.slice(7), i = rest.lastIndexOf('/t:'); return { label: 'ALL', q: i >= 0 ? rest.slice(0, i) : rest, thread: i >= 0 ? rest.slice(i + 3) : null }; }
+    let raw = decodeURIComponent(location.hash.slice(1)), mb = null;
+    const shared = /^m\/([a-f0-9]{16})\/?(.*)$/.exec(raw); if (shared) { mb = shared[1]; raw = shared[2]; }
+    if (raw.startsWith('search/')) { const rest = raw.slice(7), i = rest.lastIndexOf('/t:'); return { label: 'ALL', q: i >= 0 ? rest.slice(0, i) : rest, thread: i >= 0 ? rest.slice(i + 3) : null, mb }; }
     const [label, thread] = raw.split('/');
-    return { label: label || 'INBOX', q: '', thread: thread || null };
+    return { label: label || 'INBOX', q: '', thread: thread || null, mb };
   }
-  const mailboxQuery = (email) => '(list:' + email + ' OR to:' + email + ' OR cc:' + email + ')';
-  const hashFor = (v) => '#' + (v.mailbox ? 'mailbox/' + encodeURIComponent(v.mailbox) + (v.thread ? '/t:' + v.thread : '') : v.q ? 'search/' + encodeURIComponent(v.q) + (v.thread ? '/t:' + v.thread : '') : encodeURIComponent(v.label) + (v.thread ? '/' + v.thread : ''));
+  const hashFor = (v) => '#' + (v.mb ? 'm/' + v.mb + '/' : '') + (v.q ? 'search/' + encodeURIComponent(v.q) + (v.thread ? '/t:' + v.thread : '') : encodeURIComponent(v.label) + (v.thread ? '/' + v.thread : ''));
   function go(v) { const target = hashFor({ ...view, ...v }); if (location.hash !== target) location.hash = target; else route(); }
   async function route() {
-    const next = parseHash(), listChanged = next.label !== view.label || next.q !== view.q || !list.length;
+    const next = parseHash(), mailboxChanged = next.mb !== view.mb, listChanged = mailboxChanged || next.label !== view.label || next.q !== view.q || !list.length;
     view = next;
-    $('#search-input').value = view.mailbox ? '' : view.q; $('#search-clear').hidden = !view.q || !!view.mailbox;
+    if (mailboxChanged) { labels = []; loadLabels(); }
+    $('#search-input').value = view.q; $('#search-clear').hidden = !view.q;
     drawMailboxes();
     app.classList.toggle('reading', !!view.thread);
     closeSide();
@@ -183,27 +186,38 @@
     $('#folders').replaceChildren(...FOLDERS.map(([id, name, icon], i) => folderLink('#' + id, name, icon, { i, current: !view.q && view.label === id,
       count: id === 'INBOX' || id === 'SPAM' ? (byId[id] || {}).unread : id === 'DRAFT' ? (byId[id] || {}).drafts : 0 })));
     const saved = savedSearches();
-    $('#saved').replaceChildren(...(saved.length ? saved.map((s, i) => folderLink('#search/' + encodeURIComponent(s.q), s.name, 'search', { current: view.q === s.q && !view.mailbox, remove: () => { const all = savedSearches(); all.splice(i, 1); store.set(savedKey(), all); drawFolders(); } })) : [h('p', { class: 'empty', text: 'None yet' })]));
+    $('#saved').replaceChildren(...(saved.length ? saved.map((s, i) => folderLink('#search/' + encodeURIComponent(s.q), s.name, 'search', { current: view.q === s.q, remove: () => { const all = savedSearches(); all.splice(i, 1); store.set(savedKey(), all); drawFolders(); } })) : [h('p', { class: 'empty', text: 'None yet' })]));
     for (const [k, el] of [['saved', '#saved']]) { const open = prefs.folds[k] !== false; $(el).hidden = !open; $('[data-fold="' + k + '"]').setAttribute('aria-expanded', String(open)); }
     const inbox = byId.INBOX;
     document.title = (inbox && inbox.unread ? '(' + inbox.unread + ') ' : '') + 'HN Mail · HN Group';
   }
   const savedKey = () => 'saved.' + ((session && session.gmail.email) || 'me');
   const savedSearches = () => { const v = store.get(savedKey(), []); return Array.isArray(v) ? v.filter((x) => x && x.q && x.name) : []; };
-  // Your own address and the group inboxes (the user's request, 6 November 2026); clicking one shows the mail that
-  // reached you through it.
+  // Your mailbox and the shared mailboxes you're a member of (HN Group mail): clicking one opens it, with its own folders.
+  const size_ = (kb) => kb == null ? '' : kb >= 1048576 ? (kb / 1048576).toFixed(kb >= 10485760 ? 0 : 1) + ' GB' : kb >= 1024 ? Math.round(kb / 1024) + ' MB' : Math.round(kb) + ' KB';
   function drawMailboxes() {
     const box = $('#mailbox'); if (!box || !session) return;
-    const own = session.gmail.email || session.gmail.linkedEmail || '';
-    const ownLink = h('a', { class: 'folder mailbox-item', href: '#INBOX', title: own, 'aria-current': !view.q && view.label === 'INBOX' ? 'page' : null }, h('img', { class: 'mb-pic', src: '/api/avatar', alt: '' }), h('span', { class: 'mb-text' }, h('span', { class: 'name', text: 'My inbox' }), h('small', { text: own })));
-    box.replaceChildren(ownLink, ...mailboxes.map((m) => h('a', { class: 'folder mailbox-item', href: '#mailbox/' + encodeURIComponent(m.email), title: m.name + ' · ' + m.email, 'aria-current': view.mailbox === m.email ? 'page' : null },
-      h('span', { class: 'mb-icon' }, svg('M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1|M9 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6z|M22 19v-1a4 4 0 0 0-3-3.9|M16 4.1a3 3 0 0 1 0 5.8')),
-      h('span', { class: 'mb-text' }, h('span', { class: 'name', text: m.name }), h('small', { text: m.email })), m.unread ? h('span', { class: 'count', text: m.unread > 99 ? '99+' : m.unread }) : null)));
+    const list = mailboxes.length ? mailboxes : (session.mailboxes || []).map((m) => ({ ...m, unread: 0 }));
+    const ownId = (list.find((m) => m.kind === 'person') || {}).id;
+    const items = list.map((m) => {
+      const own = m.id === ownId, here = own ? !view.mb : view.mb === m.id;
+      return h('a', { class: 'folder mailbox-item', href: own ? '#INBOX' : '#m/' + m.id + '/INBOX', title: m.name + ' · ' + m.email, 'aria-current': here && !view.q && view.label === 'INBOX' ? 'page' : here ? 'true' : null },
+        own ? h('img', { class: 'mb-pic', src: '/api/avatar', alt: '' }) : h('span', { class: 'mb-icon' }, svg('M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1|M9 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6z|M22 19v-1a4 4 0 0 0-3-3.9|M16 4.1a3 3 0 0 1 0 5.8')),
+        h('span', { class: 'mb-text' }, h('span', { class: 'name', text: own ? 'My inbox' : m.name }), h('small', { text: m.email + (m.access === 'read' ? ' · read only' : '') })), m.unread ? h('span', { class: 'count', text: m.unread > 99 ? '99+' : m.unread }) : null);
+    });
+    // Storage of the mailbox you're looking at (each mailbox has its own limit, 1 GB unless an administrator changed it).
+    const cur = list.find((m) => (view.mb ? m.id === view.mb : m.id === ownId));
+    if (cur && cur.limitKB) {
+      const pct = Math.min(100, Math.round(((cur.usedKB || 0) / cur.limitKB) * 100)), bar = h('span');
+      bar.style.width = pct + '%';
+      items.push(h('div', { class: 'mb-usage' + (pct >= 90 ? ' warn' : ''), title: 'Storage used by ' + cur.email }, h('div', { class: 'mb-usage-bar' }, bar), h('small', { text: size_(cur.usedKB || 0) + ' of ' + size_(cur.limitKB) + ' used (' + pct + '%)' })));
+    }
+    box.replaceChildren(...items);
   }
-  async function loadMailboxes(fresh) { try { mailboxes = (await api('GET', '/api/mailboxes' + (fresh ? '?fresh=1' : ''))).mailboxes; drawMailboxes(); if (view.mailbox) $('#list-title').textContent = titleFor(); } catch (e) { if (!e.handled) console.warn(e.message); } }
+  async function loadMailboxes() { try { mailboxes = (await api('GET', '/api/mailboxes')).mailboxes; drawMailboxes(); $('#list-title').textContent = titleFor(); } catch (e) { if (!e.handled) console.warn(e.message); } }
   async function loadPeople() { try { const r = await api('GET', '/api/people'); people = new Map(r.people.map((p) => [p.email, p])); directory = r.directory || []; } catch {} }
   async function loadLabels() { try { labels = (await api('GET', '/api/labels')).labels; drawFolders(); } catch (e) { report(e); } }
-  const titleFor = () => (view.mailbox ? ((mailboxes.find((x) => x.email === view.mailbox) || {}).name || view.mailbox) : view.q ? 'Search results' : (FOLDERS.find((f) => f[0] === view.label) || [])[1] || 'Mail');
+  const titleFor = () => (view.mb && !view.q ? ((mailboxes.find((x) => x.id === view.mb) || (session.mailboxes || []).find((x) => x.id === view.mb) || {}).name || 'Shared mailbox') + ' · ' + ((FOLDERS.find((f) => f[0] === view.label) || [])[1] || '') : view.q ? 'Search results' : (FOLDERS.find((f) => f[0] === view.label) || [])[1] || 'Mail');
 
   // ---------- Conversation list ----------
   async function loadList(quiet = false) {
@@ -378,11 +392,11 @@
       wrap.append(note);
     }
     wrap.append(frame);
-    if (m.attachments.length) wrap.append(h('ul', { class: 'files' }, ...m.attachments.map((a) => h('li', {}, h('a', { class: 'file', href: '/api/messages/' + m.id + '/parts/' + a.partId, download: a.name, title: 'Download ' + a.name }, svg(I.clip), h('span', { text: a.name }), h('small', { text: size(a.size) }))))));
+    if (m.attachments.length) wrap.append(h('ul', { class: 'files' }, ...m.attachments.map((a) => h('li', {}, h('a', { class: 'file', href: '/api/messages/' + m.id + '/parts/' + a.partId + (view.mb ? '?mb=' + view.mb : ''), download: a.name, title: 'Download ' + a.name }, svg(I.clip), h('span', { text: a.name }), h('small', { text: size(a.size) }))))));
     return [wrap];
   }
   const shownImages = new Set();
-  const bodyUrl = (id, images) => '/api/messages/' + id + '/body?theme=' + currentTheme() + (images ? '&images=1' : '');
+  const bodyUrl = (id, images) => '/api/messages/' + id + '/body?theme=' + currentTheme() + (images ? '&images=1' : '') + (view.mb ? '&mb=' + view.mb : '');
   // Email frames report their height (they can't touch this page).
   window.addEventListener('message', (e) => {
     if (!e.data || typeof e.data.hnMailHeight !== 'number') return;
@@ -461,7 +475,18 @@
   for (const id of ['#c-to', '#c-cc', '#c-bcc']) attachSuggest($(id));
 
   // ---------- Writing ----------
-  const C = { open: false, draftId: null, threadId: null, inReplyTo: '', references: '', files: [], include: [], dirty: false, saving: null, timer: null };
+  const C = { open: false, draftId: null, threadId: null, inReplyTo: '', references: '', files: [], include: [], dirty: false, saving: null, timer: null, mb: null };
+  // Who the message is from: any address you may send as (yours, and shared mailboxes you may send as). The mail server
+  // checks it again. By default the mailbox you're looking at (a shared one sends as itself), otherwise your own.
+  function drawFrom(wanted) {
+    const sel = $('#c-from'), opts = [];
+    for (const m of session.mailboxes || []) for (const a of m.sendAs || []) opts.push({ mb: m.id, email: a, label: (m.kind === 'shared' ? m.name : session.user.displayName) + ' <' + a + '>' });
+    sel.replaceChildren(...opts.map((o) => h('option', { value: o.mb + '|' + o.email, text: o.label })));
+    const pick = opts.find((o) => o.email === wanted) || opts.find((o) => o.mb === view.mb) || opts.find((o) => (session.mailboxes || []).find((m) => m.id === o.mb && m.kind === 'person')) || opts[0];
+    if (pick) sel.value = pick.mb + '|' + pick.email;
+    $('#c-from-row').hidden = opts.length < 2;
+    C.mb = pick ? pick.mb : null;
+  }
   const editor = $('#c-editor');
   // "Use my Gmail signature" on: the signature set in Gmail (or the HN one if Gmail has none); off: the HN Group signature
   // made for whoever is signed in (the user's request, 6 November 2026).
@@ -474,6 +499,7 @@
   async function openComposer(fill = {}) {
     if (C.open && C.dirty) { await saveDraft(); if (C.saving) await C.saving.catch(() => {}); }
     Object.assign(C, { open: true, draftId: fill.draftId || null, threadId: fill.threadId || null, inReplyTo: fill.inReplyTo || '', references: fill.references || '', files: [], include: fill.include || [], dirty: false, saving: null });
+    drawFrom(fill.from);
     $('#c-to').value = fill.to || ''; $('#c-cc').value = fill.cc || ''; $('#c-bcc').value = fill.bcc || ''; $('#c-subject').value = fill.subject || '';
     $('#c-cc-row').hidden = !fill.cc && !fill.bcc; $('#c-bcc-row').hidden = !fill.cc && !fill.bcc; $('#c-show-cc').hidden = !!(fill.cc || fill.bcc);
     editor.innerHTML = fill.html != null ? fill.html : signature();
@@ -502,7 +528,7 @@
   async function openDraft(messageId) {
     try {
       const d = await api('GET', '/api/drafts/for/' + messageId);
-      openComposer({ title: 'Draft', draftId: d.draftId, threadId: d.threadId, to: d.to, cc: d.cc, bcc: d.bcc, subject: d.subject, inReplyTo: d.inReplyTo, references: d.references, html: sanitize(d.html), include: d.attachments.map((a) => ({ messageId: d.messageId, partId: a.partId, name: a.name, size: a.size })) });
+      openComposer({ title: 'Draft', draftId: d.draftId, threadId: d.threadId, from: d.from, to: d.to, cc: d.cc, bcc: d.bcc, subject: d.subject, inReplyTo: d.inReplyTo, references: d.references, html: sanitize(d.html), include: d.attachments.map((a) => ({ messageId: d.messageId, partId: a.partId, name: a.name, size: a.size })) });
     } catch (e) { report(e); }
   }
   function drawFiles() {
@@ -529,11 +555,13 @@
     const copy = editor.cloneNode(true);
     if (window.hnDusk) window.hnDusk.undo(copy);
     for (const img of copy.querySelectorAll('img[data-hn-src]')) { img.setAttribute('src', img.getAttribute('data-hn-src')); img.removeAttribute('data-hn-src'); img.removeAttribute('data-hn-logo'); }
-    return { to: $('#c-to').value, cc: $('#c-cc').value, bcc: $('#c-bcc').value, subject: $('#c-subject').value, html: copy.innerHTML, threadId: C.threadId, inReplyTo: C.inReplyTo, references: C.references,
+    const [mb, from] = String($('#c-from').value || '').split('|');
+    return { mb: mb || C.mb || undefined, from: from || undefined, to: $('#c-to').value, cc: $('#c-cc').value, bcc: $('#c-bcc').value, subject: $('#c-subject').value, html: copy.innerHTML, threadId: C.threadId, inReplyTo: C.inReplyTo, references: C.references,
       draftId: C.draftId, include: C.include.map(({ messageId, partId }) => ({ messageId, partId })), attachments: await Promise.all(C.files.map(async (f) => ({ name: f.name, type: f.type, data: await readFile(f) }))) };
   }
   function changed() { if (!C.open) return; C.dirty = true; $('#composer-state').textContent = ''; clearTimeout(C.timer); C.timer = setTimeout(saveDraft, 3000); }
-  // Saves the draft in Gmail. Files added here are uploaded once: after saving they're used from the saved draft.
+  // Saves the draft in the mailbox's Drafts folder (each save replaces the last). Files added here are uploaded once:
+  // after saving they're used from the saved draft.
   function saveDraft() {
     clearTimeout(C.timer);
     if (!C.open || !C.dirty) return C.saving;
@@ -545,8 +573,9 @@
       try {
         const r = await api('POST', '/api/drafts', await payload());
         C.draftId = r.draftId;
-        if (uploading.length && r.messageId) {
-          const d = await api('GET', '/api/drafts/for/' + r.messageId);
+        if ((uploading.length || C.include.length) && r.messageId) {
+          const [mb] = String($('#c-from').value || '').split('|');
+          const d = await api('GET', '/api/drafts/for/' + r.messageId + (mb ? '?mb=' + mb : ''));
           C.include = d.attachments.map((a) => ({ messageId: d.messageId, partId: a.partId, name: a.name, size: a.size }));
           C.files = C.files.filter((f) => !uploading.includes(f));
           drawFiles();
@@ -608,19 +637,37 @@
   });
   window.addEventListener('beforeunload', (e) => { if (C.open && C.dirty) { saveDraft(); e.preventDefault(); e.returnValue = ''; } });
 
-  // ---------- Connect Gmail ----------
+  // ---------- No mailbox (HN Group mail) ----------
   function showConnect(reason) {
     app.classList.add('connecting'); app.setAttribute('aria-busy', 'false');
-    const g = (session && session.gmail) || {}, linked = g.linkedEmail || '';
     const stripe = [['#E97DE8', 28], ['#5514B4', 28], ['#E3E65B', 12], ['#3E9BA3', 40], ['#7A1F6C', 20], ['#C2306B', 20], ['#5FAE7B', 26], ['#3A4166', 26]].map(([c, w]) => { const s = h('span'); s.style.background = c; s.style.width = w + 'px'; return s; });
     $('#connect').replaceChildren(h('div', { class: 'connect-card' }, h('div', { class: 'steps-mini', 'aria-hidden': 'true' }, ...stripe),
-      h('p', { class: 'eyebrow', text: 'HN MAIL' }), h('h1', { text: 'Connect your Gmail' }), reason ? h('p', { class: 'form-error', text: reason }) : null,
-      h('p', { class: 'lead', text: 'HN Mail shows your Gmail the HN Group way. Google will ask you once to allow it.' }),
-      h('ul', {}, h('li', { text: 'Only the Google account linked to your HN Group Auth account can be used' + (linked ? ': ' + linked + '.' : '.') }), h('li', { text: 'Your mail stays in Gmail. HN Mail doesn’t keep copies of it.' }), h('li', { text: 'You can disconnect at any time in Settings, or in your Google account.' })),
-      g.configured === false ? h('p', { class: 'form-error', text: 'Google isn’t set up on this server yet, so Gmail can’t be connected. Ask the system owner.' }) : h('a', { class: 'send-btn', href: '/google/connect', style: 'display:inline-flex;align-items:center;text-decoration:none' }, 'Continue with Google')));
+      h('p', { class: 'eyebrow', text: 'HN MAIL' }), h('h1', { text: 'No mailbox to open' }),
+      h('p', { class: 'lead', text: reason || (session && session.gmail.problem) || 'Your HN Group Auth account doesn’t have a mailbox on HN Group mail yet.' }),
+      h('ul', {}, h('li', { text: 'Mailboxes are made automatically from staff records that have an HN Group email address.' }), h('li', { text: 'Shared mailboxes appear here once a mail administrator adds you to them.' })),
+      h('a', { class: 'send-btn', href: '/auth/login', style: 'display:inline-flex;align-items:center;text-decoration:none' }, 'Check again')));
     $('#connect').hidden = false;
   }
-
+  // ---------- Mail apps (app passwords) ----------
+  async function drawAppPasswords() {
+    const box = $('#app-passwords'); if (!box) return;
+    const own = (session.mailboxes || []).find((m) => m.kind === 'person');
+    if (!own) { box.replaceChildren(h('p', { class: 'muted small', text: 'You need a mailbox of your own to use mail apps.' })); return; }
+    try {
+      const { appPasswords } = await api('GET', '/api/app-passwords');
+      box.replaceChildren(...(appPasswords.length ? appPasswords.map((p) => h('div', { class: 'app-pw' }, h('span', {}, h('b', { text: p.label }), h('small', { text: ' · added ' + new Date(p.createdAt).toLocaleDateString('en-GB') })),
+        h('button', { class: 'btn-plain danger', type: 'button', text: 'Remove', onclick: async () => { if (!(await confirmBox('Remove “' + p.label + '”?', 'Any app using it will stop getting your mail until you give it a new app password.', 'Remove'))) return; try { await api('DELETE', '/api/app-passwords', { id: p.id }); drawAppPasswords(); toast('App password removed.'); } catch (e) { report(e); } } }))) : [h('p', { class: 'muted small', text: 'No app passwords yet.' })]));
+    } catch (e) { box.replaceChildren(h('p', { class: 'form-error', text: e.message })); }
+  }
+  $('#app-password-new').addEventListener('click', async () => {
+    const r = await promptBox('New app password', 'Which app or device is it for? (e.g. iPhone Mail)', { ok: 'Create' });
+    if (!r || !r.value) return;
+    try {
+      const made = await api('POST', '/api/app-passwords', { label: r.value });
+      await confirmBox('Your app password for ' + made.label, made.password + '\n\nType it into the app as the password, with ' + ((session.mailboxes || []).find((m) => m.kind === 'person') || {}).email + ' as the user name. It is shown only now; remove it here if the device is lost.', 'Done');
+      drawAppPasswords();
+    } catch (e) { report(e); }
+  });
   // ---------- Profile cards on hover (the user's request, 6 November 2026: "when i hover over things like that, even
   // myself it should show something like that") ----------
   let cardTimer = null, cardFor = null;
@@ -671,7 +718,7 @@
   document.addEventListener('click', (e) => { if (app.classList.contains('side-open') && !e.target.closest('#side')) closeSide(); });
   $('#search').addEventListener('submit', (e) => { e.preventDefault(); const q = $('#search-input').value.trim(); $('#search-input').blur(); go(q ? { q, label: 'ALL', mailbox: null, thread: null } : { q: '', label: 'INBOX', mailbox: null, thread: null }); });
   $('#search-input').addEventListener('input', () => { $('#search-clear').hidden = !$('#search-input').value; });
-  $('#search-clear').addEventListener('click', () => { $('#search-input').value = ''; $('#search-clear').hidden = true; if (view.q && !view.mailbox) go({ q: '', label: 'INBOX', mailbox: null, thread: null }); else $('#search-input').focus(); });
+  $('#search-clear').addEventListener('click', () => { $('#search-input').value = ''; $('#search-clear').hidden = true; if (view.q) go({ q: '', label: 'INBOX', mailbox: null, thread: null }); else $('#search-input').focus(); });
   $('#compose-btn').addEventListener('click', () => { closeSide(); openComposer(); });
   $('#compose-fab').addEventListener('click', () => openComposer());
   $('#refresh').addEventListener('click', () => { loadList(); loadLabels(); });
@@ -686,7 +733,7 @@
   for (const b of $$('[data-fold]')) b.addEventListener('click', () => { const k = b.dataset.fold; prefs.folds[k] = prefs.folds[k] === false; store.set('folds', prefs.folds); drawFolders(); });
   // Account menu under the profile picture, with settings (the user's request).
   function closeAccount() { const p = $('.account-pop'); if (p) p.remove(); $('#account-button').setAttribute('aria-expanded', 'false'); }
-  function openSettings() { closeAccount(); $('#set-images').checked = prefs.images; $('#set-signature').checked = prefs.signature; $('#set-compact').checked = prefs.compact; $('#settings').showModal(); }
+  function openSettings() { closeAccount(); $('#set-images').checked = prefs.images; $('#set-compact').checked = prefs.compact; drawAppPasswords(); $('#settings').showModal(); }
   $('#account-button').addEventListener('click', (e) => {
     e.stopPropagation();
     if ($('.account-pop')) return closeAccount();
@@ -707,14 +754,9 @@
   document.addEventListener('click', closeAccount);
   function setImages(on) { prefs.images = on; store.set('images', on); if (current && view.thread) openThread(current.id, true); }
   $('#set-images').addEventListener('change', (e) => setImages(e.target.checked));
-  $('#set-signature').addEventListener('change', (e) => { prefs.signature = e.target.checked; store.set('signature', prefs.signature); });
   $('#set-compact').addEventListener('change', (e) => { prefs.compact = e.target.checked; store.set('compact', prefs.compact); drawList(); });
   for (const b of $$('[data-close]')) b.addEventListener('click', () => $('#' + b.dataset.close).close());
   for (const d of $$('dialog')) d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
-  $('#disconnect').addEventListener('click', async () => {
-    if (!(await confirmBox('Disconnect Gmail?', 'HN Mail will stop showing your mail until you connect it again. Nothing is deleted from Gmail.', 'Disconnect'))) return;
-    try { await api('POST', '/api/google/disconnect'); $('#settings').close(); session.gmail.connected = false; showConnect(); } catch (e) { report(e); }
-  });
   window.addEventListener('hashchange', route);
   document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && C.open && $('#composer').contains(document.activeElement)) { e.preventDefault(); $('#composer-form').requestSubmit(); return; }
@@ -739,7 +781,7 @@
       if (lastHistory && r.historyId && r.historyId !== lastHistory) {
         const inboxBefore = (labels.find((l) => l.id === 'INBOX') || {}).unread || 0;
         if (pageIndex === 0 && !selected.size) await loadList(true);
-        await loadLabels(); loadMailboxes(true); loadPeople();
+        await loadLabels(); loadMailboxes(); loadPeople();
         const inboxNow = (labels.find((l) => l.id === 'INBOX') || {}).unread || 0;
         if (inboxNow > inboxBefore) { const newest = list.find((t) => t.unread); toast(newest ? 'New mail from ' + (newest.from[newest.from.length - 1] || 'someone') + ': ' + newest.subject : 'New mail.', { action: newest ? 'Open' : undefined, onAction: newest ? () => go({ thread: newest.id }) : undefined }); }
         if (current && view.thread === current.id) openThread(current.id, true);
@@ -754,8 +796,9 @@
     app.classList.toggle('collapsed', prefs.collapsed); $('#menu-btn').setAttribute('aria-expanded', String(!prefs.collapsed));
     setImages(prefs.images);
     try { session = await api('GET', '/api/session'); } catch (e) { report(e); return; }
-    $('#settings-gmail').textContent = session.gmail.connected ? 'Connected as ' + session.gmail.email + '. Disconnecting stops HN Mail showing your mail; nothing is deleted from Gmail.' : 'Gmail isn’t connected.';
-    $('#disconnect').hidden = !session.gmail.connected;
+    const own = (session.mailboxes || []).find((m) => m.kind === 'person');
+    $('#settings-gmail').textContent = own ? own.email + (own.quotaMB ? ' · storage limit ' + (own.quotaMB >= 1024 ? (own.quotaMB / 1024) + ' GB' : own.quotaMB + ' MB') : '') + '. Shared mailboxes you can open are listed under Mailbox.' : 'You don’t have a mailbox of your own.';
+    $('#mail-app-settings').textContent = 'Incoming (IMAP): ' + session.settings.imap.host + ', port ' + session.settings.imap.port + ', SSL/TLS. Outgoing (SMTP): ' + session.settings.smtp.host + ', port ' + session.settings.smtp.port + ' SSL/TLS (or ' + session.settings.smtp.alt + ' STARTTLS). User name: your email address. Password: an app password from below, never your HN Group password.';
     if (!session.gmail.connected) return showConnect();
     await loadPeople();
     await Promise.all([loadLabels(), route(), loadMailboxes()]);

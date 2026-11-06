@@ -28,13 +28,16 @@ function createApplier({ etc = ETC, enabled = process.env.HN_MAIL_APPLY !== '0',
     for (const [rel, content] of Object.entries(files)) {
       const target = path.join(etc, rel), dir = path.dirname(target);
       fs.mkdirSync(dir, { recursive: true });
-      let old = null; try { old = fs.readFileSync(target, 'utf8'); } catch {}
+      let old = null, oldTime = 0; try { old = fs.readFileSync(target, 'utf8'); oldTime = fs.statSync(target).mtimeMs; } catch {}
       if (old === content) continue;
       const top = rel.split('/')[0], group = GROUPS[top] ? gid(GROUPS[top]) : null;
       const tmp = target + '.tmp-' + process.pid;
       fs.writeFileSync(tmp, content, { mode: group !== null ? 0o640 : 0o644 });
       if (group !== null) { try { fs.chownSync(tmp, 0, group); } catch {} }
       fs.renameSync(tmp, target);
+      // Dovecot and Postfix notice changed files by their time in whole seconds: make sure it moves on, even when the
+      // file is rewritten several times within one second.
+      if (Math.floor(Date.now() / 1000) <= Math.floor(oldTime / 1000)) { const t = new Date(Math.floor(oldTime / 1000) * 1000 + 1000); try { fs.utimesSync(target, t, t); } catch {} }
       changed.push(rel);
     }
     return changed;
