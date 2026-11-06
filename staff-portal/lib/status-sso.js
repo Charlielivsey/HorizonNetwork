@@ -53,7 +53,7 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
     // own profile), with that company's job; permissions come from the sign-in account (store.viewOf).
     const login=p.__login,profiles=login?store.loginProfiles(login):[];
     return {
-      id:p.profileId||p.id,accountId:login?login.id:p.id,displayName:p.displayName,firstName:p.firstName||'',lastName:p.lastName||'',email:(p.emails||[]).find(e=>e.primary)?.address||p.emails?.[0]?.address||store.loginName(p),
+      id:p.profileId||p.id,accountId:login?login.id:p.id,displayName:p.displayName,firstName:p.firstName||'',lastName:p.lastName||'',email:(p.emails||[]).find(e=>e.primary)?.address||p.emails?.[0]?.address||store.loginName(p),contactEmail:p.contactEmail||'',
       username:store.loginName(p),
       // Every profile this sign-in account can use, so HN Group Auth can ask which one (the default first chosen).
       profileKey:p.profile?p.profile.key:null,profiles:profiles.map(x=>({key:x.key,company:x.company,jobTitle:x.jobTitle,displayName:x.displayName,photo:!!x.avatarUrl,default:!!login&&store.defaultProfile(login)?.key===x.key})),
@@ -183,8 +183,10 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
           legalName: [rec.firstName, rec.lastName].filter(Boolean).join(' '), jobTitle: x.jobTitle || '', company: x.company,
           // Their email addresses (record + sign-in accounts + linked Google) and time zone, so HN Mail can show who sent a
           // message with their picture and a profile card (the user's request, 6 November 2026).
-          emails: [...new Set([...(rec.emails || []).map((e) => e.address), ...store.loginsForId(x.profileId).flatMap((l) => [l.username, l.account && l.account.google && l.account.google.email])]
-            .map((e) => String(e || '').trim().toLowerCase()).filter((e) => e.includes('@')))], timezone: rec.timezone || '' }; });
+          emails: [...new Set([rec.contactEmail, ...(rec.emails || []).map((e) => e.address), ...store.loginsForId(x.profileId).flatMap((l) => [l.username, l.account && l.account.google && l.account.google.email])]
+            .map((e) => String(e || '').trim().toLowerCase()).filter((e) => e.includes('@')))], timezone: rec.timezone || '',
+          // Where to email them: their contact email when set (people without an HN address), otherwise their HN address.
+          contactEmail: rec.contactEmail || '', email: store.contactAddress(rec) }; });
       sendJson(res, 200, { people }); return true;
     }
     // HN Secure Gateway asks for the PIN before connecting the VPN (checked through vpn.hngroup.org.uk).

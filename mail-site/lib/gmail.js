@@ -52,10 +52,14 @@ function createGmail({ token, fetcher = fetch }) {
   }
   function summary(thread) {
     const messages = thread.messages || [], last = messages[messages.length - 1] || {}, first = messages[0] || {};
-    const people = [];
-    for (const m of messages) { const from = mime.header(m.payload, 'From'), name = (/^"?([^"<]+?)"?\s*</.exec(from) || [])[1] || from.replace(/<.*>/, '').trim() || from; if (name && !people.includes(name)) people.push(name); }
+    const people = [], senders = [];
+    for (const m of messages) {
+      const from = mime.header(m.payload, 'From'), name = (/^"?([^"<]+?)"?\s*</.exec(from) || [])[1] || from.replace(/<.*>/, '').trim() || from;
+      const email = ((/<([^>]+)>/.exec(from) || [])[1] || from).trim().toLowerCase();
+      if (name && !people.includes(name)) { people.push(name); senders.push({ name, email }); }
+    }
     const labelIds = [...new Set(messages.flatMap((m) => m.labelIds || []))];
-    return { id: thread.id, subject: mime.header(first.payload, 'Subject') || '(no subject)', snippet: decodeEntities(last.snippet || ''), from: people.slice(-3), fromAddress: mime.header(last.payload, 'From'),
+    return { id: thread.id, senders: senders.slice(-3), subject: mime.header(first.payload, 'Subject') || '(no subject)', snippet: decodeEntities(last.snippet || ''), from: people.slice(-3), fromAddress: mime.header(last.payload, 'From'),
       to: mime.header(last.payload, 'To'), date: Number(last.internalDate) || 0, count: messages.length, unread: labelIds.includes('UNREAD'), starred: labelIds.includes('STARRED'), important: labelIds.includes('IMPORTANT'),
       attachments: messages.some((m) => /multipart\/mixed/i.test(mime.header(m.payload, 'Content-Type'))), labels: labelIds, draft: labelIds.includes('DRAFT') };
   }

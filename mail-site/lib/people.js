@@ -8,7 +8,7 @@ const STAFF_BACKEND = process.env.STAFF_BACKEND || 'http://127.0.0.1:3250';
 const SECRET_FILE = process.env.STATUS_SSO_SECRET_FILE || '/var/lib/hn-status-sso/secret';
 
 function createPeople({ fetcher = fetch } = {}) {
-  let cache = { at: 0, list: [] };
+  let cache = { at: 0, list: [], directory: [] };
   const pictures = new Map();
   const secret = () => { try { const s = fs.readFileSync(SECRET_FILE, 'utf8').trim(); return /^[a-f0-9]{64}$/.test(s) ? s : ''; } catch { return ''; } };
   async function post(route, body) {
@@ -21,12 +21,19 @@ function createPeople({ fetcher = fetch } = {}) {
     const r = await post('/api/auth/staff-directory');
     const value = r && r.ok ? await r.json().catch(() => ({})) : null;
     if (!value || !Array.isArray(value.people)) return cache.list;
-    const seen = new Set(), out = [];
+    const seen = new Set(), out = [], directory = [], people = new Set();
     for (const p of value.people) for (const email of Array.isArray(p.emails) ? p.emails : []) {
       const e = String(email).toLowerCase(); if (seen.has(e)) continue; seen.add(e);
       out.push({ email: e, id: String(p.id), name: String(p.displayName || ''), jobTitle: String(p.jobTitle || ''), company: String(p.company || ''), timezone: String(p.timezone || ''), photo: !!p.photo });
     }
-    cache = { at: Date.now(), list: out };
+    // One entry per person for the composer's suggestions: display name, legal name and where to email them (their
+    // contact email when set, the user's request, 6 November 2026; otherwise their HN address).
+    for (const p of value.people) {
+      const email = String(p.email || p.contactEmail || (p.emails || [])[0] || '').toLowerCase();
+      if (!email || people.has(email)) continue; people.add(email);
+      directory.push({ email, id: String(p.id), name: String(p.displayName || ''), legalName: String(p.legalName || ''), jobTitle: String(p.jobTitle || ''), company: String(p.company || ''), photo: !!p.photo });
+    }
+    cache = { at: Date.now(), list: out, directory };
     return out;
   }
   async function picture(id) {
@@ -40,6 +47,7 @@ function createPeople({ fetcher = fetch } = {}) {
     if (pictures.size > 300) pictures.delete(pictures.keys().next().value);
     return pic;
   }
-  return { list, picture };
+  async function directory() { await list(); return cache.directory; }
+  return { list, directory, picture };
 }
 module.exports = { createPeople };

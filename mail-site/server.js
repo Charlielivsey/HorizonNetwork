@@ -201,7 +201,7 @@ function createServer({ dir = process.env.MAIL_DATA_DIR || '/var/lib/hn-mail', f
         res.writeHead(200, { 'Content-Type': pic.type, 'Cache-Control': 'private, max-age=3600', 'Content-Security-Policy': "default-src 'none'; sandbox" }); return res.end(pic.bytes);
       }
       // People HN Mail knows (staff with HN Group accounts) and their pictures.
-      if (route === '/api/people' && req.method === 'GET') return json(200, { people: await people.list() });
+      if (route === '/api/people' && req.method === 'GET') return json(200, { people: await people.list(), directory: await people.directory() });
       if ((m = /^\/api\/people\/([A-Za-z0-9_-]{1,64})\/photo$/.exec(route)) && req.method === 'GET') {
         const pic = await people.picture(m[1]);
         if (!pic) return json(404, { error: 'No picture.' });

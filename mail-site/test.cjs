@@ -43,7 +43,7 @@ async function fakeFetch(url, opts = {}) {
   }
   if (u.port === '3250') {
     assert.equal(opts.headers.Authorization, 'Bearer ' + 'a'.repeat(64), 'staff list calls carry the service secret');
-    if (u.pathname === '/api/auth/staff-directory') return json(200, { people: [{ id: 'p-jack', displayName: 'Jack', jobTitle: 'Chief Executive Officer', company: 'HN Group', timezone: 'Europe/London', photo: true, emails: ['jack.vinckx@hngroup.org.uk'] }] });
+    if (u.pathname === '/api/auth/staff-directory') return json(200, { people: [{ id: 'p-jack', displayName: 'Jack', legalName: 'Jack Vinckx', jobTitle: 'Chief Executive Officer', company: 'HN Group', timezone: 'Europe/London', photo: true, emails: ['jack.vinckx@hngroup.org.uk'], email: 'jack.vinckx@hngroup.org.uk' }, { id: 'p-tom', displayName: 'Tom', legalName: 'Tom Guest', jobTitle: 'Helper', company: 'HN Group', photo: false, emails: ['tom@example.com', 'tom.guest@hngroup.org.uk'], contactEmail: 'tom@example.com', email: 'tom@example.com' }] });
     if (u.pathname === '/api/auth/directory-avatar') return JSON.parse(opts.body).id === 'p-jack' ? new Response(Buffer.from('JPG!'), { status: 200, headers: { 'Content-Type': 'image/jpeg' } }) : json(404, {});
   }
   if (u.hostname === 'staff.hngroup.org.uk') return u.pathname.endsWith('.png') ? new Response(Buffer.from('PNG!'), { status: 200, headers: { 'Content-Type': 'image/png' } }) : new Response('<html>', { status: 200, headers: { 'Content-Type': 'text/html' } });
@@ -139,8 +139,11 @@ test('HN Mail: labels, conversations, a locked-down body page and downloads', as
   const labels = (await (await req('/api/labels')).json()).labels;
   assert.deepEqual(labels.map((l) => l.name), ['Inbox'], 'only the built-in folders (labels were removed at the user’s request)'); assert.equal(labels[0].unread, 2);
   // People with HN Group accounts: matched by email, with their pictures (the user's request, 6 November 2026).
-  const ppl = (await (await req('/api/people')).json()).people;
-  assert.deepEqual(ppl.map((p) => [p.email, p.jobTitle, p.photo]), [['jack.vinckx@hngroup.org.uk', 'Chief Executive Officer', true]]);
+  const everyone = await (await req('/api/people')).json(), ppl = everyone.people;
+  assert.deepEqual(ppl.filter((p) => p.id === 'p-jack').map((p) => [p.email, p.jobTitle, p.photo]), [['jack.vinckx@hngroup.org.uk', 'Chief Executive Officer', true]]);
+  assert.ok(ppl.some((p) => p.email === 'tom.guest@hngroup.org.uk' && p.name === 'Tom'), 'mail from any of their addresses shows who they are');
+  // The composer's suggestions use the contact email when someone has one (the user's request, 6 November 2026).
+  assert.deepEqual(everyone.directory.map((d) => [d.name, d.legalName, d.email]), [['Jack', 'Jack Vinckx', 'jack.vinckx@hngroup.org.uk'], ['Tom', 'Tom Guest', 'tom@example.com']]);
   const face = await req('/api/people/p-jack/photo');
   assert.equal(face.headers.get('content-type'), 'image/jpeg'); assert.equal(await face.text(), 'JPG!');
   assert.equal((await req('/api/people/nobody/photo')).status, 404);

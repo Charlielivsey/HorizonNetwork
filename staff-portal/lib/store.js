@@ -474,6 +474,14 @@ function employees() {
   return people.filter((p) => !p.system);
 }
 
+function cleanContactEmail(value) {
+  const e = String(value || "").trim().toLowerCase();
+  if (!e) return "";
+  if (e.length > 254 || !/^[^\s@<>(),;:"\\[\]]+@[^\s@<>(),;:"\\[\]]+\.[^\s@<>(),;:"\\[\]]+$/.test(e)) throw new ValidationError("Enter a valid contact email address, or leave it empty.");
+  return e;
+}
+// The address to email someone at: their contact email when one is set, otherwise their main HN Group address.
+function contactAddress(person) { return (person && person.contactEmail) || primaryEmail(person || { emails: [] }); }
 function primaryEmail(person) {
   const e = person.emails.find((x) => x.primary) || person.emails[0];
   return e ? e.address : "";
@@ -701,6 +709,9 @@ function publicView(p) {
     supervisorCompany: p.supervisorCompany || null,
     isOwner: isOwner(p),
     emails: p.emails,
+    // A contact email for people without an HN Group address (the user's request, 6 November 2026); used instead of
+    // their HN address wherever someone needs to email them.
+    contactEmail: p.contactEmail || "",
     phone: p.phone,
     location: p.location,
     timezone: p.timezone,
@@ -968,6 +979,7 @@ function saveEmployee(input, existing) {
     supervisorId,
     supervisorCompany,
     emails: resolved.emails.map((e) => ({ address: e.address, primary: e.primary })),
+    contactEmail: cleanContactEmail(input.contactEmail),
     phone: str(input.phone, 40),
     location: str(input.location, 80),
     timezone,
@@ -1670,6 +1682,7 @@ module.exports = {
   saveDiscordPhoto,
   updateDiscordNames,
   ownsEmail,
+  contactAddress,
   setGoogle,
   verifyPassword,
   validateNewPassword,

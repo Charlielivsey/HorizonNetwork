@@ -1755,6 +1755,7 @@
             '<div class="check-field"><label class="check"><input type="checkbox" id="f-temporary"' + (v.temporary ? " checked" : "") + '> Temporary position</label>' +
             '<p class="muted small">For temporary or trial staff. Guest sign-in accounts can use this record, and HN Account’s “Make permanent” makes it permanent.</p></div></div>' +
             '<div class="grid-2"><div><label for="f-phone">Phone <span class="muted small">(optional)</span></label><input type="tel" id="f-phone" maxlength="40" value="' + esc(v.phone) + '"></div>' +
+            '<div><label for="f-contact">Contact email <span class="muted small">(optional)</span></label><input type="email" id="f-contact" maxlength="254" autocomplete="off" placeholder="name@example.com" value="' + esc(v.contactEmail || "") + '"><p class="muted small">For people without an HN Group email. Used instead of their HN address wherever someone needs to email them.</p></div>' +
             '<div><label for="f-start">Start date <span class="muted small">(for work anniversaries)</span></label><input type="date" id="f-start" value="' + esc(v.startDate || "") + '"></div></div>' +
             "</fieldset>" +
 
@@ -1952,6 +1953,7 @@
                 location: f("f-location").value,
                 timezone: f("f-tz").value,
                 phone: f("f-phone").value,
+                contactEmail: f("f-contact").value.trim(),
                 discordId: f("f-discord").value.trim(),
                 startDate: f("f-start").value,
                 temporary: f("f-temporary").checked,

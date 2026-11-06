@@ -22,7 +22,7 @@
   const store = { get(k, d) { try { const v = localStorage.getItem('hnmail.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem('hnmail.' + k, JSON.stringify(v)); } catch {} } };
   const prefs = { theme: store.get('theme', 'dark'), images: store.get('images', false), signature: store.get('signature', true), compact: store.get('compact', false), collapsed: store.get('collapsed', false), folds: store.get('folds', {}) };
 
-  let session = null, people = new Map(), mailboxes = [], labels = [], view = { label: 'INBOX', q: '', thread: null }, pages = [null], pageIndex = 0, list = [], selected = new Set(), current = null, contacts = new Set();
+  let session = null, people = new Map(), directory = [], mailboxes = [], labels = [], view = { label: 'INBOX', q: '', thread: null }, pages = [null], pageIndex = 0, list = [], selected = new Set(), current = null, contacts = new Set();
 
   // ---------- Helpers ----------
   function toast(text, { error = false, action, onAction, ms = 4500 } = {}) {
@@ -47,12 +47,22 @@
   const splitAddresses = (s) => String(s || '').split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map((x) => x.trim()).filter(Boolean);
   const initials = (name) => (String(name).replace(/[^\p{L}\p{N} ]/gu, ' ').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('') || '?').toUpperCase();
   const colour = (s) => { let n = 0; for (const c of String(s)) n = (n * 31 + c.codePointAt(0)) >>> 0; return PALETTE[n % PALETTE.length]; };
+  // The name to show: someone's display name from their HN Group account when they have one (the user's request,
+  // 6 November 2026: "should display name if one is set, not full name"), otherwise the name in the email.
+  function display(from, fallback) {
+    const email = emailOf(from);
+    if (mine(from) && session && session.user.displayName) return session.user.displayName;
+    const p = people.get(email), g = mailboxes.find((x) => x.email === email);
+    return (p && p.name) || (g && g.name) || fallback || nameOf(from) || email;
+  }
   const mine = (from) => !!(session && session.gmail.sender && emailOf(from) === session.gmail.sender.email);
   // Profile pictures from HN Group accounts (the user's request, 6 November 2026), initials for everyone else.
   function initialsBadge(from, cls) { const el = h('span', { class: cls, 'aria-hidden': 'true', text: initials(nameOf(from) || emailOf(from)) }); el.style.color = colour(emailOf(from)); return el; }
+  const GROUP_ICON = 'M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1|M9 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6z|M22 19v-1a4 4 0 0 0-3-3.9|M16 4.1a3 3 0 0 1 0 5.8';
   function avatar(from, cls = 'avatar') {
     const email = emailOf(from), person = people.get(email);
     let el;
+    if (!person && mailboxes.some((g) => g.email === email)) { el = h('span', { class: cls + ' group-pic', 'aria-hidden': 'true' }, svg(GROUP_ICON)); el.dataset.person = from; return el; }
     if (mine(from)) el = h('img', { class: cls, src: '/api/avatar', alt: '' });
     else if (person && person.photo) { el = h('img', { class: cls, src: '/api/people/' + encodeURIComponent(person.id) + '/photo', alt: '' }); el.addEventListener('error', () => { const f = initialsBadge(from, cls); f.dataset.person = from; el.replaceWith(f); }, { once: true }); }
     else el = initialsBadge(from, cls);
@@ -109,7 +119,7 @@
   function learnContacts(...values) {
     let added = false;
     for (const v of values) for (const a of splitAddresses(v)) { const e = emailOf(a); if (e.includes('@') && !contacts.has(a) && contacts.size < 500) { contacts.add(a); added = true; } }
-    if (added) $('#contacts').replaceChildren(...[...contacts].map((c) => h('option', { value: c })));
+
   }
 
   // ---------- Clock (UK time) ----------
@@ -196,7 +206,7 @@
       h('span', { class: 'mb-text' }, h('span', { class: 'name', text: m.name }), h('small', { text: m.email })), m.unread ? h('span', { class: 'count', text: m.unread > 99 ? '99+' : m.unread }) : null)));
   }
   async function loadMailboxes(fresh) { try { mailboxes = (await api('GET', '/api/mailboxes' + (fresh ? '?fresh=1' : ''))).mailboxes; drawMailboxes(); if (view.mailbox) $('#list-title').textContent = titleFor(); } catch (e) { if (!e.handled) console.warn(e.message); } }
-  async function loadPeople() { try { const r = await api('GET', '/api/people'); people = new Map(r.people.map((p) => [p.email, p])); } catch {} }
+  async function loadPeople() { try { const r = await api('GET', '/api/people'); people = new Map(r.people.map((p) => [p.email, p])); directory = r.directory || []; } catch {} }
   async function loadLabels() { try { labels = (await api('GET', '/api/labels')).labels; drawFolders(); } catch (e) { report(e); } }
   const titleFor = () => (view.mailbox ? ((mailboxes.find((x) => x.email === view.mailbox) || {}).name || view.mailbox) : view.q ? 'Search results' : (FOLDERS.find((f) => f[0] === view.label) || [])[1] || 'Mail');
 
@@ -238,7 +248,7 @@
     const box = h('input', { type: 'checkbox', 'aria-label': 'Select this conversation', checked: selected.has(t.id) ? true : null });
     box.addEventListener('click', (e) => e.stopPropagation());
     box.addEventListener('change', () => { if (box.checked) selected.add(t.id); else selected.delete(t.id); li.classList.toggle('selected', box.checked); updateBulk(); });
-    const whoText = view.label === 'SENT' || view.label === 'DRAFT' ? 'To: ' + (splitAddresses(t.to).map(nameOf).join(', ') || '(no recipients)') : t.from.join(', ') || '(unknown sender)';
+    const whoText = view.label === 'SENT' || view.label === 'DRAFT' ? 'To: ' + (splitAddresses(t.to).map((a) => display(a)).join(', ') || '(no recipients)') : (t.senders && t.senders.length ? t.senders.map((x) => display(x.email, x.name)).join(', ') : t.from.join(', ')) || '(unknown sender)';
     li.append(h('div', { class: 'pic' }, avatar(view.label === 'SENT' ? t.to : t.fromAddress), h('label', { class: 'check', onclick: (e) => e.stopPropagation() }, box, h('span'))),
       h('div', { class: 'lines' }, h('div', { class: 'who' }, t.draft ? h('span', { class: 'draft', text: 'Draft' }) : null, h('span', { 'data-person': view.label === 'SENT' ? t.to : t.fromAddress, text: whoText }), t.count > 1 ? h('span', { class: 'n', text: t.count }) : null),
         h('div', { class: 'subj', text: t.subject }), h('div', { class: 'snip', text: t.snippet })),
@@ -355,8 +365,8 @@
   }
   function message(m, open) {
     const el = h('article', { class: 'msg' + (open ? ' open' : ''), 'data-id': m.id });
-    const to = [m.to && 'to ' + splitAddresses(m.to).map(nameOf).join(', '), m.cc && 'cc ' + splitAddresses(m.cc).map(nameOf).join(', ')].filter(Boolean).join(' · ');
-    const head = h('div', { class: 'msg-head' }, avatar(m.from), h('div', { class: 'msg-from' }, h('b', { text: nameOf(m.from) || '(unknown)', 'data-person': m.from }), h('span', { class: 'msg-addr', text: emailOf(m.from) && emailOf(m.from) !== nameOf(m.from).toLowerCase() ? '<' + emailOf(m.from) + '>' : '' }),
+    const to = [m.to && 'to ' + splitAddresses(m.to).map((a) => (mine(a) ? 'me' : display(a))).join(', '), m.cc && 'cc ' + splitAddresses(m.cc).map((a) => (mine(a) ? 'me' : display(a))).join(', ')].filter(Boolean).join(' · ');
+    const head = h('div', { class: 'msg-head' }, avatar(m.from), h('div', { class: 'msg-from' }, h('b', { text: display(m.from) || '(unknown)', 'data-person': m.from }), h('span', { class: 'msg-addr', text: emailOf(m.from) && emailOf(m.from) !== nameOf(m.from).toLowerCase() ? '<' + emailOf(m.from) + '>' : '' }),
       h('span', { class: open ? 'to' : 'msg-snippet', text: open ? to : m.snippet })),
       h('div', { class: 'msg-when' }, h('time', { datetime: new Date(m.date).toISOString(), text: when(m.date, open) }), open && !m.draft ? tool('reply', 'Reply', () => reply(m, 'reply')) : null, open && !m.draft ? tool('more', 'More', (e) => messageMenu(e.currentTarget, m)) : null));
     el.append(head);
@@ -405,6 +415,56 @@
     popMenu(anchor, [item('Reply all', () => reply(m, 'all')), item('Forward', () => reply(m, 'forward')),
       item('Mark unread from here', () => api('POST', '/api/messages/' + m.id + '/modify', { add: ['UNREAD'] }).then(() => { toast('Marked as unread.'); go({ thread: null }); loadList(true); loadLabels(); }).catch(report))]);
   }
+  // ---------- Address suggestions (the user's request, 6 November 2026: "auto fill peoples names there … based off
+  // of the staff directory"), using people's contact email when they have one ----------
+  function candidates(term) {
+    const words = term.toLowerCase().split(/\s+/).filter(Boolean); if (!words.length) return [];
+    const pool = directory.map((d) => ({ ...d, staff: true }));
+    // Group inboxes too (the user's request, 6 November 2026: "and the same for groups aswell").
+    for (const g of mailboxes) if (!pool.some((d) => d.email === g.email)) pool.push({ email: g.email, name: g.name, jobTitle: 'Group', staff: true, group: true });
+    const known = new Set(pool.map((d) => d.email));
+    for (const c of contacts) { const e = emailOf(c); if (e && !known.has(e)) { known.add(e); pool.push({ email: e, name: nameOf(c) !== e ? nameOf(c) : '', staff: false }); } }
+    const hits = pool.filter((d) => { const hay = [d.name, d.legalName, d.email, d.company, d.jobTitle].join(' ').toLowerCase(); return words.every((w) => hay.includes(w)); });
+    const first = words[0];
+    return hits.sort((a, b) => (Number((b.name || '').toLowerCase().startsWith(first) || b.email.startsWith(first)) - Number((a.name || '').toLowerCase().startsWith(first) || a.email.startsWith(first))) || Number(b.staff) - Number(a.staff) || (a.name || a.email).localeCompare(b.name || b.email)).slice(0, 8);
+  }
+  const formatted = (d) => (d.name ? (/[",<>@]/.test(d.name) ? '"' + d.name.replace(/"/g, '') + '"' : d.name) + ' <' + d.email + '>' : d.email);
+  function attachSuggest(input) {
+    const pop = h('ul', { class: 'suggest', role: 'listbox', hidden: true }); input.closest('.addr').append(pop);
+    let items = [], active = 0;
+    const token = () => { const v = input.value, i = v.lastIndexOf(','); return { start: i + 1, text: v.slice(i + 1).trim() }; };
+    function close() { pop.hidden = true; items = []; }
+    function pick(d) {
+      const { start } = token();
+      input.value = input.value.slice(0, start).replace(/\s*$/, start ? ' ' : '') + formatted(d) + ', ';
+      close(); input.focus(); input.dispatchEvent(new Event('input', { bubbles: true })); close();
+    }
+    function draw() {
+      pop.replaceChildren(...items.map((d, i) => { const li = h('li', { role: 'option', 'aria-selected': String(i === active), class: i === active ? 'on' : '' },
+        avatar(d.name ? d.name + ' <' + d.email + '>' : d.email, 'sg-pic'),
+        h('span', { class: 'sg-text' }, h('b', {}, d.name || d.email, d.legalName && d.legalName !== d.name ? h('small', { text: ' · ' + d.legalName }) : null), h('span', { text: d.email + (d.jobTitle || d.company ? ' · ' + [d.jobTitle, d.company].filter(Boolean).join(', ') : '') })));
+        li.addEventListener('mousedown', (e) => { e.preventDefault(); pick(d); }); return li; }));
+      for (const el of $$('[data-person]', pop)) delete el.dataset.person;
+      pop.hidden = !items.length;
+    }
+    input.addEventListener('input', (e) => { if (!e.isTrusted) return; const t = token().text; items = t.length ? candidates(t) : []; active = 0; draw(); });
+    input.addEventListener('keydown', (e) => {
+      if (pop.hidden) return;
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); active = (active + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length; draw(); }
+      else if ((e.key === 'Enter' || e.key === 'Tab') && items[active]) { e.preventDefault(); e.stopPropagation(); pick(items[active]); }
+      else if (e.key === 'Escape') { e.stopPropagation(); close(); }
+    });
+    // Leaving the field: suggestions close, and a typed address of someone in the directory gets their name.
+    input.addEventListener('blur', () => {
+      setTimeout(close, 120);
+      const parts = splitAddresses(input.value);
+      const named = parts.map((a) => { if (a.includes('<')) return a; const d = directory.find((x) => x.email === a.toLowerCase()) || [...people.values()].find((x) => x.email === a.toLowerCase()); return d && d.name ? formatted({ name: d.name, email: a.toLowerCase() }) : a; });
+      const next = named.join(', ') + (parts.length && /,\s*$/.test(input.value) ? ', ' : '');
+      if (parts.length && next !== input.value) { input.value = next; input.dispatchEvent(new Event('input', { bubbles: true })); }
+    });
+  }
+  for (const id of ['#c-to', '#c-cc', '#c-bcc']) attachSuggest($(id));
+
   // ---------- Writing ----------
   const C = { open: false, draftId: null, threadId: null, inReplyTo: '', references: '', files: [], include: [], dirty: false, saving: null, timer: null };
   const editor = $('#c-editor');
@@ -564,14 +624,15 @@
   function showCard(target) {
     const from = target.dataset.person; if (!from) return;
     const email = emailOf(from), person = people.get(email), self = mine(from), u = (session && session.user) || {};
-    const name = self ? (u.displayName || nameOf(from)) : (person && person.name) || nameOf(from) || email;
-    const job = self ? [u.jobTitle, u.company].filter(Boolean).join(' • ') : person ? [person.jobTitle, person.company].filter(Boolean).join(' • ') : '';
+    const name = display(from);
+    const group = !person && mailboxes.find((g) => g.email === email);
+    const job = self ? [u.jobTitle, u.company].filter(Boolean).join(' • ') : person ? [person.jobTitle, person.company].filter(Boolean).join(' • ') : group ? 'Group inbox' : '';
     let local = '';
     if (person && person.timezone) { try { local = new Date().toLocaleTimeString('en-GB', { timeZone: person.timezone, hour: '2-digit', minute: '2-digit' }) + ' ' + ((new Intl.DateTimeFormat('en-GB', { timeZone: person.timezone, timeZoneName: 'short' }).formatToParts(new Date()).find((p) => p.type === 'timeZoneName') || {}).value || ''); } catch {} }
     const pic = avatar(from, 'card-pic'); delete pic.dataset.person;
     const address = name && name !== email ? name + ' <' + email + '>' : email;
     const card = h('div', { class: 'person-card', role: 'dialog', 'aria-label': name },
-      h('div', { class: 'pc-top' }, pic, h('div', { class: 'pc-id' }, h('b', { text: name }), h('span', { text: email }), person || self ? h('small', { class: 'pc-badge', text: 'HN Group' }) : null)),
+      h('div', { class: 'pc-top' }, pic, h('div', { class: 'pc-id' }, h('b', { text: name }), h('span', { text: email }), person || self ? h('small', { class: 'pc-badge', text: 'HN Group' }) : group ? h('small', { class: 'pc-badge', text: 'Group' }) : null)),
       h('div', { class: 'pc-actions' },
         h('button', { type: 'button', class: 'pc-main', onclick: () => { hideCard(true); openComposer({ to: address }); } }, svg(I.edit), 'Email'),
         h('button', { type: 'button', class: 'icon-btn', title: 'Copy email address', 'aria-label': 'Copy email address', onclick: async () => { try { await navigator.clipboard.writeText(email); toast('Email address copied.'); } catch { toast(email); } } }, svg('M9 9h11v11H9z|M5 15V4h11')),
