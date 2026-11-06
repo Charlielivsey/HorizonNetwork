@@ -45,7 +45,7 @@ function createGmail({ token, fetcher = fetch }) {
     CATEGORY_PERSONAL: 'Primary', CATEGORY_SOCIAL: 'Social', CATEGORY_PROMOTIONS: 'Promotions', CATEGORY_UPDATES: 'Updates', CATEGORY_FORUMS: 'Forums' };
   async function labels(user) {
     const list = (await call(user, 'GET', '/labels')).labels || [];
-    const wanted = list.filter((l) => l.type === 'user' || ['INBOX', 'DRAFT', 'SPAM', 'STARRED', 'SENT', 'TRASH', 'IMPORTANT', 'CATEGORY_SOCIAL', 'CATEGORY_PROMOTIONS', 'CATEGORY_UPDATES', 'CATEGORY_FORUMS'].includes(l.id)).slice(0, 80);
+    const wanted = list.filter((l) => ['INBOX', 'DRAFT', 'SPAM', 'STARRED', 'SENT', 'TRASH', 'IMPORTANT', 'CATEGORY_SOCIAL', 'CATEGORY_PROMOTIONS', 'CATEGORY_UPDATES', 'CATEGORY_FORUMS'].includes(l.id)).slice(0, 80);
     const detailed = await limited(wanted, 8, (l) => call(user, 'GET', '/labels/' + encodeURIComponent(l.id)).catch(() => l));
     return detailed.map((l) => ({ id: l.id, name: SYSTEM[l.id] || l.name, system: l.type === 'system', unread: l.threadsUnread || 0, total: l.threadsTotal || 0, drafts: l.id === 'DRAFT' ? (l.messagesTotal || 0) : undefined,
       color: l.color ? { text: l.color.textColor, background: l.color.backgroundColor } : null }));
@@ -61,7 +61,9 @@ function createGmail({ token, fetcher = fetch }) {
   }
   async function threads(user, { label, q, pageToken }) {
     const query = { maxResults: '25' };
-    if (label && LABEL_ID.test(label)) query.labelIds = label;
+    // Archive: conversations that have left the inbox (not sent mail, drafts, spam or the bin).
+    if (label === 'ARCHIVE') q = ['-in:inbox -in:sent -in:drafts -in:spam -in:trash', q].filter(Boolean).join(' ');
+    else if (label && label !== 'ALL' && LABEL_ID.test(label)) query.labelIds = label;
     if (q) query.q = String(q).slice(0, 500);
     if (pageToken && /^[\w-]{1,200}$/.test(pageToken)) query.pageToken = pageToken;
     if (label === 'TRASH' || label === 'SPAM') query.includeSpamTrash = 'true';
@@ -73,6 +75,7 @@ function createGmail({ token, fetcher = fetch }) {
   async function thread(user, id) {
     if (!ID.test(id)) throw fail(400, 'Unknown conversation.');
     const t = await call(user, 'GET', '/threads/' + id, { query: { format: 'full' } });
+    for (const m of t.messages || []) remember(user, m);
     return { id: t.id, labels: [...new Set((t.messages || []).flatMap((m) => m.labelIds || []))], messages: (t.messages || []).map(view) };
   }
   function view(m) {
@@ -81,9 +84,20 @@ function createGmail({ token, fetcher = fetch }) {
       messageId: h('Message-ID') || h('Message-Id'), references: h('References'), snippet: decodeEntities(m.snippet || ''), labels: m.labelIds || [], hasHtml: !!p.html, remoteImages: /<img[^>]+src\s*=\s*["']?https?:/i.test(p.html) || /url\(\s*["']?https?:/i.test(p.html),
       text: p.text.slice(0, 200000), attachments: p.attachments, unread: (m.labelIds || []).includes('UNREAD'), draft: (m.labelIds || []).includes('DRAFT') };
   }
-  async function message(user, id) {
+  // Messages just fetched are kept for two minutes, so each email's body page and attachments don't fetch the same
+  // message from Gmail again (a long conversation used to fetch every message twice).
+  const recent = new Map();
+  function remember(user, m) {
+    recent.set(user.accountId + ':' + m.id, { at: Date.now(), m });
+    if (recent.size > 300) for (const [k, v] of recent) { if (v.at < Date.now() - 120000 || recent.size > 300) recent.delete(k); else break; }
+  }
+  async function message(user, id, fresh = false) {
     if (!ID.test(id)) throw fail(400, 'Unknown message.');
-    return call(user, 'GET', '/messages/' + id, { query: { format: 'full' } });
+    const held = recent.get(user.accountId + ':' + id);
+    if (!fresh && held && held.at > Date.now() - 120000) return held.m;
+    const m = await call(user, 'GET', '/messages/' + id, { query: { format: 'full' } });
+    remember(user, m);
+    return m;
   }
   // The decoded bytes of one part (an attachment or inline image), found by its stable part id.
   async function part(user, messageId, partId, msg) {

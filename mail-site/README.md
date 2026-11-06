@@ -12,11 +12,11 @@ stays the mailbox: HN Mail keeps no copies of mail.
 
 ## What it does
 
-Inbox, Starred, Important, Sent, Drafts, All mail, Spam, Bin and your Gmail labels (with unread counts); search (Gmail's
+Midnight Lavender look (HN Browser's default theme). Inbox, Starred, Important, Sent, Drafts, Archive, All mail, Junk and Bin (with unread counts; no labels, at the user's request); saved searches; search (Gmail's
 own search words work, e.g. `from:jack has:attachment`); conversations with every message; reply, reply all and forward
 (original attachments included); compose with formatting, Cc/Bcc, attachments up to 25 MB and your Gmail signature;
 drafts saved automatically every few seconds and when you close the composer; archive, delete (to the Bin), restore,
-spam / not spam, star, read/unread and labels, on one conversation or several at once, with Undo; downloads; new mail
+spam / not spam, star and read/unread, on one conversation or several at once, with Undo; downloads; new mail
 appears every minute. Keyboard: `c` compose, `/` search, `j`/`k` next/previous, `e` archive, `#` delete, `r`/`a`/`f`
 reply/all/forward, `s` star, `u` back to the list, Ctrl/Cmd+Enter to send, Esc to close.
 

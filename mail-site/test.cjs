@@ -123,7 +123,7 @@ test('HN Mail: Gmail is only connected for the linked Google account, and its ke
 
 test('HN Mail: labels, conversations, a locked-down body page and downloads', async () => {
   const labels = (await (await req('/api/labels')).json()).labels;
-  assert.deepEqual(labels.map((l) => l.name), ['Inbox', 'Projects']); assert.equal(labels[0].unread, 2);
+  assert.deepEqual(labels.map((l) => l.name), ['Inbox'], 'only the built-in folders (labels were removed at the user’s request)'); assert.equal(labels[0].unread, 2);
   const list = await (await req('/api/threads?label=INBOX')).json();
   assert.equal(list.threads[0].subject, 'Welcome'); assert.equal(list.threads[0].unread, true); assert.equal(list.threads[0].snippet, 'Hello & welcome');
   const t = await (await req('/api/threads/bbbbbbbb22')).json();

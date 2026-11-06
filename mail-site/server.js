@@ -178,7 +178,7 @@ function createServer({ dir = process.env.MAIL_DATA_DIR || '/var/lib/hn-mail', f
         return json(200, { draftId: saved.id, messageId: saved.message && saved.message.id });
       }
       if ((m = /^\/api\/drafts\/for\/([a-f0-9]{8,32})$/i.exec(route)) && req.method === 'GET') {
-        const draftId = await gmail.draftFor(user, m[1]), msg = await gmail.message(user, m[1]), parsed = mime.parse(msg.payload), h = (n) => mime.header(msg.payload, n);
+        const draftId = await gmail.draftFor(user, m[1]), msg = await gmail.message(user, m[1], true), parsed = mime.parse(msg.payload), h = (n) => mime.header(msg.payload, n);
         return json(200, { draftId, messageId: msg.id, threadId: msg.threadId, to: h('To'), cc: h('Cc'), bcc: h('Bcc'), subject: h('Subject'), inReplyTo: h('In-Reply-To'), references: h('References'),
           html: parsed.html || escape(parsed.text || '').replace(/\n/g, '<br>'), attachments: parsed.attachments });
       }
