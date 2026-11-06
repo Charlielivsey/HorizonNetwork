@@ -107,6 +107,8 @@ install -m 755 "$SCRIPT_DIR/bin/quota-warning" "$LIB/quota-warning"
 install -m 755 "$SCRIPT_DIR/bin/backup" "$LIB/backup"
 install -m 755 "$SCRIPT_DIR/bin/check" "$LIB/check"
 ln -sfn "$LIB/check" /usr/local/sbin/hn-mail-check
+install -m 755 "$SCRIPT_DIR/bin/relay" "$LIB/relay"
+ln -sfn "$LIB/relay" /usr/local/sbin/hn-mail-relay
 
 # ---------------------------------------------------------------- TLS certificate for mx.hngroup.org.uk
 say 'TLS certificate'
@@ -154,6 +156,8 @@ while IFS= read -r line; do
     case "$line" in ''|\#*) continue ;; esac
     postconf -e "$line"
 done < "$SCRIPT_DIR/config/postfix-main.conf"
+# Keep an outgoing relay set with hn-mail-relay (e.g. Brevo while the host blocks port 25).
+[ "$TEST" = 1 ] || "$LIB/relay" reapply || warn 'Could not reapply the outgoing relay: run sudo hn-mail-relay set'
 python3 - "$SCRIPT_DIR/config/postfix-master.cf" <<'PY'
 import re, sys
 from pathlib import Path
@@ -278,6 +282,7 @@ say 'Checks'
 if [ "$TEST" != 1 ]; then
     # Provider side: Fasthosts blocks outgoing port 25 on new servers until support unblocks it.
     if timeout 8 bash -c 'exec 3<>/dev/tcp/gmail-smtp-in.l.google.com/25' 2>/dev/null; then echo 'Outgoing port 25: open (other mail servers can be reached).'
+    elif [ -f "$ETC/relay.conf" ]; then echo "Outgoing port 25 is blocked, but outgoing mail goes through the relay ($("$LIB/relay" status))."
     else warn 'Outgoing port 25 is BLOCKED: this server cannot deliver mail to other providers. Ask Fasthosts support (fasthosts.co.uk/support, or the Fasthosts control panel) to unblock outgoing port 25 for this server ($PUBLIC_IP).'; fi
     ptr="$(dig +short -x "$PUBLIC_IP" 2>/dev/null | sed 's/\.$//' | head -1)"
     if [ "$ptr" = "$HOST" ]; then echo "Reverse DNS: $PUBLIC_IP -> $HOST (correct)."

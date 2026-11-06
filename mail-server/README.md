@@ -39,6 +39,15 @@ the DNS records to publish. `hn-mail-check` (or `--json --provider`) shows the s
 4. **IP reputation**: check 217.154.34.205 on a blocklist checker (e.g. Spamhaus) before cutover; a listed address
    needs delisting first.
 
+## Outgoing relay (while port 25 is blocked)
+
+`sudo hn-mail-relay set` sends mail leaving HN Group through a relay on port 587 (chosen: Brevo, `smtp-relay.brevo.com`).
+It asks for the relay's SMTP login and SMTP key (from Brevo → SMTP & API → SMTP; never the Brevo account password),
+checks they work, and only then switches Postfix over. The key is kept only in `/etc/postfix/hn-relay-sasl` (root, 600),
+the installer keeps the relay on reinstall, mail between HN Group mailboxes never uses it, and our DKIM signature stays.
+Each sending domain must also be authenticated in Brevo (Senders, Domains & Dedicated IPs → Domains: its `brevo-code` TXT
+and DKIM records go in Cloudflare). `hn-mail-relay status` / `off` (when Fasthosts unblocks port 25).
+
 ## DNS (Cloudflare, DNS only)
 
 Backup of every record before any change: `dns-backup/2026-11-06-before-mail-server.json` (exact, from the Cloudflare
