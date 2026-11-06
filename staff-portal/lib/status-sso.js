@@ -178,7 +178,7 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
     if (pathname === '/api/auth/staff-directory') {
       // One entry per profile (each company someone works at), for profiles an enabled sign-in account uses.
       const people = store.allProfiles().filter((x) => store.loginsForId(x.profileId).some((l) => l.account && l.account.enabled))
-        .map((x) => { const rec = store.getRecord(x.personId) || {}; return { id: x.profileId, accountIds: store.loginsForId(x.profileId).filter((l) => l.account && l.account.enabled).map((l) => l.id), photo: !!x.avatarUrl, displayName: x.displayName,
+        .map((x) => { const rec = store.getPerson(x.personId) || {}; return { id: x.profileId, accountIds: store.loginsForId(x.profileId).filter((l) => l.account && l.account.enabled).map((l) => l.id), photo: !!x.avatarUrl, displayName: x.displayName,
           // Their legal name too, so people can be found by it (the user's request, 6 November 2026, for Contracts' "Who signs").
           legalName: [rec.firstName, rec.lastName].filter(Boolean).join(' '), jobTitle: x.jobTitle || '', company: x.company }; });
       sendJson(res, 200, { people }); return true;
