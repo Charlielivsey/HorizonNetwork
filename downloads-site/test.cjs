@@ -49,3 +49,40 @@ test('Linux: HN Secure Gateway’s AppImage comes only from a genuine Linux reco
  const r=readRelease({tag_name:'browser-v1.2.0-50',assets:[{name:'HN-Browser-1.2.0-linux-x86_64.AppImage',browser_download_url:base+'HN-Browser-1.2.0-linux-x86_64.AppImage',size:9,digest:'sha256:'+'d'.repeat(64)}]});
  assert.equal(r.assets['linux-x64'].name,'HN-Browser-1.2.0-linux-x86_64.AppImage');
 });
+
+// The user's report, 6 November 2026: large downloads were cut off mid-way. Installers are now kept on disk, checked
+// against their release record, and served from there with byte ranges.
+test('installers are copied once, checked against their release record and served from disk with ranges', async () => {
+  const http = require('node:http'), crypto = require('node:crypto');
+  const { createFiles } = require('./lib/files');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-download-files-'));
+  try {
+    const data = crypto.randomBytes(3 * 1024 * 1024), sha256 = crypto.createHash('sha256').update(data).digest('hex');
+    let fetches = 0;
+    const fetcher = async (url) => { fetches++; return url.endsWith('/bad') ? new Response(Buffer.from('not it')) : new Response(data); };
+    const files = createFiles(dir, { fetcher });
+    const asset = { name: 'HN-Browser-9.9.9-win-x64.exe', size: data.length, sha256, url: 'https://github.com/x/good' };
+    await assert.rejects(files.local({ ...asset, sha256: 'a'.repeat(64), url: 'https://github.com/x/bad' }), /didn’t match/);
+    assert.deepEqual(fs.readdirSync(path.join(dir, 'files')), [], 'nothing kept from a download that didn’t match');
+    const [a, b] = await Promise.all([files.local(asset), files.local(asset)]);
+    assert.equal(a, b); assert.equal(fetches, 2, 'fetched once even when asked twice at the same time');
+    assert.ok(fs.readFileSync(a).equals(data));
+    await files.local(asset); assert.equal(fetches, 2, 'served from disk after that');
+    const server = http.createServer((req, res) => files.send(req, res, a, asset));
+    await new Promise((r) => server.listen(0, '127.0.0.1', r));
+    try {
+      const base = 'http://127.0.0.1:' + server.address().port;
+      const full = await fetch(base);
+      assert.equal(full.status, 200); assert.equal(full.headers.get('content-length'), String(data.length));
+      assert.ok(Buffer.from(await full.arrayBuffer()).equals(data));
+      const part = await fetch(base, { headers: { Range: 'bytes=100-199' } });
+      assert.equal(part.status, 206); assert.equal(part.headers.get('content-range'), 'bytes 100-199/' + data.length);
+      assert.ok(Buffer.from(await part.arrayBuffer()).equals(data.subarray(100, 200)), 'downloads can resume');
+      assert.equal((await fetch(base, { headers: { Range: 'bytes=' + data.length + '-' } })).status, 416);
+    } finally { server.close(); }
+    // Files no current release offers are removed.
+    fs.writeFileSync(path.join(dir, 'files', 'b'.repeat(64)), 'old');
+    await files.warm([asset]);
+    assert.deepEqual(fs.readdirSync(path.join(dir, 'files')), [sha256]);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});

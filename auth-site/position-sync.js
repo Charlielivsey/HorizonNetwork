@@ -17,10 +17,10 @@
 //   • each member linked to a staff record gets the roles of their position(s) at the layout's company (for example
 //     President → President, Network Permission Level 5, NA | Network Administration) and loses the position, level and
 //     NA roles they no longer hold;
-//   • every human member gets every separator role, Network Permission Level 1 and M | Member.
+//   • they also get every separator role, Network Permission Level 1 and M | Member (everyone else gets these from
+//     /setup-server; the background sync only checks members linked to a staff record).
 // Roles outside `positions` (Network Permission Level 2 for Trial Staff, given by hand, and B | Bots) are never touched,
-// bots are never changed, and members who aren't linked to a staff record never lose roles. Listing every member needs
-// the Server Members Intent (Discord Developer Portal → Bot); without it only linked staff members are checked.
+// bots are never changed, and members who aren't linked to a staff record are never touched by the background sync.
 const fs = require('node:fs');
 const path = require('node:path');
 const { ALWAYS_GIVE, isSeparator, roleName, parseLayout } = require('./server-setup');
@@ -78,22 +78,10 @@ function createPositionSync({ setup, staff, rolesFile = ROLES_FILE, record = () 
     return { add, remove };
   }
 
+  // The members linked to a staff record, looked up one by one (people who aren't in this server are skipped). The
+  // background sync only checks these (the user's request, 6 November 2026: "dont do the making roles automatically jus
+  // the checking roles please"): it never goes through every member; /setup-server gives everyone the basic roles.
   async function members(guildId, people) {
-    const out = [];
-    let after = '0';
-    try {
-      for (let page = 0; page < 50; page++) {
-        check();
-        const rows = await setup.request('GET', '/guilds/' + guildId + '/members?limit=1000&after=' + after);
-        out.push(...rows);
-        if (rows.length < 1000) return out;
-        after = rows.at(-1).user.id;
-      }
-      return out;
-    } catch (e) {
-      if (e.status !== 403) throw e;
-    }
-    // No Server Members Intent: look up the linked staff members one by one.
     const found = [];
     for (const p of people) {
       check();

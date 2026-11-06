@@ -10,7 +10,7 @@ CHALLENGE_DIR=/var/www/hn-downloads-acme
 LE_DIR="/etc/letsencrypt/live/$DOMAIN"
 [ "$(id -u)" = 0 ] || { echo 'Run with sudo.'; exit 1; }
 for tool in node pm2 nginx certbot curl python3 openssl; do command -v "$tool" >/dev/null || { echo "Required tool missing: $tool"; exit 1; }; done
-for file in server.js lib/releases.js lib/apps.js public/app.js; do node --check "$SCRIPT_DIR/$file"; done
+for file in server.js lib/releases.js lib/apps.js lib/files.js public/app.js; do node --check "$SCRIPT_DIR/$file"; done
 if python3 -c 'import socket;s=socket.socket();s.settimeout(2);exit(s.connect_ex(("127.0.0.1",5100)))'; then
     pm2 describe hn-downloads >/dev/null 2>&1 || { echo 'Port 5100 belongs to another service. No changes made.'; exit 1; }
 fi

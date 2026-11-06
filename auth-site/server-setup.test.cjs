@@ -30,7 +30,7 @@ function fakeDiscord(servers) {
     if ((m = /^\/guilds\/(\d+)\/members\/(\d+)\/roles\/(\d+)$/.exec(p)) && method === 'DELETE') { const mem = s(m[1]).members.find((x) => x.user.id === m[2]); mem.roles = mem.roles.filter((r) => r !== m[3]); return new Response(null, { status: 204 }); }
     if ((m = /^\/guilds\/(\d+)\/members\/(\d+)\/roles\/(\d+)$/.exec(p)) && method === 'PUT') { s(m[1]).members.find((x) => x.user.id === m[2]).roles.push(m[3]); return new Response(null, { status: 204 }); }
     if ((m = /^\/guilds\/(\d+)\/members\/(\d+)$/.exec(p)) && method === 'PATCH') { const mem = s(m[1]).members.find((x) => x.user.id === m[2]); mem.roles = [...body.roles]; return json(mem); }
-    if ((m = /^\/guilds\/(\d+)\/members\/(\d+)$/.exec(p))) return json({ roles: [s(m[1]).botRole] });
+    if ((m = /^\/guilds\/(\d+)\/members\/(\d+)$/.exec(p))) { if (m[2] === BOT) return json({ roles: [s(m[1]).botRole] }); const mem = (s(m[1]).members || []).find((x) => x.user.id === m[2]); return mem ? json(mem) : json({ message: 'Unknown Member', code: 10007 }, 404); }
     if ((m = /^\/guilds\/(\d+)\/roles$/.exec(p))) {
       const g = s(m[1]);
       if (method === 'GET') return json(g.roles);
@@ -360,7 +360,7 @@ test('roles follow Horizon Network positions; /setup-server sets a server up and
     assert.deepEqual(g.roles.filter((r) => r.name !== '@everyone' && r.name !== 'HN Group Auth').sort((a, b) => b.position - a.position).map((r) => r.name), SPEC.map(([n]) => n), 'and the roles were made in order');
     assert.deepEqual(names(g.members[0]), [...always, 'President', 'Network Permission Level 5', 'NA | Network Administration'].sort(), 'President');
     assert.deepEqual(names(g.members[1]), [...always].sort(), 'a Founder at another company has no Horizon Network position');
-    assert.deepEqual(names(g.members[2]), [...always].sort(), 'every human member gets the separators, Level 1 and Member');
+    assert.deepEqual(names(g.members[2]), [...always].sort(), '/setup-server gives every human member the separators, Level 1 and Member');
     assert.deepEqual(g.members[3].roles, [], 'bots are never changed');
     // Promoted, demoted, moved: the old position's roles go, the new one's arrive. Level 2 (given by hand) stays.
     const writes = t.discord.writes.length;
@@ -376,6 +376,12 @@ test('roles follow Horizon Network positions; /setup-server sets a server up and
     assert.match(await command('force-sync'), /Staff roles synced\n\d+ role change/);
     assert.deepEqual(names(g.members[0]), [...always, 'Network Permission Level 2'].sort(), 'no position: position, level and NA roles go; Level 2 stays');
     assert.ok(names(g.members[2]).includes('President'), 'members not linked to a staff record never lose roles');
+    // The background sync only checks linked staff: it never lists or changes anyone else.
+    const DAVE = '300000000000000005';
+    g.members.push({ user: { id: DAVE, username: 'dave' }, roles: [] });
+    await t.manager.syncPositions(true);
+    assert.deepEqual(g.members.at(-1).roles, [], 'an unlinked member isn’t given roles by the background sync');
+    assert.ok(!t.discord.writes.some((w) => w.p.includes('/members/' + DAVE)));
     const deletes = t.discord.writes.filter((w) => w.method === 'DELETE' && /\/roles\/\d+$/.test(w.p) && !w.p.includes('/members/')).length;
     await t.manager.syncPositions(true);
     assert.equal(t.discord.writes.filter((w) => w.method === 'DELETE' && /\/roles\/\d+$/.test(w.p) && !w.p.includes('/members/')).length, deletes, 'syncing never deletes server roles');
