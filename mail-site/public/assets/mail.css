@@ -301,13 +301,14 @@ button { font: inherit; color: inherit; }
 .format-bar button { display: inline-grid; place-items: center; min-width: 34px; height: 32px; border: 0; border-radius: 8px; background: none; color: var(--ml-muted); cursor: pointer; transition: background .15s, color .15s; }
 .format-bar button:hover { background: var(--ml-raised); color: var(--ml-ink); }
 .format-bar svg { width: 18px; height: 18px; }
-/* The message is written as recipients will see it (dark text on white); in Midnight Lavender it's shown turned dark,
-   with pictures turned back, like emails in the reading pane. */
-.editor { flex: 1; min-height: 120px; overflow-y: auto; padding: 16px 2px; outline: none; line-height: 1.6; color: #1c2135; caret-color: #1c2135; overflow-wrap: anywhere; }
-:root[data-theme="light"] .editor { color: var(--ml-ink); caret-color: var(--ml-ink); }
-:root:not([data-theme="light"]) .editor { filter: invert(1) hue-rotate(180deg) contrast(.82); }
-:root:not([data-theme="light"]) .editor img, :root:not([data-theme="light"]) .editor td[bgcolor] { filter: contrast(1.22) hue-rotate(180deg) invert(1); }
-:root:not([data-theme="light"]) .editor img[data-hn-logo] { filter: none; } /* see-through logo: turned light with the text, no box */
+/* Nothing in the message is ever recoloured (the user's request, 6 November 2026: "the colours are the colours"): your
+   own text uses the theme's text colour, and in Lavender Dusk the signature, which carries its own colours, sits on
+   white paper exactly as recipients will see them. */
+.editor { flex: 1; min-height: 120px; overflow-y: auto; padding: 16px 2px; outline: none; line-height: 1.6; color: var(--ml-ink); caret-color: var(--ml-ink); overflow-wrap: anywhere; }
+:root:not([data-theme="light"]) .editor .hn-sig { display: block; width: fit-content; max-width: 100%; box-sizing: border-box; background: #ffffff; color: #1c2135; border-radius: 14px; padding: 16px 18px; }
+:root:not([data-theme="light"]) .editor blockquote { border-left-color: var(--ml-line-2); color: var(--ml-muted); }
+:root:not([data-theme="light"]) .editor a { color: var(--ml-accent); }
+:root:not([data-theme="light"]) .editor .hn-sig a { color: #4a4a4a; }
 .editor:empty::before { content: attr(data-placeholder); color: #8a8698; }
 .editor blockquote { margin: 0 0 0 .3em; padding-left: .9em; border-left: 3px solid #cfc8dc; color: #5c566b; }
 .editor a { color: #5514b4; }

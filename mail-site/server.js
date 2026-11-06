@@ -20,11 +20,14 @@ const TYPES = { '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg
 const MAX_ATTACH = 25 * 1024 * 1024;
 const fail = (status, message, code) => Object.assign(new Error(message), { status, code });
 const GOOGLE_COOKIE = 'hn_mail_google';
-// Emails in the Midnight Lavender theme (the user's request, 6 November 2026: emails "all show in a white box, i do not
-// like it"): the email page is turned dark (white becomes dark grey, dark text becomes light) and pictures are turned
-// back so they keep their real colours (the inner filter is the exact inverse of the outer one). The light theme shows
-// emails as they are, on the page's own background.
-const DARK_EMAIL = 'html{filter:invert(1) hue-rotate(180deg) contrast(.82)}img,video,picture,canvas,svg,[background],[style*="background-image"],[style*="background:url"],[style*="background: url"]{filter:contrast(1.22) hue-rotate(180deg) invert(1)}img[data-hn-logo]{filter:none!important}';
+// Emails keep their own colours in both themes (the user's request, 6 November 2026, about a signature: "things like this
+// should not change with the theme. the colours are the colours and shoiuld stay the same"), so nothing is ever turned
+// or recoloured. Light shows every email as it is on the page's background. Lavender Dusk shows an email with no colours
+// of its own (plain text, simple HTML) in the theme's text colours on the dark background, and one that sets its own
+// colours (signatures, newsletters) as it is on white paper, since its dark text can't be read on a dark page.
+const OWN_COLOURS = /<style\b|\sstyle\s*=\s*["'][^"']*(?:color|background)|\sbgcolor\s*=|<font\b[^>]*\scolor\s*=/i;
+const DUSK_PLAIN = 'html,body{color:#efe9fb}a{color:#b79cf2}blockquote{border-left-color:#43374f;color:#a99cbf}';
+const DUSK_PAPER = 'body{background:#ffffff!important;color:#1c2135;border-radius:14px;padding:18px 20px 22px!important}';
 
 async function readJson(req, limit) {
   const chunks = []; let size = 0;
@@ -68,7 +71,8 @@ function createServer({ dir = process.env.MAIL_DATA_DIR || '/var/lib/hn-mail', f
       try { const p = await gmail.part(user, id, info.partId, m); budget -= p.bytes.length; if (/^image\/(png|jpe?g|gif|webp)$/.test(p.type)) html = html.split('cid:' + cid).join('data:' + p.type + ';base64,' + p.bytes.toString('base64')); } catch {}
     }
     const nonce = crypto.randomBytes(16).toString('base64');
-    const doc = '<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>html,body{margin:0;background:transparent!important;color:#1c2135}' + (theme === 'dark' ? DARK_EMAIL : '') + 'body{padding:2px 2px 8px;font:15px/1.55 "Plus Jakarta Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}.plain{white-space:pre-wrap}a{color:#5514b4}blockquote{margin:0 0 0 .6em;padding-left:.8em;border-left:3px solid #d8d2e6;color:#4d4766}</style></head><body>' + html +
+    const dusk = theme === 'dark' ? (parsed.html && (OWN_COLOURS.test(parsed.html) || html.includes('data-hn-logo="1"')) ? DUSK_PAPER : DUSK_PLAIN) : '';
+    const doc = '<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>html,body{margin:0;background:transparent!important;color:#1c2135}body{padding:2px 2px 8px;font:15px/1.55 "Plus Jakarta Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}.plain{white-space:pre-wrap}a{color:#5514b4}blockquote{margin:0 0 0 .6em;padding-left:.8em;border-left:3px solid #d8d2e6;color:#4d4766}' + dusk + '</style></head><body>' + html +
       '<script nonce="' + nonce + '">(function(){var last=0;function post(){var h=Math.ceil(document.documentElement.scrollHeight);if(h!==last){last=h;parent.postMessage({hnMailHeight:h},"*");}}if(window.ResizeObserver)new ResizeObserver(post).observe(document.documentElement);addEventListener("load",post);setTimeout(post,50);post();})();</script></body></html>';
     const csp = "default-src 'none'; style-src 'unsafe-inline'; img-src data:" + (images ? ' https: http:' : '') + '; font-src data:' + (images ? ' https:' : '') + "; script-src 'nonce-" + nonce + "'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'; sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox";
     return { doc, csp };
@@ -107,7 +111,7 @@ function createServer({ dir = process.env.MAIL_DATA_DIR || '/var/lib/hn-mail', f
       response.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8', 'Set-Cookie': cookies });
       const action = linkGoogle ? '<a class="btn btn-primary" href="https://auth.hngroup.org.uk/">Open HN Group Auth</a> <a class="btn btn-ghost" href="/auth/login">I’ve linked it, try again</a>'
         : status === 403 ? '' : '<a class="btn btn-primary" href="/auth/login">Sign in with HN Group Auth</a>';
-      response.end('<!doctype html><html lang="en-GB"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex, nofollow"><title>HN Mail · HN Group</title><link rel="icon" href="/assets/favicon.svg"><link rel="stylesheet" href="/assets/site.css"><link rel="stylesheet" href="/assets/mail.css?v=8"><script src="/assets/hn-theme.js"></script><body class="plain-page"><main class="wrap problem"><img class="on-light logo" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="140"><img class="on-dark logo" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="140"><p class="eyebrow">HN MAIL</p><h1>' + escape(title) + '</h1><p class="lead">' + escape(message) + '</p><p class="actions">' + action + '</p></main></body></html>');
+      response.end('<!doctype html><html lang="en-GB"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex, nofollow"><title>HN Mail · HN Group</title><link rel="icon" href="/assets/favicon.svg"><link rel="stylesheet" href="/assets/site.css"><link rel="stylesheet" href="/assets/mail.css?v=9"><script src="/assets/hn-theme.js"></script><body class="plain-page"><main class="wrap problem"><img class="on-light logo" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="140"><img class="on-dark logo" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="140"><p class="eyebrow">HN MAIL</p><h1>' + escape(title) + '</h1><p class="lead">' + escape(message) + '</p><p class="actions">' + action + '</p></main></body></html>');
     };
     let route = '';
     try {

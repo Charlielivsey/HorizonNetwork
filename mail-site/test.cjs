@@ -163,7 +163,9 @@ test('HN Mail: labels, conversations, a locked-down body page and downloads', as
   assert.match(html, /<img alt="HN Group" data-hn-logo="1" src="data:image\/png;base64,iVBOR/, 'HN Group signature logos use HN Mail’s see-through copy, shown even before Show images');
   assert.match((await req('/api/messages/aaaaaaaa11/body?images=1')).headers.get('content-security-policy'), /img-src data: https:/);
   assert.doesNotMatch(html, /invert/, 'Light Lavender shows emails as they are');
-  assert.match(await (await req('/api/messages/aaaaaaaa11/body?theme=dark')).text(), /html\{filter:invert\(1\)/, 'Midnight Lavender turns emails dark (no white box)');
+  const dusk = await (await req('/api/messages/aaaaaaaa11/body?theme=dark')).text();
+  assert.doesNotMatch(dusk, /invert|hue-rotate/, 'Lavender Dusk never recolours an email: the colours are the colours');
+  assert.match(dusk, /background:#ffffff!important/, 'an email with HN Group branding is shown as it is, on white paper, in Lavender Dusk');
   // Signature pictures: only HN Group's sites and Google's image hosts, only real images.
   assert.equal((await req('/api/img?u=' + encodeURIComponent('https://evil.example/x.png'))).status, 404);
   assert.equal((await req('/api/img?u=' + encodeURIComponent('http://staff.hngroup.org.uk/x.png'))).status, 404);
