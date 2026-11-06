@@ -142,5 +142,5 @@ sudo systemctl start dovecot postfix && sudo doveadm quota recalc -A && sudo pm2
 ## Tests
 
 In a throwaway Ubuntu 24.04 container: `HN_MAIL_TEST=1 bash mail-server/install.sh`, then
-`HN_MAIL_LIVE=1 node --test mail-admin-site/test.cjs mail-site/test.cjs` (real Postfix/Dovecot/Rspamd). Delivery to
+`HN_MAIL_LIVE=1 node --test --test-concurrency=1 mail-admin-site/test.cjs mail-site/test.cjs` (one at a time: both rewrite the live mail configuration) (real Postfix/Dovecot/Rspamd). Delivery to
 outside providers, SPF/DKIM/DMARC results at Gmail/Outlook and reverse DNS can only be tested on the VPS.
