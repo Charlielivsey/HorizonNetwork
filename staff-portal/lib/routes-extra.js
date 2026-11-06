@@ -31,6 +31,7 @@ const qa = require("./qa");
 const wiki = require("./wiki");
 const mentoring = require("./mentoring");
 const oncall = require("./oncall");
+const jobdescriptions = require("./jobdescriptions");
 const security = require("./security");
 const enquiries = require("./enquiries");
 const storageAccess = require("./storage-access");
@@ -287,6 +288,37 @@ async function handle(req, res, pathname, session) {
       else if (m[2] === "note") mentoring.addNote(p, body.text, me);
       else mentoring.update(p, body, me);
       return sendJson(res, 200, { ok: true, user: meResponse(session) }), true;
+    }
+  }
+
+  // ----- Job descriptions (People → Job descriptions) -----
+  if (pathname.startsWith("/api/job-descriptions")) {
+    const mayManage = jobdescriptions.canManage(me);
+    if (method === "GET" && pathname === "/api/job-descriptions") {
+      return sendJson(res, 200, {
+        items: jobdescriptions.list(), companies: store.COMPANIES, canManage: mayManage,
+        // Suggestions for "Reports to": the titles already in use across the group.
+        titles: mayManage ? [...new Set(store.employees().flatMap((p) => [p.jobTitle, ...(p.otherRoles || []).map((r) => r.jobTitle)]).filter(Boolean))].sort() : [],
+      }), true;
+    }
+    if (method !== "POST") throw httpError(405, "Method not allowed.");
+    if (!mayManage) throw httpError(403, "Only people who can manage job descriptions can do that.");
+    if (pathname === "/api/job-descriptions") {
+      const d = jobdescriptions.save(await readJsonBody(req), null, me);
+      logEvent(req, session, "job-description-created", { target: d.role + " · " + d.company });
+      return sendJson(res, 200, { item: jobdescriptions.view(d) }), true;
+    }
+    if ((m = /^\/api\/job-descriptions\/([a-f0-9]{16})(\/delete)?$/.exec(pathname))) {
+      const d = jobdescriptions.get(m[1]);
+      if (!d) throw httpError(404, "That job description no longer exists.");
+      if (m[2]) {
+        jobdescriptions.remove(d);
+        logEvent(req, session, "job-description-deleted", { target: d.role + " · " + d.company });
+        return sendJson(res, 200, { ok: true }), true;
+      }
+      jobdescriptions.save(await readJsonBody(req), d, me);
+      logEvent(req, session, "job-description-changed", { target: d.role + " · " + d.company });
+      return sendJson(res, 200, { item: jobdescriptions.view(d) }), true;
     }
   }
 

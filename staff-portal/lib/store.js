@@ -169,6 +169,7 @@ const PERMISSIONS = [
   { key: "helpdesk.manage", name: "Handle IT tickets", description: "See every IT Helpdesk ticket, reply, assign and change its status." },
   { key: "payroll.manage", name: "Run payroll & finance", description: "See pay details, generate and issue payslips, and manage company funds, expenses and invoices. Only people who already have it can give it out." },
   { key: "cases.manage", name: "HR cases", description: "See and record disciplinary, grievance and capability cases. These are private to people with this permission." },
+  { key: "jobdescriptions.manage", name: "Manage job descriptions", description: "Post, edit and delete job descriptions for roles (People → Job descriptions). Everyone can read them." },
   { key: "recruitment.manage", name: "Recruitment", description: "Post job vacancies, track applicants and hire them." },
   { key: "enquiries.manage", name: "Website enquiries", description: "Read and answer messages sent from the contact form on hngroup.org.uk." },
   { key: "reports.view", name: "Activity reports", description: "See the monthly activity reports (payroll figures only for people who can run payroll)." },

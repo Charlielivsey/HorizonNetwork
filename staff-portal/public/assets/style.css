@@ -3746,6 +3746,19 @@ input[type="range"] { width: 100%; accent-color: var(--primary); }
 @media (max-width: 760px) { .mt-cols { grid-template-columns: minmax(0, 1fr); } }
 
 /* ---------- On call ---------- */
+/* Job descriptions (People) */
+.jd-card { margin-bottom: 0.8rem; }
+.jd-head { display: flex; align-items: flex-start; gap: 0.6rem; }
+.jd-toggle { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 0.3rem; background: none; border: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.jd-title { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.jd-role { font-size: 1.08rem; font-weight: 700; }
+.jd-reports { display: inline-flex; align-items: center; gap: 0.35rem; }
+.jd-reports .icon { width: 14px; height: 14px; }
+.jd-body { margin-top: 0.9rem; padding-top: 0.9rem; border-top: 1px solid var(--border); }
+.jd-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.6rem 1rem; margin: 0 0 1rem; }
+.jd-facts dt { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+.jd-facts dd { margin: 0.15rem 0 0; font-weight: 600; }
+.jd-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; margin-bottom: 1rem; }
 .oc-rota { margin-bottom: 1rem; }
 .oc-now { display: flex; gap: 0.8rem; align-items: center; }
 .oc-now > div { display: flex; flex-direction: column; }

@@ -380,6 +380,7 @@
                 { title: "Employee Management", desc: "Add and manage staff records", href: "/employees", icon: "briefcase", requires: "staff.manage" },
                 { title: "Joiners & leavers", desc: "Onboarding and leaving checklists", href: "/onboarding", icon: "check", requires: "onboarding.manage" },
                 { title: "Jobs", desc: "Open roles, applications and referrals", href: "/jobs", icon: "briefcase", badge: "newApplicants" },
+                { title: "Job descriptions", desc: "What each role does, who it reports to and its authority", href: "/job-descriptions", icon: "file" },
                 { title: "Roles & permissions", desc: "Choose who can do what", href: "/roles", icon: "shield", requires: "access.manage" },
             ],
         },
@@ -632,6 +633,7 @@
         "/wiki": viewWiki,
         "/mentoring": viewMentoring,
         "/on-call": viewOnCall,
+        "/job-descriptions": viewJobDescriptions,
         "/enquiries": viewEnquiries,
         "/document-storage": viewDocumentStorage,
         "/ideas": viewIdeas,
@@ -688,6 +690,7 @@
         "/wiki": "book",
         "/mentoring": "users",
         "/on-call": "phone",
+        "/job-descriptions": "file",
         "/enquiries": "mail",
         "/document-storage": "lock",
         "/ideas": "flag",
@@ -9848,6 +9851,86 @@
     }
 
     // ================= On call =================
+
+    // ================= Job descriptions (People) =================
+    // The user's request, 6 November 2026: role, company, who or what it reports to, the job description and authority.
+
+    async function viewJobDescriptions(root, current) {
+        const d = await api("/api/job-descriptions");
+        if (!current()) return;
+        let company = state.jdCompany || "";
+        if (company && d.companies.indexOf(company) === -1) company = "";
+        const open = state.jdOpen || (state.jdOpen = {});
+        const count = function (c) { return d.items.filter(function (x) { return !c || x.company === c; }).length; };
+
+        root.innerHTML = '<div class="page-head"><div><h1>Job descriptions</h1><p class="muted">What each role across HN Group is for, who or what it reports to, and the authority it carries.</p></div>' +
+            (d.canManage ? '<div class="page-actions"><button type="button" class="btn btn-primary" id="jd-new">' + icon("plus") + "New job description</button></div>" : "") + "</div>" +
+            '<div class="company-tabs" id="jd-companies" role="tablist" aria-label="Company">' +
+            '<button type="button" data-company="">All companies <span class="tab-count">' + count("") + "</span></button>" +
+            d.companies.map(function (c) { return '<button type="button" data-company="' + esc(c) + '">' + esc(c) + ' <span class="tab-count">' + count(c) + "</span></button>"; }).join("") + "</div>" +
+            '<div class="toolbar"><label class="search">' + icon("search") + '<input type="search" id="jd-search" placeholder="Search roles, reporting lines, duties or authority" aria-label="Search"></label></div>' +
+            '<div id="jd-body"></div>';
+
+        function draw() {
+            $$("#jd-companies [data-company]").forEach(function (b) { b.classList.toggle("active", b.dataset.company === company); });
+            const q = $("#jd-search").value.trim().toLowerCase();
+            const list = d.items.filter(function (x) {
+                if (company && x.company !== company) return false;
+                return !q || [x.role, x.company, x.reportsTo, x.description, x.authority].join(" ").toLowerCase().indexOf(q) !== -1;
+            });
+            $("#jd-body").innerHTML = list.length ? list.map(function (x) {
+                const isOpen = !!open[x.id] || !!q;
+                return '<section class="panel jd-card' + (isOpen ? " open" : "") + '" data-jd="' + x.id + '">' +
+                    '<div class="jd-head"><button type="button" class="jd-toggle" aria-expanded="' + isOpen + '" data-jda="toggle">' +
+                    '<span class="jd-title"><span class="jd-role">' + esc(x.role) + '</span><span class="badge">' + esc(x.company) + "</span></span>" +
+                    '<span class="jd-reports muted small">' + icon("users") + "Reports to " + esc(x.reportsTo) + "</span></button>" +
+                    (d.canManage ? '<div class="btn-row"><button type="button" class="icon-btn" data-jda="edit" aria-label="Edit">' + icon("edit") + '</button><button type="button" class="icon-btn" data-jda="delete" aria-label="Delete">' + icon("trash") + "</button></div>" : "") + "</div>" +
+                    '<div class="jd-body"' + (isOpen ? "" : " hidden") + '><dl class="jd-facts">' +
+                    "<div><dt>Role</dt><dd>" + esc(x.role) + "</dd></div><div><dt>Company</dt><dd>" + esc(x.company) + "</dd></div><div><dt>Reports to</dt><dd>" + esc(x.reportsTo) + "</dd></div></dl>" +
+                    '<h3 class="detail-head">Job description</h3><div class="jd-text">' + esc(x.description) + "</div>" +
+                    '<h3 class="detail-head">Authority</h3><div class="jd-text">' + esc(x.authority) + "</div>" +
+                    '<p class="muted small">Last updated ' + esc(fmtDate(x.updatedAt)) + (x.updatedBy ? " by " + esc(x.updatedBy) : "") + "</p></div></section>";
+            }).join("") : '<div class="empty">' + (d.items.length ? "No job descriptions match." : "No job descriptions have been posted yet." + (d.canManage ? " Press <strong>New job description</strong> to add the first one." : "")) + "</div>";
+        }
+        draw();
+        $("#jd-search").addEventListener("input", draw);
+        root.addEventListener("click", async function (e) {
+            const t = e.target.closest("#jd-companies [data-company]");
+            if (t) { company = state.jdCompany = t.dataset.company; return draw(); }
+            if (e.target.closest("#jd-new")) return openJobDescriptionForm(null, d);
+            const b = e.target.closest("[data-jda]");
+            if (!b) return;
+            const x = d.items.find(function (i) { return i.id === b.closest("[data-jd]").dataset.jd; });
+            if (!x) return;
+            if (b.dataset.jda === "toggle") { open[x.id] = !open[x.id]; return draw(); }
+            if (b.dataset.jda === "edit") return openJobDescriptionForm(x, d);
+            if (await confirmDialog({ title: "Delete the " + x.role + " job description?", message: "It will be removed for everyone at " + x.company + ".", confirmLabel: "Delete", danger: true })) {
+                try { await api("/api/job-descriptions/" + x.id + "/delete", {}); toast("Deleted."); render(); } catch (err) { toast(err.message); }
+            }
+        });
+    }
+
+    function openJobDescriptionForm(x, d) {
+        const v = x || { role: "", company: state.jdCompany || "", reportsTo: "", description: "", authority: "" };
+        const suggestions = Array.from(new Set(d.titles.concat(d.items.map(function (i) { return i.role; })))).sort();
+        const m = openModal('<h2 class="modal-title">' + (x ? "Edit job description" : "New job description") + '</h2><form id="jd-form" novalidate>' +
+            '<div class="grid-2"><div><label for="jd-role">Role</label><input type="text" id="jd-role" maxlength="120" value="' + esc(v.role) + '" placeholder="e.g. Chief of Staff"></div>' +
+            '<div><label for="jd-company">Company</label><select id="jd-company"><option value="">Choose a company…</option>' + d.companies.map(function (c) { return '<option' + (c === v.company ? " selected" : "") + ">" + esc(c) + "</option>"; }).join("") + "</select></div></div>" +
+            '<label for="jd-reports">Reports to <span class="muted small">(a person’s role, a team or a board)</span></label><input type="text" id="jd-reports" maxlength="160" list="jd-titles" value="' + esc(v.reportsTo) + '" placeholder="e.g. President, or the Board of Directors">' +
+            '<datalist id="jd-titles">' + suggestions.map(function (t) { return '<option value="' + esc(t) + '">'; }).join("") + "</datalist>" +
+            '<label for="jd-desc">Job description</label><textarea id="jd-desc" rows="10" maxlength="20000" placeholder="Purpose of the role and its main responsibilities">' + esc(v.description) + "</textarea>" +
+            '<label for="jd-auth">Authority</label><textarea id="jd-auth" rows="6" maxlength="10000" placeholder="What the role can decide, approve or sign off on its own">' + esc(v.authority) + "</textarea>" +
+            '<div class="form-error" id="jd-error" hidden></div><div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">' + (x ? "Save changes" : "Post job description") + "</button></div></form>", { wide: true });
+        $("#jd-form", m.el).addEventListener("submit", async function (e) {
+            e.preventDefault();
+            const body = { role: $("#jd-role", m.el).value, company: $("#jd-company", m.el).value, reportsTo: $("#jd-reports", m.el).value, description: $("#jd-desc", m.el).value, authority: $("#jd-auth", m.el).value };
+            try {
+                const r = await api(x ? "/api/job-descriptions/" + x.id : "/api/job-descriptions", body);
+                state.jdOpen = state.jdOpen || {}; state.jdOpen[r.item.id] = true;
+                closeModal(); toast(x ? "Saved." : "Job description posted."); render();
+            } catch (err) { formError($("#jd-error", m.el), err.message); }
+        });
+    }
 
     async function viewOnCall(root, current) {
         const from = state.onCallFrom || "";

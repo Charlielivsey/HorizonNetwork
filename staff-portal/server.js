@@ -40,6 +40,7 @@ const qa = require("./lib/qa");
 const wiki = require("./lib/wiki");
 const mentoring = require("./lib/mentoring");
 const oncall = require("./lib/oncall");
+const jobdescriptions = require("./lib/jobdescriptions");
 const security = require("./lib/security");
 const enquiries = require("./lib/enquiries");
 const storageAccess = require("./lib/storage-access");
@@ -66,7 +67,7 @@ const APP_ROUTES = new Set([
   "/home", "/directory", "/employees", "/settings", "/system", "/announcements", "/documents",
   "/calendar", "/polls", "/onboarding", "/roles", "/about", "/signature",
   "/leave", "/rotas", "/payslips", "/payroll", "/funds", "/helpdesk", "/reviews", "/staff-files", "/status",
-  "/expenses", "/invoices", "/notifications", "/training", "/cases", "/jobs", "/kudos", "/ideas", "/team", "/reports", "/bills", "/objectives", "/feedback", "/pulse", "/exit-interview", "/exit-interviews", "/flexible", "/chat", "/questions", "/wiki", "/mentoring", "/on-call", "/enquiries", "/document-storage",
+  "/expenses", "/invoices", "/notifications", "/training", "/cases", "/jobs", "/kudos", "/ideas", "/team", "/reports", "/bills", "/objectives", "/feedback", "/pulse", "/exit-interview", "/exit-interviews", "/flexible", "/chat", "/questions", "/wiki", "/mentoring", "/on-call", "/enquiries", "/document-storage", "/job-descriptions",
 ]);
 const SYSTEM_UNLOCK_MS = 15 * 60 * 1000; // System Admin stays unlocked for 15 minutes of inactivity
 const MAX_PIN_ATTEMPTS = 5;
@@ -110,7 +111,7 @@ invoices.init(DATA_DIR);
 notifications.init(DATA_DIR);
 resume.init(DATA_DIR);
 bills.init(DATA_DIR);
-for (const mod of [objectives, feedback, pulse, exitinterviews, flexible, chat, qa, wiki, mentoring, oncall, security, enquiries, storageAccess]) mod.init(DATA_DIR);
+for (const mod of [objectives, feedback, pulse, exitinterviews, flexible, chat, qa, wiki, mentoring, oncall, jobdescriptions, security, enquiries, storageAccess]) mod.init(DATA_DIR);
 training.init(DATA_DIR);
 cases.init(DATA_DIR);
 recruitment.init(DATA_DIR);
@@ -141,7 +142,7 @@ function reloadAll() {
   kudos.init(DATA_DIR);
   ideas.init(DATA_DIR);
   bills.init(DATA_DIR);
-  for (const mod of [objectives, feedback, pulse, exitinterviews, flexible, chat, qa, wiki, mentoring, oncall, security, enquiries, storageAccess]) mod.init(DATA_DIR);
+  for (const mod of [objectives, feedback, pulse, exitinterviews, flexible, chat, qa, wiki, mentoring, oncall, jobdescriptions, security, enquiries, storageAccess]) mod.init(DATA_DIR);
 }
 
 backup.scheduleNightly((err, name) => {
