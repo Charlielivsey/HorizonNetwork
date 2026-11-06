@@ -81,9 +81,16 @@
         if (!KEEP.has(el.tagName)) { el.replaceWith(...el.childNodes); continue; }
         for (const a of [...el.attributes]) {
           const n = a.name.toLowerCase(), v = a.value.trim();
-          if (n === 'src' && el.tagName === 'IMG' && /^https:\/\//i.test(v)) { el.setAttribute('data-hn-src', v); el.setAttribute('src', '/api/img?u=' + encodeURIComponent(v)); continue; }
+          if (n === 'src' && el.tagName === 'IMG' && /^https:\/\//i.test(v)) {
+            el.setAttribute('data-hn-src', v);
+            // HN Group's email logos show from HN Mail's see-through copies, so there's no white box around them.
+            const logo = /^https:\/\/staff\.hngroup\.org\.uk\/assets\/brand\/png\/([a-z-]+-email-logo)\.png$/.exec(v);
+            el.setAttribute('src', logo ? '/assets/brand/png/' + logo[1] + '-clear.png' : '/api/img?u=' + encodeURIComponent(v));
+            if (logo) el.dataset.hnLogo = '1';
+            continue;
+          }
           if (n === 'style') { if (/url\s*\(|expression|behavior|javascript:|position\s*:\s*(fixed|absolute|sticky)/i.test(v)) el.removeAttribute(a.name); continue; }
-          const ok = (n === 'href' && el.tagName === 'A' && /^(https?:|mailto:|tel:)/i.test(v)) || (n === 'src' && el.tagName === 'IMG' && /^data:image\/(png|jpe?g|gif|webp);/i.test(v)) || (n === 'data-hn-src' && /^https:\/\//i.test(v))
+          const ok = (n === 'href' && el.tagName === 'A' && /^(https?:|mailto:|tel:)/i.test(v)) || (n === 'src' && el.tagName === 'IMG' && /^data:image\/(png|jpe?g|gif|webp);/i.test(v)) || (n === 'data-hn-src' && /^https:\/\//i.test(v)) || (n === 'data-hn-logo' && v === '1')
             || ['alt', 'title', 'colspan', 'rowspan', 'width', 'height', 'align', 'valign', 'bgcolor', 'cellpadding', 'cellspacing', 'border', 'role'].includes(n);
           if (!ok) el.removeAttribute(a.name);
         }
@@ -434,7 +441,7 @@
   }
   async function payload() {
     const copy = editor.cloneNode(true);
-    for (const img of copy.querySelectorAll('img[data-hn-src]')) { img.setAttribute('src', img.getAttribute('data-hn-src')); img.removeAttribute('data-hn-src'); }
+    for (const img of copy.querySelectorAll('img[data-hn-src]')) { img.setAttribute('src', img.getAttribute('data-hn-src')); img.removeAttribute('data-hn-src'); img.removeAttribute('data-hn-logo'); }
     return { to: $('#c-to').value, cc: $('#c-cc').value, bcc: $('#c-bcc').value, subject: $('#c-subject').value, html: copy.innerHTML, threadId: C.threadId, inReplyTo: C.inReplyTo, references: C.references,
       draftId: C.draftId, include: C.include.map(({ messageId, partId }) => ({ messageId, partId })), attachments: await Promise.all(C.files.map(async (f) => ({ name: f.name, type: f.type, data: await readFile(f) }))) };
   }

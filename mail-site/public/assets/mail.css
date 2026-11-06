@@ -265,6 +265,7 @@ button { font: inherit; color: inherit; }
 :root[data-theme="light"] .editor { color: var(--ml-ink); caret-color: var(--ml-ink); }
 :root:not([data-theme="light"]) .editor { filter: invert(1) hue-rotate(180deg) contrast(.82); }
 :root:not([data-theme="light"]) .editor img, :root:not([data-theme="light"]) .editor td[bgcolor] { filter: contrast(1.22) hue-rotate(180deg) invert(1); }
+:root:not([data-theme="light"]) .editor img[data-hn-logo] { filter: none; } /* see-through logo: turned light with the text, no box */
 .editor:empty::before { content: attr(data-placeholder); color: #8a8698; }
 .editor blockquote { margin: 0 0 0 .3em; padding-left: .9em; border-left: 3px solid #cfc8dc; color: #5c566b; }
 .editor a { color: #5514b4; }

@@ -20,7 +20,7 @@ const GOOGLE_COOKIE = 'hn_mail_google';
 // like it"): the email page is turned dark (white becomes dark grey, dark text becomes light) and pictures are turned
 // back so they keep their real colours (the inner filter is the exact inverse of the outer one). The light theme shows
 // emails as they are, on the page's own background.
-const DARK_EMAIL = 'html{filter:invert(1) hue-rotate(180deg) contrast(.82)}img,video,picture,canvas,svg,[background],[style*="background-image"],[style*="background:url"],[style*="background: url"]{filter:contrast(1.22) hue-rotate(180deg) invert(1)}';
+const DARK_EMAIL = 'html{filter:invert(1) hue-rotate(180deg) contrast(.82)}img,video,picture,canvas,svg,[background],[style*="background-image"],[style*="background:url"],[style*="background: url"]{filter:contrast(1.22) hue-rotate(180deg) invert(1)}img[data-hn-logo]{filter:none!important}';
 
 async function readJson(req, limit) {
   const chunks = []; let size = 0;
@@ -47,6 +47,14 @@ function createServer({ dir = process.env.MAIL_DATA_DIR || '/var/lib/hn-mail', f
     let html = parsed.html;
     if (!html) html = '<div class="plain">' + escape(parsed.text || '').replace(/(https?:\/\/[^\s<>"']+)/g, '<a href="$1">$1</a>') + '</div>';
     html = html.replace(/<script\b[\s\S]*?<\/script\s*>/gi, '').replace(/<meta[^>]+http-equiv[^>]*>/gi, '').replace(/<base\b[^>]*>/gi, '');
+    // HN Group's email logos (in signatures) are shown from HN Mail's see-through copies: always visible, and no white
+    // box around them in Midnight Lavender.
+    html = html.replace(/<img\b[^>]*>/gi, (tag) => {
+      const m = /\ssrc\s*=\s*["']?https:\/\/staff\.hngroup\.org\.uk\/assets\/brand\/png\/([a-z-]+-email-logo)\.png["']?/i.exec(tag);
+      const file = m && path.join(PUBLIC, 'assets', 'brand', 'png', m[1].toLowerCase() + '-clear.png');
+      if (!file || !fs.existsSync(file)) return tag;
+      return tag.replace(m[0], ' data-hn-logo="1" src="data:image/png;base64,' + fs.readFileSync(file).toString('base64') + '"');
+    });
     // Inline (cid:) images become data: addresses, up to 10 MB in all.
     let budget = 10 * 1024 * 1024;
     for (const [cid, info] of Object.entries(parsed.inline)) {

@@ -29,7 +29,7 @@ const idToken = (claims) => 'x.' + Buffer.from(JSON.stringify(claims)).toString(
 const b64 = (s) => Buffer.from(s).toString('base64url');
 const MESSAGE = { id: 'aaaaaaaa11', threadId: 'bbbbbbbb22', labelIds: ['INBOX', 'UNREAD'], internalDate: String(Date.now()), snippet: 'Hello &amp; welcome',
   payload: { mimeType: 'multipart/mixed', headers: [{ name: 'From', value: 'Bob Smith <bob@example.com>' }, { name: 'To', value: 'ada@hngroup.org.uk' }, { name: 'Subject', value: 'Welcome' }, { name: 'Message-ID', value: '<m1@example.com>' }, { name: 'Content-Type', value: 'multipart/mixed' }],
-    parts: [{ partId: '0', mimeType: 'text/html', headers: [{ name: 'Content-Type', value: 'text/html; charset=utf-8' }], body: { data: b64('<p>Hi <img src="https://tracker.example/p.gif"><img src="cid:logo1"></p><script>alert(1)</script><meta http-equiv="refresh" content="0;url=https://evil.example">') } },
+    parts: [{ partId: '0', mimeType: 'text/html', headers: [{ name: 'Content-Type', value: 'text/html; charset=utf-8' }], body: { data: b64('<p>Hi <img src="https://tracker.example/p.gif"><img src="cid:logo1"></p><img alt="HN Group" src="https://staff.hngroup.org.uk/assets/brand/png/hn-group-email-logo.png"><script>alert(1)</script><meta http-equiv="refresh" content="0;url=https://evil.example">') } },
       { partId: '1', mimeType: 'image/png', filename: 'logo.png', headers: [{ name: 'Content-ID', value: '<logo1>' }, { name: 'Content-Disposition', value: 'inline' }], body: { attachmentId: 'att-logo', size: 4 } },
       { partId: '2', mimeType: 'application/pdf', filename: 'report.pdf', headers: [{ name: 'Content-Disposition', value: 'attachment; filename="report.pdf"' }], body: { attachmentId: 'att-pdf', size: 3 } }] } };
 async function fakeFetch(url, opts = {}) {
@@ -141,6 +141,7 @@ test('HN Mail: labels, conversations, a locked-down body page and downloads', as
   assert.match(csp, /sandbox allow-scripts allow-popups/); assert.match(csp, /img-src data:;/, 'no outside images until asked');
   assert.match(csp, /script-src 'nonce-/); assert.doesNotMatch(html, /alert\(1\)/); assert.doesNotMatch(html, /http-equiv/);
   assert.match(html, /data:image\/png;base64,UE5HIQ==/, 'inline images are embedded');
+  assert.match(html, /<img alt="HN Group" data-hn-logo="1" src="data:image\/png;base64,iVBOR/, 'HN Group signature logos use HN Mail’s see-through copy, shown even before Show images');
   assert.match((await req('/api/messages/aaaaaaaa11/body?images=1')).headers.get('content-security-policy'), /img-src data: https:/);
   assert.doesNotMatch(html, /invert/, 'Light Lavender shows emails as they are');
   assert.match(await (await req('/api/messages/aaaaaaaa11/body?theme=dark')).text(), /html\{filter:invert\(1\)/, 'Midnight Lavender turns emails dark (no white box)');
