@@ -322,5 +322,5 @@ footer .footer-brand .footer-company { margin: 0; display: grid; gap: .1rem; lin
 footer .footer-brand .footer-company strong { font-size: 1.02rem; font-weight: 700; }
 footer .footer-brand .footer-parent { opacity: .82; font-size: .88rem; }
 footer .footer-brand .on-dark { display: none; }
-@media (prefers-color-scheme: dark) { footer .footer-brand .on-light { display: none; } footer .footer-brand .on-dark { display: block; } }
+/* The register is always light (like Companies House), so the footer always shows the logo for light backgrounds, even when the computer or HN Browser is in dark mode. */
 footer .footer-brand { margin-bottom: 1rem; }

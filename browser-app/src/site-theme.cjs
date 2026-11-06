@@ -2,6 +2,10 @@
 const {SITES}=require('./sites.cjs');
 const HOSTS=new Set(SITES.map(([url])=>new URL(url).hostname).filter(host=>host!=='mail.google.com'));
 HOSTS.add('horizonetwork.com');HOSTS.add('horizon-network.co.uk');
+// The Company Register (public and private) has its own light, Companies House-style design, not the HN theme, so
+// the browser's colours are never put on it (the user's report, 6 November 2026: its theme "does not work correctly").
+const OWN_DESIGN=new Set(['companies.hngroup.org.uk','private.companies.hngroup.org.uk']);
+for(const host of OWN_DESIGN)HOSTS.delete(host);
 const PALETTES={
  'midnight-lavender':['#151222','#201b31','#302740','#f2edfc','#b2a6c5','#c3a2ff','#3c3150'],
  daylight:['#f5f3f9','#ffffff','#eae4f4','#251c35','#736781','#6731ad','#dcd3e8'],
@@ -12,4 +16,4 @@ const PALETTES={
 function eligible(url){try{const u=new URL(url);return u.href==='hn-browser://start/'||u.protocol==='https:'&&HOSTS.has(u.hostname);}catch{return false;}}
 function css(theme){const p=PALETTES[theme];if(!p)throw Error('Unknown theme');const[bg,surface,raised,ink,muted,accent,line]=p;return `:root,body{color-scheme:${theme==='daylight'?'light':'dark'}!important;--bg:${bg}!important;--panel:${surface}!important;--surface:${surface}!important;--surface-2:${raised}!important;--raised:${raised}!important;--tint:${raised}!important;--ink:${ink}!important;--text:${ink}!important;--muted:${muted}!important;--text-muted:${muted}!important;--accent:${accent}!important;--primary:${accent}!important;--accent-hover:${accent}!important;--primary-hover:${accent}!important;--accent-soft:${raised}!important;--primary-tint:${raised}!important;--input-bg:${surface}!important;--line:${line}!important;--border:${line}!important;--border-strong:${line}!important;--on-primary:${bg}!important;--on-accent:${bg}!important}body{background-color:${bg}!important;color:${ink}!important}input,textarea,select{color-scheme:${theme==='daylight'?'light':'dark'}}`;
 }
-module.exports={eligible,css,PALETTES};
+module.exports={eligible,css,PALETTES,OWN_DESIGN};
