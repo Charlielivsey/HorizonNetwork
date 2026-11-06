@@ -1,51 +1,21 @@
 # HN Mail (mail.hngroup.org.uk)
 
-HN Group's own front end for Gmail (the user's request, 6 November 2026). People sign in with HN Group Auth (client
-`mail`), and only accounts that already have a Google account linked on Auth get in. The first time, Google asks them
-once to let HN Mail into their Gmail, and only the Google account linked to their Auth account is accepted. Gmail
-stays the mailbox: HN Mail keeps no copies of mail.
+The web app for HN Group's own mail server (see `mail-server/README.md`). PM2 `hn-mail`, loopback **5660**, data
+`/var/lib/hn-mail` (sign-in sessions only; `grants.json` there holds the old Gmail access keys from before the move and
+is deleted once the move is settled).
 
-- PM2 `hn-mail`, loopback port **5660**, data `/var/lib/hn-mail` (sessions, `grants.json` with each person's Gmail
-  refresh token encrypted with AES-256-GCM, and the `key` file; all root only).
-- Install/update: part of the root `install.sh`, or on its own `sudo bash mail-site/install.sh`.
-- Test: `node --test mail-site/test.cjs` (real server, stand-ins for Auth, Google and Gmail).
+- Sign in with HN Group Auth (client `mail`; no Google account needed). HN Mail asks the mail directory
+  (admin.mail.hngroup.org.uk, `/api/service/access`) which mailboxes the account's staff records may open: their own
+  mailbox and the shared mailboxes they're members of. It opens them over IMAP as the person's own mailbox (Dovecot
+  master login, `/etc/hn-mail/hnmail-master.secret`), so Dovecot's shared-mailbox rights apply, and sends through
+  Postfix (127.0.0.1:10587), which only accepts From addresses that mailbox may send as.
+- `lib/imap.js` (IMAP client), `lib/rawmime.js` (reading messages), `lib/mime.js` (building them), `lib/smtp.js`,
+  `lib/mailstore.js` (folders, conversations, flags, drafts, sending; Gmail-style ids the front end already used:
+  INBOX, SENT, DRAFT, ARCHIVE, SPAM=Junk, TRASH, STARRED, IMPORTANT, ALL).
+- Front end unchanged in look: folders, saved searches, Mailbox list (yours + shared, with unread counts and the
+  current mailbox's storage), From picker, signatures (the HN Group signature), drafts, attachments, keyboard shortcuts,
+  Light/Lavender Dusk. Settings → Mail apps: app passwords for Outlook/Apple Mail/phones (IMAP mx.hngroup.org.uk:993,
+  SMTP :465 or :587), shown once, stored only as scrypt hashes, removable.
+- Email bodies are their own sandboxed page with a strict CSP (unchanged); attachments always download.
 
-## What it does
-
-Midnight Lavender look (HN Browser's default theme). Inbox, Starred, Important, Sent, Drafts, Archive, All mail, Junk and Bin (with unread counts; no labels, at the user's request); saved searches; search (Gmail's
-own search words work, e.g. `from:jack has:attachment`); conversations with every message; reply, reply all and forward
-(original attachments included); compose with formatting, Cc/Bcc, attachments up to 25 MB and your Gmail signature;
-drafts saved automatically every few seconds and when you close the composer; archive, delete (to the Bin), restore,
-spam / not spam, star and read/unread, on one conversation or several at once, with Undo; downloads; new mail
-appears every minute. Keyboard: `c` compose, `/` search, `j`/`k` next/previous, `e` archive, `#` delete, `r`/`a`/`f`
-reply/all/forward, `s` star, `u` back to the list, Ctrl/Cmd+Enter to send, Esc to close.
-
-Emails are shown inside sandboxed frames from `/api/messages/<id>/body`, each with its own strict Content Security
-Policy: the email's own scripts can't run, it has no access to HN Mail or its cookies, links open in a new tab, and
-pictures from the web stay hidden until you choose **Show images** (so tracking pixels don't report back). Inline
-pictures are embedded. Attachments always download (never open on HN Mail's address).
-
-Gmail's `gmail.modify` permission can't delete mail permanently: the Bin empties itself after 30 days, as in Gmail.
-
-## Setting up Google (system owner, once)
-
-HN Mail uses HN Group Auth's existing Google OAuth client (`/var/lib/hn-auth/google-oauth.json`). In the Google Cloud
-console, in the project that has that client:
-
-1. **APIs & Services → Library → Gmail API → Enable.**
-2. **Google Auth Platform → Clients →** the web client Auth uses **→ Authorised redirect URIs → add**
-   `https://mail.hngroup.org.uk/google/callback` and save.
-3. **Google Auth Platform → Data Access → Add or remove scopes →** add
-   `https://www.googleapis.com/auth/gmail.modify` and save.
-4. **Google Auth Platform → Audience.** Gmail access is a *restricted* permission:
-   - **Internal** (only accounts in HN Group's Google Workspace): works straight away, no Google review. Recommended
-     if everyone uses Workspace addresses. Note this also limits Auth's Sign in with Google to Workspace accounts.
-   - **External, Testing**: only the test users you list (up to 100) can connect, and Google ends access every 7 days,
-     so people have to press Continue with Google again weekly.
-   - **External, In production**: needs Google's verification and a security assessment for restricted permissions.
-
-## DNS
-
-`A mail → 217.154.34.205` (DNS only) in the hngroup.org.uk zone. If the zone already has a `mail` record (for example
-an old Google Workspace `CNAME mail → ghs.googlehosted.com` shortcut to Gmail), replace it. This doesn't touch email
-delivery, which uses the MX records.
+Test: `node --test mail-site/test.cjs` (add `HN_MAIL_LIVE=1` with the real mail server installed).

@@ -28,7 +28,7 @@
   const can = (...ps) => state && (state.me.owner || ps.some((p) => state.me.permissions.includes(p)));
 
   const VIEWS = [
-    ['overview', 'Overview', () => true, 'HN GROUP / MAIL', 'Mail.', 'Run by HN Group.', 'Mailboxes, storage and the mail server at a glance.'],
+    ['overview', 'Overview', () => true, 'MAIL', 'Mail.', 'Run by HN Group.', 'Mailboxes, storage and the mail server at a glance.'],
     ['mailboxes', 'Mailboxes', () => can('mail.view', 'mail.mailboxes', 'mail.shared'), 'MAILBOXES', 'People’s', 'mailboxes.', 'Every person’s mailbox: storage, aliases, forwarding and access. Made automatically from staff records.'],
     ['shared', 'Shared mailboxes', () => can('mail.view', 'mail.shared', 'mail.mailboxes'), 'SHARED MAILBOXES', 'One inbox,', 'many people.', 'Members open the shared mailbox in HN Mail with their own account. Send-as is checked by the mail server.'],
     ['groups', 'Distribution groups', () => can('mail.view', 'mail.groups'), 'DISTRIBUTION GROUPS', 'Mail to', 'everyone in it.', 'A copy goes to each member. Groups can contain other groups.'],
@@ -277,5 +277,6 @@
   }
   $('#refresh').addEventListener('click', () => { render.fresh = true; render(); });
   current = (location.hash || '#overview').slice(1);
+  window.addEventListener('hashchange', () => { const v = (location.hash || '#overview').slice(1); if (v !== current) { current = v; render(); } });
   render().then(health);
 })();

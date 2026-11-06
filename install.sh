@@ -89,6 +89,10 @@ else
     changed auth-site/ status-site/install-portal-sso.sh && run 'HN Group Auth' bash "$ROOT/auth-site/install.sh" "$EMAIL"
 fi
 changed echo-site/ && run 'Echo (echo.hngroup.org.uk)' bash "$ROOT/echo-site/install.sh" "$EMAIL"
+# HN Group's own mail server (Postfix, Dovecot, Rspamd; isolated, restarts only the mail services), then its
+# administration site, then HN Mail, which uses both.
+changed mail-server/ && run 'Mail server (mx.hngroup.org.uk)' bash "$ROOT/mail-server/install.sh" "$EMAIL"
+changed mail-admin-site/ && run 'Mail admin (admin.mail.hngroup.org.uk)' bash "$ROOT/mail-admin-site/install.sh" "$EMAIL"
 changed mail-site/ && run 'HN Mail (mail.hngroup.org.uk)' bash "$ROOT/mail-site/install.sh" "$EMAIL"
 changed evan-site/ && run 'Private page (evan.hngroup.org.uk)' bash "$ROOT/evan-site/install.sh" "$EMAIL"
 changed old-staff-portal-site/ && run 'Old staff portal (oldstaffportal.hngroup.org.uk)' bash "$ROOT/old-staff-portal-site/install.sh" "$EMAIL"

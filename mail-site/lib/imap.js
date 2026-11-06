@@ -179,8 +179,9 @@ class Imap {
   async expunge(uids) { if (uids.length) await this.run(this.join('UID EXPUNGE', uidSet(uids))); }
   async create(name) { await this.run(this.join('CREATE', mailboxArg(name)), { allowNo: true }); }
   // APPEND; returns {uidvalidity, uid} from UIDPLUS.
-  async append(name, raw, flags = []) {
-    const r = await this.run(this.join('APPEND', mailboxArg(name), '(' + flags.join(' ') + ')', { literal: Buffer.isBuffer(raw) ? raw : Buffer.from(raw) }));
+  async append(name, raw, flags = [], date = null) {
+    const when = date ? '"' + imapDate(date) + '"' : null;
+    const r = await this.run(this.join('APPEND', mailboxArg(name), '(' + flags.join(' ') + ')', ...(when ? [when] : []), { literal: Buffer.isBuffer(raw) ? raw : Buffer.from(raw) }));
     const m = /\[APPENDUID (\d+) (\d+)\]/.exec(r.text);
     return m ? { uidvalidity: Number(m[1]), uid: Number(m[2]) } : null;
   }
@@ -191,6 +192,11 @@ class Imap {
     const l = t[2]; for (let k = 0; k < l.length; k += 3) if (String(l[k]).toUpperCase() === 'STORAGE') return { usedKB: Number(l[k + 1]), limitKB: Number(l[k + 2]) };
     return null;
   }
+}
+// "06-Nov-2026 18:04:05 +0000" (IMAP date-time, kept as the message's original arrival time).
+function imapDate(d) {
+  const t = new Date(d), p = (n) => String(n).padStart(2, '0');
+  return p(t.getUTCDate()) + '-' + ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][t.getUTCMonth()] + '-' + t.getUTCFullYear() + ' ' + p(t.getUTCHours()) + ':' + p(t.getUTCMinutes()) + ':' + p(t.getUTCSeconds()) + ' +0000';
 }
 function uidSet(uids) {
   const s = [...new Set(uids.map(Number).filter((n) => n > 0))].sort((a, b) => a - b), out = [];

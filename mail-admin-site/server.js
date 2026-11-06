@@ -121,6 +121,28 @@ function createServer({ dir = process.env.MAIL_ADMIN_DATA_DIR || '/var/lib/hn-ma
           if (v.action === 'revoke') { directory.removeAppPassword(actor, m.id, String(v.id || '')); await applyNow(); return json(200, { ok: true }); }
           return json(400, { error: 'Unknown action.' });
         }
+        // Group and shared mailbox memberships from the Google Workspace inventory (mail-server/migrate/google.cjs
+        // groups): Google's own members only, never invented; shared mailbox members get full access without send-as.
+        if (route === '/api/service/import-memberships' && req.method === 'POST') {
+          const d = directory.data(), results = [], notHere = [];
+          for (const g of (Array.isArray(v.groups) ? v.groups : []).slice(0, 500)) {
+            const address = String(g.address || '').toLowerCase(), wanted = [...new Set((Array.isArray(g.members) ? g.members : []).map((x) => String(x).toLowerCase()))];
+            const group = Object.values(d.groups).find((x) => x.address === address), shared = Object.values(d.mailboxes).find((x) => x.kind === 'shared' && x.address === address);
+            if (group) {
+              const known = wanted.filter((a) => directory.owner(a) || !d.domains.includes(a.split('@')[1])), unknown = wanted.filter((a) => !known.includes(a));
+              results.push({ kind: 'group', address, members: known, unknown });
+              if (v.apply) directory.saveGroup({ displayName: 'Google Workspace import' }, group.id, { address, name: group.name, description: group.description, members: known });
+            } else if (shared) {
+              const boxes = wanted.map((a) => { const o = directory.owner(a); return o && o.item.kind === 'person' ? o.item : null; });
+              const members = boxes.filter(Boolean), unknown = wanted.filter((a, k) => !boxes[k]);
+              const keep = shared.members || [];
+              results.push({ kind: 'shared mailbox', address, members: members.map((m) => m.address), unknown });
+              if (v.apply) directory.setMembers({ displayName: 'Google Workspace import' }, shared.id, [...keep, ...members.filter((m) => !keep.some((x) => x.mailbox === m.id)).map((m) => ({ mailbox: m.id, access: 'full', sendAs: false }))]);
+            } else notHere.push(address);
+          }
+          if (v.apply) await applyNow();
+          return json(200, { results, notHere });
+        }
         return json(404, { error: 'Not found.' });
       }
 

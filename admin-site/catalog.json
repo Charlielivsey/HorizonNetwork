@@ -9,6 +9,15 @@
     ]
   },
   {
+    "id": "mailadmin",
+    "name": "HN Group Mail Admin",
+    "process": "hn-mail-admin",
+    "port": 5670,
+    "hosts": [
+      "admin.mail.hngroup.org.uk"
+    ]
+  },
+  {
     "id": "echo",
     "name": "Echo",
     "process": "hn-echo",
