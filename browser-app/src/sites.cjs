@@ -9,11 +9,12 @@ const SITES=[
  ['https://auth.hngroup.org.uk/',['auth','hn auth','hn group auth','authentication portal','auth portal']],
  ['https://admin.hngroup.org.uk/',['admin','website control','website admin','admin portal','hn group admin']],
  ['https://status.hngroup.org.uk/',['status','service status','hn status','hn group status']],
- ['https://links.hngroup.org.uk/',['links','group links','hn group links']],
+ ['https://sites.hngroup.org.uk/',['sites','hn group sites','hn sites','group sites','all sites','site directory','links','group links','hn group links']],
+ ['https://hngroup.org.uk/contact',['contact','contact us','contact the group','contact hn group','get in touch','enquiry']],
  ['https://wiki.hngroup.org.uk/',['wiki','hn wiki','hn group wiki']],
- ['https://branding.hngroup.org.uk/',['branding','brand centre','brand center','hn group branding']],
- ['https://companies.hngroup.org.uk/',['companies','company register','companies register','hn group company register']],
- ['https://vpn.hngroup.org.uk/',['vpn','hn vpn','hn group vpn','secure terminal','hn group secure terminal']],
+ ['https://branding.hngroup.org.uk/',['branding','brand centre','brand center','hn group branding','brand','logos','hn logos']],
+ ['https://companies.hngroup.org.uk/',['companies','company register','companies register','hn group company register','register','companies house']],
+ ['https://vpn.hngroup.org.uk/',['vpn','hn vpn','hn group vpn','secure gateway','hn secure gateway','secure network','hn secure network','secure terminal','hn group secure terminal']],
  ['https://media.hngroup.org.uk/',['media','media group','horizon media','horizon media group']],
  ['https://development.hngroup.org.uk/',['development','horizon development']],
  ['https://hngroup.org.uk/support',['support','hn support','hn group support','help']],
@@ -27,7 +28,7 @@ const SITES=[
  ['https://bots.hngroup.org.uk/',['hn group bots','hn bots','bots','discord bot','bot manager','auth bot']],
  ['https://docs.hngroup.org.uk/',['hn group docs','hn docs','docs','documentation','hn group documents','documents','letterhead','company letterhead','document templates','my storage']],
  ['https://investors.hngroup.org.uk/',['investors','hn investors','hn group investors','investor relations','investor portal']],
- ['https://downloads.hngroup.org.uk/',['downloads','hn downloads','hn group downloads','hn browser','browser download']]
+ ['https://downloads.hngroup.org.uk/',['downloads','hn downloads','hn group downloads','hn browser','browser download','app manager','hn app manager','hn group app manager','software']]
 ];
 const normalize=value=>value.toLowerCase().trim().replace(/^(?:open|visit|go to|take me to)\s+/,'').replace(/[^a-z0-9]/g,'');
 function oneEdit(a,b){if(Math.abs(a.length-b.length)>1)return false;if(a.length===b.length){const positions=[];for(let i=0;i<a.length;i++)if(a[i]!==b[i])positions.push(i);return positions.length===1||(positions.length===2&&positions[1]===positions[0]+1&&a[positions[0]]===b[positions[1]]&&a[positions[1]]===b[positions[0]]);}if(a.length>b.length)[a,b]=[b,a];let i=0;while(i<a.length&&a[i]===b[i])i++;return a.slice(i)===b.slice(i+1);}

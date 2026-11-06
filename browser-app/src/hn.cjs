@@ -6,6 +6,8 @@ const NAMES=new Map();
 for(const group of GROUPS)for(const[name,url]of group.sites){const host=new URL(url).hostname;if(host!=='mail.google.com'&&!NAMES.has(host))NAMES.set(host,name);}
 // Horizon Network's earlier addresses redirect to network.hngroup.org.uk.
 for(const old of ['horizon-network.co.uk','horizonetwork.com'])NAMES.set(old,'Horizon Network');
+// HN Group Links moved to sites.hngroup.org.uk; the old address redirects there.
+NAMES.set('links.hngroup.org.uk','HN Group Sites');
 // The HN Group website a URL belongs to (https only), or null.
 function hnSite(value){try{const u=new URL(value);if(u.protocol!=='https:'||u.username||u.password)return null;const host=u.hostname.replace(/^www\./,'');const name=NAMES.get(host);return name?{name,host}:null;}catch{return null;}}
 module.exports={hnSite,NAMES};
