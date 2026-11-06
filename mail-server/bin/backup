@@ -9,7 +9,7 @@ STAMP="$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$DEST"; chmod 700 "$DEST"
 umask 077
 FILE="$DEST/mail-$STAMP.tar.gz"
-tar -czf "$FILE.partial" --ignore-failed-read -C / var/vmail etc/hn-mail var/lib/rspamd/dkim var/lib/hn-mail-admin var/lib/dovecot/hn-shared-mailboxes.db 2>/dev/null || [ $? -eq 1 ]
+tar -czf "$FILE.partial" --ignore-failed-read -C / var/vmail etc/hn-mail var/lib/rspamd/dkim var/lib/hn-mail-admin 2>/dev/null || [ $? -eq 1 ]
 mv "$FILE.partial" "$FILE"
 find "$DEST" -maxdepth 1 -name 'mail-*.tar.gz' -mtime +7 -delete
 echo "$(date -Is) backup $FILE $(du -h "$FILE" | cut -f1)"

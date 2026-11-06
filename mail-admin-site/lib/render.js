@@ -62,7 +62,7 @@ function render(d) {
   const bccRows = [];
   for (const m of mailboxes) if (m.kind === 'shared') { const [l, dom] = m.address.split('@'); for (const a of [m.address, ...(m.aliases || [])]) bccRows.push([a, l + '+hn-sent@' + dom]); }
 
-  const users = mailboxes.map((m) => m.address + ':::::/var/vmail/' + m.id + '::quota_rule=*:storage=' + Math.max(10, Math.round(m.quotaMB)) + 'M').join('\n') + (mailboxes.length ? '\n' : '');
+  const users = mailboxes.map((m) => m.address + ':::::/var/vmail/' + m.id + '::userdb_quota_rule=*:storage=' + Math.max(10, Math.round(m.quotaMB)) + 'M').join('\n') + (mailboxes.length ? '\n' : '');
   const masterTarget = mailboxes.filter((m) => m.kind === 'person' && active(m)).map((m) => m.address + ':{CRYPT}*').join('\n') + '\n';
   const denied = mailboxes.filter((m) => m.kind === 'shared' || !active(m)).map((m) => m.address).join('\n') + '\n';
   const appPasswords = JSON.stringify({ version: 1, mailboxes: Object.fromEntries(mailboxes.filter((m) => m.kind === 'person' && active(m) && (m.appPasswords || []).length)

@@ -172,7 +172,7 @@ cp "$SCRIPT_DIR/config/dovecot.conf" /etc/dovecot/dovecot.conf
 cp "$SCRIPT_DIR/config/before.sieve" "$ETC/sieve/before.sieve"
 sievec "$ETC/sieve/before.sieve"
 chmod 644 "$ETC/sieve/before.sieve" "$ETC/sieve/before.svbin"
-touch /var/lib/dovecot/hn-shared-mailboxes.db && chown dovecot:dovecot /var/lib/dovecot/hn-shared-mailboxes.db 2>/dev/null || true
+touch "$VMAIL/.hn-shared-mailboxes.db" && chown vmail:vmail "$VMAIL/.hn-shared-mailboxes.db" && chmod 600 "$VMAIL/.hn-shared-mailboxes.db"
 doveconf -n >/dev/null
 
 # ---------------------------------------------------------------- Rspamd and DKIM keys
@@ -246,12 +246,6 @@ if [ "$TEST" != 1 ]; then
     else warn "Reverse DNS for $PUBLIC_IP is '${ptr:-none}', not $HOST. Set it in the IONOS Cloud Panel (Network > Public IP > Reverse DNS) to $HOST."; fi
 fi
 echo
-echo 'DNS records this server needs (publish only after the checks above pass; see mail-server/README.md):'
-for d in "${DOMAINS[@]}"; do
-    pub="$(tr -d '\n' < "$ETC/dkim/$d.$SELECTOR.txt" | grep -o 'p=[A-Za-z0-9+/=" ]*' | tr -d '" ' )"
-    echo "  $d  MX 10 $HOST"
-    echo "  $SELECTOR._domainkey.$d  TXT \"v=DKIM1; k=rsa; $pub\""
-done
 python3 - "$ETC" "$SELECTOR" "${DOMAINS[@]}" <<'PY'
 import json, re, sys
 etc, sel, domains = sys.argv[1], sys.argv[2], sys.argv[3:]
@@ -264,6 +258,14 @@ for d in domains:
 json.dump(out, open(f'{etc}/dkim/public.json', 'w'), indent=1)
 PY
 chmod 644 "$ETC/dkim/public.json"
+echo
+echo 'DNS records this server needs (publish only after the checks above pass; see mail-server/README.md):'
+python3 - "$ETC/dkim/public.json" "$HOST" <<'PY'
+import json, sys
+for d, v in json.load(open(sys.argv[1])).items():
+    print(f"  {d}  MX 10 {sys.argv[2]}")
+    print(f"  {v['selector']}._domainkey.{d}  TXT \"{v['dkim']}\"")
+PY
 if [ "${#WARNINGS[@]}" -gt 0 ]; then
     echo; echo 'Mail server installed, with problems to fix:'; printf ' - %s\n' "${WARNINGS[@]}"
 else

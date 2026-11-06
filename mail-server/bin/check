@@ -57,7 +57,7 @@ def certificate():
         info = dict(l.split('=', 1) for l in p.stdout.decode().splitlines() if '=' in l)
         end = datetime.datetime.strptime(info.get('notAfter', '').strip(), '%b %d %H:%M:%S %Y %Z')
         return {'issuer': info.get('issuer', '').strip(), 'subject': info.get('subject', '').strip(), 'expires': end.isoformat() + 'Z',
-                'days': (end - datetime.datetime.utcnow()).days, 'selfSigned': "Let's Encrypt" not in info.get('issuer', '')}
+                'days': (end - datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)).days, 'selfSigned': "Let's Encrypt" not in info.get('issuer', '')}
     except Exception as e:
         return {'error': str(e)[:200]}
 
@@ -87,7 +87,7 @@ def provider():
 
 def main():
     args = sys.argv[1:]
-    result = {'checked': datetime.datetime.utcnow().isoformat() + 'Z', 'services': {s: service(s) for s in SERVICES},
+    result = {'checked': datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None).isoformat() + 'Z', 'services': {s: service(s) for s in SERVICES},
               'ports': [{'port': p, 'name': n, 'listening': port_open(p)} for p, n in PORTS], 'queue': queue(), 'certificate': certificate()}
     if '--provider' in args:
         result['provider'] = provider()
