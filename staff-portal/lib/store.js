@@ -150,8 +150,94 @@ function init(dir) {
     }
     settings.contractsPermissionsAdded = true;
   }
+  if (!settings.positionsSeeded) {
+    // Positions people hold at each company (the user's request, 7 November 2026). Job titles and supervisors are
+    // chosen from these; more are added on the staff portal (People → Job descriptions → Positions).
+    settings.positions = { ...JSON.parse(JSON.stringify(DEFAULT_POSITIONS)), ...(settings.positions || {}) };
+    settings.positionsSeeded = true;
+  }
   writeJson(settingsFile, settings);
   loadLogins();
+  if (resolveSupervisors()) savePeople();
+}
+
+// ---------- Positions (the user's request, 7 November 2026) ----------
+// Each company has a list of positions. A staff record's job title (per company) is one of them, and supervisors are
+// set as a position: whoever holds that position is filled in as the supervisor, and it follows when the holder changes.
+
+const DEFAULT_POSITIONS = {
+  "HN Group": ["Board Chairman", "Board Director", "Board Member", "Chief Executive Officer", "Chief Operating Officer", "Executive Assistant"],
+  "Horizon Network": ["President", "Vice President", "Executive Assistant", "Chief of Staff", "Internal Relations Director", "Advisor", "Founder"],
+};
+
+function positions() {
+  const out = {};
+  for (const c of COMPANIES) out[c] = ((settings.positions || {})[c] || []).slice();
+  return out;
+}
+
+const sameTitle = (a, b) => String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
+
+// Everyone holding a position (main role or a role at another company), main roles first.
+function holdersOf(company, title) {
+  const main = [], other = [];
+  for (const p of people) {
+    if (p.system) continue;
+    if (p.company === company && sameTitle(p.jobTitle, title)) main.push(p);
+    else if ((p.otherRoles || []).some((r) => r.company === company && sameTitle(r.jobTitle || p.jobTitle, title))) other.push(p);
+  }
+  const byAge = (a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || ""));
+  return main.sort(byAge).concat(other.sort(byAge));
+}
+
+function cleanPosition(v) {
+  if (!v || typeof v !== "object") return null;
+  const company = str(v.company, 60), title = str(v.title, 100);
+  return COMPANIES.includes(company) && title ? { company, title } : null;
+}
+
+function addPosition(company, title) {
+  const c = str(company, 60), t = str(title, 100).replace(/\s+/g, " ");
+  if (!COMPANIES.includes(c)) throw new ValidationError("Choose a company.");
+  if (!t) throw new ValidationError("Give the position a name.");
+  settings.positions = settings.positions || {};
+  const list = settings.positions[c] = settings.positions[c] || [];
+  if (list.some((x) => sameTitle(x, t))) throw new ValidationError(`${c} already has a ${t} position.`);
+  list.push(t);
+  writeJson(settingsFile, settings);
+  return positions();
+}
+
+function removePosition(company, title) {
+  const list = (settings.positions || {})[company] || [];
+  const i = list.findIndex((x) => sameTitle(x, title));
+  if (i < 0) throw new ValidationError("That position no longer exists.");
+  const held = holdersOf(company, list[i]).length;
+  if (held) throw new ValidationError(`${held === 1 ? "Someone holds" : held + " people hold"} ${list[i]} at ${company}. Give them another position first.`);
+  list.splice(i, 1);
+  writeJson(settingsFile, settings);
+  return positions();
+}
+
+// Fills in each supervisor from the position they report to. Returns true when anything changed.
+function resolveSupervisors() {
+  let changed = false;
+  // Never a loop: someone can't end up reporting (through others) to themselves.
+  const leadsTo = (from, self) => { for (let cur = from, hops = 0; cur && hops < 200; cur = cur.supervisorId ? people.find((x) => x.id === cur.supervisorId) : null, hops++) if (cur.id === self.id) return true; return false; };
+  const pick = (pos, self) => { if (!pos) return null; const h = holdersOf(pos.company, pos.title).find((x) => x.id !== self.id && !leadsTo(x, self)); return h ? h.id : null; };
+  for (const p of people) {
+    if (p.system) continue;
+    if (p.supervisorPosition) {
+      const id = pick(p.supervisorPosition, p), company = id ? p.supervisorPosition.company : null;
+      if (p.supervisorId !== id || (p.supervisorCompany || null) !== company) { p.supervisorId = id; p.supervisorCompany = company; changed = true; }
+    }
+    for (const r of p.otherRoles || []) {
+      if (!r.supervisorPosition) continue;
+      const id = pick(r.supervisorPosition, p), company = id ? r.supervisorPosition.company : null;
+      if (r.supervisorId !== id || (r.supervisorCompany || null) !== company) { r.supervisorId = id; r.supervisorCompany = company; changed = true; }
+    }
+  }
+  return changed;
 }
 
 // ---------- Roles & permissions ----------
@@ -716,6 +802,7 @@ function publicView(p) {
     otherRoles: p.otherRoles || [],
     supervisorId: p.supervisorId,
     supervisorCompany: p.supervisorCompany || null,
+    supervisorPosition: p.supervisorPosition || null,
     isOwner: isOwner(p),
     emails: p.emails,
     // A contact email for people without an HN Group address (the user's request, 6 November 2026); used instead of
@@ -938,7 +1025,8 @@ function saveEmployee(input, existing) {
   for (const r of Array.isArray(input.otherRoles) ? input.otherRoles.slice(0, COMPANIES.length) : []) {
     const roleCompany = str(r && r.company, 60);
     if (!COMPANIES.includes(roleCompany) || roleCompany === company || otherRoles.some((x) => x.company === roleCompany)) continue;
-    let roleSupervisor = (r && r.supervisorId) || null;
+    const rolePosition = r && r.supervisorPosition !== undefined ? cleanPosition(r.supervisorPosition) : undefined;
+    let roleSupervisor = rolePosition !== undefined ? null : (r && r.supervisorId) || null;
     let roleSupervisorCompany = null;
     if (roleSupervisor) {
       const sup = getPerson(roleSupervisor);
@@ -947,7 +1035,10 @@ function saveEmployee(input, existing) {
         roleSupervisor = null;
       } else roleSupervisorCompany = supervisorCompanyFor(sup, r.supervisorCompany);
     }
-    otherRoles.push({ company: roleCompany, jobTitle: str(r.jobTitle, 100), department: str(r.department, 80), supervisorId: roleSupervisor, supervisorCompany: roleSupervisorCompany });
+    const role = { company: roleCompany, jobTitle: str(r.jobTitle, 100), department: str(r.department, 80), supervisorId: roleSupervisor, supervisorCompany: roleSupervisorCompany };
+    // Supervisor set as a position: filled in from whoever holds it (resolveSupervisors).
+    if (rolePosition) role.supervisorPosition = rolePosition;
+    otherRoles.push(role);
   }
 
   if (!firstName) errors.push("First name is required.");
@@ -955,7 +1046,8 @@ function saveEmployee(input, existing) {
   if (!jobTitle) errors.push("Job title is required.");
   if (!COMPANIES.includes(company)) errors.push("Choose a company.");
 
-  let supervisorId = input.supervisorId || null;
+  const supervisorPosition = input.supervisorPosition !== undefined ? cleanPosition(input.supervisorPosition) : undefined;
+  let supervisorId = supervisorPosition !== undefined ? null : input.supervisorId || null;
   let supervisorCompany = null;
   if (supervisorId) {
     const sup = getPerson(supervisorId);
@@ -995,6 +1087,8 @@ function saveEmployee(input, existing) {
     startDate: validDate(input.startDate),
     updatedAt: now,
   };
+  if (supervisorPosition !== undefined) fields.supervisorPosition = supervisorPosition;
+  else if (input.supervisorId !== undefined) fields.supervisorPosition = null;
   // A temporary position (the user's request, 6 November 2026): guest sign-in accounts can use a temporary record, and
   // are moved onto a permanent one with "Make permanent" on HN Account.
   if (input.temporary !== undefined) fields.temporary = input.temporary === true;
@@ -1012,11 +1106,13 @@ function saveEmployee(input, existing) {
 
   if (existing) {
     Object.assign(existing, fields);
+    resolveSupervisors();
     savePeople();
     return existing;
   }
   const person = { id: newId(), system: false, ...fields, avatar: null, createdAt: now, account: null };
   people.push(attach(person));
+  resolveSupervisors();
   savePeople();
   return person;
 }
@@ -1032,6 +1128,7 @@ function deleteEmployee(person) {
   }
   removeAvatar(person, false);
   removeBanner(person, false);
+  resolveSupervisors();
   savePeople();
 }
 
@@ -1667,6 +1764,11 @@ module.exports = {
   can,
   RENAMED_COMPANIES,
   COMPANIES,
+  positions,
+  addPosition,
+  removePosition,
+  holdersOf,
+  resolveSupervisors,
   DOMAINS,
   COMPANY_DOMAINS,
   DEFAULT_TIMEZONE,

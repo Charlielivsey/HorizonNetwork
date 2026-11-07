@@ -11,8 +11,21 @@ const MANAGE = "jobdescriptions.manage";
 
 let db;
 
+// The user's own job descriptions (7 November 2026), added once each (never again after they're edited or deleted).
+const SEED = require("./job-descriptions-seed.json");
+
 function init(dataDir) {
-  db = datafile.open(dataDir, "job-descriptions.json", () => ({ items: [] }));
+  db = datafile.open(dataDir, "job-descriptions.json", () => ({ items: [], seeded: [] }));
+  let changed = false;
+  for (const d of SEED) {
+    if (db.data.seeded.includes(d.seed)) continue;
+    db.data.seeded.push(d.seed);
+    changed = true;
+    if (db.data.items.some((x) => x.company === d.company && x.role.toLowerCase() === d.role.toLowerCase())) continue;
+    const now = new Date().toISOString();
+    db.data.items.push({ id: crypto.randomBytes(8).toString("hex"), role: d.role, company: d.company, reportsTo: d.reportsTo, description: d.description, authority: d.authority, createdAt: now, updatedAt: now, updatedBy: "" });
+  }
+  if (changed) db.save();
 }
 
 const str = (v, max) => String(v == null ? "" : v).replace(/\r\n?/g, "\n").trim().slice(0, max);
@@ -46,6 +59,7 @@ function save(input, existing, by) {
   const errors = [];
   if (!role) errors.push("Give the role a name.");
   if (!store.COMPANIES.includes(company)) errors.push("Choose a company.");
+  else if (role && !(store.positions()[company] || []).some((t) => t.toLowerCase() === role.toLowerCase()) && !(existing && existing.role === role && existing.company === company)) errors.push(`${role} isn't one of ${company}'s positions. Add it under Positions first.`);
   if (!reportsTo) errors.push("Say who or what the position reports to.");
   if (!description) errors.push("Write the job description.");
   if (!authority) errors.push("Say what authority the role has.");

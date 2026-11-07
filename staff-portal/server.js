@@ -1312,6 +1312,7 @@ async function routeApi(req, res, pathname, session) {
   if (method === "GET" && pathname === "/api/meta") {
     return sendJson(res, 200, {
       companies: store.COMPANIES,
+      positions: store.positions(),
       domains: store.DOMAINS,
       companyDomains: store.COMPANY_DOMAINS,
       defaultTimezone: store.DEFAULT_TIMEZONE,

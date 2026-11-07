@@ -1,0 +1,106 @@
+[
+  {
+    "seed": "hng-board-chairman",
+    "company": "HN Group",
+    "role": "Board Chairman",
+    "reportsTo": "No one: head of the Board and final decision-making authority under the Operations Policy",
+    "description": "The Board Chairman leads HN Group’s Board, provides strategic oversight and ensures the organisation has clear direction. The Chairman holds the intervention powers established by Articles 5, 6 and 8 of the Operations Policy and signs all contracts on behalf of HN Group.\n\nPosition: Head of the Board and final decision-making authority under the Operations Policy\n\nKey responsibilities\n• Chair Board meetings, set agendas and ensure decisions are recorded.\n• Lead the Board’s oversight of group strategy, executive performance and significant risks.\n• Maintain a constructive relationship with the Chief Executive Officer.\n• Ensure executive leadership understands the Board’s expectations and priorities.\n• Resolve matters requiring a final decision within the Chairman’s authority.\n• Record and communicate the reasons for significant interventions and resulting instructions.\n• Act as the signing party for any and all contracts on behalf of HN Group.\n• Monitor the implementation of Board and Chairman decisions.\n\nAll HN Group roles operate remotely through Discord and HN Group’s online services.",
+    "authority": "• Operations Policy, Article 5: May override decisions made by the Board.\n• Operations Policy, Article 6: Holds the final decision and may override decisions made by the Chief Executive Officer in emergent situations.\n• Operations Policy, Article 8: May assume full control of a group company through an executive directive and dismiss its company director without notice.\n• Contracts: Signs all contracts on behalf of HN Group. Other positions do not acquire this authority through their job title."
+  },
+  {
+    "seed": "hng-board-director",
+    "company": "HN Group",
+    "role": "Board Director",
+    "reportsTo": "The Board collectively (Board coordination: Board Chairman)",
+    "description": "A Board Director helps determine HN Group’s strategic direction and oversees executive performance. Directors contribute to collective decisions and may oversee an agreed portfolio or area of responsibility.\n\nAccountable to: The Board collectively\nBoard coordination: Board Chairman\n\nKey responsibilities\n• Review group strategy, priorities, performance and significant proposals.\n• Examine executive reports and challenge recommendations constructively.\n• Monitor risks, resources, staffing and the reliability of group services.\n• Oversee any portfolio or committee assigned by the Board.\n• Review policy proposals submitted by the Chief Executive Officer.\n• Participate in the Board’s collective consideration of its Article 7 veto.\n• Declare conflicts of interest and protect confidential information.\n• Complete assigned actions and support the implementation of agreed decisions.\n\nAll HN Group roles operate remotely through Discord and HN Group’s online services.",
+    "authority": "Participates in collective Board decisions and exercises specifically delegated responsibilities.\n\nUnder Article 7 of the Operations Policy, the Board as a whole may veto new policy changes proposed by the Chief Executive Officer. An individual Director does not independently hold that collective veto.\n\nBoard decisions remain subject to the Chairman’s Article 5 override. A Board Director does not independently sign contracts on behalf of HN Group."
+  },
+  {
+    "seed": "hng-board-member",
+    "company": "HN Group",
+    "role": "Board Member",
+    "reportsTo": "The Board collectively (Board coordination: Board Chairman)",
+    "description": "A Board Member contributes experience, ideas and scrutiny to the Board’s work, supporting informed oversight and collective decision-making.\n\nAccountable to: The Board collectively\nBoard coordination: Board Chairman\n\nKey responsibilities\n• Attend Board meetings and review relevant information beforehand.\n• Contribute to discussions about strategy, projects, performance and organisational concerns.\n• Raise questions and suggest practical improvements.\n• Review policy changes proposed by the Chief Executive Officer.\n• Contribute to the Board’s collective consideration of its Article 7 veto.\n• Participate in working groups or committees when appointed.\n• Complete assigned actions and communicate progress.\n• Protect confidential information and declare conflicts of interest.\n\nAll HN Group roles operate remotely through Discord and HN Group’s online services.",
+    "authority": "Exercises the participation and voting rights attached to their Board appointment. The Article 7 veto belongs to the Board collectively, rather than to individual members.\n\nBoard decisions remain subject to the Chairman’s Article 5 override. Board membership alone does not grant executive management powers or authority to sign HN Group contracts."
+  },
+  {
+    "seed": "hng-ceo",
+    "company": "HN Group",
+    "role": "Chief Executive Officer",
+    "reportsTo": "The Board of Directors, through the Board Chairman",
+    "description": "The Chief Executive Officer leads HN Group’s executive management and delivers its agreed strategy. They coordinate company leadership, establish priorities and remain accountable for the group’s overall operational performance.\n\nDirect reports: Chief Operating Officer and Executive Assistant\n\nKey responsibilities\n• Translate agreed strategy into clear objectives and delivery plans.\n• Lead the executive team and coordinate leadership across group companies.\n• Allocate responsibilities and resolve competing priorities.\n• Oversee performance, staffing and the use of available resources.\n• Keep the Board and Chairman informed about progress, significant risks and matters requiring decisions.\n• Develop and present new policies or policy changes through the required approval process.\n• Consider major changes proposed by group companies, with advice from the Board.\n• Implement Board decisions and applicable Chairman overrides.\n• Escalate emergent situations promptly and provide the information needed for the Chairman’s decision.\n• Arrange the preparation and review of contracts for signature by the Board Chairman.\n\nAll HN Group roles operate remotely through Discord and HN Group’s online services.",
+    "authority": "Makes executive and operational decisions within their delegated mandate.\n\n• Operations Policy, Article 6: Decisions may be overridden by the Board Chairman in emergent situations, with the Chairman holding the final decision.\n• Operations Policy, Article 7: New policy changes proposed by the Chief Executive Officer may be vetoed by the Board as a whole.\n• Divisions Policy, Article 4: Approves major company-level changes with advice from the Board.\n• Contracts: Refers contracts made on behalf of HN Group to the Board Chairman for signature."
+  },
+  {
+    "seed": "hng-coo",
+    "company": "HN Group",
+    "role": "Chief Operating Officer",
+    "reportsTo": "Chief Executive Officer",
+    "description": "The Chief Operating Officer oversees day-to-day delivery across HN Group, ensuring teams, processes and services work effectively together.\n\nCompany reporting responsibility: Horizon Network’s President reports to this role\n\nKey responsibilities\n• Turn executive priorities into practical operational plans.\n• Coordinate work involving multiple teams or group companies.\n• Receive operational updates from company leaders, including Horizon Network’s President.\n• Track progress, identify obstacles and arrange corrective action.\n• Establish clear processes for routine work, handovers and escalation.\n• Monitor service performance and coordinate responses to operational issues.\n• Support staffing, onboarding and team-capacity planning with relevant leaders.\n• Provide accurate operational reports to the Chief Executive Officer.\n• Escalate major proposed company changes for the Chief Executive Officer’s approval.\n• Implement approved policies, Board decisions and applicable Chairman instructions.\n\nAll HN Group roles operate remotely through Discord and HN Group’s online services.",
+    "authority": "Directs operational work within responsibilities delegated by the Chief Executive Officer. Reporting oversight of a company does not automatically transfer its director’s powers to the Chief Operating Officer.\n\nThe role does not independently grant the Chairman’s intervention powers, the Board’s collective veto or authority to sign HN Group contracts. It does not automatically assume the Chief Executive Officer’s authority during an absence."
+  },
+  {
+    "seed": "hng-executive-assistant",
+    "company": "HN Group",
+    "role": "Executive Assistant",
+    "reportsTo": "Chief Executive Officer",
+    "description": "The Executive Assistant provides organisational and administrative support to leadership, ensuring meetings, communications, documents and agreed actions are handled accurately.\n\nAlso supports: Board Chairman and Chief Operating Officer when assigned\n\nKey responsibilities\n• Coordinate leadership meetings, appointments and schedules.\n• Prepare agendas, briefing materials, reports and presentations.\n• Record minutes, decisions, responsibilities and deadlines.\n• Maintain records of Chairman interventions and collective Board veto decisions when assigned.\n• Track actions and follow up with those responsible.\n• Organise executive correspondence and direct enquiries appropriately.\n• Coordinate the preparation and circulation of policy proposals.\n• Prepare contracts and supporting documents for the Board Chairman’s signature.\n• Maintain orderly, appropriately restricted records.\n• Handle sensitive information with discretion.\n\nAll HN Group roles operate remotely through Discord and HN Group’s online services.",
+    "authority": "Coordinates work and communicates leadership instructions when authorised. The role does not independently grant management authority, Board voting rights, policy approval or veto powers, Chairman intervention powers, or authority to sign HN Group contracts."
+  },
+  {
+    "seed": "hn-president",
+    "company": "Horizon Network",
+    "role": "President",
+    "reportsTo": "Chief Operating Officer (HN Group)",
+    "description": "The President leads Horizon Network and is accountable for its direction, performance and management. As the company’s director, the President exercises the authority granted by the Divisions Policy while ensuring the company operates within HN Group’s wider structure.\n\nDirect reports: Vice President and Executive Assistant\n\nKey responsibilities\n• Set company priorities and turn group objectives into practical plans.\n• Lead the company’s leadership team and hold it accountable for delivery.\n• Oversee operations, staffing, projects and services.\n• Provide HN Group’s Chief Operating Officer with accurate updates on performance, significant issues and resource needs.\n• Resolve company-level disagreements and make final decisions within the company’s authority.\n• Obtain approval from HN Group’s Chief Executive Officer for major changes, with advice from the Board.\n• Review leadership changes and exercise the Article 3 veto where appropriate.\n• Suspend applicable company-level policies where needed under Article 5.\n• Make temporary or permanent appointments under Article 6.\n• Record and communicate significant decisions, appointments, vetoes and policy suspensions.",
+    "authority": "Holds the company-director powers described below. Final authority over company-level decisions does not replace the requirement for group approval of major changes.\n\nUnder Article 8 of the Operations Policy, the Board Chairman may assume full control through an executive directive and dismiss the President without notice.\n\nCompany-director authority\nThe following powers apply across HN Group to formally appointed company directors, whether called President, Chief Executive Officer, Executive Director or an equivalent title. At Horizon Network, the President exercises these powers as the company’s director. Other leadership titles do not automatically receive them.\n• Divisions Policy, Article 3: May veto changes made by the company’s leadership.\n• Divisions Policy, Article 4: Has the final say in company-level decisions. Major changes require approval from HN Group’s Chief Executive Officer, with advice from the Board.\n• Divisions Policy, Article 5: May suspend certain company-level policies where needed.\n• Divisions Policy, Article 6: May appoint people to specified positions on a temporary or permanent basis.\n• Operations Policy, Article 8: The HN Group Board Chairman may assume full control through an executive directive and dismiss the company director without notice."
+  },
+  {
+    "seed": "hn-vice-president",
+    "company": "Horizon Network",
+    "role": "Vice President",
+    "reportsTo": "President",
+    "description": "The Vice President supports the President in leading Horizon Network and coordinates the delivery of company priorities.\n\nDirect report: Chief of Staff\n\nKey responsibilities\n• Support the development and delivery of company plans.\n• Oversee delegated work and report progress accurately.\n• Lead and support the Chief of Staff.\n• Coordinate leadership activity and resolve competing priorities.\n• Identify operational concerns and escalate significant matters.\n• Ensure approved decisions and policies are implemented consistently.\n• Review proposals before presenting them to the President.\n• Represent the President when authorised.\n• Maintain continuity during the President’s absence within an explicitly delegated remit.",
+    "authority": "Exercises authority delegated by the President. The title alone does not confer company-director powers or automatically transfer the President’s authority during an absence."
+  },
+  {
+    "seed": "hn-executive-assistant",
+    "company": "Horizon Network",
+    "role": "Executive Assistant",
+    "reportsTo": "President",
+    "description": "The Executive Assistant provides administrative and organisational support to the President, helping leadership meetings, communications and agreed actions run smoothly.\n\nKey responsibilities\n• Coordinate the President’s meetings, appointments and schedule.\n• Prepare agendas, briefing materials, reports and presentations.\n• Record minutes, decisions, responsibilities and deadlines.\n• Track agreed actions and follow up with those responsible.\n• Organise correspondence and direct enquiries appropriately.\n• Maintain accurate, appropriately restricted company records.\n• Help prepare appointment notices, policy communications and announcements.\n• Record the President’s use of veto, policy-suspension and appointment powers when assigned.\n• Support communication between the President, company leadership and HN Group.",
+    "authority": "May coordinate work and communicate instructions on the President’s behalf when authorised. The role does not independently grant management authority, policy approval, appointment powers or company-director status."
+  },
+  {
+    "seed": "hn-chief-of-staff",
+    "company": "Horizon Network",
+    "role": "Chief of Staff",
+    "reportsTo": "Vice President",
+    "description": "The Chief of Staff coordinates leadership activity and ensures company priorities become clear actions.\n\nDirect reports: Internal Relations Director and Advisor\n\nKey responsibilities\n• Translate leadership priorities into coordinated work and action plans.\n• Lead and support the Internal Relations Director and Advisor.\n• Monitor deadlines, outstanding decisions and delivery commitments.\n• Prepare updates identifying progress, obstacles and required decisions.\n• Coordinate work involving several leadership roles.\n• Ensure information reaches the appropriate decision-maker promptly.\n• Organise leadership meetings and track resulting actions.\n• Review proposals for completeness before escalating them.\n• Ensure instructions from the President and Vice President are understood and implemented.",
+    "authority": "Coordinates leadership work within the delegated remit. Changes and recommendations remain subject to the President’s company-level authority and applicable group approval requirements.\n\nThe role does not independently hold the company-director powers in Articles 3–6."
+  },
+  {
+    "seed": "hn-internal-relations-director",
+    "company": "Horizon Network",
+    "role": "Internal Relations Director",
+    "reportsTo": "Chief of Staff",
+    "description": "The Internal Relations Director oversees staff relations and internal communication, helping maintain a fair, organised and supportive working environment.\n\nKey responsibilities\n• Coordinate recruitment, onboarding and staff-development activity as assigned.\n• Support communication between staff and leadership.\n• Receive staff concerns and arrange appropriate review or escalation.\n• Help resolve internal disagreements fairly and discreetly.\n• Monitor staff engagement, conduct and compliance with approved policies.\n• Identify training needs and recommend improvements.\n• Maintain confidential records of relevant staff matters.\n• Advise the Chief of Staff on staffing concerns and internal relations.\n• Coordinate the implementation of approved appointments and organisational changes.",
+    "authority": "Leads internal relations within the assigned remit. Despite containing “Director,” this departmental title does not itself make the holder the company’s director or grant the powers in Articles 3–6.\n\nAppointments require appropriate authorisation; the President holds the company-director appointment power."
+  },
+  {
+    "seed": "hn-advisor",
+    "company": "Horizon Network",
+    "role": "Advisor",
+    "reportsTo": "Chief of Staff",
+    "description": "The Advisor provides considered advice and practical recommendations, helping leadership assess proposals, identify risks and consider alternative approaches.\n\nKey responsibilities\n• Review matters referred by authorised leadership.\n• Research relevant information and prepare clear recommendations.\n• Identify risks, dependencies and consequences of proposed changes.\n• Contribute to planning and review discussions.\n• Offer constructive challenge while respecting reporting lines.\n• Help assess whether proposals require escalation or group approval.\n• Maintain confidentiality and declare conflicts of interest.\n• Complete advisory assignments and communicate findings promptly.",
+    "authority": "Provides advice rather than independently directing staff or approving changes. Recommendations require approval before implementation.\n\nThe role does not grant company-director veto, final-decision, policy-suspension or appointment powers."
+  },
+  {
+    "seed": "hn-founder",
+    "company": "Horizon Network",
+    "role": "Founder",
+    "reportsTo": "No direct supervisor or reporting line",
+    "description": "The Founder recognises the individual’s contribution to establishing Horizon Network. The role provides historical knowledge and continuity and may contribute advice when invited.\n\nRole responsibilities\n• Support an accurate understanding of the company’s origins and development.\n• Share relevant experience and historical context when requested.\n• Contribute ideas and advice through appropriate company channels.\n• Represent their connection to Horizon Network responsibly.\n• Respect confidential information and applicable policies.\n• Work constructively with the appointed leadership.",
+    "authority": "Founder status alone does not grant operational command, supervisory authority or company-director powers. Having no direct reporting line does not exempt the holder from company or group policies.\n\nIf the Founder separately holds an appointed leadership or company-director position, that position’s authority and responsibilities also apply."
+  }
+]

@@ -1,21 +1,36 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
-test('job descriptions: post, validate, list by company, edit, delete and keep across restarts',()=>{
+test('job descriptions, positions and supervisors set as positions',()=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-jd-'));
  try{
   const store=require('./lib/store');store.init(dir);
   const jd=require('./lib/jobdescriptions');jd.init(dir);
-  const [a,b]=store.COMPANIES;
-  assert.throws(()=>jd.save({role:'',company:'Nope'},null),/name.*company.*reports to.*description.*authority/is);
-  const x=jd.save({role:'Chief of Staff',company:b,reportsTo:'President',description:'Runs the office.\nKeeps things moving.',authority:'Approves spending up to £500.'},null,{displayName:'Charlie'});
-  jd.save({role:'Advisor',company:a,reportsTo:'Board of Directors',description:'Advises.',authority:'None on their own.'},null);
-  assert.throws(()=>jd.save({role:'chief of staff',company:b,reportsTo:'x',description:'x',authority:'x'},null),/already/);
-  assert.deepEqual(jd.list().map(i=>i.role),['Advisor','Chief of Staff'],'ordered by company then role');
-  assert.equal(jd.list()[1].description,'Runs the office.\nKeeps things moving.');assert.equal(jd.list()[1].updatedBy,'Charlie');
-  jd.save({...jd.view(x),reportsTo:'Vice President'},x);
-  jd.init(dir);assert.equal(jd.get(x.id).reportsTo,'Vice President','saved to disk');
-  jd.remove(jd.get(x.id));assert.equal(jd.list().length,1);
-  assert.ok(store.PERMISSIONS.some(p=>p.key===jd.MANAGE));
+  // The user's positions and job descriptions are there from the start.
+  assert.deepEqual(store.positions()['HN Group'],['Board Chairman','Board Director','Board Member','Chief Executive Officer','Chief Operating Officer','Executive Assistant']);
+  assert.equal(store.positions()['Horizon Network'].length,7);
+  assert.equal(jd.list().length,13);
+  const president=jd.list().find(i=>i.company==='Horizon Network'&&i.role==='President');
+  assert.equal(president.reportsTo,'Chief Operating Officer (HN Group)');assert.match(president.authority,/Divisions Policy, Article 6/);
+  // Seeds are added once: deleting one doesn't bring it back.
+  jd.remove(jd.get(president.id));jd.init(dir);assert.equal(jd.list().length,12);
+  // Roles must be one of the company's positions; positions can be added and removed.
+  assert.throws(()=>jd.save({role:'Designer',company:'Horizon Network',reportsTo:'x',description:'x',authority:'x'},null),/positions/);
+  store.addPosition('Horizon Media Group','Designer');
+  assert.throws(()=>store.addPosition('Horizon Media Group','designer'),/already/);
+  const x=jd.save({role:'Designer',company:'Horizon Media Group',reportsTo:'President',description:'Designs.',authority:'None.'},null,{displayName:'Charlie'});
+  assert.equal(x.updatedBy,'Charlie');
+  assert.throws(()=>jd.save({role:'Designer',company:'Horizon Media Group',reportsTo:'x',description:'x',authority:'x'},null),/already/);
+  // Supervisors as positions: whoever holds the position is filled in, and it follows the position.
+  const make=(first,title,extra)=>store.saveEmployee({firstName:first,lastName:'Test',jobTitle:title,company:'Horizon Network',emails:[{domain:store.COMPANY_DOMAINS['Horizon Network'],auto:true,primary:true}],...extra},null);
+  const vp=make('Val','Vice President',{supervisorPosition:{company:'Horizon Network',title:'President'}});
+  assert.equal(vp.supervisorId,null,'vacant position: nobody yet');
+  const pres=make('Pat','President');
+  assert.equal(store.getPerson(vp.id).supervisorId,pres.id,'filled in once someone holds it');
+  store.saveEmployee({...store.publicView(pres),jobTitle:'Advisor',emails:pres.emails.map(e=>{const at=e.address.indexOf('@');return{local:e.address.slice(0,at),domain:e.address.slice(at+1),primary:e.primary};})},pres);
+  assert.equal(store.getPerson(vp.id).supervisorId,null,'follows the position, not the person');
+  assert.throws(()=>store.removePosition('Horizon Network','Vice President'),/holds/);
+  store.removePosition('Horizon Media Group','Founder'.replace('Founder','Designer'));
+  assert.ok(!store.positions()['Horizon Media Group'].includes('Designer'));
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });

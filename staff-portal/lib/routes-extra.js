@@ -291,12 +291,23 @@ async function handle(req, res, pathname, session) {
     }
   }
 
+  // ----- Positions at each company (People → Job descriptions → Positions) -----
+  if (pathname === "/api/positions" || pathname === "/api/positions/remove") {
+    if (method === "GET" && pathname === "/api/positions") return sendJson(res, 200, { positions: store.positions(), canManage: jobdescriptions.canManage(me) }), true;
+    if (method !== "POST") throw httpError(405, "Method not allowed.");
+    if (!jobdescriptions.canManage(me)) throw httpError(403, "Only people who can manage job descriptions or staff can change positions.");
+    const body = await readJsonBody(req);
+    const list = pathname === "/api/positions" ? store.addPosition(body.company, body.title) : store.removePosition(body.company, body.title);
+    logEvent(req, session, pathname === "/api/positions" ? "position-added" : "position-removed", { target: String(body.title || "") + " · " + String(body.company || "") });
+    return sendJson(res, 200, { positions: list }), true;
+  }
+
   // ----- Job descriptions (People → Job descriptions) -----
   if (pathname.startsWith("/api/job-descriptions")) {
     const mayManage = jobdescriptions.canManage(me);
     if (method === "GET" && pathname === "/api/job-descriptions") {
       return sendJson(res, 200, {
-        items: jobdescriptions.list(), companies: store.COMPANIES, canManage: mayManage,
+        items: jobdescriptions.list(), companies: store.COMPANIES, positions: store.positions(), canManage: mayManage,
         // Suggestions for "Reports to": the titles already in use across the group.
         titles: mayManage ? [...new Set(store.employees().flatMap((p) => [p.jobTitle, ...(p.otherRoles || []).map((r) => r.jobTitle)]).filter(Boolean))].sort() : [],
       }), true;

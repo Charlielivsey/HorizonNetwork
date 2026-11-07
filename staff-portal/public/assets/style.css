@@ -3759,6 +3759,12 @@ input[type="range"] { width: 100%; accent-color: var(--primary); }
 .jd-facts dt { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
 .jd-facts dd { margin: 0.15rem 0 0; font-weight: 600; }
 .jd-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; margin-bottom: 1rem; }
+.pos-company { margin-bottom: 1.1rem; }
+.pos-list { list-style: none; margin: 0 0 0.5rem; padding: 0; display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.pos-list li { display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.15rem 0.2rem 0.15rem 0.75rem; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface); font-weight: 600; font-size: 0.875rem; }
+.pos-list .icon-btn { width: 28px; height: 28px; }
+.pos-add { display: flex; gap: 0.5rem; }
+.pos-add input { flex: 1; margin: 0; }
 .oc-rota { margin-bottom: 1rem; }
 .oc-now { display: flex; gap: 0.8rem; align-items: center; }
 .oc-now > div { display: flex; flex-direction: column; }

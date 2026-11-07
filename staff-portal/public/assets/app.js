@@ -1680,7 +1680,16 @@
         const supervisors = employees.filter(function (p) { return !emp || p.id !== emp.id; });
         // Job title and supervisor for each extra company; blank means "same as main company".
         const roleState = {};
-        (v.otherRoles || []).forEach(function (r) { roleState[r.company] = { jobTitle: r.jobTitle || "", department: r.department || "", supervisorId: r.supervisorId || "", supervisorCompany: r.supervisorCompany || "" }; });
+        // Supervisors are positions (the user's request, 7 November 2026): whoever holds the position is filled in.
+        // Older records that named a person start on that person's position.
+        const positionOf = function (supId, supCompany) {
+            const sup = supId && employees.find(function (p) { return p.id === supId; });
+            if (!sup) return null;
+            const c = supCompany || sup.company;
+            const r = c === sup.company ? null : (sup.otherRoles || []).find(function (x) { return x.company === c; });
+            return { company: c, title: c === sup.company ? sup.jobTitle : (r && r.jobTitle) || sup.jobTitle };
+        };
+        (v.otherRoles || []).forEach(function (r) { roleState[r.company] = { jobTitle: r.jobTitle || "", department: r.department || "", position: r.supervisorPosition || positionOf(r.supervisorId, r.supervisorCompany) }; });
         // Departments already in use, offered as suggestions.
         const departments = {};
         employees.forEach(function (p) { [p.department].concat((p.otherRoles || []).map(function (r) { return r.department; })).forEach(function (d) { if (d) departments[d] = true; }); });
@@ -1707,10 +1716,46 @@
             const i = String(value || "").indexOf("|");
             return i < 0 ? { supervisorId: null, supervisorCompany: null } : { supervisorId: value.slice(0, i), supervisorCompany: value.slice(i + 1) };
         };
-        let mainSupervisor = { supervisorId: v.supervisorId || null, supervisorCompany: v.supervisorCompany || null };
-        const drawMainSupervisor = function () {
-            f("f-supervisor").innerHTML = supervisorOptions(mainSupervisor.supervisorId, mainSupervisor.supervisorCompany, f("f-company").value, "No supervisor");
+        const positionsFor = function (c) { return (meta.positions && meta.positions[c]) || []; };
+        const same = function (a, b) { return String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase(); };
+        // Who holds a position now (main roles first), not counting the person being edited.
+        const holderOf = function (pos) {
+            const others = employees.filter(function (p) { return !emp || p.id !== emp.id; });
+            return others.find(function (p) { return p.company === pos.company && same(p.jobTitle, pos.title); }) ||
+                others.find(function (p) { return (p.otherRoles || []).some(function (r) { return r.company === pos.company && same(r.jobTitle || p.jobTitle, pos.title); }); }) || null;
         };
+        const posValue = function (pos) { return pos ? encodeURIComponent(pos.company) + "|" + encodeURIComponent(pos.title) : ""; };
+        const posFrom = function (value) { const i = String(value || "").indexOf("|"); return i < 0 ? null : { company: decodeURIComponent(value.slice(0, i)), title: decodeURIComponent(value.slice(i + 1)) }; };
+        // Job title choices: the company's positions (plus their current title if it isn't one, so nothing is lost).
+        const titleOptions = function (company, current, emptyLabel) {
+            const list = positionsFor(company);
+            const known = list.some(function (t) { return same(t, current); });
+            return '<option value="">' + esc(emptyLabel || "Choose a position…") + "</option>" +
+                list.map(function (t) { return '<option value="' + esc(t) + '"' + (same(t, current) ? " selected" : "") + ">" + esc(t) + "</option>"; }).join("") +
+                (current && !known ? '<option value="' + esc(current) + '" selected>' + esc(current) + " (not in the list)</option>" : "");
+        };
+        // Supervisor choices: every company's positions (this company first), each showing who holds it now.
+        const positionOptions = function (selected, forCompany, emptyLabel) {
+            const order = [forCompany].concat(meta.companies.filter(function (c) { return c !== forCompany; }));
+            let found = false;
+            const groups = order.map(function (c) {
+                const list = positionsFor(c);
+                if (!list.length) return "";
+                return '<optgroup label="' + esc(c) + '">' + list.map(function (t) {
+                    const pos = { company: c, title: t }, h = holderOf(pos);
+                    const on = selected && selected.company === c && same(selected.title, t);
+                    if (on) found = true;
+                    return '<option value="' + esc(posValue(pos)) + '"' + (on ? " selected" : "") + ">" + esc(t) + " — " + (h ? esc(h.displayName) : "vacant") + "</option>";
+                }).join("") + "</optgroup>";
+            }).join("");
+            const extra = selected && !found ? '<option value="' + esc(posValue(selected)) + '" selected>' + esc(selected.title) + " (" + esc(selected.company) + ", not in the list) — " + (holderOf(selected) ? esc(holderOf(selected).displayName) : "vacant") + "</option>" : "";
+            return '<option value="">' + esc(emptyLabel) + "</option>" + extra + groups;
+        };
+        let mainPosition = v.supervisorPosition || positionOf(v.supervisorId, v.supervisorCompany);
+        const drawMainSupervisor = function () {
+            f("f-supervisor").innerHTML = positionOptions(mainPosition, f("f-company").value, "No supervisor");
+        };
+        const drawMainTitle = function () { const cur = f("f-title").value || v.jobTitle || ""; f("f-title").innerHTML = titleOptions(f("f-company").value, cur); };
         const companyOptions = meta.companies.map(function (c) {
             return '<option value="' + esc(c) + '"' + (c === v.company ? " selected" : "") + ">" + esc(c) + "</option>";
         }).join("");
@@ -1729,11 +1774,11 @@
             "</fieldset>" +
 
             '<fieldset><legend>Role</legend>' +
-            '<div class="grid-2"><div><label for="f-title">Job title <span class="req">*</span></label><input type="text" id="f-title" maxlength="100" value="' + esc(v.jobTitle) + '" placeholder="e.g. Marketing Executive" required></div>' +
+            '<div class="grid-2"><div><label for="f-title">Position <span class="req">*</span></label><select id="f-title" required></select><p class="muted small">Add positions under People → Job descriptions → Positions.</p></div>' +
             '<div><label for="f-dept">Department</label><input type="text" id="f-dept" maxlength="80" value="' + esc(v.department || "") + '" placeholder="e.g. Marketing" list="f-departments"></div></div>' + departmentList +
             '<div class="grid-2">' +
             '<div><label for="f-company">Company <span class="req">*</span></label><select id="f-company">' + companyOptions + "</select></div>" +
-            '<div><label for="f-supervisor">Supervisor</label><select id="f-supervisor"></select></div></div>' +
+            '<div><label for="f-supervisor">Reports to (position)</label><select id="f-supervisor"></select><p class="muted small">Whoever holds that position is their supervisor, and it follows when the position changes hands.</p></div></div>' +
             '<label>Also works at <span class="muted small">(optional)</span></label><div class="check-chips" id="f-other">' +
             meta.companies.map(function (c) {
                 return '<label class="check-chip"><input type="checkbox" value="' + esc(c) + '"' + (roleState[c] ? " checked" : "") + "><span>" + esc(c) + "</span></label>";
@@ -1777,7 +1822,7 @@
                 cb.disabled = own;
                 if (own) cb.checked = false;
                 cb.parentNode.classList.toggle("disabled", own);
-                if (cb.checked && !roleState[cb.value]) roleState[cb.value] = { jobTitle: "", department: "", supervisorId: "", supervisorCompany: "" };
+                if (cb.checked && !roleState[cb.value]) roleState[cb.value] = { jobTitle: "", department: "", position: null };
                 if (!cb.checked) delete roleState[cb.value];
             });
             drawRoles();
@@ -1788,10 +1833,9 @@
             f("f-roles").innerHTML = list.map(function (c) {
                 const r = roleState[c];
                 return '<div class="role-row" data-company="' + esc(c) + '"><div class="role-row-head">' + icon("building") + esc(c) + "</div>" +
-                    '<div class="grid-2"><div><label>Job title at ' + esc(c) + '</label><input type="text" class="role-title" maxlength="100" value="' + esc(r.jobTitle) +
-                    '" placeholder="Same as main job title"></div>' +
+                    '<div class="grid-2"><div><label>Position at ' + esc(c) + '</label><select class="role-title">' + titleOptions(c, r.jobTitle, "Same as main position") + "</select></div>" +
                     "<div><label>Department at " + esc(c) + '</label><input type="text" class="role-dept" maxlength="80" value="' + esc(r.department || "") + '" placeholder="Same as main department" list="f-departments"></div></div>' +
-                    "<label>Supervisor at " + esc(c) + '</label><select class="role-sup">' + supervisorOptions(r.supervisorId, r.supervisorCompany, c, "Same as main supervisor") + "</select></div>";
+                    "<label>Reports to at " + esc(c) + ' (position)</label><select class="role-sup">' + positionOptions(r.position, c, "Same as main supervisor") + "</select></div>";
             }).join("");
         }
 
@@ -1802,7 +1846,8 @@
         });
         f("f-roles").addEventListener("change", function (e) {
             const row = e.target.closest(".role-row");
-            if (row && e.target.classList.contains("role-sup")) Object.assign(roleState[row.dataset.company], supervisorChoice(e.target.value));
+            if (row && e.target.classList.contains("role-sup")) roleState[row.dataset.company].position = posFrom(e.target.value);
+            if (row && e.target.classList.contains("role-title")) roleState[row.dataset.company].jobTitle = e.target.value;
         });
         f("f-other").addEventListener("change", syncOtherCompanies);
 
@@ -1878,9 +1923,11 @@
         f("f-first").addEventListener("input", onNameChange);
         f("f-last").addEventListener("input", onNameChange);
         f("f-display").addEventListener("input", function () { displayTouched = f("f-display").value.trim() !== ""; });
-        f("f-supervisor").addEventListener("change", function () { mainSupervisor = supervisorChoice(f("f-supervisor").value); });
+        f("f-supervisor").addEventListener("change", function () { mainPosition = posFrom(f("f-supervisor").value); });
+        drawMainTitle();
         drawMainSupervisor();
         f("f-company").addEventListener("change", function () {
+            drawMainTitle();
             drawMainSupervisor();
             syncOtherCompanies();
             const r = rows[0];
@@ -1945,10 +1992,9 @@
                 jobTitle: f("f-title").value,
                 department: f("f-dept").value,
                 company: f("f-company").value,
-                supervisorId: mainSupervisor.supervisorId,
-                supervisorCompany: mainSupervisor.supervisorCompany,
+                supervisorPosition: mainPosition || null,
                 otherRoles: meta.companies.filter(function (c) { return roleState[c] && c !== f("f-company").value; }).map(function (c) {
-                    return { company: c, jobTitle: roleState[c].jobTitle, department: roleState[c].department, supervisorId: roleState[c].supervisorId || null, supervisorCompany: roleState[c].supervisorCompany || null };
+                    return { company: c, jobTitle: roleState[c].jobTitle, department: roleState[c].department, supervisorPosition: roleState[c].position || null };
                 }),
                 emails: rows.map(function (r) { return { local: r.local, domain: r.domain, auto: r.auto, primary: r.primary }; }),
                 location: f("f-location").value,
@@ -9864,7 +9910,7 @@
         const count = function (c) { return d.items.filter(function (x) { return !c || x.company === c; }).length; };
 
         root.innerHTML = '<div class="page-head"><div><h1>Job descriptions</h1><p class="muted">What each role across HN Group is for, who or what it reports to, and the authority it carries.</p></div>' +
-            (d.canManage ? '<div class="page-actions"><button type="button" class="btn btn-primary" id="jd-new">' + icon("plus") + "New job description</button></div>" : "") + "</div>" +
+            (d.canManage ? '<div class="page-actions"><button type="button" class="btn btn-ghost" id="jd-positions">' + icon("users") + 'Positions</button><button type="button" class="btn btn-primary" id="jd-new">' + icon("plus") + "New job description</button></div>" : "") + "</div>" +
             '<div class="company-tabs" id="jd-companies" role="tablist" aria-label="Company">' +
             '<button type="button" data-company="">All companies <span class="tab-count">' + count("") + "</span></button>" +
             d.companies.map(function (c) { return '<button type="button" data-company="' + esc(c) + '">' + esc(c) + ' <span class="tab-count">' + count(c) + "</span></button>"; }).join("") + "</div>" +
@@ -9898,6 +9944,7 @@
             const t = e.target.closest("#jd-companies [data-company]");
             if (t) { company = state.jdCompany = t.dataset.company; return draw(); }
             if (e.target.closest("#jd-new")) return openJobDescriptionForm(null, d);
+            if (e.target.closest("#jd-positions")) return openPositionsManager(d);
             const b = e.target.closest("[data-jda]");
             if (!b) return;
             const x = d.items.find(function (i) { return i.id === b.closest("[data-jd]").dataset.jd; });
@@ -9914,13 +9961,23 @@
         const v = x || { role: "", company: state.jdCompany || "", reportsTo: "", description: "", authority: "" };
         const suggestions = Array.from(new Set(d.titles.concat(d.items.map(function (i) { return i.role; })))).sort();
         const m = openModal('<h2 class="modal-title">' + (x ? "Edit job description" : "New job description") + '</h2><form id="jd-form" novalidate>' +
-            '<div class="grid-2"><div><label for="jd-role">Role</label><input type="text" id="jd-role" maxlength="120" value="' + esc(v.role) + '" placeholder="e.g. Chief of Staff"></div>' +
-            '<div><label for="jd-company">Company</label><select id="jd-company"><option value="">Choose a company…</option>' + d.companies.map(function (c) { return '<option' + (c === v.company ? " selected" : "") + ">" + esc(c) + "</option>"; }).join("") + "</select></div></div>" +
+            '<div class="grid-2"><div><label for="jd-company">Company</label><select id="jd-company"><option value="">Choose a company…</option>' + d.companies.map(function (c) { return '<option' + (c === v.company ? " selected" : "") + ">" + esc(c) + "</option>"; }).join("") + "</select></div>" +
+            '<div><label for="jd-role">Role</label><select id="jd-role"></select></div></div>' +
             '<label for="jd-reports">Reports to <span class="muted small">(a person’s role, a team or a board)</span></label><input type="text" id="jd-reports" maxlength="160" list="jd-titles" value="' + esc(v.reportsTo) + '" placeholder="e.g. President, or the Board of Directors">' +
             '<datalist id="jd-titles">' + suggestions.map(function (t) { return '<option value="' + esc(t) + '">'; }).join("") + "</datalist>" +
             '<label for="jd-desc">Job description</label><textarea id="jd-desc" rows="10" maxlength="20000" placeholder="Purpose of the role and its main responsibilities">' + esc(v.description) + "</textarea>" +
             '<label for="jd-auth">Authority</label><textarea id="jd-auth" rows="6" maxlength="10000" placeholder="What the role can decide, approve or sign off on its own">' + esc(v.authority) + "</textarea>" +
             '<div class="form-error" id="jd-error" hidden></div><div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">' + (x ? "Save changes" : "Post job description") + "</button></div></form>", { wide: true });
+        // The role is one of the company's positions (added under Positions).
+        const drawRoles = function () {
+            const c = $("#jd-company", m.el).value, cur = $("#jd-role", m.el).value || v.role;
+            const list = (d.positions[c] || []);
+            $("#jd-role", m.el).innerHTML = '<option value="">' + (c ? (list.length ? "Choose a position…" : "No positions yet: add them under Positions") : "Choose a company first") + "</option>" +
+                list.map(function (t) { return '<option' + (t === cur ? " selected" : "") + ">" + esc(t) + "</option>"; }).join("") +
+                (cur && c === v.company && list.indexOf(cur) === -1 ? '<option selected value="' + esc(cur) + '">' + esc(cur) + " (not in the list)</option>" : "");
+        };
+        drawRoles();
+        $("#jd-company", m.el).addEventListener("change", drawRoles);
         $("#jd-form", m.el).addEventListener("submit", async function (e) {
             e.preventDefault();
             const body = { role: $("#jd-role", m.el).value, company: $("#jd-company", m.el).value, reportsTo: $("#jd-reports", m.el).value, description: $("#jd-desc", m.el).value, authority: $("#jd-auth", m.el).value };
@@ -9929,6 +9986,41 @@
                 state.jdOpen = state.jdOpen || {}; state.jdOpen[r.item.id] = true;
                 closeModal(); toast(x ? "Saved." : "Job description posted."); render();
             } catch (err) { formError($("#jd-error", m.el), err.message); }
+        });
+    }
+
+    // Positions at each company (the user's request, 7 November 2026): staff records' positions and supervisors are
+    // chosen from these lists. Opened from People → Job descriptions → Positions.
+    function openPositionsManager(d) {
+        const m = openModal('<h2 class="modal-title">Positions</h2><p class="muted">The positions people can hold at each company. Employee Management’s Position and Reports to lists, and job descriptions, use these.</p><div id="pos-body"></div>', { wide: true });
+        function draw() {
+            $("#pos-body", m.el).innerHTML = d.companies.map(function (c) {
+                const list = d.positions[c] || [];
+                return '<section class="pos-company" data-company="' + esc(c) + '"><h3 class="detail-head">' + esc(c) + ' <span class="tab-count">' + list.length + "</span></h3>" +
+                    (list.length ? '<ul class="pos-list">' + list.map(function (t) { return '<li><span>' + esc(t) + '</span><button type="button" class="icon-btn" data-pos-remove="' + esc(t) + '" aria-label="Remove ' + esc(t) + '">' + icon("trash") + "</button></li>"; }).join("") + "</ul>" : '<p class="muted small">No positions yet.</p>') +
+                    '<form class="pos-add" novalidate><input type="text" maxlength="100" placeholder="New position at ' + esc(c) + '" aria-label="New position at ' + esc(c) + '"><button type="submit" class="btn btn-ghost btn-small">' + icon("plus") + "Add</button></form></section>";
+            }).join("") + '<div class="form-error" id="pos-error" hidden></div>';
+        }
+        async function change(url, body) {
+            try {
+                const r = await api(url, body);
+                d.positions = r.positions;
+                if (state.meta) state.meta.positions = r.positions;
+                formError($("#pos-error", m.el), "");
+                draw();
+            } catch (err) { formError($("#pos-error", m.el), err.message); }
+        }
+        draw();
+        m.el.addEventListener("submit", function (e) {
+            const form = e.target.closest(".pos-add");
+            if (!form) return;
+            e.preventDefault();
+            const title = $("input", form).value.trim();
+            if (title) change("/api/positions", { company: form.closest("[data-company]").dataset.company, title: title });
+        });
+        m.el.addEventListener("click", function (e) {
+            const b = e.target.closest("[data-pos-remove]");
+            if (b) change("/api/positions/remove", { company: b.closest("[data-company]").dataset.company, title: b.dataset.posRemove });
         });
     }
 
