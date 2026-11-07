@@ -5,7 +5,7 @@ protected: yes
 
 {{Cards start}}
 {{Company cards}}
-{{Company card|Horizon Development|horizon-development-logo.svg|Custom software and web applications, part of Horizon Network.}}
+{{Company card|Horizon Development|horizon-development-logo.svg|Custom software and web applications, a Horizon Network company.}}
 {{Cards end}}
 
 {{Columns start}}

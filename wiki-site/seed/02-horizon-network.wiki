@@ -8,7 +8,7 @@ title: Horizon Network
 | Country = United Kingdom
 | Website = [https://network.hngroup.org.uk network.hngroup.org.uk]
 }}
-'''Horizon Network''' is the [[HN Group]] business for digital infrastructure, advertising and software. It brings together its own digital services and infrastructure with [[Horizon Development]], which is part of Horizon Network, and [[Horizon Advertising]], a [[Horizon Media Group]] subsidiary that Horizon Network manages.<ref>[https://network.hngroup.org.uk/ Horizon Network], horizon-network.co.uk.</ref>
+'''Horizon Network''' is the [[HN Group]] business for digital infrastructure, advertising and software. It brings together its own digital services and infrastructure with [[Horizon Development]], its subsidiary, and [[Horizon Advertising]], a [[Horizon Media Group]] subsidiary that Horizon Network manages.<ref>[https://network.hngroup.org.uk/ Horizon Network], horizon-network.co.uk.</ref>
 
 Its tagline is "Connecting ideas. Building what's next." — digital infrastructure, advertising and software, brought together to help businesses build, connect and grow.
 
@@ -35,7 +35,7 @@ On 1 September 2026, Horizon Network merged with [[Horizon Media Group]] to form
 == Structure ==
 {{Company ownership|Horizon Network}}
 
-[[Horizon Development]] is part of Horizon Network, and Horizon Network manages [[Horizon Advertising]], a subsidiary of [[Horizon Media Group]]. Together they combine specialist skills with the shared people and systems of HN Group.
+[[Horizon Development]] is a subsidiary of Horizon Network, and Horizon Network manages [[Horizon Advertising]], a subsidiary of [[Horizon Media Group]]. Together they combine specialist skills with the shared people and systems of HN Group.
 
 {{Company tree}}
 

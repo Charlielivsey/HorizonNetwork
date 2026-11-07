@@ -92,6 +92,11 @@ function syncCompanyPages() {
       if (next !== text) store.edit(title, next, SYSTEM, 'Renamed on the Company Register');
       changed = true;
     }
+    // Renamed to the name of an article that already exists (HN Group Investments → HN Group Management, 7 November 2026):
+    // that article is kept and the old one becomes a redirect to it (its history stays).
+    if (mapped && mapped !== title && store.get(mapped) && store.get(title) && !/^#REDIRECT/i.test(store.latest(store.get(mapped)).text)) {
+      store.edit(mapped, '#REDIRECT [[' + title + ']]\n', SYSTEM, 'Renamed on the Company Register'); changed = true;
+    }
     const page = store.get(title);
     if (!page) { store.edit(title, companyArticle(c), SYSTEM, 'Created from the Company Register'); changed = true; }
     else {

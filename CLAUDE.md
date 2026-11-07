@@ -55,5 +55,5 @@ Removed (don't bring back unless asked): holding.hngroup.org.uk, the client port
 - Always show profile pictures for signed-in people and staff.
 - Only two themes everywhere: Light (default) and Lavender Dusk, chosen on the staff portal's Appearance and shared by the `hn_theme` cookie; every page loads `hn-theme.js` (copies in `brand/web/theme-copies.json`). See AGENTS.md.
 
-## Group (latest: 2 November 2026)
-CLivsey Holdings → HN Group Limited (→ HN Group Management Limited). HN Group Investments Limited (its own ownership: whatever the register records) → Horizon Network Limited (70%; includes Horizon Development; manages Horizon Advertising) and Horizon Media Group Limited (55%, → Horizon Advertising Limited). Ownership lives on the Company Register; never hard-code or invent it.
+## Group (latest: 7 November 2026)
+HN Group Limited (Charlie Livsey 51%, Jack Vinckx 49%) → HN Group Management Limited (100%; formerly HN Group Investments Limited, trades as HN Group Management) → Horizon Network Limited (100%; → Horizon Development Limited 100%; manages Horizon Advertising) and Horizon Media Group Limited (100%; → Horizon Advertising Limited 51%, Horizon Network 49%). CLivsey Holdings no longer exists. Ownership lives on the Company Register; never hard-code or invent it.

@@ -87,7 +87,8 @@ function runGroupMigrations() {
   }
   // All or nothing: if a change can't be made, the register is left exactly as it was and says why.
   const atomically = (name, fn) => {
-    if (process.env.COMPANIES_GROUP_UPDATES === 'off' || db.migrations.includes(name)) return;
+    // COMPANIES_SKIP_UPDATES (tests only): names of updates to leave out, so tests of older updates aren't changed by newer ones.
+    if (process.env.COMPANIES_GROUP_UPDATES === 'off' || db.migrations.includes(name) || String(process.env.COMPANIES_SKIP_UPDATES || '').split(',').includes(name)) return;
     const snapshot = JSON.stringify(db), files = new Set(db.filings.map((f) => f.file));
     try { fn(); db.migrations.push(name); }
     catch (e) {
@@ -108,6 +109,119 @@ function runGroupMigrations() {
   // HN Group Investments Limited isn't on the register) changes nothing and is tried again at the next start.
   for (const [name, legal] of [['horizon-network', 'Horizon Network Limited'], ['horizon-media-group', 'Horizon Media Group Limited']])
     atomically('hn-group-investments-2026-11-02-' + name, transferToInvestments(legal));
+  // The user's request (7 November 2026): the group's ownership reset from scratch (see ownershipReset20261107).
+  atomically('ownership-reset-2026-11-07', ownershipReset20261107);
+}
+
+// ----- 7 November 2026: ownership reset -----
+// The user's request: "Ownership of all companies completely reset to the following, remove all filings aswell except
+// incorporation filings the new filings for these changes and director filings", with:
+//   CLivsey Holdings – no longer exists (removed from the register)
+//   HN Group Limited – Charlie Livsey 51% Class A, Jack Vinckx 49%
+//   HN Group Management Limited – 100% HN Group Limited (HN Group Investments Limited renamed, trading as HN Group Management)
+//   Horizon Network Limited – 100% HN Group Management Limited
+//   Horizon Development – 100% Horizon Network
+//   Horizon Media Group Limited – 100% HN Group Management Limited
+//   Horizon Advertising Limited – 51% Horizon Media Group, 49% Horizon Network, managed by Horizon Network
+// Shares whose class wasn't given are recorded as Class A (ordinary shares). A private copy of the whole register and
+// every PDF is kept first in DATA_DIR/backups/ownership-reset-<time>/. Every filing is removed except Incorporation and
+// officer (director) filings; then the changes are filed: the change of name, a Notification for each person with
+// significant control, a statement of capital per company and the appointment of Horizon Network as Horizon
+// Advertising's manager. Old PDFs are deleted only once everything else has worked.
+function ownershipReset20261107() {
+  const today = now().slice(0, 10), actor = 'system:ownership-reset-2026-11-07', doomed = [];
+  const backup = path.join(dir, 'backups', 'ownership-reset-' + now().replace(/[:.]/g, '-'));
+  fs.mkdirSync(backup, { recursive: true, mode: 0o700 });
+  fs.writeFileSync(path.join(backup, 'register.json'), JSON.stringify(db), { mode: 0o600 });
+  fs.cpSync(filesDir, path.join(backup, 'files'), { recursive: true });
+  const find = (re) => db.companies.find((c) => re.test(String(c.legalName).trim()) || re.test(String(c.name).trim())) || null;
+  const make = (slug, name, legalName) => { let s = slug, n = 2; while (company(s)) s = slug + '-' + n++; const c = blankCompany({ slug: s, name, legalName }); c.status = 'Active'; db.companies.push(c); audit(actor, 'company.create', s); return c; };
+  const drop = (c) => {
+    for (const f of db.filings.filter((x) => x.company === c.slug)) doomed.push(f.file);
+    db.filings = db.filings.filter((x) => x.company !== c.slug);
+    db.companies = db.companies.filter((x) => x !== c);
+    for (const o of db.companies) { if (o.parent === c.slug) o.parent = ''; if (o.managedBy === c.slug) o.managedBy = ''; }
+    audit(actor, 'company.delete', c.slug + ' (' + c.legalName + ')');
+  };
+
+  // CLivsey Holdings no longer exists.
+  for (const c of db.companies.filter((x) => /^clivsey holdings( limited)?$/i.test(String(x.legalName).trim()) || /^clivsey holdings$/i.test(String(x.name).trim()))) drop(c);
+
+  // The companies, found by name (made if they aren't on the register yet; only what's known is recorded).
+  const hng = find(/^hn group( limited)?$/i) || make('hn-group', 'HN Group', 'HN Group Limited');
+  const investments = find(/^hn group investments( limited)?$/i);
+  let mgmt = find(/^hn group management( limited)?$/i);
+  if (investments) {
+    // HN Group Investments Limited becomes HN Group Management Limited. A separate record already under that name
+    // would be a second copy of the same company, so it goes (it's in the backup).
+    if (mgmt && mgmt !== investments) drop(mgmt);
+    mgmt = investments;
+  }
+  if (!mgmt) mgmt = make('hn-group-management', 'HN Group Management', 'HN Group Management Limited');
+  const network = find(/^horizon network( limited)?$/i) || make('horizon-network', 'Horizon Network', 'Horizon Network Limited');
+  const development = find(/^horizon development( limited)?$/i) || make('horizon-development', 'Horizon Development', 'Horizon Development Limited');
+  const hmg = find(/^horizon media group( limited)?$/i) || make('horizon-media-group', 'Horizon Media Group', 'Horizon Media Group Limited');
+  const ha = find(/^horizon advertising( limited)?$/i) || make('horizon-advertising', 'Horizon Advertising', 'Horizon Advertising Limited');
+
+  // Every filing goes except Incorporation and officer filings (appointments and terminations of directors and other
+  // officers; the old "managed by" appointment is filed again below).
+  const keep = (f) => f.category === 'Incorporation' || (f.category === 'Officers' && !(f.doc && f.doc.code === 'REG-MGR'));
+  for (const f of db.filings) if (!keep(f)) doomed.push(f.file);
+  const removed = db.filings.length - db.filings.filter(keep).length;
+  db.filings = db.filings.filter(keep);
+  audit(actor, 'filings.removed', removed + ' filings removed (incorporation and officer filings kept)');
+
+  // The rename, with its Change of name filing.
+  if (mgmt.legalName !== 'HN Group Management Limited') {
+    const old = mgmt.legalName;
+    mgmt.legalName = 'HN Group Management Limited';
+    recordNameChange(mgmt, old);
+    audit(actor, 'company.rename', mgmt.slug + ' ' + old + ' → HN Group Management Limited');
+  }
+  mgmt.name = 'HN Group Management';
+  for (const c of db.companies) {
+    c.description = String(c.description || '').replace(/HN Group Investments Limited/g, 'HN Group Management Limited').replace(/HN Group Investments/g, 'HN Group Management');
+    for (const o of c.officers) o.name = String(o.name).replace(/HN Group Investments Limited/g, 'HN Group Management Limited');
+  }
+  network.description = String(network.description || '').replace(/(?:A )?(?:wholly owned )?subsidiary of HN Group (?:Management )?Limited\.?/i, 'A wholly owned subsidiary of HN Group Management Limited.')
+    .replace(/Horizon Development is part of Horizon Network Limited\.?/i, 'Horizon Development is its wholly owned subsidiary.').trim();
+  // Horizon Development is now a company of its own, so it's no longer listed as one of Horizon Network's divisions.
+  network.divisions = (network.divisions || []).filter((x) => !/^horizon development$/i.test(String(x).trim()));
+
+  // Ownership from scratch: everyone recorded before is removed (their old filings went above), then the new holders
+  // are notified today.
+  const ownership = [
+    [hng, '', [{ name: 'Charlie Livsey', kind: 'Individual', classA: '51' }, { name: 'Jack Vinckx', kind: 'Individual', classA: '49' }]],
+    [mgmt, hng, [{ name: hng.legalName, kind: 'Parent company', classA: '100' }]],
+    [network, mgmt, [{ name: mgmt.legalName, kind: 'Parent company', classA: '100' }]],
+    [development, network, [{ name: network.legalName, kind: 'Parent company', classA: '100' }]],
+    [hmg, mgmt, [{ name: mgmt.legalName, kind: 'Parent company', classA: '100' }]],
+    [ha, hmg, [{ name: hmg.legalName, kind: 'Parent company', classA: '51' }, { name: network.legalName, kind: 'Relevant legal entity', classA: '49', extra: ['Has significant influence or control'] }]],
+  ];
+  const band = (n, what) => n > 25 && n <= 50 ? 'Ownership of ' + what + ' – more than 25% but not more than 50%' : n > 50 && n < 75 ? 'Ownership of ' + what + ' – more than 50% but less than 75%' : n >= 75 ? 'Ownership of ' + what + ' – 75% or more' : '';
+  for (const [c, parent, holders] of ownership) {
+    c.psc = holders.map((h) => ({ id: id(), name: h.name, kind: h.kind, share: h.classA, classA: h.classA, classB: '', classC: '', classCIssuedBy: '', control: [], notified: today, ceased: '' }));
+    const votes = votingPower(c);
+    for (const p of c.psc) p.control = [...new Set([band(Number(p.share), 'shares'), band((votes[p.id] || {}).votes || 0, 'voting rights'), ...((holders.find((h) => h.name === p.name) || {}).extra || [])].filter(Boolean))];
+    checkShareRules(c, c.psc);
+    c.parent = parent ? parent.slug : '';
+    c.updatedAt = now();
+    generateFilings(c); // a Notification filing for each holder
+    const r = shareClasses(c);
+    newGeneratedFiling(c, today, 'Capital', 'Statement of capital following a change in shareholdings on ' + longDate(today), { code: 'REG-CAP', heading: 'Statement of capital',
+      rows: [['Company', c.legalName], ['Shares', 'Class A ' + r.classA + '%, Class B ' + r.classB + '%, Class C ' + r.classC + '% (100% issued)'],
+        ...c.psc.map((p) => [p.name, p.share + '% · ' + classText(p)]), ['Changed on', longDate(today)]] });
+    audit(actor, 'ownership.reset', c.slug + ': ' + c.psc.map((p) => p.name + ' ' + p.share + '%').join(', '));
+  }
+  // Horizon Network manages Horizon Advertising.
+  ha.managedBy = network.slug;
+  newGeneratedFiling(ha, today, 'Officers', 'Appointment of ' + network.legalName + ' as manager of the company on ' + longDate(today), { code: 'REG-MGR', heading: 'Appointment of a managing company',
+    rows: [['Company', ha.legalName], ['Managed by', network.legalName], ['Appointed on', longDate(today)]] });
+  audit(actor, 'company.managedBy', ha.slug + ' → ' + network.slug);
+
+  // Only now, with everything else done, are the old PDFs deleted (they're in the backup).
+  for (const name of doomed) removeFile(name);
+  audit(actor, 'done', 'backup in ' + path.relative(dir, backup));
 }
 
 // ----- 30 October 2026 shareholdings -----

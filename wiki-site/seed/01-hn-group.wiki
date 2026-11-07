@@ -6,7 +6,7 @@ title: HN Group
 | Industry = Digital infrastructure<br>Advertising<br>Software development<br>Media
 | Country = United Kingdom
 }}
-'''HN Group''' is the parent company of the Horizon businesses, bringing together [[Horizon Network]] and [[Horizon Media Group]]. [[Horizon Development]] is part of Horizon Network, and [[Horizon Advertising]] is a subsidiary of Horizon Media Group that is managed by Horizon Network.<ref>[https://hngroup.org.uk/about About HN Group], hngroup.org.uk.</ref> Together the companies cover what a modern business needs online: the infrastructure it runs on, the software it uses, the advertising that brings customers in and the media that tells its story.
+'''HN Group''' is the parent company of the Horizon businesses, bringing together [[Horizon Network]] and [[Horizon Media Group]]. [[Horizon Development]] is a subsidiary of Horizon Network, and [[Horizon Advertising]] is a subsidiary of Horizon Media Group that is managed by Horizon Network.<ref>[https://hngroup.org.uk/about About HN Group], hngroup.org.uk.</ref> Together the companies cover what a modern business needs online: the infrastructure it runs on, the software it uses, the advertising that brings customers in and the media that tells its story.
 
 The group describes its purpose as "building the digital infrastructure, products and media for tomorrow's businesses".<ref>[https://hngroup.org.uk/ HN Group home page], hngroup.org.uk.</ref>
 
@@ -21,7 +21,7 @@ The group's companies, as recorded on the HN Group Company Register:
 {{Company tree}}
 
 === HN Group Management ===
-[[HN Group Management]] owns the group's assets, including its domains, Discord servers and technical assets, and manages all of HN Group's email services. It has no staff of its own and is managed directly by HN Group staff.
+[[HN Group Management]] (formerly HN Group Investments) holds Horizon Network and Horizon Media Group for HN Group. It owns the group's assets, including its domains, Discord servers and technical assets, and manages all of HN Group's email services. It has no staff of its own and is managed directly by HN Group staff.
 
 === Horizon Advertising ===
 [[Horizon Advertising]] has an unusual arrangement. It is a '''subsidiary of [[Horizon Media Group]]''', but it is '''managed by [[Horizon Network]]''', which runs it day to day alongside its digital infrastructure and [[Horizon Development]]. This is why the group's websites present Horizon Advertising among Horizon Network's services.

@@ -1,19 +1,12 @@
 title: List of HN Group companies
 ---
 {{Short description|List of the companies in HN Group}}
-This is a list of the companies in '''[[HN Group]]''', kept up to date automatically from the HN Group Company Register: when a company is added or changed there, this list changes too. [[Horizon Development]] is part of [[Horizon Network]] rather than a separate company, and [[Horizon Advertising]] is managed by Horizon Network.
+This is a list of the companies in '''[[HN Group]]''', kept up to date automatically from the HN Group Company Register: when a company is added or changed there, this list changes too. [[Horizon Development]] is a subsidiary of [[Horizon Network]], and [[Horizon Advertising]] is managed by Horizon Network.
 
 {{Company list}}
 
 == Group structure ==
 {{Company tree}}
-
-== Divisions ==
-{| class="wikitable"
-! Division !! Part of !! Focus
-|-
-| '''[[Horizon Development]]''' || [[Horizon Network]] || Custom software and web applications
-|}
 
 [[Category:Companies]]
 [[Category:HN Group]]

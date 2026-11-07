@@ -200,6 +200,8 @@ function companyOf(name) { return companies && companies.register ? companies.re
 // should show as HN Group even though they are owned by HN investments, and HNI should show as owner"). The register's
 // ownership is unchanged: Owner rows still name HN Group Investments. Only the Parent, Subsidiaries and Divisions rows,
 // the ownership sentences and the tree look through a company shown as a division to the company above it.
+// Since 7 November 2026 HN Group Investments Limited is HN Group Management Limited (the user's request) and the wiki shows
+// the register's structure as it is, so no company on the register matches this any more.
 const SHOWN_AS_DIVISION = /^hn group investments( limited)?$/i;
 function isDivision(c) { return !!c && (SHOWN_AS_DIVISION.test(companies.register.displayName(c)) || SHOWN_AS_DIVISION.test(c.legalName || '')); }
 function groupParent(c) {
