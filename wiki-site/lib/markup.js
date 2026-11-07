@@ -200,9 +200,13 @@ function companyOf(name) { return companies && companies.register ? companies.re
 // should show as HN Group even though they are owned by HN investments, and HNI should show as owner"). The register's
 // ownership is unchanged: Owner rows still name HN Group Investments. Only the Parent, Subsidiaries and Divisions rows,
 // the ownership sentences and the tree look through a company shown as a division to the company above it.
-// Since 7 November 2026 HN Group Investments Limited is HN Group Management Limited (the user's request) and the wiki shows
-// the register's structure as it is, so no company on the register matches this any more.
-const SHOWN_AS_DIVISION = /^hn group investments( limited)?$/i;
+// Since 7 November 2026 HN Group Investments Limited is HN Group Management Limited (the user's request), and the same
+// presentation applies to it (the user's request, 7 November 2026: "Division is HN management, subsidiary is HMG and HN.
+// Parent of HMG AND HN is HN Group, not management even though that is the owner pro forma and HMG and HN is managed by
+// HN Group"): HN Group lists HN Group Management under Divisions and Horizon Network / Horizon Media Group under
+// Subsidiaries, their Parent is HN Group, Owner rows still name HN Group Management, and a company held through a division
+// is shown as managed by the company above it (unless the register records another manager).
+const SHOWN_AS_DIVISION = /^hn group (investments|management)( limited)?$/i;
 function isDivision(c) { return !!c && (SHOWN_AS_DIVISION.test(companies.register.displayName(c)) || SHOWN_AS_DIVISION.test(c.legalName || '')); }
 function groupParent(c) {
   const R = companies.register, seen = new Set([c.slug]);
@@ -218,6 +222,15 @@ function groupChildren(c, seen = new Set([c.slug])) {
   }
   return out;
 }
+// Who manages a company: the register's manager, else, for a company held through a division, the company above it.
+function managerOf(c) {
+  const R = companies.register;
+  if (c.managedBy) return R.bySlug(c.managedBy) || null;
+  const p = c.parent && R.bySlug(c.parent);
+  return p && isDivision(p) ? groupParent(c) : null;
+}
+// Companies a company manages that aren't already listed as its subsidiaries.
+const managesOf = (c) => (companies.register.all ? companies.register.all() : companies.register.managedBy(c)).filter((x) => x.slug !== c.slug && (managerOf(x) || {}).slug === c.slug && (groupParent(x) || {}).slug !== c.slug).sort((a, b) => companies.register.displayName(a).localeCompare(companies.register.displayName(b)));
 const divisionsOf = (c) => [...companies.register.children(c).filter(isDivision).map((x) => companies.register.displayName(x)), ...(c.divisions || [])];
 function sourceNote(c) { const R = companies.register; return 'Facts from the <a class="external" href="' + esc(R.registerUrl(c)) + '" rel="noopener">HN Group Company Register</a>, updated automatically.'; }
 
@@ -226,7 +239,7 @@ function companyInfobox(params, ctx) {
   const name = (params[0] || '').trim(), extras = params.slice(1).filter((p) => p.includes('='));
   const c = companyOf(name);
   if (!c) return infobox(['name = ' + name, ...extras], ctx);
-  const R = companies.register, own = R.owners(c), parent = groupParent(c), manager = c.managedBy && R.bySlug(c.managedBy);
+  const R = companies.register, own = R.owners(c), parent = groupParent(c), manager = managerOf(c);
   const given = Object.fromEntries(extras.map((p) => [p.slice(0, p.indexOf('=')).trim().toLowerCase(), p.slice(p.indexOf('=') + 1).trim()]));
   const rows = [];
   const add = (key, value) => { if (value) rows.push(key + ' = ' + value); };
@@ -243,7 +256,7 @@ function companyInfobox(params, ctx) {
   else if (sharing.length > 1) add('Voting control', 'Shared by ' + listWords(sharing.map(nameOf)) + ' (' + Math.round(sharing.reduce((n, o) => n + o.votes, 0) * 100) / 100 + '% of votes together, through Class C shares)');
   if (manager) add('Managed by', link(R.displayName(manager)));
   add('Subsidiaries', groupChildren(c).map((x) => link(R.displayName(x))).join('<br>'));
-  add('Manages', R.managedBy(c).filter((x) => x.parent !== c.slug).map((x) => link(R.displayName(x))).join('<br>'));
+  add('Manages', managesOf(c).map((x) => link(R.displayName(x))).join('<br>'));
   add('Divisions', divisionsOf(c).map(link).join('<br>'));
   add('Industry', given.industry || (c.sic || []).join('<br>'));
   add('Status', statusText(c));
@@ -291,11 +304,11 @@ function companyOwnership(params, ctx) {
     parts.push('Its shares are split into classes with different voting rights, so the votes are held ' + (voters.length > 1 ? 'as follows: ' : 'by ') + listWords(voters) + '.');
   }
   if (parent && !own.some((o) => o.company && o.company.slug === parent.slug)) parts.push('It is a subsidiary of ' + link(R.displayName(parent)) + '.');
-  const manager = c.managedBy && R.bySlug(c.managedBy);
+  const manager = managerOf(c);
   if (manager) parts.push('It is managed by ' + link(R.displayName(manager)) + '.');
   const subs = groupChildren(c).map((x) => link(R.displayName(x)));
   if (subs.length) parts.push((subs.length === 1 ? 'Its subsidiary is ' : 'Its subsidiaries are ') + listWords(subs) + '.');
-  const runs = R.managedBy(c).filter((x) => x.parent !== c.slug).map((x) => link(R.displayName(x)));
+  const runs = managesOf(c).map((x) => link(R.displayName(x)));
   if (runs.length) parts.push('It also manages ' + listWords(runs) + '.');
   const divs = divisionsOf(c);
   if (divs.length) parts.push(listWords(divs.map(link)) + (divs.length === 1 ? ' is a division of ' : ' are divisions of ') + n + '.');
@@ -308,7 +321,7 @@ function companyTree(params, ctx) {
   const lines = [], seen = new Set();
   const walk = (c, depth) => {
     if (seen.has(c.slug)) return; seen.add(c.slug);
-    const manager = c.managedBy && R.bySlug(c.managedBy), own = R.owners(c), share = own.length === 1 && own[0].company && own[0].share ? own[0].share + ' owned' : '';
+    const manager = managerOf(c), own = R.owners(c), share = own.length === 1 && own[0].company && own[0].share ? own[0].share + ' owned' : '';
     const notes = [isDivision(c) && depth > 1 ? 'division' : '', share, manager ? 'managed by ' + link(R.displayName(manager)) : '', inactive(c) ? statusText(c).charAt(0).toLowerCase() + statusText(c).slice(1) : ''].filter(Boolean);
     lines.push('*'.repeat(depth) + " '''" + link(R.displayName(c)) + "'''" + (notes.length ? ' (' + notes.join(', ') + ')' : ''));
     for (const d of c.divisions || []) lines.push('*'.repeat(depth + 1) + ' ' + link(d) + ' (division)');
@@ -323,7 +336,7 @@ function companyList(params, ctx) {
   const R = companies.register, order = [], seen = new Set();
   const walk = (c) => { if (seen.has(c.slug)) return; seen.add(c.slug); order.push(c); R.children(c).forEach(walk); };
   R.roots().forEach(walk);
-  const rows = order.map((c) => { const manager = c.managedBy && R.bySlug(c.managedBy); return "| '''" + link(R.displayName(c)) + "''' || " + (R.owners(c).map((o) => ownerText(o, hasClasses(c))).join('<br>') || '—') + ' || ' + (manager ? link(R.displayName(manager)) : '—') + ' || ' + (statusText(c) || '—') + ' || ' + (longDate(c.incorporated) || '—') + ' || ' + (webLink(c.website) || '—'); });
+  const rows = order.map((c) => { const manager = managerOf(c); return "| '''" + link(R.displayName(c)) + "''' || " + (R.owners(c).map((o) => ownerText(o, hasClasses(c))).join('<br>') || '—') + ' || ' + (manager ? link(R.displayName(manager)) : '—') + ' || ' + (statusText(c) || '—') + ' || ' + (longDate(c.incorporated) || '—') + ' || ' + (webLink(c.website) || '—'); });
   return table(['{| class="wikitable company-list"', '! Company !! Owner !! Managed by !! Status !! Founded !! Website', ...rows.flatMap((r) => ['|-', r]), '|}'], ctx);
 }
 // {{Company cards}}: a card for every company, with its current logo.

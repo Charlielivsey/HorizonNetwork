@@ -1,6 +1,6 @@
 title: HN Group Management
 ---
-{{Short description|Company that holds HN Group's assets}}
+{{Short description|Division of HN Group that holds the group's assets}}
 {{Company infobox|HN Group Management
 | logo = hn-group-management-logo.svg
 | Industry = Asset holding
@@ -9,7 +9,7 @@ title: HN Group Management
 | Staff = None of its own; managed by HN Group staff
 | Country = United Kingdom
 }}
-'''HN Group Management''' is the company that holds the assets of [[HN Group]]. It owns the group's domains, Discord servers and technical assets, and manages all of HN Group's email services.
+'''HN Group Management''' is a division of [[HN Group]] that holds the group's assets. It owns the group's domains, Discord servers and technical assets, and manages all of HN Group's email services.
 
 {{Company ownership|HN Group Management}}
 

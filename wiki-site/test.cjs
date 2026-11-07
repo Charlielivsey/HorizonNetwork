@@ -204,9 +204,13 @@ test('HN Group Wiki: reading, editing, history, protection and safety', async ()
     // HN Group Investments is shown as HN Group's division; its companies are HN Group's subsidiaries with HN Group as
     // their parent, while HN Group Investments stays their owner (the user's request, 3 November 2026).
     const subRow = (html, key) => ((new RegExp('<th scope="row">' + key + '</th><td>(.*?)</td>').exec(html) || [])[1] || '');
-    assert.equal(subRow(hnPage, 'Divisions'), '<a href="/wiki/HN_Group_Investments">HN Group Investments</a>');
-    assert.equal(subRow(hnPage, 'Subsidiaries'), '<a href="/wiki/Horizon_Media_Group">Horizon Media Group</a><br><a href="/wiki/Horizon_Network">Horizon Network</a><br><a href="/wiki/HN_Group_Management">HN Group Management</a>');
-    assert.ok(hnPage.includes('<a href="/wiki/HN_Group_Investments">HN Group Investments</a> is a division of HN Group.'));
+    // HN Group Management is shown as a division too (the user's request, 7 November 2026).
+    assert.equal(subRow(hnPage, 'Divisions'), '<a href="/wiki/HN_Group_Investments">HN Group Investments</a><br><a href="/wiki/HN_Group_Management">HN Group Management</a>');
+    assert.equal(subRow(hnPage, 'Subsidiaries'), '<a href="/wiki/Horizon_Media_Group">Horizon Media Group</a><br><a href="/wiki/Horizon_Network">Horizon Network</a>');
+    // Companies held through a division are shown as managed by HN Group.
+    assert.equal(subRow(networkPage, 'Managed by'), '<a href="/wiki/HN_Group">HN Group</a>');
+    assert.ok(networkPage.includes('It is managed by <a href="/wiki/HN_Group">HN Group</a>.'));
+    assert.ok(hnPage.includes('<a href="/wiki/HN_Group_Investments">HN Group Investments</a> and <a href="/wiki/HN_Group_Management">HN Group Management</a> are divisions of HN Group.'));
     assert.equal(subRow(networkPage, 'Parent'), '<a href="/wiki/HN_Group">HN Group</a>');
     assert.ok(networkPage.includes('It is a subsidiary of <a href="/wiki/HN_Group">HN Group</a>.'));
     const mediaPage = (await anon.go('/wiki/Horizon_Media_Group')).text;

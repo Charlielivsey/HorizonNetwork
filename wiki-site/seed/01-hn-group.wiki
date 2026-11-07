@@ -21,7 +21,7 @@ The group's companies, as recorded on the HN Group Company Register:
 {{Company tree}}
 
 === HN Group Management ===
-[[HN Group Management]] (formerly HN Group Investments) holds Horizon Network and Horizon Media Group for HN Group. It owns the group's assets, including its domains, Discord servers and technical assets, and manages all of HN Group's email services. It has no staff of its own and is managed directly by HN Group staff.
+[[HN Group Management]] (formerly HN Group Investments) is a division of HN Group. On paper it holds Horizon Network and Horizon Media Group, but both are subsidiaries of HN Group and are managed by HN Group. It owns the group's assets, including its domains, Discord servers and technical assets, and manages all of HN Group's email services. It has no staff of its own and is managed directly by HN Group staff.
 
 === Horizon Advertising ===
 [[Horizon Advertising]] has an unusual arrangement. It is a '''subsidiary of [[Horizon Media Group]]''', but it is '''managed by [[Horizon Network]]''', which runs it day to day alongside its digital infrastructure and [[Horizon Development]]. This is why the group's websites present Horizon Advertising among Horizon Network's services.
