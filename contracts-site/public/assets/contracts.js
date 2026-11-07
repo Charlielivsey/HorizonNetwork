@@ -75,7 +75,8 @@
   const VIEWS = {
     sign: ['toSign', 'To sign', 'Contracts waiting for your signature. Open one to read it, then sign it with your name.', ['Nothing to sign', 'When someone sends you a contract, it appears here.']],
     waiting: ['waiting', 'In progress', 'Contracts you’ve sent or signed that are still waiting for someone.', ['Nothing in progress', 'Contracts waiting for other people appear here.']],
-    completed: ['completed', 'Finished', 'Signed, declined and cancelled contracts.', ['Nothing finished yet', 'Contracts appear here once everyone has signed, or one is declined or cancelled.']],
+    completed: ['completed', 'Finished', 'Signed and declined contracts.', ['Nothing finished yet', 'Contracts appear here once everyone has signed, or one is declined.']],
+    cancelled: ['cancelled', 'Cancelled', 'Contracts that were cancelled before everyone signed. They can’t be signed any more.', ['Nothing cancelled', 'Cancelled contracts are kept here, out of the way of the others.']],
     drafts: ['drafts', 'Drafts', 'Contracts you’ve uploaded but not sent yet.', ['No drafts', 'Upload a PDF, or use Send for signing in HN Group Docs.']],
     all: ['everything', 'All contracts', 'Every contract on HN Group Contracts.', ['No contracts yet', '']],
   };
@@ -93,11 +94,11 @@
   async function dashboard(view) {
     setNav(view);
     const v = await api('/api/contracts');
-    counts = { sign: v.toSign.length, waiting: v.waiting.length, completed: v.completed.length, drafts: v.drafts.length };
-    $('count-sign').hidden = !counts.sign; $('count-sign').textContent = counts.sign;
+    counts = { sign: v.toSign.length, waiting: v.waiting.length, completed: v.completed.length, cancelled: (v.cancelled || []).length, drafts: v.drafts.length };
+    $('count-sign').hidden = !counts.sign; $('count-sign').textContent = counts.sign; $('nav-cancelled').hidden = !counts.cancelled && view !== 'cancelled';
     const [key, title, lead, empty] = VIEWS[view];
     const list = v[key] || [];
-    const tiles = el('div', { class: 'tiles' }, [['sign', '/', 'To sign', 'c-purple'], ['waiting', '/waiting', 'In progress', 'c-teal'], ['completed', '/completed', 'Finished', 'c-lavender'], ...(me.canSend ? [['drafts', '/drafts', 'Drafts', 'c-raspberry']] : [])]
+    const tiles = el('div', { class: 'tiles' }, [['sign', '/', 'To sign', 'c-purple'], ['waiting', '/waiting', 'In progress', 'c-teal'], ['completed', '/completed', 'Finished', 'c-lavender'], ...(me.canSend ? [['drafts', '/drafts', 'Drafts', 'c-raspberry']] : []), ...(counts.cancelled || view === 'cancelled' ? [['cancelled', '/cancelled', 'Cancelled', 'c-plum']] : [])]
       .map(([k, href, label, colour]) => el('a', { class: 'tile', href, 'aria-current': k === view ? 'page' : null }, el('span', { class: 'pillar-bar ' + colour }), el('strong', { 'data-hn-count': counts[k], text: '0' }), el('span', { text: label }))));
     const search = el('input', { class: 'search', type: 'search', placeholder: 'Search by title or name', 'aria-label': 'Search contracts' });
     const box = el('div', { class: 'rows' });
@@ -309,7 +310,7 @@
     else viewer.append(pdfViewer(c, bar, placement));
     const tags = el('div', { class: 'tags' }, tag(STATUS[c.status][0], STATUS[c.status][1]), c.overdue ? tag('Overdue', 'bad') : null, c.source.kind === 'docs' ? tag('From HN Group Docs', 'plain') : null,
       c.order === 'sequence' ? tag('Signed in order', 'plain') : null, c.dueDate ? tag('Sign by ' + day(c.dueDate), c.overdue ? 'bad' : 'plain') : null);
-    const back = c.status === 'draft' ? ['/drafts', 'Drafts'] : c.can.sign ? ['/', 'To sign'] : ['completed', 'declined', 'cancelled'].includes(c.status) ? ['/completed', 'Finished'] : ['/waiting', 'In progress'];
+    const back = c.status === 'draft' ? ['/drafts', 'Drafts'] : c.can.sign ? ['/', 'To sign'] : c.status === 'cancelled' ? ['/cancelled', 'Cancelled'] : ['completed', 'declined'].includes(c.status) ? ['/completed', 'Finished'] : ['/waiting', 'In progress'];
     const pageHead = el('div', { class: 'contract-head hn-glow' },
       el('a', { class: 'back', href: back[0], text: '← ' + back[1] }),
       el('h1', { text: c.title }),
@@ -335,7 +336,7 @@
       c.can.cancel ? el('button', { class: 'btn btn-ghost btn-small', type: 'button', onclick: async () => {
         const draft = c.status === 'draft';
         if (!(await ask(draft ? 'Delete this draft?' : 'Cancel this contract?', draft ? 'The draft and its PDF are deleted.' : 'Nobody will be able to sign it any more. Signatures already made stay in its history.', draft ? 'Delete draft' : 'Cancel contract', { danger: true }))) return;
-        try { const v = await api('/api/contracts/' + c.id + '/cancel', { json: {} }); toast(v.deleted ? 'Draft deleted.' : 'Contract cancelled.'); if (v.deleted) go('/drafts'); else route(); } catch (e) { toast(e.message, true); }
+        try { const v = await api('/api/contracts/' + c.id + '/cancel', { json: {} }); toast(v.deleted ? 'Draft deleted.' : 'Contract cancelled. It’s now under Cancelled.'); go(v.deleted ? '/drafts' : '/cancelled'); } catch (e) { toast(e.message, true); }
       } }, c.status === 'draft' ? 'Delete draft' : 'Cancel contract') : null);
     if (actions.children.length) cards.push(actions);
     cards.push(el('div', { class: 'card' }, el('h2', { text: 'History' }), el('div', { class: 'history' }, c.events.slice().reverse().map((e) => el('div', {}, el('time', { text: when(e.at) }), el('span', {}, el('strong', { text: e.who }), ' ', e.text))))));
@@ -487,7 +488,7 @@
       if (p === '/new') return newContract();
       const m = /^\/contract\/([0-9a-f-]{36})$/.exec(p);
       if (m) return await contractPage(m[1]);
-      const view = { '/': 'sign', '/sign': 'sign', '/waiting': 'waiting', '/completed': 'completed', '/drafts': 'drafts', '/all': 'all' }[p] || 'sign';
+      const view = { '/': 'sign', '/sign': 'sign', '/waiting': 'waiting', '/completed': 'completed', '/cancelled': 'cancelled', '/drafts': 'drafts', '/all': 'all' }[p] || 'sign';
       return await dashboard(view === 'all' && !me.canManage ? 'sign' : view);
     } catch (e) {
       if (e.message !== 'Signed out') main.replaceChildren(section(head('HN Group Contracts', 'Not available', e.message, el('a', { class: 'btn btn-ghost', href: '/', text: 'Back to your contracts' }))));

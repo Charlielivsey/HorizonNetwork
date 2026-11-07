@@ -155,6 +155,9 @@ test('HN Group Contracts', async () => {
     r = await call('/api/contracts/' + c.id + '/decline', { cookie: jo, json: { reason: 'The start date is wrong.' } });
     assert.equal(r.body.contract.status, 'declined');
     assert.equal((await call('/api/contracts/' + c.id + '/cancel', { cookie: hr, json: {} })).body.contract.status, 'cancelled');
+    { const l = (await call('/api/contracts', { cookie: hr })).body, ids = (k) => (l[k] || []).map((x) => x.id);
+      assert.ok(ids('cancelled').includes(c.id), 'cancelled contracts have their own section');
+      for (const k of ['toSign', 'waiting', 'completed', 'drafts', 'everything']) assert.ok(!ids(k).includes(c.id), 'and never show in ' + k); }
     c = (await upload(hr)).body.contract;
     assert.deepEqual((await call('/api/contracts/' + c.id + '/cancel', { cookie: hr, json: {} })).body, { deleted: true }, 'a draft is deleted outright');
 

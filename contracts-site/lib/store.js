@@ -131,9 +131,11 @@ function lists(u) {
   return {
     toSign: pick((c, s) => s.needsMe),
     waiting: pick((c, s) => c.status === 'out' && !s.needsMe && (s.mine || s.myStatus)),
-    completed: pick((c, s) => ['completed', 'declined', 'cancelled'].includes(c.status) && (s.mine || s.myStatus)),
+    completed: pick((c, s) => ['completed', 'declined'].includes(c.status) && (s.mine || s.myStatus)),
+    // Cancelled contracts only show in their own section (the user's request, 7 November 2026), never in the others.
+    cancelled: pick((c, s) => c.status === 'cancelled' && (s.mine || s.myStatus || canManage(u))),
     drafts: pick((c, s) => c.status === 'draft' && s.mine),
-    everything: canManage(u) ? all.map(({ s }) => s) : null,
+    everything: canManage(u) ? all.filter(({ c }) => c.status !== 'cancelled').map(({ s }) => s) : null,
   };
 }
 

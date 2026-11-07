@@ -177,7 +177,7 @@ function staticFile(res, rel) {
   res.writeHead(200, { ...HEADERS, 'Content-Type': TYPES[path.extname(full)] || 'application/octet-stream', 'Cache-Control': rel.startsWith('assets/') ? 'public, max-age=300' : 'no-store' });
   res.end(fs.readFileSync(full)); return true;
 }
-const PAGES = /^\/(|sign|waiting|completed|drafts|all|new|contract\/[0-9a-f-]{36})$/;
+const PAGES = /^\/(|sign|waiting|completed|cancelled|drafts|all|new|contract\/[0-9a-f-]{36})$/;
 
 // What the site needs to work, for the installer and anyone checking: the data folder, HN Group Auth's shared secret
 // and the pages. It never shows people or contracts.

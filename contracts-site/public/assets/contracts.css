@@ -245,3 +245,6 @@ dialog.ask::backdrop { background: rgba(14, 16, 32, 0.6); backdrop-filter: blur(
 
 /* Legal name beside the display name in Who signs (6 November 2026) */
 .legal-name { font-weight: 500; color: var(--muted); }
+
+/* Cancelled section tile (the plum from the HN palette) */
+.c-plum { background: #7A1F6C; }
