@@ -4277,3 +4277,55 @@ footer .footer-brand .footer-parent { opacity: .82; font-size: .88rem; }
 [data-theme="dark"] .badge-temporary, .theme-dark .badge-temporary { color: #E3E65B; }
 .check-field { align-self: end; }
 .check-field .check { display: inline-flex; align-items: center; gap: .5rem; font-weight: 600; }
+
+/* Shared dropdowns — native form values with a themed, searchable option panel. */
+select:not([multiple]):not([size]), select[size="1"] {
+    cursor: pointer; padding-right: 2.6rem; border-radius: 12px;
+    background-size: 17px; background-position: right .85rem center;
+    transition: border-color .18s, box-shadow .18s, background-color .18s;
+}
+select:hover:not(:disabled) { border-color: var(--primary); }
+select[data-dropdown-open] { border-color: var(--primary); box-shadow: 0 0 0 3px var(--focus-ring); }
+select:disabled { cursor: not-allowed; opacity: .55; }
+select option, select optgroup { background: var(--surface); color: var(--text); }
+.hn-dropdown {
+    display: none; position: fixed; inset: auto; margin: 0; padding: 8px;
+    flex-direction: column; gap: 7px; box-sizing: border-box;
+    max-width: calc(100vw - 24px); min-height: 0; overflow: hidden;
+    border: 1px solid var(--border-strong); border-radius: 16px;
+    background: var(--surface); color: var(--text); font: 500 .92rem/1.45 var(--font);
+    box-shadow: 0 8px 24px rgba(10, 7, 30, .12), 0 24px 64px rgba(10, 7, 30, .2);
+    z-index: 20000; transform-origin: top left; animation: hn-dropdown-in .15s ease-out;
+}
+.hn-dropdown[data-open] { display: flex; }
+.hn-dropdown[data-direction="up"] { transform-origin: bottom left; }
+.hn-dropdown::before { content: ""; display: block; height: 3px; margin: -8px -8px 2px; flex-shrink: 0; background: var(--primary); opacity: .8; }
+.hn-dropdown .hn-dropdown-search {
+    flex-shrink: 0; width: 100%; margin: 0; padding: .65rem .8rem;
+    font: inherit; font-size: .87rem; background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 10px; color: var(--text);
+}
+.hn-dropdown-search::placeholder { color: var(--text-muted); opacity: .9; }
+.hn-dropdown-options { overflow: auto; overscroll-behavior: contain; min-height: 0; scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; padding: 1px; }
+.hn-dropdown-option {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: .65rem .8rem; margin: 2px 0; min-height: 40px;
+    border-radius: 10px; border: 1px solid transparent; cursor: pointer;
+    transition: background .1s, color .1s, border-color .1s;
+}
+.hn-dropdown-option > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.hn-dropdown-option[aria-selected="true"] { background: var(--primary-tint); color: var(--primary); font-weight: 700; }
+.hn-dropdown-option.is-active { background: var(--row-hover, var(--surface-2)); border-color: var(--primary-soft-border, var(--primary)); }
+.hn-dropdown-option.is-active[aria-selected="true"] { background: var(--primary-tint); border-color: var(--primary); }
+.hn-dropdown-option[aria-disabled="true"] { cursor: not-allowed; opacity: .4; }
+.hn-dropdown-check { width: 16px; height: 16px; flex-shrink: 0; position: relative; }
+.hn-dropdown-option[aria-selected="true"] .hn-dropdown-check::after { content: ""; position: absolute; width: 6px; height: 10px; left: 5px; top: 1px; border: solid currentColor; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.hn-dropdown-group { font-size: .72rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); padding: .8rem .8rem .3rem; }
+.hn-dropdown-empty { color: var(--text-muted); padding: 1rem .8rem; margin: 0; font-size: .9rem; }
+@keyframes hn-dropdown-in { from { opacity: 0; transform: translateY(-4px) scale(.985); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .hn-dropdown { animation: none; } .hn-dropdown-option { transition: none; } }
+/* Navigation, account and row-action menus share the same panel finish. */
+.menu { border-radius: 16px; padding: 8px; border-color: var(--border-strong); }
+.menu-item { padding: .7rem .8rem; transition: background .15s, color .15s; }
+.menu-item:focus-visible { box-shadow: inset 0 0 0 2px var(--primary); }
+@media (prefers-reduced-motion: reduce) { .menu-item { transition: none; } }
