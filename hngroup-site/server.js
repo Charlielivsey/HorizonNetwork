@@ -68,6 +68,8 @@ const server=http.createServer(async(req,res)=>{
       '/_maintenance/favicon.svg':path.join(PUBLIC,'assets/favicon.svg')
     };
     if(Object.hasOwn(assets,route)&&req.method==='GET')return file(res,assets[route]);
+    // Discord's domain check for hngroup.org.uk (the user's request, 7 November 2026). Served even during maintenance.
+    if(route==='/.well-known/discord'&&(req.method==='GET'||req.method==='HEAD')){res.writeHead(200,{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-cache'});return res.end(req.method==='HEAD'?undefined:'dh=0c909947adf115496ada67cfe18dcef041298918');}
     if(settings.maintenance&&process.env.HN_CONTROL_MANAGED!=='1'){res.setHeader('Retry-After','300');if(route.startsWith('/api/'))return json(res,503,{error:'The website is undergoing maintenance.'});res.setHeader('X-Robots-Tag','noindex');return file(res,path.join(CONTROL,'maintenance.html'),503);}
     if(route==='/api/leadership')return req.method==='GET'?await leadership('leadership',res).catch(()=>json(res,503,{error:'Our leadership team is temporarily unavailable.'})):json(res,405,{error:'Method not allowed.'});
     {const m=/^\/api\/leadership\/avatar\/([a-f0-9]{16})$/.exec(route);if(m&&req.method==='GET')return await leadership('avatar',res,m[1]).catch(()=>json(res,404,{error:'Not found.'}));}
