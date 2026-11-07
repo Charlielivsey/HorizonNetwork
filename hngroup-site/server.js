@@ -7,6 +7,16 @@ const CONTROL = path.join(__dirname,'control');
 const DATA = process.env.WEBSITE_DATA_DIR || '/var/lib/hn-website';
 fs.mkdirSync(DATA,{recursive:true,mode:0o700});
 const stateFile=path.join(DATA,'settings.json');
+// HN Group's leadership team on /about, read from the staff backend with the service secret (never exposed).
+const BACKEND=process.env.STAFF_PORTAL_BACKEND || 'http://127.0.0.1:3200';
+const SECRET=process.env.STATUS_SSO_SECRET_FILE || '/var/lib/hn-status-sso/secret';
+async function leadership(route,res,id){
+ const secret=fs.readFileSync(SECRET,'utf8').trim();if(!/^[a-f0-9]{64}$/.test(secret))throw Error('Configuration unavailable');
+ const result=await fetch(BACKEND+'/api/auth/group-'+route,{method:'POST',headers:{Authorization:'Bearer '+secret,'Content-Type':'application/json'},body:JSON.stringify(id?{id}:{}),signal:AbortSignal.timeout(6000),redirect:'error'});
+ if(!result.ok)return json(res,result.status===404?404:503,{error:'Our leadership team is temporarily unavailable.'});
+ if(id){res.writeHead(200,{'Content-Type':result.headers.get('content-type')});return res.end(Buffer.from(await result.arrayBuffer()));}
+ return json(res,200,await result.json());
+}
 let settings={maintenance:false,updatedAt:null,updatedBy:null};
 if(fs.existsSync(stateFile)) { try { settings=JSON.parse(fs.readFileSync(stateFile,'utf8')); if(typeof settings.maintenance!=='boolean')throw Error(); } catch { settings={maintenance:true,updatedAt:null,updatedBy:null}; } }
 const mime={'.html':'text/html; charset=utf-8','.css':'text/css','.js':'application/javascript','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.webp':'image/webp','.ico':'image/x-icon','.woff2':'font/woff2','.txt':'text/plain','.xml':'application/xml'};
@@ -59,6 +69,8 @@ const server=http.createServer(async(req,res)=>{
     };
     if(Object.hasOwn(assets,route)&&req.method==='GET')return file(res,assets[route]);
     if(settings.maintenance&&process.env.HN_CONTROL_MANAGED!=='1'){res.setHeader('Retry-After','300');if(route.startsWith('/api/'))return json(res,503,{error:'The website is undergoing maintenance.'});res.setHeader('X-Robots-Tag','noindex');return file(res,path.join(CONTROL,'maintenance.html'),503);}
+    if(route==='/api/leadership')return req.method==='GET'?await leadership('leadership',res).catch(()=>json(res,503,{error:'Our leadership team is temporarily unavailable.'})):json(res,405,{error:'Method not allowed.'});
+    {const m=/^\/api\/leadership\/avatar\/([a-f0-9]{16})$/.exec(route);if(m&&req.method==='GET')return await leadership('avatar',res,m[1]).catch(()=>json(res,404,{error:'Not found.'}));}
     if(route.startsWith('/api/public/'))return publicApi(req,res);
     if(route.startsWith('/api/'))return json(res,404,{error:'Not found.'});
     if(!['GET','HEAD'].includes(req.method))return json(res,405,{error:'Method not allowed.'});

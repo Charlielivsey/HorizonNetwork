@@ -98,7 +98,7 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       logEvent(req, session, 'status-admin-sign-in');
       redirect(res, `${STATUS_ORIGIN}/auth/callback?code=${code}&state=${state}`); return true;
     }
-    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/password', '/api/auth/code', '/api/auth/network-leadership', '/api/auth/network-avatar', '/api/auth/account-status', '/api/auth/staff-directory', '/api/auth/directory-avatar', '/api/auth/vpn-pin', '/api/auth/accounts-session', '/api/auth/profile-select', '/api/auth/profile-avatar', '/api/auth/browser-issue', '/api/auth/browser-profile', '/api/auth/browser-avatar', '/api/auth/browser-offer', '/api/auth/browser-logout', '/api/auth/browser-unlock', '/api/auth/browser-lock', '/api/auth/browser-account', '/api/auth/browser-account-update', '/api/auth/browser-account-status', '/api/auth/browser-account-photo', '/api/auth/google-login', '/api/auth/google-link', '/api/auth/google-unlink', '/api/auth/discord-positions', '/api/auth/accounts-handoff', '/api/auth/discord-login', '/api/auth/discord-link', '/api/auth/discord-unlink', '/api/auth/discord-accounts', '/api/auth/discord-update'].includes(pathname)) return false;
+    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/password', '/api/auth/code', '/api/auth/network-leadership', '/api/auth/network-avatar', '/api/auth/group-leadership', '/api/auth/group-avatar', '/api/auth/account-status', '/api/auth/staff-directory', '/api/auth/directory-avatar', '/api/auth/vpn-pin', '/api/auth/accounts-session', '/api/auth/profile-select', '/api/auth/profile-avatar', '/api/auth/browser-issue', '/api/auth/browser-profile', '/api/auth/browser-avatar', '/api/auth/browser-offer', '/api/auth/browser-logout', '/api/auth/browser-unlock', '/api/auth/browser-lock', '/api/auth/browser-account', '/api/auth/browser-account-update', '/api/auth/browser-account-status', '/api/auth/browser-account-photo', '/api/auth/google-login', '/api/auth/google-link', '/api/auth/google-unlink', '/api/auth/discord-positions', '/api/auth/accounts-handoff', '/api/auth/discord-login', '/api/auth/discord-link', '/api/auth/discord-unlink', '/api/auth/discord-accounts', '/api/auth/discord-update'].includes(pathname)) return false;
     if (req.method !== 'POST') { sendJson(res, 405, { error: 'Method not allowed.' }); return true; }
     if (!credentials(req)) { sendJson(res, 401, { error: 'Status integration not authenticated.' }); return true; }
     const body = await readJsonBody(req, pathname === '/api/auth/browser-account-photo' ? 2 * 1024 * 1024 : undefined);
@@ -203,6 +203,16 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       const profile = store.allProfiles().find((x) => x.profileId === body.id && store.loginsForId(x.profileId).some((l) => l.account && l.account.enabled));
       const avatar = profile && store.avatarFile(store.getPerson(profile.personId));
       if (!avatar) { sendJson(res, 404, { error: 'No profile picture.' }); return true; }
+      res.writeHead(200, { 'Content-Type': avatar.mime, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+      fs.createReadStream(avatar.file).on('error', () => res.destroy()).pipe(res); return true;
+    }
+    if (pathname === '/api/auth/group-leadership') {
+      sendJson(res, 200, { leaders: network.groupPublicMembers(store) }); return true;
+    }
+    if (pathname === '/api/auth/group-avatar') {
+      const person = network.groupMembers(store).find(p => p.id === body.id);
+      const avatar = person && store.avatarFile(person);
+      if (!avatar) { sendJson(res, 404, { error: 'Not found.' }); return true; }
       res.writeHead(200, { 'Content-Type': avatar.mime, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
       fs.createReadStream(avatar.file).on('error', () => res.destroy()).pipe(res); return true;
     }
