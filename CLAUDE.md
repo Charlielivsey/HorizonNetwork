@@ -48,7 +48,7 @@ Removed (don't bring back unless asked): holding.hngroup.org.uk, the client port
 - Plus Jakarta Sans (local); purple `#5514B4` for actions (dark mode `#A47BF0`, text on accent `#12101F`).
 - Palette: pink `#E97DE8`, purple `#5514B4`, yellow `#E3E65B`, teal `#3E9BA3`, plum `#7A1F6C`, raspberry `#C2306B`, green `#5FAE7B`, navy `#1C2135`, lavender `#7B52C4`.
 - Stripe order/widths: pink 14, purple 14, yellow 6, teal 20, plum 10, raspberry 10, green 13, `#3A4166` 13 (stepped under the wordmark and on page heads).
-- 72px blurred header, pill buttons, 18px lifting cards, hero glow + stepped stripe, navy striped footer, light and dark, reduced motion respected.
+- 72px blurred header, pill buttons, 18px lifting cards, hero glow + stepped stripe, striped footer (navy in Lavender Dusk, light in the Light theme via hn-theme.js), reduced motion respected.
 - Logos: only the originals in `brand/logos/` (see `brand/README.md`); white variants on dark. Tab icon `hngroup-site/public/assets/favicon.svg`.
 - Footer: the company logo once; subsidiaries add "A subsidiary of HN Group Limited" once.
 - Exception: the Company register (public and private) is styled like Companies House, not the HN theme.

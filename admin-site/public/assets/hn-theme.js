@@ -10,7 +10,10 @@
      Light, whatever the computer's setting, so every site keeps the dark version designed for it;
    - the two palettes' exact colours are set on the colour names the HN sites use (a constructed stylesheet, which the
      sites' security policies allow);
-   - logos made for light or dark backgrounds (.on-light / .on-dark) follow the theme.
+   - logos made for light or dark backgrounds (.on-light / .on-dark) follow the theme;
+   - dark (navy) footers turn light in the Light theme, with the coloured logo instead of the white one (the user's
+     report, 7 November 2026: "why is that bar still that colour when in light theme mode"). The coloured stripe on
+     top keeps its colours. In Lavender Dusk footers stay as each site designed them.
    Identical copies live in every site (brand/web/theme-copies.json, checked by brand/web/test.cjs). */
 (function () {
   'use strict';
@@ -38,7 +41,14 @@
   var CSS = 'html[data-hn-theme="light"]{' + vars(LIGHT) + '}html[data-hn-theme="dusk"]{' + vars(DUSK) + '}' +
     'html[data-hn-theme="light"] body,html[data-hn-theme="dusk"] body{background-color:var(--bg);color:var(--text)}' +
     'html[data-hn-theme="light"] .on-dark{display:none!important}html[data-hn-theme="dusk"] .on-light{display:none!important}' +
-    'html[data-hn-theme="dusk"] img.on-dark{display:inline-block!important}html[data-hn-theme="light"] img.on-light{display:inline-block!important}';
+    'html[data-hn-theme="dusk"] img.on-dark{display:inline-block!important}html[data-hn-theme="light"] img.on-light{display:inline-block!important}' +
+    // Light footers: page tint, muted text, dark links; buttons and the stripe keep their own colours.
+    '.hn-light-footer{background:var(--tint)!important;background-image:none!important;color:var(--muted)!important;border-top-color:var(--line)!important}' +
+    '.hn-light-footer a:not(.btn):not([class*="button"]){color:var(--ink)!important}.hn-light-footer a:not(.btn):not([class*="button"]):hover{color:var(--accent)!important}' +
+    '.hn-light-footer strong,.hn-light-footer b,.hn-light-footer h2,.hn-light-footer h3,.hn-light-footer h4,.hn-light-footer .footer-company{color:var(--ink)!important}' +
+    '.hn-light-footer p,.hn-light-footer small,.hn-light-footer .small,.hn-light-footer .muted,.hn-light-footer .footer-parent{color:var(--muted)!important}' +
+    '.hn-light-footer [class*="legal"],.hn-light-footer hr{border-color:var(--line)!important}' +
+    '.hn-light-footer img.hn-logo-inverted{filter:invert(1) hue-rotate(180deg)}';
 
   var originals = typeof WeakMap === 'function' ? new WeakMap() : null;
   var DARK = /\(\s*prefers-color-scheme\s*:\s*dark\s*\)/gi, LIGHTQ = /\(\s*prefers-color-scheme\s*:\s*light\s*\)/gi;
@@ -67,6 +77,44 @@
     if (palette || !('adoptedStyleSheets' in document)) return;
     try { palette = new CSSStyleSheet(); palette.replaceSync(CSS); document.adoptedStyleSheets = document.adoptedStyleSheets.concat([palette]); } catch (e) { palette = null; }
   }
+  // Footers drawn dark by a site's own styles (navy): found by their colour, so every site is covered.
+  function dark(el) {
+    var m = /rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)(?:[,\s/]+([\d.]+))?/.exec(getComputedStyle(el).backgroundColor || '');
+    if (!m || (m[4] !== undefined && +m[4] < 0.5)) return false;
+    return (0.2126 * m[1] + 0.7152 * m[2] + 0.0722 * m[3]) / 255 < 0.3;
+  }
+  var WHITE = /-white(\.(?:svg|png|webp))(\?.*)?$/i;
+  function logos(footer, light) {
+    var imgs = footer.querySelectorAll('img');
+    for (var i = 0; i < imgs.length; i++) {
+      var img = imgs[i], dark0 = img.getAttribute('data-hn-dark-src');
+      if (light) {
+        if (dark0 || img.classList.contains('on-dark') || img.classList.contains('on-light')) continue;
+        var src = img.getAttribute('src') || '';
+        if (!WHITE.test(src)) continue;
+        img.setAttribute('data-hn-dark-src', src);
+        // The coloured version beside it; if a site doesn't have one, the white logo is shown darkened instead.
+        img.onerror = function () { this.onerror = null; this.src = this.getAttribute('data-hn-dark-src'); this.classList.add('hn-logo-inverted'); };
+        img.src = src.replace(WHITE, '$1$2');
+      } else if (dark0) {
+        img.onerror = null; img.classList.remove('hn-logo-inverted'); img.src = dark0; img.removeAttribute('data-hn-dark-src');
+      }
+    }
+  }
+  function footers(theme) {
+    if (!document.body) return;
+    var list = document.querySelectorAll('footer, .site-footer, .footer, [class*="-footer"]');
+    for (var i = 0; i < list.length; i++) {
+      var f = list[i];
+      if (f.parentElement && f.parentElement.closest('.hn-light-footer')) continue;
+      if (theme === 'light') {
+        if (f.classList.contains('hn-light-footer') || !dark(f)) continue;
+        f.classList.add('hn-light-footer'); logos(f, true);
+      } else if (f.classList.contains('hn-light-footer')) {
+        f.classList.remove('hn-light-footer'); logos(f, false);
+      }
+    }
+  }
   function read() { var m = /(?:^|;\s*)hn_theme=(light|dusk)(?:;|$)/.exec(document.cookie || ''); return m ? m[1] : 'light'; }
   var current = null;
   function apply(theme) {
@@ -77,13 +125,14 @@
     var meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.setAttribute('content', theme === 'dusk' ? '#17121f' : '#faf8fd');
     addPalette();
     sheets(theme);
+    footers(theme);
     try { document.dispatchEvent(new CustomEvent('hn-theme', { detail: { theme: theme } })); } catch (e) {}
   }
   apply(read());
   // Stylesheets that arrive later (and the page's own scripts) are brought in line too.
-  document.addEventListener('DOMContentLoaded', function () { sheets(current); });
-  window.addEventListener('load', function () { sheets(current); });
+  document.addEventListener('DOMContentLoaded', function () { sheets(current); footers(current); });
+  window.addEventListener('load', function () { sheets(current); footers(current); });
   // A change made in another tab or site (the staff portal's Appearance) shows when you come back to this one.
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') { var t = read(); if (t !== current) apply(t); } });
-  window.hnTheme = { get: function () { return current; }, apply: apply, refresh: function () { sheets(current); } };
+  window.hnTheme = { get: function () { return current; }, apply: apply, refresh: function () { sheets(current); footers(current); } };
 })();
