@@ -16,6 +16,8 @@ const store = {
   employees: () => PEOPLE.filter((p) => !p.system),
   loginsForId: (id) => id === 'c'.repeat(16) ? [{ account: { enabled: false } }] : [{ account: { enabled: true } }],
   avatarFile: (p) => p.id === 'a'.repeat(16) ? { file: __filename, mime: 'image/png' } : null,
+  positions: () => ({ 'HN Group': ['Board Chairman', 'Board Director', 'Chief Executive Officer'], 'Horizon Network': ['President', 'Founder'] }),
+  positionReports: () => ({ 'HN Group': { 'Board Chairman': null, 'Board Director': { company: 'HN Group', title: 'Board Chairman' }, 'Chief Executive Officer': { company: 'HN Group', title: 'Board Chairman' } }, 'Horizon Network': { President: { company: 'HN Group', title: 'Chief Executive Officer' }, Founder: null } }),
 };
 
 test('the staff portal publishes only public fields, respects the About me choice and leaves out leavers', () => {
@@ -29,6 +31,13 @@ test('the staff portal publishes only public fields, respects the About me choic
   assert.equal(charlie.photo, true);
   for (const p of out.people) for (const k of ['phone', 'email', 'firstName', 'lastName', 'birthday']) assert.ok(!(k in p), k + ' is never published');
   assert.equal(pub.avatarOf(store, 'c'.repeat(16)), null);
+  // Every position, held or vacant, with its reporting line and holders; someone with two positions is in both.
+  const pos = (c, t) => out.positions.find((p) => p.company === c && p.title === t);
+  assert.equal(out.positions.length, 5);
+  assert.deepEqual(pos('HN Group', 'Board Chairman').holders, ['a'.repeat(16)]);
+  assert.deepEqual(pos('Horizon Network', 'President').holders, ['a'.repeat(16)]);
+  assert.deepEqual(pos('HN Group', 'Chief Executive Officer').holders, [], 'vacant positions are listed');
+  assert.deepEqual(pos('Horizon Network', 'President').reportsTo, { company: 'HN Group', title: 'Chief Executive Officer' });
 });
 
 test('the site serves the list, pictures and page addresses', async () => {
@@ -53,6 +62,7 @@ test('the site serves the list, pictures and page addresses', async () => {
   try {
     const list = await (await fetch(base + '/api/people')).json();
     assert.equal(list.people.length, 2);
+    assert.equal(list.positions.length, 5, 'positions are passed on');
     await fetch(base + '/api/people');
     assert.equal(calls, 1, 'cached for half a minute');
     const pic = await fetch(base + '/api/people/' + 'a'.repeat(16) + '/photo');

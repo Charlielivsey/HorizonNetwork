@@ -64,8 +64,45 @@ if [ -f /opt/hn-admin/reconcile-power.cjs ]; then node /opt/hn-admin/reconcile-p
 pm2 save
 if [ ! -f /etc/systemd/system/pm2-root.service ]; then pm2 startup systemd -u root --hp /root; fi
 systemctl enable pm2-root >/dev/null
+# The server's own resolver can remember that the name didn't exist yet, so public resolvers are asked too.
+has_web_dns() {
+    if getent ahosts "$1" >/dev/null 2>&1; then return 0; fi
+    if command -v dig >/dev/null 2>&1; then
+        local resolver answers
+        for resolver in 1.1.1.1 8.8.8.8; do
+            answers="$(dig @"$resolver" +time=2 +tries=1 +short "$1" A 2>/dev/null || true)
+$(dig @"$resolver" +time=2 +tries=1 +short "$1" AAAA 2>/dev/null || true)"
+            if printf '%s\n' "$answers" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}$|^[0-9a-fA-F:]*:[0-9a-fA-F:]+$'; then
+                echo "Public DNS resolves $1; ignoring the stale local DNS result." >&2
+                return 0
+            fi
+        done
+    else
+        # Standard-library fallback for hosts without the optional dig command.
+        if python3 - "$1" <<'PYDNS'
+import json,sys,urllib.request,ipaddress
+for domain_type in ('A','AAAA'):
+    try:
+        url='https://dns.google/resolve?name='+sys.argv[1]+'&type='+domain_type
+        with urllib.request.urlopen(url,timeout=5) as response: value=json.load(response)
+        for record in value.get('Answer',[]):
+            if record.get('type') not in (1,28): continue
+            ipaddress.ip_address(record['data'])
+            sys.exit(0)
+    except Exception:
+        pass
+sys.exit(1)
+PYDNS
+        then
+            echo "Public DNS resolves $1; ignoring the stale local DNS result." >&2
+            return 0
+        fi
+    fi
+    return 1
+}
+
 if [ ! -f "$LE_DIR/fullchain.pem" ]; then
-    if ! getent ahosts "$DOMAIN" >/dev/null 2>&1; then
+    if ! has_web_dns "$DOMAIN"; then
         echo 'HN Group People is installed and running in PM2. Public DNS and SSL for people.hngroup.org.uk are pending.'
         echo 'Add A people -> 217.154.34.205 (DNS only) in the hngroup.org.uk DNS zone, then rerun: sudo bash people-site/install.sh'
         exit 0

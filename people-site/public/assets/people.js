@@ -78,52 +78,50 @@
   }
 
   // ---------- Org charts ----------
-  // A chart is a list of nodes {id, person, role, parent}. A company's chart has everyone with a role there, under who that
-  // role reports to (when that person is at the same company). The group chart has everyone once, by their main role.
+  // Charts are made of positions, held or vacant (People → Job descriptions → Positions on the staff portal), each under
+  // the position it reports to. Everyone holding a position is shown in it, so someone with several positions appears
+  // once for each. A company's chart has that company's positions; a position reporting to another company's starts a
+  // branch with "Reports to …". The whole-group chart has every company's positions together.
+  var posKey = function (p) { return p.company + '\n' + String(p.title).toLowerCase(); };
   function chartNodes(c) {
-    var nodes = [];
-    data.people.forEach(function (p) {
-      var r = c ? roleAt(p, c) : mainRole(p);
-      if (!r) return;
-      var to = r.reportsTo || (!c && p.roles.map(function (x) { return x.reportsTo; }).filter(Boolean)[0]) || null;
-      nodes.push({ id: p.id, person: p, role: r, parentId: to ? to.id : null, outside: null });
-    });
+    var list = (data.positions || []).filter(function (p) { return !c || p.company === c; });
+    var nodes = list.map(function (p) { return { id: posKey(p), pos: p, parentId: p.reportsTo ? posKey(p.reportsTo) : null, outside: null }; });
     var ids = {}; nodes.forEach(function (n) { ids[n.id] = n; });
-    nodes.forEach(function (n) {
-      if (n.parentId && !ids[n.parentId]) { var s = byId(n.parentId); n.outside = s ? { person: s, company: (n.role.reportsTo || {}).company } : null; n.parentId = null; }
-    });
-    // Never round in circles: a node whose line of managers comes back to itself starts its own branch.
+    nodes.forEach(function (n) { if (n.parentId && !ids[n.parentId]) { n.outside = n.pos.reportsTo; n.parentId = null; } });
     nodes.forEach(function (n) {
       var seen = {}, at = n;
       while (at && at.parentId) { if (seen[at.id]) { n.parentId = null; break; } seen[at.id] = true; at = ids[at.parentId]; }
     });
     return nodes;
   }
+  function holderHtml(id) {
+    var p = byId(id);
+    return p ? link('/people/' + p.id, avatar(p, 'sm') + '<span class="org-name">' + esc(p.name) + '</span>', 'org-holder') : '';
+  }
   function treeHtml(nodes, group) {
-    var kids = {};
-    nodes.forEach(function (n) { (kids[n.parentId || ''] = kids[n.parentId || ''] || []).push(n); });
-    Object.keys(kids).forEach(function (k) { kids[k].sort(function (a, b) { return (kids[b.id] || []).length - (kids[a.id] || []).length || a.person.name.localeCompare(b.person.name); }); });
+    var kids = {}, order = {};
+    nodes.forEach(function (n, i) { order[n.id] = i; (kids[n.parentId || ''] = kids[n.parentId || ''] || []).push(n); });
+    Object.keys(kids).forEach(function (k) { kids[k].sort(function (a, b) { return order[a.id] - order[b.id]; }); });
     function li(n) {
-      var below = kids[n.id] || [];
-      return '<li><a class="org-node" href="/people/' + n.id + '" data-route>' + avatar(n.person, 'sm') +
-        '<span class="org-text"><strong>' + esc(n.person.name) + '</strong><span>' + esc(title(n.role)) + '</span>' +
-        (group ? '<span class="org-co">' + esc(n.role.company) + '</span>' : n.role.department ? '<span class="org-co">' + esc(n.role.department) + '</span>' : '') +
-        (n.outside ? '<span class="org-outside">Reports to ' + esc(n.outside.person.name) + (n.outside.company && n.outside.company !== n.role.company ? ' (' + esc(n.outside.company) + ')' : '') + '</span>' : '') +
-        '</span></a>' + (below.length ? '<ul>' + below.map(li).join('') + '</ul>' : '') + '</li>';
+      var below = kids[n.id] || [], holders = n.pos.holders || [];
+      return '<li><div class="org-node' + (holders.length ? '' : ' vacant') + '"><div class="org-pos"><strong>' + esc(n.pos.title) + '</strong>' +
+        (group ? '<span class="org-co">' + esc(n.pos.company) + '</span>' : '') +
+        (n.outside ? '<span class="org-outside">Reports to ' + esc(n.outside.title) + (n.outside.company !== n.pos.company ? ', ' + esc(n.outside.company) : '') + '</span>' : '') + '</div>' +
+        (holders.length ? '<div class="org-holders">' + holders.map(holderHtml).join('') + '</div>' : '<div class="org-vacant">Vacant</div>') +
+        '</div>' + (below.length ? '<ul>' + below.map(li).join('') + '</ul>' : '') + '</li>';
     }
     var roots = kids[''] || [];
-    return roots.length ? '<div class="org-scroll" tabindex="0" aria-label="Org chart, scroll to see more"><ul class="org-tree">' + roots.map(li).join('') + '</ul></div>' : '<div class="empty card"><p>No one is listed here yet.</p></div>';
+    return roots.length ? '<div class="org-scroll" tabindex="0" aria-label="Org chart, scroll to see more"><ul class="org-tree">' + roots.map(li).join('') + '</ul></div>' : '<div class="empty card"><p>No positions are listed here yet.</p></div>';
   }
   function renderOrg(c) {
     setNav('org');
-    var count = function (x) { return data.people.filter(function (p) { return inCompany(p, x); }).length; };
+    var count = function (x) { return (data.positions || []).filter(function (p) { return p.company === x; }).length; };
     var tabs = '<nav class="tabs" aria-label="Org charts">' + link('/org', 'Whole group', !c ? 'tab active' : 'tab') +
       data.companies.filter(count).map(function (x) { return link('/org/' + slug(x), esc(x) + ' <span>' + count(x) + '</span>', c === x ? 'tab active' : 'tab'); }).join('') + '</nav>';
-    var nodes = chartNodes(c);
+    var nodes = chartNodes(c), filled = nodes.filter(function (n) { return n.pos.holders.length; }).length;
     view.innerHTML = pageHead('Org charts', c ? esc(c) + '<span class="dot">.</span>' : 'The whole group<span class="dot">.</span>',
-      c ? 'Everyone at ' + esc(c) + ', and who they report to.' : 'Everyone at HN Group and its companies in one chart, by their main position.',
-      '') +
-      '<section class="section org-section"><div class="wrap">' + tabs + treeHtml(nodes, !c) + '<p class="muted small org-note">Select anyone to see their profile. Reporting lines are set on the HN Group staff portal.</p></div></section>';
+      (c ? 'Every position at ' + esc(c) + ' and who it reports to.' : 'Every position at HN Group and its companies in one chart.') + ' ' + filled + ' of ' + nodes.length + ' positions are filled.', '') +
+      '<section class="section org-section"><div class="wrap">' + tabs + treeHtml(nodes, !c) + '<p class="muted small org-note">Select anyone to see their profile. Positions and reporting lines are set on the HN Group staff portal.</p></div></section>';
   }
 
   // ---------- Profile ----------

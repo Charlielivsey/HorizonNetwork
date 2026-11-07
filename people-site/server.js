@@ -40,7 +40,7 @@ async function people() {
       if (!r.ok) throw new Error('Staff list unavailable');
       const data = await r.json();
       if (!Array.isArray(data.people) || !Array.isArray(data.companies)) throw new Error('Staff list unavailable');
-      cache = { at: Date.now(), data: { companies: data.companies, people: data.people, updatedAt: new Date().toISOString() } };
+      cache = { at: Date.now(), data: { companies: data.companies, people: data.people, positions: Array.isArray(data.positions) ? data.positions : [], updatedAt: new Date().toISOString() } };
     } catch (e) {
       if (!cache || Date.now() - cache.at > 24 * 3600 * 1000) throw e;
     } finally { pending = null; }

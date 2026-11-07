@@ -156,9 +156,30 @@ function init(dir) {
     settings.positions = { ...JSON.parse(JSON.stringify(DEFAULT_POSITIONS)), ...(settings.positions || {}) };
     settings.positionsSeeded = true;
   }
+  let fillReports = false;
+  if (!settings.positionReportsSeeded) {
+    // Who each position reports to (the user's request, 7 November 2026): filled in as a record's "Reports to" when that
+    // position is chosen on Employee Management (it can still be changed there), changed under Positions, and used by
+    // HN Group People's org charts.
+    settings.positionReports = settings.positionReports || {};
+    for (const [c, list] of Object.entries(DEFAULT_POSITION_REPORTS)) {
+      const own = settings.positionReports[c] = settings.positionReports[c] || {};
+      for (const [title, to] of Object.entries(list)) if (!(title in own)) own[title] = to;
+    }
+    settings.positionReportsSeeded = true;
+    fillReports = true;
+  }
   writeJson(settingsFile, settings);
   loadLogins();
-  if (resolveSupervisors()) savePeople();
+  // Once: roles with no supervisor at all get their position's usual one; anything set by hand stays.
+  let filled = false;
+  if (fillReports) for (const p of people) {
+    if (p.system) continue;
+    const fill = (role, company, title) => { if (!role.supervisorPosition && !role.supervisorId) { const to = reportsToOf(company, title); if (to) { role.supervisorPosition = to; filled = true; } } };
+    fill(p, p.company, p.jobTitle);
+    for (const r of p.otherRoles || []) fill(r, r.company, r.jobTitle || p.jobTitle);
+  }
+  if (resolveSupervisors() || filled) savePeople();
 }
 
 // ---------- Positions (the user's request, 7 November 2026) ----------
@@ -169,6 +190,47 @@ const DEFAULT_POSITIONS = {
   "HN Group": ["Board Chairman", "Board Director", "Board Member", "Chief Executive Officer", "Chief Operating Officer", "Executive Assistant"],
   "Horizon Network": ["President", "Vice President", "Executive Assistant", "Chief of Staff", "Internal Relations Director", "Advisor", "Founder"],
 };
+
+const HNG = (title) => ({ company: "HN Group", title }), HNW = (title) => ({ company: "Horizon Network", title });
+const DEFAULT_POSITION_REPORTS = {
+  "HN Group": { "Board Chairman": null, "Board Director": HNG("Board Chairman"), "Board Member": HNG("Board Chairman"), "Chief Executive Officer": HNG("Board Chairman"), "Chief Operating Officer": HNG("Chief Executive Officer"), "Executive Assistant": HNG("Chief Executive Officer") },
+  "Horizon Network": { "President": HNG("Chief Operating Officer"), "Vice President": HNW("President"), "Executive Assistant": HNW("President"), "Chief of Staff": HNW("Vice President"), "Internal Relations Director": HNW("Chief of Staff"), "Advisor": HNW("Chief of Staff"), "Founder": null },
+};
+
+// Who each company's positions report to: {company: {title: {company, title} | null}}, for the positions in the lists.
+function positionReports() {
+  const out = {}, all = settings.positionReports || {};
+  for (const c of COMPANIES) {
+    out[c] = {};
+    for (const t of (settings.positions || {})[c] || []) {
+      const own = all[c] || {}, key = Object.keys(own).find((k) => sameTitle(k, t));
+      out[c][t] = key && own[key] ? { company: own[key].company, title: own[key].title } : null;
+    }
+  }
+  return out;
+}
+function reportsToOf(company, title) {
+  const list = positionReports()[company] || {}, key = Object.keys(list).find((k) => sameTitle(k, title));
+  return key ? list[key] : null;
+}
+function setPositionReport(company, title, to) {
+  const list = (settings.positions || {})[company] || [];
+  const t = list.find((x) => sameTitle(x, title));
+  if (!t) throw new ValidationError("That position no longer exists.");
+  const target = to ? cleanPosition(to) : null;
+  if (to && (!target || !((settings.positions || {})[target.company] || []).some((x) => sameTitle(x, target.title)))) throw new ValidationError("Choose one of the positions.");
+  if (target && target.company === company && sameTitle(target.title, t)) throw new ValidationError("A position can't report to itself.");
+  // Never a loop of positions reporting to each other.
+  for (let cur = target, hops = 0; cur && hops < 100; cur = reportsToOf(cur.company, cur.title), hops++) {
+    if (cur.company === company && sameTitle(cur.title, t)) throw new ValidationError(`${target.title} already reports (through others) to ${t}.`);
+  }
+  settings.positionReports = settings.positionReports || {};
+  const own = settings.positionReports[company] = settings.positionReports[company] || {};
+  for (const k of Object.keys(own)) if (sameTitle(k, t)) delete own[k];
+  own[t] = target;
+  writeJson(settingsFile, settings);
+  return positionReports();
+}
 
 function positions() {
   const out = {};
@@ -196,7 +258,7 @@ function cleanPosition(v) {
   return COMPANIES.includes(company) && title ? { company, title } : null;
 }
 
-function addPosition(company, title) {
+function addPosition(company, title, reportsTo) {
   const c = str(company, 60), t = str(title, 100).replace(/\s+/g, " ");
   if (!COMPANIES.includes(c)) throw new ValidationError("Choose a company.");
   if (!t) throw new ValidationError("Give the position a name.");
@@ -205,6 +267,7 @@ function addPosition(company, title) {
   if (list.some((x) => sameTitle(x, t))) throw new ValidationError(`${c} already has a ${t} position.`);
   list.push(t);
   writeJson(settingsFile, settings);
+  if (reportsTo) setPositionReport(c, t, reportsTo);
   return positions();
 }
 
@@ -214,7 +277,11 @@ function removePosition(company, title) {
   if (i < 0) throw new ValidationError("That position no longer exists.");
   const held = holdersOf(company, list[i]).length;
   if (held) throw new ValidationError(`${held === 1 ? "Someone holds" : held + " people hold"} ${list[i]} at ${company}. Give them another position first.`);
-  list.splice(i, 1);
+  const gone = list.splice(i, 1)[0];
+  // Positions that reported to it now report to no one, until someone chooses again.
+  const reports = settings.positionReports || {};
+  for (const k of Object.keys(reports[company] || {})) if (sameTitle(k, gone)) delete reports[company][k];
+  for (const c of Object.keys(reports)) for (const k of Object.keys(reports[c])) { const to = reports[c][k]; if (to && to.company === company && sameTitle(to.title, gone)) reports[c][k] = null; }
   writeJson(settingsFile, settings);
   return positions();
 }
@@ -1770,6 +1837,9 @@ module.exports = {
   addPosition,
   removePosition,
   holdersOf,
+  positionReports,
+  reportsToOf,
+  setPositionReport,
   resolveSupervisors,
   DOMAINS,
   COMPANY_DOMAINS,

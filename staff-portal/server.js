@@ -1314,6 +1314,7 @@ async function routeApi(req, res, pathname, session) {
     return sendJson(res, 200, {
       companies: store.COMPANIES,
       positions: store.positions(),
+      positionReports: store.positionReports(),
       domains: store.DOMAINS,
       companyDomains: store.COMPANY_DOMAINS,
       defaultTimezone: store.DEFAULT_TIMEZONE,

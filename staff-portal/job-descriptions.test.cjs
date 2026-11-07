@@ -32,5 +32,16 @@ test('job descriptions, positions and supervisors set as positions',()=>{
   assert.throws(()=>store.removePosition('Horizon Network','Vice President'),/holds/);
   store.removePosition('Horizon Media Group','Founder'.replace('Founder','Designer'));
   assert.ok(!store.positions()['Horizon Media Group'].includes('Designer'));
+  // The user's reporting lines (7 November 2026) are there from the start and can be changed, never in a loop.
+  const rep=store.positionReports();
+  assert.equal(rep['HN Group']['Board Chairman'],null);
+  assert.deepEqual(rep['HN Group']['Chief Operating Officer'],{company:'HN Group',title:'Chief Executive Officer'});
+  assert.deepEqual(rep['Horizon Network']['President'],{company:'HN Group',title:'Chief Operating Officer'});
+  assert.deepEqual(rep['Horizon Network']['Advisor'],{company:'Horizon Network',title:'Chief of Staff'});
+  assert.equal(rep['Horizon Network']['Founder'],null);
+  store.setPositionReport('Horizon Network','Advisor',{company:'Horizon Network',title:'President'});
+  assert.deepEqual(store.reportsToOf('Horizon Network','advisor'),{company:'Horizon Network',title:'President'});
+  assert.throws(()=>store.setPositionReport('HN Group','Board Chairman',{company:'HN Group',title:'Board Director'}),/already reports/);
+  assert.throws(()=>store.setPositionReport('HN Group','Board Chairman',{company:'HN Group',title:'Nobody'}),/Choose/);
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });

@@ -89,7 +89,10 @@ else
     changed auth-site/ status-site/install-portal-sso.sh && run 'HN Group Auth' bash "$ROOT/auth-site/install.sh" "$EMAIL"
 fi
 changed echo-site/ && run 'Echo (echo.hngroup.org.uk)' bash "$ROOT/echo-site/install.sh" "$EMAIL"
-changed people-site/ && run 'HN Group People (people.hngroup.org.uk)' bash "$ROOT/people-site/install.sh" "$EMAIL"
+# HN Group People also re-runs until it has its HTTPS certificate (it waits for DNS on the first install).
+if changed people-site/ || [ ! -f /etc/letsencrypt/live/people.hngroup.org.uk/fullchain.pem ]; then
+    run 'HN Group People (people.hngroup.org.uk)' bash "$ROOT/people-site/install.sh" "$EMAIL"
+fi
 changed mail-site/ && run 'HN Mail (mail.hngroup.org.uk)' bash "$ROOT/mail-site/install.sh" "$EMAIL"
 changed evan-site/ && run 'Private page (evan.hngroup.org.uk)' bash "$ROOT/evan-site/install.sh" "$EMAIL"
 changed old-staff-portal-site/ && run 'Old staff portal (oldstaffportal.hngroup.org.uk)' bash "$ROOT/old-staff-portal-site/install.sh" "$EMAIL"

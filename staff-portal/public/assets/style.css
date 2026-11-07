@@ -3760,9 +3760,12 @@ input[type="range"] { width: 100%; accent-color: var(--primary); }
 .jd-facts dd { margin: 0.15rem 0 0; font-weight: 600; }
 .jd-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; margin-bottom: 1rem; }
 .pos-company { margin-bottom: 1.1rem; }
-.pos-list { list-style: none; margin: 0 0 0.5rem; padding: 0; display: flex; flex-wrap: wrap; gap: 0.4rem; }
-.pos-list li { display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.15rem 0.2rem 0.15rem 0.75rem; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface); font-weight: 600; font-size: 0.875rem; }
-.pos-list .icon-btn { width: 28px; height: 28px; }
+.pos-list { list-style: none; margin: 0 0 0.5rem; padding: 0; display: grid; gap: 0.4rem; }
+.pos-list li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) auto; align-items: center; gap: 0.6rem; padding: 0.4rem 0.4rem 0.4rem 0.9rem; border: 1px solid var(--border-strong); border-radius: 14px; background: var(--surface); font-weight: 600; font-size: 0.9rem; }
+.pos-report { display: flex; align-items: center; gap: 0.5rem; margin: 0; font-weight: 500; }
+.pos-report select { flex: 1; min-width: 0; margin: 0; }
+.pos-list .icon-btn { width: 30px; height: 30px; }
+@media (max-width: 640px) { .pos-list li { grid-template-columns: minmax(0, 1fr) auto; } .pos-report { grid-column: 1 / -1; grid-row: 2; } }
 .pos-add { display: flex; gap: 0.5rem; }
 .pos-add input { flex: 1; margin: 0; }
 .oc-rota { margin-bottom: 1rem; }

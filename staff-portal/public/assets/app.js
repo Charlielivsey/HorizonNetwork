@@ -1718,6 +1718,12 @@
         };
         const positionsFor = function (c) { return (meta.positions && meta.positions[c]) || []; };
         const same = function (a, b) { return String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase(); };
+        // Who a position usually reports to (People → Job descriptions → Positions); filled in when a position is chosen.
+        const usualReport = function (company, title) {
+            const list = (meta.positionReports && meta.positionReports[company]) || {};
+            const key = Object.keys(list).find(function (k) { return same(k, title); });
+            return key === undefined ? undefined : list[key];
+        };
         // Who holds a position now (main roles first), not counting the person being edited.
         const holderOf = function (pos) {
             const others = employees.filter(function (p) { return !emp || p.id !== emp.id; });
@@ -1847,7 +1853,11 @@
         f("f-roles").addEventListener("change", function (e) {
             const row = e.target.closest(".role-row");
             if (row && e.target.classList.contains("role-sup")) roleState[row.dataset.company].position = posFrom(e.target.value);
-            if (row && e.target.classList.contains("role-title")) roleState[row.dataset.company].jobTitle = e.target.value;
+            if (row && e.target.classList.contains("role-title")) {
+                const c = row.dataset.company, to = usualReport(c, e.target.value);
+                roleState[c].jobTitle = e.target.value;
+                if (to !== undefined) { roleState[c].position = to; $(".role-sup", row).innerHTML = positionOptions(to, c, "Same as main supervisor"); }
+            }
         });
         f("f-other").addEventListener("change", syncOtherCompanies);
 
@@ -1924,6 +1934,11 @@
         f("f-last").addEventListener("input", onNameChange);
         f("f-display").addEventListener("input", function () { displayTouched = f("f-display").value.trim() !== ""; });
         f("f-supervisor").addEventListener("change", function () { mainPosition = posFrom(f("f-supervisor").value); });
+        // Choosing a position fills in who it usually reports to; it can still be changed by hand.
+        f("f-title").addEventListener("change", function () {
+            const to = usualReport(f("f-company").value, f("f-title").value);
+            if (to !== undefined) { mainPosition = to; drawMainSupervisor(); }
+        });
         drawMainTitle();
         drawMainSupervisor();
         f("f-company").addEventListener("change", function () {
@@ -9994,12 +10009,21 @@
     // Positions at each company (the user's request, 7 November 2026): staff records' positions and supervisors are
     // chosen from these lists. Opened from People → Job descriptions → Positions.
     function openPositionsManager(d) {
-        const m = openModal('<h2 class="modal-title">Positions</h2><p class="muted">The positions people can hold at each company. Employee Management’s Position and Reports to lists, and job descriptions, use these.</p><div id="pos-body"></div>', { wide: true });
+        const m = openModal('<h2 class="modal-title">Positions</h2><p class="muted">The positions people can hold at each company, and who each one reports to. Choosing a position on Employee Management fills in its Reports to (it can still be changed there). HN Group People’s org charts follow these reporting lines.</p><div id="pos-body"></div>', { wide: true });
+        d.positionReports = d.positionReports || {};
+        const enc = function (p) { return p ? encodeURIComponent(p.company) + "|" + encodeURIComponent(p.title) : ""; };
+        const reportOptions = function (c, t) {
+            const cur = (d.positionReports[c] || {})[t] || null;
+            return '<option value="">Reports to no one</option>' + d.companies.map(function (oc) {
+                const list = (d.positions[oc] || []).filter(function (x) { return !(oc === c && x === t); });
+                return list.length ? '<optgroup label="' + esc(oc) + '">' + list.map(function (x) { const on = cur && cur.company === oc && cur.title === x; return '<option value="' + esc(enc({ company: oc, title: x })) + '"' + (on ? " selected" : "") + ">" + esc(x) + (oc !== c ? " (" + esc(oc) + ")" : "") + "</option>"; }).join("") + "</optgroup>" : "";
+            }).join("");
+        };
         function draw() {
             $("#pos-body", m.el).innerHTML = d.companies.map(function (c) {
                 const list = d.positions[c] || [];
                 return '<section class="pos-company" data-company="' + esc(c) + '"><h3 class="detail-head">' + esc(c) + ' <span class="tab-count">' + list.length + "</span></h3>" +
-                    (list.length ? '<ul class="pos-list">' + list.map(function (t) { return '<li><span>' + esc(t) + '</span><button type="button" class="icon-btn" data-pos-remove="' + esc(t) + '" aria-label="Remove ' + esc(t) + '">' + icon("trash") + "</button></li>"; }).join("") + "</ul>" : '<p class="muted small">No positions yet.</p>') +
+                    (list.length ? '<ul class="pos-list">' + list.map(function (t) { return '<li data-pos="' + esc(t) + '"><span>' + esc(t) + '</span><label class="pos-report"><span class="muted small">Reports to</span><select class="pos-report-select" aria-label="Who ' + esc(t) + ' reports to">' + reportOptions(c, t) + '</select></label><button type="button" class="icon-btn" data-pos-remove="' + esc(t) + '" aria-label="Remove ' + esc(t) + '">' + icon("trash") + "</button></li>"; }).join("") + "</ul>" : '<p class="muted small">No positions yet.</p>') +
                     '<form class="pos-add" novalidate><input type="text" maxlength="100" placeholder="New position at ' + esc(c) + '" aria-label="New position at ' + esc(c) + '"><button type="submit" class="btn btn-ghost btn-small">' + icon("plus") + "Add</button></form></section>";
             }).join("") + '<div class="form-error" id="pos-error" hidden></div>';
         }
@@ -10007,7 +10031,8 @@
             try {
                 const r = await api(url, body);
                 d.positions = r.positions;
-                if (state.meta) state.meta.positions = r.positions;
+                if (r.positionReports) d.positionReports = r.positionReports;
+                if (state.meta) { state.meta.positions = r.positions; if (r.positionReports) state.meta.positionReports = r.positionReports; }
                 formError($("#pos-error", m.el), "");
                 draw();
             } catch (err) { formError($("#pos-error", m.el), err.message); }
@@ -10019,6 +10044,12 @@
             e.preventDefault();
             const title = $("input", form).value.trim();
             if (title) change("/api/positions", { company: form.closest("[data-company]").dataset.company, title: title });
+        });
+        m.el.addEventListener("change", function (e) {
+            const s = e.target.closest(".pos-report-select");
+            if (!s) return;
+            const v = s.value, i = v.indexOf("|");
+            change("/api/positions/reports", { company: s.closest("[data-company]").dataset.company, title: s.closest("[data-pos]").dataset.pos, reportsTo: i < 0 ? null : { company: decodeURIComponent(v.slice(0, i)), title: decodeURIComponent(v.slice(i + 1)) } });
         });
         m.el.addEventListener("click", function (e) {
             const b = e.target.closest("[data-pos-remove]");

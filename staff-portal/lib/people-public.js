@@ -31,7 +31,25 @@ function publicPeople(store) {
     photo: !!store.avatarFile(p),
     updatedAt: p.updatedAt || null,
   })).sort((a, b) => a.name.localeCompare(b.name));
-  return { companies: store.COMPANIES.slice(), people: out };
+  return { companies: store.COMPANIES.slice(), people: out, positions: positionsOf(store, list) };
+}
+// Every position at every company, held or vacant (the user's request, 7 November 2026: "this should show all roles
+// and positions for all companies, not just the taken ones"), with who it reports to (People → Job descriptions →
+// Positions) and who holds it. Titles people hold that aren't in a company's list are added at the end.
+function positionsOf(store, list) {
+  const same = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+  const lists = store.positions ? store.positions() : {}, reports = store.positionReports ? store.positionReports() : {};
+  const out = [];
+  for (const company of store.COMPANIES) {
+    const titles = (lists[company] || []).slice();
+    for (const p of list) for (const r of rolesOf(p)) if (r.company === company && r.jobTitle && !titles.some((t) => same(t, r.jobTitle))) titles.push(r.jobTitle);
+    for (const title of titles) {
+      const to = (reports[company] || {})[title] || null;
+      out.push({ company, title, reportsTo: to ? { company: to.company, title: to.title } : null, listed: (lists[company] || []).includes(title),
+        holders: list.filter((p) => rolesOf(p).some((r) => r.company === company && same(r.jobTitle, title))).map((p) => p.id) });
+    }
+  }
+  return out;
 }
 function avatarOf(store, id) {
   const p = people(store).find((x) => x.id === id);

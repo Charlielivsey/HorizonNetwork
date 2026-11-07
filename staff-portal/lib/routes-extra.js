@@ -292,14 +292,22 @@ async function handle(req, res, pathname, session) {
   }
 
   // ----- Positions at each company (People → Job descriptions → Positions) -----
-  if (pathname === "/api/positions" || pathname === "/api/positions/remove") {
-    if (method === "GET" && pathname === "/api/positions") return sendJson(res, 200, { positions: store.positions(), canManage: jobdescriptions.canManage(me) }), true;
+  if (pathname === "/api/positions/reports") {
     if (method !== "POST") throw httpError(405, "Method not allowed.");
     if (!jobdescriptions.canManage(me)) throw httpError(403, "Only people who can manage job descriptions or staff can change positions.");
     const body = await readJsonBody(req);
-    const list = pathname === "/api/positions" ? store.addPosition(body.company, body.title) : store.removePosition(body.company, body.title);
+    const reports = store.setPositionReport(body.company, body.title, body.reportsTo || null);
+    logEvent(req, session, "position-reporting-changed", { target: String(body.title || "") + " · " + String(body.company || ""), detail: body.reportsTo ? "reports to " + body.reportsTo.title + " · " + body.reportsTo.company : "reports to no one" });
+    return sendJson(res, 200, { positions: store.positions(), positionReports: reports }), true;
+  }
+  if (pathname === "/api/positions" || pathname === "/api/positions/remove") {
+    if (method === "GET" && pathname === "/api/positions") return sendJson(res, 200, { positions: store.positions(), positionReports: store.positionReports(), canManage: jobdescriptions.canManage(me) }), true;
+    if (method !== "POST") throw httpError(405, "Method not allowed.");
+    if (!jobdescriptions.canManage(me)) throw httpError(403, "Only people who can manage job descriptions or staff can change positions.");
+    const body = await readJsonBody(req);
+    const list = pathname === "/api/positions" ? store.addPosition(body.company, body.title, body.reportsTo || null) : store.removePosition(body.company, body.title);
     logEvent(req, session, pathname === "/api/positions" ? "position-added" : "position-removed", { target: String(body.title || "") + " · " + String(body.company || "") });
-    return sendJson(res, 200, { positions: list }), true;
+    return sendJson(res, 200, { positions: list, positionReports: store.positionReports() }), true;
   }
 
   // ----- Job descriptions (People → Job descriptions) -----
@@ -307,7 +315,7 @@ async function handle(req, res, pathname, session) {
     const mayManage = jobdescriptions.canManage(me);
     if (method === "GET" && pathname === "/api/job-descriptions") {
       return sendJson(res, 200, {
-        items: jobdescriptions.list(), companies: store.COMPANIES, positions: store.positions(), canManage: mayManage,
+        items: jobdescriptions.list(), companies: store.COMPANIES, positions: store.positions(), positionReports: store.positionReports(), canManage: mayManage,
         // Suggestions for "Reports to": the titles already in use across the group.
         titles: mayManage ? [...new Set(store.employees().flatMap((p) => [p.jobTitle, ...(p.otherRoles || []).map((r) => r.jobTitle)]).filter(Boolean))].sort() : [],
       }), true;
