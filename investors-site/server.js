@@ -163,8 +163,9 @@ function holdingCard(h) {
 }
 function interestsTable(list) {
   if (!list.length) return '';
-  return '<section class="block"><h2>Held through your companies</h2><p class="intro">Companies your holdings own in turn. Their value is already part of the value of the company that owns them.</p><div class="table-wrap"><table><thead><tr><th>Company</th><th>Owned through</th><th>Your effective interest</th></tr></thead><tbody>' +
-    list.map((i) => '<tr><td><span class="cell-co">' + logo(i.company, 'sm') + esc(register.displayName(i.company)) + '</span></td><td>' + i.through.map((c) => esc(register.displayName(c))).join(' → ') + '</td><td>' + esc(i.shareText) + '</td></tr>').join('') + '</tbody></table></div></section>';
+  return '<section class="block"><h2>Held through your companies</h2><p class="intro">Companies your holdings own in turn. Your share of each one’s value is included in your total value.</p><div class="table-wrap"><table><thead><tr><th>Company</th><th>Owned through</th><th>Your effective interest</th><th class="num">Company valuation</th><th class="num">Your share</th></tr></thead><tbody>' +
+    list.map((i) => '<tr><td><span class="cell-co">' + logo(i.company, 'sm') + esc(register.displayName(i.company)) + '</span></td><td>' + (i.routes || [i.through]).map((r) => r.map((c) => esc(register.displayName(c))).join(' → ')).join('<br>') + '</td><td>' + esc(i.shareText) + '</td>' +
+      '<td class="num">' + (i.valuation ? esc(money(i.valuation.amount)) : '<span class="muted">Not valued yet</span>') + '</td><td class="num"><b>' + (i.value !== null ? esc(money(i.value)) : '—') + '</b></td></tr>').join('') + '</tbody></table></div></section>';
 }
 const unreadFor = (x) => store.news().filter((n) => !x.newsSeen || n.publishedAt > x.newsSeen).length;
 function newsList(items, x, base) {
@@ -178,7 +179,8 @@ function investorOverview(x, ctx, preview) {
     '<section class="hero small"><p class="eyebrow">Your investments</p><h1>Hello, ' + esc(first) + '.</h1></section>' +
     '<section class="summary">' +
     '<div class="stat big"><span class="stat-label">Total value</span><span class="stat-value">' + (s.direct.length && s.total ? esc(money(s.total)) : s.direct.length ? '—' : esc(money(0))) + '</span>' + (s.previous !== null ? change(s.total, s.previous) : '') +
-    (s.unvalued ? '<span class="muted small">' + s.unvalued + ' holding' + (s.unvalued === 1 ? ' isn’t' : 's aren’t') + ' valued yet.</span>' : '') + '</div>' +
+    (s.indirect.length ? '<span class="muted small">' + esc(money(s.directTotal)) + ' held directly · ' + esc(money(s.indirectTotal)) + ' through your companies</span>' : '') +
+    (s.unvalued ? '<span class="muted small">' + s.unvalued + ' compan' + (s.unvalued === 1 ? 'y isn’t' : 'ies aren’t') + ' valued yet.</span>' : '') + '</div>' +
     '<div class="stat"><span class="stat-label">Companies you hold directly</span><span class="stat-value">' + s.direct.length + '</span></div>' +
     '<div class="stat"><span class="stat-label">Held through them</span><span class="stat-value">' + s.indirect.length + '</span></div></section>' +
     chart(s.series) + votingSection(s) +
@@ -200,7 +202,8 @@ function holdingsPage(x, ctx) {
     (store.valuations()[h.company.slug] || []).slice().sort((a, b) => b.asOf.localeCompare(a.asOf)).map((v) => '<tr><td>' + esc(longDate(v.asOf)) + (v.note ? '<div class="muted small">' + esc(v.note) + '</div>' : '') + '</td><td class="num">' + esc(money(v.amount)) + '</td><td class="num">' + esc(money(Math.round(v.amount * h.share) / 100)) + '</td></tr>').join('') + '</tbody></table></div>').join('');
   const body = '<section class="hero small"><p class="eyebrow">Your investments</p><h1>Holdings</h1><p class="lede">Every holding recorded for you on the HN Group Company Register, as ' + esc(x.holders.join(', ') || '—') + '.</p></section>' +
     (s.direct.length ? '<div class="table-wrap"><table class="holdings-table"><thead><tr><th>Company</th><th>Share</th><th class="num">Votes</th><th>Nature of control</th><th class="since">Since</th><th class="num">Value</th></tr></thead><tbody>' + rows + '</tbody>' +
-      '<tfoot><tr><th colspan="4">Total</th><td class="since"></td><th class="num">' + esc(money(s.total)) + '</th></tr></tfoot></table></div>' + CLASS_HELP : '<p class="muted">No holdings are recorded for you yet.</p>') +
+      '<tfoot><tr><th colspan="4">' + (s.indirect.length ? 'Held directly' : 'Total') + '</th><td class="since"></td><th class="num">' + esc(money(s.directTotal)) + '</th></tr>' +
+      (s.indirect.length ? '<tr><th colspan="4">Through your companies</th><td class="since"></td><th class="num">' + esc(money(s.indirectTotal)) + '</th></tr><tr><th colspan="4">Total value</th><td class="since"></td><th class="num">' + esc(money(s.total)) + '</th></tr>' : '') + '</tfoot></table></div>' + CLASS_HELP : '<p class="muted">No holdings are recorded for you yet.</p>') +
     interestsTable(s.indirect) + (history ? '<section class="block"><h2>Valuation history</h2>' + history + '</section>' : '');
   return layout({ ...ctx, title: 'Holdings', active: '/holdings', body, unread: unreadFor(x) });
 }
