@@ -723,12 +723,19 @@ function discordIds(pending) {
 }
 // Each staff record's Discord ID with its job titles at every company (main role and other roles), for HN Group Auth's
 // bot to keep Discord roles in step with positions (the user's request, 6 November 2026). System accounts are left out.
+// Records sharing a Discord ID are merged, so that member gets the roles of every position on all of them.
 function discordPositions() {
-  return people.filter((p) => !p.system && p.discord && DISCORD_ID.test(String(p.discord.id))).map((p) => ({
-    id: String(p.discord.id),
-    titles: [{ company: p.company || "", title: p.jobTitle || "" }, ...(p.otherRoles || []).map((r) => ({ company: r.company || "", title: r.jobTitle || "" }))]
-      .filter((t) => t.company && t.title).map((t) => ({ company: String(t.company).slice(0, 80), title: String(t.title).slice(0, 120) })),
-  }));
+  const byId = new Map();
+  for (const p of people.filter((x) => !x.system && x.discord && DISCORD_ID.test(String(x.discord.id)))) {
+    const id = String(p.discord.id), titles = byId.get(id) || [];
+    for (const t of [{ company: p.company || "", title: p.jobTitle || "" }, ...(p.otherRoles || []).map((r) => ({ company: r.company || "", title: r.jobTitle || "" }))]) {
+      if (!t.company || !t.title) continue;
+      const item = { company: String(t.company).slice(0, 80), title: String(t.title).slice(0, 120) };
+      if (!titles.some((x) => x.company === item.company && x.title.toLowerCase() === item.title.toLowerCase())) titles.push(item);
+    }
+    byId.set(id, titles);
+  }
+  return [...byId].map(([id, titles]) => ({ id, titles }));
 }
 // New usernames from Discord (the bot): updates the sign-in accounts and the staff records that hold them.
 function updateDiscordNames(updates) {
@@ -767,7 +774,6 @@ function missingDiscord() { return people.filter((p) => !p.system && !(p.discord
 function setRecordDiscord(person, id) {
   id = String(id || "").trim();
   if (!DISCORD_ID.test(id)) throw new ValidationError("Enter their Discord user ID: 15 to 22 digits (in Discord, turn on Developer Mode, then right-click their name and choose Copy User ID).");
-  if (people.some((p) => p.id !== person.id && !p.system && p.discord && p.discord.id === id)) throw new ValidationError("That Discord user ID is already on another staff record.");
   if (!person.discord || person.discord.id !== id) { person.discord = { id, username: null, updatedAt: new Date().toISOString() }; person.discordPhotoApplied = null; }
   savePeople();
 }
@@ -1165,7 +1171,7 @@ function saveEmployee(input, existing) {
   if (input.discordId !== undefined) {
     const id = String(input.discordId || "").trim();
     if (id && !DISCORD_ID.test(id)) throw new ValidationError("Enter their Discord user ID: 15 to 22 digits (in Discord, turn on Developer Mode, then right-click their name and choose Copy User ID).");
-    if (id && people.some((p) => p !== existing && p.discord && p.discord.id === id)) throw new ValidationError("That Discord user ID is already on another staff record.");
+    // Several staff records may share one Discord ID (the user's request, 7 November 2026).
     const current = existing && existing.discord;
     if (!id) { if (existing && existing.discord) throw new ValidationError("Every staff profile needs a Discord account. Enter their Discord user ID."); }
     else if (!current || current.id !== id) { fields.discord = { id, username: null, updatedAt: now }; fields.discordPhotoApplied = null; }

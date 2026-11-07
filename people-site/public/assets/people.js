@@ -41,7 +41,7 @@
     var r = company ? roleAt(p, company) : mainRole(p);
     var others = p.roles.filter(function (x) { return x !== r; });
     return '<a class="card person" href="/people/' + p.id + '" data-route>' + avatar(p, 'md') +
-      '<span class="person-text"><strong class="person-name">' + esc(p.name) + '</strong>' +
+      '<span class="person-text"><strong class="person-name">' + esc(p.name) + (p.temporary ? ' <span class="temp-tag">Temporary</span>' : '') + '</strong>' +
       '<span class="person-title">' + esc(title(r)) + '</span>' +
       '<span class="person-meta">' + esc(r.company) + (r.department ? ' · ' + esc(r.department) : '') + '</span>' +
       (others.length ? '<span class="chips small-chips">' + others.map(function (o) { return '<span class="chip">' + esc(o.company) + '</span>'; }).join('') + '</span>' : '') +
@@ -96,7 +96,7 @@
   }
   function holderHtml(id) {
     var p = byId(id);
-    return p ? link('/people/' + p.id, avatar(p, 'sm') + '<span class="org-name">' + esc(p.name) + '</span>', 'org-holder') : '';
+    return p ? link('/people/' + p.id, avatar(p, 'sm') + '<span class="org-name">' + esc(p.name) + (p.temporary ? '<span class="temp-tag">Temporary</span>' : '') + '</span>', 'org-holder') : '';
   }
   function treeHtml(nodes, group) {
     var kids = {}, order = {};
@@ -157,7 +157,7 @@
     }).join('');
     var tags = function (label, list) { return list && list.length ? '<div class="facts"><h2 class="h-small">' + label + '</h2><div class="chips">' + list.map(function (s) { return '<span class="chip">' + esc(s) + '</span>'; }).join('') + '</div></div>' : ''; };
     view.innerHTML = '<section class="page-head profile-head"><div class="wrap"><p class="crumbs">' + link('/', 'Staff list') + ' / ' + esc(p.name) + '</p><div class="profile-top">' + avatar(p, 'xl') +
-      '<div><h1>' + esc(p.name) + '</h1><p class="lead">' + esc(title(r0)) + ' · ' + esc(r0.company) + '</p></div></div><div class="head-steps" data-hn-steps aria-hidden="true"></div></div></section>' +
+      '<div><h1>' + esc(p.name) + '</h1>' + (p.temporary ? '<p><span class="temp-tag big">Temporary position</span></p>' : '') + '<p class="lead">' + esc(title(r0)) + ' · ' + esc(r0.company) + '</p></div></div><div class="head-steps" data-hn-steps aria-hidden="true"></div></div></section>' +
       '<section class="section profile-body"><div class="wrap profile-grid"><div class="profile-main"><div class="card about"><h2 class="h-small">About me</h2>' + (p.about ? '<p class="about-text">' + esc(p.about) + '</p>' : '<p class="muted">' + esc(p.name.split(' ')[0]) + ' hasn’t written an About me yet.</p>') + '</div>' +
       tags('Skills', p.skills) + tags('Languages', p.languages) + '</div><div class="profile-roles"><h2 class="h-small">' + (p.roles.length > 1 ? 'Positions' : 'Position') + '</h2>' + roles + '</div></div></section>';
   }

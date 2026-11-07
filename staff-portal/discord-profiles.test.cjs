@@ -16,7 +16,10 @@ test('Discord accounts on staff profiles and pictures that follow Discord', () =
     // Sam has no Discord account yet, so people who manage staff are asked for it.
     assert.deepEqual(store.missingDiscord().map((p) => p.id), [sam.id]);
     assert.throws(() => store.setRecordDiscord(sam, '123'), /15 to 22 digits/);
-    assert.throws(() => store.setRecordDiscord(sam, '123456789012345678'), /already on another staff record/);
+    // Several staff records can share one Discord ID (the user's request, 7 November 2026); the bot sees it once.
+    store.setRecordDiscord(sam, '123456789012345678');
+    assert.equal(store.getPerson(sam.id).discord.id, '123456789012345678');
+    assert.equal(store.discordPositions().filter((x) => x.id === '123456789012345678').length, 1);
     store.setRecordDiscord(sam, '223456789012345678');
     assert.deepEqual(store.missingDiscord(), []);
     // A profile's Discord account can be changed but not removed.

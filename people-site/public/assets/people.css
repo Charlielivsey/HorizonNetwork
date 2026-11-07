@@ -99,6 +99,9 @@ main:focus { outline: none; }
 .org-holder:hover { background: var(--accent-soft); color: var(--accent); }
 .org-holder .avatar-sm { width: 36px; height: 36px; font-size: .75rem; }
 .org-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.temp-tag { display: inline-block; vertical-align: middle; margin-left: .4rem; padding: .05rem .5rem; border-radius: 999px; background: color-mix(in srgb, var(--yellow) 35%, transparent); color: var(--text); font-size: .68rem; font-weight: 800; letter-spacing: .02em; }
+.temp-tag.big { margin: 0 0 .4rem; font-size: .8rem; padding: .15rem .7rem; }
+.org-name { display: flex; align-items: center; flex-wrap: wrap; gap: 0 .1rem; white-space: normal; }
 .org-vacant { font-size: .85rem; font-weight: 600; color: var(--muted); }
 .org-note { margin-top: 1rem; }
 

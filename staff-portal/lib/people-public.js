@@ -29,6 +29,7 @@ function publicPeople(store) {
     about: p.peopleBio === false ? '' : String(p.bio || ''),
     skills: p.skills || [], languages: p.languages || [],
     photo: !!store.avatarFile(p),
+    temporary: p.temporary === true,
     updatedAt: p.updatedAt || null,
   })).sort((a, b) => a.name.localeCompare(b.name));
   return { companies: store.COMPANIES.slice(), people: out, positions: positionsOf(store, list) };
