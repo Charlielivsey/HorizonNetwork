@@ -13,6 +13,7 @@ const SITES=[
  ['https://sites.hngroup.org.uk/',['sites','hn group sites','hn sites','group sites','all sites','site directory','links','group links','hn group links']],
  ['https://hngroup.org.uk/contact',['contact','contact us','contact the group','contact hn group','get in touch','enquiry']],
  ['https://wiki.hngroup.org.uk/',['wiki','hn wiki','hn group wiki']],
+ ['https://people.hngroup.org.uk/',['people','hn people','hn group people','staff list','org chart','org charts']],
  ['https://branding.hngroup.org.uk/',['branding','brand centre','brand center','hn group branding','brand','logos','hn logos']],
  ['https://companies.hngroup.org.uk/',['companies','company register','companies register','hn group company register','register','companies house']],
  ['https://vpn.hngroup.org.uk/',['vpn','hn vpn','hn group vpn','secure gateway','hn secure gateway','secure network','hn secure network','secure terminal','hn group secure terminal']],

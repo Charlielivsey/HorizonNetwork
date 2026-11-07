@@ -1554,6 +1554,8 @@ function updateOwnProfile(person, input) {
   // appear on one (e.g. Horizon Network leadership) unless they turn that off.
   if ("bio" in input) person.bio = String(input.bio == null ? "" : input.bio).replace(/\r/g, "").replace(/\n{3,}/g, "\n\n").trim().slice(0, 600);
   if ("bioPublic" in input) person.bioPublic = !!input.bioPublic;
+  // HN Group People (people.hngroup.org.uk) shows About me unless they turn it off.
+  if ("peopleBio" in input) person.peopleBio = !!input.peopleBio;
   // Birthday: day and month only (no year), shown to colleagues only if the person chooses.
   if ("birthdayMonth" in input) {
     const month = Number(input.birthdayMonth);

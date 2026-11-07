@@ -782,6 +782,7 @@ function meResponse(session) {
   // Whether their About me can appear on the Horizon Network website (leadership page).
   user.onNetworkSite = !!networkLeadership.networkRole(session.person);
   user.bioPublic = session.person.bioPublic !== false;
+  user.peopleBio = session.person.peopleBio !== false;
   if (store.can(session.person, enquiries.MANAGE)) user.enquiriesNew = enquiries.newCount();
   user.onCallNow = oncall.current();
   user.pulseDue = !session.person.system && !pulse.hasAnswered(session.person);

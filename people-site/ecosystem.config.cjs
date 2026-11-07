@@ -1,0 +1,1 @@
+module.exports={apps:[{name:'hn-people',script:'/opt/hn-people/server.js',cwd:'/opt/hn-people',instances:1,exec_mode:'fork',autorestart:true,max_memory_restart:'192M',env:{NODE_ENV:'production',PORT:5670}}]};

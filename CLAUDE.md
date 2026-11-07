@@ -39,6 +39,7 @@ Full project history and rules (always read and follow):
 | HN Group Bots | bots.hngroup.org.uk | hn-bots :5600 | bots-site |
 | Echo | echo.hngroup.org.uk | hn-echo :5630 | echo-site |
 | HN Mail | mail.hngroup.org.uk | hn-mail :5660 | mail-site |
+| HN Group People | people.hngroup.org.uk | hn-people :5670 | people-site |
 | Website control | admin.hngroup.org.uk | hn-admin :4700 | admin-site |
 
 Removed (don't bring back unless asked): holding.hngroup.org.uk, the client portal, support.hngroup.org.uk (now `/support` sections), the Horizon Advertising website (horizonadvertising.co.uk shows HN-NO-SITE), contracts.hngroup.org.uk (now contract.), documents.hngroup.org.uk / the old docs help site.

@@ -49,6 +49,7 @@
       "desc": "Open roles across the group, with applications sent straight to the hiring team.", "keywords": "jobs vacancies apply careers" },
     { "id": "news", "group": "services", "name": "News", "url": "https://news.hngroup.org.uk/", "host": "news.hngroup.org.uk", "icon": "news", "label": "From the group", "access": "public",
       "desc": "Announcements, company updates and launches from across HN Group.", "keywords": "news announcements updates press" },
+    {"id": "people", "group": "services", "name": "HN Group People", "url": "https://people.hngroup.org.uk/", "host": "people.hngroup.org.uk", "icon": "user", "label": "Our people", "access": "public", "desc": "Everyone across HN Group and its companies, with org charts for each company and the whole group.", "keywords": "people staff list org chart organisation team about me directory"},
     { "id": "wiki", "group": "services", "name": "HN Group Wiki", "url": "https://wiki.hngroup.org.uk/", "host": "wiki.hngroup.org.uk", "icon": "book", "label": "Our companies", "access": "public",
       "desc": "Factual company information and how the group fits together.", "keywords": "wiki encyclopedia companies structure" },
     { "id": "companies", "group": "services", "name": "Company register", "url": "https://companies.hngroup.org.uk/", "host": "companies.hngroup.org.uk", "icon": "building", "label": "Company records", "access": "public",

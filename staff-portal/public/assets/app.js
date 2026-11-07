@@ -6247,7 +6247,8 @@
             '<p class="muted small">Separate with commas. Colleagues can search the directory by these.</p>' +
             '<label for="p-bio">About me <span class="muted small">(optional)</span></label>' +
             '<textarea id="p-bio" rows="4" maxlength="600" placeholder="A short introduction: what you do, what you\u2019re working on, something about you.">' + esc(me.bio || "") + "</textarea>" +
-            '<p class="muted small"><span id="p-bio-count">' + (me.bio || "").length + "</span>/600 \u00b7 Shown on your staff profile.</p>" +
+            '<p class="muted small"><span id="p-bio-count">' + (me.bio || "").length + "</span>/600 \u00b7 Shown on your staff profile and on <a href=\"https://people.hngroup.org.uk\" target=\"_blank\" rel=\"noopener\">HN Group People</a>, the public staff list.</p>" +
+            '<label class="inline-check"><input type="checkbox" id="p-bio-people"' + (me.peopleBio !== false ? " checked" : "") + "> Show my About me on HN Group People. Your name, positions and picture are listed there either way.</label>" +
             (me.onNetworkSite ? '<label class="inline-check"><input type="checkbox" id="p-bio-public"' + (me.bioPublic ? " checked" : "") + "> Also show my About me on the Horizon Network website, where you\u2019re listed as part of the leadership team</label>" : "") +
             '<p class="hint">Your location and time zone are shown on your home page and in the staff directory.</p>' +
             (me.system ? "" :
@@ -6455,6 +6456,7 @@
                     languages: $("#p-langs").value,
                     bio: $("#p-bio").value,
                     bioPublic: $("#p-bio-public") ? $("#p-bio-public").checked : undefined,
+                    peopleBio: $("#p-bio-people") ? $("#p-bio-people").checked : undefined,
                 }))).user;
                 renderChrome();
                 toast("Profile saved.");
