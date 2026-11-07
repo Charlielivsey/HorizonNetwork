@@ -70,10 +70,12 @@ main:focus { outline: none; }
 
 /* Org charts: a top-down tree that scrolls sideways when it's wider than the page. */
 .org-section { padding-top: 1rem; }
-.org-scroll { overflow-x: auto; padding: .5rem 0 1.5rem; border-radius: var(--radius); }
-.org-scroll:focus-visible { outline: 3px solid var(--accent-soft); }
+.org-wrap { max-width: none; }
+.org-wrap > .tabs, .org-wrap > .org-note { max-width: calc(var(--wrap) - 48px); margin-left: auto; margin-right: auto; }
+/* The whole chart always fits the screen: people.js scales it down to the page width, so there are no scroll bars. */
+.org-scroll { position: relative; overflow: hidden; padding: .5rem 0 1.5rem; }
 .org-tree, .org-tree ul { display: flex; justify-content: center; margin: 0; padding: 0; list-style: none; }
-.org-tree { min-width: max-content; margin: 0 auto; gap: 1.2rem; }
+.org-tree { width: max-content; margin: 0; gap: 1.2rem; transform-origin: top left; }
 .org-tree ul { position: relative; padding-top: 24px; }
 .org-tree li { position: relative; display: flex; flex-direction: column; align-items: center; padding: 24px 6px 0; }
 .org-tree li::before, .org-tree li::after { content: ""; position: absolute; top: 0; right: 50%; width: 50%; height: 24px; border-top: 2px solid var(--line); }
@@ -126,6 +128,8 @@ main:focus { outline: none; }
 /* On phones the chart becomes an indented list. */
 @media (max-width: 720px) {
   .org-tree, .org-tree ul { display: block; min-width: 0; }
+  .org-tree { width: auto; transform: none !important; margin: 0 !important; }
+  .org-scroll { height: auto !important; }
   .org-tree ul { padding: 0 0 0 1.1rem; margin-left: 1.1rem; border-left: 2px solid var(--line); }
   .org-tree ul::before, .org-tree li::before, .org-tree li::after { display: none; }
   .org-tree li { display: block; padding: .6rem 0 0; }

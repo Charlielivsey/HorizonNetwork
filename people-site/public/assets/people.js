@@ -111,18 +111,34 @@
         '</div>' + (below.length ? '<ul>' + below.map(li).join('') + '</ul>' : '') + '</li>';
     }
     var roots = kids[''] || [];
-    return roots.length ? '<div class="org-scroll" tabindex="0" aria-label="Org chart, scroll to see more"><ul class="org-tree">' + roots.map(li).join('') + '</ul></div>' : '<div class="empty card"><p>No positions are listed here yet.</p></div>';
+    return roots.length ? '<div class="org-scroll" role="group" aria-label="Org chart"><ul class="org-tree">' + roots.map(li).join('') + '</ul></div>' : '<div class="empty card"><p>No positions are listed here yet.</p></div>';
   }
   function renderOrg(c) {
     setNav('org');
+    setTimeout(fitChart, 0);
     var count = function (x) { return (data.positions || []).filter(function (p) { return p.company === x; }).length; };
     var tabs = '<nav class="tabs" aria-label="Org charts">' + link('/org', 'Whole group', !c ? 'tab active' : 'tab') +
       data.companies.filter(count).map(function (x) { return link('/org/' + slug(x), esc(x) + ' <span>' + count(x) + '</span>', c === x ? 'tab active' : 'tab'); }).join('') + '</nav>';
     var nodes = chartNodes(c), filled = nodes.filter(function (n) { return n.pos.holders.length; }).length;
     view.innerHTML = pageHead('Org charts', c ? esc(c) + '<span class="dot">.</span>' : 'The whole group<span class="dot">.</span>',
       (c ? 'Every position at ' + esc(c) + ' and who it reports to.' : 'Every position at HN Group and its companies in one chart.') + ' ' + filled + ' of ' + nodes.length + ' positions are filled.', '') +
-      '<section class="section org-section"><div class="wrap">' + tabs + treeHtml(nodes, !c) + '<p class="muted small org-note">Select anyone to see their profile. Positions and reporting lines are set on the HN Group staff portal.</p></div></section>';
+      '<section class="section org-section"><div class="wrap org-wrap">' + tabs + treeHtml(nodes, !c) + '<p class="muted small org-note">Select anyone to see their profile. Positions and reporting lines are set on the HN Group staff portal.</p></div></section>';
   }
+
+  // The chart fills the page width and is scaled down when it's wider, so it's always seen whole without scroll bars.
+  // (On phones it's an indented list instead.)
+  function fitChart() {
+    var box = view.querySelector('.org-scroll'), tree = box && box.querySelector('.org-tree');
+    if (!tree) return;
+    tree.style.transform = ''; tree.style.marginLeft = ''; box.style.height = '';
+    if (window.matchMedia('(max-width: 720px)').matches) return;
+    var avail = box.clientWidth, w = tree.offsetWidth, h = tree.offsetHeight, s = Math.min(1, avail / w);
+    tree.style.marginLeft = Math.max(0, (avail - w * s) / 2) + 'px';
+    tree.style.transform = s < 1 ? 'scale(' + s + ')' : '';
+    box.style.height = Math.ceil(h * s) + 24 + 'px';
+  }
+  window.addEventListener("resize", fitChart);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitChart);
 
   // ---------- Profile ----------
   function renderPerson(id) {
