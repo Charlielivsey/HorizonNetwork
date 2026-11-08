@@ -100,20 +100,30 @@
     });
     return nodes;
   }
+  // The chart sits in a panel with a toolbar: switch company, find a person or position, collapse/expand branches and
+  // zoom (Fit by default; zoom out/in in 10% steps from 10% to 200%, 100%, Fit to screen; when zoomed, the chart scrolls
+  // and its arrow keys move it). Zoom, scroll position and collapsed branches survive the live redraws.
+  var CO_COLOURS = { 'HN Group': 'purple', 'Horizon Network': 'teal', 'Horizon Media Group': 'raspberry', 'Horizon Advertising': 'pink', 'Horizon Development': 'green' };
+  var coClass = function (c) { return 'co-' + (CO_COLOURS[c] || 'lavender'); };
+  var collapsed = {}, chartQuery = '', chartKey = '';
+  var ICON_PERSON = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/></svg>';
   function holderHtml(id) {
     var p = byId(id);
-    return p ? link('/people/' + p.id, avatar(p, 'sm') + '<span class="org-name">' + esc(p.name) + (p.temporary ? '<span class="temp-tag">Temporary</span>' : '') + '</span>', 'org-holder') : '';
+    return p ? link('/people/' + p.id, avatar(p, 'sm') + '<span class="org-who"><span class="org-name">' + esc(p.name) + '</span>' + (p.temporary ? '<span class="temp-tag">Temporary</span>' : '') + '</span>', 'org-holder') : '';
   }
   function treeHtml(nodes, group) {
     var kids = {}, order = {};
     nodes.forEach(function (n, i) { order[n.id] = i; (kids[n.parentId || ''] = kids[n.parentId || ''] || []).push(n); });
     Object.keys(kids).forEach(function (k) { kids[k].sort(function (a, b) { return order[a.id] - order[b.id]; }); });
+    var count = function (n) { return (kids[n.id] || []).reduce(function (t, k) { return t + 1 + count(k); }, 0); };
     function li(n) {
-      var below = kids[n.id] || [], holders = n.pos.holders || [];
-      return '<li><div class="org-node' + (holders.length ? '' : ' vacant') + '"><div class="org-pos"><strong>' + esc(n.pos.title) + '</strong>' +
-        (group ? '<span class="org-co">' + esc(n.pos.company) + '</span>' : '') +
+      var below = kids[n.id] || [], holders = n.pos.holders || [], shut = !!collapsed[n.id], under = count(n);
+      var names = holders.map(function (id) { var p = byId(id); return p ? p.name : ''; }).join(' ');
+      return '<li' + (shut ? ' class="collapsed"' : '') + ' data-node="' + esc(n.id) + '"><div class="org-node ' + coClass(n.pos.company) + (holders.length ? '' : ' vacant') + '" data-find="' + esc((n.pos.title + ' ' + n.pos.company + ' ' + names).toLowerCase()) + '">' +
+        '<div class="org-pos"><strong>' + esc(n.pos.title) + '</strong>' + (group ? '<span class="org-co"><i></i>' + esc(n.pos.company) + '</span>' : '') +
         (n.outside ? '<span class="org-outside">Reports to ' + esc(n.outside.title) + (n.outside.company !== n.pos.company ? ', ' + esc(n.outside.company) : '') + '</span>' : '') + '</div>' +
-        (holders.length ? '<div class="org-holders">' + holders.map(holderHtml).join('') + '</div>' : '<div class="org-vacant">Vacant</div>') +
+        (holders.length ? '<div class="org-holders">' + holders.map(holderHtml).join('') + '</div>' : '<div class="org-vacant"><span class="org-empty">' + ICON_PERSON + '</span><span>Vacant</span></div>') +
+        (below.length ? '<button type="button" class="org-toggle" aria-expanded="' + !shut + '" aria-label="' + (shut ? 'Show' : 'Hide') + ' the ' + under + ' position' + (under === 1 ? '' : 's') + ' under ' + esc(n.pos.title) + '"><span>' + under + '</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>' : '') +
         '</div>' + (below.length ? '<ul>' + below.map(li).join('') + '</ul>' : '') + '</li>';
     }
     var roots = kids[''] || [];
@@ -121,6 +131,7 @@
   }
   function renderOrg(c) {
     setNav('org');
+    if (chartKey !== (c || '*')) { chartKey = c || '*'; chartQuery = ''; }
     var previous = view.querySelector('.org-scroll'), left = previous ? previous.scrollLeft : 0, top = previous ? previous.scrollTop : 0;
     setTimeout(function () {
       fitChart();
@@ -128,19 +139,61 @@
       if (box && chartScale !== null) { box.scrollLeft = left; box.scrollTop = top; }
     }, 0);
     var count = function (x) { return (data.positions || []).filter(function (p) { return p.company === x; }).length; };
-    var tabs = '<nav class="tabs" aria-label="Org charts">' + link('/org', 'Whole group', !c ? 'tab active' : 'tab') +
-      data.companies.filter(count).map(function (x) { return link('/org/' + slug(x), esc(x) + ' <span>' + count(x) + '</span>', c === x ? 'tab active' : 'tab'); }).join('') + '</nav>';
+    var tabs = '<nav class="org-switch" aria-label="Org charts">' + link('/org', 'Whole group', !c ? 'active' : '') +
+      data.companies.filter(count).map(function (x) { return link('/org/' + slug(x), '<i class="' + coClass(x) + '"></i>' + esc(x) + ' <span>' + count(x) + '</span>', c === x ? 'active' : ''); }).join('') + '</nav>';
     var nodes = chartNodes(c), filled = nodes.filter(function (n) { return n.pos.holders.length; }).length;
+    var who = {}; nodes.forEach(function (n) { n.pos.holders.forEach(function (h) { who[h] = 1; }); });
+    var stats = '<div class="org-stats"><span><b>' + nodes.length + '</b> positions</span><span><b>' + filled + '</b> filled</span><span><b>' + (nodes.length - filled) + '</b> vacant</span><span><b>' + Object.keys(who).length + '</b> people</span></div>';
+    var tools = '<div class="org-tools"><label class="org-find"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span class="sr-only">Find a person or position</span><input type="search" id="org-q" placeholder="Find a person or position" autocomplete="off" value="' + esc(chartQuery) + '"><span class="org-hits" id="org-hits"></span></label>' +
+      '<div class="org-btns"><button type="button" class="org-btn" data-branches="expand">Expand all</button><button type="button" class="org-btn" data-branches="collapse">Collapse all</button>' +
+      '<div class="org-zoom" role="group" aria-label="Chart zoom"><button type="button" class="icon" data-zoom="out" aria-label="Zoom out">−</button><output id="org-scale" aria-live="polite">Fit</output><button type="button" class="icon" data-zoom="in" aria-label="Zoom in">+</button><button type="button" data-zoom="actual">100%</button><button type="button" data-zoom="fit">Fit to screen</button></div></div></div>';
+    var legend = '<div class="org-legend"><span><i class="lg-filled"></i>Filled</span><span><i class="lg-vacant"></i>Vacant</span><span><span class="temp-tag">Temporary</span></span>' +
+      (!c ? data.companies.filter(count).map(function (x) { return '<span><i class="' + coClass(x) + '"></i>' + esc(x) + '</span>'; }).join('') : '') + '</div>';
     view.innerHTML = pageHead('Org charts', c ? esc(c) + '<span class="dot">.</span>' : 'The whole group<span class="dot">.</span>',
-      (c ? 'Every position at ' + esc(c) + ' and who it reports to.' : 'Every position at HN Group and its companies in one chart.') + ' ' + filled + ' of ' + nodes.length + ' positions are filled.', '') +
-      '<section class="section org-section"><div class="wrap org-wrap">' + tabs +
-      '<div class="org-zoom" role="group" aria-label="Chart zoom"><button type="button" data-zoom="out" aria-label="Zoom out">−</button><output id="org-scale" aria-live="polite">Fit</output><button type="button" data-zoom="in" aria-label="Zoom in">+</button><button type="button" data-zoom="actual">100%</button><button type="button" data-zoom="fit">Fit to screen</button></div>' +
-      treeHtml(nodes, !c) + '<p class="muted small org-note">Select anyone to see their profile. When zoomed in, scroll or use the chart’s arrow keys to move around. Positions and reporting lines are set on the HN Group staff portal.</p></div></section>';
+      (c ? 'Every position at ' + esc(c) + ' and who it reports to.' : 'Every position at HN Group and its companies in one chart.'), stats) +
+      '<section class="section org-section"><div class="wrap org-wrap">' + tabs + '<div class="org-panel">' + tools + legend + treeHtml(nodes, !c) + '</div>' +
+      '<p class="muted small org-note">Select anyone to see their profile. When zoomed in, scroll or use the chart’s arrow keys to move around. Positions and reporting lines are set on the HN Group staff portal.</p></div></section>';
     view.querySelectorAll('[data-zoom]').forEach(function (button) { button.addEventListener('click', function () {
       var action = button.dataset.zoom, current = chartScale === null ? fittedScale : chartScale;
       chartScale = action === 'fit' ? null : action === 'actual' ? 1 : Math.max(.1, Math.min(2, Math.round((current + (action === 'in' ? .1 : -.1)) * 100) / 100));
       fitChart();
     }); });
+    wireChart();
+  }
+  function wireChart() {
+    var box = view.querySelector('.org-scroll'); if (!box) return;
+    var q = document.getElementById('org-q');
+    var find = function () {
+      chartQuery = q.value.trim();
+      var words = chartQuery.toLowerCase().split(/\s+/).filter(Boolean), hits = 0;
+      box.classList.toggle('searching', words.length > 0);
+      box.querySelectorAll('.org-node').forEach(function (card) {
+        var on = words.length > 0 && words.every(function (w) { return card.getAttribute('data-find').indexOf(w) >= 0; });
+        card.classList.toggle('match', on);
+        // Open any collapsed branch a match is in.
+        if (on) { hits++; for (var li = card.parentNode.parentNode.closest('li'); li; li = li.parentNode.closest('li')) if (li.classList.contains('collapsed')) setBranch(li, false); }
+      });
+      document.getElementById('org-hits').textContent = words.length ? (hits ? hits + ' found' : 'None found') : '';
+      fitChart();
+    };
+    q.addEventListener('input', find);
+    if (chartQuery) find();
+    view.querySelectorAll('[data-branches]').forEach(function (b) { b.addEventListener('click', function () {
+      var shut = b.dataset.branches === 'collapse';
+      // Collapse all keeps the top positions open, so the chart still shows where everything starts.
+      box.querySelectorAll('li').forEach(function (li) { if (li.querySelector(':scope > ul')) setBranch(li, shut && !li.parentNode.classList.contains('org-tree')); });
+      fitChart();
+    }); });
+    box.addEventListener('click', function (e) {
+      var t = e.target.closest('.org-toggle'); if (!t) return;
+      var li = t.closest('li'); setBranch(li, !li.classList.contains('collapsed')); fitChart();
+    });
+  }
+  function setBranch(li, shut) {
+    li.classList.toggle('collapsed', shut);
+    if (shut) collapsed[li.getAttribute('data-node')] = 1; else delete collapsed[li.getAttribute('data-node')];
+    var t = li.querySelector(':scope > .org-node .org-toggle');
+    if (t) { t.setAttribute('aria-expanded', String(!shut)); t.setAttribute('aria-label', t.getAttribute('aria-label').replace(/^(Show|Hide)/, shut ? 'Show' : 'Hide')); }
   }
 
   // Fit is the default. Manual zoom uses a scaled canvas, so every enlarged card remains reachable by scrolling.
@@ -150,7 +203,7 @@
     var canvas = box && box.querySelector('.org-canvas');
     if (!tree || !canvas) return;
     tree.style.transform = ''; tree.style.marginLeft = ''; box.style.height = '';
-    var avail = box.clientWidth;
+    var cs = getComputedStyle(box), avail = box.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
     canvas.style.width = avail + 'px';
     var w = tree.offsetWidth, h = tree.offsetHeight;
     fittedScale = Math.min(1, avail / w);
@@ -221,8 +274,9 @@
       var next = JSON.parse(text), key = JSON.stringify({ c: next.companies, p: next.people, positions: next.positions });
       if (key === raw) return;
       raw = key; data = next;
-      var typing = document.activeElement && document.activeElement.id === 'q';
-      if (first || !typing) render(); else document.getElementById('results').innerHTML = listResults();
+      // Never redraw under someone typing: the staff list just refreshes its results, the org chart waits.
+      var active = document.activeElement, typing = active && active.tagName === 'INPUT';
+      if (first || !typing) render(); else if (active.id === 'q' && document.getElementById('results')) document.getElementById('results').innerHTML = listResults();
     }).catch(function () {
       if (first) view.innerHTML = '<section class="section"><div class="wrap"><div class="empty card"><p>The staff list is temporarily unavailable. Please try again shortly.</p></div></div></section>';
     });
