@@ -15,8 +15,8 @@ function people(store) {
   return store.employees().filter((p) => listed(store, p));
 }
 function rolesOf(p) {
-  return [{ company: p.company, jobTitle: p.jobTitle || '', department: p.department || '', supervisorId: p.supervisorId || null, supervisorCompany: p.supervisorCompany || null, main: true },
-    ...(p.otherRoles || []).map((r) => ({ company: r.company, jobTitle: r.jobTitle || p.jobTitle || '', department: r.department || p.department || '', supervisorId: r.supervisorId || null, supervisorCompany: r.supervisorCompany || null, main: false }))]
+  return [{ company: p.company, jobTitle: p.jobTitle || '', department: p.department || '', supervisorId: p.supervisorId || null, supervisorCompany: p.supervisorCompany || null, supervisorPosition: p.supervisorPosition, main: true },
+    ...(p.otherRoles || []).map((r) => ({ company: r.company, jobTitle: r.jobTitle || p.jobTitle || '', department: r.department || p.department || '', supervisorId: r.supervisorId || null, supervisorCompany: r.supervisorCompany || null, supervisorPosition: r.supervisorPosition, main: false }))]
     .filter((r) => r.company);
 }
 function publicPeople(store) {
@@ -45,9 +45,30 @@ function positionsOf(store, list) {
     const titles = (lists[company] || []).slice();
     for (const p of list) for (const r of rolesOf(p)) if (r.company === company && r.jobTitle && !titles.some((t) => same(t, r.jobTitle))) titles.push(r.jobTitle);
     for (const title of titles) {
-      const to = (reports[company] || {})[title] || null;
-      out.push({ company, title, reportsTo: to ? { company: to.company, title: to.title } : null, listed: (lists[company] || []).includes(title),
-        holders: list.filter((p) => rolesOf(p).some((r) => r.company === company && same(r.jobTitle, title))).map((p) => p.id) });
+      const usual = (reports[company] || {})[title] || null;
+      const groups = new Map();
+      for (const p of list) for (const r of rolesOf(p)) {
+        if (r.company !== company || !same(r.jobTitle, title)) continue;
+        let to = usual;
+        // A saved employee override takes precedence, including an explicit "no supervisor".
+        // Keep a position link when its supervisor is vacant; old person-based links still resolve too.
+        if (r.supervisorPosition !== undefined) to = r.supervisorPosition;
+        else if (r.supervisorId) {
+          const boss = list.find((x) => x.id === r.supervisorId);
+          const role = boss && rolesOf(boss).find((x) => x.company === (r.supervisorCompany || company));
+          to = role ? { company: role.company, title: role.jobTitle } : null;
+        }
+        to = to ? { company: to.company, title: to.title } : null;
+        const key = JSON.stringify(to);
+        if (!groups.has(key)) groups.set(key, { reportsTo: to, holders: [] });
+        const holders = groups.get(key).holders;
+        if (!holders.includes(p.id)) holders.push(p.id);
+      }
+      if (!groups.size) groups.set('vacant', { reportsTo: usual, holders: [] });
+      // Holders of the same position may report to different positions. Separate those branches
+      // instead of silently moving every holder when only one person's supervisor changed.
+      for (const [key, group] of groups) out.push({ company, title, ...group,
+        key: company + '\n' + title.toLowerCase() + '\n' + key, listed: (lists[company] || []).includes(title) });
     }
   }
   return out;

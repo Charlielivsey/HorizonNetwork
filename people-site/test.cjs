@@ -81,3 +81,28 @@ test('the site serves the list, pictures and page addresses', async () => {
     server.close(); backend.close(); fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('charts follow each saved role supervisor, including vacant positions, secondary roles and explicit none', () => {
+  const people = [
+    { id: 'human', displayName: 'Human', company: 'Horizon Network', jobTitle: 'Founder', supervisorPosition: { company: 'Horizon Network', title: 'Executive Assistant' } },
+    { id: 'other', displayName: 'Other founder', company: 'Horizon Network', jobTitle: 'Founder', supervisorPosition: null },
+    { id: 'vee', displayName: 'Vee', company: 'Horizon Network', jobTitle: 'Executive Assistant', supervisorPosition: { company: 'Horizon Network', title: 'President' }, otherRoles: [
+      { company: 'HN Group', jobTitle: 'Board Director', supervisorPosition: { company: 'HN Group', title: 'Chief Executive Officer' } },
+    ] },
+  ];
+  const fixture = { ...store, employees: () => people, loginsForId: () => [], avatarFile: () => null };
+  let out = pub.publicPeople(fixture);
+  const founders = out.positions.filter(p => p.title === 'Founder');
+  assert.equal(founders.length, 2, 'different supervisors keep separate branches');
+  assert.deepEqual(founders.find(p => p.holders.includes('human')).reportsTo, { company: 'Horizon Network', title: 'Executive Assistant' });
+  assert.equal(founders.find(p => p.holders.includes('other')).reportsTo, null);
+  assert.equal(new Set(out.positions.map(p => p.key)).size, out.positions.length);
+  assert.deepEqual(out.positions.find(p => p.title === 'Board Director').reportsTo, { company: 'HN Group', title: 'Chief Executive Officer' }, 'secondary role override, even when supervisor position is vacant');
+  people[0].supervisorPosition = { company: 'HN Group', title: 'Chief Executive Officer' };
+  out = pub.publicPeople(fixture);
+  assert.equal(out.positions.find(p => p.holders.includes('human')).reportsTo.company, 'HN Group');
+  delete people[0].supervisorPosition;
+  people[0].supervisorId = 'vee';
+  people[0].supervisorCompany = 'HN Group';
+  assert.deepEqual(pub.publicPeople(fixture).positions.find(p => p.holders.includes('human')).reportsTo, { company: 'HN Group', title: 'Board Director' }, 'legacy person link resolves the specified company role');
+});

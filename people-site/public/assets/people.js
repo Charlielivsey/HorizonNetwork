@@ -85,7 +85,12 @@
   var posKey = function (p) { return p.company + '\n' + String(p.title).toLowerCase(); };
   function chartNodes(c) {
     var list = (data.positions || []).filter(function (p) { return !c || p.company === c; });
-    var nodes = list.map(function (p) { return { id: posKey(p), pos: p, parentId: p.reportsTo ? posKey(p.reportsTo) : null, outside: null }; });
+    var nodes = list.map(function (p) { return { id: p.key || posKey(p), pos: p, parentId: null, outside: null }; });
+    nodes.forEach(function (n) {
+      if (!n.pos.reportsTo) return;
+      var parent = nodes.find(function (x) { return posKey(x.pos) === posKey(n.pos.reportsTo); });
+      if (parent) n.parentId = parent.id; else n.outside = n.pos.reportsTo;
+    });
     var ids = {}; nodes.forEach(function (n) { ids[n.id] = n; });
     nodes.forEach(function (n) { if (n.parentId && !ids[n.parentId]) { n.outside = n.pos.reportsTo; n.parentId = null; } });
     nodes.forEach(function (n) {
@@ -185,11 +190,11 @@
   });
   window.addEventListener('popstate', render);
 
-  // Live from the staff portal: checked every minute and when the tab is shown again; redrawn only when something changed
+  // Live from the staff portal: checked every 15 seconds and when the tab is shown again; redrawn only when something changed
   // (and never while someone is typing in the search box).
   function load(first) {
     return fetch('/api/people', { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error(); return r.text(); }).then(function (text) {
-      var next = JSON.parse(text), key = JSON.stringify({ c: next.companies, p: next.people });
+      var next = JSON.parse(text), key = JSON.stringify({ c: next.companies, p: next.people, positions: next.positions });
       if (key === raw) return;
       raw = key; data = next;
       var typing = document.activeElement && document.activeElement.id === 'q';
@@ -199,7 +204,7 @@
     });
   }
   load(true);
-  setInterval(function () { if (!document.hidden) load(false); }, 60000);
+  setInterval(function () { if (!document.hidden) load(false); }, 15000);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) load(false); });
 
   // Header: border once scrolled and the phone menu.

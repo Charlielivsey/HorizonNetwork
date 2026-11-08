@@ -2,7 +2,7 @@
 // HN Group People at people.hngroup.org.uk (the user's request, 7 November 2026): a fully public staff list for every
 // company, an org chart per company, one org chart with everyone, and each person's About me. Everything comes live
 // from the staff portal (the staff backend's /api/auth/people-public with the service secret, never exposed), so changes
-// made on the staff portal show here within half a minute. Nobody signs in here.
+// made on the staff portal are picked up by the page’s 15-second refresh. Nobody signs in here.
 const http = require('node:http'), fs = require('node:fs'), path = require('node:path');
 
 const PORT = Number(process.env.PORT || 5670);
@@ -10,7 +10,7 @@ const HOST = process.env.HOST || '127.0.0.1';
 const PUBLIC = path.join(__dirname, 'public');
 const BACKEND = process.env.STAFF_PORTAL_BACKEND || 'http://127.0.0.1:3200';
 const SECRET = process.env.STATUS_SSO_SECRET_FILE || '/var/lib/hn-status-sso/secret';
-const FRESH = Number(process.env.PEOPLE_CACHE_MS || 30000);
+const FRESH = Number(process.env.PEOPLE_CACHE_MS || 5000);
 const PHOTO_FRESH = 10 * 60 * 1000;
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8', '.xml': 'application/xml' };
@@ -30,7 +30,7 @@ function backend(route, body) {
   return fetch(BACKEND + '/api/auth/' + route, { method: 'POST', headers: { Authorization: 'Bearer ' + secret(), 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}), signal: AbortSignal.timeout(6000), redirect: 'error' });
 }
 
-// The staff list, kept for half a minute; if the staff portal can't be reached the last copy is shown for up to a day.
+// The staff list, kept for five seconds; if the staff portal can't be reached the last copy is shown for up to a day.
 let cache = null, pending = null;
 async function people() {
   if (cache && Date.now() - cache.at < FRESH) return cache.data;
