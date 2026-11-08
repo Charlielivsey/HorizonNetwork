@@ -142,7 +142,7 @@ function layout(o) {
     (o.noindex ? '<meta name="robots" content="noindex">' : '') +
     (o.canonical ? '<link rel="canonical" href="' + esc(auth.WIKI_ORIGIN + o.canonical) + '">' : '') +
     '<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="preload" href="/assets/fonts/plus-jakarta-sans.woff2" as="font" type="font/woff2" crossorigin>' +
-    '<link rel="stylesheet" href="/assets/wiki.css?v=20261020b"><script src="/assets/hn-theme.js"></script><script src="/assets/wiki.js?v=20261020a" defer></script></head><body>' +
+    '<link rel="stylesheet" href="/assets/wiki.css?v=20261108-layout"><script src="/assets/hn-theme.js"></script><script src="/assets/wiki.js?v=20261020a" defer></script></head><body>' +
     '<a class="skip" href="#content">Skip to content</a><div class="stripe" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>' +
     '<header class="site-header"><button class="menu-toggle" type="button" aria-expanded="false" aria-controls="sidebar" aria-label="Main menu"><span></span><span></span><span></span></button>' +
     '<a class="brand" href="/wiki/Main_Page" aria-label="' + esc(SITE) + ' main page"><img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="92" height="32"><img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="92" height="32"><span class="brand-wiki">Wiki</span></a>' +
@@ -544,7 +544,7 @@ function serveStatic(res, route) {
   const file = path.normalize(path.join(PUBLIC, route));
   if (!file.startsWith(path.join(PUBLIC, 'assets') + path.sep) && !['/robots.txt'].includes(route)) return false;
   if (!fs.existsSync(file) || !fs.statSync(file).isFile()) return false;
-  res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': route.startsWith('/assets/') ? 'public, max-age=604800' : 'public, max-age=3600' });
+  res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': /\.(css|js)$/.test(file) ? 'no-cache' : route.startsWith('/assets/') ? 'public, max-age=604800' : 'public, max-age=3600' });
   fs.createReadStream(file).pipe(res);
   return true;
 }
