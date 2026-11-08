@@ -46,5 +46,22 @@ test('an open org chart redraws when only reporting positions change', async () 
     await page.goto('http://127.0.0.1:' + server.address().port + '/org/horizon-network');
     await founder.waitFor();
     assert.match(await founder.textContent(), /Reports to Chief Executive Officer, HN Group/);
+    positions = [{ company: 'HN Group', title: 'Board Chairman', reportsTo: null, holders: [], key: 'chair' }];
+    for (let i = 0; i < 9; i++) positions.push({ company: 'HN Group', title: 'Leadership position ' + i, reportsTo: { company: 'HN Group', title: 'Board Chairman' }, holders: [], key: 'lead-' + i });
+    positions.push({ company: 'Horizon Network', title: 'President', reportsTo: { company: 'HN Group', title: 'Leadership position 0' }, holders: [], key: 'pres' });
+    for (let i = 0; i < 5; i++) positions.push({ company: 'Horizon Network', title: 'Network position ' + i, reportsTo: { company: 'Horizon Network', title: 'President' }, holders: [], key: 'network-' + i });
+    for (const width of [1440, 1024, 768, 390]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.goto('http://127.0.0.1:' + server.address().port + '/org');
+      await page.locator('.org-node').first().waitFor();
+      await page.evaluate(() => document.fonts.ready);
+      const clipped = await page.evaluate(() => {
+        const box = document.querySelector('.org-scroll').getBoundingClientRect();
+        return Array.from(document.querySelectorAll('.org-node')).filter(n => {
+          const r = n.getBoundingClientRect(); return r.left < box.left - 1 || r.right > box.right + 1;
+        }).map(n => n.textContent);
+      });
+      assert.deepEqual(clipped, [], 'no clipped cards at width ' + width);
+    }
   } finally { if (browser) await browser.close(); await new Promise(r => server.close(r)); }
 });
