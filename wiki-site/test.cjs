@@ -113,7 +113,7 @@ test('HN Group Wiki: reading, editing, history, protection and safety', async ()
     assert.ok((await anon.go('/wiki/Horizon_Advertising')).text.includes('Managed by'), 'Advertising infobox shows who manages it');
     for (const t of ['HN_Group', 'Horizon_Network', 'Horizon_Advertising', 'Horizon_Development', 'Horizon_Media_Group', 'Horizon_Assets_Management', 'List_of_HN_Group_companies']) {
       const html = (await anon.go('/wiki/' + t)).text;
-      assert.ok(!html.includes('Legal name') && !/(Network|Media Group|Group Management|Advertising) Limited/.test(html.replace(/<footer[\s\S]*$/, '')), t + ' shows no legal names');
+      assert.ok(!html.includes('Legal name') && !/(Network|Media Group|Group Management|Advertising) Limited/.test(html.replace(/<caption>[\s\S]*?<\/caption>/g, '').replace(/<footer[\s\S]*$/, '')), t + ' keeps trading names outside the infobox heading');
     }
     assert.ok((await anon.go('/wiki/HNGroup')).url.endsWith('/wiki/HN_Group?from=HNGroup'), 'redirect page');
     assert.ok((await anon.go('/wiki/hn_group')).url.endsWith('/wiki/HN_Group'), 'case-insensitive titles');
@@ -226,7 +226,7 @@ test('HN Group Wiki: reading, editing, history, protection and safety', async ()
     // Automatically created article, registered-name redirect and no legal names in what's shown.
     const investments = await anon.go('/wiki/HN_Group_Investments');
     assert.ok(investments.text.includes('a company in <a href="/wiki/HN_Group">HN Group</a>') && investments.text.includes('managed by HN Group.'));
-    assert.ok(!/Limited/.test(investments.text.replace(/<footer[\s\S]*$/, '')), 'no registered names on an automatic article');
+    assert.ok(!/Limited/.test(investments.text.replace(/<caption>[\s\S]*?<\/caption>/g, '').replace(/<footer[\s\S]*$/, '')), 'no registered names on an automatic article');
     assert.ok((await anon.go('/wiki/HN_Group_Investments_Limited')).url.endsWith('/wiki/HN_Group_Investments?from=HN%20Group%20Investments%20Limited'));
     assert.ok((await anon.go('/wiki/List_of_HN_Group_companies')).text.includes('<a href="/wiki/HN_Group_Investments">HN Group Investments</a>'));
     assert.ok((await anon.go('/wiki/Main_Page')).text.includes('href="/wiki/HN_Group_Investments"'), 'Main Page card');
@@ -245,7 +245,7 @@ test('HN Group Wiki: reading, editing, history, protection and safety', async ()
     await until(async () => (await anon.go('/wiki/Horizon_Pictures')).status === 200, 'the renamed company');
     const pictures = await anon.go('/wiki/Horizon_Studios');
     assert.ok(pictures.url.endsWith('/wiki/Horizon_Pictures?from=Horizon%20Studios') && pictures.text.includes('Staff-written history.'));
-    assert.ok(pictures.text.includes('<caption>Horizon Pictures</caption>'));
+    assert.ok(pictures.text.includes('<caption>Horizon Pictures Limited</caption>'));
     // A dissolved company is shown as defunct everywhere: notice, infobox, ownership, list, tree, cards and category.
     regFeed = { version: 'v4', companies: regFeed.companies.map((c) => c.slug === 'horizon-studios' ? { ...c, status: 'Dissolved', dissolved: '2026-10-19' } : c) };
     await until(async () => (await anon.go('/wiki/Horizon_Pictures')).text.includes('Defunct since 19 October 2026'), 'the defunct status');
@@ -298,6 +298,16 @@ test('HN Group Wiki: reading, editing, history, protection and safety', async ()
     assert.ok((await anon.go('/wiki/Special:CompanyLogo')).text.includes(newLogo));
     await ella.form('/wiki/Special:CompanyLogo?company=horizon-network', { company: 'horizon-network', reset: '1', csrf });
     assert.ok((await anon.go('/wiki/Horizon_Network')).text.includes('/assets/brand/horizon-network-wordmark.svg'));
+
+    // A trading-name change keeps the approved logo, with the legal name above it.
+    regFeed = { version: 'v6-media-name', companies: regFeed.companies.map(c => c.slug === 'horizon-media-group' ? { ...c, name: 'Horizon Media' } : c) };
+    await until(async () => (await anon.go('/wiki/Horizon_Media')).status === 200, 'the Media trading-name change');
+    const renamedMediaPage = (await anon.go('/wiki/Horizon_Media')).text;
+    assert.match(renamedMediaPage, /<caption>Horizon Media Group Limited<\/caption>/);
+    assert.match(renamedMediaPage, /ib-logo[\s\S]*?src="\/assets\/brand\/horizon-media-group-logo.svg"/);
+    const renamedHome = (await anon.go('/wiki/Main_Page')).text;
+    assert.match(renamedHome, /href="\/wiki\/Horizon_Media"><span class="cc-logo">[\s\S]*?horizon-media-group-logo.svg/);
+    assert.equal((await fetch(WIKI + '/assets/brand/horizon-media-group-logo.svg')).status, 200);
 
     // Protected Main Page: editors can't change it; admins can, and can protect/delete pages.
     assert.equal((await ella.form('/wiki/Main_Page?action=submit', { text: 'Vandalised', save: '1', csrf, base: '' })).status, 403);

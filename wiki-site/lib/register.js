@@ -2,8 +2,7 @@
 // Follows the HN Group Company Register (companies.hngroup.org.uk). The register is the source of truth
 // for each company's facts: owners, parent, management, officers, status and dates. The wiki reads its
 // public feed every few seconds and keeps the last copy on disk, so company articles stay correct even
-// while the register is offline. Only the names companies go by are shown on the wiki, never their
-// registered (legal) names.
+// while the register is offline. Trading names are used for article titles and links; company infobox headings use registered (legal) names.
 const fs = require('node:fs');
 const path = require('node:path');
 

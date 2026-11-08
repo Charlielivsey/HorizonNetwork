@@ -65,3 +65,5 @@ If DNS isn't ready yet, the wiki still installs and the installer tells you to r
   - edit conflicts, history privacy, restoring versions and creating pages;
   - categories, protection, admin-only deleting, the CSRF and cross-site checks, and sign-out;
   - that a restart never overwrites edits.
+
+Company infobox headings above logos use the current legal name from the Company Register; article titles and links continue to use trading names. Approved logo lookup tries the trading name, legal name without Limited, then the stable register slug, so renaming a company does not lose its logo. Uploaded wiki logos still take priority.

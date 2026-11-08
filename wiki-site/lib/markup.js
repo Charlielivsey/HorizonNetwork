@@ -133,7 +133,7 @@ function infobox(params, ctx, extra) {
     // Type is the kind of company: the register's, for a company on it; "Part of …" and the like are left out.
     if (/^type$/i.test(key)) value = onRegister ? typeOf(onRegister) : RELATION.test(value) ? '' : value;
     if (!value) continue;
-    if (key === 'name') name = value;
+    if (key === 'name') name = onRegister && onRegister.legalName ? onRegister.legalName : value;
     else if (key === 'logo') logo = value;
     else if (key === 'image') image = value;
     else if (key === 'caption') caption = value;
@@ -273,7 +273,7 @@ function companyInfobox(params, ctx) {
   const logo = (companies.logo && companies.logo(c)) || (given.logo ? findImage(given.logo) : null);
   if (c.status === 'Dissolved' && !ctx.categories.includes('Defunct companies')) ctx.categories.push('Defunct companies');
   const notice = inactive(c) ? '<div class="notice company-status status-' + esc(statusKey(c)) + '" role="note"><span class="co-status status-' + esc(statusKey(c)) + '">' + esc(statusLabel(c)) + '</span> ' + esc(statusSentence(c, R.displayName(c))) + '</div>' : '';
-  return notice + infobox(['name = ' + R.displayName(c), ...rows], ctx, { logoHtml: logo ? pictureHtml(logo, R.displayName(c)) : '', footer: sourceNote(c), cls: 'company-infobox' + (inactive(c) ? ' status-' + statusKey(c) : '') });
+  return notice + infobox(['name = ' + (c.legalName || R.displayName(c)), ...rows], ctx, { logoHtml: logo ? pictureHtml(logo, R.displayName(c)) : '', footer: sourceNote(c), cls: 'company-infobox' + (inactive(c) ? ' status-' + statusKey(c) : '') });
 }
 
 // Follows company owners upwards: "owned by A (100%), which is owned by B (100%)". When a company has

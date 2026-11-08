@@ -43,8 +43,9 @@ markup.setFileResolver((name) => { const f = media.image(name); return f ? { src
 // A company's logo: the one staff set on the wiki, otherwise its original brand logo when there is one.
 const slugOf = (text) => String(text).toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 function brandLogo(c) {
-  const base = slugOf(register.displayName(c));
-  for (const name of [base + '-wordmark.svg', base + '-logo.svg']) if (brandFiles.has(name)) { const white = name.replace('.svg', '-white.svg'); return { src: '/assets/brand/' + name, dark: darkVariants.has(white) ? '/assets/brand/' + white : null }; }
+  // Trading names can change without renaming the approved brand files (e.g. Horizon Media).
+  const bases = [...new Set([register.displayName(c), String(c.legalName || '').replace(/\s+(limited|ltd\.?)$/i, ''), c.slug].filter(Boolean).map(slugOf))];
+  for (const base of bases) for (const name of [base + '-wordmark.svg', base + '-logo.svg']) if (brandFiles.has(name)) { const white = name.replace('.svg', '-white.svg'); return { src: '/assets/brand/' + name, dark: darkVariants.has(white) ? '/assets/brand/' + white : null }; }
   return null;
 }
 function companyLogo(c) {

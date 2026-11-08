@@ -27,6 +27,10 @@ test('an infobox Type row is the kind of company, never what it belongs to', () 
   assert.equal(typeRow(html('{{Infobox\n| name = Horizon Development\n| Type = Part of [[Horizon Network]]\n}}')), 'Private limited company');
   assert.equal(typeRow(html('{{Infobox\n| name = Somewhere else\n| Type = Subsidiary of X\n}}')), undefined);
   assert.equal(typeRow(html('{{Infobox\n| name = Somewhere else\n| Type = Partnership\n}}')), 'Partnership');
+  assert.match(hd, /<caption>Horizon Development Limited<\/caption>/);
+  assert.match(html('{{Company infobox|Horizon Network}}'), /<caption>Horizon Network Limited<\/caption>/);
+  assert.match(html('{{Infobox\n| name = Horizon Development\n}}'), /<caption>Horizon Development Limited<\/caption>/);
+  assert.match(html('{{Infobox\n| name = Somewhere else\n}}'), /<caption>Somewhere else<\/caption>/);
 });
 
 test('every company infobox has its Parent row, under Key people', () => {
