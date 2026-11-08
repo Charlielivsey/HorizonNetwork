@@ -62,6 +62,21 @@ test('an open org chart redraws when only reporting positions change', async () 
         }).map(n => n.textContent);
       });
       assert.deepEqual(clipped, [], 'no clipped cards at width ' + width);
+      await page.getByRole('button', { name: '100%', exact: true }).click();
+      assert.equal(await page.locator('#org-scale').textContent(), '100%');
+      await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
+      assert.equal(await page.locator('#org-scale').textContent(), '110%');
+      await page.getByRole('button', { name: 'Zoom out', exact: true }).click();
+      assert.equal(await page.locator('#org-scale').textContent(), '100%');
+      if (width > 720) {
+        const scrollable = await page.locator('.org-scroll').evaluate(box => {
+          box.scrollLeft = box.scrollWidth;
+          return box.scrollWidth > box.clientWidth && box.scrollLeft > 0;
+        });
+        assert.equal(scrollable, true, 'enlarged chart can be moved horizontally');
+      }
+      await page.getByRole('button', { name: 'Fit to screen', exact: true }).click();
+      assert.equal(await page.locator('.org-scroll').evaluate(box => box.scrollLeft), 0);
     }
   } finally { if (browser) await browser.close(); await new Promise(r => server.close(r)); }
 });

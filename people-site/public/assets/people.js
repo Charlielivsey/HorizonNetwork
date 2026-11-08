@@ -3,6 +3,7 @@
   'use strict';
   var view = document.getElementById('view');
   var data = null, raw = '', query = '', company = '';
+  var chartScale = null, fittedScale = 1;
   var LOGOS = { 'HN Group': 'hn-group-wordmark', 'Horizon Network': 'horizon-network-wordmark', 'Horizon Advertising': 'horizon-advertising-logo', 'Horizon Development': 'horizon-development-logo', 'Horizon Media Group': 'horizon-media-group-logo' };
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
   var slug = function (s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); };
@@ -116,31 +117,54 @@
         '</div>' + (below.length ? '<ul>' + below.map(li).join('') + '</ul>' : '') + '</li>';
     }
     var roots = kids[''] || [];
-    return roots.length ? '<div class="org-scroll" role="group" aria-label="Org chart"><ul class="org-tree">' + roots.map(li).join('') + '</ul></div>' : '<div class="empty card"><p>No positions are listed here yet.</p></div>';
+    return roots.length ? '<div class="org-scroll" role="group" aria-label="Org chart; use arrow keys to move when zoomed" tabindex="0"><div class="org-canvas"><ul class="org-tree">' + roots.map(li).join('') + '</ul></div></div>' : '<div class="empty card"><p>No positions are listed here yet.</p></div>';
   }
   function renderOrg(c) {
     setNav('org');
-    setTimeout(fitChart, 0);
+    var previous = view.querySelector('.org-scroll'), left = previous ? previous.scrollLeft : 0, top = previous ? previous.scrollTop : 0;
+    setTimeout(function () {
+      fitChart();
+      var box = view.querySelector('.org-scroll');
+      if (box && chartScale !== null) { box.scrollLeft = left; box.scrollTop = top; }
+    }, 0);
     var count = function (x) { return (data.positions || []).filter(function (p) { return p.company === x; }).length; };
     var tabs = '<nav class="tabs" aria-label="Org charts">' + link('/org', 'Whole group', !c ? 'tab active' : 'tab') +
       data.companies.filter(count).map(function (x) { return link('/org/' + slug(x), esc(x) + ' <span>' + count(x) + '</span>', c === x ? 'tab active' : 'tab'); }).join('') + '</nav>';
     var nodes = chartNodes(c), filled = nodes.filter(function (n) { return n.pos.holders.length; }).length;
     view.innerHTML = pageHead('Org charts', c ? esc(c) + '<span class="dot">.</span>' : 'The whole group<span class="dot">.</span>',
       (c ? 'Every position at ' + esc(c) + ' and who it reports to.' : 'Every position at HN Group and its companies in one chart.') + ' ' + filled + ' of ' + nodes.length + ' positions are filled.', '') +
-      '<section class="section org-section"><div class="wrap org-wrap">' + tabs + treeHtml(nodes, !c) + '<p class="muted small org-note">Select anyone to see their profile. Positions and reporting lines are set on the HN Group staff portal.</p></div></section>';
+      '<section class="section org-section"><div class="wrap org-wrap">' + tabs +
+      '<div class="org-zoom" role="group" aria-label="Chart zoom"><button type="button" data-zoom="out" aria-label="Zoom out">−</button><output id="org-scale" aria-live="polite">Fit</output><button type="button" data-zoom="in" aria-label="Zoom in">+</button><button type="button" data-zoom="actual">100%</button><button type="button" data-zoom="fit">Fit to screen</button></div>' +
+      treeHtml(nodes, !c) + '<p class="muted small org-note">Select anyone to see their profile. When zoomed in, scroll or use the chart’s arrow keys to move around. Positions and reporting lines are set on the HN Group staff portal.</p></div></section>';
+    view.querySelectorAll('[data-zoom]').forEach(function (button) { button.addEventListener('click', function () {
+      var action = button.dataset.zoom, current = chartScale === null ? fittedScale : chartScale;
+      chartScale = action === 'fit' ? null : action === 'actual' ? 1 : Math.max(.1, Math.min(2, Math.round((current + (action === 'in' ? .1 : -.1)) * 100) / 100));
+      fitChart();
+    }); });
   }
 
-  // The chart fills the page width and is scaled down when it's wider, so it's always seen whole without scroll bars.
-  // (On phones it's an indented list instead.)
+  // Fit is the default. Manual zoom uses a scaled canvas, so every enlarged card remains reachable by scrolling.
+  // On phones the underlying layout stays an indented list.
   function fitChart() {
     var box = view.querySelector('.org-scroll'), tree = box && box.querySelector('.org-tree');
-    if (!tree) return;
+    var canvas = box && box.querySelector('.org-canvas');
+    if (!tree || !canvas) return;
     tree.style.transform = ''; tree.style.marginLeft = ''; box.style.height = '';
-    if (window.matchMedia('(max-width: 720px)').matches) return;
-    var avail = box.clientWidth, w = tree.offsetWidth, h = tree.offsetHeight, s = Math.min(1, avail / w);
+    var avail = box.clientWidth;
+    canvas.style.width = avail + 'px';
+    var w = tree.offsetWidth, h = tree.offsetHeight;
+    fittedScale = Math.min(1, avail / w);
+    var s = chartScale === null ? fittedScale : chartScale;
+    box.classList.toggle('zoomed', chartScale !== null);
+    canvas.style.width = Math.max(avail, Math.ceil(w * s)) + 'px';
+    canvas.style.height = Math.ceil(h * s) + 24 + 'px';
     tree.style.marginLeft = Math.max(0, (avail - w * s) / 2) + 'px';
-    tree.style.transform = s < 1 ? 'scale(' + s + ')' : '';
-    box.style.height = Math.ceil(h * s) + 24 + 'px';
+    tree.style.transform = 'scale(' + s + ')';
+    var label = view.querySelector('#org-scale');
+    if (label) label.textContent = Math.round(s * 100) + '%';
+    view.querySelector('[data-zoom="out"]').disabled = s <= .1;
+    view.querySelector('[data-zoom="in"]').disabled = s >= 2;
+    if (chartScale === null) { box.scrollLeft = 0; box.scrollTop = 0; }
   }
   window.addEventListener("resize", fitChart);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitChart);

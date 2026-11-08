@@ -74,6 +74,16 @@ main:focus { outline: none; }
 .org-wrap > .tabs, .org-wrap > .org-note { max-width: calc(var(--wrap) - 48px); margin-left: auto; margin-right: auto; }
 /* The whole chart always fits the screen: people.js scales it down to the page width, so there are no scroll bars. */
 .org-scroll { position: relative; overflow: hidden; padding: .5rem 0 1.5rem; }
+.org-scroll.zoomed { overflow: auto; max-height: 75vh; overscroll-behavior: contain; }
+.org-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.org-canvas { position: relative; }
+.org-canvas > .org-tree { position: absolute; top: 0; left: 0; }
+.org-zoom { display: flex; justify-content: center; align-items: center; gap: .4rem; margin: 1rem 0; flex-wrap: wrap; }
+.org-zoom button { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px; min-height: 40px; min-width: 40px; padding: .4rem .9rem; font: inherit; font-weight: 700; cursor: pointer; }
+.org-zoom button:hover { background: var(--accent-soft); border-color: var(--accent); }
+.org-zoom button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.org-zoom button:disabled { opacity: .4; cursor: default; }
+.org-zoom output { min-width: 4rem; text-align: center; font-weight: 700; color: var(--accent); }
 .org-tree, .org-tree ul { display: flex; justify-content: center; margin: 0; padding: 0; list-style: none; }
 .org-tree { width: max-content; margin: 0; gap: 1.2rem; transform-origin: top left; }
 .org-tree ul { position: relative; padding-top: 24px; width: max-content; flex-shrink: 0; }
@@ -131,7 +141,7 @@ main:focus { outline: none; }
 /* On phones the chart becomes an indented list. */
 @media (max-width: 720px) {
   .org-tree, .org-tree ul { display: block; min-width: 0; width: auto; }
-  .org-tree { width: auto; transform: none !important; margin: 0 !important; }
+  .org-tree { width: 100%; }
   .org-scroll { height: auto !important; }
   .org-tree ul { padding: 0 0 0 1.1rem; margin-left: 1.1rem; border-left: 2px solid var(--line); }
   .org-tree ul::before, .org-tree li::before, .org-tree li::after { display: none; }

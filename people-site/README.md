@@ -16,3 +16,5 @@ chart with the whole group, and each person's profile with their About me.
 
 Install or update: `sudo bash people-site/install.sh` (the root `install.sh` runs it when this folder changes).
 DNS: A `people` → 217.154.34.205 (DNS only). Test: `node --test people-site/test.cjs`.
+
+Org charts have zoom out/in, 100% and Fit to screen controls. Fit is the default; manual zoom (10–200%) enables scrolling in a bounded viewport. Zoom and scroll position survive live redraws.
