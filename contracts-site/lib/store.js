@@ -27,11 +27,13 @@ function init(dataDir) {
   fs.mkdirSync(filesDir, { recursive: true, mode: 0o700 });
   try { db = JSON.parse(fs.readFileSync(file, 'utf8')); }
   catch (e) { if (e.code !== 'ENOENT') fs.renameSync(file, file + '.unreadable-' + Date.now()); db = {}; }
-  for (const [k, v] of Object.entries({ version: 2, contracts: [], sessions: {}, audit: [] })) if (db[k] === undefined) db[k] = v;
+  for (const [k, v] of Object.entries({ version: 2, contracts: [], sessions: {}, linkSessions: {}, audit: [] })) if (db[k] === undefined) db[k] = v;
   for (const [t, s] of Object.entries(db.sessions)) if (!(s.expires > Date.now())) delete db.sessions[t];
+  for (const [t, s] of Object.entries(db.linkSessions)) if (!(s.expires > Date.now())) delete db.linkSessions[t];
   // Contracts from before signers had keys (and placed boxes) get them now.
   for (const c of db.contracts) {
     if (!Array.isArray(c.fields)) c.fields = [];
+    if (!c.links || typeof c.links !== 'object') c.links = {};
     for (const x of c.signers) if (!x.key) { let k; do k = crypto.randomBytes(4).toString('hex'); while (c.signers.some((y) => y.key === k)); x.key = k; }
   }
   save();
@@ -99,7 +101,8 @@ function view(c, u) {
     createdAt: c.createdAt, sentAt: c.sentAt || null, completedAt: c.completedAt || null, cancelledAt: c.cancelledAt || null,
     sender: { id: c.sender.id, name: c.sender.name }, mine: isSender(c, u), source: c.source,
     file: { name: c.file.name, size: c.file.size, pages: c.file.pages, sha256: c.file.sha256 }, certificate: !!c.certificate,
-    signers: c.signers.map((s, i) => ({ position: i + 1, key: s.key, id: s.id, name: s.name, jobTitle: s.jobTitle, company: s.company, role: s.role, status: s.status, me: mine.includes(s),
+    signers: c.signers.map((s, i) => ({ position: i + 1, key: s.key, id: s.id, name: s.name, jobTitle: s.jobTitle, company: s.company, role: s.role, status: s.status, me: mine.includes(s), external: !!s.external,
+      ...(manage ? { email: s.email || '', linkAt: (c.links[s.id] && c.links[s.id].createdAt) || null, linkUsedAt: (c.links[s.id] && c.links[s.id].usedAt) || null } : {}),
       viewedAt: s.viewedAt || null, signedAt: s.signedAt || null, declinedAt: s.declinedAt || null, remindedAt: s.remindedAt || null,
       signature: s.status === 'signed' ? s.signature.typed : '', reason: s.status === 'declined' ? s.reason : '', next: next === s })),
     fields: (c.fields || []).map((f) => ({ ...f, signer: c.signers.findIndex((s) => s.key === f.signer) })).filter((f) => f.signer >= 0),
@@ -107,6 +110,8 @@ function view(c, u) {
     can: {
       edit: c.status === 'draft' && manage && canSend(u),
       cancel: ['draft', 'out', 'declined'].includes(c.status) && manage && !u.impersonated,
+      // Signing links can be remade while it's out for signing (the old link and PIN stop working).
+      links: c.status === 'out' && manage && !u.viaLink && !u.impersonated,
       remind: c.status === 'out' && manage && !u.impersonated,
       sign: !u.impersonated && mine.some((s) => canSignNow(c, s)),
       mustOpen: c.status === 'out' && mine.some((s) => s.status === 'waiting' && !s.viewedAt),
@@ -149,7 +154,7 @@ function create(u, { title, pdf, fileName, source }) {
   const c = { id: crypto.randomUUID(), title: t, message: '', status: 'draft', order: 'any', dueDate: '', createdAt: now(),
     sender: { id: u.id, accountId: u.accountId || '', name: u.displayName },
     file: { blob: writeBlob(pdf), name, size: pdf.length, pages: pageCount(pdf), sha256: sha256(pdf) },
-    source: source && source.kind === 'docs' ? { kind: 'docs', docId: clean(source.docId, 64) } : { kind: 'upload' }, signers: [], fields: [], events: [] };
+    source: source && source.kind === 'docs' ? { kind: 'docs', docId: clean(source.docId, 64) } : { kind: 'upload' }, signers: [], fields: [], links: {}, events: [] };
   event(c, u, c.source.kind === 'docs' ? 'Sent from HN Group Docs' : 'Uploaded ' + name);
   db.contracts.push(c); audit(u, 'contract.create', c, t); save();
   return c;
@@ -178,8 +183,19 @@ function update(id, u, input, directory) {
     // The same person may sign more than once, each time as something different (employee and for the employer).
     const seen = new Set(), used = new Set();
     const next = input.signers.map((x) => {
-      const p = directory.find((d) => d.id === String(x && x.id));
-      if (!p) throw fail(400, 'Choose everyone who signs from the staff list.');
+      // Someone outside HN Group (the user's request, 8 November 2026: people who "aren't staff" sign with their link
+      // and PIN): typed in by name, with an optional email address and organisation, and kept as they were on re-saves.
+      let p = directory.find((d) => d.id === String(x && x.id));
+      const ext = !p && x && (x.external === true || /^ext-[0-9a-f]{12}$/.test(String(x.id || '')));
+      if (ext) {
+        const old = /^ext-[0-9a-f]{12}$/.test(String(x.id || '')) && c.signers.find((s) => s.id === x.id && s.external);
+        // Details not sent again stay as they were.
+        const name = clean(x.name !== undefined ? x.name : old && old.name, 120), email = clean(x.email !== undefined ? x.email : old && old.email, 200), company = clean(x.company !== undefined ? x.company : old && old.company, 120);
+        if (name.length < 2) throw fail(400, 'Type the name of the person outside HN Group who signs.');
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw fail(400, 'Check ' + name + '’s email address.');
+        p = { id: old ? old.id : 'ext-' + crypto.randomBytes(6).toString('hex'), accountIds: [], name, email, jobTitle: '', company, external: true };
+      }
+      if (!p) throw fail(400, 'Choose everyone who signs from the staff list, or add them as someone outside HN Group.');
       // A role typed in before the list existed stays as it was; anything new comes from the list.
       const role = clean(x.role, 80), before = c.signers.find((s) => s.id === p.id && s.role === role);
       if (!ROLES.includes(role) && !(role && before)) throw fail(400, 'Choose what ' + p.name + ' signs as.');
@@ -188,7 +204,7 @@ function update(id, u, input, directory) {
       let key = before && !used.has(before.key) ? before.key : '';
       if (!key) do key = crypto.randomBytes(4).toString('hex'); while (used.has(key) || c.signers.some((s) => s.key === key && s !== before));
       used.add(key);
-      return { key, id: p.id, accountIds: p.accountIds || [], name: p.name, jobTitle: p.jobTitle, company: p.company, role, status: 'waiting' };
+      return { key, id: p.id, accountIds: p.accountIds || [], name: p.name, jobTitle: p.jobTitle, company: p.company, role, status: 'waiting', ...(p.external ? { external: true, email: p.email } : {}) };
     });
     // Boxes placed for someone no longer signing go with them.
     c.fields = (c.fields || []).filter((f) => next.some((s) => s.key === f.signer));
@@ -220,8 +236,78 @@ function send(id, u) {
   if (c.dueDate && c.dueDate < now().slice(0, 10)) throw fail(400, 'The date to sign by has passed. Choose a new one.');
   c.status = 'out'; c.sentAt = now();
   event(c, u, 'Sent for signing to ' + c.signers.map((s) => s.name).join(', ') + (c.order === 'sequence' ? ', in that order' : '') + (c.dueDate ? ', to sign by ' + c.dueDate : ''));
+  const access = [...new Set(c.signers.map((s) => s.id))].map((pid) => makeLink(c, pid));
+  event(c, u, 'Made a signing link and PIN for ' + access.map((a) => a.name).join(', '), true);
   audit(u, 'contract.send', c, c.signers.map((s) => s.name).join(', ')); save();
+  c.access = access; // shown to the sender once, never saved
   return c;
+}
+
+// ---------- Signing links and PINs (the user's request, 8 November 2026: "When contracts are sent for signing I want a
+// unique link generated so even if they aren't staff or can't access their account they can see and sign and download
+// that specific contract, it should also generate a unique pin that must be entered when that contact is accessed via
+// that link") ----------
+// Each person signing gets their own link (a random 32-byte code) and six-digit PIN when the contract is sent. Only a
+// hash of the link and a scrypt hash of the PIN are kept, so the sender sees them once and can make new ones (which
+// stops the old ones working). Five wrong PINs lock that link for 15 minutes. The link only ever opens that one
+// contract, as that one person: they can read it, download it and sign or decline their own places, nothing else.
+const LINK_LOCK = 15 * 60000, LINK_TRIES = 5, LINK_SESSION = 2 * 3600000;
+const pinHash = (pin, salt) => crypto.scryptSync(String(pin), salt, 32).toString('hex');
+function makeLink(c, personId) {
+  const token = crypto.randomBytes(32).toString('base64url'), pin = String(crypto.randomInt(0, 1000000)).padStart(6, '0'), salt = crypto.randomBytes(16).toString('hex');
+  c.links[personId] = { token: sha256(token), salt, pin: pinHash(pin, salt), createdAt: now(), tries: 0, lockedUntil: 0 };
+  for (const [t, ls] of Object.entries(db.linkSessions)) if (ls.contract === c.id && ls.person === personId) delete db.linkSessions[t];
+  const mine = c.signers.filter((s) => s.id === personId);
+  return { person: personId, name: mine[0] ? mine[0].name : '', email: (mine.find((s) => s.email) || {}).email || '', roles: mine.map((s) => s.role), token, pin };
+}
+// The sender (or anyone who manages contracts) makes a new link and PIN for someone still to sign.
+function newLink(id, u, personId) {
+  const c = get(id, u);
+  if (!view(c, u).can.links) throw fail(409, 'Signing links can only be made by the sender while it’s out for signing.');
+  if (!c.signers.some((s) => s.id === personId)) throw fail(404, 'That person isn’t signing this contract.');
+  const a = makeLink(c, personId);
+  event(c, u, 'Made a new signing link and PIN for ' + a.name + ' (the old one no longer works)', true); audit(u, 'contract.link', c, a.name); save();
+  return a;
+}
+const TOKEN = /^[A-Za-z0-9_-]{43}$/;
+function byToken(token) {
+  if (!TOKEN.test(token || '')) return null;
+  const h = sha256(token);
+  for (const c of db.contracts) for (const [person, l] of Object.entries(c.links || {})) if (l.token === h) return { c, person, l };
+  return null;
+}
+// Who someone using a link is, to the rest of this file: the person the link was made for, with no permissions.
+function linkUser(c, person) {
+  const s = c.signers.find((x) => x.id === person) || {};
+  return { id: person, accountId: '', displayName: s.name || 'Signer', fullName: s.name || '', email: s.email || '', jobTitle: s.jobTitle || '', owner: false, impersonated: false, permissions: [], viaLink: true };
+}
+// Entering the PIN. Returns a session token for this link (kept as a hash, two hours) or throws.
+function unlockLink(token, pin) {
+  const found = byToken(token);
+  if (!found || found.c.status === 'draft') throw fail(404, 'This signing link doesn’t work. It may have been replaced with a new one; ask the person who sent it.');
+  const { c, person, l } = found;
+  if (l.lockedUntil > Date.now()) throw fail(429, 'Too many wrong PINs. Try again in ' + Math.ceil((l.lockedUntil - Date.now()) / 60000) + ' minutes.');
+  const given = String(pin || '').replace(/\s/g, '');
+  const ok = /^\d{6}$/.test(given) && crypto.timingSafeEqual(Buffer.from(pinHash(given, l.salt), 'hex'), Buffer.from(l.pin, 'hex'));
+  if (!ok) {
+    l.tries = (l.tries || 0) + 1;
+    if (l.tries >= LINK_TRIES) { l.tries = 0; l.lockedUntil = Date.now() + LINK_LOCK; event(c, null, 'A signing link was locked for 15 minutes after five wrong PINs', true); }
+    save();
+    throw fail(l.lockedUntil > Date.now() ? 429 : 401, l.lockedUntil > Date.now() ? 'Too many wrong PINs. Try again in 15 minutes.' : 'That PIN isn’t right. ' + (LINK_TRIES - l.tries) + ' tr' + (LINK_TRIES - l.tries === 1 ? 'y' : 'ies') + ' left.');
+  }
+  l.tries = 0; l.lockedUntil = 0; l.usedAt = now();
+  const session = crypto.randomBytes(32).toString('hex');
+  db.linkSessions[hash(session)] = { contract: c.id, person, linkToken: l.token, expires: Date.now() + LINK_SESSION };
+  save();
+  return session;
+}
+// The contract and person for a link plus its unlocked session, or null.
+function linkAccess(token, session) {
+  const found = byToken(token);
+  if (!found || !/^[a-f0-9]{64}$/.test(session || '')) return null;
+  const ls = db.linkSessions[hash(session)];
+  if (!ls || ls.expires <= Date.now() || ls.contract !== found.c.id || ls.person !== found.person || ls.linkToken !== found.l.token) return null;
+  return { c: found.c, u: linkUser(found.c, found.person) };
 }
 
 // Opening the PDF is recorded, and signers have to open it before they can sign.
@@ -229,7 +315,7 @@ function opened(c, u) {
   const first = mySigners(c, u).filter((s) => c.status === 'out' && s.status === 'waiting' && !s.viewedAt);
   if (!first.length) return;
   for (const s of first) s.viewedAt = now();
-  event(c, u, 'Opened the contract'); save();
+  event(c, u, 'Opened the contract' + (u.viaLink ? ' with their signing link' : '')); save();
 }
 
 function sign(id, u, input, from) {
@@ -247,10 +333,10 @@ function sign(id, u, input, from) {
   const done = [];
   for (let x = mine.find((y) => canSignNow(c, y)); x; x = mine.find((y) => canSignNow(c, y))) {
     x.status = 'signed'; x.signedAt = now(); x.viewedAt = x.viewedAt || now();
-    x.signature = { typed, accountId: u.accountId || '', profileId: u.id, email: u.email, ip: clean(from.ip, 64), agent: clean(from.agent, 300), sha256: c.file.sha256 };
+    x.signature = { typed, accountId: u.accountId || '', profileId: u.id, email: u.email, ip: clean(from.ip, 64), agent: clean(from.agent, 300), sha256: c.file.sha256, ...(u.viaLink ? { via: 'link and PIN' } : {}) };
     done.push(x.role);
   }
-  event(c, u, 'Signed as “' + typed + '”' + (done.filter(Boolean).length ? ' (' + done.filter(Boolean).join('; ') + ')' : '')); audit(u, 'contract.sign', c, typed);
+  event(c, u, 'Signed as “' + typed + '”' + (done.filter(Boolean).length ? ' (' + done.filter(Boolean).join('; ') + ')' : '') + (u.viaLink ? ' with their signing link and PIN' : '')); audit(u, 'contract.sign', c, typed);
   if (c.signers.every((x) => x.status === 'signed')) { c.status = 'completed'; c.completedAt = now(); event(c, null, 'Everyone has signed. The contract is complete.'); }
   save(); return c;
 }
@@ -291,4 +377,5 @@ const fileOf = (c) => readBlob(c.file.blob);
 const certificateOf = (c) => (c.certificate ? readBlob(c.certificate) : null);
 
 module.exports = { init, writable, createSession, session, updateSession, endSession, get, view, lists, create, update, send, opened, sign, decline, remind, cancel,
+  newLink, unlockLink, linkAccess, TOKEN,
   setCertificate, fileOf, certificateOf, canSend, canManage, MAX_PDF, ROLES, FIELD_TYPES, get db() { return db; } };

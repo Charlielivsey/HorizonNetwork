@@ -44,15 +44,32 @@
   const widths = (root) => requestAnimationFrame(() => root.querySelectorAll('[data-w]').forEach((s) => { s.style.width = s.dataset.w + '%'; }));
 
   // A question in the HN design (never the browser's own boxes). Resolves to true, the typed text, or null.
-  function ask(title, text, ok, { danger, input } = {}) {
+  function ask(title, text, ok, { danger, input, content, info } = {}) {
     const d = $('ask');
     $('ask-title').textContent = title; $('ask-text').textContent = text; $('ask-ok').textContent = ok;
     $('ask-ok').className = 'btn ' + (danger ? 'btn-danger' : 'btn-primary');
+    $('ask-cancel').hidden = !!info;
     const extra = $('ask-extra'); extra.replaceChildren();
     let field = null;
     if (input) { field = el('textarea', { rows: 3, placeholder: input, 'aria-label': input }); extra.append(field); }
-    d.returnValue = ''; d.showModal(); (field || $('ask-cancel')).focus();
+    if (content) extra.append(content);
+    d.returnValue = ''; d.showModal(); (field || (info ? $('ask-ok') : $('ask-cancel'))).focus();
     return new Promise((resolve) => d.addEventListener('close', () => resolve(d.returnValue === 'ok' ? (field ? field.value.trim() : true) : null), { once: true }));
+  }
+
+  // Each signer's own link and PIN (made when a contract is sent, or remade later), shown to the sender to pass on. They
+  // can open, download and sign that one contract with them, without signing in, even if they aren't staff.
+  async function copy(text, what) { try { await navigator.clipboard.writeText(text); toast(what + ' copied.'); } catch { toast('Couldn’t copy. Select it and copy it yourself.', true); } }
+  function showAccess(access, contractTitle) {
+    const list = el('div', { class: 'share-list' }, access.map((a) => {
+      const note = 'Hi ' + a.name.split(' ')[0] + ', please read and sign “' + contractTitle + '” here: ' + a.url + '\nYour PIN is ' + a.pin + '.';
+      return el('div', { class: 'share' },
+        el('strong', { text: a.name }), el('small', { text: [a.roles.filter(Boolean).join(', '), a.email].filter(Boolean).join(' · ') }),
+        el('div', { class: 'share-line' }, el('code', { text: a.url }), el('button', { class: 'btn btn-small btn-ghost', type: 'button', onclick: () => copy(a.url, 'Link') }, 'Copy link')),
+        el('div', { class: 'share-line' }, el('code', { class: 'pin', text: a.pin }), el('button', { class: 'btn btn-small btn-ghost', type: 'button', onclick: () => copy(a.pin, 'PIN') }, 'Copy PIN'),
+          el('button', { class: 'btn btn-small btn-primary', type: 'button', onclick: () => copy(note, 'Message with the link and PIN') }, 'Copy message')));
+    }));
+    return ask(access.length === 1 ? 'Signing link and PIN' : 'Signing links and PINs', 'Send each person their own link and PIN, ideally separately. They can open, download and sign this contract with them without signing in. You won’t see the PINs again, but you can make a new link and PIN from the contract at any time.', 'Done', { content: list, info: true });
   }
 
   // ---------- Navigation ----------
@@ -159,7 +176,7 @@
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
   function makePlacement(c) {
     const editable = c.can.edit;
-    const list = c.signers.map((s) => ({ key: s.key, id: s.id, name: s.name, jobTitle: s.jobTitle, company: s.company, role: s.role, status: s.status, me: s.me }));
+    const list = c.signers.map((s) => ({ key: s.key, id: s.id, name: s.name, jobTitle: s.jobTitle, company: s.company, role: s.role, status: s.status, me: s.me, external: !!s.external, email: s.email || '' }));
     let fields = c.fields.map((f) => ({ ...f, signer: list[f.signer] })).filter((f) => f.signer);
     const sheets = [], P = { list, editable, tool: null, onChange: () => {}, onTool: () => {} };
     const colour = (entry) => 'fc' + (list.indexOf(entry) % 6);
@@ -344,15 +361,22 @@
   }
 
   function signersCard(c) {
+    const firstOf = (s) => c.signers.find((x) => x.id === s.id) === s;
+    const newLink = async (s) => {
+      if (!(await ask('Make a new link and PIN for ' + s.name + '?', 'Their current link and PIN stop working straight away.', 'Make new link'))) return;
+      try { const v = await api('/api/contracts/' + c.id + '/link', { json: { person: s.id } }); showAccess(v.access, c.title); } catch (e) { toast(e.message, true); }
+    };
     return el('div', { class: 'card' }, el('h2', { text: c.order === 'sequence' ? 'Signing, in order' : 'Signing' }),
       c.signers.map((s) => el('div', { class: 'signer' },
         el('span', { class: 'face-wrap' }, face(s.id, s.name), c.order === 'sequence' ? el('span', { class: 'position', text: s.position }) : null),
-        el('span', {}, el('strong', { text: s.name + (s.me ? ' (you)' : '') }), s.role ? el('span', { class: 'role-chip', text: s.role }) : null, el('small', { text: [s.jobTitle, s.company].filter(Boolean).join(' · ') }),
+        el('span', {}, el('strong', { text: s.name + (s.me ? ' (you)' : '') }, s.external ? el('span', { class: 'ext-chip', text: 'Outside HN Group' }) : null), s.role ? el('span', { class: 'role-chip', text: s.role }) : null, el('small', { text: [s.jobTitle, s.company, s.email].filter(Boolean).join(' · ') }),
           s.status === 'signed' ? el('span', { class: 'signature', text: s.signature }) : null,
           s.status === 'signed' ? el('small', { text: 'Signed ' + when(s.signedAt) }) : null,
           s.status === 'declined' ? el('small', { text: 'Declined: ' + s.reason }) : null,
           s.status === 'waiting' && s.viewedAt ? el('small', { text: 'Opened ' + when(s.viewedAt) }) : null,
-          s.status === 'waiting' && s.next ? el('small', { text: 'Next to sign' }) : null),
+          s.status === 'waiting' && s.next ? el('small', { text: 'Next to sign' }) : null,
+          s.linkUsedAt && firstOf(s) ? el('small', { text: 'Used their signing link ' + when(s.linkUsedAt) }) : null,
+          c.can.links && firstOf(s) && c.signers.some((x) => x.id === s.id && x.status === 'waiting') ? el('button', { class: 'btn-text small', type: 'button', onclick: () => newLink(s) }, 'New link & PIN') : null),
         tag(SIGNER[s.status][0], SIGNER[s.status][1]))));
   }
 
@@ -437,7 +461,7 @@
     const boxes = boxesPart(placement);
     const drawChosen = () => { placement.refresh(); boxes.update(); chosen.replaceChildren(...(list.length ? list.map((s, i) => el('div', { class: 'chosen-row' },
       el('span', { class: 'face-wrap' }, face(s.id, s.name, 'small'), el('span', { class: 'position', text: i + 1 })),
-      el('span', { class: 'who-text' }, el('strong', { text: s.name }), el('small', { text: [s.jobTitle, s.company].filter(Boolean).join(' · ') })),
+      el('span', { class: 'who-text' }, el('strong', { text: s.name }, s.external ? el('span', { class: 'ext-chip', text: 'Outside HN Group' }) : null), el('small', { text: [s.jobTitle, s.company, s.email].filter(Boolean).join(' · ') })),
       el('span', { class: 'order-buttons' },
         el('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Move ' + s.name + ' up', disabled: i === 0, onclick: () => { [list[i - 1], list[i]] = [list[i], list[i - 1]]; drawChosen(); } }, '↑'),
         el('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Move ' + s.name + ' down', disabled: i === list.length - 1, onclick: () => { [list[i + 1], list[i]] = [list[i], list[i + 1]]; drawChosen(); } }, '↓'),
@@ -457,11 +481,24 @@
         face(p.id, p.name, 'small'), el('span', {}, el('strong', { text: p.name }, p.legalName && p.legalName.toLowerCase() !== p.name.toLowerCase() ? el('span', { class: 'legal-name', text: ' (' + p.legalName + ')' }) : null), el('small', { text: list.some((s) => s.id === p.id) ? 'Already signing as ' + list.filter((s) => s.id === p.id).map((s) => s.role).join(', ') + '. Add again to sign as something else.' : [p.jobTitle, p.company].filter(Boolean).join(' · ') })))));
       results.hidden = !hits.length; search.setAttribute('aria-expanded', String(!!hits.length));
     });
-    const save = () => api('/api/contracts/' + c.id, { method: 'PUT', json: { title: title.value, message: message.value, dueDate: due.value, order: orderSeq.checked ? 'sequence' : 'any', signers: list.map((s) => ({ id: s.id, role: s.role || '' })), fields: placement.payload() } });
+    const save = () => api('/api/contracts/' + c.id, { method: 'PUT', json: { title: title.value, message: message.value, dueDate: due.value, order: orderSeq.checked ? 'sequence' : 'any', signers: list.map((s) => (s.external ? { id: s.id || '', external: true, name: s.name, email: s.email || '', company: s.company || '', role: s.role || '' } : { id: s.id, role: s.role || '' })), fields: placement.payload() } });
+    // Someone outside HN Group signs with their own link and PIN (they have no HN Group Auth account).
+    const extName = el('input', { placeholder: 'Their full name', maxlength: 120, 'aria-label': 'Name of the person outside HN Group' });
+    const extEmail = el('input', { type: 'email', placeholder: 'Email (optional)', maxlength: 200, 'aria-label': 'Their email address' });
+    const extCompany = el('input', { placeholder: 'Organisation (optional)', maxlength: 120, 'aria-label': 'Their organisation' });
+    const extBox = el('div', { class: 'external-add', hidden: true }, el('div', { class: 'row' }, extName, extEmail), extCompany,
+      el('div', { class: 'button-row' }, el('button', { class: 'btn btn-small btn-primary', type: 'button', onclick: () => {
+        const name = extName.value.trim();
+        if (name.length < 2) return toast('Type their full name.', true);
+        list.push({ id: '', external: true, name, email: extEmail.value.trim(), company: extCompany.value.trim(), jobTitle: '', role: list.some((s) => s.role === 'Employee') ? 'Witness' : 'Employee' });
+        extName.value = extEmail.value = extCompany.value = ''; extBox.hidden = true; drawChosen();
+      } }, 'Add'), el('button', { class: 'btn-text small', type: 'button', onclick: () => { extBox.hidden = true; } }, 'Cancel')),
+      el('p', { class: 'muted small', text: 'They’ll sign with their own link and PIN, which you’ll get when you send it.' }));
+    const outside = el('div', {}, el('button', { class: 'btn-text small', type: 'button', onclick: () => { extBox.hidden = false; extName.focus(); } }, '+ Someone outside HN Group'), extBox);
     const part = (n, heading, ...kids) => el('div', { class: 'part' }, el('h3', {}, el('span', { class: 'step', text: n }), heading), ...kids);
     return el('div', { class: 'card draft' },
-      el('div', { class: 'draft-head' }, el('h2', { text: 'Get it signed' }), el('p', { text: 'Each person signs in with their own HN Group Auth account to read and sign it. Nobody can see it until you send it.' })),
-      part(1, 'Who signs', el('div', { class: 'picker' }, search, results), chosen),
+      el('div', { class: 'draft-head' }, el('h2', { text: 'Get it signed' }), el('p', { text: 'Each person reads and signs it with their HN Group Auth account, or with their own signing link and PIN (you get these when you send it). Nobody can see it until you send it.' })),
+      part(1, 'Who signs', el('div', { class: 'picker' }, search, results), outside, chosen),
       part(2, 'Signature boxes', boxes.node),
       part(3, 'Order',
         el('div', { class: 'segmented' }, el('label', {}, orderAny, el('span', {}, el('strong', { text: 'Any order' }), el('small', { text: 'Everyone can sign at once' }))),
@@ -476,8 +513,8 @@
           if (!list.length) return toast('Add at least one person to sign it.', true);
           const missing = list.find((s) => !s.role); if (missing) return toast('Choose what ' + missing.name + ' signs as.', true);
           const names = list.map((s) => s.name + ' (' + s.role.replace(/^On behalf of /, 'for ') + ')').join(', ');
-          if (!(await ask('Send for signing?', names + (list.length === 1 ? ' will' : ' will each') + ' be able to sign it with their HN Group Auth account' + (orderSeq.checked ? ', in that order' : '') + '. You can’t change it after this.', 'Send'))) return;
-          try { await save(); await api('/api/contracts/' + c.id + '/send', { json: {} }); toast('Sent for signing.'); route(); } catch (e) { toast(e.message, true); }
+          if (!(await ask('Send for signing?', names + (list.length === 1 ? ' will' : ' will each') + ' be able to sign it with their HN Group Auth account, or with their own signing link and PIN, which you’ll see next' + (orderSeq.checked ? ', in that order' : '') + '. You can’t change it after this.', 'Send'))) return;
+          try { await save(); const v = await api('/api/contracts/' + c.id + '/send', { json: {} }); toast('Sent for signing.'); await route(); if (v.access && v.access.length) showAccess(v.access, v.contract.title); } catch (e) { toast(e.message, true); }
         } }, 'Send for signing')));
   }
 

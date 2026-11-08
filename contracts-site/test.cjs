@@ -68,7 +68,7 @@ test('HN Group Contracts', async () => {
     for (let i = 0; i < 50; i++) { try { if ((await fetch(SITE + '/healthz')).ok) break; } catch {} await new Promise((r) => setTimeout(r, 100)); }
     // The health check says what the site needs, and nothing private.
     let r = await call('/healthz');
-    assert.deepEqual(r.body, { ok: true, service: 'hn-contracts', version: '2.1.0', checks: { data: true, auth: true, pages: true } });
+    assert.deepEqual(r.body, { ok: true, service: 'hn-contracts', version: '2.2.0', checks: { data: true, auth: true, pages: true } });
     // Signed out: only the sign-in; pages are in the HN Group website theme.
     assert.equal((await call('/')).status, 302);
     assert.equal((await call('/api/contracts')).status, 401);
@@ -221,6 +221,52 @@ test('HN Group Contracts', async () => {
     assert.deepEqual((await call('/api/contracts/' + c.id, { cookie: hr })).body.contract.can.signAs, ['Employee', 'On behalf of HN Group Limited']);
     r = await sign(hr, c, 'Harriet Reed'); assert.equal(r.body.contract.status, 'completed');
     assert.ok(r.body.contract.events.some((e) => /Signed as “Harriet Reed” \(Employee; On behalf of HN Group Limited\)/.test(e.text)));
+
+    // Signing links and PINs (8 November 2026): each person gets their own link and PIN when it's sent, and can read,
+    // download and sign that one contract without signing in, including someone outside HN Group.
+    c = (await upload(hr)).body.contract;
+    r = await call('/api/contracts/' + c.id, { cookie: hr, method: 'PUT', json: { signers: [{ external: true, name: 'Pat Outside', email: 'pat@example.com', company: 'Example Ltd', role: 'Employee' }, { id: 'p-sam', role: 'On behalf of HN Group Limited' }] } });
+    assert.equal(r.status, 200, JSON.stringify(r.body)); const ext = r.body.contract.signers[0];
+    assert.match(ext.id, /^ext-[0-9a-f]{12}$/); assert.deepEqual([ext.external, ext.email], [true, 'pat@example.com']);
+    r = await call('/api/contracts/' + c.id, { cookie: hr, method: 'PUT', json: { signers: [{ id: ext.id, role: 'Employee' }, { id: 'p-sam', role: 'On behalf of HN Group Limited' }] } });
+    assert.equal(r.body.contract.signers[0].id, ext.id, 'the outside signer is kept on re-saves');
+    r = await call('/api/contracts/' + c.id + '/send', { cookie: hr, json: {} });
+    const access = r.body.access; assert.equal(access.length, 2);
+    const pat = access.find((a) => a.person === ext.id), samLink = access.find((a) => a.person === 'p-sam');
+    assert.match(pat.url, /\/s\/[A-Za-z0-9_-]{43}$/); assert.match(pat.pin, /^\d{6}$/);
+    assert.ok(!JSON.stringify(JSON.parse(fs.readFileSync(path.join(dir, 'data', 'contracts.json'), 'utf8'))).includes(pat.pin + '"'), 'PINs are never stored');
+    const tok = pat.url.split('/s/')[1], L = '/api/link/' + tok;
+    r = await call('/s/' + tok); assert.equal(r.status, 200); assert.match(r.body, /link\.js/);
+    assert.equal((await call(L)).status, 401, 'the PIN comes first');
+    assert.equal((await call(L + '/file')).status, 401);
+    const wrong = pat.pin === '000000' ? '111111' : '000000';
+    r = await call(L + '/unlock', { json: { pin: wrong } }); assert.equal(r.status, 401); assert.match(r.body.error, /4 tries left/);
+    r = await call(L + '/unlock', { json: { pin: pat.pin } }); assert.equal(r.status, 200);
+    const linkCookie = cookieOf(r, 'hn_cl_' + tok.slice(0, 16)); assert.ok(linkCookie);
+    // Sam's link doesn't open with Pat's session, and Pat's session doesn't work on another link.
+    assert.equal((await call('/api/link/' + samLink.url.split('/s/')[1], { cookie: linkCookie })).status, 401);
+    r = await call(L, { cookie: linkCookie }); assert.equal(r.status, 200);
+    assert.deepEqual([r.body.me.name, r.body.contract.can.sign, r.body.contract.can.mustOpen], ['Pat Outside', true, true]);
+    assert.equal(r.body.contract.signers[0].email, undefined, 'signers don’t see other people’s details');
+    assert.equal((await call(L + '/sign', { cookie: linkCookie, json: { name: 'Pat Outside', agree: true, sha256: c.file.sha256 } })).status, 409, 'open it first');
+    r = await call(L + '/file', { cookie: linkCookie }); assert.equal(r.status, 200); assert.equal(r.headers.get('content-type'), 'application/pdf');
+    r = await call(L + '/sign', { cookie: linkCookie, json: { name: 'Pat Outside', agree: true, sha256: c.file.sha256 } }); assert.equal(r.status, 200);
+    assert.ok(r.body.contract.events.some((e) => /with their signing link and PIN/.test(e.text)));
+    assert.equal((await call(L + '/file?download', { cookie: linkCookie })).status, 200, 'they can download it');
+    // A new link and PIN stops the old ones; only the sender can make one.
+    assert.equal((await call('/api/contracts/' + c.id + '/link', { cookie: sam, json: { person: 'p-sam' } })).status, 409);
+    r = await call('/api/contracts/' + c.id + '/link', { cookie: hr, json: { person: 'p-sam' } }); assert.equal(r.status, 200);
+    const fresh = r.body.access[0]; assert.notEqual(fresh.url, samLink.url);
+    assert.equal((await call('/api/link/' + samLink.url.split('/s/')[1] + '/unlock', { json: { pin: samLink.pin } })).status, 404, 'the old link stops working');
+    const F = '/api/link/' + fresh.url.split('/s/')[1];
+    // Five wrong PINs lock the link.
+    const bad = fresh.pin === '000000' ? '111111' : '000000';
+    for (let i = 0; i < 4; i++) assert.equal((await call(F + '/unlock', { json: { pin: bad } })).status, 401);
+    assert.equal((await call(F + '/unlock', { json: { pin: bad } })).status, 429);
+    assert.equal((await call(F + '/unlock', { json: { pin: fresh.pin } })).status, 429, 'locked even with the right PIN');
+    // Cancelled contracts can't be opened with a link any more.
+    await call('/api/contracts/' + c.id + '/cancel', { cookie: hr, json: {} });
+    assert.equal((await call(L + '/file', { cookie: linkCookie })).status, 410);
 
     // HN Group Docs sends documents over loopback with the service secret, never through nginx.
     const importBody = (by) => JSON.stringify({ by, title: 'Employee Agreement', fileName: 'Employee Agreement.pdf', docId: crypto.randomUUID(), pdf: PDF.toString('base64') });

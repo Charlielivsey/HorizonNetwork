@@ -45,3 +45,15 @@ whenever the site isn't running or has no web address**. It stops the retired `h
 program holding port 5560, shows the service's log if it won't start, and finishes by checking the site through nginx
 the way visitors reach it ("HN Group Contracts is working" or "CONTRACTS NOT REACHABLE …").
 Tests: `node --test contracts-site/test.cjs`.
+
+## Signing links and PINs (2.2.0)
+
+When a contract is sent, everyone signing it gets their own link (`https://contract.hngroup.org.uk/s/<link>`) and a
+six-digit PIN. The sender sees them straight after sending (copy the link, the PIN, or a ready-made message) and can make
+a new link and PIN for anyone still to sign from the contract page ("New link & PIN"; the old ones stop working). With
+the link and PIN, the person can read, download and sign or decline that one contract without signing in, so it works
+for people who aren't staff or can't get into their account. Only hashes of links and PINs are stored; five wrong PINs
+lock a link for 15 minutes; an unlocked link lasts two hours in that browser; cancelled contracts can't be opened.
+
+People outside HN Group can be added as signers ("+ Someone outside HN Group": name, optional email and organisation);
+they sign with their link and PIN.

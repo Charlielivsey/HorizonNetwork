@@ -14,7 +14,7 @@ const { createAuth } = require('./lib/auth');
 const { certificate } = require('./lib/certificate');
 const { signedCopy } = require('./lib/stamp');
 
-const VERSION = '2.1.0';
+const VERSION = '2.2.0';
 const PUBLIC = process.env.CONTRACTS_PUBLIC_DIR || path.join(__dirname, 'public');
 const DATA_DIR = process.env.CONTRACTS_DATA_DIR || '/var/lib/hn-contracts';
 const HOST = process.env.HOST || '127.0.0.1', PORT = Number(process.env.PORT || 5560);
@@ -139,7 +139,7 @@ async function api(req, res, url) {
     if (!store.canSend(user)) throw fail(403, 'Only people who send contracts can see the staff list here.');
     return send(res, 200, { people: (await staffDirectory()).map(({ id, name, legalName, jobTitle, company }) => ({ id, name, legalName, jobTitle, company })) });
   }
-  const m = /^\/api\/contracts\/([0-9a-f-]{36})(?:\/(send|sign|decline|cancel|remind|file|certificate))?$/.exec(route);
+  const m = /^\/api\/contracts\/([0-9a-f-]{36})(?:\/(send|sign|decline|cancel|remind|file|certificate|link))?$/.exec(route);
   if (!m) throw fail(404, 'Not found.');
   const [, id, action] = m;
   if (!action && method === 'GET') return send(res, 200, { contract: store.view(store.get(id, user), user) });
@@ -158,7 +158,9 @@ async function api(req, res, url) {
     return pdf(res, bytes, c.title.replace(/[\\/:*?"<>|]/g, '-') + ' - signing certificate.pdf', url.searchParams.has('download'));
   }
   if (method !== 'POST') throw fail(405, 'Method not allowed.');
-  if (action === 'send') return send(res, 200, { contract: store.view(store.send(id, user), user) });
+  // Sending makes each signer's link and PIN, shown to the sender this once (they can make new ones later).
+  if (action === 'send') { const c = store.send(id, user); return send(res, 200, { contract: store.view(c, user), access: shareable(c.access) }); }
+  if (action === 'link') { const v = await json(req); return send(res, 200, { access: shareable([store.newLink(id, user, String(v.person || ''))]) }); }
   if (action === 'sign') {
     const c = store.sign(id, user, await json(req), { ip: String(req.headers['x-real-ip'] || req.socket.remoteAddress || ''), agent: req.headers['user-agent'] });
     if (c.status === 'completed') store.setCertificate(c, certificate(c));
@@ -167,6 +169,50 @@ async function api(req, res, url) {
   if (action === 'decline') return send(res, 200, { contract: store.view(store.decline(id, user, await json(req)), user) });
   if (action === 'remind') return send(res, 200, { contract: store.view(store.remind(id, user), user) });
   if (action === 'cancel') { const c = store.cancel(id, user); return send(res, 200, c ? { contract: store.view(c, user) } : { deleted: true }); }
+  throw fail(404, 'Not found.');
+}
+
+// ---------- Signing links (contract.hngroup.org.uk/s/<link>): no HN Group Auth sign-in, just the link and its PIN ----------
+const shareable = (list) => (list || []).map((a) => ({ person: a.person, name: a.name, email: a.email, roles: a.roles, url: auth.ORIGIN + '/s/' + a.token, pin: a.pin }));
+const SECURE = auth.ORIGIN.startsWith('https://');
+const linkCookie = (token) => 'hn_cl_' + token.slice(0, 16);
+const readCookie = (req, name) => (req.headers.cookie || '').split(';').map((x) => x.trim()).find((x) => x.startsWith(name + '='))?.slice(name.length + 1) || '';
+async function linkApi(req, res, url) {
+  const m = /^\/api\/link\/([A-Za-z0-9_-]{43})(?:\/(unlock|file|certificate|sign|decline))?$/.exec(url.pathname);
+  if (!m) throw fail(404, 'Not found.');
+  const [, token, action] = m, method = req.method;
+  // Changes only from this site's own pages.
+  if (method !== 'GET' && req.headers.origin && req.headers.origin !== auth.ORIGIN) throw fail(403, 'That request didn’t come from HN Group Contracts.');
+  if (action === 'unlock') {
+    if (method !== 'POST') throw fail(405, 'Method not allowed.');
+    const session = store.unlockLink(token, (await json(req, 4096)).pin);
+    res.setHeader('Set-Cookie', linkCookie(token) + '=' + session + '; Path=/; HttpOnly;' + (SECURE ? ' Secure;' : '') + ' SameSite=Strict; Max-Age=7200');
+    return send(res, 200, { ok: true });
+  }
+  const access = store.linkAccess(token, readCookie(req, linkCookie(token)));
+  if (!access) throw fail(401, 'Enter your PIN to open this contract.');
+  const { c, u } = access;
+  if (!action && method === 'GET') return send(res, 200, { contract: store.view(c, u), me: { name: u.displayName } });
+  if ((action === 'file' || action === 'certificate') && method === 'GET') {
+    if (c.status === 'cancelled') throw fail(410, 'This contract was cancelled, so it can’t be opened any more.');
+    if (action === 'certificate') {
+      const bytes = store.certificateOf(c);
+      if (!bytes) throw fail(404, 'There’s no signing certificate until everyone has signed.');
+      return pdf(res, bytes, c.title.replace(/[\\/:*?"<>|]/g, '-') + ' - signing certificate.pdf', url.searchParams.has('download'));
+    }
+    store.opened(c, u);
+    const original = store.fileOf(c);
+    let copy = null;
+    if (!url.searchParams.has('original')) copy = await signedCopy(original, c).catch(() => null);
+    return pdf(res, copy || original, copy ? c.file.name.replace(/(\.pdf)?$/i, ' (signed).pdf') : c.file.name, url.searchParams.has('download'));
+  }
+  if (method !== 'POST') throw fail(405, 'Method not allowed.');
+  if (action === 'sign') {
+    const done = store.sign(c.id, u, await json(req), { ip: String(req.headers['x-real-ip'] || req.socket.remoteAddress || ''), agent: req.headers['user-agent'] });
+    if (done.status === 'completed') store.setCertificate(done, certificate(done));
+    return send(res, 200, { contract: store.view(done, u) });
+  }
+  if (action === 'decline') return send(res, 200, { contract: store.view(store.decline(c.id, u, await json(req)), u) });
   throw fail(404, 'Not found.');
 }
 
@@ -192,6 +238,8 @@ http.createServer(async (req, res) => {
     if (route === '/healthz') return send(res, 200, health());
     if (route.startsWith('/auth/') && await auth.handle(req, res, url, page)) return;
     if (route.startsWith('/api/service/')) return await service(req, res, route);
+    if (route.startsWith('/api/link/')) return await linkApi(req, res, url);
+    if (store.TOKEN.test(route.slice(3)) && route.startsWith('/s/') && req.method === 'GET') { res.setHeader('X-Robots-Tag', 'noindex, nofollow'); return staticFile(res, 'link.html'); }
     if (route.startsWith('/api/')) return await api(req, res, url);
     if (route === '/robots.txt') return staticFile(res, 'robots.txt');
     if (route === '/signed-out') return page(res, 200, 'Signed out', 'You’ve signed out of HN Group Contracts.', null, ['Sign in again', '/auth/login']);
