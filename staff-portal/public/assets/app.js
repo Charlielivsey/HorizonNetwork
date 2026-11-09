@@ -5984,21 +5984,31 @@
         const d = await api("/api/staff-files" + (personId ? "?person=" + personId : ""));
         if (!current()) return;
         const own = d.person.id === state.me.id;
-        const list = '<section class="panel sf-files"><div class="panel-head"><h2 class="panel-title">' + icon("file") + (own ? "Your documents" : esc(d.person.displayName)) + "</h2>" +
-            (d.canManage ? '<button type="button" class="btn btn-primary btn-small" id="sf-upload">' + icon("upload") + "Upload</button>" : "") + "</div>" +
-            (d.files.length ? '<div class="sf-list">' + d.files.map(function (f) {
+        function fileRows(files) {
+            return '<div class="sf-list">' + files.map(function (f) {
                 const fileUrl = f.linked ? '/api/staff-files/linked/' + f.linked + '/' + f.sourceId + '/file?person=' + d.person.id : '/api/staff-files/' + f.id + '/file';
                 return '<div class="sf-row" data-file="' + f.id + '">' + fileBadge(f.ext) +
                     '<div class="sf-main"><div class="emp-name">' + esc(f.title) + "</div>" +
-                    '<div class="muted small">' + esc(f.source || f.category) + (f.status ? " · " + esc(f.status === "out" ? "Awaiting signatures" : f.status) : "") + (f.size ? " · " + esc(fileSize(f.size)) : "") + " · updated " + esc(fmtDate(f.uploadedAt)) + (d.canManage ? " by " + esc(f.uploadedByName) : "") + "</div>" +
+                    '<div class="muted small">' + esc(f.source || f.category) + (f.size ? " · " + esc(fileSize(f.size)) : "") + " · updated " + esc(fmtDate(f.uploadedAt)) + (d.canManage ? " by " + esc(f.uploadedByName) : "") + "</div>" +
                     (f.note ? '<div class="lr-note">' + esc(f.note) + "</div>" : "") + "</div>" +
-                    '<div class="sf-actions">' + (d.canManage && !f.linked ? (f.shared ? '<span class="badge badge-soft">' + icon("eye") + "They can see it</span>" : '<span class="badge">' + icon("lock") + "HR only</span>") : "") +
+                    '<div class="sf-actions">' + (f.status ? '<span class="sf-status sf-status-' + (['completed', 'out', 'draft', 'declined', 'final'].indexOf(f.status) !== -1 ? f.status : 'other') + '">' + esc(({ out: 'Awaiting signatures', completed: 'Signed', draft: 'Draft', final: 'Final', declined: 'Declined' })[f.status] || f.status) + '</span>' : '') + (d.canManage && !f.linked ? (f.shared ? '<span class="badge badge-soft">' + icon("eye") + "They can see it</span>" : '<span class="badge">' + icon("lock") + "HR only</span>") : "") +
                     (f.inline ? '<a class="btn btn-ghost btn-small" href="' + fileUrl + '" target="_blank" rel="noopener">' + icon("eye") + "View</a>" : "") +
                     '<a class="btn btn-ghost btn-small" href="' + fileUrl + (f.linked ? '&download' : '?download') + '">' + icon("download") + "</a>" +
                     (d.canManage && !f.linked ? '<button type="button" class="btn btn-ghost btn-small" data-sf-share="' + (f.shared ? "0" : "1") + '">' + (f.shared ? "Hide from them" : "Show to them") + "</button>" +
                         '<button type="button" class="btn btn-ghost btn-small danger-text" data-sf-del aria-label="Delete">' + icon("trash") + "</button>" : "") + "</div></div>";
-            }).join("") + "</div>" : '<p class="muted small">' + (own ? "No documents yet. Your staff uploads, Docs files and contracts will appear here automatically." : "No documents for " + esc(d.person.displayName) + " yet.") + "</p>") +
-            (d.unavailable && d.unavailable.length ? '<p class="muted small" role="status">' + esc(d.unavailable.join(" and ")) + " could not be loaded. Your other files are shown; we’ll retry automatically.</p>" : "") + "</section>";
+            }).join("") + '</div>';
+        }
+        const groups = [
+            { key: 'contracts', title: 'Contracts', icon: 'edit', description: 'Agreements and signing progress from HN Group Contracts.', files: d.files.filter(function (f) { return f.linked === 'contracts'; }), offline: (d.unavailable || []).includes('Contracts'), empty: 'No contracts to show yet.' },
+            { key: 'docs', title: 'Docs', icon: 'file', description: 'Documents and files from HN Group Docs storage.', files: d.files.filter(function (f) { return f.linked === 'documents' || f.linked === 'files'; }), offline: (d.unavailable || []).includes('Docs'), empty: 'No accessible documents or files to show yet.' },
+            { key: 'uploads', title: 'Staff uploads', icon: 'upload', description: 'Personal records uploaded directly to the Staff Portal.', files: d.files.filter(function (f) { return !f.linked; }), empty: 'No staff uploads yet.' }
+        ];
+        const list = '<div class="sf-documents"><div class="sf-documents-heading"><div><p class="sf-eyebrow">Document collection</p><h2>' + (own ? 'Your documents' : esc(d.person.displayName) + '’s documents') + '</h2></div><span class="sf-total">' + d.files.length + ' file' + (d.files.length === 1 ? '' : 's') + '</span></div>' + groups.map(function (g) {
+            return '<section class="panel sf-files sf-source sf-source-' + g.key + '" aria-labelledby="sf-heading-' + g.key + '"><div class="sf-source-head"><span class="sf-source-icon" aria-hidden="true">' + icon(g.icon) + '</span><div class="sf-source-title"><h3 id="sf-heading-' + g.key + '">' + g.title + '<span class="sf-source-count">' + g.files.length + '</span></h3><p>' + g.description + '</p></div>' +
+                (g.key === 'uploads' && d.canManage ? '<button type="button" class="btn btn-primary btn-small" id="sf-upload">' + icon('upload') + 'Upload</button>' : '') + '</div>' +
+                (g.offline ? '<p class="sf-source-notice" role="status">' + g.title + ' is unavailable. We’ll retry automatically.</p>' : '') +
+                (g.files.length ? fileRows(g.files) : !g.offline ? '<div class="sf-source-empty">' + icon(g.icon) + '<p>' + g.empty + '</p></div>' : '') + '</section>';
+        }).join('') + '</div>';
         root.innerHTML =
             '<div class="page-head"><div><h1>Staff documents</h1><p class="muted">' + (d.canManage ? "Staff uploads, Docs storage and Contracts records, updated automatically. Private storage follows your document access permissions." : "Your staff uploads, Docs storage and Contracts records, updated automatically.") + "</p></div></div>" +
             (d.canManage ? '<div class="sf-layout"><aside class="panel sf-people"><label class="search">' + icon("search") + '<input type="search" id="sf-search" placeholder="Find someone" aria-label="Find someone"></label><div class="sf-people-list" id="sf-people"></div></aside>' + list + "</div>" : list);
