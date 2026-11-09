@@ -317,16 +317,24 @@ function renderDocument(doc, company, template) {
   function table(b) {
     const x0 = PAGE.left + (b.indent || 0), max = CONTENT_W - (b.indent || 0), cols = Math.max(...b.rows.map((r) => r.reduce((s, c) => s + c.span, 0)));
     const colW = max / cols, pad = 2.5 * MM, size = 9.5, lead = size * 1.45;
+    const cellText = (c) => c.runs.map((r) => r.text).join('').trim();
+    const signatureTable = cols === 2 && b.rows[0].some((c) => /^the employee$/i.test(cellText(c))) && b.rows[0].some((c) => /^on behalf of /i.test(cellText(c)));
+    const rowHeight = (row) => row.some((c) => /^signature\s*:/i.test(cellText(c))) ? 58 : 36;
+    if (signatureTable) room((b.before || 0) + b.rows.reduce((h, row) => h + rowHeight(row), 0) + (b.after || 0));
     y += b.before || 0;
     for (const row of b.rows) {
       let col = 0;
       const cells = row.map((c) => { const w = colW * c.span, lines = breakLines(c.runs, size, w - pad * 2); const cell = { ...c, x: x0 + col * colW, w, lines }; col += c.span; return cell; });
-      const h = Math.max(...cells.map((c) => c.lines.length)) * lead + 1.8 * MM * 2;
+      const h = Math.max(Math.max(...cells.map((c) => c.lines.length)) * lead + 1.8 * MM * 2, signatureTable ? rowHeight(row) : 0);
       if (y + h > bottom) newPage();
       for (const c of cells) {
-        if (c.header) pdf.rect(page, c.x, y, c.w, h, C.head);
-        pdf.line(page, c.x, y, c.x + c.w, y, C.ruleDark); pdf.line(page, c.x, y + h, c.x + c.w, y + h, C.ruleDark);
-        pdf.line(page, c.x, y, c.x, y + h, C.ruleDark); pdf.line(page, c.x + c.w, y, c.x + c.w, y + h, C.ruleDark);
+        if (signatureTable) {
+          if (!c.header) pdf.line(page, c.x + pad, y + h - 7, c.x + c.w - pad - 12, y + h - 7, C.ruleDark);
+        } else {
+          if (c.header) pdf.rect(page, c.x, y, c.w, h, C.head);
+          pdf.line(page, c.x, y, c.x + c.w, y, C.ruleDark); pdf.line(page, c.x, y + h, c.x + c.w, y + h, C.ruleDark);
+          pdf.line(page, c.x, y, c.x, y + h, C.ruleDark); pdf.line(page, c.x + c.w, y, c.x + c.w, y + h, C.ruleDark);
+        }
         c.lines.forEach((l, i) => {
           let x = c.x + pad + (c.align === 'center' ? (c.w - pad * 2 - l.width) / 2 : c.align === 'right' ? c.w - pad * 2 - l.width : 0);
           for (const part of l.parts) { pdf.text(page, x, y + 1.8 * MM + i * lead + size * 0.95, part.text, { key: fontKey({ ...part, bold: part.bold || c.header }), size, color: part.color || C.ink }); x += part.w; }
@@ -390,7 +398,14 @@ function renderDocument(doc, company, template) {
     table({ rows: [['Version', 'Date', 'By', 'Changes'].map((t) => ({ header: true, span: 1, runs: [{ text: t, bold: true, color: C.ink }] })),
       ...doc.history.slice().reverse().map((h) => [h.version, h.date, h.by, h.changes.map((c) => '• ' + c).join('\n')].map((t, i) => ({ span: 1, runs: [{ text: String(t), bold: i === 0, color: C.ink }] })))], before: 0, after: 8 * MM });
   }
-  for (const b of blocksOf(parseHtml(doc.body))) { if (b.type === 'text') textBlock(b); else if (b.type === 'table') table(b); else { y += b.before; room(2); pdf.line(page, PAGE.left, y, PAGE.w - PAGE.right, y, C.ruleDark); y += b.after; } }
+  const bodyBlocks = blocksOf(parseHtml(doc.body));
+  for (const [i, b] of bodyBlocks.entries()) {
+    if (b.type === 'text') {
+      if (b.runs.map((r) => r.text).join('').trim() === 'Signatures' && bodyBlocks[i + 1]?.type === 'table') room(260);
+      textBlock(b);
+    } else if (b.type === 'table') table(b);
+    else { y += b.before; room(2); pdf.line(page, PAGE.left, y, PAGE.w - PAGE.right, y, C.ruleDark); y += b.after; }
+  }
   // The sign-off (letters): closing, a gap for a signature, then name, job title and company.
   if (template.foot.length) {
     y += 8 * MM;

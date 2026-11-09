@@ -178,6 +178,8 @@
     const editable = c.can.edit;
     const list = c.signers.map((s) => ({ key: s.key, id: s.id, name: s.name, jobTitle: s.jobTitle, company: s.company, role: s.role, status: s.status, me: s.me, external: !!s.external, email: s.email || '' }));
     let fields = c.fields.map((f) => ({ ...f, signer: list[f.signer] })).filter((f) => f.signer);
+    const automatic = (c.source && c.source.signatureLayout) || [], applied = new Map();
+    list.forEach((s) => { if (fields.some((f) => f.signer === s)) applied.set(s, s.role); });
     const sheets = [], P = { list, editable, tool: null, onChange: () => {}, onTool: () => {} };
     const colour = (entry) => 'fc' + (list.indexOf(entry) % 6);
     const first = (n) => String(n || '').split(/\s+/)[0];
@@ -236,9 +238,22 @@
     };
     P.setTool = (tool) => { P.tool = tool; for (const sh of sheets) if (sh) sh.layer.classList.toggle('placing', !!tool); P.onTool(tool); };
     // After people are added, removed or reordered: drop boxes for anyone no longer signing and redraw.
-    P.refresh = () => { fields = fields.filter((f) => list.includes(f.signer)); if (P.tool && !list.includes(P.tool.signer)) P.setTool(null); for (const sh of sheets) if (sh) drawSheet(sh); };
+    P.refresh = () => {
+      fields = fields.filter((f) => list.includes(f.signer));
+      if (editable) for (const s of list) {
+        if (applied.get(s) === s.role) continue;
+        fields = fields.filter((f) => !(f.signer === s && f.automatic));
+        const layout = automatic.find((a) => a.role.toLowerCase() === String(s.role || '').toLowerCase());
+        if (layout && !fields.some((f) => f.signer === s)) {
+          fields.push(...layout.fields.map((f) => ({ ...f, signer: s, automatic: true })));
+          applied.set(s, s.role);
+        }
+      }
+      if (P.tool && !list.includes(P.tool.signer)) P.setTool(null);
+      for (const sh of sheets) if (sh) drawSheet(sh);
+    };
     P.count = (entry) => fields.filter((f) => f.signer === entry).length;
-    P.clear = () => { fields = []; for (const sh of sheets) if (sh) drawSheet(sh); changed(); };
+    P.clear = () => { fields = []; list.forEach((s) => applied.set(s, s.role)); for (const sh of sheets) if (sh) drawSheet(sh); changed(); };
     P.total = () => fields.length;
     P.payload = () => fields.filter((f) => list.includes(f.signer)).map((f) => ({ signer: list.indexOf(f.signer), type: f.type, page: f.page, x: f.x, y: f.y, w: f.w, h: f.h }));
     P.colour = colour;
@@ -426,7 +441,7 @@
     } }, el('span', { class: 'box-swatch', 'aria-hidden': 'true' }), label));
     const clearAll = el('button', { class: 'btn-link', type: 'button', onclick: async () => { if (P.total() && await ask('Remove every box?', 'Everyone will sign in the contract’s own signing blocks, or on a signatures page at the end.', 'Remove boxes', { danger: true })) P.clear(); } }, 'Remove all boxes');
     const node = el('div', { class: 'boxes' },
-      el('p', { class: 'muted small', text: 'Optional. Choose whose box it is and what it’s for, then click on the contract where it goes. Drag a box to move it and its corner to resize it. Anyone without boxes signs in the contract’s signing block, or on a signatures page at the end.' }),
+      el('p', { class: 'muted small', text: 'Staff contracts sent from Docs place the name, signature, job title and date boxes automatically when you choose who signs and their role. You can still drag or resize them, remove them, or choose a box below and click on the page to place it manually.' }),
       el('label', { class: 'role' }, el('span', { text: 'For' }), who), el('div', { class: 'box-types' }, typeButtons), hint, counts, clearAll);
     function update() {
       const keep = who.value;
@@ -466,7 +481,7 @@
         el('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Move ' + s.name + ' up', disabled: i === 0, onclick: () => { [list[i - 1], list[i]] = [list[i], list[i - 1]]; drawChosen(); } }, '↑'),
         el('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Move ' + s.name + ' down', disabled: i === list.length - 1, onclick: () => { [list[i + 1], list[i]] = [list[i], list[i + 1]]; drawChosen(); } }, '↓'),
         el('button', { class: 'icon-btn remove', type: 'button', 'aria-label': 'Remove ' + s.name, onclick: () => { list.splice(i, 1); drawChosen(); } }, '×')),
-      roleSelect(s, () => { boxes.update(); placement.refresh(); })))
+      roleSelect(s, () => { placement.refresh(); boxes.update(); })))
       : [el('div', { class: 'chosen-empty' }, el('strong', { text: 'Nobody yet' }), el('span', { text: 'Add the employee and the person signing on behalf of HN Group.' }))])); };
     drawChosen();
     search.addEventListener('input', async () => {

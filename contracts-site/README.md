@@ -57,3 +57,5 @@ lock a link for 15 minutes; an unlocked link lasts two hours in that browser; ca
 
 People outside HN Group can be added as signers ("+ Someone outside HN Group": name, optional email and organisation);
 they sign with their link and PIN.
+
+Staff contracts sent from Docs carry an automatic signature layout. Choosing each signer and their role places full name, signature, job title and date boxes in the matching employee/employer column. Boxes can still be moved, resized, deleted or placed manually; removing all boxes does not immediately recreate them. New Docs staff contract templates have an employee column on the left and employer column on the right, with a taller signature row.

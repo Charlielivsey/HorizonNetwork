@@ -68,7 +68,7 @@ test('HN Group Contracts', async () => {
     for (let i = 0; i < 50; i++) { try { if ((await fetch(SITE + '/healthz')).ok) break; } catch {} await new Promise((r) => setTimeout(r, 100)); }
     // The health check says what the site needs, and nothing private.
     let r = await call('/healthz');
-    assert.deepEqual(r.body, { ok: true, service: 'hn-contracts', version: '2.2.0', checks: { data: true, auth: true, pages: true } });
+    assert.deepEqual(r.body, { ok: true, service: 'hn-contracts', version: '2.2.1', checks: { data: true, auth: true, pages: true } });
     // Signed out: only the sign-in; pages are in the HN Group website theme.
     assert.equal((await call('/')).status, 302);
     assert.equal((await call('/api/contracts')).status, 401);
@@ -278,6 +278,14 @@ test('HN Group Contracts', async () => {
     assert.equal(r.status, 201); assert.match(r.body.url, /\/contract\/[0-9a-f-]{36}$/);
     const imported = (await call('/api/contracts/' + r.body.id, { cookie: hr })).body.contract;
     assert.deepEqual([imported.source.kind, imported.status], ['docs', 'draft']);
+    const catalog = require('../docs-site/lib/catalog'), template = catalog.template('contract'), company = catalog.company('hn-group');
+    const start = catalog.start(template, company, people.hr);
+    const staffPdf = renderDocument({ title: 'Employee Agreement', fields: start.fields, body: start.body }, company, template);
+    const withLayout = { ...JSON.parse(importBody({ ...people.hr })), pdf: staffPdf.toString('base64') };
+    r = await service(JSON.stringify(withLayout)); assert.equal(r.status, 201);
+    const automatic = (await call('/api/contracts/' + r.body.id, { cookie: hr })).body.contract.source.signatureLayout;
+    assert.equal(automatic.length, 2); assert.deepEqual(automatic.map(x => x.role), ['Employee', 'On behalf of HN Group Limited']);
+    assert(automatic.every(x => x.fields.length === 4), 'Docs import retains all four automatically positioned fields per signer role');
     // Sign-out needs the site's own origin.
     r = await call('/auth/logout', { cookie: jo, method: 'POST' }); assert.equal(r.status, 302); assert.equal((await call('/api/me', { cookie: jo })).status, 401);
   } finally {

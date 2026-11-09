@@ -154,7 +154,7 @@ function create(u, { title, pdf, fileName, source }) {
   const c = { id: crypto.randomUUID(), title: t, message: '', status: 'draft', order: 'any', dueDate: '', createdAt: now(),
     sender: { id: u.id, accountId: u.accountId || '', name: u.displayName },
     file: { blob: writeBlob(pdf), name, size: pdf.length, pages: pageCount(pdf), sha256: sha256(pdf) },
-    source: source && source.kind === 'docs' ? { kind: 'docs', docId: clean(source.docId, 64) } : { kind: 'upload' }, signers: [], fields: [], links: {}, events: [] };
+    source: source && source.kind === 'docs' ? { kind: 'docs', docId: clean(source.docId, 64), signatureLayout: source.signatureLayout || [] } : { kind: 'upload' }, signers: [], fields: [], links: {}, events: [] };
   event(c, u, c.source.kind === 'docs' ? 'Sent from HN Group Docs' : 'Uploaded ' + name);
   db.contracts.push(c); audit(u, 'contract.create', c, t); save();
   return c;

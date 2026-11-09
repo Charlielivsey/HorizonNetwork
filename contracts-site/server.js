@@ -12,9 +12,9 @@ const crypto = require('node:crypto');
 const store = require('./lib/store');
 const { createAuth } = require('./lib/auth');
 const { certificate } = require('./lib/certificate');
-const { signedCopy } = require('./lib/stamp');
+const { signedCopy, placementLayout } = require('./lib/stamp');
 
-const VERSION = '2.2.0';
+const VERSION = '2.2.1';
 const PUBLIC = process.env.CONTRACTS_PUBLIC_DIR || path.join(__dirname, 'public');
 const DATA_DIR = process.env.CONTRACTS_DATA_DIR || '/var/lib/hn-contracts';
 const HOST = process.env.HOST || '127.0.0.1', PORT = Number(process.env.PORT || 5560);
@@ -82,7 +82,12 @@ async function service(req, res, route) {
   const user = { id: String(by.id || '').slice(0, 64), accountId: String(by.accountId || '').slice(0, 64), displayName: String(by.displayName || 'Staff member').slice(0, 120), email: String(by.email || '').slice(0, 200),
     owner: by.owner === true, impersonated: by.impersonated === true, permissions: (Array.isArray(by.permissions) ? by.permissions : []).map(String).slice(0, 100) };
   if (!user.id) throw fail(400, 'Say who is sending it.');
-  const c = store.create(user, { title: v.title, pdf: Buffer.from(String(v.pdf || ''), 'base64'), fileName: v.fileName, source: { kind: 'docs', docId: v.docId } });
+  if (!store.canSend(user)) throw fail(403, 'You need permission to send contracts.');
+  const pdf = Buffer.from(String(v.pdf || ''), 'base64');
+  if (pdf.length > store.MAX_PDF) throw fail(413, 'That PDF is larger than 25 MB.');
+  let signatureLayout = [];
+  try { signatureLayout = await placementLayout(pdf, crypto.createHash('sha256').update(pdf).digest('hex')); } catch { /* PDFs without readable signing blocks can still use manual placement. */ }
+  const c = store.create(user, { title: v.title, pdf, fileName: v.fileName, source: { kind: 'docs', docId: v.docId, signatureLayout } });
   return send(res, 201, { id: c.id, url: auth.ORIGIN + '/contract/' + c.id });
 }
 

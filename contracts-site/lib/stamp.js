@@ -14,7 +14,7 @@ const PDFLib = require('./vendor/pdf-lib.min.js');
 
 const PURPLE = PDFLib.rgb(0x55 / 255, 0x14 / 255, 0xB4 / 255), INK = PDFLib.rgb(0.09, 0.09, 0.11), GREY = PDFLib.rgb(0.35, 0.36, 0.42), LINE = PDFLib.rgb(0.9, 0.88, 0.93);
 const HEADING = /^(on behalf of .+|the employee|employee|the witness|witness)$/i;
-const LABEL = /^(name|signature|date)\s*:?$/i;
+const LABEL = /^(name|full name|signature|job title|date|date signed)\s*:?$/i;
 
 let pdfjs = null;
 async function loadPdfjs() {
@@ -38,17 +38,17 @@ async function blocks(bytes, sha256) {
   const found = [];
   try {
     for (let n = 1; n <= doc.numPages; n++) {
-      const page = await doc.getPage(n), width = page.getViewport({ scale: 1 }).viewBox[2];
+      const page = await doc.getPage(n), viewport = page.getViewport({ scale: 1 }), width = viewport.width, height = viewport.height;
       const items = (await page.getTextContent()).items.filter((i) => i.str && i.str.trim()).map((i) => ({ text: i.str.trim().replace(/\s+/g, ' '), x: i.transform[4], y: i.transform[5], width: i.width, size: Math.abs(i.transform[3]) || 10 }));
       const headings = items.filter((i) => HEADING.test(i.text)), labels = items.filter((i) => LABEL.test(i.text));
       for (const h of headings) {
-        const below = labels.filter((l) => Math.abs(l.x - h.x) < 4 && l.y < h.y && h.y - l.y < 140);
-        const pick = (kind) => below.filter((l) => l.text.toLowerCase().startsWith(kind)).sort((a, b) => b.y - a.y)[0];
+        const below = labels.filter((l) => Math.abs(l.x - h.x) < 4 && l.y < h.y && h.y - l.y < 230);
+        const pick = (kind) => below.filter((l) => l.text.toLowerCase().replace(/^full name/, 'name').startsWith(kind)).sort((a, b) => b.y - a.y)[0];
         const name = pick('name'), signature = pick('signature'), date = pick('date');
         if (!name || !signature || !date) continue;
         const next = headings.filter((o) => o !== h && Math.abs(o.y - h.y) < 3 && o.x > h.x).sort((a, b) => a.x - b.x)[0];
         const at = (l) => ({ x: l.x + l.width + 6, y: l.y, size: l.size });
-        found.push({ page: n - 1, heading: h.text, right: next ? next.x - 8 : Math.max(h.x + h.width, width - 57), name: at(name), signature: at(signature), date: at(date) });
+        found.push({ page: n - 1, heading: h.text, left: h.x, width, height, right: next ? next.x - 8 : Math.max(h.x + h.width, width - 57), name: at(name), signature: at(signature), date: at(date), jobTitle: pick('job title') ? at(pick('job title')) : null });
       }
     }
   } finally { await doc.destroy(); }
@@ -120,6 +120,7 @@ async function signedCopy(bytes, c) {
     draw(page, regular, s.signature.typed, b.name.x, b.name.y, size, b.right - b.name.x, INK);
     draw(page, italic, s.signature.typed, b.signature.x, b.signature.y - 1, size + 4, b.right - b.signature.x, PURPLE);
     draw(page, regular, longDay(s.signedAt), b.date.x, b.date.y, size, b.right - b.date.x, INK);
+    if (b.jobTitle) draw(page, regular, s.jobTitle || '', b.jobTitle.x, b.jobTitle.y, size, b.right - b.jobTitle.x, INK);
   }
   if (rest.length) {
     const last = pages[pages.length - 1], [w, h] = last ? [last.getWidth(), last.getHeight()] : [595.28, 841.89];
@@ -146,4 +147,13 @@ async function signedCopy(bytes, c) {
   return out;
 }
 
-module.exports = { signedCopy, blocks, loadPdfjs };
+async function placementLayout(bytes, hash) {
+  return (await blocks(bytes, hash)).map((b) => ({
+    role: /^the employee$/i.test(b.heading) ? 'Employee' : /^the witness$/i.test(b.heading) ? 'Witness' : b.heading,
+    fields: ['name', 'signature', 'jobTitle', 'date'].filter((type) => b[type]).map((type) => {
+      const x = b.left / b.width, y = (b.height - b[type].y + 5) / b.height;
+      return { type, page: b.page, x, y, w: Math.min((b.right - b.left - 8) / b.width, 1 - x), h: Math.min((type === 'signature' ? 32 : 18) / b.height, 1 - y) };
+    }),
+  }));
+}
+module.exports = { signedCopy, blocks, loadPdfjs, placementLayout };
