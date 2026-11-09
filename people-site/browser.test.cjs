@@ -46,6 +46,12 @@ test('an open org chart redraws when only reporting positions change', async () 
     await page.goto('http://127.0.0.1:' + server.address().port + '/org/horizon-network');
     await founder.waitFor();
     assert.match(await founder.textContent(), /Reports to Chief Executive Officer, HN Group/);
+    await page.getByRole('button', { name: 'Everyone', exact: true }).click();
+    await page.getByRole('button', { name: 'Vacant', exact: true }).click();
+    assert.equal(await page.locator('.org-node:not(.org-context):not(.vacant)').count(), 0);
+    await page.getByRole('button', { name: 'Everyone', exact: true }).click();
+    assert.ok(await page.locator('.org-node:not(.vacant)').count() > 0);
+    assert.equal(await page.locator('.org-switch').count(), 0, 'no duplicated company tabs');
     positions = [{ company: 'HN Group', title: 'Board Chairman', reportsTo: null, holders: [], key: 'chair' }];
     for (let i = 0; i < 9; i++) positions.push({ company: 'HN Group', title: 'Leadership position ' + i, reportsTo: { company: 'HN Group', title: 'Board Chairman' }, holders: [], key: 'lead-' + i });
     positions.push({ company: 'Horizon Network', title: 'President', reportsTo: { company: 'HN Group', title: 'Leadership position 0' }, holders: [], key: 'pres' });
@@ -62,6 +68,13 @@ test('an open org chart redraws when only reporting positions change', async () 
         }).map(n => n.textContent);
       });
       assert.deepEqual(clipped, [], 'no clipped cards at width ' + width);
+      const search = await page.locator('.org-find').evaluate(label => {
+        const icon = label.querySelector('svg').getBoundingClientRect(), input = label.querySelector('input').getBoundingClientRect();
+        return { difference: Math.abs(icon.y + icon.height / 2 - input.y - input.height / 2), overflow: document.documentElement.scrollWidth > innerWidth };
+      });
+      assert.ok(search.difference < 1, 'search icon vertically centred at ' + width + ': ' + JSON.stringify(search));
+      assert.equal(search.overflow, false, 'toolbar does not overflow at width ' + width);
+
       await page.getByRole('button', { name: '100%', exact: true }).click();
       assert.equal(await page.locator('#org-scale').textContent(), '100%');
       await page.getByRole('button', { name: 'Zoom in', exact: true }).click();

@@ -90,16 +90,16 @@ main:focus { outline: none; }
 .org-switch a.active i { box-shadow: 0 0 0 2px var(--on-accent); }
 .org-panel { border: 1px solid var(--border); border-radius: 24px; background: var(--surface); box-shadow: var(--shadow); overflow: hidden; }
 .org-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .8rem; padding: .9rem 1rem; border-bottom: 1px solid var(--border); }
-.org-find { position: relative; display: flex; align-items: center; flex: 1 1 260px; max-width: 400px; }
-.org-find svg { position: absolute; left: .9rem; width: 18px; height: 18px; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; pointer-events: none; }
-.org-find input { width: 100%; font: inherit; font-size: .95rem; padding: .6rem 6rem .6rem 2.5rem; border-radius: 999px; border: 1px solid var(--border); background: var(--bg); color: var(--text); }
+.org-find { min-width: 0; margin: 0; position: relative; display: flex; align-items: center; flex: 1 1 260px; max-width: 400px; }
+.org-find svg { position: absolute; left: .9rem; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; pointer-events: none; }
+.org-find input { margin: 0; min-width: 0; width: 100%; font: inherit; font-size: .95rem; padding: .6rem 6rem .6rem 2.5rem; border-radius: 999px; border: 1px solid var(--border); background: var(--bg); color: var(--text); }
 .org-find input:focus { outline: 3px solid var(--accent-soft); border-color: var(--accent); }
 .org-hits { position: absolute; right: 1rem; font-size: .8rem; font-weight: 700; color: var(--muted); pointer-events: none; }
-.org-btns { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+.org-btns { min-width: 0; flex: 1 1 500px; justify-content: flex-end; display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
 .org-btn, .org-zoom button { font: inherit; font-size: .88rem; font-weight: 700; min-height: 38px; padding: .45rem .95rem; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; transition: border-color .15s, color .15s, background .15s; }
 .org-btn:hover, .org-zoom button:hover { border-color: var(--accent); color: var(--accent); }
 .org-btn:focus-visible, .org-zoom button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.org-zoom { display: inline-flex; align-items: center; gap: .3rem; margin-left: .3rem; padding-left: .6rem; border-left: 1px solid var(--border); }
+.org-zoom { max-width: 100%; flex-wrap: wrap; display: inline-flex; align-items: center; gap: .3rem; margin-left: .3rem; padding-left: .6rem; border-left: 1px solid var(--border); }
 .org-zoom button.icon { min-width: 38px; padding: 0; font-size: 1.15rem; line-height: 1; }
 .org-zoom button:disabled { opacity: .4; cursor: default; }
 .org-zoom output { min-width: 3.4rem; text-align: center; font-weight: 800; font-size: .9rem; color: var(--accent); }
@@ -202,3 +202,11 @@ main:focus { outline: none; }
   .person, .org-holder, .chip-btn, .org-node, .org-toggle svg { transition: none !important; }
   .person:hover { transform: none; }
 }
+
+/* A single filter row replaces the duplicate company navigation and static legend. */
+.org-legend .org-filter { display: inline-flex; align-items: center; gap: .45rem; font: inherit; color: var(--muted); background: transparent; border: 1px solid transparent; border-radius: 999px; padding: .4rem .65rem; text-decoration: none; cursor: pointer; }
+.org-legend .org-filter:hover, .org-legend .org-filter:focus-visible { color: var(--text); border-color: var(--accent); }
+.org-legend .org-filter.active { background: var(--accent); color: var(--on-accent); }
+.org-node.org-context { opacity: .5; }
+.org-hits { top: 50%; transform: translateY(-50%); }
+@media (max-width: 720px) { .org-find { max-width: none; flex-basis: 100%; } .org-btns { justify-content: flex-start; } }

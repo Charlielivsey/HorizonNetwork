@@ -286,6 +286,22 @@ test('HN Group Contracts', async () => {
     const automatic = (await call('/api/contracts/' + r.body.id, { cookie: hr })).body.contract.source.signatureLayout;
     assert.equal(automatic.length, 2); assert.deepEqual(automatic.map(x => x.role), ['Employee', 'On behalf of HN Group Limited']);
     assert(automatic.every(x => x.fields.length === 4), 'Docs import retains all four automatically positioned fields per signer role');
+    // Staff Portal reads only records tied to the selected person, with the latest signed PDF.
+    const staffRead = (person, suffix = '', headers = {}) => call('/api/service/staff/' + person + suffix, { headers: { Authorization: 'Bearer ' + secret, ...headers } });
+    assert.equal((await call('/api/service/staff/p-jo')).status, 404);
+    assert.equal((await staffRead('p-jo', '', { 'X-Real-IP': '1.2.3.4' })).status, 404);
+    assert.equal((await staffRead('p-jo', '', { 'X-Forwarded-For': '1.2.3.4' })).status, 404);
+    const hrRecords = (await staffRead('p-hr')).body.contracts;
+    assert.ok(hrRecords.some(x => x.id === r.body.id), 'sender draft is linked');
+    const joRecords = (await staffRead('p-jo')).body.contracts;
+    assert.ok(!joRecords.some(x => x.id === r.body.id), 'another person cannot see sender drafts');
+    assert.ok(joRecords.every(x => x.status !== 'cancelled'));
+    assert.ok(joRecords.length > 0);
+    const signedRecord = joRecords.find(x => x.status === 'completed');
+    assert.ok(signedRecord, 'completed agreements appear');
+    const signedPdf = await staffRead('p-jo', '/' + signedRecord.id + '/file');
+    assert.equal(signedPdf.status, 200); assert.equal(signedPdf.headers.get('content-type'), 'application/pdf');
+    assert.equal((await staffRead('p-jo', '/' + r.body.id + '/file')).status, 404, 'cannot fetch a different person’s draft by its ID');
     // Sign-out needs the site's own origin.
     r = await call('/auth/logout', { cookie: jo, method: 'POST' }); assert.equal(r.status, 302); assert.equal((await call('/api/me', { cookie: jo })).status, 401);
   } finally {

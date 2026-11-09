@@ -18,6 +18,7 @@ const payslips = require("./lib/payslips");
 const helpdesk = require("./lib/helpdesk");
 const reviews = require("./lib/reviews");
 const stafffiles = require("./lib/stafffiles");
+const staffDocuments = require("./lib/staff-documents");
 const uptime = require("./lib/uptime");
 const expenses = require("./lib/expenses");
 const invoices = require("./lib/invoices");
@@ -1817,13 +1818,27 @@ async function routeApi(req, res, pathname, session) {
       const p = store.getPerson(personId);
       if (!p) throw httpError(404, "Person not found.");
       const counts = manager ? stafffiles.counts() : {};
+      const linked = await staffDocuments.listing(p.id, me);
       return sendJson(res, 200, {
         person: { id: p.id, displayName: p.displayName, jobTitle: p.jobTitle },
-        files: stafffiles.forPerson(p.id, me),
+        files: [...stafffiles.forPerson(p.id, me), ...linked.files],
+        unavailable: linked.unavailable,
         canManage: manager,
         categories: stafffiles.CATEGORIES,
         people: manager ? store.employees().map((x) => ({ id: x.id, displayName: x.displayName, jobTitle: x.jobTitle, avatarUrl: store.publicView(x).avatarUrl, count: counts[x.id] || 0 })).sort((a, b) => a.displayName.localeCompare(b.displayName)) : [],
       });
+    }
+    if (method === "GET" && (m = /^\/api\/staff-files\/linked\/(documents|files|contracts)\/([0-9a-f-]{36})\/file$/.exec(pathname))) {
+      const q = new URL(req.url, "http://localhost").searchParams;
+      const personId = manager && q.get("person") ? q.get("person") : me.id;
+      const person = store.getPerson(personId);
+      if (!person) throw httpError(404, "Person not found.");
+      const r = await staffDocuments.read(person.id, m[1], m[2], me, q.has("download"));
+      logEvent(req, session, "staff-file-opened", { target: person.displayName, detail: "From " + (m[1] === "contracts" ? "Contracts" : "Docs") });
+      res.writeHead(200, { "Content-Type": r.type, "Content-Length": r.body.length,
+        "Content-Disposition": (q.has("download") ? "attachment" : "inline") + (r.disposition && r.disposition.includes(";") ? r.disposition.slice(r.disposition.indexOf(";")) : ""),
+        "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "sandbox; default-src 'none'" });
+      return res.end(r.body);
     }
     if (method === "POST" && pathname === "/api/staff-files/upload") {
       if (!manager) throw httpError(403, "Only HR can upload staff documents.");

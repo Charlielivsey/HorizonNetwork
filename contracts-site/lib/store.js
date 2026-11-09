@@ -144,6 +144,14 @@ function lists(u) {
   };
 }
 
+// Staff documents includes only this person's own sender/signatory records, never every manager-visible contract.
+function staffContracts(personId, accountIds = []) {
+  const person = { id: personId, accountId: '' };
+  const related = (c) => isSender(c, person) || accountIds.includes(c.sender.accountId) ||
+    (c.status !== 'draft' && c.signers.some(s => s.id === personId || (s.accountIds || []).some(id => accountIds.includes(id))));
+  return db.contracts.filter(c => c.status !== 'cancelled' && related(c));
+}
+
 // A new contract (a draft for its sender) from an uploaded PDF or a document sent from HN Group Docs.
 function create(u, { title, pdf, fileName, source }) {
   if (!canSend(u)) throw fail(403, 'You need the “Send contracts for signing” permission. Ask an administrator to add it to one of your roles in the staff portal.');
@@ -377,5 +385,5 @@ const fileOf = (c) => readBlob(c.file.blob);
 const certificateOf = (c) => (c.certificate ? readBlob(c.certificate) : null);
 
 module.exports = { init, writable, createSession, session, updateSession, endSession, get, view, lists, create, update, send, opened, sign, decline, remind, cancel,
-  newLink, unlockLink, linkAccess, TOKEN,
+  staffContracts, newLink, unlockLink, linkAccess, TOKEN,
   setCertificate, fileOf, certificateOf, canSend, canManage, MAX_PDF, ROLES, FIELD_TYPES, get db() { return db; } };

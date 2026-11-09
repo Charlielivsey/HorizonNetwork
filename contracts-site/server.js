@@ -73,21 +73,33 @@ async function staffDirectory() {
 // signed-in member of staff and the permissions HN Group Auth gave them.
 function fromDocs(req) {
   const key = secret(), given = String(req.headers.authorization || '').replace(/^Bearer /, '');
-  if (!key || req.headers['x-real-ip'] || given.length !== key.length) return false;
+  if (!key || req.headers['x-real-ip'] || req.headers['x-forwarded-for'] || !['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress) || given.length !== key.length) return false;
   return crypto.timingSafeEqual(Buffer.from(given), Buffer.from(key));
 }
 async function service(req, res, route) {
+  const staff = /^\/api\/service\/staff\/([A-Za-z0-9_-]{1,64})(?:\/([0-9a-f-]{36})\/file(\/download)?)?$/.exec(route);
+  if (staff && req.method === 'GET' && fromDocs(req)) {
+    const person = (await staffDirectory()).find(p => p.id === staff[1]);
+    if (!person) throw fail(404, 'Person not found.');
+    const records = store.staffContracts(person.id, person.accountIds);
+    if (!staff[2]) return send(res, 200, { contracts: records.map(c => ({ id: c.id, title: c.title, status: c.status,
+      createdAt: c.createdAt, sentAt: c.sentAt || null, completedAt: c.completedAt || null, sender: c.sender.name })) });
+    const c = records.find(c => c.id === staff[2]);
+    if (!c) throw fail(404, 'Contract not found.');
+    const original = store.fileOf(c), copy = await signedCopy(original, c);
+    return pdf(res, copy || original, c.file.name, !!staff[3]);
+  }
   if (route !== '/api/service/import' || req.method !== 'POST' || !fromDocs(req)) throw fail(404, 'Not found.');
   const v = await json(req, 36 * 1024 * 1024), by = v.by || {};
   const user = { id: String(by.id || '').slice(0, 64), accountId: String(by.accountId || '').slice(0, 64), displayName: String(by.displayName || 'Staff member').slice(0, 120), email: String(by.email || '').slice(0, 200),
     owner: by.owner === true, impersonated: by.impersonated === true, permissions: (Array.isArray(by.permissions) ? by.permissions : []).map(String).slice(0, 100) };
   if (!user.id) throw fail(400, 'Say who is sending it.');
   if (!store.canSend(user)) throw fail(403, 'You need permission to send contracts.');
-  const pdf = Buffer.from(String(v.pdf || ''), 'base64');
-  if (pdf.length > store.MAX_PDF) throw fail(413, 'That PDF is larger than 25 MB.');
+  const importedPdf = Buffer.from(String(v.pdf || ''), 'base64');
+  if (importedPdf.length > store.MAX_PDF) throw fail(413, 'That PDF is larger than 25 MB.');
   let signatureLayout = [];
-  try { signatureLayout = await placementLayout(pdf, crypto.createHash('sha256').update(pdf).digest('hex')); } catch { /* PDFs without readable signing blocks can still use manual placement. */ }
-  const c = store.create(user, { title: v.title, pdf, fileName: v.fileName, source: { kind: 'docs', docId: v.docId, signatureLayout } });
+  try { signatureLayout = await placementLayout(importedPdf, crypto.createHash('sha256').update(importedPdf).digest('hex')); } catch { /* PDFs without readable signing blocks can still use manual placement. */ }
+  const c = store.create(user, { title: v.title, pdf: importedPdf, fileName: v.fileName, source: { kind: 'docs', docId: v.docId, signatureLayout } });
   return send(res, 201, { id: c.id, url: auth.ORIGIN + '/contract/' + c.id });
 }
 

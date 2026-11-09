@@ -98,6 +98,16 @@
       var seen = {}, at = n;
       while (at && at.parentId) { if (seen[at.id]) { n.parentId = null; break; } seen[at.id] = true; at = ids[at.parentId]; }
     });
+    if (chartFilter) {
+      var keep = {};
+      nodes.forEach(function (n) {
+        var holders = n.pos.holders || [];
+        var match = chartFilter === 'filled' ? holders.length > 0 : chartFilter === 'vacant' ? !holders.length : holders.some(function (id) { return byId(id) && byId(id).temporary; });
+        n.context = !match;
+        if (match) { var at = n; while (at && !keep[at.id]) { keep[at.id] = true; at = ids[at.parentId]; } }
+      });
+      nodes = nodes.filter(function (n) { return keep[n.id]; });
+    }
     return nodes;
   }
   // The chart sits in a panel with a toolbar: switch company, find a person or position, collapse/expand branches and
@@ -105,7 +115,7 @@
   // and its arrow keys move it). Zoom, scroll position and collapsed branches survive the live redraws.
   var CO_COLOURS = { 'HN Group': 'purple', 'Horizon Network': 'teal', 'Horizon Media Group': 'raspberry', 'Horizon Advertising': 'pink', 'Horizon Development': 'green' };
   var coClass = function (c) { return 'co-' + (CO_COLOURS[c] || 'lavender'); };
-  var collapsed = {}, chartQuery = '', chartKey = '';
+  var collapsed = {}, chartQuery = '', chartKey = '', chartFilter = '';
   var ICON_PERSON = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/></svg>';
   function holderHtml(id) {
     var p = byId(id);
@@ -119,7 +129,7 @@
     function li(n) {
       var below = kids[n.id] || [], holders = n.pos.holders || [], shut = !!collapsed[n.id], under = count(n);
       var names = holders.map(function (id) { var p = byId(id); return p ? p.name : ''; }).join(' ');
-      return '<li' + (shut ? ' class="collapsed"' : '') + ' data-node="' + esc(n.id) + '"><div class="org-node ' + coClass(n.pos.company) + (holders.length ? '' : ' vacant') + '" data-find="' + esc((n.pos.title + ' ' + n.pos.company + ' ' + names).toLowerCase()) + '">' +
+      return '<li' + (shut ? ' class="collapsed"' : '') + ' data-node="' + esc(n.id) + '"><div class="org-node ' + coClass(n.pos.company) + (holders.length ? '' : ' vacant') + (n.context ? ' org-context' : '') + '" data-find="' + esc((n.pos.title + ' ' + n.pos.company + ' ' + names).toLowerCase()) + '">' +
         '<div class="org-pos"><strong>' + esc(n.pos.title) + '</strong>' + (group ? '<span class="org-co"><i></i>' + esc(n.pos.company) + '</span>' : '') +
         (n.outside ? '<span class="org-outside">Reports to ' + esc(n.outside.title) + (n.outside.company !== n.pos.company ? ', ' + esc(n.outside.company) : '') + '</span>' : '') + '</div>' +
         (holders.length ? '<div class="org-holders">' + holders.map(holderHtml).join('') + '</div>' : '<div class="org-vacant"><span class="org-empty">' + ICON_PERSON + '</span><span>Vacant</span></div>') +
@@ -139,24 +149,28 @@
       if (box && chartScale !== null) { box.scrollLeft = left; box.scrollTop = top; }
     }, 0);
     var count = function (x) { return (data.positions || []).filter(function (p) { return p.company === x; }).length; };
-    var tabs = '<nav class="org-switch" aria-label="Org charts">' + link('/org', 'Whole group', !c ? 'active' : '') +
-      data.companies.filter(count).map(function (x) { return link('/org/' + slug(x), '<i class="' + coClass(x) + '"></i>' + esc(x) + ' <span>' + count(x) + '</span>', c === x ? 'active' : ''); }).join('') + '</nav>';
     var nodes = chartNodes(c), filled = nodes.filter(function (n) { return n.pos.holders.length; }).length;
     var who = {}; nodes.forEach(function (n) { n.pos.holders.forEach(function (h) { who[h] = 1; }); });
     var stats = '<div class="org-stats"><span><b>' + nodes.length + '</b> positions</span><span><b>' + filled + '</b> filled</span><span><b>' + (nodes.length - filled) + '</b> vacant</span><span><b>' + Object.keys(who).length + '</b> people</span></div>';
     var tools = '<div class="org-tools"><label class="org-find"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span class="sr-only">Find a person or position</span><input type="search" id="org-q" placeholder="Find a person or position" autocomplete="off" value="' + esc(chartQuery) + '"><span class="org-hits" id="org-hits"></span></label>' +
       '<div class="org-btns"><button type="button" class="org-btn" data-branches="expand">Expand all</button><button type="button" class="org-btn" data-branches="collapse">Collapse all</button>' +
       '<div class="org-zoom" role="group" aria-label="Chart zoom"><button type="button" class="icon" data-zoom="out" aria-label="Zoom out">−</button><output id="org-scale" aria-live="polite">Fit</output><button type="button" class="icon" data-zoom="in" aria-label="Zoom in">+</button><button type="button" data-zoom="actual">100%</button><button type="button" data-zoom="fit">Fit to screen</button></div></div></div>';
-    var legend = '<div class="org-legend"><span><i class="lg-filled"></i>Filled</span><span><i class="lg-vacant"></i>Vacant</span><span><span class="temp-tag">Temporary</span></span>' +
-      (!c ? data.companies.filter(count).map(function (x) { return '<span><i class="' + coClass(x) + '"></i>' + esc(x) + '</span>'; }).join('') : '') + '</div>';
+    var legend = '<nav class="org-legend" aria-label="Org chart filters"><button type="button" data-org-everyone class="org-filter' + (!c && !chartFilter ? ' active' : '') + '">Everyone</button>' +
+      ['filled', 'vacant', 'temporary'].map(function (f) { return '<button type="button" class="org-filter' + (chartFilter === f ? ' active' : '') + '" data-org-filter="' + f + '" aria-pressed="' + (chartFilter === f) + '">' + (f === 'temporary' ? '<span class="temp-tag">Temporary</span>' : '<i class="lg-' + f + '"></i>' + (f === 'filled' ? 'Filled' : 'Vacant')) + '</button>'; }).join('') +
+      data.companies.filter(count).map(function (x) { return link('/org/' + slug(x), '<i class="' + coClass(x) + '"></i>' + esc(x), 'org-filter' + (c === x ? ' active' : '')); }).join('') + '</nav>';
     view.innerHTML = pageHead('Org charts', c ? esc(c) + '<span class="dot">.</span>' : 'The whole group<span class="dot">.</span>',
       (c ? 'Every position at ' + esc(c) + ' and who it reports to.' : 'Every position at HN Group and its companies in one chart.'), stats) +
-      '<section class="section org-section"><div class="wrap org-wrap">' + tabs + '<div class="org-panel">' + tools + legend + treeHtml(nodes, !c) + '</div>' +
-      '<p class="muted small org-note">Select anyone to see their profile. When zoomed in, scroll or use the chart’s arrow keys to move around. Positions and reporting lines are set on the HN Group staff portal.</p></div></section>';
+      '<section class="section org-section"><div class="wrap org-wrap">' + '<div class="org-panel">' + tools + legend + treeHtml(nodes, !c) + '</div>' +
+      '<p class="muted small org-note">Select anyone to see their profile. When zoomed in, scroll or use the chart’s arrow keys to move around. When filtering, supervisors remain visible to show reporting lines. Positions and reporting lines are set on the HN Group staff portal.</p></div></section>';
     view.querySelectorAll('[data-zoom]').forEach(function (button) { button.addEventListener('click', function () {
       var action = button.dataset.zoom, current = chartScale === null ? fittedScale : chartScale;
       chartScale = action === 'fit' ? null : action === 'actual' ? 1 : Math.max(.1, Math.min(2, Math.round((current + (action === 'in' ? .1 : -.1)) * 100) / 100));
       fitChart();
+    }); });
+    view.querySelector('[data-org-everyone]').addEventListener('click', function () { chartFilter = ''; history.pushState(null, '', '/org'); render(); });
+    view.querySelectorAll('[data-org-filter]').forEach(function (button) { button.addEventListener('click', function () {
+      chartFilter = chartFilter === button.dataset.orgFilter ? '' : button.dataset.orgFilter;
+      renderOrg(c);
     }); });
     wireChart();
   }
