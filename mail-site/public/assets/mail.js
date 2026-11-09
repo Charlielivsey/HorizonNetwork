@@ -132,7 +132,7 @@
 
   // ---------- Theme: Light or Lavender Dusk, the one chosen under Appearance on the staff portal (the user's request,
   // 6 November 2026), shared by every HN website through the hn_theme cookie (brand/web/hn-theme.js) ----------
-  const currentTheme = () => ((window.hnTheme && window.hnTheme.get()) === 'dusk' || /(?:^|;\s*)hn_theme=dusk(?:;|$)/.test(document.cookie) ? 'dark' : 'light');
+  const currentTheme = () => (window.hnTheme ? window.hnTheme.get() !== 'light' : !/(?:^|;\s*)hn_theme=light(?:;|$)/.test(document.cookie)) ? 'dark' : 'light';
   function applyTheme(redraw = true) {
     const t = currentTheme();
     document.documentElement.dataset.theme = t;

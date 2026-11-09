@@ -54,7 +54,7 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
     // own profile), with that company's job; permissions come from the sign-in account (store.viewOf).
     const login=p.__login,profiles=login?store.loginProfiles(login):[];
     return {
-      id:p.profileId||p.id,accountId:login?login.id:p.id,displayName:p.displayName,firstName:p.firstName||'',lastName:p.lastName||'',email:(p.emails||[]).find(e=>e.primary)?.address||p.emails?.[0]?.address||store.loginName(p),contactEmail:p.contactEmail||'',theme:typeof store.themeOf==='function'?store.themeOf(p):'light',
+      id:p.profileId||p.id,accountId:login?login.id:p.id,displayName:p.displayName,firstName:p.firstName||'',lastName:p.lastName||'',email:(p.emails||[]).find(e=>e.primary)?.address||p.emails?.[0]?.address||store.loginName(p),contactEmail:p.contactEmail||'',theme:typeof store.themeOf==='function'?store.themeOf(p):'midnight',
       username:store.loginName(p),
       // Every profile this sign-in account can use, so HN Group Auth can ask which one (the default first chosen).
       profileKey:p.profile?p.profile.key:null,profiles:profiles.map(x=>({key:x.key,company:x.company,jobTitle:x.jobTitle,displayName:x.displayName,photo:!!x.avatarUrl,default:!!login&&store.defaultProfile(login)?.key===x.key})),

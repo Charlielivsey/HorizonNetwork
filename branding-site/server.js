@@ -101,7 +101,7 @@ function layout(o) {
   return '<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
     '<meta name="theme-color" content="#5514B4"><meta name="robots" content="noindex, nofollow"><title>' + esc(o.title) + ' · HN Group</title>' +
     '<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="preload" href="/assets/fonts/plus-jakarta-sans.woff2" as="font" type="font/woff2" crossorigin>' +
-    '<link rel="stylesheet" href="/assets/branding.css?v=1"><script src="/assets/hn-theme.js"></script><script src="/assets/branding.js?v=1" defer></script></head><body>' +
+    '<link rel="stylesheet" href="/assets/branding.css?v=1"><script src="/assets/hn-theme.js?v=20261109-midnight"></script><script src="/assets/branding.js?v=1" defer></script></head><body>' +
     '<div class="stripe" aria-hidden="true">' + STRIPE.map(([id, w]) => '<i class="c-' + id + ' f' + w + '"></i>').join('') + '</div>' +
     '<header class="top"><a class="brand" href="/"><img class="on-light" src="/assets/brand/svg/hn-group-wordmark.svg" alt="HN Group" width="92" height="32"><img class="on-dark" src="/assets/brand/svg/hn-group-wordmark-white.svg" alt="" width="92" height="32"><span class="brand-name">Brand centre</span></a>' +
     (user ? '<div class="user"><span>' + esc(user.name) + '</span><form method="post" action="/auth/logout"><input type="hidden" name="csrf" value="' + esc(user.csrf) + '"><button type="submit" class="link">Sign out</button></form></div>' : '') +

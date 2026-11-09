@@ -98,11 +98,11 @@ test('HN Mail: only accounts with a linked Google account, never while impersona
   const s = await (await req('/api/session')).json();
   assert.equal(s.gmail.connected, false); assert.equal(s.gmail.linkedEmail, 'ada@hngroup.org.uk');
   assert.match(s.hnSignature, /hn-group-email-logo\.png/, 'the HN Group signature is made for whoever is signed in');
-  // HN Mail asks for HN Group Auth on every reload (the user's request, 6 November 2026).
-  assert.equal((await req('/')).status, 200, 'the page straight after signing in opens');
+  // A reload preserves the existing sign-in and linked-account validation.
+  assert.equal((await req('/')).status, 200);
   const reload = await req('/');
-  assert.equal(reload.status, 302); assert.match(reload.headers.get('location'), /^\/auth\/login/);
-  assert.equal((await req('/api/session')).status, 401, 'reloading ended that sign-in');
+  assert.equal(reload.status, 200);
+  assert.equal((await req('/api/session')).status, 200);
   assert.equal((await signIn(ADA)).status, 302);
   assert.equal((await req('/api/labels')).status, 409, 'Gmail must be connected first');
 });

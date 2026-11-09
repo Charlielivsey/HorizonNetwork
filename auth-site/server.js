@@ -55,7 +55,7 @@ const secretFile = process.env.STATUS_SSO_SECRET_FILE || '/var/lib/hn-status-sso
 const backend = process.env.STAFF_PORTAL_BACKEND || 'http://127.0.0.1:3200';
 const sessions = new Map(), challenges = new Map(), codes = new Map(), applicationSessions = new Map();
 // Website sign-ins (the user's request, 30 October 2026: "not keeping signed in"). Each one keeps its own copy of the
-// staff sign-in, so it isn't ended when Auth's own page ends its browser session (on every page load) or when Auth
+// staff sign-in, so it isn't ended when Auth's browser session ends or when Auth
 // restarts: they're saved (keyed by a hash of the token) in DATA_DIR/app-sessions.json and last 30 days from last use.
 const APP_SESSIONS_FILE = process.env.DATA_DIR ? path.join(process.env.DATA_DIR, 'app-sessions.json') : '';
 try { if (APP_SESSIONS_FILE) for (const [k, v] of Object.entries(JSON.parse(fs.readFileSync(APP_SESSIONS_FILE, 'utf8')))) if (v && v.entry && v.expires > Date.now()) applicationSessions.set(k, v); } catch {}
@@ -76,9 +76,9 @@ function setCookie(name, value, age = 43200) { return `${name}=${value}; Path=/;
 // Every response carrying a signed-in account also sets the theme cookie that every *.hngroup.org.uk website reads
 // (light | dusk, brand/web/hn-theme.js; the user's request, 6 November 2026: themes "synced via auth accounts once
 // signed in"). Readable by pages (not HttpOnly) because it only says which colours to use.
-const themeCookie = (theme) => 'hn_theme=' + (theme === 'dusk' ? 'dusk' : 'light') + '; Path=/; Domain=hngroup.org.uk; Max-Age=31536000; Secure; SameSite=Lax';
+const themeCookie = (theme) => 'hn_theme=' + (['light', 'dusk', 'midnight'].includes(theme) ? theme : 'midnight') + '; Path=/; Domain=hngroup.org.uk; Max-Age=31536000; Secure; SameSite=Lax';
 function send(res, status, data, cookies = []) {
-  if (data && data.user && (data.user.theme === 'light' || data.user.theme === 'dusk') && !data.user.impersonated) cookies = [...cookies, themeCookie(data.user.theme)];
+  if (data && data.user && ['light', 'dusk', 'midnight'].includes(data.user.theme) && !data.user.impersonated) cookies = [...cookies, themeCookie(data.user.theme)];
   res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Set-Cookie': cookies }); res.end(JSON.stringify(data));
 }
 function redirect(res, url) { res.writeHead(302, { Location: url, 'Cache-Control': 'no-store' }); res.end(); }
@@ -343,12 +343,10 @@ const server = http.createServer(async (req, res) => {
     }
     const file = staticFiles[route];
     if (!file) return send(res, 404, { error: 'Not found.' });
-    // Auth deliberately ends its session on every document navigation, including refresh.
-    // Assets and API requests must not revoke the sign-in in progress.
+    // Page reloads preserve the signed-in session. Discard only unfinished one-time login challenges.
     if (file.endsWith('.html')) {
-      sessions.delete(hash(cookie(req, COOKIE)));
       challenges.delete(hash(cookie(req, FLOW)));
-      res.setHeader('Set-Cookie', [setCookie(COOKIE, '', 0), setCookie(FLOW, '', 0),...(browserRemembered?[setCookie(REMEMBER,browserRemembered,30*86400)]:[])]);
+      res.setHeader('Set-Cookie', [setCookie(FLOW, '', 0),...(browserRemembered?[setCookie(REMEMBER,browserRemembered,30*86400)]:[])]);
     }
     res.writeHead(200, { 'Content-Type': mime[path.extname(file)], // The page and its script/stylesheet are always revalidated, so an update reaches people at once
     // (a cached old app.js once left the new Devices sign-in stuck); fonts and pictures may be kept for an hour.

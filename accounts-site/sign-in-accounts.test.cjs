@@ -15,6 +15,8 @@ const waitFor = async (url) => { for (let i = 0; i < 100; i++) { try { if ((awai
 
 test('sign-in accounts: made on HN Account, several profiles with a default, own permissions, none at all', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-sign-in-accounts-'));
+  process.env.DATA_DIR = dir; // Keep Auth and optional integration configuration inside the test fixture.
+
   const store = require('../staff-portal/lib/store'); store.init(dir);
   const make = (first, local, password, pin, extra) => { const p = store.saveEmployee({ firstName: first, lastName: 'Test', jobTitle: 'Analyst', company: 'HN Group', emails: [{ local, domain: 'hngroup.org.uk', primary: true }], ...extra }); if (password) { store.issueTemporaryPassword(p); store.setPassword(p, password); store.setCode(p, pin); } return p; };
   const ada = make('Ada', 'ada.test', 'Ada-password-582!', '582947');
@@ -98,6 +100,10 @@ test('sign-in accounts: made on HN Account, several profiles with a default, own
     assert.equal((await fetch(ACC + '/', { headers: { Cookie: handCookie } })).status, 200, 'opens the app, no sign-in');
     const again = await fetch(ACC + hand.pathname + hand.search, { redirect: 'manual' });
     assert.match(again.headers.get('location'), /^\/auth\/login\?return=/, 'a used ticket falls back to signing in, to the same place');
+    for (const route of ['/jobs', '/jobs', '/employees', '/jobs']) {
+      const page = await fetch(staffBase + route, { headers: { Cookie: portal }, redirect: 'manual' });
+      assert.equal(page.status, 200, 'portal navigation and refresh preserve the session: ' + route);
+    }
     const odd = await (await fetch(staffBase + '/api/accounts-handoff', { method: 'POST', headers: { Cookie: portal, 'Content-Type': 'application/json' }, body: JSON.stringify({ next: 'https://evil.example/' }) })).json();
     assert.equal(new URL(odd.url).searchParams.get('return'), '/#overview', 'only places on HN Account');
     assert.equal((await fetch(staffBase + '/api/auth/accounts-handoff', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ticket: 'a'.repeat(64) }) })).status === 200, false, 'the swap needs the service secret');
@@ -193,15 +199,13 @@ test('sign-in accounts: made on HN Account, several profiles with a default, own
     const samSite = await hnAccount('sam.test@hngroup.org.uk', 'Sam-password-582!', '493817');
 
     assert.equal((await samSite.get('/api/logins')).status, 403);
-    // HN Account asks you to sign in every time you open it: the page straight after signing in opens, and opening it
-    // again ends that sign-in and goes back through HN Group Auth.
+    // Refresh and reopening keep the signed-in account and its permission checks.
     assert.equal((await samSite.get('/')).status, 200);
     const reopened = await samSite.get('/');
-    // Reopening ends the sign-in and goes back through HN Group Auth, via the sign-in page's script (?continue=1), which
-    // keeps the part after # so you still land where the link pointed.
-    assert.ok(reopened.redirected && new URL(reopened.url).searchParams.get('continue') === '1', 'reopening goes back to HN Group Auth');
-    assert.match(await reopened.text(), /landing\.js/);
-    assert.equal((await samSite.get('/api/session')).status, 401);
+    assert.equal(reopened.status, 200); assert.equal(reopened.redirected, false);
+    assert.match(await reopened.text(), /accounts\.js/);
+    assert.equal((await samSite.get('/api/session')).status, 200);
+    assert.equal((await samSite.get('/api/logins')).status, 403, 'refresh does not change permissions');
     assert.equal((await fetch(ACC + '/')).status, 200, 'signed-out visitors see the landing page');
   } finally {
     await new Promise((r) => auth.close(r));

@@ -108,7 +108,7 @@ function createServer({ dir = process.env.MAIL_DATA_DIR || '/var/lib/hn-mail', f
       response.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8', 'Set-Cookie': cookies });
       const action = linkGoogle ? '<a class="btn btn-primary" href="https://auth.hngroup.org.uk/">Open HN Group Auth</a> <a class="btn btn-ghost" href="/auth/login">I’ve linked it, try again</a>'
         : status === 403 ? '' : '<a class="btn btn-primary" href="/auth/login">Sign in with HN Group Auth</a>';
-      response.end('<!doctype html><html lang="en-GB"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex, nofollow"><title>HN Mail · HN Group</title><link rel="icon" href="/assets/favicon.svg"><link rel="stylesheet" href="/assets/site.css"><link rel="stylesheet" href="/assets/mail.css?v=9"><script src="/assets/hn-theme.js"></script><body class="plain-page"><main class="wrap problem"><img class="on-light logo" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="140"><img class="on-dark logo" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="140"><p class="eyebrow">HN MAIL</p><h1>' + escape(title) + '</h1><p class="lead">' + escape(message) + '</p><p class="actions">' + action + '</p></main></body></html>');
+      response.end('<!doctype html><html lang="en-GB"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex, nofollow"><title>HN Mail · HN Group</title><link rel="icon" href="/assets/favicon.svg"><link rel="stylesheet" href="/assets/site.css"><link rel="stylesheet" href="/assets/mail.css?v=9"><script src="/assets/hn-theme.js?v=20261109-midnight"></script><body class="plain-page"><main class="wrap problem"><img class="on-light logo" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="140"><img class="on-dark logo" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="140"><p class="eyebrow">HN MAIL</p><h1>' + escape(title) + '</h1><p class="lead">' + escape(message) + '</p><p class="actions">' + action + '</p></main></body></html>');
     };
     let route = '';
     try {
@@ -147,16 +147,8 @@ function createServer({ dir = process.env.MAIL_DATA_DIR || '/var/lib/hn-mail', f
         res.writeHead(302, { Location: '/', 'Set-Cookie': clear }); return res.end();
       }
 
-      // HN Mail asks you to sign in every time you open or reload it (the user's request, 6 November 2026: "its not
-      // making me sign in again via auth on reload"): the page straight after signing in opens; loading it again ends
-      // that sign-in and goes back through HN Group Auth.
+      // A reload keeps the current session; Auth validation and expiry still apply.
       if (route === '/' && req.method === 'GET') {
-        const held = store.session(active.token);
-        if (!held || !held.fresh) {
-          store.endSession(active.token);
-          res.writeHead(302, { Location: '/auth/login?next=/', 'Set-Cookie': (secure ? '__Host-' : '') + 'hn_mail_session=; Path=/; HttpOnly;' + (secure ? ' Secure;' : '') + ' SameSite=Lax; Max-Age=0' }); return res.end();
-        }
-        store.updateSession(active.token, { fresh: false });
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         return res.end(fs.readFileSync(path.join(PUBLIC, 'index.html'), 'utf8'));
       }

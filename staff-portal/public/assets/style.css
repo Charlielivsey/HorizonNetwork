@@ -4332,3 +4332,10 @@ select option, select optgroup { background: var(--surface); color: var(--text);
 .menu-item { padding: .7rem .8rem; transition: background .15s, color .15s; }
 .menu-item:focus-visible { box-shadow: inset 0 0 0 2px var(--primary); }
 @media (prefers-reduced-motion: reduce) { .menu-item { transition: none; } }
+
+/* Jobs search: keep the results and their existing application controls together. */
+.jobs-filters { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto; gap: 1rem; align-items: end; margin-bottom: 1.25rem; }
+.jobs-filters > div { min-width: 0; }
+.jobs-filters #jb-count { grid-column: 1 / -1; margin: 0; }
+.job-card[hidden], #jb-no-results[hidden] { display: none !important; }
+@media (max-width: 640px) { .jobs-filters { grid-template-columns: minmax(0, 1fr); } .jobs-filters #jb-count { grid-column: auto; } .jobs-filters #jb-clear { justify-self: start; } }

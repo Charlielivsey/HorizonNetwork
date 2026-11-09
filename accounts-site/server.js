@@ -179,17 +179,9 @@ async function handle(req, res) {
 
   if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, '');
   const s = current(req);
-  // You sign in every time you open HN Account (the user's request, 28 October 2026): the page straight after
-  // signing in opens; opening or refreshing it again ends that sign-in and goes back through HN Group Auth.
+  // Refreshing HN Account keeps a valid sign-in and the current hash destination.
   if (route === '/' || route === '/index.html') {
-    if (s && s.entry.fresh) { s.entry.fresh = false; return page(res, 200, 'app.html'); }
-    if (s) {
-      sessions.delete(s.token);
-      fetch(STAFF_BACKEND + '/api/logout', { method: 'POST', headers: { Cookie: 'hn_staff_session=' + s.staff, 'Content-Type': 'application/json' }, body: '{}', signal: AbortSignal.timeout(5000) }).catch(() => {});
-      // Through the sign-in page's script, which adds the part after # (the server never sees it) so you still land
-      // where the link pointed, e.g. creating a login for someone just added on the staff portal.
-      return redirect(res, '/?continue=1', [setCookie(COOKIE, '', 0)]);
-    }
+    if (s) return page(res, 200, 'app.html');
     return page(res, 200, 'index.html');
   }
   return messagePage(res, 404, 'Not found', 'That page isn’t part of HN Account.');

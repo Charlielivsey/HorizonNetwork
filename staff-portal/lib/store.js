@@ -46,13 +46,11 @@ const RENAMED_COMPANIES = { "HN Group Limited": "HN Group", "Horizon Network Lim
 
 const DEFAULT_TIMEZONE = "Europe/London";
 const THEMES = ["system", "light", "dark", "lavender", "lavender-dusk", "ocean", "forest", "midnight"];
-// Every HN Group website has two themes now (the user's request, 6 November 2026): Light (HN Mail's) and Lavender Dusk
-// (the staff portal's). The choice lives on the sign-in account (synced to every website through HN Group Auth), Light
-// by default; older choices count as Light, except Lavender Dusk.
+// Midnight Lavender is the default; explicit Light and Lavender Dusk choices stay on the sign-in account.
 function themeOf(person) {
   const login = person && (person.__login || (!person.system && primaryLogin(person)));
   const raw = (login && login.theme) || (person && person.theme);
-  return raw === "dusk" || raw === "lavender-dusk" ? "dusk" : "light";
+  return raw === "dusk" || raw === "lavender-dusk" ? "dusk" : raw === "light" ? "light" : "midnight";
 }
 const ADMIN_USERNAME = "admin@hngroup.org.uk";
 // The system owner has access to everything, including PIN-protected System Admin.
@@ -975,7 +973,7 @@ function meView(p) {
     accountId: login ? login.id : null,
     profileCompany: p.profile ? p.profile.company : null,
     roles: rolesOf(p),
-    theme: themeOf(p) === "dusk" ? "lavender-dusk" : "light",
+    theme: themeOf(p) === "dusk" ? "lavender-dusk" : themeOf(p),
     system: !!p.system,
     username: loginName(p),
     supervisor: supervisor ? { id: supervisor.id, displayName: supervisor.displayName } : null,
@@ -1649,8 +1647,8 @@ function markAnnouncementsSeen(person) {
 }
 
 function setTheme(person, theme) {
-  if (!["light", "dusk", "lavender-dusk"].includes(theme)) throw new ValidationError("Choose Light or Lavender Dusk.");
-  const value = theme === "light" ? "light" : "dusk";
+  if (!["light", "dusk", "lavender-dusk", "midnight"].includes(theme)) throw new ValidationError("Choose Light, Lavender Dusk or Midnight Lavender.");
+  const value = theme === "light" || theme === "midnight" ? theme : "dusk";
   const login = person.__login || (!person.system && primaryLogin(person));
   if (login) login.theme = value; else person.theme = value;
   savePeople();

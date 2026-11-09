@@ -92,17 +92,18 @@
     }
 
     // Themes on offer. Preview colours: page background, card, accent, and a text line.
-    // The two themes of every HN Group website (the user's request, 6 November 2026). The choice here is saved on your
+    // Shared themes, with Midnight Lavender the default (9 November 2026). The choice here is saved on your
     // sign-in account and every HN website follows it (through HN Group Auth and the shared hn_theme cookie).
     const THEMES = [
+        { key: "midnight", name: "Midnight Lavender", preview: ["#100d1a", "#211a2e", "#c3a2ff", "#f4f0fd"] },
         { key: "light", name: "Light", preview: ["#faf8fd", "#ffffff", "#6731ad", "#1d1630"] },
         { key: "lavender-dusk", name: "Lavender Dusk", preview: ["#17121f", "#201a2b", "#b79cf2", "#efe9fb"] },
     ];
 
     function applyTheme(theme) {
-        theme = theme === "lavender-dusk" ? "lavender-dusk" : "light";
+        theme = ["light", "lavender-dusk", "midnight"].includes(theme) ? theme : "midnight";
         if (window.hnApplyTheme) window.hnApplyTheme(theme);
-        if (window.hnTheme) window.hnTheme.apply(theme === "lavender-dusk" ? "dusk" : "light");
+        if (window.hnTheme) window.hnTheme.apply(theme === "lavender-dusk" ? "dusk" : theme);
     }
 
     // Opens HN Account already signed in, at `next` (the user's request, 6 November 2026): the staff portal asks for a
@@ -6383,7 +6384,7 @@
         });
         function markTheme() {
             $$(".theme-option").forEach(function (btn) {
-                const on = btn.dataset.themeKey === (state.me.theme || "light");
+                const on = btn.dataset.themeKey === (state.me.theme || "midnight");
                 btn.classList.toggle("active", on);
                 btn.setAttribute("aria-checked", String(on));
                 $(".theme-name .icon", btn).style.visibility = on ? "visible" : "hidden";
@@ -8091,6 +8092,9 @@
         root.innerHTML =
             '<div class="page-head"><div><h1>Jobs</h1><p class="muted">Open roles across HN Group. Apply yourself, or refer someone you know.' + (d.canManage ? " As a recruiter you can post vacancies and move applicants through to hire." : "") + "</p></div>" +
             (d.canManage ? '<div class="page-actions"><button type="button" class="btn btn-primary" id="jb-new">' + icon("plus") + "Post a vacancy</button></div>" : "") + "</div>" +
+            '<div class="card jobs-filters"><div><label for="jb-search">Search jobs</label><input id="jb-search" type="search" placeholder="Job title, company or keyword" autocomplete="off"></div>' +
+            '<div><label for="jb-company">Company</label><select id="jb-company"><option value="">All companies</option>' + d.companies.map(function (c) { return '<option value="' + esc(c) + '">' + esc(c) + '</option>'; }).join("") + '</select></div>' +
+            '<button type="button" class="btn btn-ghost btn-small" id="jb-clear">Clear filters</button><p class="muted small" id="jb-count" role="status" aria-live="polite"></p></div>' +
             (d.vacancies.length ? '<div class="job-list">' + d.vacancies.map(function (v) {
                 return '<article class="job-card' + (v.open ? "" : " job-closed") + '" data-job="' + v.id + '"><div class="job-head"><div><h2>' + esc(v.title) + "</h2>" +
                     '<div class="job-meta"><span>' + icon("building") + esc(v.company) + "</span>" +
@@ -8102,6 +8106,27 @@
                     (v.open ? '<button type="button" class="btn btn-ghost btn-small" data-jb="refer">' + icon("users") + "Refer someone</button>" + (v.applied || state.me.system ? "" : '<button type="button" class="btn btn-primary btn-small" data-jb="apply">Apply</button>') : "") + "</div></div>" +
                     (d.canManage ? jobPipelineHtml(d, v) : "") + "</article>";
             }).join("") + "</div>" : '<div class="empty-page">' + icon("briefcase", "big") + "<h2>No vacancies right now</h2><p class=\"muted\">New roles will appear here.</p></div>");
+        root.insertAdjacentHTML("beforeend", '<div class="empty-page" id="jb-no-results" hidden><h2>No matching vacancies</h2><p class="muted">Try another search or clear the filters.</p></div>');
+        const filters = state.jobFilters || (state.jobFilters = { q: "", company: "" });
+        const search = $("#jb-search", root), company = $("#jb-company", root);
+        search.value = filters.q; company.value = filters.company;
+        function filterJobs() {
+            filters.q = search.value; filters.company = company.value;
+            const words = filters.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+            let shown = 0;
+            root.querySelectorAll(".job-card[data-job]").forEach(function (card) {
+                const v = d.vacancies.find(function (x) { return x.id === card.dataset.job; });
+                const text = [v.title, v.company, v.description, v.hiringManagerName].join(" ").toLowerCase();
+                const match = (!filters.company || filters.company === v.company) && words.every(function (w) { return text.includes(w); });
+                card.hidden = !match; if (match) shown++;
+            });
+            $("#jb-count", root).textContent = shown + " of " + d.vacancies.length + " vacancies";
+            $("#jb-no-results", root).hidden = shown !== 0 || d.vacancies.length === 0;
+        }
+        search.addEventListener("input", filterJobs);
+        company.addEventListener("change", filterJobs);
+        $("#jb-clear", root).addEventListener("click", function () { search.value = ""; company.value = ""; filterJobs(); search.focus(); });
+        filterJobs();
         root.addEventListener("click", async function (e) {
             if (e.target.closest("#jb-new")) return openVacancyForm(d, null);
             const b = e.target.closest("[data-jb]");

@@ -379,7 +379,7 @@ function redirect(res, location) {
 function themeCookie(req, theme) {
   const host = String(req.headers["x-forwarded-host"] || req.headers.host || "").split(":")[0].toLowerCase();
   const domain = host === "hngroup.org.uk" || host.endsWith(".hngroup.org.uk") ? "; Domain=hngroup.org.uk" : "";
-  return "hn_theme=" + (theme === "dusk" ? "dusk" : "light") + "; Path=/" + domain + "; Max-Age=31536000; SameSite=Lax" + (domain ? "; Secure" : "");
+  return "hn_theme=" + (["light", "dusk", "midnight"].includes(theme) ? theme : "midnight") + "; Path=/" + domain + "; Max-Age=31536000; SameSite=Lax" + (domain ? "; Secure" : "");
 }
 function sendFile(res, filePath, extraHeaders = {}) {
   fs.readFile(filePath, (err, content) => {
@@ -1331,7 +1331,7 @@ async function routeApi(req, res, pathname, session) {
   if (method === "POST" && pathname === "/api/me/theme") {
     const { theme } = await readJsonBody(req);
     store.setTheme(me, theme);
-    logEvent(req, session, "theme-changed", { target: store.themeOf(me) === "dusk" ? "Lavender Dusk" : "Light" });
+    logEvent(req, session, "theme-changed", { target: store.themeOf(me) === "dusk" ? "Lavender Dusk" : store.themeOf(me) === "midnight" ? "Midnight Lavender" : "Light" });
     return sendJson(res, 200, { user: meResponse(session) }, { "Set-Cookie": themeCookie(req, store.themeOf(me)) });
   }
   if (method === "POST" && pathname === "/api/me/avatar") {
@@ -2449,22 +2449,13 @@ async function route(req, res) {
     return sendLoginPage(req, res);
   }
 
-  // Loading or refreshing a portal page signs you out. The only page load allowed is the one
-  // straight after signing in (or switching with "log in as"); moving around inside the portal
-  // doesn't reload the page, so it isn't affected.
+  // A valid portal session survives page navigation and refresh; normal expiry and account checks still apply.
   if (APP_ROUTES.has(pathname)) {
     if (!session) return redirect(res, "/login");
     if (store.maintenance().on && !store.hasOwnerAccess(session.person)) {
       sessions.delete(session.token);
       return send(res, 302, "", { Location: "/login?maintenance=1", "Cache-Control": "no-store", "Set-Cookie": sessionCookie(req, "", 0) });
     }
-    if (!session.data.allowPageLoad) {
-      sessions.delete(session.token);
-      logEvent(req, session, "signed-out-refresh");
-      return send(res, 302, "", { Location: "/login", "Cache-Control": "no-store", "Set-Cookie": sessionCookie(req, "", 0) });
-    }
-    session.data.allowPageLoad = false;
-    sessions.save();
     return sendFile(res, path.join(PUBLIC_DIR, "app.html"), { "Cache-Control": "no-store" });
   }
 

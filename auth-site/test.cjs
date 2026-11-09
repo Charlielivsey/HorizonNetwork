@@ -5,6 +5,8 @@ const fs = require('node:fs'), os = require('node:os'), path = require('node:pat
 const { spawn } = require('node:child_process');
 test('real staff password and PIN, minimal live profile, avatar, fixed clients and central logout', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-auth-test-'));
+  process.env.DATA_DIR = dir; // Keep Auth and optional integration configuration inside the test fixture.
+
   const store = require('../staff-portal/lib/store'); store.init(dir);
   const person = store.saveEmployee({ firstName: 'Test', lastName: 'Owner', jobTitle: 'System owner', company: store.COMPANIES[0], emails: [{ local: 'test.owner', domain: 'hngroup.org.uk', primary: true }] });
   store.issueTemporaryPassword(person); store.setPassword(person, 'Test-password-582!'); store.setCode(person, '582947');
@@ -34,12 +36,12 @@ test('real staff password and PIN, minimal live profile, avatar, fixed clients a
     assert.equal((await post('/api/login/code',{code:'111111'},flow)).status,401);
     const verified = await post('/api/login/code',{code:'582947'},flow); assert.equal(verified.status,200);
     const account = (await verified.json()).user;
-    assert.deepEqual(Object.keys(account).sort(),['id','displayName','email','jobTitle','company','companies','avatarUrl','statusAdminAllowed','ownerAccess'].sort());
+    assert.deepEqual(Object.keys(account).sort(),['accountId','avatarUrl','companies','company','contactEmail','discord','displayName','email','firstName','google','id','jobTitle','lastName','ownerAccess','permissions','profileKey','profiles','statusAdminAllowed','storageAccess','storageGrants','theme','username'].sort());
     assert.equal(account.email,'test.owner@hngroup.org.uk'); assert.equal(account.displayName,'Test Owner'); assert.equal(account.jobTitle,'System owner'); assert.equal(account.company,store.COMPANIES[0]); assert.equal(account.statusAdminAllowed,true); assert.equal(account.ownerAccess,true);
     const cookie = verified.headers.getSetCookie().find(c=>c.startsWith('__Host-hn_auth_session=')).split(';')[0];
     assert.ok(!verified.headers.get('set-cookie').includes('hn_staff_session='));
     // Every new site uses its registered callback and its own one-use grant.
-    for (const client of ['media','holding','development','support','clients','careers','docs','news']) {
+    for (const client of ['media','development','careers','docs','news']) {
       const state = 'e'.repeat(64);
       const grant = await post('/api/continue', {client_id:client,state}, cookie);
       assert.equal(grant.status,200);
@@ -72,10 +74,10 @@ test('real staff password and PIN, minimal live profile, avatar, fixed clients a
     assert.equal((await post('/api/sso/avatar',{session:sso.session})).status,401);
     const refreshed = await fetch(base + '/', { headers: { Cookie: cookie } });
     assert.equal(refreshed.status, 200);
-    assert.equal(refreshed.headers.getSetCookie().filter(c => /Max-Age=0/.test(c)).length, 2);
-    assert.equal((await post('/api/sso/session',{session:sso.session},'',authHeader)).status,401);
+    assert.equal(refreshed.headers.getSetCookie().filter(c => /Max-Age=0/.test(c)).length, 1, 'only the unfinished challenge is cleared');
+    assert.equal((await post('/api/sso/session',{session:sso.session},'',authHeader)).status,200, 'refresh preserves application sign-ins');
     assert.equal((await post('/api/logout',{},cookie)).status,200);
-    assert.equal((await post('/api/sso/session',{session:sso.session},'',authHeader)).status,401);
+    assert.equal((await post('/api/sso/session',{session:sso.session},'',authHeader)).status,200, 'websites retain their independent sign-ins when the Auth page signs out');
     assert.equal((await fetch(base+'/api/me',{headers:{Cookie:cookie}})).status,401);
     const pendingLogin = await post('/api/login',{ username:'test.owner@hngroup.org.uk',password:'Test-password-582!' });
     const pendingFlow = pendingLogin.headers.getSetCookie()[0].split(';')[0];
@@ -85,7 +87,7 @@ test('real staff password and PIN, minimal live profile, avatar, fixed clients a
     // Remembering an account is separate from signing in, and is isolated per browser.
     const resumeCookie = verified.headers.getSetCookie().find(c=>c.startsWith('__Host-hn_auth_resume=')).split(';')[0];
     assert.match(verified.headers.getSetCookie().find(c=>c.startsWith('__Host-hn_auth_resume=')), /HttpOnly; Secure; SameSite=Lax; Max-Age=2592000/);
-    assert.deepEqual(await (await fetch(base+'/api/resume')).json(), { available:false });
+    assert.deepEqual(await (await fetch(base+'/api/resume')).json(), { available:false, google:false, discord:false });
     assert.equal((await fetch(base+'/api/me',{headers:{Cookie:resumeCookie}})).status,401);
     const remembered = await (await fetch(base+'/api/resume',{headers:{Cookie:resumeCookie}})).json();
     assert.equal(remembered.available,true); assert.equal(remembered.firstName,'Test'); assert.equal(remembered.username,'test.owner@hngroup.org.uk');
@@ -106,7 +108,7 @@ test('real staff password and PIN, minimal live profile, avatar, fixed clients a
     assert.equal(resumeCallback.origin,'https://hngroup.org.uk');
     assert.equal((await post('/api/sso/exchange',{client_id:'website',code:resumeCallback.searchParams.get('code'),state},'',authHeader)).status,200);
     await fetch(base+'/',{headers:{Cookie:resumedSession+'; '+rotated}});
-    assert.equal((await fetch(base+'/api/me',{headers:{Cookie:resumedSession}})).status,401);
+    assert.equal((await fetch(base+'/api/me',{headers:{Cookie:resumedSession}})).status,200);
     assert.equal((await (await fetch(base+'/api/resume',{headers:{Cookie:rotated}})).json()).available,true);
     for(let i=0;i<5;i++) {
       const wrong = await post('/api/resume',{code:'111111'},rotated); assert.equal(wrong.status,401);
