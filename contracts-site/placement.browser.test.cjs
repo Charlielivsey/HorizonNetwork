@@ -13,6 +13,7 @@ test('Docs signing boxes appear automatically and remain manually editable',asyn
   const json=x=>{res.setHeader('Content-Type','application/json');res.end(JSON.stringify(x));};
   if(u.pathname==='/api/me')return json({user:{id:'sender',displayName:'Sender'},canSend:true,roles:['Employee','On behalf of HN Group Limited','Witness']});
   if(u.pathname==='/api/people')return json({people:[{id:'person',name:'Echo',jobTitle:'Board Chairman',company:'HN Group'}]});
+  if(u.pathname==='/api/contracts/'+c.id+'/send')return json({contract:c,access:[{name:'Echo',roles:['Employee','On behalf of HN Group Limited'],url:'https://contract.hngroup.org.uk/s/'+ 'a'.repeat(90),pin:'123456'}]});
   if(u.pathname.endsWith('/file')){res.setHeader('Content-Type','application/pdf');return res.end(pdf);}
   if(u.pathname==='/api/contracts/'+c.id){if(req.method==='PUT'){let s='';for await(const b of req)s+=b;saved=JSON.parse(s);}return json({contract:c});}
   if(u.pathname.startsWith('/assets/')){
@@ -35,5 +36,14 @@ test('Docs signing boxes appear automatically and remain manually editable',asyn
   assert.equal(new Set(saved.fields.filter(f=>f.signer===0).map(f=>f.type)).size,4);
   assert(saved.fields.filter(f=>f.signer===0).every(f=>f.x<.5));assert(saved.fields.filter(f=>f.signer===1).every(f=>f.x>.5));
   await fields.first().focus();await page.keyboard.press('Delete');assert.equal(await fields.count(),7,'boxes can still be removed manually');
+  await page.getByRole('button',{name:'Send for signing',exact:true}).click();
+  await page.locator('#ask-ok').click();
+  await page.waitForFunction(()=>document.querySelector('#ask-title').textContent==='Signing link and PIN');
+  for(const width of [1280,768,390,320]){
+   await page.setViewportSize({width,height:1000});
+   const overflow=await page.locator('#ask').evaluate(d=>({scroll:d.scrollWidth,width:d.clientWidth,buttons:Array.from(d.querySelectorAll('button')).filter(b=>!b.hidden).map(b=>{const r=b.getBoundingClientRect(),box=d.getBoundingClientRect();return r.left<box.left||r.right>box.right;})}));
+   assert(overflow.scroll<=overflow.width+1,'signing-link dialog has no horizontal scrolling at '+width);
+   assert(overflow.buttons.every(x=>!x),'all copy controls remain inside the dialog');
+  }
  }finally{if(browser)await browser.close();await new Promise(r=>server.close(r));}
 });

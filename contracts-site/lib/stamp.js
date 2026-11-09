@@ -81,7 +81,7 @@ function draw(page, font, text, x, y, size, max, color) {
 
 // A placed box, filled in. Boxes are stored as fractions of the page as people see it (PDF.js draws the crop box), from
 // the top left; PDF points count from the bottom left of the crop box.
-function fillBox(page, f, s, fonts) {
+function fillBox(page, f, s, fonts, baseline) {
   const box = page.getCropBox ? page.getCropBox() : { x: 0, y: 0, width: page.getWidth(), height: page.getHeight() };
   const x = box.x + f.x * box.width, w = f.w * box.width, h = f.h * box.height, y = box.y + (1 - f.y - f.h) * box.height;
   const text = f.type === 'signature' || f.type === 'name' ? s.signature.typed : f.type === 'date' ? longDay(s.signedAt) : s.jobTitle || '';
@@ -90,8 +90,12 @@ function fillBox(page, f, s, fonts) {
   const fitted = fit(font, text);
   let size = Math.min(h * (f.type === 'signature' ? 0.72 : 0.62), f.type === 'signature' ? 28 : 16);
   while (size > 5 && font.widthOfTextAtSize(fitted, size) > w - 4) size -= 0.5;
-  page.drawText(fitted, { x: x + 2, y: y + (h - size) / 2 + size * 0.22, size, font, color });
+  page.drawText(fitted, { x: x + 2, y: baseline === undefined ? y + (h - size) / 2 + size * 0.22 : baseline, size, font, color });
 }
+
+// The Docs signing table prints its underline 7pt above the row bottom. PDF text items
+// report the label's baseline (1.8mm + .95 × 9.5pt from the row top).
+const signingBaseline = (b, type) => b[type].y - ((type === 'signature' ? 58 : 36) - 7 - (1.8 * 72 / 25.4 + 9.5 * .95)) + 1.5;
 
 // The signed copy, or null when nobody has signed yet.
 const copies = new Map();
@@ -109,7 +113,13 @@ async function signedCopy(bytes, c) {
     const boxes = (c.fields || []).filter((f) => f.signer === s.key);
     if (boxes.length) {
       if (s.status !== 'signed' || !s.signature) continue;
-      for (const f of boxes) if (pages[f.page]) fillBox(pages[f.page], f, s, { regular, italic });
+      const layout = (c.source?.signatureLayout || []).find((l) => l.role.toLowerCase() === s.role.toLowerCase());
+      const printed = match(s.role, found);
+      for (const f of boxes) if (pages[f.page]) {
+        const original = layout?.fields.find((a) => a.type === f.type && a.page === f.page && ['x', 'y', 'w', 'h'].every((k) => Math.abs(a[k] - f[k]) < .00011));
+        const baseline = original && printed?.jobTitle && printed.page === f.page && printed[f.type] ? signingBaseline(printed, f.type) : undefined;
+        fillBox(pages[f.page], f, s, { regular, italic }, baseline);
+      }
       continue;
     }
     const b = match(s.role, free);
@@ -117,10 +127,11 @@ async function signedCopy(bytes, c) {
     if (s.status !== 'signed' || !s.signature) continue;
     if (!b || !pages[b.page]) { rest.push(s); continue; }
     const page = pages[b.page], size = b.name.size || 10;
-    draw(page, regular, s.signature.typed, b.name.x, b.name.y, size, b.right - b.name.x, INK);
-    draw(page, italic, s.signature.typed, b.signature.x, b.signature.y - 1, size + 4, b.right - b.signature.x, PURPLE);
-    draw(page, regular, longDay(s.signedAt), b.date.x, b.date.y, size, b.right - b.date.x, INK);
-    if (b.jobTitle) draw(page, regular, s.jobTitle || '', b.jobTitle.x, b.jobTitle.y, size, b.right - b.jobTitle.x, INK);
+    for (const [type, text, font, color] of [['name', s.signature.typed, regular, INK], ['signature', s.signature.typed, italic, PURPLE], ['jobTitle', s.jobTitle || '', regular, INK], ['date', longDay(s.signedAt), regular, INK]]) {
+      if (!b[type]) continue;
+      const x = b.jobTitle ? b.left + 2 : b[type].x, y = b.jobTitle ? signingBaseline(b, type) : b[type].y - (type === 'signature' ? 1 : 0);
+      draw(page, font, text, x, y, type === 'signature' ? size + 4 : size, b.right - x, color);
+    }
   }
   if (rest.length) {
     const last = pages[pages.length - 1], [w, h] = last ? [last.getWidth(), last.getHeight()] : [595.28, 841.89];
@@ -151,7 +162,8 @@ async function placementLayout(bytes, hash) {
   return (await blocks(bytes, hash)).map((b) => ({
     role: /^the employee$/i.test(b.heading) ? 'Employee' : /^the witness$/i.test(b.heading) ? 'Witness' : b.heading,
     fields: ['name', 'signature', 'jobTitle', 'date'].filter((type) => b[type]).map((type) => {
-      const x = b.left / b.width, y = (b.height - b[type].y + 5) / b.height;
+      const height = type === 'signature' ? 32 : 18;
+      const x = b.left / b.width, y = b.jobTitle ? (b.height - (signingBaseline(b, type) - 2 + height)) / b.height : (b.height - b[type].y + 5) / b.height;
       return { type, page: b.page, x, y, w: Math.min((b.right - b.left - 8) / b.width, 1 - x), h: Math.min((type === 'signature' ? 32 : 18) / b.height, 1 - y) };
     }),
   }));
