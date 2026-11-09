@@ -198,13 +198,13 @@ test('the command is registered on connect and kept when the dashboard republish
   const t = setup({ test: LAYOUT });
   try {
     await t.manager.registerBuiltins();
-    const reg = t.discord.writes.find((w) => w.method === 'POST' && w.p === '/applications/' + APP + '/commands');
+    const reg = t.discord.writes.find((w) => w.method === 'POST' && w.p === '/applications/' + APP + '/commands' && w.body.name === 'server-setup');
     assert.equal(reg.body.name, 'server-setup'); assert.deepEqual(reg.body.contexts, [0]);
     assert.equal(reg.body.options[0].options[0].autocomplete, true, 'the layout option searches as you type');
     await t.manager.handle('save-commands', { commands: [{ name: 'hello', description: 'Hi', response: 'Hello', ephemeral: false }, { name: 'server-setup', description: 'old copy' }] });
     const put = t.discord.writes.find((w) => w.method === 'PUT');
-    assert.deepEqual(put.body.map((c) => c.name), ['hello', 'server-setup', 'setup-server', 'force-sync'], 'the built-in commands are always kept');
-    assert.equal(put.body[1].options.length, 3, 'the built-in definition, not the dashboard copy');
+    assert.deepEqual(put.body.map((c) => c.name), ['hello', 'ping', 'server-setup', 'setup-server', 'force-sync'], 'the built-in commands are always kept');
+    assert.equal(put.body.find(c => c.name === 'server-setup').options.length, 3, 'the built-in definition, not the dashboard copy');
   } finally { t.close(); }
 });
 
