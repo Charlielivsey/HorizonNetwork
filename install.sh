@@ -94,7 +94,7 @@ if changed people-site/ || [ ! -f /etc/letsencrypt/live/people.hngroup.org.uk/fu
     run 'HN Group People (people.hngroup.org.uk)' bash "$ROOT/people-site/install.sh" "$EMAIL"
 fi
 changed mail-site/ && run 'HN Mail (mail.hngroup.org.uk)' bash "$ROOT/mail-site/install.sh" "$EMAIL"
-changed evan-site/ && run 'Private page (evan.hngroup.org.uk)' bash "$ROOT/evan-site/install.sh" "$EMAIL"
+run 'Retire Evan site' bash "$ROOT/scripts/retire-evan.sh"
 changed old-staff-portal-site/ && run 'Old staff portal (oldstaffportal.hngroup.org.uk)' bash "$ROOT/old-staff-portal-site/install.sh" "$EMAIL"
 changed bots-site/ && run 'HN Group Bots (bots.hngroup.org.uk)' bash "$ROOT/bots-site/install.sh" "$EMAIL"
 changed status-site/ admin-site/catalog.json && run 'Status' bash "$ROOT/status-site/install.sh" "$EMAIL"

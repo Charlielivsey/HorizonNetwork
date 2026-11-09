@@ -4121,10 +4121,6 @@ footer .footer-brand .footer-parent { opacity: .82; font-size: .88rem; }
 .svc-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--green, #5FAE7B); box-shadow: 0 0 0 4px color-mix(in srgb, var(--green, #5FAE7B) 25%, transparent); flex-shrink: 0; }
 .svc-line.down .svc-dot { background: var(--raspberry, #C2306B); box-shadow: 0 0 0 4px color-mix(in srgb, var(--raspberry, #C2306B) 25%, transparent); }
 @media (prefers-reduced-motion: reduce) { .qa-btn { transition: none; } .qa-btn:hover { transform: none; } }
-.evan-note { display: flex; gap: 0.85rem; align-items: flex-start; border-color: color-mix(in srgb, var(--raspberry, #C2306B) 45%, var(--border)); background: color-mix(in srgb, var(--surface) 88%, var(--raspberry, #C2306B) 12%); }
-.evan-note .evan-emoji { font-size: 1.8rem; line-height: 1; }
-.evan-note .section-title { margin: 0 0 0.3rem; }
-.evan-note p { margin: 0 0 0.25rem; font-weight: 650; }
 
 /* ---------- Employee Management, rebuilt (the user's request, 3 November 2026) ---------- */
 .emp-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.85rem; margin-bottom: 1.25rem; }

@@ -913,10 +913,6 @@
             '<section class="panel" data-widget="quick">' + homeQuickActions() + "</section>" +
             '<section class="panel" id="home-around" data-widget="around" hidden></section>' +
             '<section class="panel" data-widget="services">' + homeServices(me) + "</section>" +
-            // A private note for the system owner only (the user's request, 3 November 2026: "a message telling evan to go
-            // fuck himself and his gap … even if it is only visible to me"). Never shown to anyone else, or while logged in as
-            // someone else.
-            (me.isOwner && !me.impersonatedBy ? '<section class="panel evan-note" aria-label="A note for Evan"><span class="evan-emoji" aria-hidden="true">\ud83d\udd95</span><div><h2 class="section-title">A note for Evan</h2><p>Evan, go fuck yourself and your gap.</p><p class="muted small">Only you can see this.</p></div></section>' : "") +
             '<section class="panel" data-widget="questions" hidden></section>' +
             '<section class="panel me-panel" data-widget="me"><div class="me-card">' + avatar(me, "lg") + '<div><div class="me-name">' + esc(me.displayName) + "</div>" +
             '<div class="muted small">' + esc(me.jobTitle) + "</div>" + (me.isOwner ? '<span class="badge badge-owner">System owner</span>' : "") + "</div></div>" +

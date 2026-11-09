@@ -14,8 +14,6 @@ const CLIENTS = {
   // logged in as someone else.
   mail: { name: 'HN Mail', callback: 'https://mail.hngroup.org.uk/auth/callback', allowed: u => !!(u.google && u.google.email) && !u.impersonated, denied: 'HN Mail only works with an account that has a Google account linked. Turn on Sign in with Google on this page first, then open HN Mail again.' },
   echo: { name: 'Echo', callback: 'https://echo.hngroup.org.uk/auth/callback', allowed: u => ['catnap@hngroup.org.uk', 'charlie.livsey@hngroup.org.uk'].includes(String(u.username || '').trim().toLowerCase()) && !u.impersonated, denied: 'Echo is private to its authorised HN Group accounts.' },
-  // evan.hngroup.org.uk (the user's request, 4 November 2026): private to the same two sign-in accounts as Echo.
-  evan: { name: 'Private page', callback: 'https://evan.hngroup.org.uk/auth/callback', allowed: u => ['catnap@hngroup.org.uk', 'charlie.livsey@hngroup.org.uk'].includes(String(u.username || '').trim().toLowerCase()) && !u.impersonated, denied: 'This page is private.' },
   bots: {name:'HN Group Bots',callback:'https://bots.hngroup.org.uk/auth/callback',allowed:u=>!!(u.ownerAccess||u.statusAdminAllowed)&&!u.impersonated,denied:'Only owner-level accounts and Super Admin members can manage bots.'},
   browser: { name: 'HN Browser', native: true, allowed: () => true, denied: 'This account cannot use HN Browser.' },
   'app-manager': { name: 'HN Group App Manager', native: true, allowed: () => true, denied: 'This account cannot use HN Group App Manager.' },

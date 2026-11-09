@@ -7,11 +7,15 @@ test('every application registered in server.js is known to the sign-in page',()
  const server=keys('server.js','const CLIENTS','\n};'),page=keys('public/app.js','const APPS','\n};');
  assert.ok(server.includes('devices')&&server.includes('app-manager'));
  assert.deepEqual(page,server);
+ assert.ok(!server.includes('evan'), 'retired private site has no Auth entry');
 });
 
 // Guest accounts (the user's request, 6 November 2026) only get the websites and apps ticked for them, and each
 // website's own rule still applies.
 test('guest accounts only reach the websites and apps ticked for them', () => {
+  const dir = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'hn-auth-clients-'));
+  process.env.DATA_DIR = dir; // Never load the live bot configuration in a test.
+  require('node:test').after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const { CLIENTS } = require('./server');
   const guest = { guest: true, guestSites: ['docs', 'portal', 'status'], username: 'visitor@example.com' };
   assert.equal(CLIENTS.docs.allowed(guest), true);
