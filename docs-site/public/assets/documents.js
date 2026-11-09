@@ -429,7 +429,8 @@
   }
   function field(f, value) {
     const node = el('div', { class: 'field', contenteditable: 'true', 'data-key': f.key, 'data-placeholder': f.label, 'aria-label': f.label, spellcheck: 'true' });
-    node.textContent = value || '';
+    node.textContent = f.fixed ? f.value : value || '';
+    if (f.fixed) { node.dataset.fixed = 'true'; node.setAttribute('aria-readonly', 'true'); }
     plainField(node, !!f.multiline);
     return node;
   }
@@ -489,7 +490,7 @@
   function drawControls() {
     const d = S.doc, final = d.status === 'final', locked = final || d.readOnly;
     sheet.classList.toggle('final', locked);
-    for (const n of sheet.querySelectorAll('[contenteditable]')) n.setAttribute('contenteditable', locked ? 'false' : 'true');
+    for (const n of sheet.querySelectorAll('[contenteditable]')) n.setAttribute('contenteditable', locked || n.dataset.fixed === 'true' ? 'false' : 'true');
     $('toolbar').classList.toggle('off', locked);
     $('doc-sign').hidden = !S.me.canSendContracts || !!d.readOnly;
     $('toolbar').hidden = !!d.readOnly;

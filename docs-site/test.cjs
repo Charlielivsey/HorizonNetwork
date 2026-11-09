@@ -146,6 +146,16 @@ test('HN Group Docs: sign-in, storage, files, access, templates, filters, editin
       assert.equal(r.status, 201, JSON.stringify(r.body)); made.push(r.body.document);
       assert.equal(r.body.document.sharing, 'staff'); assert.equal(r.body.document.version, 1);
     }
+    const directive = made.find(d => d.template === 'executive-directive');
+    assert.equal(directive.fields.authority, 'Article 10 of the Operations Policy');
+    assert.equal(directive.fields.senderName, 'Sam Taylor');
+    assert.equal(directive.fields.signature, 'Sam Taylor');
+    assert.equal(directive.fields.senderRole, 'Head of People');
+    assert.equal(directive.fields.signed, catalog.longDate(new Date()));
+    assert.match(directive.body, /under Article 10 of the Operations Policy/);
+    r = await call('/api/documents/' + directive.id, { cookie: sam.cookie, method: 'PUT', json: { version: directive.version, fields: { ...directive.fields, authority: 'Article 8' } } });
+    assert.equal(r.status, 200);
+    assert.equal(r.body.document.fields.authority, 'Article 10 of the Operations Policy', 'authority stays fixed even for direct API edits');
     assert.equal((await call('/api/documents', { cookie: sam.cookie, json: { company: 'nope', template: 'letter' } })).status, 400);
     assert.equal((await call('/api/documents', { cookie: sam.cookie, json: { company: 'hn-group', template: 'letter' }, origin: 'https://evil.example' })).status, 403, 'changes must come from the site');
     const termination = made.find((d) => d.template === 'termination' && d.company === 'hn-group');

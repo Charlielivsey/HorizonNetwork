@@ -181,7 +181,7 @@ function get(id, user) {
 
 function cleanFields(t, input) {
   const out = {};
-  for (const f of [...t.head, ...t.foot]) out[f.key] = plain(input && input[f.key], f.multiline ? 600 : 200, !!f.multiline);
+  for (const f of [...t.head, ...t.foot]) out[f.key] = plain(f.fixed ? f.value : input && input[f.key], f.multiline ? 600 : 200, !!f.multiline);
   return out;
 }
 
@@ -208,6 +208,7 @@ function update(id, user, input) {
   if (input.title !== undefined) d.title = plain(input.title, 160) || 'Untitled document';
   if (input.company !== undefined) { if (!catalog.company(input.company)) throw fail(400, 'Choose a company.'); d.company = input.company; }
   if (input.fields !== undefined) d.fields = cleanFields(t, input.fields);
+  for (const f of [...t.head, ...t.foot]) if (f.fixed) d.fields[f.key] = f.value;
   if (input.body !== undefined) { if (String(input.body).length > 600000) throw fail(413, 'This document is too long.'); d.body = sanitize(input.body); }
   if (input.sharing !== undefined && input.sharing !== d.sharing) {
     if (!SHARING.includes(input.sharing)) throw fail(400, 'Unknown sharing.');
@@ -291,6 +292,11 @@ function duplicate(id, user) {
   const s = get(id, user);
   const d = { ...JSON.parse(JSON.stringify(s)), id: crypto.randomUUID(), title: (s.title + ' (copy)').slice(0, 160), status: 'draft', version: 1,
     sharing: s.sharing === 'staff' && canEdit(s, user) ? s.sharing : 'private', owner: user.displayName, ownerId: user.id, ownerEmail: user.email, createdAt: now(), updatedAt: now(), updatedBy: user.displayName };
+  for (const f of [...catalog.template(d.template).head, ...catalog.template(d.template).foot]) if (f.fixed) d.fields[f.key] = f.value;
+  if (d.template === 'executive-directive') {
+    const start = catalog.start(catalog.template(d.template), catalog.company(d.company), user);
+    for (const key of ['senderName', 'senderRole', 'signature', 'signed']) d.fields[key] = start.fields[key];
+  }
   delete d.policy; d.protected = false; delete d.protectedBy; delete d.protectedAt;
   data.documents[d.id] = d;
   audit(user, 'duplicated', d); save();

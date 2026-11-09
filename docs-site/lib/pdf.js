@@ -406,14 +406,16 @@ function renderDocument(doc, company, template) {
     } else if (b.type === 'table') table(b);
     else { y += b.before; room(2); pdf.line(page, PAGE.left, y, PAGE.w - PAGE.right, y, C.ruleDark); y += b.after; }
   }
-  // The sign-off (letters): closing, a gap for a signature, then name, job title and company.
-  if (template.foot.length) {
-    y += 8 * MM;
-    room(30 * MM);
-    for (const f of template.foot) {
+  // Reserve the actual non-empty sign-off height; a fixed 30 mm reservation needlessly created extra pages.
+  const signOff = template.foot.map(f => ({ f, value: fieldText(f.key) })).filter(x => x.value);
+  if (signOff.length) {
+    const gap = 8 * MM;
+    const height = signOff.reduce((h, x) => h + (x.f.gap ? 14 * MM : 0) + breakLines([{ text: x.value }], BODY.size, CONTENT_W).length * BODY.size * BODY.lead, 0);
+    room(Math.min(gap + height, bottom - PAGE.top));
+    y += gap;
+    for (const { f, value } of signOff) {
       if (f.gap) y += 14 * MM;
-      const v = fieldText(f.key); if (!v) continue;
-      textBlock({ runs: [{ text: v, color: C.ink }], style: { ...BODY }, after: 0 });
+      textBlock({ runs: [{ text: value, color: C.ink }], style: { ...BODY }, after: 0 });
     }
   }
   // Every page: "Private & confidential" at the top when marked, and the company footer with page numbers (no website).
