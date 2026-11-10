@@ -505,6 +505,7 @@
     function highlightNav() {
         const path = window.location.pathname;
         if (window.HNPortal) window.HNPortal.route(path);
+        if (window.HNWorkspaceNavigation) window.HNWorkspaceNavigation.route(path);
         $$("#mainnav [data-section]").forEach(function (el) {
             el.classList.toggle("active", el.dataset.section.split(" ").indexOf(path) !== -1);
         });
@@ -748,6 +749,7 @@
         if (!HR_APP && path === '/leave') return window.location.assign('https://hr.hngroup.org.uk/leave');
         if (HR_APP && path !== '/leave') return window.location.assign('https://staff.hngroup.org.uk' + path);
         let view = ROUTES[path];
+        if (window.HNWorkspaceNavigation && window.HNWorkspaceNavigation.hasView(path)) view = function(root) { window.HNWorkspaceNavigation.overview(root,path); };
         if (!view) return navigate("/home", true);
         const NEEDS = { "/employees": "staff.manage", "/onboarding": "onboarding.manage", "/roles": "access.manage", "/payroll": "payroll.manage", "/funds": "payroll.manage", "/invoices": "payroll.manage", "/cases": "cases.manage", "/reports": "reports.view", "/bills": "payroll.manage", "/exit-interviews": "staff.manage", "/enquiries": "enquiries.manage" };
         if (NEEDS[path] && !can(NEEDS[path])) view = viewNoAccess;
@@ -767,6 +769,7 @@
         }
         if (seq !== renderSeq) return;
         decoratePageHead(root, path);
+        if (window.HNWorkspaceNavigation) window.HNWorkspaceNavigation.decorate(root,path);
         if (window.location.hash) {
             const target = document.getElementById(window.location.hash.slice(1));
             if (target) target.scrollIntoView({ block: "start" });
@@ -5210,8 +5213,9 @@
         let filter = state.helpFilter && filters.some(function (f) { return f[0] === state.helpFilter; }) ? state.helpFilter : "open";
 
         root.innerHTML =
-            '<div class="page-head"><div><h1>' + HELP_LABEL + '</h1><p class="muted">' + (d.canManage ? "Every ticket raised across HN Group." : "Get help from the IT team. Raise a ticket and follow it here.") + "</p></div>" +
+            '<div class="page-head"><div><h1>' + HELP_LABEL + '</h1><p class="muted">' + (d.canManage ? "Requests you raised and requests your teams are authorized to handle." : "Choose the right team and follow your requests here.") + "</p></div>" +
             '<div class="page-actions"><button type="button" class="btn btn-primary" id="hd-new">' + icon("plus") + (document.documentElement.dataset.hnApp ? "New ticket" : HELP_LABEL) + "</button></div></div>" +
+            '<div id="request-workspace"></div><h2 class="request-history-title">Your requests &amp; team queues</h2>' +
             '<div class="company-tabs" id="hd-tabs">' + filters.map(function (f) {
                 return '<button type="button" data-f="' + f[0] + '">' + esc(f[1]) + ' <span class="tab-count">' + d.tickets.filter(f[2]).length + "</span></button>";
             }).join("") + "</div>" +
@@ -5225,13 +5229,13 @@
                 return '<button type="button" class="ticket-row" data-ticket="' + t.id + '">' +
                     '<span class="tk-num">#' + t.number + "</span>" +
                     '<span class="tk-main"><span class="tk-subject">' + esc(t.subject) + "</span>" +
-                    '<span class="muted small">' + esc(t.categoryLabel) + (d.canManage && t.requester ? " · " + esc(t.requester.displayName) : "") +
+                    '<span class="muted small">' + (t.teamLabel ? esc(t.teamLabel) + (t.company ? " · " + esc(t.company) : "") + " · " : "") + esc(t.categoryLabel) + (d.canManage && t.requester ? " · " + esc(t.requester.displayName) : "") +
                     " · updated " + esc(timeAgo(t.updatedAt)) + (t.replies ? " · " + t.replies + (t.replies === 1 ? " reply" : " replies") : "") + "</span></span>" +
                     '<span class="tk-side">' + priorityPill(t.priority, d.priorities) + ticketStatusPill(t.status, d.statuses) +
                     (t.assignee ? '<span class="tk-assignee" title="Assigned to ' + esc(t.assignee.displayName) + '">' + avatar(t.assignee, "xs") + "</span>" : "") + "</span></button>";
             }).join("") + "</div>"
                 : '<div class="empty-page">' + icon("lifebuoy", "big") + "<h2>" + (filter === "open" ? "No open tickets" : "Nothing here") + "</h2>" +
-                  '<p class="muted">' + (filter === "open" && !d.canManage ? "Something not working? Use <strong>New ticket</strong> and the IT team will help." : "All quiet.") + "</p></div>";
+                  '<p class="muted">' + (filter === "open" && !d.canManage ? "Choose a team above to raise a request. Your requests and replies will appear here." : "All quiet.") + "</p></div>";
         }
 
         root.addEventListener("click", function (e) {
@@ -5242,6 +5246,10 @@
             if (t) openTicket(t.dataset.ticket, d);
         });
         draw();
+        if(window.HNRequests)window.HNRequests.mount($("#request-workspace",root),{data:d,icon:icon,api:api,state:state,complete:function(r){
+            state.me=r.user;renderChrome();toast("Request #"+r.ticket.number+" sent to "+r.ticket.teamLabel+" · "+r.ticket.company+".");
+            state.pendingTicket=r.ticket.id;state.helpFilter="open";render();
+        }});
         if (state.pendingTicket) {
             const id = state.pendingTicket;
             state.pendingTicket = null;
@@ -5250,6 +5258,7 @@
     }
 
     function openNewTicket(d) {
+        if(window.HNRequests && window.HNRequests.start())return;
         const m = openModal(
             '<h2 class="modal-title">' + (document.documentElement.dataset.hnApp ? "New IT ticket" : HELP_LABEL) + '</h2><p class="muted">Tell the IT team what’s wrong. The more detail, the quicker they can fix it.</p>' +
             '<form id="tk-form" novalidate>' +
@@ -5287,23 +5296,23 @@
         const m = openModal(
             '<div class="tk-header"><span class="tk-num">#' + t.number + "</span>" + ticketStatusPill(t.status, d.statuses) + priorityPill(t.priority, d.priorities) + "</div>" +
             '<h2 class="modal-title">' + esc(t.subject) + "</h2>" +
-            '<p class="muted small">' + esc(t.categoryLabel) + " · raised by " + esc(t.requester ? t.requester.displayName : "") + " " + esc(timeAgo(t.createdAt)) +
+            '<p class="muted small">' + (t.teamLabel ? esc(t.teamLabel) + (t.company ? " · " + esc(t.company) : "") + " · " : "") + esc(t.categoryLabel) + " · raised by " + esc(t.requester ? t.requester.displayName : "") + " " + esc(timeAgo(t.createdAt)) +
             (t.assignee ? " · assigned to " + esc(t.assignee.displayName) : " · not assigned yet") + "</p>" +
             (t.canManage ? '<div class="tk-controls">' +
                 '<label>Status<select id="tk-status">' + Object.keys(d.statuses).map(function (k) { return '<option value="' + k + '"' + (t.status === k ? " selected" : "") + ">" + esc(k === "waiting" ? "Waiting on requester" : d.statuses[k]) + "</option>"; }).join("") + "</select></label>" +
                 '<label>Priority<select id="tk-priority">' + Object.keys(d.priorities).map(function (k) { return '<option value="' + k + '"' + (t.priority === k ? " selected" : "") + ">" + esc(d.priorities[k]) + "</option>"; }).join("") + "</select></label>" +
-                '<label>Assigned to<select id="tk-assignee"><option value="">Nobody</option>' + d.agents.map(function (a) { return '<option value="' + a.id + '"' + (t.assignee && t.assignee.id === a.id ? " selected" : "") + ">" + esc(a.displayName) + (a.id === state.me.id ? " (me)" : "") + "</option>"; }).join("") + "</select></label>" +
+                '<label>Assigned to<select id="tk-assignee"><option value="">Nobody</option>' + (t.agents || d.agents).map(function (a) { return '<option value="' + a.id + '"' + (t.assignee && t.assignee.id === a.id ? " selected" : "") + ">" + esc(a.displayName) + (a.id === state.me.id ? " (me)" : "") + "</option>"; }).join("") + "</select></label>" +
                 "</div>" : "") +
             '<div class="tk-thread">' + t.messages.map(function (msg) {
                 const mine = msg.authorId === state.me.id;
                 return '<div class="tk-msg' + (mine ? " mine" : "") + (msg.internal ? " internal" : "") + (msg.fromIt ? " from-it" : "") + '">' + avatar(msg.author || {}, "sm") +
                     '<div class="tk-bubble"><div class="tk-meta"><strong>' + esc(msg.author ? msg.author.displayName : "") + "</strong>" +
-                    (msg.fromIt ? '<span class="badge">IT</span>' : "") + (msg.internal ? '<span class="badge badge-yellow">Internal note</span>' : "") +
+                    (msg.fromIt ? '<span class="badge">Team handler</span>' : "") + (msg.internal ? '<span class="badge badge-yellow">Internal note</span>' : "") +
                     '<span class="muted small">' + esc(timeAgo(msg.at)) + '</span></div><div class="tk-body">' + richText(msg.body) + "</div></div></div>";
             }).join("") + "</div>" +
             (t.status === "closed" && !t.canManage ? '<p class="muted small center">This ticket is closed. Reopen it if the problem is back.</p>' :
-            '<form id="tk-reply" class="tk-reply" novalidate><textarea id="tk-reply-text" rows="3" maxlength="5000" placeholder="' + (t.canManage ? "Reply to " + esc(t.requester ? t.requester.displayName : "the requester") : "Add more detail or reply to IT") + '…"></textarea>' +
-            '<div class="tk-reply-bar">' + (t.canManage ? '<label class="inline-check"><input type="checkbox" id="tk-internal"> Internal note (only IT sees it)</label>' : "<span></span>") +
+            '<form id="tk-reply" class="tk-reply" novalidate><textarea id="tk-reply-text" rows="3" maxlength="5000" placeholder="' + (t.canManage ? "Reply to " + esc(t.requester ? t.requester.displayName : "the requester") : "Add more detail or reply to the team") + '…"></textarea>' +
+            '<div class="tk-reply-bar">' + (t.canManage ? '<label class="inline-check"><input type="checkbox" id="tk-internal"> Internal note (authorized handlers only)</label>' : "<span></span>") +
             '<button type="submit" class="btn btn-primary btn-small">' + icon("message") + "Send</button></div></form>") +
             '<div class="modal-actions">' + (t.isRequester && !t.canManage
                 ? (done ? '<button type="button" class="btn btn-ghost" data-set="open">' + icon("refresh") + "Reopen ticket</button>" : '<button type="button" class="btn btn-ghost" data-set="resolved">' + icon("tick") + "It’s fixed – close ticket</button>")

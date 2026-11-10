@@ -2302,8 +2302,10 @@ async function routeApi(req, res, pathname, session) {
     if (method === "GET" && pathname === "/api/helpdesk") {
       return sendJson(res, 200, {
         tickets: helpdesk.list(me),
-        canManage: helpdesk.isAgent(me),
-        agents: helpdesk.agents(),
+        canManage: helpdesk.canHandleAny(me),
+        agents: helpdesk.visibleAgents(me),
+        teams: helpdesk.routing(),
+        companies: store.COMPANIES,
         categories: helpdesk.CATEGORIES,
         priorities: helpdesk.PRIORITIES,
         statuses: helpdesk.STATUSES,
@@ -2311,8 +2313,8 @@ async function routeApi(req, res, pathname, session) {
     }
     if (method === "POST" && pathname === "/api/helpdesk") {
       const t = helpdesk.createTicket(me, await readJsonBody(req));
-      logEvent(req, session, "ticket-raised", { target: `#${t.number}`, detail: t.subject });
-      notifications.notify(helpdesk.agents().map((a) => a.id), { type: "helpdesk", title: `New IT ticket #${t.number} from ${me.displayName}`, body: t.subject, link: "/helpdesk" }, me);
+      logEvent(req, session, "ticket-raised", { target: `#${t.number}`, detail: `${helpdesk.TEAMS[t.team].label} · ${t.company}` });
+      notifications.notify(helpdesk.recipients(t), { type: "helpdesk", title: `New ${helpdesk.TEAMS[t.team].label} request #${t.number}`, body: `${t.company} · A new request is ready in your team queue.`, link: "/helpdesk" }, me);
       return sendJson(res, 201, { ticket: helpdesk.fullView(t, me), user: meResponse(session) });
     }
     if ((m = /^\/api\/helpdesk\/([a-f0-9]{16})(?:\/(reply|update))?$/.exec(pathname))) {
@@ -2322,11 +2324,11 @@ async function routeApi(req, res, pathname, session) {
       if (method === "POST" && m[2] === "reply") {
         const body = await readJsonBody(req);
         helpdesk.reply(t, me, body);
-        if (!(body.internal && helpdesk.isAgent(me))) {
-          const to = me.id === t.createdBy ? (t.assigneeId ? [t.assigneeId] : helpdesk.agents().map((a) => a.id)) : [t.createdBy];
-          notifications.notify(to, { type: "helpdesk", title: `${me.displayName} replied on ticket #${t.number}`, body: t.subject, link: "/helpdesk" }, me);
+        if (!(body.internal && helpdesk.isAgent(me,t))) {
+          const to = helpdesk.replyRecipients(t,me);
+          notifications.notify(to, { type: "helpdesk", title: `Reply on request #${t.number}`, body: "There is a new reply on this request.", link: "/helpdesk" }, me);
         }
-        logEvent(req, session, body.internal && helpdesk.isAgent(me) ? "ticket-note-added" : "ticket-replied", { target: `#${t.number}` });
+        logEvent(req, session, body.internal && helpdesk.isAgent(me,t) ? "ticket-note-added" : "ticket-replied", { target: `#${t.number}` });
         return sendJson(res, 200, { ticket: helpdesk.fullView(t, me), user: meResponse(session) });
       }
       if (method === "POST" && m[2] === "update") {

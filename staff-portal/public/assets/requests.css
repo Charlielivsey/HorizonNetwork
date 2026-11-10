@@ -1,0 +1,32 @@
+/* Request chooser uses only the Staff Portal's approved theme tokens. */
+html[data-portal-ui] .request-workspace { margin-bottom: 32px; }
+html[data-portal-ui] .request-intro h2 { font-size: 23px; margin-top: 6px; letter-spacing: -.03em; }
+html[data-portal-ui] .request-intro p:not(.portal-eyebrow) { color: var(--text-muted); font-size: 12px; margin: 8px 0 20px; }
+html[data-portal-ui] .request-progress { display: flex; flex-wrap: wrap; gap: 22px; list-style: none; margin: 0 0 20px; padding: 0; }
+html[data-portal-ui] .request-progress li { display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 11px; }
+html[data-portal-ui] .request-progress li > span { display: grid; place-items: center; width: 25px; height: 25px; border-radius: 50%; background: var(--surface); border: 1px solid var(--border); }
+html[data-portal-ui] .request-progress [aria-current] { color: var(--primary); font-weight: 700; }
+html[data-portal-ui] .request-progress [aria-current] > span { background: var(--primary-tint); border-color: var(--primary-soft-border); }
+html[data-portal-ui] .request-team-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 16px; }
+html[data-portal-ui] .request-team-card { position: relative; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; text-align: left; padding: 22px; gap: 13px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 16px; font: inherit; cursor: pointer; transition: background .15s,border-color .15s; }
+html[data-portal-ui] .request-team-card:hover, html[data-portal-ui] .request-team-card[aria-pressed=true] { background: var(--surface-2); border-color: var(--primary); }
+html[data-portal-ui] .request-team-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: var(--primary-tint); color: var(--primary); }
+html[data-portal-ui] .team-hr .request-team-icon { color: var(--pink); background: color-mix(in srgb,var(--pink) 12%,var(--surface)); }
+html[data-portal-ui] .team-technology .request-team-icon { color: var(--teal); background: color-mix(in srgb,var(--teal) 12%,var(--surface)); }
+html[data-portal-ui] .team-compliance .request-team-icon { color: var(--yellow); background: color-mix(in srgb,var(--yellow) 12%,var(--surface)); }
+html[data-portal-ui] .request-team-card > strong { font-size: 14px; line-height: 1.5; padding-right: 8px; }
+html[data-portal-ui] .request-team-description { font-size: 12px; line-height: 1.8; color: var(--text-muted); flex: 1; }
+html[data-portal-ui] .request-examples { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 3px; }
+html[data-portal-ui] .request-examples > span { font-size: 9px; padding: 4px 7px; line-height: 1.5; color: var(--text-muted); background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; }
+html[data-portal-ui] .request-team-next { position: absolute; right: 16px; top: 31px; color: var(--text-muted); }
+html[data-portal-ui] .request-stage { margin-top: 24px; scroll-margin-top: 100px; max-width: 920px; }
+html[data-portal-ui] .request-stage-head { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 16px; }
+html[data-portal-ui] .request-stage-head h2 { margin-top: 6px; font-size: 20px; }
+html[data-portal-ui] .request-routing { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+html[data-portal-ui] .request-routing > span { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; font-size: 11px; background: var(--surface-2); }
+html[data-portal-ui] .request-routing .icon { width: 15px; height: 15px; color: var(--primary); }
+html[data-portal-ui] .request-audience { color: var(--text-muted); line-height: 1.8; font-size: 11px; margin-bottom: 20px; }
+html[data-portal-ui] .request-stage-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; }
+html[data-portal-ui] .request-history-title { font-size: 18px; margin: 32px 0 16px; }
+@media (max-width: 1300px) { html[data-portal-ui] .request-team-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width: 600px) { html[data-portal-ui] .request-team-grid { grid-template-columns: 1fr; } html[data-portal-ui] .request-stage-head { flex-wrap: wrap; } }
