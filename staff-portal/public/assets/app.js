@@ -492,10 +492,17 @@
             $('#mainnav').innerHTML = '<a href="/leave" data-link class="nav-link active">' + icon('sun') + '<span>Leave &amp; absence</span></a><a class="nav-link" href="https://staff.hngroup.org.uk/">Staff Portal</a>';
             $('#search-btn').hidden = true;
         }
+        if (window.HNPortal) window.HNPortal.chrome({
+            me: me, icon: icon, canAdmin: can("system.admin") && !me.impersonatedBy,
+            sections: NAV.filter(function (section) { return section.label !== "HR"; }).map(function (section) {
+                return { label: section.label, items: visibleItems(section) };
+            }),
+        });
     }
 
     function highlightNav() {
         const path = window.location.pathname;
+        if (window.HNPortal) window.HNPortal.route(path);
         $$("#mainnav [data-section]").forEach(function (el) {
             el.classList.toggle("active", el.dataset.section.split(" ").indexOf(path) !== -1);
         });
@@ -532,6 +539,7 @@
 
     function setMobileNav(open) {
         document.body.classList.toggle("nav-open", open);
+        if (window.HNPortal) window.HNPortal.mobile(open);
         $("#nav-toggle").setAttribute("aria-expanded", String(open));
         $("#nav-toggle").innerHTML = icon(open ? "x" : "menu");
     }
@@ -744,12 +752,16 @@
         if (path === "/system" && (!can("system.admin") || state.me.impersonatedBy)) view = viewNoSystemAccess;
 
         highlightNav();
-        root.innerHTML = '<div class="loading">Loading…</div>';
+        root.innerHTML = window.HNPortal ? window.HNPortal.loading() : '<div class="loading">Loading…</div>';
         root.classList.add("view-enter");
         try {
             await view(root, function () { return seq === renderSeq; });
         } catch (err) {
-            if (seq === renderSeq) root.innerHTML = '<div class="empty">' + esc(err.message) + "</div>";
+            if (seq === renderSeq) {
+                root.innerHTML = window.HNPortal ? window.HNPortal.error(err.message) : '<div class="empty">' + esc(err.message) + "</div>";
+                const retry = root.querySelector('[data-portal-retry]');
+                if (retry) retry.addEventListener('click', render);
+            }
         }
         if (seq !== renderSeq) return;
         decoratePageHead(root, path);
@@ -776,6 +788,7 @@
         document.body.classList.add("modal-open");
 
         const modal = { el: backdrop.firstChild, onClose: opts.onClose };
+        if (window.HNPortal) window.HNPortal.dialog(modal);
         backdrop.addEventListener("mousedown", function (e) { if (e.target === backdrop) closeModal(); });
         backdrop.addEventListener("click", function (e) { if (e.target.closest("[data-close]")) closeModal(); });
         activeModal = modal;
@@ -831,13 +844,20 @@
         return '<p class="muted hero-sub">' + esc(main.jobTitle) + " \u00b7 " + esc(main.company) + "</p>";
     }
 
-    async function viewHome(root) {
+    async function viewHome(root, current) {
         // Fresh counts for the reminder chips (approvals and tickets change while you're signed in).
         try {
             state.me = (await api("/api/me")).user;
             renderChrome();
         } catch (e) { /* keep what we have */ }
         const me = state.me;
+        if (window.HNPortal) return window.HNPortal.home(root, current, {
+            me: me, api: api, icon: icon, avatar: avatar, clock: clock,
+            statusPill: statusPill, rolesHtml: rolesHtml, mountAnnouncements: mountAnnouncements,
+            applyHomeLayout: applyHomeLayout, openHomeCustomiser: openHomeCustomiser,
+            loadComingUp: loadComingUp, loadWhosAround: loadWhosAround,
+            loadCelebrations: loadCelebrations, loadHomeColleagues: loadHomeColleagues,
+        });
         // Their own time comes from the time zone in their profile (not the device), and the second
         // clock is always UK time, where HN Group is based (shows BST or GMT).
         const profileTz = me.timezone || state.meta.defaultTimezone;
@@ -3524,8 +3544,12 @@
             overlay.remove();
             document.removeEventListener("keydown", onKey, true);
         };
-        const pages = NAV.reduce(function (all, s) { return all.concat(visibleItems(s).filter(function (it) { return it.href; })); }, [
+        const pages = NAV.reduce(function (all, s) { return all.concat(visibleItems(s).filter(function (it) { return it.href && (!window.HNPortal || window.HNPortal.isPortalDestination(it.href)); })); }, [
             { title: "Home", href: "/home", icon: "home" }, { title: "Settings", href: "/settings", icon: "settings" },
+            { title: "HN Group HR", href: "https://hr.hngroup.org.uk/", icon: "users" },
+            { title: "HN Group Finance", href: "https://finance.hngroup.org.uk/", icon: "pound" },
+            { title: "HN Group Docs", href: "https://docs.hngroup.org.uk/", icon: "file" },
+            { title: "HN Account", href: "https://accounts.hngroup.org.uk/", icon: "user" },
         ]);
         function go(it) {
             close();
@@ -6643,6 +6667,11 @@
             applyTheme(state.me.theme);
             if (!state.me.passwordTemporary && !state.me.passwordExpired && !state.me.codeSetupRequired) state.meta = await api("/api/meta");
         } catch (e) {
+            if (window.HNPortal) {
+                document.body.classList.remove("app-loading");
+                $("#view").innerHTML = window.HNPortal.error(e.message);
+                $("#view [data-portal-retry]").addEventListener("click", start);
+            }
             return;
         }
         renderChrome();
@@ -9922,7 +9951,7 @@
 
     function openHomeCustomiser() {
         const l = homeLayout();
-        let order = l.order.slice();
+        let order = window.HNPortal ? l.order.filter(function (key) { return window.HNPortal.widgetKeys.includes(key); }) : l.order.slice();
         const hidden = {};
         l.hidden.forEach(function (k) { hidden[k] = true; });
         const byKey = {};
