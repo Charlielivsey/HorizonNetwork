@@ -59,7 +59,10 @@
             '<nav aria-label="Workspace"><div class="portal-nav-group"><span class="portal-nav-label">Your workspace</span>' + link({title:'Overview',href:'/home',icon:'grid'}) + link({title:'Notifications',href:'/notifications',icon:'bell',badge:'notificationsUnread'}) + '</div>' +
             ctx.sections.map(section => '<div class="portal-nav-group"><span class="portal-nav-label">' + esc(section.label === 'People' ? 'Connect' : section.label) + '</span>' + section.items.map(link).join('') + '</div>').join('') +
             '<div class="portal-nav-group"><span class="portal-nav-label">HN Group services</span>' + services.map(it => '<a class="portal-nav-link portal-service-link" href="' + it.href + '">' + icon(it.icon) + '<span>' + it.title + '</span><span class="portal-external" aria-hidden="true">↗</span></a>').join('') + '</div></nav>' +
-            '<div class="portal-nav-bottom">' + link({title:'Settings',href:'/settings',icon:'settings'}) + (ctx.canAdmin ? link({title:'System administration',href:'/system',icon:'shield'}) : '') + '<a class="portal-sites-link" href="https://sites.hngroup.org.uk/">Explore all HN sites <span aria-hidden="true">↗</span></a></div>';
+            '<div class="portal-nav-bottom"><div class="portal-account-identity">' + (me.avatarUrl ? '<img class="avatar avatar-sm" src="'+esc(me.avatarUrl)+'" alt="">' : '<span class="avatar avatar-sm" aria-hidden="true">'+esc(String(me.displayName || '?').slice(0,1))+'</span>') + '<div><strong>'+esc(me.displayName)+'</strong><span>'+esc(me.username)+'</span></div></div>' +
+            (me.system ? '' : '<button class="portal-account-status" type="button" data-action="status">'+((q('#user-menu .status-pill') || {}).outerHTML || '<span>Set availability</span>')+icon('edit')+'</button>') +
+            '<a class="portal-nav-link" href="https://accounts.hngroup.org.uk/"'+(!me.impersonatedBy?' data-hn-account="/#overview"':'')+'>'+icon('user')+'<span>HN Account</span><span class="portal-external" aria-hidden="true">↗</span></a>' + link({title:'Settings',href:'/settings',icon:'settings'}) +
+            (ctx.canAdmin ? link({title:'System Admin',href:'/system',icon:'shield'}) : '') + '<button class="portal-nav-link portal-signout" type="button" data-action="logout">'+icon('logout')+'<span>Sign out</span></button><a class="portal-sites-link" href="https://sites.hngroup.org.uk/">Explore all HN sites <span aria-hidden="true">↗</span></a></div>';
         side.querySelector('.portal-sidebar-close').addEventListener('click', () => {document.body.classList.remove('nav-open');q('#nav-toggle').setAttribute('aria-expanded','false');q('#nav-toggle').innerHTML=icon('menu');mobile(false);});
         q('#nav-toggle').setAttribute('aria-controls','portal-sidebar');
         const search = q('#search-btn'); search.setAttribute('aria-label','Search the workspace (Ctrl or Command K)');
@@ -131,11 +134,26 @@
     function loading() { return '<div class="portal-loading" role="status"><div class="portal-skeleton portal-skeleton-title"></div><div class="portal-skeleton"></div><div class="portal-loading-grid"><div class="portal-skeleton"></div><div class="portal-skeleton"></div><div class="portal-skeleton"></div></div><span>Loading your workspace…</span></div>'; }
     function error(message) { return '<section class="portal-empty portal-page-error" role="alert"><h1>This page couldn’t load</h1><p>' + esc(message) + '</p><button class="btn btn-primary" data-portal-retry type="button">Try again</button><a class="btn btn-ghost" href="/home" data-link>Back to overview</a></section>'; }
     document.addEventListener('keydown',e => {
+        if (q('.modal-backdrop') || q('.search-overlay')) return;
         if (e.key !== 'Tab' || !document.body.classList.contains('nav-open') || !matchMedia('(max-width:1100px)').matches) return;
         const controls = Array.from(q('#portal-sidebar').querySelectorAll('a,button')).filter(el => el.getClientRects().length);
         const first=controls[0],last=controls[controls.length-1];
         if (e.shiftKey && document.activeElement===first) {e.preventDefault();last.focus();}
         else if (!e.shiftKey && document.activeElement===last) {e.preventDefault();first.focus();}
     });
-    window.HNPortal = {chrome,route,mobile,home,loading,error,dialog,isPortalDestination,widgetKeys:['celebrate','coming','around','me','help']};
+    const excludedCompany = /^HN Group Management(?: Limited)?$/i;
+    function companyVisible(company) { return !excludedCompany.test(String(company || '').trim()); }
+    function presentCompanies(node) {
+        if (!node || node.nodeType !== 1 || node.closest('script,style,textarea,[contenteditable=true]')) return;
+        const walker = document.createTreeWalker(node,NodeFilter.SHOW_TEXT);
+        while (walker.nextNode()) {
+            const text=walker.currentNode;
+            if (text.parentElement && !text.parentElement.closest('script,style,textarea,[contenteditable=true]') && /HN Group Management/i.test(text.nodeValue)) text.nodeValue=text.nodeValue.replace(/HN Group Management(?: Limited)?/gi,'Other company');
+        }
+        node.querySelectorAll('[aria-label],[title],[alt]').forEach(el=>{
+            for (const attr of ['aria-label','title','alt']) { const value=el.getAttribute(attr); if(value && /HN Group Management/i.test(value))el.setAttribute(attr,value.replace(/HN Group Management(?: Limited)?/gi,'Other company')); }
+        });
+    }
+    new MutationObserver(mutations=>{for(const mutation of mutations)for(const node of mutation.addedNodes)if(node.nodeType===1)presentCompanies(node);}).observe(document.body,{childList:true,subtree:true});
+    window.HNPortal = {chrome,route,mobile,home,loading,error,dialog,isPortalDestination,companyVisible,widgetKeys:['celebrate','coming','around','me','help']};
 })();
