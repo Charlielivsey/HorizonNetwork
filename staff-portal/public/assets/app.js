@@ -525,6 +525,7 @@
     function highlightNav() {
         const path = window.location.pathname;
         if (window.HNHR) window.HNHR.route(path);
+        if (window.HNWorkspaceNavigation) window.HNWorkspaceNavigation.route(path);
         $$("#mainnav [data-section]").forEach(function (el) {
             el.classList.toggle("active", el.dataset.section.split(" ").indexOf(path) !== -1);
         });
@@ -770,6 +771,7 @@
         const target = destination(path + location.search + location.hash);
         if (/^https?:/.test(target)) return window.location.assign(target);
         let view = HR_APP && path === "/home" ? viewHrHome : ROUTES[path];
+        if (window.HNWorkspaceNavigation && window.HNWorkspaceNavigation.hasView(path)) view = function(root) { window.HNWorkspaceNavigation.overview(root,path); };
         if (!view) return navigate("/home", true);
         const NEEDS = { "/employees": "staff.manage", "/onboarding": "onboarding.manage", "/roles": "access.manage", "/payroll": "payroll.manage", "/funds": "payroll.manage", "/invoices": "payroll.manage", "/cases": "cases.manage", "/reports": "reports.view", "/bills": "payroll.manage", "/exit-interviews": "staff.manage", "/enquiries": "enquiries.manage" };
         if (NEEDS[path] && !can(NEEDS[path])) view = viewNoAccess;
@@ -784,6 +786,7 @@
             if (seq === renderSeq) root.innerHTML = '<div class="empty">' + esc(err.message) + "</div>";
         }
         if (seq !== renderSeq) return;
+        if (window.HNWorkspaceNavigation) window.HNWorkspaceNavigation.decorate(root,path);
         decoratePageHead(root, path);
         if (window.location.hash) {
             const target = document.getElementById(window.location.hash.slice(1));

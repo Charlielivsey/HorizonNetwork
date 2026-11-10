@@ -14,10 +14,10 @@ function allowed(path,method){
 }
 function hrHtml(html){
  return html.replace(/<aside class="deprecation-banner"[^>]*>[\s\S]*?<\/aside>/g,'').replace('<html','<html data-hn-app="hr"')
-  .replace(/<link[^>]+href="\/assets\/(portal-ui|position-chart)\.css[^>]*>/g,'')
-  .replace(/<script[^>]+src="\/assets\/(portal-ui|position-chart|personal-calendar)\.js[^>]*><\/script>/g,'')
-  .replace('</head>','<link rel="stylesheet" href="/assets/hr-ui.css?v=hr-workspace-1"></head>')
-  .replace(/<script src="\/assets\/app\.js[^>]*><\/script>/, '<script src="/assets/hr-ui.js?v=hr-workspace-1"></script><script src="/assets/app.js?v=hr-workspace-1"></script>')
+  .replace(/<link[^>]+href="\/assets\/(portal-ui|position-chart|workspace-navigation)\.css[^>]*>/g,'')
+  .replace(/<script[^>]+src="\/assets\/(portal-ui|position-chart|personal-calendar|workspace-navigation)\.js[^>]*><\/script>/g,'')
+  .replace('</head>','<link rel="stylesheet" href="/assets/hr-ui.css?v=hr-navigation-2"><link rel="stylesheet" href="/assets/workspace-navigation.css?v=20261110-navigation-1"></head>')
+  .replace(/<script src="\/assets\/app\.js[^>]*><\/script>/, '<script src="/assets/workspace-navigation.js?v=20261110-navigation-1"></script><script src="/assets/hr-ui.js?v=hr-navigation-2"></script><script src="/assets/app.js?v=hr-navigation-2"></script>')
   .replaceAll('HN Group Staff Portal','HN Group HR').replaceAll('>Staff Portal<','>HR<')
   .replace('The staff portal for everyone across HN Group, Horizon Network and Horizon Media Group.','Leave, working hours, development and staff records across HN Group.')
   .replace(/<nav class="pf-col" aria-label="Your work">[\s\S]*?<\/nav>/, '<nav class="pf-col" aria-label="Your work"><h2>Your work</h2><a href="/leave" data-link>Leave &amp; absence</a><a href="/rotas" data-link>Rotas &amp; timesheets</a><a href="/reviews" data-link>Probation &amp; reviews</a><a href="/training" data-link>Training</a><a href="/staff-files" data-link>Staff documents</a></nav>')

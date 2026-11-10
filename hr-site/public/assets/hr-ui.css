@@ -493,3 +493,7 @@ html[data-hn-app="hr"][data-hr-ui] .portal-footer .pf-bottom { padding-block: 20
 @media(max-width:760px) { html[data-hn-app="hr"][data-hr-ui] .hr-welcome { flex-direction: column; align-items: stretch; } html[data-hn-app="hr"][data-hr-ui] .hr-tool-grid,html[data-hn-app="hr"][data-hr-ui] .hr-day { grid-template-columns: minmax(0,1fr); } html[data-hn-app="hr"][data-hr-ui] .page-head .page-actions { flex-basis: 100%; margin-left: 0; justify-content: flex-start; } html[data-hn-app="hr"][data-hr-ui] .page-head > div:not(.page-actions):not(.segmented) { flex-basis: calc(100% - 56px); } }
 /* Grid spacing owns dashboard rhythm; inherited sibling margins must not add a second gap. */
 html[data-hn-app="hr"][data-hr-ui] .hr-dashboard .panel { margin: 0; }
+/* Section headings remain clear links without introducing another nested sidebar. */
+html[data-hn-app="hr"][data-hr-ui] .hr-tool-panel .portal-section-head h2 a { color: inherit; text-decoration: none; display: inline-flex; align-items: center; gap: 9px; }
+html[data-hn-app="hr"][data-hr-ui] .hr-tool-panel .portal-section-head h2 a::after { content: '↗'; color: var(--primary); font-size: 12px; }
+html[data-hn-app="hr"][data-hr-ui] .hr-tool-panel .portal-section-head h2 a:hover { color: var(--primary); }

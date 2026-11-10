@@ -39,6 +39,8 @@ test('HR shell isolates its assets and removes portal-only components',()=>{
  assert.doesNotMatch(html,/deprecation-banner|\/assets\/(portal-ui|position-chart|personal-calendar)\.(?:css|js)/);
  assert.ok(html.indexOf('/assets/hr-ui.js?')<html.indexOf('/assets/app.js?'));
  assert.match(html,/\/assets\/hr-ui\.css\?v=/);
+ assert.equal((html.match(/src="\/assets\/workspace-navigation\.js/g)||[]).length,1);assert.equal((html.match(/href="\/assets\/workspace-navigation\.css/g)||[]).length,1);
+ assert.ok(html.indexOf('/assets/workspace-navigation.js?')<html.indexOf('/assets/hr-ui.js?'));
  const script=fs.readFileSync(path.join(__dirname,'public/assets/hr-ui.js'),'utf8');
  for(const mode of [undefined,'finance']){const dataset=mode?{hnApp:mode}:{};vm.runInNewContext(script,{document:{documentElement:{dataset}}});assert.equal(dataset.hrUi,undefined);}
 });
