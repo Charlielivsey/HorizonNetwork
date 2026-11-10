@@ -86,6 +86,13 @@
         if (!q('#user-menu a[href="https://accounts.hngroup.org.uk/"]')) q('#user-menu .menu-sep').insertAdjacentHTML('beforebegin','<a class="menu-item compact" role="menuitem" href="https://accounts.hngroup.org.uk/">' + icon('user') + '<span>HN Account</span></a>');
         mobile(document.body.classList.contains('nav-open'));
         route(location.pathname);
+        if(window.HNWorkspaceNavigation){
+            const navigation=window.HNWorkspaceNavigation;
+            const account=side.querySelector('.portal-account');
+            const accountController=navigation.bindDetails({details:account,button:account.querySelector('summary'),menu:account.querySelector('.portal-account-controls')});
+            const definitions={People:{id:'connect',title:'Connect',icon:'users',description:'Find colleagues, join conversations and share knowledge.'},Workplace:{id:'workplace',title:'Workplace',icon:'building',description:'Group news, your calendar and ways to shape our workplace.'},Support:{id:'support',title:'Support',icon:'lifebuoy',description:'Raise a request, find support and check group services.'}};
+            navigation.configure({app:'portal',sidebar:side,icon:icon,closeAccount:()=>accountController.close(),sections:ctx.sections.filter(section=>section.items.length).map(section=>({...definitions[section.label],items:section.items})).concat([{id:'services',title:'HN Group services',icon:'grid',description:'Open the dedicated HN websites for your work.',items:services}])});
+        }
     }
     const panelHead = (title, href, label) => '<div class="portal-section-head"><h2>' + title + '</h2>' + (href ? '<a href="' + href + '" data-link>' + (label || 'View all') + '<span aria-hidden="true"> ↗</span></a>' : '') + '</div>';
     async function home(root, current, ctx) {
@@ -152,11 +159,11 @@
     function error(message) { return '<section class="portal-empty portal-page-error" role="alert"><h1>This page couldn’t load</h1><p>' + esc(message) + '</p><button class="btn btn-primary" data-portal-retry type="button">Try again</button><a class="btn btn-ghost" href="/home" data-link>Back to overview</a></section>'; }
     document.addEventListener('pointerdown', e => {
         const account = q('.portal-account[open]');
-        if (account && !account.contains(e.target) && !q('.modal-backdrop')) account.open = false;
+        if (account && !account.dataset.workspaceAccount && !account.contains(e.target) && !q('.modal-backdrop')) account.open = false;
     });
     document.addEventListener('keydown',e => {
         const account = q('.portal-account[open]');
-        if (e.key === 'Escape' && account && !q('.modal-backdrop') && !q('.search-overlay')) {
+        if (e.key === 'Escape' && account && !account.dataset.workspaceAccount && !q('.modal-backdrop') && !q('.search-overlay')) {
             e.preventDefault(); e.stopImmediatePropagation(); account.open = false; account.querySelector('summary').focus(); return;
         }
         if (q('.modal-backdrop') || q('.search-overlay')) return;

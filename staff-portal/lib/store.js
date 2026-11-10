@@ -317,7 +317,10 @@ const PERMISSIONS = [
   { key: "onboarding.manage", name: "Run onboarding", description: "Start onboarding checklists and edit the templates." },
   { key: "leave.manage", name: "Manage leave", description: "Approve anyone's leave, see all absence and set holiday allowances." },
   { key: "rotas.manage", name: "Manage rotas & timesheets", description: "Plan shifts on the rota and approve anyone's timesheets." },
-  { key: "helpdesk.manage", name: "Handle IT tickets", description: "See every IT Helpdesk ticket, reply, assign and change its status." },
+  { key: "helpdesk.manage", name: "Handle Internal Technology requests", description: "Read and handle Internal Technology requests and existing IT tickets across companies. Does not grant access to other teams' private requests." },
+  { key: "requests.leadership", name: "Handle Leadership requests", description: "Read, reply to and assign Leadership Team requests across companies." },
+  { key: "requests.hr", name: "Handle Human Resources requests", description: "Read, reply to and assign private Human Resources Team requests across companies. Independent of staff and leave management." },
+  { key: "requests.compliance", name: "Handle Compliance requests", description: "Read, reply to and assign private Compliance Team requests across companies." },
   { key: "payroll.manage", name: "Run payroll & finance", description: "See pay details, generate and issue payslips, and manage company funds, expenses and invoices. Only people who already have it can give it out." },
   { key: "cases.manage", name: "HR cases", description: "See and record disciplinary, grievance and capability cases. These are private to people with this permission." },
   { key: "jobdescriptions.manage", name: "Manage job descriptions", description: "Post, edit and delete job descriptions for roles (People → Job descriptions). Everyone can read them." },
@@ -334,7 +337,7 @@ const PAYROLL = "payroll.manage";
 // Permissions only someone who already has them can hand out.
 const STORAGE_ACCESS = "storage.access";
 const CONTRACTS_MANAGE = "contracts.manage";
-const GUARDED_PERMISSIONS = [SYSTEM_ADMIN, PAYROLL, STORAGE_ACCESS, CONTRACTS_MANAGE];
+const GUARDED_PERMISSIONS = [SYSTEM_ADMIN, PAYROLL, STORAGE_ACCESS, CONTRACTS_MANAGE, "requests.leadership", "requests.hr", "requests.compliance"];
 const PERMISSION_KEYS = PERMISSIONS.map((p) => p.key);
 
 // First run with roles: create sensible defaults, and give anyone who had access through their

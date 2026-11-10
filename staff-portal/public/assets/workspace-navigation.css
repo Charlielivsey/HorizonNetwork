@@ -1,0 +1,23 @@
+/* Common section hierarchy and desktop navigation for Staff Portal and HR. */
+html[data-workspace-app] .workspace-sidebar-toggle { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 36px; color: var(--text); border: 1px solid var(--border); border-radius: 9px; }
+html[data-workspace-app] .workspace-section-nav { display: flex; flex-wrap: wrap; gap: 7px; margin: 0 0 26px; padding: 0 0 18px; border-bottom: 1px solid var(--border); }
+html[data-workspace-app] .workspace-page-link { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 8px 11px; border-radius: 8px; border: 1px solid transparent; color: var(--text-muted); font-size: 11px; text-decoration: none; }
+html[data-workspace-app] .workspace-page-link .icon { width: 15px; height: 15px; }
+html[data-workspace-app] .workspace-page-link:hover { color: var(--text); background: var(--surface); }
+html[data-workspace-app] .workspace-page-link.is-current { color: var(--primary); background: var(--primary-tint); border-color: var(--primary-soft-border); }
+html[data-workspace-app] .workspace-overview-link { font-weight: 700; border-color: var(--border); }
+html[data-workspace-app] .workspace-overview-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,250px),1fr)); gap: 18px; }
+html[data-workspace-app] .workspace-overview-card { position: relative; display: flex; flex-direction: column; gap: 14px; min-height: 190px; padding: 24px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); color: var(--text); text-decoration: none; }
+html[data-workspace-app] .workspace-overview-card:hover { background: var(--surface-2); border-color: var(--primary); }
+html[data-workspace-app] .workspace-card-icon { width: 40px; height: 40px; display: grid; place-items: center; background: var(--primary-tint); color: var(--primary); border-radius: 12px; }
+html[data-workspace-app] .workspace-overview-card strong { font-size: 14px; }
+html[data-workspace-app] .workspace-overview-card > span:not(.workspace-card-icon) { color: var(--text-muted); font-size: 12px; line-height: 1.8; }
+html[data-workspace-app] .workspace-overview-card > .icon { position: absolute; top: 35px; right: 22px; color: var(--text-muted); }
+@media (min-width:1101px) {
+ html[data-workspace-app] body { transition: padding-left 180ms ease; }
+ html[data-workspace-app] .portal-sidebar { transition: transform 180ms ease,visibility 180ms; }
+ html[data-workspace-app][data-workspace-collapsed] body { padding-left: 0 !important; }
+ html[data-workspace-app][data-workspace-collapsed] .portal-sidebar { transform: translateX(-100%) !important; visibility: hidden !important; pointer-events: none; }
+}
+@media (max-width:1100px) { html[data-workspace-app] .workspace-sidebar-toggle { display: none; } }
+@media (prefers-reduced-motion:reduce) { html[data-workspace-app] body,html[data-workspace-app] .portal-sidebar { transition: none; } }

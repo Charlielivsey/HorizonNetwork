@@ -1073,7 +1073,7 @@ async function handle(req, res, pathname, session) {
       },
       logins: { total: signIns.length, people: new Set(signIns.map((e) => e.actor)).size, byDay, busiestDay: Object.entries(byDay).sort((a, b) => b[1] - a[1])[0] || null },
       leave: { byType: Object.entries(leaveDays).map(([type, days]) => ({ type, label: leave.TYPES[type] || type, days })), total: Object.values(leaveDays).reduce((n, d) => n + d, 0) },
-      helpdesk: helpdesk.statsBetween(from, to),
+      helpdesk: helpdesk.statsBetween(from, to, me),
       status: { incidents: uptime.incidentsBetween(from, to), services: uptime.list().map((x) => ({ name: x.name, uptime7d: x.uptime7d, state: x.state })) },
       engagement: {
         kudos: kudos.countBetween(from, to),
