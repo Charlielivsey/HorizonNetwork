@@ -7,11 +7,11 @@ const ready=async u=>{for(let i=0;i<100;i++){try{if((await fetch(u)).ok)return;}
 test('Docs administration migrates policies and storage with separate permissions and existing data',async()=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-docs-administration-'));process.env.DATA_DIR=dir;
  const store=require('../staff-portal/lib/store');store.init(dir);
- const users={};for(const [index,name] of ['policy','storage','hr','ordinary'].entries()){
+ const users={};for(const [index,name] of ['policy','storage','hr','ordinary','both'].entries()){
   const p=store.saveEmployee({firstName:name,lastName:'Fixture',displayName:name,company:'HN Group',jobTitle:'Analyst',discordId:String(index+1)+'23456789012345678',emails:[{local:'docs.'+name,domain:'hngroup.org.uk',primary:true}]});
   store.issueTemporaryPassword(p);store.setPassword(p,'Fixture-password-582!');store.setCode(p,'582947');users[name]=p;
  }
- for(const [name,permissions] of [['policy',['documents.manage']],['storage',['storage.access']],['hr',['hr.manage']]]){const role=store.saveRole({name:'Docs fixture '+name,permissions});store.setRoleMembers(role,[users[name].id]);}
+ for(const [name,permissions] of [['policy',['documents.manage']],['storage',['storage.access']],['hr',['hr.manage']],['both',['storage.access','documents.manage']]]){const role=store.saveRole({name:'Docs fixture '+name,permissions});store.setRoleMembers(role,[users[name].id]);}
  const secret=path.join(dir,'secret');fs.writeFileSync(secret,'f'.repeat(64));
  const [staffPort,authPort,docsPort,proxyPort]=await Promise.all([port(),port(),port(),port()]);
  const staff='http://127.0.0.1:'+staffPort,auth='http://127.0.0.1:'+authPort,docs='http://127.0.0.1:'+docsPort,proxy='http://127.0.0.1:'+proxyPort;
@@ -32,14 +32,14 @@ test('Docs administration migrates policies and storage with separate permission
   await Promise.all([ready(staff+'/healthz'),ready(auth+'/healthz'),ready(docs+'/healthz'),ready(proxy+'/healthz')]);
   const cookies={};for(const name of Object.keys(users))cookies[name]=await signIn(name);
   for(const [name,c] of Object.entries(cookies)){
-   const flags=(await(await get(docs,'/api/me',c)).json()).user.administration;assert.deepEqual(flags,{storage:name==='storage',documents:name==='policy'});
+   const flags=(await(await get(docs,'/api/me',c)).json()).user.administration;assert.deepEqual(flags,{storage:['storage','both'].includes(name),documents:['policy','both'].includes(name)});
    assert.equal((await get(docs,'/administration',c)).status,['hr','ordinary'].includes(name)?403:200);
-   assert.equal((await get(docs,'/administration/storage',c)).status,name==='storage'?200:403);
-   assert.equal((await get(docs,'/administration/documents',c)).status,name==='policy'?200:403);
-   assert.equal((await get(docs,'/api/administration/document-storage',c)).status,name==='storage'?200:403);
-   assert.equal((await get(docs,'/api/administration/documents',c)).status,name==='policy'?200:403);
+   assert.equal((await get(docs,'/administration/storage',c)).status,['storage','both'].includes(name)?200:403);
+   assert.equal((await get(docs,'/administration/documents',c)).status,['policy','both'].includes(name)?200:403);
+   assert.equal((await get(docs,'/api/administration/document-storage',c)).status,['storage','both'].includes(name)?200:403);
+   assert.equal((await get(docs,'/api/administration/documents',c)).status,['policy','both'].includes(name)?200:403);
    assert.equal((await get(docs,'/api/administration/policies',c)).status,200);
-   assert.equal((await get(docs,'/api/storage/'+users.ordinary.id,c)).status,name==='ordinary'||name==='storage'?200:403);
+   assert.equal((await get(docs,'/api/storage/'+users.ordinary.id,c)).status,name==='ordinary'||['storage','both'].includes(name)?200:403);
   }
   assert.equal((await get(docs,'/api/administration/tools')).status,401);
   assert.equal((await get(staff,'/api/docs-administration/tools')).status,404);
@@ -69,13 +69,24 @@ test('Docs administration migrates policies and storage with separate permission
   assert.equal((await post(docs,'/api/administration/documents/'+d.id,{},cookies.policy,'https://evil.test')).status,403);
   for(const [old,next] of [['/documents','/administration/documents'],['/document-storage','/administration/storage']]){const r=await get(proxy,old+'?view=example');assert.equal(r.status,302);assert.equal(r.headers.get('location'),'https://docs.hngroup.org.uk'+next+'?view=example');}
   if(process.env.HN_DOCS_BROWSER==='1'){
+   fs.mkdirSync(path.join(root,'.test-results'),{recursive:true});
    const {chromium}=require('../browser-app/node_modules/playwright');const browser=await chromium.launch({executablePath:process.env.CHROMIUM_EXECUTABLE,args:['--no-sandbox']});
    try{for(const [name,c] of Object.entries(cookies)){
     const context=await browser.newContext({viewport:{width:1365,height:950}});await context.addCookies([{name:'hn_docs_session',value:c.split('=')[1],url:docs}]);const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
-    await page.goto(docs);await page.waitForSelector('#who:not([hidden])');await page.locator('#profile-menu summary').click();assert.equal(await page.locator('#administration-link').isVisible(),['policy','storage'].includes(name));
-    if(['policy','storage'].includes(name)){
-     await page.locator('#administration-link').click();await page.waitForSelector('.admin-tools');assert.equal(await page.locator('.admin-tools a').count(),1);
-     await page.locator('.admin-tools a').click();await page.waitForSelector(name==='policy'?'#admin-doc-search':'#admin-ds-search');
+    await page.goto(docs);await page.waitForSelector('#who:not([hidden])');await page.locator('#profile-menu summary').click();assert.equal(await page.locator('#administration-link').isVisible(),['policy','storage','both'].includes(name));
+    if(['policy','storage','both'].includes(name)){
+     await page.locator('#administration-link').click();await page.waitForSelector('.admin-tools');assert.equal(await page.locator('.admin-tools a').count(),name==='both'?2:1);
+     assert.equal(await page.locator('.admin-tool-card').first().evaluate(e=>getComputedStyle(e).borderTopStyle),'solid');
+     assert.ok(await page.locator('.admin-tool-icon svg').first().isVisible());
+     await page.screenshot({path:path.join(root,'.test-results','docs-overview-'+name+'-desktop.png'),fullPage:true});
+     await page.locator('#profile-menu summary').click();assert.equal(await page.locator('#administration-link').evaluate(e=>getComputedStyle(e).fontSize),'13px');
+     await page.screenshot({path:path.join(root,'.test-results','docs-menu-'+name+'-desktop.png')});
+     await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+     await page.screenshot({path:path.join(root,'.test-results','docs-menu-'+name+'-mobile.png'),fullPage:true});
+     await page.locator('#profile-menu summary').click();await page.screenshot({path:path.join(root,'.test-results','docs-overview-'+name+'-mobile.png'),fullPage:true});
+     await page.setViewportSize({width:1365,height:950});
+
+     await page.locator('.admin-tools a').first().click();await page.waitForSelector(name==='policy'?'#admin-doc-search':'#admin-ds-search');
      if(name==='policy'){await page.locator('#upload-doc').click();await page.locator('#admin-doc-title').fill('Browser policy');await page.locator('#admin-doc-file').setInputFiles({name:'browser.txt',mimeType:'text/plain',buffer:Buffer.from('Browser upload')});await page.locator('#admin-doc-save').click();await page.waitForSelector('.admin-doc-title:has-text("Browser policy")');await page.locator('.admin-doc-row').filter({hasText:'Browser policy'}).locator('[data-menu]').click();await page.getByRole('button',{name:'Edit details',exact:true}).click();await page.waitForSelector('#admin-doc-form');await page.locator('#modal-root [data-close]').first().click();}
      await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'no mobile overflow: '+name);
      fs.mkdirSync(path.join(root,'.test-results'),{recursive:true});await page.screenshot({path:path.join(root,'.test-results','docs-administration-'+name+'.png'),fullPage:true});

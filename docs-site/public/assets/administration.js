@@ -32,9 +32,15 @@ async function render() {
     const allowed = path === '/administration/storage' ? tools.storage : path === '/administration/documents' ? tools.documents : tools.storage || tools.documents;
     if (!readOnly && !allowed) { root.innerHTML = '<h1>Access denied</h1><p>You do not have permission to use this administration tool.</p>'; return; }
     if (path === '/administration') {
-      root.innerHTML = '<div class="page-head"><div><p class="eyebrow">HN Group Docs</p><h1>Administration</h1><p class="muted">Manage the document tools available to you.</p></div></div><div class="admin-tools">' +
-       (tools.storage ? '<a class="card" href="/administration/storage" data-link><h2>Document storage</h2><p>Review private storage and manage timed access.</p></a>' : '') +
-       (tools.documents ? '<a class="card" href="/administration/documents" data-link><h2>Documents &amp; Policies</h2><p>Manage uploads, audiences, versions and acknowledgements.</p></a>' : '') + '</div>';
+      const toolCard = (href, glyph, title, description, action, colour) => '<a class="admin-tool-card ' + colour + '" href="' + href + '" data-link>' +
+        '<span class="admin-tool-icon">' + icon(glyph) + '</span><div class="admin-tool-copy"><h2>' + title + '</h2><p>' + description + '</p></div>' +
+        '<span class="admin-tool-action">' + action + icon('chevronRight') + '</span></a>';
+      root.innerHTML = '<div class="admin-heading"><a class="admin-breadcrumb" href="/" data-link>' + icon('chevronLeft') + 'Back to Docs</a><div class="admin-heading-row"><span class="admin-heading-icon">' + icon('shield') + '</span><div><p class="eyebrow">HN Group Docs</p><h1>Administration</h1><p class="muted">Manage documents, policies and access to staff storage.</p></div></div></div>' +
+        '<section class="admin-tool-section" aria-labelledby="admin-tools-title"><div class="admin-section-heading"><h2 id="admin-tools-title">Document management</h2><span class="admin-section-note">Tools available to you</span></div><div class="admin-tools">' +
+        (tools.storage ? toolCard('/administration/storage', 'lock', 'Document storage', 'View staff storage and give or remove temporary access to private documents.', 'Manage storage', 'admin-tool-teal') : '') +
+        (tools.documents ? toolCard('/administration/documents', 'file', 'Documents &amp; Policies', 'Upload policies, manage versions and audiences, and track staff acknowledgements.', 'Manage documents', 'admin-tool-purple') : '') +
+        '</div></section><div class="admin-access-note">' + icon('shield') + '<p>Each tool follows your account permissions. Private storage access is recorded.</p></div>';
+
     } else {
       root.innerHTML = '<p>Loading…</p>';
       if (path === '/administration/storage') await viewDocumentStorage(root, current);

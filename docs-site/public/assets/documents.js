@@ -79,7 +79,7 @@
     for (const a of document.querySelectorAll('.tabs a')) a.removeAttribute('aria-current');
     window.HNDocsAdministration.close();
     document.getElementById('profile-menu').open = false;
-    if (p.startsWith('/administration') || p === '/policies') { S.doc = null; $('view-administration').hidden = false; return window.HNDocsAdministration.render($('view-administration')); }
+    if (p.startsWith('/administration') || p === '/policies') { document.title = (p === '/policies' ? 'Policies' : 'Administration') + ' · HN Group Docs'; S.doc = null; $('view-administration').hidden = false; return window.HNDocsAdministration.render($('view-administration')); }
     if (m) return openDoc(m[1]);
     S.doc = null; document.title = 'HN Group Docs';
     const params = new URLSearchParams(location.search);

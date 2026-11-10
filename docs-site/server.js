@@ -215,7 +215,7 @@ async function api(req, res, url) {
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.png': 'image/png', '.txt': 'text/plain; charset=utf-8' };
 // Public without a sign-in: what the sign-in page needs. Company logos and the app itself need a sign-in.
-const PUBLIC_FILES = new Set(['/assets/hn-theme.js', '/assets/documents.css', '/assets/hn-motion.css', '/assets/hn-motion.js', '/assets/favicon.svg', '/assets/fonts/plus-jakarta-sans.woff2', '/assets/brand/hn-group-wordmark.svg', '/assets/brand/hn-group-wordmark-white.svg', '/robots.txt']);
+const PUBLIC_FILES = new Set(['/assets/hn-theme.js', '/assets/documents.css', '/assets/administration.css', '/assets/hn-motion.css', '/assets/hn-motion.js', '/assets/favicon.svg', '/assets/fonts/plus-jakarta-sans.woff2', '/assets/brand/hn-group-wordmark.svg', '/assets/brand/hn-group-wordmark-white.svg', '/robots.txt']);
 function serveFile(res, rel, cache) {
   const file = path.join(PUBLIC, path.normalize(rel).replace(/^([/\\])+/, ''));
   if (!file.startsWith(PUBLIC + path.sep)) return false;
