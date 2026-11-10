@@ -1,6 +1,7 @@
 'use strict';
 // A fixed allowlist: no request may choose an arbitrary process or hostname.
 const sites=[
+['hr','HN Group HR','hn-hr',5680,['hr.hngroup.org.uk']],
 ['people','HN Group People','hn-people',5670,['people.hngroup.org.uk']],
 ['mail','HN Mail','hn-mail',5660,['mail.hngroup.org.uk']],
 ['echo','Echo','hn-echo',5630,['echo.hngroup.org.uk']],

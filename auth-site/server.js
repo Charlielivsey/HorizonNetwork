@@ -10,6 +10,7 @@ const {createDiscord}=require('./discord');
 const ORIGIN = 'https://auth.hngroup.org.uk';
 // Registered applications: fixed callbacks and who may use them.
 const CLIENTS = {
+  hr: {name:'HN Group HR',callback:'https://hr.hngroup.org.uk/auth/callback',allowed:u=>!u.standalone,denied:'A staff profile is required to use HR.'},
   // HN Mail (the user's request, 6 November 2026): only sign-in accounts with a Google account linked, never while
   // logged in as someone else.
   mail: { name: 'HN Mail', callback: 'https://mail.hngroup.org.uk/auth/callback', allowed: u => !!(u.google && u.google.email) && !u.impersonated, denied: 'HN Mail only works with an account that has a Google account linked. Turn on Sign in with Google on this page first, then open HN Mail again.' },
@@ -207,7 +208,7 @@ const server = http.createServer(async (req, res) => {
       if (detachedEntry) { const application = applicationSessions.get(hash(applicationToken)); if (application && application.expires !== entry.expires) { application.expires = entry.expires; saveAppSessions(); } }
       requireReady(user);
       if (!CLIENTS[clientId].allowed(user)) throw fail(403, guestDenied(clientId, user));
-      if (clientId === 'portal' || clientId === 'accounts') {
+      if (clientId === 'portal' || clientId === 'accounts' || clientId === 'hr') {
         // The application starts its own session (HN Account swaps this one for its own on the staff
         // account service); this Auth sign-in has done its job.
         sessions.delete(token);

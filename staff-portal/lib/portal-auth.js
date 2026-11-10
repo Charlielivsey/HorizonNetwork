@@ -24,6 +24,7 @@ function readSecret() {
 }
 
 // Auth sign-in is used whenever the shared secret is installed; otherwise the portal keeps its own form.
+function clientFor(req) { return req.headers['x-hn-hr-app'] === '1' && ['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress) ? 'hr' : 'portal'; }
 function enabled() { return !!readSecret(); }
 
 function createPortalAuth({ store, sessions, resume, createSession, cookieFor, parseCookies, send, redirect, logEvent, loginNext, clientIp }) {
@@ -40,9 +41,9 @@ function createPortalAuth({ store, sessions, resume, createSession, cookieFor, p
     for (const [s, v] of states) if (v.expires <= Date.now()) states.delete(s);
     if (states.size >= 10000) return send(res, 503, 'Please try again shortly.', { 'Content-Type': 'text/plain' });
     const state = crypto.randomBytes(32).toString('hex');
-    states.set(state, { next: loginNext(next) || null, expires: Date.now() + STATE_TTL_MS });
+    states.set(state, { client: clientFor(req), next: loginNext(next) || null, expires: Date.now() + STATE_TTL_MS });
     send(res, 302, '', {
-      Location: `${AUTH_ORIGIN}/authorize?client_id=portal&state=${state}`,
+      Location: `${AUTH_ORIGIN}/authorize?client_id=${clientFor(req)}&state=${state}`,
       'Cache-Control': 'no-store',
       'Set-Cookie': stateCookie(req, state, STATE_TTL_MS / 1000),
     });
@@ -57,7 +58,7 @@ function createPortalAuth({ store, sessions, resume, createSession, cookieFor, p
     const pending = HEX.test(state) && states.get(state);
     states.delete(state);
     // The state must be one this portal issued, to this same browser, and not yet used.
-    if (!pending || pending.expires <= Date.now() || parseCookies(req)[STATE_COOKIE] !== state) return back(req, res, 'auth_error=expired');
+    if (!pending || pending.client !== clientFor(req) || pending.expires <= Date.now() || parseCookies(req)[STATE_COOKIE] !== state) return back(req, res, 'auth_error=expired');
     if (url.searchParams.get('error')) return back(req, res, 'auth_error=denied');
     const code = url.searchParams.get('code') || '';
     const secret = readSecret();
@@ -68,7 +69,7 @@ function createPortalAuth({ store, sessions, resume, createSession, cookieFor, p
       const response = await fetch(AUTH_BACKEND + '/api/sso/exchange', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + secret },
-        body: JSON.stringify({ client_id: 'portal', code, state }),
+        body: JSON.stringify({ client_id: pending.client, code, state }),
         signal: AbortSignal.timeout(8000),
         redirect: 'error',
       });
@@ -97,7 +98,7 @@ function createPortalAuth({ store, sessions, resume, createSession, cookieFor, p
     // An old portal "Resume session" token on this browser is retired: Auth remembers the account now.
     const old = parseCookies(req)[resume.COOKIE];
     if (old) { resume.forget(old); cookies.push(resume.cookie(req, '', true)); }
-    send(res, 302, '', { Location: pending.next || '/home', 'Cache-Control': 'no-store', 'Set-Cookie': cookies });
+    send(res, 302, '', { Location: pending.next || (pending.client === 'hr' ? '/leave' : '/home'), 'Cache-Control': 'no-store', 'Set-Cookie': cookies });
   }
 
   // Returns true when it handled the request.

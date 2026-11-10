@@ -1,5 +1,6 @@
 (function () {
     "use strict";
+    const HR_APP = document.documentElement.dataset.hnApp === "hr";
 
     // ================= Helpers =================
 
@@ -399,7 +400,7 @@
         },
         {
             label: "HR", items: [
-                { title: "Leave & Absence", desc: "Book holidays and report absence", href: "/leave", icon: "sun", badge: "leaveApprovals" },
+                { title: "Leave & Absence", desc: "Book holidays and report absence", href: "https://hr.hngroup.org.uk/leave", icon: "sun", badge: "leaveApprovals" },
                 { title: "Rotas & Timesheets", desc: "Shifts, hours and approvals", href: "/rotas", icon: "clock", badge: "timesheetApprovals" },
                 { title: "Probation & reviews", desc: "Probation dates and reviews", href: "/reviews", icon: "star", badge: "reviewsDue" },
                 { title: "Goals", desc: "Quarterly goals and progress", href: "/objectives", icon: "flag" },
@@ -489,6 +490,10 @@
             banner.innerHTML = '<div class="imp-inner">' + icon("login") + "<span>You're logged in as <strong>" + esc(me.displayName) + "</strong> (" + esc(me.username) +
                 "). Everything you do is recorded as them.</span>" +
                 '<button type="button" class="btn btn-small btn-light" data-action="stop-impersonating">Return to my account</button></div>';
+        }
+        if (HR_APP) {
+            $('#mainnav').innerHTML = '<a href="/leave" data-link class="nav-link active">' + icon('sun') + '<span>Leave &amp; absence</span></a><a class="nav-link" href="https://staff.hngroup.org.uk/">Staff Portal</a>';
+            $('#search-btn').hidden = true;
         }
     }
 
@@ -650,6 +655,10 @@
     };
 
     function navigate(href, replace) {
+        if (/^https?:/.test(href)) return window.location.assign(href);
+        if (!HR_APP && href.split('?')[0] === '/leave') return window.location.assign('https://hr.hngroup.org.uk' + href);
+        if (HR_APP && href.split('?')[0] !== '/leave') return window.location.assign('https://staff.hngroup.org.uk' + href);
+
         history[replace ? "replaceState" : "pushState"]({}, "", href);
         render();
     }
@@ -733,6 +742,8 @@
         document.body.classList.remove("locked");
 
         const path = window.location.pathname;
+        if (!HR_APP && path === '/leave') return window.location.assign('https://hr.hngroup.org.uk/leave');
+        if (HR_APP && path !== '/leave') return window.location.assign('https://staff.hngroup.org.uk' + path);
         let view = ROUTES[path];
         if (!view) return navigate("/home", true);
         const NEEDS = { "/employees": "staff.manage", "/onboarding": "onboarding.manage", "/roles": "access.manage", "/payroll": "payroll.manage", "/funds": "payroll.manage", "/invoices": "payroll.manage", "/cases": "cases.manage", "/reports": "reports.view", "/bills": "payroll.manage", "/exit-interviews": "staff.manage", "/enquiries": "enquiries.manage" };
@@ -907,7 +918,7 @@
             '<section class="panel" id="home-todo" data-widget="todo" hidden></section>' +
             '<section class="panel" id="home-onboarding" data-widget="onboarding" hidden></section>' +
             (me.pulseDue ? '<section class="panel" id="home-pulse" data-widget="pulse"></section>' : "") +
-            (me.system ? "" : '<section class="panel" data-widget="leave" hidden></section>') +
+
             '<section class="panel" id="home-celebrate" data-widget="celebrate" hidden></section>' +
             '<section class="panel" id="home-coming" data-widget="coming"><p class="muted small">Loading\u2026</p></section>' +
             '<section class="panel" data-widget="quick">' + homeQuickActions() + "</section>" +
@@ -4320,13 +4331,13 @@
         const year = state.leaveYear || new Date().getFullYear();
         const d = await api("/api/leave?year=" + year);
         if (!current()) return;
-        let tab = state.leaveTab || (d.approvals.length ? "approvals" : "mine");
+        let tab = state.leaveTab || ((d.extraApprovals || []).length ? "extra" : d.approvals.length ? "approvals" : "mine");
         if (tab === "approvals" && !d.isApprover) tab = "mine";
         if ((tab === "allowances" || tab === "shutdowns") && !d.canManage) tab = "mine";
         if (tab === "rtw" && !d.returnToWork.length && !d.canManage) tab = "mine";
         const s = d.summary;
 
-        const tabs = [["mine", "My leave", d.mine.length]];
+        const tabs = [["mine", "My leave", d.mine.length], ["extra", "Additional days", (d.extraApprovals || []).length]];
         if (d.isApprover) tabs.push(["approvals", "To approve", d.approvals.length]);
         tabs.push(["off", "Who’s off", d.whosOff.length]);
         tabs.push(["calendar", "Calendar", null]);
@@ -4337,12 +4348,13 @@
             '<div class="page-head"><div><h1>Leave &amp; Absence</h1><p class="muted">Book holidays, report sickness and see who’s off. Weekends and bank holidays never count against your allowance.</p></div>' +
             '<div class="page-actions">' + (s ? '<button type="button" class="btn btn-ghost" id="lv-sick">' + icon("thermometer") + "Report sickness</button>" : "") +
             (d.setPeople.length ? '<button type="button" class="btn ' + (s ? "btn-ghost" : "btn-primary") + '" id="lv-set">' + icon("calendar") + "Set leave</button>" : "") +
-            (s ? '<button type="button" class="btn btn-primary" id="lv-new">' + icon("plus") + "Request leave</button>" : "") + "</div></div>" +
+            (s ? '<button type="button" class="btn btn-ghost" id="lv-extra">Request additional days</button><button type="button" class="btn btn-primary" id="lv-new">' + icon("plus") + "Request leave</button>" : "") + "</div></div>" +
             (s ? '<section class="leave-summary">' +
                 '<div class="ls-main"><div class="ls-year"><button type="button" class="icon-btn icon-btn-sm" data-year="' + (year - 1) + '" aria-label="Previous year">' + icon("chevronLeft") + "</button>" +
                 "<span>" + year + " holiday allowance</span>" +
                 '<button type="button" class="icon-btn icon-btn-sm" data-year="' + (year + 1) + '" aria-label="Next year">' + icon("chevronRight") + "</button></div>" +
                 '<div class="ls-remaining"><span class="ls-big">' + (Math.round(s.remaining * 2) / 2) + '</span><span class="muted">of ' + s.allowance + " days left</span>" +
+                (s.additional ? '<span class="badge badge-soft">Includes ' + s.additional + ' approved additional days</span>' : "") +
                 (s.carried ? '<span class="badge badge-soft">Includes ' + s.carried + (s.carried === 1 ? " day" : " days") + " carried over from " + (year - 1) + "</span>" : "") +
                 (s.bankHolidayAdjustment ? '<span class="badge badge-soft">' + (s.bankHolidayAdjustment > 0 ? "Includes " + s.bankHolidayAdjustment : "Less " + (-s.bankHolidayAdjustment)) + " for bank holidays (you work " + esc(s.patternLabel) + ")</span>" : "") + "</div>" +
                 '<div class="ls-bar"><span class="ls-taken" data-pct="' + pct(s.taken, s.allowance) + '"></span><span class="ls-booked" data-pct="' + pct(s.booked, s.allowance) + '"></span><span class="ls-pending" data-pct="' + pct(s.pending, s.allowance) + '"></span></div>' +
@@ -4381,7 +4393,12 @@
         function draw() {
             $$("#lv-tabs [data-tab]").forEach(function (b) { b.classList.toggle("active", b.dataset.tab === tab); });
             const body = $("#lv-body");
-            if (tab === "mine") {
+            if (tab === "extra") {
+                const rows = (d.extraApprovals || []).map(r => ({...r, approval:true})).concat(d.extraMine || []);
+                body.innerHTML = '<section class="panel"><h2>Additional annual leave</h2><p class="muted">You may request up to 10 additional days per year. Your direct supervisor approves requests. If no supervisor is assigned, requesting automatically tops up your additional allowance to 10 days. Approved days are added to that year’s allowance.</p>' +
+                    (rows.length ? rows.map(function(r) { return '<div class="leave-row"><div class="lr-main"><strong>' + esc(r.personName) + ' · ' + r.days + ' days · ' + r.year + '</strong><p>' + esc(r.reason) + '</p><span class="badge">' + esc(r.status) + '</span>' + (r.note ? '<p>' + esc(r.note) + '</p>' : '') + '</div><div class="lr-side">' +
+                    (r.approval ? '<button class="btn btn-primary btn-small" data-extra-action="approve" data-extra-id="'+r.id+'">Approve</button><button class="btn btn-ghost btn-small" data-extra-action="decline" data-extra-id="'+r.id+'">Decline</button>' : r.status==='pending' ? '<button class="btn btn-ghost btn-small" data-extra-action="cancel" data-extra-id="'+r.id+'">Cancel</button>' : '') + '</div></div>'; }).join('') : '<p class="muted">No additional-day requests yet.</p>') + '</section>';
+            } else if (tab === "mine") {
                 body.innerHTML = d.mine.length ? '<div class="panel leave-list">' + d.mine.map(function (r) { return requestRow(r, { cancel: true }); }).join("") + "</div>"
                     : '<div class="empty-page">' + icon("sun", "big") + "<h2>No leave yet</h2><p class=\"muted\">Use <strong>Request leave</strong> to book some time off.</p></div>";
             } else if (tab === "approvals") {
@@ -4450,6 +4467,23 @@
             if (t) { tab = state.leaveTab = t.dataset.tab; return draw(); }
             const y = e.target.closest("[data-year]");
             if (y) { state.leaveYear = Number(y.dataset.year); return render(); }
+            if (e.target.closest('#lv-extra')) {
+                const automatic = !!d.extraAutomatic;
+                const m = openModal('<div class="hr-extra-heading"><span class="hr-extra-icon">' + icon('sun') + '</span><div><p class="hr-extra-eyebrow">Annual leave allowance</p><h2 class="modal-title">Additional leave</h2></div></div>' +
+                    '<p class="hr-extra-intro">' + (automatic ? 'You have no direct supervisor. Submit a request to receive your additional allowance automatically.' : 'Ask your direct supervisor for up to 10 additional days this year.') + '</p>' +
+                    '<form id="extra-form"><div class="hr-extra-fields"><div><label for="extra-year">Leave year</label><select id="extra-year"><option>'+new Date().getFullYear()+'</option><option>'+(new Date().getFullYear()+1)+'</option></select></div>' +
+                    (automatic ? '' : '<div><label for="extra-days">Additional days</label><input id="extra-days" type="number" min="0.5" max="10" step="0.5" placeholder="e.g. 2" required><small class="muted">Half days are available.</small></div>') + '</div>' +
+                    (automatic ? '<div class="hr-extra-auto"><strong><span id="extra-auto-days">10</span> additional days</strong><span>Automatically approved when you submit. Maximum 10 per year.</span></div>' : '') +
+                    '<div class="hr-extra-reason"><label for="extra-reason">' + (automatic ? 'Note <span class="muted">(optional)</span>' : 'Why do you need additional leave?') + '</label><textarea id="extra-reason" rows="3" '+(automatic?'':'required')+' maxlength="1000" placeholder="'+(automatic?'Add a note for your records…':'A brief reason for your supervisor…')+'"></textarea></div>' +
+                    '<p class="form-error" id="extra-error" role="alert" hidden></p><div class="hr-extra-footer"><button type="button" class="btn btn-ghost" id="extra-cancel">Cancel</button><button class="btn btn-primary" id="extra-submit">'+(automatic?'Request allowance':'Send request')+'</button></div></form>');
+                m.el.classList.add('hr-extra-dialog');
+                $('#extra-cancel').addEventListener('click',closeModal);
+                function remainingExtra() {if(!automatic)return;const used=(d.extraMine||[]).filter(r=>r.status==='approved'&&r.year===Number($('#extra-year').value)).reduce((n,r)=>n+r.days,0);$('#extra-auto-days').textContent=Math.max(0,10-used);$('#extra-submit').disabled=used>=10;}
+                $('#extra-year').addEventListener('change',remainingExtra);remainingExtra();
+                $('#extra-form').addEventListener('submit',async function(ev){ev.preventDefault();const button=$('#extra-submit');button.disabled=true;formError($('#extra-error'),'');try{const result=await api('/api/leave/extra',{year:$('#extra-year').value,days:automatic?10:$('#extra-days').value,reason:$('#extra-reason').value});closeModal();state.leaveTab='extra';render();toast(result.request&&result.request.status==='approved'?'Additional days added to your allowance.':'Request sent to your direct supervisor.');}catch(err){formError($('#extra-error'),err.message);button.disabled=false;}});return;
+            }
+            const extra = e.target.closest('[data-extra-action]');
+            if(extra){try{await api('/api/leave/extra/'+extra.dataset.extraId+'/'+extra.dataset.extraAction,{});render();toast('Request updated.');}catch(err){toast(err.message);}return;}
             if (e.target.closest("#lv-new")) return openLeaveForm(d, "annual");
             if (e.target.closest("#lv-sick")) return openLeaveForm(d, "sick");
             if (e.target.closest("#lv-set")) return openLeaveForm(d, "annual", true);
@@ -7143,7 +7177,7 @@
             toast("Signed in as " + mainRole.jobTitle + ", " + mainRole.company);
         }
 
-        if (state.me.canManage && !state.me.impersonatedBy && !state.me.passwordTemporary && !state.me.passwordExpired && !state.me.codeSetupRequired) missingDiscordPrompt();
+        if (!HR_APP && state.me.canManage && !state.me.impersonatedBy && !state.me.passwordTemporary && !state.me.passwordExpired && !state.me.codeSetupRequired) missingDiscordPrompt();
 
         // Notice quickly if this session is ended from the system panel.
         setInterval(function () {

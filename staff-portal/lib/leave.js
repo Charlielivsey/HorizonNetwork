@@ -19,7 +19,7 @@ const TYPES = {
 // TOIL is earned in hours and taken in days of this length.
 const TOIL_HOURS_PER_DAY = 7.5;
 const MANAGE = "leave.manage";
-const DEFAULT_ALLOWANCE = 25;
+const DEFAULT_ALLOWANCE = 74;
 
 let db;
 
@@ -28,6 +28,8 @@ function init(dataDir) {
   // Carry-over and return-to-work forms only apply from the year/date they were switched on, so
   // years before the portal was used don't carry holiday forward.
   let changed = false;
+  if (!db.data.allowance74) { db.data.defaultAllowance = DEFAULT_ALLOWANCE; db.data.allowance74 = true; changed = true; }
+  if (!db.data.extraRequests) { db.data.extraRequests = []; changed = true; }
   if (db.data.maxCarryOver === undefined) { db.data.maxCarryOver = 5; changed = true; }
   if (!db.data.carryOverFrom) { db.data.carryOverFrom = new Date().getFullYear(); changed = true; }
   if (!db.data.rtwFrom) { db.data.rtwFrom = new Date().toISOString().slice(0, 10); changed = true; }
@@ -134,7 +136,46 @@ function carriedInto(personId, year) {
 }
 
 function allowanceFor(personId, year) {
-  return baseAllowance(personId) + carriedInto(personId, year || new Date().getFullYear()) + bankHolidayAdjustment(personId, year || new Date().getFullYear()).adjustment;
+  return baseAllowance(personId) + extraGranted(personId, year || new Date().getFullYear()) + carriedInto(personId, year || new Date().getFullYear()) + bankHolidayAdjustment(personId, year || new Date().getFullYear()).adjustment;
+}
+
+// Additional annual allowance is requested by staff and approved only by their current direct supervisor.
+const extraGranted = (personId, year) => db.data.extraRequests.filter(r => r.personId === personId && r.year === Number(year) && r.status === 'approved').reduce((n,r) => n + r.days, 0);
+function extraView(r) { const p=store.getPerson(r.personId), boss=store.getPerson(r.decidedBy); return {...r, personName:p?.displayName || 'Former staff', decidedByName:boss?.displayName || ''}; }
+function extraMine(me) { return db.data.extraRequests.filter(r => r.personId === me.id).map(extraView).reverse(); }
+function extraApprovals(me) { return db.data.extraRequests.filter(r => r.status === 'pending' && store.supervises(me,store.getPerson(r.personId))).map(extraView); }
+const hasDirectSupervisor = me => !!me && store.employees().some(p => store.supervises(p,me));
+function requestExtra(me, input) {
+  if (!me || me.system) throw new store.ValidationError('A staff profile is required.');
+  const year=Number(input.year), automatic=!hasDirectSupervisor(me), now=new Date().getFullYear();
+  let days=Number(input.days), reason=String(input.reason || '').trim().slice(0,1000);
+  if (!Number.isInteger(year) || year < now || year > now+1) throw new store.ValidationError('Choose this year or next year.');
+  if (automatic) {
+    days=10-extraGranted(me.id,year);
+    if(days<=0) throw new store.ValidationError('You have already received all 10 additional days for this year.');
+    reason=reason || 'Requested additional annual allowance — no direct supervisor assigned.';
+    // A new explicit request replaces any outstanding supervisor requests when there is no longer a supervisor.
+    for(const r of db.data.extraRequests.filter(r=>r.personId===me.id&&r.year===year&&r.status==='pending')){
+      r.status='cancelled';r.decidedAt=new Date().toISOString();r.note='Replaced by the staff member’s automatically approved annual allowance request.';
+    }
+  } else {
+    if (!Number.isFinite(days) || days < .5 || days > 10 || days*2 !== Math.round(days*2)) throw new store.ValidationError('Request between 0.5 and 10 days, in half-day steps.');
+    if (!reason) throw new store.ValidationError('Explain why you are requesting additional leave.');
+    const reserved=db.data.extraRequests.filter(r=>r.personId===me.id&&r.year===year&&['approved','pending'].includes(r.status)).reduce((n,r)=>n+r.days,0);
+    if (reserved+days>10) throw new store.ValidationError('Additional leave requests cannot exceed 10 days per year, including pending requests.');
+  }
+  const r={id:crypto.randomBytes(8).toString('hex'),personId:me.id,year,days,reason,status:automatic?'approved':'pending',createdAt:new Date().toISOString(),...(automatic?{automatic:true,decidedAt:new Date().toISOString(),note:'Automatically approved on request: no direct supervisor assigned.'}:{})};
+  db.data.extraRequests.push(r);db.save();return extraView(r);
+}
+function decideExtra(id, action, me, note) {
+  const r=db.data.extraRequests.find(x=>x.id===id);
+  if (!r || r.status!=='pending') throw new store.ValidationError('That request is no longer pending.');
+  if (action==='cancel') { if(r.personId!==me.id) throw Object.assign(new Error('Only the requester can cancel this request.'),{status:403}); }
+  else {
+    if (!store.supervises(me,store.getPerson(r.personId))) throw Object.assign(new Error('Only their current direct supervisor can decide this request.'),{status:403});
+    if (action==='approve' && extraGranted(r.personId,r.year)+r.days>10) throw new store.ValidationError('The annual limit is 10 additional days.');
+  }
+  r.status=action==='approve'?'approved':action==='decline'?'declined':'cancelled';r.decidedBy=me.id;r.decidedAt=new Date().toISOString();r.note=String(note||'').trim().slice(0,500);db.save();return extraView(r);
 }
 
 // ---------- Work patterns and bank holidays ----------
@@ -224,7 +265,7 @@ function summary(personId, year) {
   const pending = sum(annual.filter((r) => r.status === "pending"));
   const sickDays = sum(db.data.requests.filter((r) => r.personId === personId && r.type === "sick" && r.status === "approved" && r.startDate.startsWith(y)));
   const bh = bankHolidayAdjustment(personId, y);
-  return { year: Number(y), allowance, base: allowance - carried - bh.adjustment, carried, bankHolidayAdjustment: bh.adjustment, bankHolidays: bh, pattern: patternOf(personId), patternLabel: patternLabel(personId), taken, booked, pending, remaining: allowance - taken - booked - pending, sickDays, toilHours: toilBalance(personId) };
+  return { year: Number(y), allowance, additional: extraGranted(personId, y), base: allowance - carried - bh.adjustment - extraGranted(personId, y), carried, bankHolidayAdjustment: bh.adjustment, bankHolidays: bh, pattern: patternOf(personId), patternLabel: patternLabel(personId), taken, booked, pending, remaining: allowance - taken - booked - pending, sickDays, toilHours: toilBalance(personId) };
 }
 
 function canApprove(approver, request) {
@@ -632,7 +673,7 @@ function leaveBetween(from, to) {
   return out;
 }
 
-module.exports = {
+module.exports = { hasDirectSupervisor, requestExtra, decideExtra, extraMine, extraApprovals, extraGranted,
   patternOf, setPattern, bankHolidayAdjustment, workingDaysFor, patternLabel,
   TOIL_HOURS_PER_DAY, clashFor, setMaxOffPerCompany, grid, createShutdown, deleteShutdown, shutdowns, toilBalance, addToil, toilHistory, leaveBetween,
   syncStatuses,

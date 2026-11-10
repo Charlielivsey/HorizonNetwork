@@ -62,6 +62,53 @@ test('sign-in accounts: made on HN Account, several profiles with a default, own
       };
     }
 
+    // HR signs in through its own fixed Auth client and keeps a host-local portal session for leave only.
+    const hrStart = await fetch(staffBase + '/auth/start?next=/leave', { headers: {'x-hn-hr-app':'1'}, redirect:'manual' });
+    const hrAuth = new URL(hrStart.headers.get('location')), hrState=hrAuth.searchParams.get('state');
+    assert.equal(hrAuth.searchParams.get('client_id'),'hr');
+    const hrStateCookie=hrStart.headers.getSetCookie()[0].split(';')[0];
+    const hrSigned=await authSignIn('ada.test@hngroup.org.uk','Ada-password-582!','582947');
+    const hrGrant=await(await authPost('/api/continue',{client_id:'hr',state:hrState},hrSigned.session)).json();
+    const hrReturn=new URL(hrGrant.redirect);
+    const hrBack=await fetch(staffBase+hrReturn.pathname+hrReturn.search,{headers:{'x-hn-hr-app':'1',Cookie:hrStateCookie},redirect:'manual'});
+    assert.equal(hrBack.status,302);assert.equal(hrBack.headers.get('location'),'/leave');
+    const hrCookie=cookieOf(hrBack,'hn_staff_session');
+    const hrLeave=await(await fetch(staffBase+'/api/leave',{headers:{Cookie:hrCookie}})).json();
+    assert.equal(hrLeave.summary.base,74);
+    assert.ok(Array.isArray(hrLeave.extraMine));
+
+    if (process.env.HN_HR_BROWSER === '1') {
+      const hrPort=await freePort(),hrBase='http://127.0.0.1:'+hrPort;
+      const hrProcess=spawn(process.execPath,['hr-site/server.js'],{cwd:path.join(__dirname,'..'),env:{...process.env,PORT:String(hrPort),HR_ORIGIN:hrBase,PRIVATE_STAFF_BACKEND:staffBase},stdio:['ignore','ignore','inherit']});
+      let browser;
+      try {
+        await waitFor(hrBase+'/healthz');
+        const {chromium}=require('../browser-app/node_modules/playwright');
+        browser=await chromium.launch({executablePath:process.env.CHROMIUM_EXECUTABLE,args:['--no-sandbox']});
+        const context=await browser.newContext(),page=await context.newPage();
+        await context.addCookies([{name:'hn_staff_session',value:hrCookie.split('=')[1],url:hrBase}]);
+        const errors=[];page.on('pageerror',e=>errors.push(e.message));
+        await page.goto(hrBase+'/leave');await page.getByRole('heading',{name:'Leave & Absence',exact:true}).waitFor();
+        assert.match(await page.locator('.ls-remaining').textContent(),/74/);
+        assert.equal(await page.locator('#mainnav .nav-link').count(),2,'HR does not expose other Staff Portal screens');
+        await page.getByRole('button',{name:'Request additional days',exact:true}).click();
+        assert.equal(await page.locator('#extra-error').isVisible(),false,'no empty red error box');
+        assert.equal(await page.locator('#extra-days').count(),0,'no-supervisor staff request the automatic ten-day allowance');
+        await page.getByRole('button',{name:'Request allowance',exact:true}).click();
+        await page.waitForFunction(()=>!document.querySelector('#extra-form'));
+        await page.waitForFunction(()=>document.querySelector('.ls-remaining')?.textContent.includes('84'));
+        assert.deepEqual(errors,[]);
+        await page.getByRole('button',{name:'Request additional days',exact:true}).click();
+        await page.locator('#extra-year').selectOption(String(new Date().getFullYear()+1));
+        await page.setViewportSize({width:390,height:900});
+        assert.equal(await page.locator('#extra-error').isVisible(),false);
+        assert.ok(await page.locator('.hr-extra-dialog').evaluate(el=>el.getBoundingClientRect().width<=innerWidth));
+        await page.screenshot({path:'/tmp/hn-hr-screen.png'});
+        const blocked=await fetch(hrBase+'/api/employees',{headers:{Cookie:hrCookie}});assert.equal(blocked.status,404);
+        const csrf=await fetch(hrBase+'/api/leave/extra',{method:'POST',headers:{Cookie:hrCookie,Origin:'https://other.example','Content-Type':'application/json'},body:'{}'});assert.equal(csrf.status,403);
+      } finally {if(browser)await browser.close();hrProcess.kill();}
+    }
+
     // Existing logins were converted: same username, password, PIN and permissions.
     const admin = await hnAccount('ada.test@hngroup.org.uk', 'Ada-password-582!', '582947');
     let data = await (await admin.get('/api/logins')).json();

@@ -10,6 +10,7 @@ if (discordReturn) { query.delete('discord'); history.replaceState(null, '', loc
 const client = query.get('client_id'), state = query.get('state');
 // Must match the applications registered in server.js.
 const APPS = {
+  hr: {name:'HN Group HR',short:'HR',allowed:u=>!u.standalone,granted:'Manage your leave and absence.',restricted:'A staff profile is required to use HR.'},
   browser: {name:'HN Browser',short:'HN Browser',allowed:()=>true,granted:'Your HN account is ready for the browser.',restricted:''},
   media: { name: 'Horizon Media Group administration', short: 'Horizon Media Group', allowed: user => user.statusAdminAllowed, granted: 'You can manage this website.', restricted: 'Only the system owner and Super Admin members can manage this website.' },
   development: { name: 'Horizon Development administration', short: 'Horizon Development', allowed: user => user.statusAdminAllowed, granted: 'You can manage this website.', restricted: 'Only the system owner and Super Admin members can manage this website.' },

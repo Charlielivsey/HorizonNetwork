@@ -1,5 +1,14 @@
 [
   {
+    "id": "hr",
+    "name": "HN Group HR",
+    "process": "hn-hr",
+    "port": 5680,
+    "hosts": [
+      "hr.hngroup.org.uk"
+    ]
+  },
+  {
     "id": "people",
     "name": "HN Group People",
     "process": "hn-people",

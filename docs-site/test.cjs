@@ -54,7 +54,7 @@ test('every template starts filled in for every company, signed with the author�
   // The staff contract (HN Group Limited employs) and the same contract with the branded company as the employer.
   const network = catalog.company('horizon-network');
   const group = catalog.start(catalog.template('contract'), network, me), own = catalog.start(catalog.template('contract-company'), network, me);
-  assert.match(group.body, /made between <strong>HN Group Limited<\/strong>/); assert.match(group.body, /64 days’ paid holiday/); assert.match(group.body, /two weeks’ written notice/);
+  assert.match(group.body, /made between <strong>HN Group Limited<\/strong>/); assert.match(group.body, /74 days’ paid holiday/); assert.match(group.body, /two weeks’ written notice/);
   assert.match(group.body, /Any director of HN Group Limited, as listed on the Company Register/); assert.equal(group.fields.deployedTo, 'Horizon Network Limited');
   assert.match(own.body, /made between <strong>Horizon Network Limited<\/strong>/); assert.match(own.body, /Any director of Horizon Network Limited/); assert.match(own.body, /On behalf of Horizon Network Limited/);
   assert.ok(!/HN Group Limited/.test(own.body), 'the company version never names HN Group Limited as employer');

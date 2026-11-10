@@ -1,6 +1,7 @@
 {
   "_note": "Every site HN Group Sites lists (sites.hngroup.org.uk). The page, its search and the live status dots come from this file. group: companies | staff | services. access: public | staff (any HN Group Auth account) | restricted (named people or a separate permission). Use logo (a file in public/assets/brand, without -white/.svg) for company logos, otherwise icon. Private pages that aren't meant to be found (old staff portal, evan) are never listed.",
   "sites": [
+    { "id": "hr", "group": "staff", "name": "HN Group HR", "url": "https://hr.hngroup.org.uk/", "host": "hr.hngroup.org.uk", "icon": "user", "label": "Staff", "access": "staff", "desc": "Annual leave, absence, supervisor approvals, additional days, return-to-work forms, TOIL and leave settings.", "keywords": "hr human resources leave annual holiday sickness absence balance" },
     { "id": "hngroup", "group": "companies", "name": "HN Group", "url": "https://hngroup.org.uk/", "host": "hngroup.org.uk", "logo": "hn-group-wordmark", "label": "The group", "access": "public", "wide": true,
       "desc": "Our group and its companies: who we are, what we do, careers and how to get in touch.", "keywords": "group home about contact" },
     { "id": "network", "group": "companies", "name": "Horizon Network", "url": "https://network.hngroup.org.uk/", "host": "network.hngroup.org.uk", "logo": "horizon-network-wordmark", "label": "A subsidiary of HN Group", "access": "public",
@@ -13,7 +14,7 @@
       "desc": "Investors sign in to see their holdings, what they’re worth, documents and investor news.", "keywords": "shares holdings valuation investors" },
 
     { "id": "staff", "group": "staff", "name": "Staff portal", "url": "https://staff.hngroup.org.uk/auth/start", "host": "staff.hngroup.org.uk", "icon": "briefcase", "label": "Staff", "access": "staff", "popular": true,
-      "desc": "Your HN Group workplace: the staff directory, leave, payslips, documents, recruitment and your profile.", "keywords": "portal workplace leave payslips holidays hr directory" },
+      "desc": "Your HN Group workplace: the staff directory, payslips, documents, recruitment and your profile.", "keywords": "portal workplace leave payslips holidays hr directory" },
     { "id": "mail", "group": "staff", "name": "HN Mail", "url": "https://mail.hngroup.org.uk/", "host": "mail.hngroup.org.uk", "icon": "mail", "label": "Staff", "access": "staff", "popular": true,
       "desc": "Your Gmail in HN Group's own mail app. Needs a Google account linked to your HN Group Auth account.", "keywords": "mail email gmail inbox google" },
     { "id": "auth", "group": "staff", "name": "HN Group Auth", "url": "https://auth.hngroup.org.uk/", "host": "auth.hngroup.org.uk", "icon": "key", "label": "Staff sign-in", "access": "staff",

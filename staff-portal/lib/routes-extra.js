@@ -754,7 +754,7 @@ async function handle(req, res, pathname, session) {
     if (method === "POST" && pathname === "/api/leave/shutdowns") {
       const s = leave.createShutdown(await readJsonBody(req), me);
       logEvent(req, session, "shutdown-booked", { target: s.name, detail: `${s.startDate}${s.endDate !== s.startDate ? " to " + s.endDate : ""}: ${s.requestIds.length} people${s.skipped.length ? `, ${s.skipped.length} skipped` : ""}` });
-      if (notify) notify(s.requestIds.map((id) => (leave.getRequest(id) || {}).personId), { type: "leave", title: `Company shutdown booked: ${s.name}`, body: `${s.startDate}${s.endDate !== s.startDate ? " to " + s.endDate : ""}. It's been taken from your holiday allowance.`, link: "/leave" }, me);
+      if (notify) notify(s.requestIds.map((id) => (leave.getRequest(id) || {}).personId), { type: "leave", title: `Company shutdown booked: ${s.name}`, body: `${s.startDate}${s.endDate !== s.startDate ? " to " + s.endDate : ""}. It's been taken from your holiday allowance.`, link: "https://hr.hngroup.org.uk/leave" }, me);
       return sendJson(res, 201, { shutdown: s, user: meResponse(session) }), true;
     }
     if (method === "POST" && (m = /^\/api\/leave\/shutdowns\/([a-f0-9]{16})\/delete$/.exec(pathname))) {
@@ -773,7 +773,7 @@ async function handle(req, res, pathname, session) {
       const body = await readJsonBody(req);
       leave.addToil(person, body.hours, body.reason, me, "manual");
       logEvent(req, session, "toil-added", { target: person.displayName, detail: `${body.hours} hours – ${body.reason || ""}` });
-      if (notify) notify([person.id], { type: "leave", title: `${Number(body.hours) > 0 ? "You've earned" : "Adjustment:"} ${body.hours} hours of time off in lieu`, body: body.reason || "", link: "/leave" }, me);
+      if (notify) notify([person.id], { type: "leave", title: `${Number(body.hours) > 0 ? "You've earned" : "Adjustment:"} ${body.hours} hours of time off in lieu`, body: body.reason || "", link: "https://hr.hngroup.org.uk/leave" }, me);
     }
     return sendJson(res, 200, { balance: leave.toilBalance(person.id), hoursPerDay: leave.TOIL_HOURS_PER_DAY, history: leave.toilHistory(person.id) }), true;
   }

@@ -764,7 +764,7 @@ function meResponse(session) {
   user.pendingAcks = workplace.pendingAcks(session.person) + workplace.pendingAnnouncementAcks(session.person);
   user.openPolls = polls.openForPerson(session.person);
   user.onboardingTasks = onboarding.forPerson(session.person).reduce((n, c) => n + c.tasks.filter((t) => !t.doneAt && t.canTick).length, 0);
-  user.leaveApprovals = leave.pendingApprovalCount(session.person);
+  user.leaveApprovals = leave.pendingApprovalCount(session.person) + leave.extraApprovals(session.person).length;
   user.timesheetApprovals = rotas.pendingApprovalCount(session.person);
   user.helpdeskBadge = helpdesk.badgeCount(session.person);
   user.onLeaveToday = leave.isOffToday(session.person.id);
@@ -1922,6 +1922,7 @@ async function routeApi(req, res, pathname, session) {
       const year = /^\d{4}$/.test(q.get("year") || "") ? q.get("year") : String(new Date().getFullYear());
       const t = new Date().toISOString().slice(0, 10);
       return sendJson(res, 200, {
+        extraMine: leave.extraMine(me), extraApprovals: leave.extraApprovals(me), extraAutomatic: !leave.hasDirectSupervisor(me),
         types: leave.TYPES,
         summary: me.system ? null : leave.summary(me.id, year),
         mine: me.system ? [] : leave.mine(me),
@@ -1936,6 +1937,16 @@ async function routeApi(req, res, pathname, session) {
           .map((p) => ({ id: p.id, displayName: p.displayName, jobTitle: p.jobTitle })),
         allowances: leaveManager ? leave.allowances() : null,
       });
+    }
+    if (method === "POST" && pathname === "/api/leave/extra") {
+      const r=leave.requestExtra(me,await readJsonBody(req));
+      if (r.status === "pending") notifications.notify(store.employees().filter(p=>store.supervises(p,me)).map(p=>p.id),{type:"leave",title:`${me.displayName} requested ${r.days} additional annual leave days`,body:`${r.year}: ${r.reason}`,link:"https://hr.hngroup.org.uk/leave"},me);
+      logEvent(req,session,r.automatic?"extra-leave-auto-approved":"extra-leave-requested",{detail:`${r.days} days for ${r.year}`});return sendJson(res,201,{ok:true,request:r});
+    }
+    if (method === "POST" && (m=/^\/api\/leave\/extra\/([a-f0-9]{16})\/(approve|decline|cancel)$/.exec(pathname))) {
+      const r=leave.decideExtra(m[1],m[2],me,(await readJsonBody(req)).note);
+      notifications.notify([r.personId],{type:"leave",title:`Additional annual leave ${r.status}`,body:`${r.days} days for ${r.year}`,link:"https://hr.hngroup.org.uk/leave"},me);
+      logEvent(req,session,"extra-leave-"+r.status,{target:r.personName,detail:`${r.days} days for ${r.year}`});return sendJson(res,200,{ok:true});
     }
     if (method === "POST" && pathname === "/api/leave/working-days") {
       const { startDate, endDate, personId } = await readJsonBody(req);
@@ -1962,11 +1973,11 @@ async function routeApi(req, res, pathname, session) {
         // Their supervisor(s) approve; anyone who manages leave if they have none.
         const sups = [person.supervisorId].concat((person.otherRoles || []).map((x) => x.supervisorId)).filter(Boolean);
         const to = sups.length ? sups : store.employees().filter((p) => store.can(p, leave.MANAGE)).map((p) => p.id);
-        notifications.notify(to, { type: "leave", title: `${person.displayName} asked for ${leave.TYPES[r.type].toLowerCase()}`, body: `${when} (${r.days} day${r.days === 1 ? "" : "s"})`, link: "/leave" }, me);
+        notifications.notify(to, { type: "leave", title: `${person.displayName} asked for ${leave.TYPES[r.type].toLowerCase()}`, body: `${when} (${r.days} day${r.days === 1 ? "" : "s"})`, link: "https://hr.hngroup.org.uk/leave" }, me);
       } else if (person.id !== me.id) {
-        notifications.notify([person.id], { type: "leave", title: `${me.displayName} booked ${leave.TYPES[r.type].toLowerCase()} for you`, body: when, link: "/leave" }, me);
+        notifications.notify([person.id], { type: "leave", title: `${me.displayName} booked ${leave.TYPES[r.type].toLowerCase()} for you`, body: when, link: "https://hr.hngroup.org.uk/leave" }, me);
       } else if (r.type === "sick" && person.supervisorId) {
-        notifications.notify([person.supervisorId], { type: "leave", title: `${person.displayName} is off sick`, body: when, link: "/leave" }, me);
+        notifications.notify([person.supervisorId], { type: "leave", title: `${person.displayName} is off sick`, body: when, link: "https://hr.hngroup.org.uk/leave" }, me);
       }
       logEvent(req, session, r.type === "sick" ? "absence-reported" : "leave-requested", {
         target: person.id === me.id ? undefined : person.displayName,
@@ -1992,7 +2003,7 @@ async function routeApi(req, res, pathname, session) {
         logEvent(req, session, "leave-cancelled", { target: who, detail: `${leave.TYPES[r.type]}, ${r.startDate}` });
       } else {
         leave.decide(r, m[2] === "approve", me, body.note, body.allowOver === true);
-        notifications.notify([r.personId], { type: "leave", title: `Your ${leave.TYPES[r.type].toLowerCase()} was ${m[2] === "approve" ? "approved" : "declined"}`, body: `${r.startDate}${r.endDate !== r.startDate ? " to " + r.endDate : ""}${body.note ? ` · ${body.note}` : ""}`, link: "/leave" }, me);
+        notifications.notify([r.personId], { type: "leave", title: `Your ${leave.TYPES[r.type].toLowerCase()} was ${m[2] === "approve" ? "approved" : "declined"}`, body: `${r.startDate}${r.endDate !== r.startDate ? " to " + r.endDate : ""}${body.note ? ` · ${body.note}` : ""}`, link: "https://hr.hngroup.org.uk/leave" }, me);
         logEvent(req, session, m[2] === "approve" ? "leave-approved" : "leave-declined", { target: who, detail: `${leave.TYPES[r.type]}, ${r.startDate}${r.endDate !== r.startDate ? " to " + r.endDate : ""}` });
       }
       return sendJson(res, 200, { ok: true, user: meResponse(session) });
@@ -2430,6 +2441,7 @@ const portalAuth = portalAuthLib.createPortalAuth({ store, sessions, resume, cre
 async function route(req, res) {
   const pathname = new URL(req.url, "http://localhost").pathname;
   const session = getSession(req);
+  if (pathname === '/leave' && req.headers['x-hn-hr-app'] !== '1') return redirect(res, 'https://hr.hngroup.org.uk/leave');
 
   if (await statusSso(req, res, pathname, session)) return;
   if (await portalAuth(req, res, pathname)) return;
