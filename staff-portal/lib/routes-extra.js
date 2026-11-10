@@ -201,7 +201,7 @@ async function handle(req, res, pathname, session) {
     if (method === "POST" && pathname === "/api/document-storage/grants") {
       const g = storageAccess.add(await readJsonBody(req), me);
       logEvent(req, session, "storage-access-granted", { target: g.granteeName, detail: g.ownerName + "'s storage until " + g.until.slice(0, 10) + (g.reason ? " (" + g.reason + ")" : "") });
-      if (notify) notify([g.granteeId], { type: "info", title: `${me.displayName} gave you access to ${g.ownerName}'s document storage`, link: "/document-storage" }, me);
+      if (notify) notify([g.granteeId], { type: "info", title: `${me.displayName} gave you access to ${g.ownerName}'s document storage`, link: "https://docs.hngroup.org.uk/storage/" + g.ownerId }, me);
       return sendJson(res, 201, { grant: g }), true;
     }
     if ((m = /^\/api\/document-storage\/grants\/([a-f0-9]{16})\/delete$/.exec(pathname)) && method === "POST") {

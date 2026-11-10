@@ -70,11 +70,16 @@
     e.preventDefault(); go(a.getAttribute('href'));
   });
   window.addEventListener('popstate', () => route());
+  document.addEventListener('click', e => { if (!e.target.closest('#profile-menu')) $('profile-menu').open = false; });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') $('profile-menu').open = false; });
   async function route() {
     if (S.doc && (dirty || saving)) await saveNow();
     const p = location.pathname, m = /^\/doc\/([0-9a-f-]{36})$/.exec(p), other = /^\/storage\/([A-Za-z0-9_-]{1,64})$/.exec(p);
-    for (const v of ['view-library', 'view-templates', 'view-people', 'view-editor']) $(v).hidden = true;
+    for (const v of ['view-library', 'view-templates', 'view-people', 'view-editor', 'view-administration']) $(v).hidden = true;
     for (const a of document.querySelectorAll('.tabs a')) a.removeAttribute('aria-current');
+    window.HNDocsAdministration.close();
+    document.getElementById('profile-menu').open = false;
+    if (p.startsWith('/administration') || p === '/policies') { S.doc = null; $('view-administration').hidden = false; return window.HNDocsAdministration.render($('view-administration')); }
     if (m) return openDoc(m[1]);
     S.doc = null; document.title = 'HN Group Docs';
     const params = new URLSearchParams(location.search);
@@ -338,7 +343,7 @@
   async function showPeople() {
     $('view-people').hidden = false; document.title = 'Staff storage · HN Group Docs';
     try { people = await api('GET', '/api/people'); } catch (e) { $('people-note').textContent = e.message; $('people-list').replaceChildren(); return; }
-    $('people-note').textContent = people.all ? 'Open anyone’s private storage to read and download what’s there. You can’t change or delete anything, and every visit is recorded.' : 'Storage you’ve been given access to in the staff portal, until the date shown. Every visit is recorded.';
+    $('people-note').textContent = people.all ? 'Open anyone’s private storage to read and download what’s there. You can’t change or delete anything, and every visit is recorded.' : 'Storage you’ve been given access to, until the date shown. Every visit is recorded.';
     drawPeople();
   }
   function drawPeople() {
@@ -695,6 +700,7 @@
       $('who-photo').addEventListener('load', () => { $('who-photo').hidden = false; $('who-avatar').hidden = true; }, { once: true });
       $('who-photo').src = '/api/avatar';
     }
+    $('administration-link').hidden = !(me.user.administration?.storage || me.user.administration?.documents);
     $('people-tab').hidden = !(me.user.storageAccess || (me.user.storageGrants || []).length);
     $('type-filter').append(...S.templates.map((t) => el('option', { value: t.id, text: t.name })), el('option', { value: 'files', text: 'Files' }));
     $('doc-company').replaceChildren(...S.companies.map((c) => el('option', { value: c.id, text: c.name })));

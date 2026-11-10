@@ -163,7 +163,7 @@ function list(user, { scope = 'shared', company, template, q } = {}) {
 }
 // Someone else's private storage, for people allowed in. Every visit is logged.
 function storage(ownerId, user) {
-  if (!storageAllowed(user, ownerId)) throw fail(403, 'You don’t have access to this person’s storage. Access is given in the staff portal.');
+  if (!storageAllowed(user, ownerId)) throw fail(403, 'You don’t have access to this person’s storage. Ask someone with the staff document storage permission to grant access in Docs.');
   const p = person(ownerId);
   if (ownerId !== user.id) { audit(user, 'opened storage', null, { of: ownerId, ofName: p ? p.displayName : '' }); save(); }
   const docs = Object.values(data.documents).filter((d) => d.ownerId === ownerId && d.sharing === 'private').sort((a, b) => b.updatedAt - a.updatedAt).map((d) => view(d, user, false));

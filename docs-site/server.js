@@ -132,15 +132,33 @@ function sendFile(res, f, bytes, download) {
   res.end(bytes);
 }
 
+async function administration(req, res, url, current) {
+  const target = url.pathname.replace('/api/administration', '/api/docs-administration');
+  if (!/^\/api\/docs-administration\/(tools|documents|policies|document-storage)(\/|$)/.test(target)) throw fail(404, 'Not found.');
+  const key = secret();
+  if (!key) throw fail(503, 'Document administration is unavailable.');
+  const headers = { Authorization: 'Bearer ' + key, 'X-HN-Docs-Identity': Buffer.from(JSON.stringify({ id: current.user.id, accountId: current.user.accountId, impersonated: current.user.impersonated })).toString('base64url') };
+  for (const name of ['content-type', 'x-document']) if (req.headers[name]) headers[name] = req.headers[name];
+  const body = ['GET', 'HEAD'].includes(req.method) ? undefined : await raw(req);
+  let response;
+  try { response = await fetch(STAFF_BACKEND + target + url.search, { method: req.method, headers, body, redirect: 'error', signal: AbortSignal.timeout(30000) }); }
+  catch { throw fail(503, 'Document administration is temporarily unavailable.'); }
+  const bytes = Buffer.from(await response.arrayBuffer());
+  const out = { ...HEADERS, 'Cache-Control': 'private, no-store', 'Content-Type': response.headers.get('content-type') || 'application/json' };
+  for (const key of ['content-disposition', 'content-security-policy']) if (response.headers.get(key)) out[key] = response.headers.get(key);
+  res.writeHead(response.status, out); res.end(bytes);
+}
+
 async function api(req, res, url) {
   const route = url.pathname, method = req.method;
   const current = await auth.current(req);
   if (!current) throw fail(401, 'Sign in to use HN Group Docs.');
   const { user } = current;
+  if (route.startsWith('/api/administration/')) return administration(req, res, url, current);
   const q = url.searchParams;
   if (route === '/api/me' && method === 'GET') {
     return send(res, 200, { user: { id: user.id, name: user.displayName, fullName: user.fullName, jobTitle: user.jobTitle, email: user.email, admin: user.admin, picture: !!store.avatar(user.id),
-      storageAccess: user.storageAccess, storageGrants: user.storageGrants, canSendContracts: canSendContracts(user) }, ...catalog.publicCatalog(), counts: { shared: store.counts(user, 'shared'), mine: store.counts(user, 'mine') } });
+      administration: { storage: !user.impersonated && (user.owner || user.permissions.includes('storage.access')), documents: !user.impersonated && (user.owner || user.permissions.includes('documents.manage')) }, storageAccess: user.storageAccess, storageGrants: user.storageGrants, canSendContracts: canSendContracts(user) }, ...catalog.publicCatalog(), counts: { shared: store.counts(user, 'shared'), mine: store.counts(user, 'mine') } });
   }
   if (route === '/api/avatar' && method === 'GET') {
     const a = store.avatar(user.id);
@@ -209,7 +227,7 @@ function serveFile(res, rel, cache) {
 }
 // The pages of the app (one page drawn by documents.js): shared documents, your storage, someone else's storage
 // (when allowed), templates and the editor.
-const APP_ROUTES = /^\/(?:|new|templates|people|storage|storage\/[A-Za-z0-9_-]{1,64}|doc\/[0-9a-f-]{36})$/;
+const APP_ROUTES = /^\/(?:|new|templates|people|policies|administration(?:\/storage|\/documents)?|storage|storage\/[A-Za-z0-9_-]{1,64}|doc\/[0-9a-f-]{36})$/;
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
@@ -226,6 +244,12 @@ const server = http.createServer(async (req, res) => {
     if (!current) {
       if (route.startsWith('/assets/')) { res.writeHead(401, { ...HEADERS, 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }); return res.end('Sign in to HN Group Docs.'); }
       res.writeHead(302, { Location: '/auth/login?next=' + encodeURIComponent(route + url.search), 'Cache-Control': 'no-store' }); return res.end();
+    }
+    if (route.startsWith('/administration')) {
+      const u = current.user;
+      const storage = !u.impersonated && (u.owner || u.permissions.includes('storage.access'));
+      const documents = !u.impersonated && (u.owner || u.permissions.includes('documents.manage'));
+      if ((!storage && !documents) || (route === '/administration/storage' && !storage) || (route === '/administration/documents' && !documents)) return showPage(res, 403, 'Access denied', 'You do not have permission to use this administration tool.');
     }
     if (APP_ROUTES.test(route) && serveFile(res, '/index.html', 'no-store')) return;
     if (route.startsWith('/assets/') && serveFile(res, route, 'private, max-age=300')) return;

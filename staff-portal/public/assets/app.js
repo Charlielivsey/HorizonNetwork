@@ -389,8 +389,6 @@
         {
             label: "Workplace", items: [
                 { title: "Announcements", desc: "Group-wide news and updates", href: "/announcements", icon: "bell", badge: "unreadAnnouncements" },
-                { title: "Documents & Policies", desc: "Handbooks, policies, forms and templates", href: "/documents", icon: "file", badge: "pendingAcks" },
-                { title: "Document storage", desc: "Private storage on HN Group Docs and who can open it", href: "/document-storage", icon: "lock" },
                 { title: "Calendar", desc: "Events, bank holidays and celebrations", href: "/calendar", icon: "calendar" },
                 { title: "Polls & surveys", desc: "Have your say", href: "/polls", icon: "chart", badge: "openPolls" },
                 { title: "Ideas", desc: "Suggest improvements and vote", href: "/ideas", icon: "flag", badge: "newIdeas" },
@@ -610,7 +608,6 @@
         "/settings": viewSettings,
         "/system": viewSystem,
         "/announcements": viewAnnouncements,
-        "/documents": viewDocuments,
         "/calendar": viewCalendar,
         "/polls": viewPolls,
         "/onboarding": viewOnboarding,
@@ -639,7 +636,6 @@
         "/on-call": viewOnCall,
         "/job-descriptions": viewJobDescriptions,
         "/enquiries": viewEnquiries,
-        "/document-storage": viewDocumentStorage,
         "/ideas": viewIdeas,
         "/team": viewTeam,
         "/reports": viewReports,
@@ -998,7 +994,7 @@
                         return '<li><a href="/announcements" data-link data-ann="' + x.id + '"><span class="sp-icon">' + icon("bell") + "</span><span>" + esc(x.title) + "</span></a></li>";
                     }).join("") +
                     docs.map(function (x) {
-                        return '<li><a href="/documents" data-link>' + fileBadge(x.file.ext) + "<span>" + esc(x.title) + "</span></a></li>";
+                        return '<li><a href="https://docs.hngroup.org.uk/policies">' + fileBadge(x.file.ext) + "<span>" + esc(x.title) + "</span></a></li>";
                     }).join("") + "</ul>";
                 box.addEventListener("click", function (e) {
                     const a = e.target.closest("[data-ann]");
@@ -1546,7 +1542,6 @@
                             : '<button type="button" class="menu-item compact" data-act="enable">' + icon("check") + "<span>Enable login</span></button>");
                     }
                     if (e.temporary) actions.push('<button type="button" class="menu-item compact" data-act="permanent">' + icon("check") + "<span>Make permanent</span></button>");
-                    if (e.account && can("storage.access")) actions.push('<a class="menu-item compact" href="/document-storage?view=' + encodeURIComponent(e.id) + '" data-link>' + icon("lock") + "<span>Document storage</span></a>");
                     actions.push('<div class="menu-sep"></div><button type="button" class="menu-item compact danger" data-act="delete">' + icon("trash") + "<span>Delete employee</span></button>");
                 }
                 const menu = locked && e.account
@@ -2507,105 +2502,6 @@
         return '<span class="file-badge file-' + esc(ext) + '">' + esc((ext || "file").toUpperCase()) + "</span>";
     }
 
-    async function viewDocuments(root, current) {
-        const data = await api("/api/documents");
-        if (!current()) return;
-        const docs = data.documents;
-        let category = "";
-        const pending = docs.filter(function (d) { return d.needsAck; });
-
-        root.innerHTML =
-            '<div class="page-head"><div><h1>Documents &amp; Policies</h1><p class="muted">Handbooks, policies, forms and templates for HN Group staff.</p></div>' +
-            (data.canManage ? '<div class="page-actions"><button type="button" class="btn btn-primary" id="upload-doc">' + icon("upload") + "Upload document</button></div>" : "") +
-            "</div>" +
-            (pending.length ? '<div class="banner banner-warn"><div>' + icon("alert") + " <strong>" + pending.length +
-                (pending.length === 1 ? " document needs" : " documents need") + " your acknowledgement.</strong> Please read " + (pending.length === 1 ? "it" : "them") + " and confirm.</div>" +
-                '<button type="button" class="btn btn-small btn-dark" id="show-pending">Show me</button></div>' : "") +
-            '<div class="company-tabs" id="doc-cats">' +
-            '<button type="button" data-cat="">All <span class="tab-count">' + docs.length + "</span></button>" +
-            data.categories.map(function (c) {
-                const n = docs.filter(function (d) { return d.category === c; }).length;
-                return n || data.canManage ? '<button type="button" data-cat="' + esc(c) + '">' + esc(c) + ' <span class="tab-count">' + n + "</span></button>" : "";
-            }).join("") +
-            (pending.length ? '<button type="button" data-cat="__pending">To acknowledge <span class="tab-count">' + pending.length + "</span></button>" : "") +
-            "</div>" +
-            '<div class="toolbar"><label class="search">' + icon("search") + '<input type="search" id="doc-search" placeholder="Search documents" aria-label="Search documents"></label></div>' +
-            '<div id="doc-list"></div>';
-
-        function draw() {
-            $$("#doc-cats [data-cat]").forEach(function (b) { b.classList.toggle("active", b.dataset.cat === category); });
-            const q = $("#doc-search").value.trim().toLowerCase();
-            const list = docs.filter(function (d) {
-                if (category === "__pending" && !d.needsAck) return false;
-                if (category && category !== "__pending" && d.category !== category) return false;
-                return !q || [d.title, d.description, d.category, d.file.name].join(" ").toLowerCase().indexOf(q) !== -1;
-            });
-            $("#doc-list").innerHTML = list.length ? '<div class="doc-list">' + list.map(function (d) {
-                const status = d.requiresAck
-                    ? (d.acknowledgedAt
-                        ? '<span class="badge badge-green">' + icon("tick") + "Acknowledged " + esc(fmtDate(d.acknowledgedAt)) + "</span>"
-                        : d.needsAck ? '<button type="button" class="btn btn-small btn-primary" data-act="ack">Read &amp; acknowledge</button>' : "")
-                    : "";
-                const progress = data.canManage && d.requiresAck
-                    ? '<button type="button" class="ack-progress" data-act="acks" title="See who has acknowledged"><span class="ack-bar"><span data-pct="' +
-                        (d.audienceCount ? Math.round(d.ackCount / d.audienceCount * 100) : 0) + '"></span></span>' + d.ackCount + "/" + d.audienceCount + " acknowledged</button>"
-                    : "";
-                return '<div class="doc-row' + (d.needsAck ? " needs-ack" : "") + '" data-id="' + d.id + '">' +
-                    fileBadge(d.file.ext) +
-                    '<div class="doc-main"><div class="doc-title">' + esc(d.title) + (d.requiresAck ? ' <span class="badge">Must read</span>' : "") + "</div>" +
-                    (d.description ? '<div class="doc-desc muted small">' + esc(d.description) + "</div>" : "") +
-                    '<div class="doc-meta muted small">' + esc(d.category) + " · " + esc(FILE_KINDS[d.file.ext] || d.file.ext) + " · " + fileSize(d.file.size) +
-                    " · Updated " + esc(fmtDate(d.updatedAt)) + (d.version > 1 ? ' · <button type="button" class="link-btn" data-act="versions">Version ' + d.version + " \u00b7 history</button>" : "") + "</div>" +
-                    '<div class="chips">' + audienceChips(d.companies) + "</div></div>" +
-                    '<div class="doc-side">' + status + progress +
-                    '<div class="btn-row">' +
-                    (d.file.inline ? '<a class="btn btn-ghost btn-small" href="/api/documents/' + d.id + '/file" target="_blank" rel="noopener">' + icon("eye") + "View</a>" : "") +
-                    '<a class="btn btn-ghost btn-small" href="/api/documents/' + d.id + '/file?download=1">' + icon("download") + "Download</a>" +
-                    (data.canManage ? '<div class="nav-item row-menu"><button type="button" class="icon-btn" data-menu aria-haspopup="true" aria-expanded="false" aria-label="Document options">' + icon("more") + "</button>" +
-                        '<div class="menu menu-right menu-row" role="menu" hidden>' +
-                        '<button type="button" class="menu-item compact" data-act="edit">' + icon("edit") + "<span>Edit details</span></button>" +
-                        '<button type="button" class="menu-item compact" data-act="replace">' + icon("upload") + "<span>Upload new version</span></button>" +
-                        (d.requiresAck ? '<button type="button" class="menu-item compact" data-act="acks">' + icon("users") + "<span>Who has acknowledged</span></button>" : "") +
-                        '<div class="menu-sep"></div><button type="button" class="menu-item compact danger" data-act="delete">' + icon("trash") + "<span>Delete</span></button></div></div>" : "") +
-                    "</div></div></div>";
-            }).join("") + "</div>"
-                : '<div class="empty-page">' + icon("file", "big") + "<h2>" + (docs.length ? "No matching documents" : "No documents yet") + "</h2>" +
-                  '<p class="muted">' + (docs.length ? "Try a different search or category." : data.canManage ? "Upload the first one with <strong>Upload document</strong>." : "Check back soon.") + "</p></div>";
-            $$(".ack-bar [data-pct]").forEach(function (b) { b.style.width = b.dataset.pct + "%"; });
-        }
-
-        root.addEventListener("click", async function (e) {
-            const cat = e.target.closest("[data-cat]");
-            if (cat) { category = cat.dataset.cat; return draw(); }
-            if (e.target.closest("#show-pending")) { category = "__pending"; return draw(); }
-            if (e.target.closest("#upload-doc")) return openDocumentForm(null, data.categories);
-            const btn = e.target.closest("[data-act]");
-            if (!btn) return;
-            closeMenus();
-            const d = docs.find(function (x) { return x.id === btn.closest("[data-id]").dataset.id; });
-            const act = btn.dataset.act;
-            if (act === "ack") return openAcknowledge(d);
-            if (act === "edit") return openDocumentForm(d, data.categories);
-            if (act === "replace") return openReplaceFile(d);
-            if (act === "acks") return openAcknowledgements(d);
-            if (act === "versions") return openVersions(d);
-            if (act === "delete") {
-                if (!(await confirmDialog({ title: "Delete “" + d.title + "”?", message: "The document and its acknowledgements will be removed for everyone.", confirmLabel: "Delete", danger: true }))) return;
-                try {
-                    await api("/api/documents/" + d.id + "/delete", {});
-                    toast("Document deleted.");
-                    render();
-                } catch (err) { toast(err.message); }
-            }
-        });
-        $("#doc-search").addEventListener("input", draw);
-        if (state.pendingDocSearch) {
-            $("#doc-search").value = state.pendingDocSearch;
-            state.pendingDocSearch = null;
-        }
-        draw();
-    }
-
     // Sends a file as the raw request body, with progress.
     function uploadFile(url, file, meta, onProgress) {
         return new Promise(function (resolve, reject) {
@@ -2646,153 +2542,6 @@
         const bar = $(".upload-progress", el);
         bar.hidden = false;
         $("span", bar).style.width = pct + "%";
-    }
-
-    function openDocumentForm(d, categories) {
-        const v = d || { title: "", description: "", category: "Policies", companies: [], requiresAck: false };
-        let file = null;
-        const m = openModal(
-            '<h2 class="modal-title">' + (d ? "Edit document" : "Upload document") + "</h2>" +
-            '<form novalidate id="doc-form">' +
-            (d ? "" : fileDropField("doc-file")) +
-            '<label for="doc-title">Title</label><input type="text" id="doc-title" maxlength="150" value="' + esc(v.title) + '">' +
-            '<label for="doc-desc">Description <span class="muted small">(optional)</span></label><textarea id="doc-desc" rows="3" maxlength="1000">' + esc(v.description) + "</textarea>" +
-            '<label for="doc-cat">Category</label><select id="doc-cat">' + categories.map(function (c) {
-                return '<option' + (c === v.category ? " selected" : "") + ">" + esc(c) + "</option>";
-            }).join("") + "</select>" +
-            audienceField(v.companies) +
-            '<label class="inline-check option-row"><input type="checkbox" id="doc-ack"' + (v.requiresAck ? " checked" : "") +
-            "> Staff must read and acknowledge this</label>" +
-            '<p class="hint">They\'ll see it on their home page until they confirm they\'ve read it. Uploading a new version asks everyone again.</p>' +
-            '<div class="form-error" id="doc-error" hidden></div>' +
-            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button>' +
-            '<button type="submit" class="btn btn-primary" id="doc-save">' + (d ? "Save changes" : "Upload") + "</button></div></form>",
-            { wide: true }
-        );
-        if (!d) {
-            wireDropZone(m.el, $("#doc-file", m.el), function (f) {
-                file = f;
-                $(".dz-text", m.el).innerHTML = "<strong>" + esc(f.name) + "</strong> · " + fileSize(f.size);
-                if (!$("#doc-title", m.el).value.trim()) $("#doc-title", m.el).value = f.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ");
-            });
-        }
-        $("#doc-form", m.el).addEventListener("submit", async function (e) {
-            e.preventDefault();
-            formError($("#doc-error", m.el), "");
-            const meta = {
-                title: $("#doc-title", m.el).value,
-                description: $("#doc-desc", m.el).value,
-                category: $("#doc-cat", m.el).value,
-                companies: readAudience(m.el),
-                requiresAck: $("#doc-ack", m.el).checked,
-            };
-            if (!d && !file) return formError($("#doc-error", m.el), "Choose a file to upload.");
-            if (!meta.title.trim()) return formError($("#doc-error", m.el), "Give the document a title.");
-            $("#doc-save", m.el).disabled = true;
-            try {
-                if (d) await api("/api/documents/" + d.id, meta);
-                else await uploadFile("/api/documents/upload", file, meta, function (pct) { showProgress(m.el, pct); });
-                closeModal();
-                toast(d ? "Document updated." : "Document uploaded.");
-                render();
-            } catch (err) {
-                formError($("#doc-error", m.el), err.message);
-                $("#doc-save", m.el).disabled = false;
-            }
-        });
-    }
-
-    async function openVersions(d) {
-        let r;
-        try { r = await api("/api/documents/" + d.id + "/versions"); } catch (err) { return toast(err.message); }
-        openModal(
-            '<h2 class="modal-title">Version history</h2><p class="muted">' + esc(r.title) + "</p>" +
-            '<ol class="version-list">' + r.versions.map(function (v) {
-                return '<li class="' + (v.current ? "current" : "") + '"><div class="vl-head"><strong>Version ' + v.version + "</strong>" + (v.current ? ' <span class="badge badge-green">Current</span>' : "") +
-                    '<span class="muted small">' + esc(fmtDate(v.uploadedAt)) + (v.uploadedByName ? " \u00b7 " + esc(v.uploadedByName) : "") + (v.replacedAt ? " \u00b7 replaced " + esc(fmtDate(v.replacedAt)) : "") + "</span>" +
-                    (v.current ? '<a class="btn btn-ghost btn-small" href="/api/documents/' + d.id + '/file?download=1">' + icon("download") + "</a>" : '<a class="btn btn-ghost btn-small" href="/api/documents/' + d.id + "/versions/" + v.version + '/file">' + icon("download") + "</a>") + "</div>" +
-                    (v.note ? '<p class="vl-note">' + esc(v.note) + "</p>" : "") +
-                    '<div class="muted small">' + esc(v.file.name) + " \u00b7 " + fileSize(v.file.size) + (d.requiresAck ? " \u00b7 acknowledged by " + v.ackCount + (v.acknowledgedByMe ? " (including you)" : "") : "") + "</div>" +
-                    (v.acks && v.acks.length ? '<details class="vl-acks"><summary>Who acknowledged version ' + v.version + "</summary><ul>" + v.acks.map(function (a) { return "<li>" + esc(a.name) + ' <span class="muted small">' + esc(fmtDateTime(a.at)) + "</span></li>"; }).join("") + "</ul></details>" : "") +
-                    "</li>";
-            }).join("") + "</ol>" +
-            '<div class="modal-actions"><button type="button" class="btn btn-primary" data-close>Done</button></div>'
-        );
-    }
-
-    function openReplaceFile(d) {
-        let file = null;
-        const m = openModal(
-            '<h2 class="modal-title">Upload a new version</h2>' +
-            '<p class="muted">Replaces the file for “' + esc(d.title) + "” (currently " + esc(d.file.name) + ")." +
-            (d.requiresAck ? " Everyone will be asked to acknowledge the new version." : "") + "</p>" +
-            fileDropField("rep-file") +
-            '<label for="rep-note">What\u2019s changed? <span class="muted small">(shown in the version history)</span></label><input type="text" id="rep-note" maxlength="300" placeholder="e.g. Updated the holiday section for 2027">' +
-            '<div class="form-error" id="rep-error" hidden></div>' +
-            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button>' +
-            '<button type="button" class="btn btn-primary" id="rep-save">Upload new version</button></div>'
-        );
-        wireDropZone(m.el, $("#rep-file", m.el), function (f) {
-            file = f;
-            $(".dz-text", m.el).innerHTML = "<strong>" + esc(f.name) + "</strong> · " + fileSize(f.size);
-        });
-        $("#rep-save", m.el).addEventListener("click", async function () {
-            if (!file) return formError($("#rep-error", m.el), "Choose a file to upload.");
-            $("#rep-save", m.el).disabled = true;
-            try {
-                await uploadFile("/api/documents/" + d.id + "/file", file, { note: $("#rep-note", m.el).value }, function (pct) { showProgress(m.el, pct); });
-                closeModal();
-                toast("New version uploaded.");
-                render();
-            } catch (err) {
-                formError($("#rep-error", m.el), err.message);
-                $("#rep-save", m.el).disabled = false;
-            }
-        });
-    }
-
-    function openAcknowledge(d) {
-        const m = openModal(
-            '<div class="success-mark">' + icon("file") + "</div>" +
-            '<h2 class="modal-title center">' + esc(d.title) + "</h2>" +
-            '<p class="muted center">Please read this document in full, then confirm below.</p>' +
-            '<div class="center btn-row ack-open">' +
-            (d.file.inline ? '<a class="btn btn-ghost" href="/api/documents/' + d.id + '/file" target="_blank" rel="noopener">' + icon("eye") + "Open document</a>" : "") +
-            '<a class="btn btn-ghost" href="/api/documents/' + d.id + '/file?download=1">' + icon("download") + "Download</a></div>" +
-            '<label class="inline-check ack-confirm"><input type="checkbox" id="ack-check"> I have read and understood this document.</label>' +
-            '<div class="form-error" id="ack-error" hidden></div>' +
-            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Not yet</button>' +
-            '<button type="button" class="btn btn-primary" id="ack-go" disabled>Acknowledge</button></div>'
-        );
-        $("#ack-check", m.el).addEventListener("change", function (e) { $("#ack-go", m.el).disabled = !e.target.checked; });
-        $("#ack-go", m.el).addEventListener("click", async function () {
-            try {
-                const r = await api("/api/documents/" + d.id + "/acknowledge", {});
-                state.me = r.user;
-                renderChrome();
-                closeModal();
-                toast("Thanks — acknowledgement recorded.");
-                render();
-            } catch (err) { formError($("#ack-error", m.el), err.message); }
-        });
-    }
-
-    async function openAcknowledgements(d) {
-        const data = await api("/api/documents/" + d.id + "/acknowledgements");
-        const done = data.people.filter(function (p) { return p.acknowledgedAt; });
-        const waiting = data.people.filter(function (p) { return !p.acknowledgedAt; });
-        const row = function (p) {
-            return '<li class="ack-row">' + avatar(p, "sm") + '<div class="ack-who"><div class="emp-name">' + esc(p.displayName) + '</div><div class="muted small">' + esc(p.jobTitle) + "</div></div>" +
-                (p.acknowledgedAt ? '<span class="badge badge-green">' + esc(fmtDate(p.acknowledgedAt)) + "</span>" : '<span class="badge badge-yellow">Not yet</span>') + "</li>";
-        };
-        openModal(
-            '<h2 class="modal-title">Who has acknowledged</h2>' +
-            '<p class="muted">' + esc(d.title) + (data.version > 1 ? " · version " + data.version : "") + " · " + done.length + " of " + data.people.length + " people</p>" +
-            (waiting.length ? '<h3 class="detail-head">Still to acknowledge (' + waiting.length + ")</h3><ul class=\"ack-list\">" + waiting.map(row).join("") + "</ul>" : "") +
-            (done.length ? '<h3 class="detail-head">Acknowledged (' + done.length + ")</h3><ul class=\"ack-list\">" + done.map(row).join("") + "</ul>" : "") +
-            (data.people.length ? "" : '<p class="muted">No staff are in this document\'s audience yet.</p>') +
-            '<div class="modal-actions"><button type="button" class="btn btn-primary" data-close>Done</button></div>'
-        );
     }
 
     // ================= Status / out of office =================
@@ -3781,7 +3530,7 @@
         function go(it) {
             close();
             if (it.kind === "person") { state.pendingPerson = it.id; navigate("/directory"); }
-            else if (it.kind === "document") { state.pendingDocSearch = it.title; navigate("/documents"); }
+            else if (it.kind === "document") { window.location.href = "https://docs.hngroup.org.uk/policies"; }
             else if (it.kind === "announcement") { state.pendingAnnouncement = it.id; navigate("/announcements"); }
             else if (it.kind === "event") { state.pendingCalendarDate = it.date; navigate("/calendar"); }
             else if (it.kind === "poll") { state.pendingPoll = it.id; navigate("/polls"); }
@@ -3824,7 +3573,7 @@
                 draw([
                     { label: "People", items: d.people.map(function (p) { return { kind: "person", id: p.id, title: p.displayName, sub: p.jobTitle + " · " + p.company, person: p }; }) },
                     { label: "Pages", items: pageHits },
-                    { label: "Documents", items: d.documents.map(function (x) { return { kind: "document", id: x.id, title: x.title, sub: x.category + " · " + x.ext.toUpperCase(), icon: "file" }; }) },
+
                     { label: "Announcements", items: d.announcements.map(function (x) { return { kind: "announcement", id: x.id, title: x.title, sub: fmtDate(x.publishAt), icon: "bell" }; }) },
                     { label: "Events", items: d.events.map(function (x) { return { kind: "event", id: x.id, date: x.startDate, title: x.title, sub: dayLabel(x.startDate), icon: "calendar" }; }) },
                     { label: "Polls", items: d.polls.map(function (x) { return { kind: "poll", id: x.id, title: x.title, sub: x.open ? "Open" : "Closed", icon: "chart" }; }) },
@@ -9018,7 +8767,7 @@
 
     // ---- The rest of the home page's main column (the user's request, 3 November 2026: "too much blank space, fill
     // it with stuff"): shortcuts to the pages you use, your colleagues at a glance, and the other HN Group websites.
-    const HOME_SHORTCUTS = ["/directory", "/leave", "/calendar", "/documents", "/payslips", "/rotas", "/expenses", "/helpdesk", "/chat", "/kudos", "/wiki", "/polls"];
+    const HOME_SHORTCUTS = ["/directory", "/leave", "/calendar", "/payslips", "/rotas", "/expenses", "/helpdesk", "/chat", "/kudos", "/wiki", "/polls"];
     const HN_SITES = [
         { title: "HN Group Docs", desc: "Write and store documents", href: "https://docs.hngroup.org.uk/", icon: "file" },
         { title: "Contracts", desc: "Send and sign contracts", href: "https://contract.hngroup.org.uk/", icon: "edit" },
@@ -10329,103 +10078,6 @@
             if (input.value.trim()) save({ note: input.value });
         });
         drawList();
-    }
-
-    // ================= Document storage (private storage on docs.hngroup.org.uk) =================
-    // Everyone sees the storage they've been given access to. People with "Access staff document storage" (Super
-    // Admin and the system owner have it) can open anyone's storage and give individuals access for a while.
-
-    async function viewDocumentStorage(root, current) {
-        let d = await api("/api/document-storage");
-        if (!current()) return;
-        const DOCS = "https://docs.hngroup.org.uk";
-        const day = function (iso) { return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric" }).format(new Date(iso)); };
-        const inDays = function (n) { const t = new Date(Date.now() + n * 86400000); return t.toISOString().slice(0, 10); };
-        let viewing = new URLSearchParams(window.location.search).get("view"), viewData = null, viewError = "";
-        const size = function (b) { return b < 1024 ? b + " bytes" : b < 1048576 ? Math.round(b / 1024) + " KB" : (b / 1048576).toFixed(1) + " MB"; };
-        // Someone's storage, shown here: their private documents (download as PDF) and files. View only; Docs records it.
-        function viewer() {
-            if (!viewing) return "";
-            if (!viewData) return '<section class="panel" id="ds-viewer"><p class="muted">' + (viewError ? esc(viewError) : "Opening their storage…") + '</p><button type="button" class="btn btn-ghost btn-small" data-close-view>Close</button></section>';
-            const base = "/api/document-storage/people/" + encodeURIComponent(viewing);
-            const p = viewData.person, docs = viewData.documents, files = viewData.files;
-            return '<section class="panel" id="ds-viewer"><div class="panel-head"><div><h2 class="panel-title">' + esc(p.name) + "’s storage</h2>" +
-                '<p class="muted small">' + (p.jobTitle ? esc(p.jobTitle) + " · " : "") + "View only. Opening and downloading are recorded on HN Group Docs.</p></div>" +
-                '<div class="ds-view-actions"><a class="btn btn-ghost btn-small" href="' + DOCS + "/storage/" + encodeURIComponent(viewing) + '" target="_blank" rel="noopener">Open in HN Group Docs ↗</a><button type="button" class="btn btn-ghost btn-small" data-close-view>Close</button></div></div>' +
-                '<h3 class="detail-head">Documents</h3>' +
-                (docs.length ? '<div class="table-card flat"><table class="table"><thead><tr><th>Title</th><th>Status</th><th>Last edited</th><th class="col-actions"></th></tr></thead><tbody>' +
-                    docs.map(function (x) { return "<tr><td>" + esc(x.title) + (x.confidential ? ' <span class="badge badge-red">Confidential</span>' : "") + "</td><td>" + (x.status === "final" ? "Final" : "Draft") + "</td><td>" + esc(fmtDateTime(new Date(x.updatedAt).toISOString())) + '</td><td class="col-actions"><a class="btn btn-ghost btn-small" href="' + base + "/documents/" + x.id + '/pdf">Download PDF</a></td></tr>'; }).join("") + "</tbody></table></div>"
-                    : '<p class="muted">No private documents.</p>') +
-                '<h3 class="detail-head">Files</h3>' +
-                (files.length ? '<div class="table-card flat"><table class="table"><thead><tr><th>Name</th><th>Size</th><th>Added</th><th class="col-actions"></th></tr></thead><tbody>' +
-                    files.map(function (f) { return "<tr><td>" + esc(f.name) + "</td><td>" + esc(size(f.size)) + "</td><td>" + esc(fmtDateTime(new Date(f.createdAt).toISOString())) + '</td><td class="col-actions"><a class="btn btn-ghost btn-small" href="' + base + "/files/" + f.id + '" target="_blank" rel="noopener">Open</a> <a class="btn btn-ghost btn-small" href="' + base + "/files/" + f.id + '?download=1">Download</a></td></tr>'; }).join("") + "</tbody></table></div>"
-                    : '<p class="muted">No files.</p>') + "</section>";
-        }
-        async function openView(id) {
-            viewing = id; viewData = null; viewError = "";
-            history.replaceState({}, "", "/document-storage?view=" + encodeURIComponent(id));
-            draw(); if ($("#ds-viewer")) $("#ds-viewer").scrollIntoView({ behavior: "smooth", block: "start" });
-            try { viewData = await api("/api/document-storage/people/" + encodeURIComponent(id)); } catch (err) { viewError = err.message; }
-            if (current() && viewing === id) draw();
-        }
-        function draw() {
-            const mine = '<section class="panel"><h2 class="panel-title">Storage you can open</h2>' +
-                (d.myGrants.length ? '<div class="table-card flat"><table class="table"><thead><tr><th>Whose storage</th><th>Until</th><th class="col-actions"></th></tr></thead><tbody>' +
-                    d.myGrants.map(function (g) { return "<tr><td>" + esc(g.name) + "</td><td>" + esc(day(g.until)) + '</td><td class="col-actions"><button type="button" class="btn btn-ghost btn-small" data-view="' + esc(g.personId) + '">View documents</button></td></tr>'; }).join("") + "</tbody></table></div>"
-                    : '<p class="muted">' + (d.manage ? "You can open anyone’s storage from the list below." : "Nobody has given you access to anyone else’s storage. Your own storage is at " + '<a href="' + DOCS + '/storage" target="_blank" rel="noopener">docs.hngroup.org.uk</a>.') + "</p>") + "</section>";
-            if (!d.manage) { root.innerHTML = head + viewer() + mine; return; }
-            const options = function (sel) { return '<option value="">Choose…</option>' + d.people.map(function (p) { return '<option value="' + esc(p.id) + '"' + (p.id === sel ? " selected" : "") + ">" + esc(p.displayName) + (p.jobTitle ? " – " + esc(p.jobTitle) : "") + "</option>"; }).join(""); };
-            root.innerHTML = head + viewer() + (d.myGrants.length ? mine : "") +
-                '<section class="panel"><div class="panel-head"><h2 class="panel-title">Everyone’s storage</h2><label class="search">' + icon("search") + '<input type="search" id="ds-search" placeholder="Search staff"></label></div>' +
-                '<p class="muted small">Opening someone’s storage shows their private documents and files, view only. Every visit is recorded.</p>' +
-                '<div class="table-card flat"><table class="table"><thead><tr><th>Name</th><th>Job title</th><th>Company</th><th class="col-actions"></th></tr></thead><tbody id="ds-people"></tbody></table></div></section>' +
-                '<section class="panel" id="ds-give"><h2 class="panel-title">Give someone access to one person’s storage</h2>' +
-                '<p class="muted small">For temporary access, for example while someone covers for a colleague. It ends by itself on the date you choose, or remove it below.</p>' +
-                '<form id="ds-form" class="grid-2">' +
-                '<div><label for="ds-grantee">Who gets access</label><select id="ds-grantee" required>' + options("") + "</select></div>" +
-                '<div><label for="ds-owner">Whose storage they can open</label><select id="ds-owner" required>' + options(state.dsOwner || "") + "</select></div>" +
-                '<div><label for="ds-until">Until the end of</label><input type="date" id="ds-until" required min="' + inDays(0) + '" max="' + inDays(365) + '" value="' + inDays(7) + '"></div>' +
-                '<div><label for="ds-reason">Reason <span class="muted small">(optional)</span></label><input type="text" id="ds-reason" maxlength="300" placeholder="e.g. Covering while they’re on leave"></div>' +
-                '<div class="form-actions"><button type="submit" class="btn btn-primary">' + icon("lock") + "Give access</button></div></form>" +
-                '<h3 class="detail-head">Access given</h3>' +
-                (d.grants.length ? '<div class="table-card flat"><table class="table"><thead><tr><th>Who</th><th>Can open</th><th>Until</th><th>Given by</th><th class="col-actions"></th></tr></thead><tbody>' +
-                    d.grants.map(function (g) {
-                        return "<tr><td>" + esc(g.granteeName) + "</td><td>" + esc(g.ownerName) + "’s storage" + (g.reason ? '<div class="muted small">' + esc(g.reason) + "</div>" : "") + "</td><td>" + esc(day(g.until)) + (g.active ? "" : ' <span class="badge">Ended</span>') + "</td><td>" + esc(g.grantedByName) + '</td><td class="col-actions"><button type="button" class="btn btn-ghost btn-small" data-remove="' + esc(g.id) + '">Remove</button></td></tr>';
-                    }).join("") + "</tbody></table></div>" : '<p class="muted">Nobody has been given individual access.</p>') + "</section>";
-            drawPeople();
-        }
-        const head = '<div class="page-head"><div><h1>Document storage</h1><p class="muted">Everyone has private storage on <a href="' + DOCS + '" target="_blank" rel="noopener">HN Group Docs</a> that nobody else can open, except people with the “Access staff document storage” permission and anyone given access below.</p></div></div>';
-        function drawPeople() {
-            const q = ($("#ds-search") ? $("#ds-search").value : "").trim().toLowerCase();
-            const list = d.people.filter(function (p) { return !q || [p.displayName, p.jobTitle, p.company].join(" ").toLowerCase().indexOf(q) !== -1; });
-            $("#ds-people").innerHTML = list.map(function (p) {
-                return "<tr><td>" + esc(p.displayName) + "</td><td>" + esc(p.jobTitle) + "</td><td>" + esc(p.company) + '</td><td class="col-actions"><button type="button" class="btn btn-ghost btn-small" data-view="' + esc(p.id) + '">View documents</button> <button type="button" class="btn btn-ghost btn-small" data-give="' + esc(p.id) + '">Give access…</button></td></tr>';
-            }).join("") || '<tr><td colspan="4" class="muted">Nobody matches.</td></tr>';
-        }
-        async function reload() { d = await api("/api/document-storage"); if (current()) draw(); }
-        root.addEventListener("input", function (ev) { if (ev.target.id === "ds-search") drawPeople(); });
-        root.addEventListener("click", async function (ev) {
-            const view = ev.target.closest("[data-view]");
-            if (view) return openView(view.dataset.view);
-            if (ev.target.closest("[data-close-view]")) { viewing = null; viewData = null; history.replaceState({}, "", "/document-storage"); return draw(); }
-            const give = ev.target.closest("[data-give]");
-            if (give) { $("#ds-owner").value = give.dataset.give; $("#ds-give").scrollIntoView({ behavior: "smooth", block: "start" }); $("#ds-grantee").focus(); return; }
-            const rm = ev.target.closest("[data-remove]");
-            if (rm && await confirmDialog({ title: "Remove this access?", message: "They won’t be able to open that storage any more (within a minute).", confirmLabel: "Remove", danger: true })) {
-                try { await api("/api/document-storage/grants/" + rm.dataset.remove + "/delete", {}); toast("Access removed."); reload(); } catch (err) { toast(err.message); }
-            }
-        });
-        root.addEventListener("submit", async function (ev) {
-            if (ev.target.id !== "ds-form") return;
-            ev.preventDefault();
-            const until = $("#ds-until").value;
-            try {
-                await api("/api/document-storage/grants", { granteeId: $("#ds-grantee").value, ownerId: $("#ds-owner").value, until: until ? until + "T23:59:59" : "", reason: $("#ds-reason").value });
-                toast("Access given.");
-                reload();
-            } catch (err) { toast(err.message); }
-        });
-        if (viewing) openView(viewing); else draw();
     }
 
     start();

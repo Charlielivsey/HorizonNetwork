@@ -19,7 +19,7 @@ its data in `/var/lib/hn-docs/old-help-site-<time>/`.
   unless you choose Shared with staff. Filter by company and type, and search.
 - **Other people's storage:** nobody else can open your storage, except anyone with the "Access staff document
   storage" permission (Super Admin and the system owner have it) and anyone given an individual, timed grant to one
-  person's storage in the staff portal (Workplace → Document storage). They find it on the **Staff storage** page here
+  person's storage in Docs (profile menu → Administration → Document storage). They find it on the **Staff storage** page here
   (everyone, from the staff list via `/api/auth/staff-directory`, or just the storage they've been given) or view it
   inside the staff portal itself (the portal asks `/api/service/*` over loopback with the service secret, never through
   nginx, naming who is looking). They see it at `/storage/<person>`,
@@ -52,3 +52,15 @@ its data in `/var/lib/hn-docs/old-help-site-<time>/`.
 node --test docs-site/test.cjs        # tests
 sudo bash docs-site/install.sh        # install or update this site only
 ```
+
+- **Administration:** the profile-picture menu shows Administration only with `storage.access` or
+  `documents.manage`. `/administration` shows just the authorised tools. Document storage grants,
+  uploads, policy metadata, audiences, acknowledgements and all file versions use the single private
+  staff backend at 3250; existing data remains in `/var/lib/hn-staff-portal`. Docs relays a fixed
+  `/api/administration/` namespace with its authenticated identity and the service secret. The backend
+  rejects public/forwarded callers and resolves the current sign-in account/profile and permissions
+  for every request. HR permission alone never opens private storage. Ordinary staff read and
+  acknowledge audience-visible policies at `/policies`. Old Staff Portal management URLs redirect;
+  former management APIs are retired. No second writer or copied policy data.
+- Migration checks: `node --test docs-site/administration.test.cjs`. Add `HN_DOCS_BROWSER=1` for
+  desktop/mobile browser checks (and `CHROMIUM_EXECUTABLE` if using a system Chromium).

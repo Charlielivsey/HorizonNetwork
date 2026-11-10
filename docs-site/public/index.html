@@ -12,17 +12,19 @@
 <link rel="stylesheet" href="/assets/documents.css?v=4">
 <link rel="stylesheet" href="/assets/hn-motion.css?v=1"><script src="/assets/hn-theme.js?v=20261109-midnight"></script>
 <script src="/assets/hn-motion.js?v=1" defer></script>
-<script src="/assets/documents.js?v=5" defer></script>
+<link rel="stylesheet" href="/assets/administration.css?v=1">
+<script src="/assets/administration.js?v=1" defer></script>
+<script src="/assets/documents.js?v=6" defer></script>
 </head>
 <body>
 <div class="stripe" aria-hidden="true"></div>
 <header class="top" data-hn-header>
  <div class="top-inner">
   <a class="brand" href="/" data-link><img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="92" height="32"><img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="92" height="32"><span class="brand-name">Docs</span></a>
-  <nav class="tabs" aria-label="Sections"><a href="/" data-link data-tab="shared">Shared</a><a href="/storage" data-link data-tab="mine">My storage</a><a href="/templates" data-link data-tab="templates">Templates</a><a href="/people" data-link data-tab="people" id="people-tab" hidden>Staff storage</a></nav>
+  <nav class="tabs" aria-label="Sections"><a href="/" data-link data-tab="shared">Shared</a><a href="/storage" data-link data-tab="mine">My storage</a><a href="/templates" data-link data-tab="templates">Templates</a><a href="/policies" data-link>Policies</a><a href="/people" data-link data-tab="people" id="people-tab" hidden>Staff storage</a></nav>
   <div class="top-actions">
    <button class="btn primary" type="button" id="new-button"><span aria-hidden="true">+</span> New document</button>
-   <div class="who" id="who" hidden><span class="avatar" id="who-avatar" aria-hidden="true"></span><img class="avatar photo" id="who-photo" alt="" hidden><span class="who-name" id="who-name"></span><form method="post" action="/auth/logout"><button class="btn small ghost" type="submit">Sign out</button></form></div>
+   <details class="profile-menu" id="profile-menu"><summary aria-label="Profile menu"><span class="who" id="who" hidden><span class="avatar" id="who-avatar" aria-hidden="true"></span><img class="avatar photo" id="who-photo" alt="" hidden><span class="who-name" id="who-name"></span></span></summary><div class="profile-options"><a href="https://accounts.hngroup.org.uk/">HN Account</a><a href="/administration" data-link id="administration-link" hidden>Administration</a><form method="post" action="/auth/logout"><button class="btn small ghost" type="submit">Sign out</button></form></div></details>
   </div>
  </div>
 </header>
@@ -30,6 +32,8 @@
 <main id="main">
  <p class="loading" id="loading">Loading…</p>
 
+ <section class="view" id="view-administration" hidden></section>
+ <div id="modal-root"></div>
  <!-- Documents -->
  <section class="view" id="view-library" hidden>
   <div class="page-head hn-glow"><div data-hn-steps="alive"></div>

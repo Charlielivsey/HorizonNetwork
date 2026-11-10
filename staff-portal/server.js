@@ -850,7 +850,7 @@ async function routeWorkplace(req, res, pathname, session) {
   const me = session.person;
   const method = req.method;
   const annManager = store.can(me, "announcements.manage");
-  const docManager = store.can(me, "documents.manage");
+  const docManager = !req.docsPoliciesReadOnly && store.can(me, "documents.manage");
   const requireAnn = () => {
     if (!annManager) throw httpError(403, "You don't have permission to manage announcements.");
   };
@@ -1242,8 +1242,7 @@ function search(me, query) {
     people.push({ id: p.id, displayName: p.displayName, jobTitle: p.jobTitle, company: p.company, avatarUrl: store.publicView(p).avatarUrl });
     if (people.length >= 6) break;
   }
-  const documents = workplace.listDocuments(me).filter((d) => has(d.title, d.description, d.category, d.file.name)).slice(0, 5)
-    .map((d) => ({ id: d.id, title: d.title, category: d.category, ext: d.file.ext }));
+  const documents = []; // Policy management and search now live on Docs.
   const announcements = workplace.listAnnouncements(me).filter((a) => has(a.title, a.body)).slice(0, 5)
     .map((a) => ({ id: a.id, title: a.title, publishAt: a.publishAt }));
   const today = new Date().toISOString().slice(0, 10);
@@ -1276,6 +1275,8 @@ async function routeApi(req, res, pathname, session) {
     return sendJson(res, 200, { ok: true }, { "Set-Cookie": sessionCookie(req, "", 0) });
   }
 
+  if (pathname.startsWith('/api/document-storage') || (pathname.startsWith('/api/documents') && (method !== 'GET' || pathname.endsWith('/acknowledgements')))) return sendJson(res, 410, { error: 'Document administration has moved to https://docs.hngroup.org.uk/administration' });
+  if (pathname.startsWith('/api/documents')) req.docsPoliciesReadOnly = true;
   if (!session) return sendJson(res, 401, { error: "Not signed in." });
   const me = session.person;
   // Maintenance mode signs everyone but the owner out, including "log in as" sessions.
@@ -2446,6 +2447,8 @@ const portalAuth = portalAuthLib.createPortalAuth({ store, sessions, resume, cre
 async function route(req, res) {
   const pathname = new URL(req.url, "http://localhost").pathname;
   if (pathname === "/signature") return redirect(res, "https://accounts.hngroup.org.uk/" + new URL(req.url, "http://localhost").search + "#signature");
+  if (await require('./lib/docs-administration')(req, res, pathname, { sendJson, routeWorkplace, extraRoutes })) return;
+  if (pathname === '/document-storage' || pathname === '/documents') return redirect(res, 'https://docs.hngroup.org.uk' + (pathname === '/document-storage' ? '/administration/storage' : '/administration/documents') + new URL(req.url, 'http://localhost').search);
   const session = getSession(req);
   if (pathname === '/leave' && req.headers['x-hn-hr-app'] !== '1') return redirect(res, 'https://hr.hngroup.org.uk/leave');
 
