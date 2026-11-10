@@ -15,18 +15,28 @@ function roles(person) {
 }
 function access(viewer) {
   const record = store.getPerson(viewer.id);
-  const own = record ? roles(record).filter(r=>!viewer.profile || r.company===viewer.profile.company) : [];
+  // Availability follows all saved roles and linked company profiles, regardless
+  // of the company selected at sign-in. Never trust requested person/team IDs.
+  const ownRoles = new Map();
+  const add = (person, role) => ownRoles.set(person.id+'\0'+role.company,{...role,personId:person.id,record:person});
+  if(record)roles(record).forEach(role=>add(record,role));
+  const login = viewer.loginId && store.getLogin(viewer.loginId);
+  if(login)for(const profile of store.loginProfiles(login)){
+    const person = store.getPerson(profile.personId);
+    if(person && !person.leftAt)for(const role of roles(person))if(role.company===profile.company)add(person,role);
+  }
+  const own = [...ownRoles.values()],selfIds = new Set(own.map(r=>r.personId));
   const people = store.employees().filter(p=>!p.leftAt);
   const full = store.hasOwnerAccess(viewer) || store.can(viewer,'system.admin');
-  const teams = own.filter(r=>/\bteam\s+(?:leader|lead)\b/i.test(r.jobTitle)).map(r=>({
+  const teams = [...new Map(own.filter(r=>/\bteam\s+(?:leader|lead)\b/i.test(r.jobTitle)).map(r=>[teamKey(r),{
     id:teamKey(r),company:r.company,department:r.department,label:r.company+(r.department ? ' · '+r.department : ''),
-  }));
-  const reports = people.filter(p=>p.id!==viewer.id && roles(p).some(r=>{
-    if(r.supervisorId!==viewer.id)return false;
-    const supervisorCompany=r.supervisorCompany || (record && roles(record).some(b=>b.company===r.company) ? r.company : record && record.company);
-    return own.some(b=>b.company===supervisorCompany);
-  }));
-  const teamMembers = team => people.filter(p=>p.id!==viewer.id && roles(p).some(r=>r.company===team.company && (!team.department || normal(r.department)===normal(team.department))));
+  }])).values()];
+  const reports = people.filter(p=>!selfIds.has(p.id) && roles(p).some(r=>own.some(b=>{
+    if(r.supervisorId!==b.personId)return false;
+    const supervisorCompany=r.supervisorCompany || (roles(b.record).some(role=>role.company===r.company) ? r.company : b.record.company);
+    return b.company===supervisorCompany;
+  })));
+  const teamMembers = team => people.filter(p=>!selfIds.has(p.id) && roles(p).some(r=>r.company===team.company && (!team.department || normal(r.department)===normal(team.department))));
   return {full,teams,reports,teamMembers,people};
 }
 function read(viewer,query) {

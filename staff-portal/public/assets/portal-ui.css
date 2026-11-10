@@ -385,7 +385,7 @@ html[data-portal-ui] .modal-person .pv-where span { min-width: 0; justify-conten
 }
 @media (max-width: 860px) { html[data-portal-ui] .modal.modal-person { width: calc(100vw - 20px); max-width: calc(100vw - 20px); height: calc(100dvh - 20px); } }
 
-/* All account actions are permanent parts of the sidebar, including on phones. */
+/* Account controls remain part of the sidebar shell. */
 html[data-portal-ui] .topbar #user-menu { display: none; }
 html[data-portal-ui] .portal-account-identity { display: flex; align-items: center; gap: 10px; padding: 5px 10px 10px; }
 html[data-portal-ui] .portal-account-identity > div { min-width: 0; }
@@ -400,3 +400,39 @@ html[data-portal-ui] .portal-nav-bottom { max-height: 56dvh; overflow-y: auto; o
 html[data-portal-ui] .modal-backdrop { z-index: 500; }
 html[data-portal-ui] .search-overlay { z-index: 510; }
 html[data-portal-ui] .toast { z-index: 650; }
+
+/* Shared page headings keep the icon alongside the title at every content width. */
+html[data-portal-ui] { scroll-padding-top: 100px; overflow-anchor: none; }
+html[data-portal-ui] .topbar { flex-shrink: 0; }
+html[data-portal-ui] #view { overflow-anchor: none; }
+html[data-portal-ui] .page-head { justify-content: flex-start; align-items: center; scroll-margin-top: 100px; }
+html[data-portal-ui] .page-head > div:not(.page-actions):not(.segmented) { flex: 1 1 220px; min-width: 0; max-width: none; }
+html[data-portal-ui] .page-head > .page-icon { flex: 0 0 44px; width: 44px; height: 44px; border-radius: 12px; }
+html[data-portal-ui] .page-head .page-actions { margin-left: auto; }
+/* Account controls open above the compact identity rather than shrinking navigation. */
+html[data-portal-ui] .portal-nav-bottom { position: relative; overflow: visible; max-height: none; padding: 10px 13px; }
+html[data-portal-ui] .portal-account { position: relative; }
+html[data-portal-ui] .portal-account-identity { list-style: none; padding: 8px; min-height: 50px; border-radius: 10px; cursor: pointer; }
+html[data-portal-ui] .portal-account-identity::-webkit-details-marker { display: none; }
+html[data-portal-ui] .portal-account-identity:hover, html[data-portal-ui] .portal-account[open] summary { background: var(--surface-2); }
+html[data-portal-ui] .portal-account-name { flex: 1; min-width: 0; }
+html[data-portal-ui] .portal-account-name > span { display: block; color: var(--text-muted); font-size: 9px; margin-top: 3px; }
+html[data-portal-ui] .portal-account-identity > .icon { width: 14px; height: 14px; rotate: 180deg; }
+html[data-portal-ui] .portal-account[open] .portal-account-identity > .icon { rotate: 0deg; }
+html[data-portal-ui] .portal-account-controls { position: absolute; bottom: calc(100% + 10px); left: 0; right: 0; max-height: min(65dvh, 480px); overflow-y: auto; overscroll-behavior: contain; padding: 10px 4px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 12px 36px rgba(0,0,0,.25); }
+html[data-portal-ui] .portal-account-email { display: block; margin: 3px 10px 12px; color: var(--text-muted); font-size: 10px; overflow-wrap: anywhere; }
+
+/* Account popover: a readable floating panel beside the sidebar on desktop. */
+html[data-portal-ui] .portal-account-controls { left: calc(100% + 20px); right: auto; bottom: 0; width: min(300px,calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 16px 10px 14px; border-radius: 14px; box-shadow: 0 18px 50px rgba(0,0,0,.3); }
+html[data-portal-ui] .portal-account-caption { display: block; margin: 0 8px 5px; color: var(--text-muted); font-size: 9px; font-weight: 750; text-transform: uppercase; letter-spacing: .09em; }
+html[data-portal-ui] .portal-account-email { margin: 0 8px 14px; line-height: 1.6; font-size: 11px; }
+html[data-portal-ui] .portal-account-status { display: flex; align-items: flex-start; width: 100%; margin: 0 0 10px; padding: 12px; gap: 12px; border-radius: 10px; text-align: left; }
+html[data-portal-ui] .portal-availability-copy { flex: 1; min-width: 0; display: grid; gap: 5px; line-height: 1.5; overflow-wrap: anywhere; }
+html[data-portal-ui] .portal-availability-copy strong { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 650; }
+html[data-portal-ui] .portal-availability-copy .status-dot { flex: 0 0 7px; width: 7px; height: 7px; }
+html[data-portal-ui] .portal-availability-reason, html[data-portal-ui] .portal-availability-return { display: block; padding-left: 14px; font-size: 11px; color: var(--text-muted); }
+html[data-portal-ui] .portal-availability-edit { display: grid; place-items: center; flex: 0 0 24px; width: 24px; height: 24px; border-radius: 6px; color: var(--primary); }
+html[data-portal-ui] .portal-availability-edit .icon { width: 15px; height: 15px; }
+html[data-portal-ui] .portal-account-controls > .portal-nav-link { min-height: 38px; font-size: 11px; }
+html[data-portal-ui] .portal-account-controls > .portal-sites-link { margin-top: 8px; padding-top: 13px; border-top: 1px solid var(--border); font-size: 10px; }
+@media (max-width: 1100px) { html[data-portal-ui] .portal-account-controls { left: 0; bottom: calc(100% + 10px); width: 100%; max-height: 65dvh; } }

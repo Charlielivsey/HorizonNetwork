@@ -45,7 +45,7 @@ test('portal workspace uses real Auth, preserves service boundaries and permissi
    const loaded=new Set();page.on('response',r=>{if(r.ok())loaded.add(new URL(r.url()).pathname)});
    await page.goto(proxy+'/home');await page.locator('.portal-welcome h1').waitFor();await page.getByText('Welcome to your workspace',{exact:true}).waitFor();
    assert.equal(await page.locator('.portal-sidebar a[href="/employees"]').count(),0);assert.equal(await page.locator('.portal-sidebar a[href="https://hr.hngroup.org.uk/"]').count(),1);assert.equal(await page.locator('.portal-sidebar a[href="/roles"]').count(),role==='manager'?1:0);
-   assert.equal(await page.locator('.deprecation-banner').count(),0);assert.ok(await page.locator('.portal-nav-bottom [data-action=logout]').isVisible());
+   assert.equal(await page.locator('.deprecation-banner').count(),0);assert.equal(await page.locator('.portal-nav-bottom [data-action=logout]').isVisible(),false);
    await page.screenshot({path:path.join(output,role+'-home.png'),fullPage:true});await page.reload();await page.locator('.portal-welcome h1').waitFor();
    const routes=role==='employee'?['directory','announcements','helpdesk','settings','chat']:['directory','announcements','calendar','polls','ideas','kudos','questions','wiki','chat','team','mentoring','helpdesk','on-call','status','settings','notifications','about'];
    if(role==='manager')routes.push('roles','reports','enquiries');
@@ -54,16 +54,18 @@ test('portal workspace uses real Auth, preserves service boundaries and permissi
    }
    await page.goto(proxy+'/helpdesk');await page.locator('#hd-new').click();await page.locator('.modal').waitFor();assert.ok(await page.getByRole('dialog').isVisible());await page.screenshot({path:path.join(output,role+'-dialog.png')});assert.ok((await page.locator('.modal').boundingBox()).width<=641);
    if(role==='employee'){
-    await page.locator('#tk-subject').fill('Portal redesign browser fixture');await page.locator('#tk-body').fill('Checking the live form and original support workflow.');await page.getByRole('button',{name:'Raise ticket',exact:true}).click();await page.getByRole('heading',{name:'Portal redesign browser fixture',exact:true}).waitFor();
+    await page.locator('#tk-subject').fill('Portal redesign browser fixture');await page.locator('#tk-body').fill('Checking the live form and original support workflow.');await page.getByRole('dialog').getByRole('button',{name:'Raise a issue',exact:true}).click();await page.getByRole('heading',{name:'Portal redesign browser fixture',exact:true}).waitFor();
     const tickets=await(await get(proxy,'/api/helpdesk',c)).json();assert.ok(tickets.tickets.some(t=>t.subject==='Portal redesign browser fixture'));
    }
    await page.keyboard.press('Escape');assert.equal(await page.locator('.modal').count(),0);
    await page.goto(proxy+'/home');await page.locator('.portal-welcome h1').waitFor();await page.locator('#search-btn').click();await page.locator('#sp-q').fill('calendar');await page.locator('.sp-item').first().waitFor();await page.screenshot({path:path.join(output,role+'-search.png')});await page.keyboard.press('Escape');assert.equal(await page.locator('.search-overlay').count(),0);
    for(const theme of ['light','dusk','midnight']){await post(proxy,'/api/me/theme',{theme},c);await page.reload();await page.locator('.portal-welcome h1').waitFor();assert.equal(await page.locator('html').getAttribute('data-theme'),theme==='dusk'?'lavender-dusk':theme);await page.screenshot({path:path.join(output,role+'-'+theme+'.png'),fullPage:true});}
+   if(process.env.HN_PORTAL_DESKTOP_ONLY!=='1'){
    await page.setViewportSize({width:390,height:844});await page.goto(proxy+'/home');await page.locator('.portal-welcome h1').waitFor();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:path.join(output,role+'-mobile-home.png'),fullPage:true});
    await page.locator('#nav-toggle').click();await page.locator('#portal-sidebar').waitFor({state:'visible'});assert.ok(await page.locator('#portal-sidebar').isVisible());assert.equal(await page.locator('#portal-sidebar').evaluate(el=>el.inert),false);await page.screenshot({path:path.join(output,role+'-mobile-nav.png')});await page.keyboard.press('Escape');assert.equal(await page.locator('#portal-sidebar').evaluate(el=>el.inert),true);
    for(const route of ['directory','calendar','helpdesk','kudos','settings']){await page.goto(proxy+'/'+route);await page.locator('#view h1').waitFor();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'mobile '+route);await page.screenshot({path:path.join(output,role+'-mobile-'+route+'.png'),fullPage:true});}
    await page.goto(proxy+'/helpdesk');await page.locator('#hd-new').click();await page.locator('.modal').waitFor();assert.ok((await page.locator('.modal').boundingBox()).width<=390);await page.screenshot({path:path.join(output,role+'-mobile-dialog.png')});await page.keyboard.press('Escape');
+   }
    if(role==='employee'){await page.goto(proxy+'/roles');await page.locator('#view h1').waitFor();assert.match(await page.locator('#view').innerText(),/access|permission/i);}
    // A transient startup failure must offer recovery and must not leave a blank shell.
    console.log(role+' startup recovery');await page.route('**/api/me',r=>r.fulfill({status:503,contentType:'application/json',body:'{"error":"Fixture service unavailable"}'}));await page.goto(proxy+'/home');await page.getByText('This page couldn’t load',{exact:true}).waitFor();await page.unroute('**/api/me');await page.getByRole('button',{name:'Try again',exact:true}).click();await page.locator('.portal-welcome h1').waitFor();

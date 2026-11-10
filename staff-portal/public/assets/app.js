@@ -2,6 +2,8 @@
     "use strict";
     const HR_APP = document.documentElement.dataset.hnApp === "hr";
 
+    const HELP_LABEL = document.documentElement.dataset.hnApp ? "IT Helpdesk" : "Raise a issue";
+
     // ================= Helpers =================
 
     const ICONS = {
@@ -420,7 +422,7 @@
                 { title: "Service status", desc: "Are our websites up?", href: "/status", icon: "activity", badge: "servicesDown" },
                 { title: "Activity reports", desc: "Monthly summary as a PDF", href: "/reports", icon: "chart", requires: "reports.view" },
                 { title: "About HN Group", desc: "Our companies, brand colours and logos", href: "/about", icon: "building" },
-                { title: "IT Helpdesk", desc: "Raise and track support tickets", href: "/helpdesk", icon: "lifebuoy", badge: "helpdeskBadge" },
+                { title: HELP_LABEL, desc: "Raise and track support tickets", href: "/helpdesk", icon: "lifebuoy", badge: "helpdeskBadge" },
                 { title: "On call", desc: "Who to contact out of hours", href: "/on-call", icon: "phone" },
                 { title: "Website enquiries", desc: "Messages from hngroup.org.uk", href: "/enquiries", icon: "mail", requires: "enquiries.manage", badge: "enquiriesNew" },
             ],
@@ -5208,8 +5210,8 @@
         let filter = state.helpFilter && filters.some(function (f) { return f[0] === state.helpFilter; }) ? state.helpFilter : "open";
 
         root.innerHTML =
-            '<div class="page-head"><div><h1>IT Helpdesk</h1><p class="muted">' + (d.canManage ? "Every ticket raised across HN Group." : "Get help from the IT team. Raise a ticket and follow it here.") + "</p></div>" +
-            '<div class="page-actions"><button type="button" class="btn btn-primary" id="hd-new">' + icon("plus") + "New ticket</button></div></div>" +
+            '<div class="page-head"><div><h1>' + HELP_LABEL + '</h1><p class="muted">' + (d.canManage ? "Every ticket raised across HN Group." : "Get help from the IT team. Raise a ticket and follow it here.") + "</p></div>" +
+            '<div class="page-actions"><button type="button" class="btn btn-primary" id="hd-new">' + icon("plus") + (document.documentElement.dataset.hnApp ? "New ticket" : HELP_LABEL) + "</button></div></div>" +
             '<div class="company-tabs" id="hd-tabs">' + filters.map(function (f) {
                 return '<button type="button" data-f="' + f[0] + '">' + esc(f[1]) + ' <span class="tab-count">' + d.tickets.filter(f[2]).length + "</span></button>";
             }).join("") + "</div>" +
@@ -5249,7 +5251,7 @@
 
     function openNewTicket(d) {
         const m = openModal(
-            '<h2 class="modal-title">New IT ticket</h2><p class="muted">Tell the IT team what’s wrong. The more detail, the quicker they can fix it.</p>' +
+            '<h2 class="modal-title">' + (document.documentElement.dataset.hnApp ? "New IT ticket" : HELP_LABEL) + '</h2><p class="muted">Tell the IT team what’s wrong. The more detail, the quicker they can fix it.</p>' +
             '<form id="tk-form" novalidate>' +
             '<label for="tk-subject">Summary</label><input type="text" id="tk-subject" maxlength="150" placeholder="e.g. Can’t connect to the VPN from home">' +
             '<div class="grid-2"><div><label for="tk-cat">Category</label><select id="tk-cat">' + Object.keys(d.categories).map(function (k) {
@@ -5260,7 +5262,7 @@
             }).join("") + "</select></div></div>" +
             '<label for="tk-body">Details</label><textarea id="tk-body" rows="6" maxlength="5000" placeholder="What happened, what you expected, any error messages, and what you’ve tried."></textarea>' +
             '<div class="form-error" id="tk-error" hidden></div>' +
-            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">Raise ticket</button></div></form>'
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">' + (document.documentElement.dataset.hnApp ? "Raise ticket" : HELP_LABEL) + '</button></div></form>'
         );
         $("#tk-subject", m.el).focus();
         $("#tk-form", m.el).addEventListener("submit", async function (e) {
@@ -6336,7 +6338,7 @@
         ["leave", "Leave & absence"],
         ["rotas", "Rotas & timesheets"],
         ["payroll", "Payroll & funds"],
-        ["helpdesk", "IT Helpdesk"],
+        ["helpdesk", HELP_LABEL],
         ["cases", "HR cases"],
         ["system", "System Admin"],
     ];
@@ -6356,6 +6358,8 @@
             '<div class="form-error" id="pin-error" hidden></div>' +
             '<button type="submit" class="btn btn-primary btn-block" id="pin-go">Unlock</button>' +
             "</form></div></div>";
+        // Dynamic screens do not reliably apply the HTML autofocus attribute.
+        $("#pin", root).focus({ preventScroll: true });
         $("#pin").addEventListener("input", function (e) { e.target.value = e.target.value.replace(/\D/g, ""); });
         $("#pin-form").addEventListener("submit", async function (e) {
             e.preventDefault();
@@ -8855,7 +8859,7 @@
     }
     // Side panels that fill the right-hand column (the user's request, 3 November 2026: "fill in that gap").
     function homeQuickActions() {
-        const acts = [["/leave", "sun", "Book leave"], ["/helpdesk", "lifebuoy", "Raise an IT ticket"], ["/expenses", "pound", "Claim an expense"],
+        const acts = [["/leave", "sun", "Book leave"], ["/helpdesk", "lifebuoy", HELP_LABEL], ["/expenses", "pound", "Claim an expense"],
             ["/kudos", "heart", "Give kudos"], ["/questions", "help", "Ask a question"], ["/ideas", "flag", "Share an idea"]];
         return '<h2 class="section-title">' + icon("tick") + "Quick actions</h2>" + '<div class="qa-grid">' +
             acts.map(function (a) { return '<a class="qa-btn" href="' + a[0] + '" data-link>' + icon(a[1]) + "<span>" + a[2] + "</span></a>"; }).join("") + "</div>";

@@ -32,7 +32,38 @@ test('personal calendar privacy and live reporting/team-profile access',()=>{
   leader.jobTitle='Member';assert.throws(()=>read(leader,'view=team&team='+team.id),e=>e.status===403,'role change revokes team access');leader.jobTitle='Team Leader';
   const multi=make('Multi','Horizon Advertising','Design','Member',{otherRoles:[{company:'HN Group',department:'Operations',jobTitle:'Team Leader'}]});
   assert.equal(read(multi).calendars.teams.length,1);const ownLogin=store.createLogin({displayName:'Profile fixture',username:'profile.fixture@hngroup.org.uk',profiles:[{personId:multi.id,company:'Horizon Advertising'},{personId:multi.id,company:'HN Group'}]}).login;
-  const profiles=store.loginProfiles(ownLogin);assert.equal(read(store.viewOf(ownLogin,profiles.find(p=>p.company==='Horizon Advertising'))).calendars.teams.length,0);assert.equal(read(store.viewOf(ownLogin,profiles.find(p=>p.company==='HN Group'))).calendars.teams.length,1);
+  const profiles=store.loginProfiles(ownLogin);assert.equal(read(store.viewOf(ownLogin,profiles.find(p=>p.company==='Horizon Advertising'))).calendars.teams.length,1);assert.equal(read(store.viewOf(ownLogin,profiles.find(p=>p.company==='HN Group'))).calendars.teams.length,1);
+  // Secondary supervisor AND subordinate company profiles must remain available
+  // regardless of the company selected on the signed-in profile.
+  const multiManager=make('MultiManager','HN Group','Operations','Manager',{otherRoles:[{company:'Horizon Network',department:'Network Leadership',jobTitle:'Manager'}]});
+  const secondReport=make('SecondaryReport','HN Group','Operations','Member',{otherRoles:[{company:'Horizon Network',department:'Network Leadership',jobTitle:'Member',supervisorId:multiManager.id,supervisorCompany:'Horizon Network'}]});
+  const primaryReport=make('PrimaryReport','Horizon Network','Network Leadership','Member',{supervisorId:multiManager.id,supervisorCompany:'Horizon Network',otherRoles:[{company:'HN Group',jobTitle:'Member',supervisorId:multiManager.id,supervisorCompany:'HN Group'}]});
+  const unrelatedReport=make('UnrelatedReport','Horizon Advertising','Operations','Member',{supervisorId:multiManager.id,supervisorCompany:'Horizon Advertising'});
+  const secondLeave=leave.createRequest(secondReport,{type:'annual',startDate:'2026-11-20',endDate:'2026-11-20'},owner);
+  leave.createRequest(primaryReport,{type:'annual',startDate:'2026-11-24',endDate:'2026-11-24'},owner);
+  leave.createRequest(secondReport,{type:'sick',startDate:'2026-11-25',endDate:'2026-11-25'},secondReport);
+  calendar.saveEvent({title:'Secondary profile private meeting',type:'meeting',startDate:'2026-11-23',visibility:'private',attendeeIds:[secondReport.id]},owner);
+  const multiLogin=store.createLogin({displayName:'Multi manager',username:'multi.manager@hngroup.org.uk',profiles:[{personId:multiManager.id,company:'HN Group'},{personId:multiManager.id,company:'Horizon Network'}]}).login;
+  unrelatedReport.supervisorCompany='Horizon Advertising';
+  for(const profile of store.loginProfiles(multiLogin)){
+    const viewer=store.viewOf(multiLogin,profile), result=read(viewer,'view=reports');
+    assert.equal(result.calendars.reports,2,'deduplicate staff without losing secondary company reporting relationships');
+    assert.deepEqual(new Set(result.items.map(x=>x.personId)),new Set([secondReport.id,primaryReport.id]));
+    assert.equal(result.items.filter(x=>x.id==='lv-'+secondLeave.id).length,1);
+    assert.ok(result.items.every(x=>x.kind==='leave'&&x.leaveType==='annual'&&x.status==='approved'));
+    assert.doesNotMatch(JSON.stringify(result),/Secondary profile private meeting/);
+    assert.throws(()=>read(viewer,'person='+unrelatedReport.id),e=>e.status===403,'a nonexistent supervisor company never grants access');
+  }
+  const linkedManager=make('LinkedManager','Horizon Development','Development','Manager');
+  const linkedReport=make('LinkedReport','Horizon Development','Development','Member',{supervisorId:linkedManager.id,supervisorCompany:'Horizon Development'});
+  leave.createRequest(linkedReport,{type:'annual',startDate:'2026-11-26',endDate:'2026-11-26'},owner);
+  multiLogin.profiles.push({personId:linkedManager.id,company:'Horizon Development'});
+  const multiViewer=store.viewOf(multiLogin,store.loginProfiles(multiLogin).find(p=>p.company==='HN Group'));
+  assert.ok(read(multiViewer,'view=reports').items.some(x=>x.personId===linkedReport.id),'linked company profiles on another saved record also contribute direct reports');
+  multiLogin.profiles=multiLogin.profiles.filter(p=>p.personId!==linkedManager.id);
+  assert.throws(()=>read(multiViewer,'person='+linkedReport.id),e=>e.status===403,'removing a linked profile immediately revokes its availability access');
+  secondReport.otherRoles[0].supervisorId=peer.id;
+  assert.throws(()=>read(multiManager,'person='+secondReport.id),e=>e.status===403,'secondary reporting changes revoke access immediately');
   const cross=make('Cross','Horizon Network','Operations','Member',{supervisorId:manager.id,supervisorCompany:'HN Group'});
   assert.ok(read(manager).calendars.reports>=2);
   const noInherited=make('Independent','HN Group','Sales','Member',{supervisorId:manager.id,otherRoles:[{company:'Horizon Network',jobTitle:'Member'}]});
