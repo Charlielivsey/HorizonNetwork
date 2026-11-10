@@ -31,7 +31,7 @@ function clientFor(req) {
 function nextFor(req, value, legacy) {
   if (clientFor(req) === 'hr' && typeof value === 'string' && /^\/(?!\/)/.test(value) && value.length < 2048 && !/[\\\x00-\x20\x7f]/.test(value)) {
     const url = new URL(value, 'https://hr.hngroup.org.uk');
-    if (value.startsWith('/') && url.origin === 'https://hr.hngroup.org.uk' && /^\/(home|leave|rotas|reviews|objectives|feedback|flexible|exit-interview|exit-interviews|staff-files|training|cases|notifications)$/.test(url.pathname)) return url.pathname + url.search + url.hash;
+    if (value.startsWith('/') && url.origin === 'https://hr.hngroup.org.uk' && /^\/(home|leave|rotas|reviews|objectives|feedback|flexible|exit-interview|exit-interviews|staff-files|training|cases|employees|onboarding|jobs|job-descriptions|notifications)$/.test(url.pathname)) return url.pathname + url.search + url.hash;
   }
   return legacy(value);
 }

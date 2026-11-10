@@ -149,7 +149,9 @@ test('sign-in accounts: made on HN Account, several profiles with a default, own
     assert.match(again.headers.get('location'), /^\/auth\/login\?return=/, 'a used ticket falls back to signing in, to the same place');
     for (const route of ['/jobs', '/jobs', '/employees', '/jobs']) {
       const page = await fetch(staffBase + route, { headers: { Cookie: portal }, redirect: 'manual' });
-      assert.equal(page.status, 200, 'portal navigation and refresh preserve the session: ' + route);
+      assert.equal(page.status, 302, 'migrated People tools redirect to HR: ' + route);
+      assert.equal(page.headers.get('location'), 'https://hr.hngroup.org.uk' + route);
+      assert.equal((await fetch(staffBase + '/home', { headers: { Cookie: portal }, redirect: 'manual' })).status, 200, 'portal sign-in still survives navigation');
     }
     const odd = await (await fetch(staffBase + '/api/accounts-handoff', { method: 'POST', headers: { Cookie: portal, 'Content-Type': 'application/json' }, body: JSON.stringify({ next: 'https://evil.example/' }) })).json();
     assert.equal(new URL(odd.url).searchParams.get('return'), '/#overview', 'only places on HN Account');

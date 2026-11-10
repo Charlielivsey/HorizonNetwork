@@ -2441,7 +2441,7 @@ const portalAuth = portalAuthLib.createPortalAuth({ store, sessions, resume, cre
 async function route(req, res) {
   const pathname = new URL(req.url, "http://localhost").pathname;
   const session = getSession(req);
-  if (/^\/(leave|rotas|reviews|objectives|feedback|flexible|exit-interview|exit-interviews|staff-files|training|cases)$/.test(pathname) && portalAuthLib.clientFor(req) !== 'hr') return redirect(res, 'https://hr.hngroup.org.uk' + req.url);
+  if (/^\/(leave|rotas|reviews|objectives|feedback|flexible|exit-interview|exit-interviews|staff-files|training|cases|employees|onboarding|jobs|job-descriptions)$/.test(pathname) && portalAuthLib.clientFor(req) !== 'hr') return redirect(res, 'https://hr.hngroup.org.uk' + req.url);
 
   if (await statusSso(req, res, pathname, session)) return;
   if (await portalAuth(req, res, pathname)) return;

@@ -1,10 +1,12 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict');const {allowed}=require('./server');
 test('HR proxy exposes migrated tools and required session assets only',()=>{
- for(const path of ['/leave','/auth/start','/api/leave','/api/leave/grid','/api/leave/extra','/rotas','/reviews','/objectives','/feedback','/flexible','/exit-interview','/exit-interviews','/staff-files','/training','/cases','/home','/notifications','/api/meta','/assets/app.js'])assert.equal(allowed(path,'GET'),true,path);
- for(const path of ['/employees','/api/employees','/api/logins','/api/auth/profile','/api/system','/api/recruitment'])assert.equal(allowed(path,'GET'),false,path);
+ for(const path of ['/leave','/auth/start','/api/leave','/api/leave/grid','/api/leave/extra','/rotas','/reviews','/objectives','/feedback','/flexible','/exit-interview','/exit-interviews','/staff-files','/training','/cases','/employees','/onboarding','/jobs','/job-descriptions','/home','/notifications','/api/meta','/assets/app.js'])assert.equal(allowed(path,'GET'),true,path);
+ for(const path of ['/roles','/api/roles','/api/logins','/api/auth/profile','/api/system','/api/recruitment'])assert.equal(allowed(path,'GET'),false,path);
+ assert.equal(allowed('/api/accounts-handoff','POST'),true);assert.equal(allowed('/api/accounts-handoff','GET'),false);
+ assert.equal(allowed('/api/public/jobs','GET'),false);
  assert.equal(allowed('/api/leave/extra','POST'),true);assert.equal(allowed('/api/me/theme','POST'),true);
- for(const prefix of ['leave','rotas','timesheets','reviews','objectives','feedback','flexible','exit-interview','exit-interviews','staff-files','training','cases']) { assert.equal(allowed('/api/'+prefix,'GET'),true);assert.equal(allowed('/api/'+prefix+'/item','POST'),true);assert.equal(allowed('/api/'+prefix+'-unrelated','GET'),false); }
+ for(const prefix of ['leave','rotas','timesheets','reviews','objectives','feedback','flexible','exit-interview','exit-interviews','staff-files','training','cases','employees','onboarding','jobs','job-descriptions','positions']) { assert.equal(allowed('/api/'+prefix,'GET'),true);assert.equal(allowed('/api/'+prefix+'/item','POST'),true);assert.equal(allowed('/api/'+prefix+'-unrelated','GET'),false); }
  for(const method of ['PUT','DELETE','OPTIONS'])assert.equal(allowed('/api/leave',method),false);
  for(const p of ['/api/notifications/anything','/api/me/password','/api/payroll','/api/payslips','/api/funds','/api/directory'])assert.equal(allowed(p,'POST'),false,p);
 });
@@ -16,7 +18,7 @@ test('the Staff Portal redirects HR tools and rejects their APIs, even if its pr
  const child=spawn(process.execPath,[path.join(__dirname,'../staff-portal/public-proxy.js')],{env:{...process.env,PORT:String(port),PRIVATE_STAFF_BACKEND:'http://127.0.0.1:'+upstream.address().port},stdio:'ignore'}),base='http://127.0.0.1:'+port;
  try{
   for(let i=0;i<50;i++){try{await fetch(base+'/healthz');break;}catch{await new Promise(r=>setTimeout(r,30));}}
-  for(const path of ['/leave','/rotas','/reviews','/objectives','/feedback','/flexible','/exit-interview','/exit-interviews','/staff-files','/training','/cases']) {
+  for(const path of ['/leave','/rotas','/reviews','/objectives','/feedback','/flexible','/exit-interview','/exit-interviews','/staff-files','/training','/cases','/employees','/onboarding','/jobs','/job-descriptions']) {
  const page=await fetch(base+path+'?person=test&year=2026',{redirect:'manual'});assert.equal(page.status,302);assert.equal(page.headers.get('location'),'https://hr.hngroup.org.uk'+path+'?person=test&year=2026');
  assert.equal((await fetch(base+'/api'+path,{headers:{'x-hn-hr-app':'1'}})).status,410);
  }
@@ -27,6 +29,6 @@ test('the Staff Portal redirects HR tools and rejects their APIs, even if its pr
 
 test('HR return paths stay on approved tools and preserve queries',()=>{
  const {nextFor}=require('../staff-portal/lib/portal-auth');const req={socket:{remoteAddress:'127.0.0.1'},headers:{'x-hn-hr-app':'1'}};
- for(const p of ['/home','/reviews?person=abc','/staff-files?person=abc#files'])assert.equal(nextFor(req,p,()=>null),p);
- for(const p of ['https://evil.test/leave','//evil.test/leave','//[','/api/system','/employees','/leave\\evil','/leave\n'])assert.equal(nextFor(req,p,()=>null),null);
+ for(const p of ['/home','/reviews?person=abc','/staff-files?person=abc#files','/employees','/onboarding','/jobs','/job-descriptions'])assert.equal(nextFor(req,p,()=>null),p);
+ for(const p of ['https://evil.test/leave','//evil.test/leave','//[','/api/system','/roles','/leave\\evil','/leave\n'])assert.equal(nextFor(req,p,()=>null),null);
 });

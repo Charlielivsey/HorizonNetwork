@@ -1,7 +1,7 @@
 (function () {
     "use strict";
     const FINANCE_PATHS = ["/payslips", "/expenses", "/payroll", "/funds", "/invoices", "/bills"];
-    const HR_PATHS = ["/leave", "/rotas", "/reviews", "/objectives", "/feedback", "/flexible", "/exit-interview", "/exit-interviews", "/staff-files", "/training", "/cases"];
+    const HR_PATHS = ["/leave", "/rotas", "/reviews", "/objectives", "/feedback", "/flexible", "/exit-interview", "/exit-interviews", "/staff-files", "/training", "/cases", "/employees", "/onboarding", "/jobs", "/job-descriptions"];
     const HR_APP = document.documentElement.dataset.hnApp === "hr";
 
     // ================= Helpers =================
@@ -381,10 +381,6 @@
                 { title: "Q&A", desc: "Ask a question, share what you know", href: "/questions", icon: "help" },
                 { title: "Knowledge base", desc: "How-to guides anyone can edit", href: "/wiki", icon: "book" },
                 { title: "Mentoring", desc: "Find a mentor and plan catch-ups", href: "/mentoring", icon: "users", badge: "mentoringDue" },
-                { title: "Employee Management", desc: "Add and manage staff records", href: "/employees", icon: "briefcase", requires: "staff.manage" },
-                { title: "Joiners & leavers", desc: "Onboarding and leaving checklists", href: "/onboarding", icon: "check", requires: "onboarding.manage" },
-                { title: "Jobs", desc: "Open roles, applications and referrals", href: "/jobs", icon: "briefcase", badge: "newApplicants" },
-                { title: "Job descriptions", desc: "What each role does, who it reports to and its authority", href: "/job-descriptions", icon: "file" },
                 { title: "Roles & permissions", desc: "Choose who can do what", href: "/roles", icon: "shield", requires: "access.manage" },
             ],
         },
@@ -402,6 +398,10 @@
         },
         {
             label: "HR", items: [
+                { title: "Employee Management", desc: "Add and manage staff records", href: "/employees", icon: "briefcase", requires: "staff.manage" },
+                { title: "Joiners & leavers", desc: "Onboarding and leaving checklists", href: "/onboarding", icon: "check", requires: "onboarding.manage" },
+                { title: "Jobs", desc: "Open roles, applications and referrals", href: "/jobs", icon: "briefcase", badge: "newApplicants" },
+                { title: "Job descriptions", desc: "What each role does, who it reports to and its authority", href: "/job-descriptions", icon: "file" },
                 { title: "Leave & Absence", desc: "Book holidays and report absence", href: "/leave", icon: "sun", badge: "leaveApprovals" },
                 { title: "Rotas & Timesheets", desc: "Shifts, hours and approvals", href: "/rotas", icon: "clock", badge: "timesheetApprovals" },
                 { title: "Probation & reviews", desc: "Probation dates and reviews", href: "/reviews", icon: "star", badge: "reviewsDue" },
@@ -427,6 +427,7 @@
         },
     ];
 
+    const HR_PEOPLE_PATHS = ["/employees", "/onboarding", "/jobs", "/job-descriptions"];
     const HR_ITEMS = NAV.find(function (section) { return section.label === "HR"; }).items;
 
     function destination(href) {
@@ -440,7 +441,8 @@
 
     function viewHrHome(root) {
         root.innerHTML = '<section class="page-head"><div><h1>HN Group HR</h1><p class="muted">Leave, working hours, development and your staff documents in one place.</p></div></section>' +
-            '<section class="panel"><h2>Your HR tools</h2><div class="menu-grid">' + visibleItems({items: HR_ITEMS}).map(menuItemHtml).join('') + '</div></section>';
+            '<section class="panel"><h2>Your HR tools</h2><div class="menu-grid">' + visibleItems({items: HR_ITEMS.filter(function (it) { return !HR_PEOPLE_PATHS.includes(it.href); })}).map(menuItemHtml).join('') + '</div></section><section class="panel"><h2>People &amp; recruitment</h2><div class="menu-grid">' + visibleItems({items: HR_ITEMS.filter(function (it) { return HR_PEOPLE_PATHS.includes(it.href); })}).map(menuItemHtml).join('') + '</div></section><section class="panel" id="hr-onboarding" hidden></section>';
+        loadMyOnboarding($('#hr-onboarding', root));
     }
 
     function visibleItems(section) {
@@ -505,8 +507,9 @@
                 '<button type="button" class="btn btn-small btn-light" data-action="stop-impersonating">Return to my account</button></div>';
         }
         if (HR_APP) {
-            const items = visibleItems({items: HR_ITEMS});
-            $('#mainnav').innerHTML = '<a href="/home" data-link class="nav-link" data-section="/home">Overview</a><a href="/leave" data-link class="nav-link" data-section="/leave">Leave &amp; absence</a><div class="nav-item"><button type="button" class="nav-link" data-menu aria-haspopup="true" aria-expanded="false" data-section="' + HR_PATHS.filter(function (p) { return p !== '/leave'; }).join(' ') + '">HR tools' + icon('chevron', 'chev') + '</button><div class="menu menu-cols" role="menu" hidden>' + items.filter(function (it) { return it.href !== '/leave'; }).map(menuItemHtml).join('') + '</div></div>';
+            const items = visibleItems({items: HR_ITEMS.filter(function (it) { return !HR_PEOPLE_PATHS.includes(it.href); })});
+            const people = visibleItems({items: HR_ITEMS.filter(function (it) { return HR_PEOPLE_PATHS.includes(it.href); })});
+            $('#mainnav').innerHTML = '<a href="/home" data-link class="nav-link" data-section="/home">Overview</a><a href="/leave" data-link class="nav-link" data-section="/leave">Leave &amp; absence</a><div class="nav-item"><button type="button" class="nav-link" data-menu aria-haspopup="true" aria-expanded="false" data-section="' + HR_PEOPLE_PATHS.join(' ') + '">People' + icon('chevron', 'chev') + '</button><div class="menu" role="menu" hidden>' + people.map(menuItemHtml).join('') + '</div></div><div class="nav-item"><button type="button" class="nav-link" data-menu aria-haspopup="true" aria-expanded="false" data-section="' + HR_PATHS.filter(function (p) { return p !== '/leave' && !HR_PEOPLE_PATHS.includes(p); }).join(' ') + '">HR tools' + icon('chevron', 'chev') + '</button><div class="menu menu-cols" role="menu" hidden>' + items.filter(function (it) { return it.href !== '/leave'; }).map(menuItemHtml).join('') + '</div></div>';
             $('#search-btn').hidden = false;
             $('#user-menu').innerHTML = '<button type="button" class="user-btn" data-menu aria-haspopup="true" aria-expanded="false">' + avatar(me, 'sm') + '<span class="user-meta"><span class="user-name">' + esc(me.displayName) + '</span></span>' + icon('chevron', 'chev') + '</button><div class="menu menu-right menu-user" role="menu" hidden><a class="menu-item compact" role="menuitem" href="https://accounts.hngroup.org.uk/">' + icon('user') + '<span>HN Account</span></a><a class="menu-item compact" role="menuitem" href="https://staff.hngroup.org.uk/">Staff Portal</a><a class="menu-item compact" role="menuitem" href="https://finance.hngroup.org.uk/">HN Group Finance</a><button type="button" class="menu-item compact danger" role="menuitem" data-action="logout">' + icon('logout') + '<span>Sign out</span></button></div>';
             highlightNav();
@@ -890,7 +893,6 @@
             (me.unreadAnnouncements ? '<a class="hero-chip" href="/announcements" data-link>' + icon("bell") + me.unreadAnnouncements + " new announcement" + (me.unreadAnnouncements === 1 ? "" : "s") + "</a>" : "") +
             (me.pendingAcks ? '<a class="hero-chip warn" href="#home-todo">' + icon("check") + me.pendingAcks + (me.pendingAcks === 1 ? " thing" : " things") + " to acknowledge</a>" : "") +
             (me.openPolls ? '<a class="hero-chip" href="/polls" data-link>' + icon("chart") + me.openPolls + (me.openPolls === 1 ? " poll" : " polls") + " to answer</a>" : "") +
-            (me.onboardingTasks ? '<a class="hero-chip" href="#home-onboarding">' + icon("check") + me.onboardingTasks + " onboarding task" + (me.onboardingTasks === 1 ? "" : "s") + "</a>" : "") +
             (me.payrollOverdrawn ? '<a class="hero-chip danger" href="/funds" data-link>' + icon("alert") + "Company funds overdrawn \u2013 next payroll can\u2019t be met</a>" : "") +
             (me.reviewsDue ? '<a class="hero-chip" href="/reviews" data-link>' + icon("star") + me.reviewsDue + (me.reviewsDue === 1 ? " probation or review" : " probations or reviews") + " coming up</a>" : "") +
             (me.returnToWorkDue ? '<a class="hero-chip" href="/leave?tab=rtw" data-link data-rtw-chip>' + icon("thermometer") + me.returnToWorkDue + " return-to-work form" + (me.returnToWorkDue === 1 ? "" : "s") + " to do</a>" : "") +
@@ -906,12 +908,11 @@
             (me.invoicesOverdue ? '<a class="hero-chip warn" href="/invoices" data-link>' + icon("file") + me.invoicesOverdue + " overdue invoice" + (me.invoicesOverdue === 1 ? "" : "s") + "</a>" : "") +
             (me.backupStale ? '<a class="hero-chip danger" href="/system#sys-backups" data-link>' + icon("archive") + "No backup in the last 36 hours</a>" : "") +
             (me.trainingDue ? '<a class="hero-chip warn" href="/training" data-link>' + icon("star") + me.trainingDue + " training item" + (me.trainingDue === 1 ? "" : "s") + " expiring or missing</a>" : "") +
-            (me.newApplicants ? '<a class="hero-chip" href="/jobs" data-link>' + icon("briefcase") + me.newApplicants + " new job applicant" + (me.newApplicants === 1 ? "" : "s") + "</a>" : "") +
             (me.chatUnread ? '<a class="hero-chip" href="/chat" data-link>' + icon("message") + me.chatUnread + " unread message" + (me.chatUnread === 1 ? "" : "s") + "</a>" : "") +
             (me.mentoringDue ? '<a class="hero-chip" href="/mentoring" data-link>' + icon("users") + me.mentoringDue + " mentoring catch-up" + (me.mentoringDue === 1 ? "" : "s") + " due</a>" : "") +
             (me.enquiriesNew ? '<a class="hero-chip" href="/enquiries" data-link>' + icon("mail") + me.enquiriesNew + " new website enquir" + (me.enquiriesNew === 1 ? "y" : "ies") + "</a>" : "") +
             (me.helpdeskBadge ? '<a class="hero-chip" href="/helpdesk" data-link>' + icon("lifebuoy") + me.helpdeskBadge + " IT ticket" + (me.helpdeskBadge === 1 ? "" : "s") + " need" + (me.helpdeskBadge === 1 ? "s" : "") + " attention</a>" : "") +
-            (!me.unreadAnnouncements && !me.pendingAcks && !me.openPolls && !me.onboardingTasks && !me.leaveApprovals && !me.timesheetApprovals && !me.helpdeskBadge && !me.payrollOverdrawn && !me.reviewsDue && !me.returnToWorkDue && !me.servicesDown && !me.expenseApprovals && !me.budgetWarnings && !me.invoicesOverdue && !me.trainingDue && !me.newApplicants && !me.backupStale && !me.billsDue && !me.exitInterviewDue && !me.feedbackDue && !me.flexibleDecisions && !me.chatUnread && !me.mentoringDue && !me.enquiriesNew ? '<span class="hero-chip calm">' + icon("tick") + "You\u2019re all caught up</span>" : "") +
+            (!me.unreadAnnouncements && !me.pendingAcks && !me.openPolls && !me.leaveApprovals && !me.timesheetApprovals && !me.helpdeskBadge && !me.payrollOverdrawn && !me.reviewsDue && !me.returnToWorkDue && !me.servicesDown && !me.expenseApprovals && !me.budgetWarnings && !me.invoicesOverdue && !me.trainingDue && !me.backupStale && !me.billsDue && !me.exitInterviewDue && !me.feedbackDue && !me.flexibleDecisions && !me.chatUnread && !me.mentoringDue && !me.enquiriesNew ? '<span class="hero-chip calm">' + icon("tick") + "You\u2019re all caught up</span>" : "") +
             "</div></div>" +
             '<div class="hero-clocks' + (sameAsUk ? " single" : "") + '">' +
             '<div class="glass-clock"><div class="gc-label" title="' + esc(placeName) + '">' + icon("pin") + '<span class="gc-place">Your time \u00b7 ' + esc(placeShort) + "</span></div>" +
@@ -931,7 +932,6 @@
 
             '<aside class="home-side" id="home-side">' +
             '<section class="panel" id="home-todo" data-widget="todo" hidden></section>' +
-            '<section class="panel" id="home-onboarding" data-widget="onboarding" hidden></section>' +
             (me.pulseDue ? '<section class="panel" id="home-pulse" data-widget="pulse"></section>' : "") +
 
             '<section class="panel" id="home-celebrate" data-widget="celebrate" hidden></section>' +
@@ -998,7 +998,6 @@
             box.innerHTML = pulseCardHtml(p.question);
             wirePulse(box);
         }).catch(function () {});
-        if ($("#home-onboarding")) loadMyOnboarding($("#home-onboarding"));
 
         if (me.pendingAcks && $("#home-todo")) {
             Promise.all([api("/api/documents"), api("/api/announcements")]).then(function (r) {
@@ -1741,7 +1740,7 @@
         };
         const positionsFor = function (c) { return (meta.positions && meta.positions[c]) || []; };
         const same = function (a, b) { return String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase(); };
-        // Who a position usually reports to (People → Job descriptions → Positions); filled in when a position is chosen.
+        // Who a position usually reports to (HR → People → Job descriptions → Positions); filled in when a position is chosen.
         const usualReport = function (company, title) {
             const list = (meta.positionReports && meta.positionReports[company]) || {};
             const key = Object.keys(list).find(function (k) { return same(k, title); });
@@ -1803,7 +1802,7 @@
             "</fieldset>" +
 
             '<fieldset><legend>Role</legend>' +
-            '<div class="grid-2"><div><label for="f-title">Position <span class="req">*</span></label><select id="f-title" required></select><p class="muted small">Add positions under People → Job descriptions → Positions.</p></div>' +
+            '<div class="grid-2"><div><label for="f-title">Position <span class="req">*</span></label><select id="f-title" required></select><p class="muted small">Add positions under HR → People → Job descriptions → Positions.</p></div>' +
             '<div><label for="f-dept">Department</label><input type="text" id="f-dept" maxlength="80" value="' + esc(v.department || "") + '" placeholder="e.g. Marketing" list="f-departments"></div></div>' + departmentList +
             '<div class="grid-2">' +
             '<div><label for="f-company">Company <span class="req">*</span></label><select id="f-company">' + companyOptions + "</select></div>" +
@@ -2967,7 +2966,7 @@
             if (!d.checklists.length) return;
             box.hidden = false;
             const draw = function () {
-                box.innerHTML = '<h2 class="section-title">' + icon("check") + "Onboarding</h2>" + d.checklists.map(function (c) { return checklistHtml(c, { compact: true }); }).join("");
+                box.innerHTML = '<h2 class="section-title">' + icon("check") + "Your joiner &amp; leaver tasks</h2>" + d.checklists.map(function (c) { return checklistHtml(c, { compact: !HR_APP }); }).join("");
                 paintProgress(box);
             };
             draw();
@@ -7197,7 +7196,7 @@
             toast("Signed in as " + mainRole.jobTitle + ", " + mainRole.company);
         }
 
-        if (!HR_APP && state.me.canManage && !state.me.impersonatedBy && !state.me.passwordTemporary && !state.me.passwordExpired && !state.me.codeSetupRequired) missingDiscordPrompt();
+        if (HR_APP && state.me.canManage && !state.me.impersonatedBy && !state.me.passwordTemporary && !state.me.passwordExpired && !state.me.codeSetupRequired) missingDiscordPrompt();
 
         // Notice quickly if this session is ended from the system panel.
         setInterval(function () {
@@ -8688,9 +8687,6 @@
             '<section class="panel"><h2 class="panel-title">' + icon("calendar") + "Upcoming events</h2>" + (d.events.length ? '<ul class="team-list">' + d.events.map(function (e) {
                 return "<li><strong>" + esc(e.title) + '</strong><span class="muted small">' + esc(dateRange(e.startDate, e.endDate)) + (e.location ? " · " + esc(e.location) : "") + "</span></li>";
             }).join("") + "</ul>" : '<p class="muted small">No events coming up.</p>') + "</section>" +
-            (d.vacancies.length ? '<section class="panel"><h2 class="panel-title">' + icon("briefcase") + "We’re hiring</h2><ul class=\"team-list\">" + d.vacancies.map(function (v) {
-                return '<li><a href="/jobs" data-link><strong>' + esc(v.title) + "</strong></a>" + '<span class="muted small">' + esc(v.company || "") + "</span>" + "</li>";
-            }).join("") + "</ul></section>" : "") +
             "</aside></div>";
         root.addEventListener("click", function (e) {
             const t = e.target.closest("[data-team]");
@@ -10107,7 +10103,7 @@
     }
 
     // Positions at each company (the user's request, 7 November 2026): staff records' positions and supervisors are
-    // chosen from these lists. Opened from People → Job descriptions → Positions.
+    // chosen from these lists. Opened from HR → People → Job descriptions → Positions.
     function openPositionsManager(d) {
         const m = openModal('<h2 class="modal-title">Positions</h2><p class="muted">The positions people can hold at each company, and who each one reports to. Choosing a position on Employee Management fills in its Reports to (it can still be changed there). HN Group People’s org charts follow these reporting lines.</p><div id="pos-body"></div>', { wide: true });
         d.positionReports = d.positionReports || {};
@@ -10402,7 +10398,6 @@
 
     const HOME_WIDGETS = [
         { key: "todo", label: "To do", desc: "Things waiting for you to acknowledge" },
-        { key: "onboarding", label: "Onboarding", desc: "Your joiner or leaver checklist" },
         { key: "pulse", label: "Pulse", desc: "This week’s quick question" },
         { key: "leave", label: "Leave balance", desc: "Days left this year and what’s booked", off: true },
         { key: "celebrate", label: "Celebrations", desc: "Birthdays and work anniversaries" },

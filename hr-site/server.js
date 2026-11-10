@@ -2,13 +2,13 @@
 // HR has its own hostname, Auth client and host-only session cookie. HR records stay with the private staff service.
 const http=require('node:http');
 const ORIGIN=process.env.HR_ORIGIN || 'https://hr.hngroup.org.uk';
-const PAGES = new Set(['/home', '/leave', '/rotas', '/reviews', '/objectives', '/feedback', '/flexible', '/exit-interview', '/exit-interviews', '/staff-files', '/training', '/cases', '/notifications']);
-const HR_API = /^\/api\/(leave|rotas|timesheets|reviews|objectives|feedback|flexible|exit-interview|exit-interviews|staff-files|training|cases)(\/|$)/;
+const PAGES = new Set(['/home', '/leave', '/rotas', '/reviews', '/objectives', '/feedback', '/flexible', '/exit-interview', '/exit-interviews', '/staff-files', '/training', '/cases', '/employees', '/onboarding', '/jobs', '/job-descriptions', '/notifications']);
+const HR_API = /^\/api\/(leave|rotas|timesheets|reviews|objectives|feedback|flexible|exit-interview|exit-interviews|staff-files|training|cases|employees|onboarding|jobs|job-descriptions|positions)(\/|$)/;
 function allowed(path,method){
  const read = method==='GET'||method==='HEAD';
  if(read && (PAGES.has(path) || ['/','/healthz','/login','/auth/start','/auth/callback','/api/me','/api/meta','/api/maintenance','/api/notifications'].includes(path) || path.startsWith('/assets/') || /^\/api\/(avatar|avatars|discord-avatar)\//.test(path))) return true;
  if(['GET','HEAD','POST'].includes(method) && HR_API.test(path)) return true;
- return method==='POST' && ['/api/logout','/api/me/theme','/api/notifications/read','/api/notifications/clear'].includes(path);
+ return method==='POST' && ['/api/accounts-handoff','/api/logout','/api/me/theme','/api/notifications/read','/api/notifications/clear'].includes(path);
 }
 function hrHtml(html){
  return html.replace(/<aside class="deprecation-banner"[^>]*>[\s\S]*?<\/aside>/g,'').replace('<html','<html data-hn-app="hr"')
