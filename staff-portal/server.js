@@ -8,6 +8,8 @@ const crypto = require("crypto");
 const store = require("./lib/store");
 const workplace = require("./lib/workplace");
 const calendar = require("./lib/calendar");
+const personalCalendar = require("./lib/personal-calendar");
+const portalPeople = require("./lib/people-public");
 const polls = require("./lib/polls");
 const onboarding = require("./lib/onboarding");
 const backup = require("./lib/backup");
@@ -1630,16 +1632,11 @@ async function routeApi(req, res, pathname, session) {
     return sendJson(res, 200, search(me, new URL(req.url, "http://localhost").searchParams.get("q") || ""));
   }
 
+  if (pathname === "/api/org-chart" && method === "GET") return sendJson(res, 200, portalPeople.publicPeople(store));
+
   // ----- Calendar -----
   if (pathname === "/api/calendar" && method === "GET") {
-    const q = new URL(req.url, "http://localhost").searchParams;
-    const from = q.get("from") || new Date().toISOString().slice(0, 10);
-    const to = q.get("to") || from;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || to < from) throw httpError(400, "Choose a valid date range.");
-    if ((Date.parse(to) - Date.parse(from)) / 86400000 > 120) throw httpError(400, "Choose a shorter date range.");
-    const items = calendar.itemsBetween(me, from, to).concat(leave.calendarItems(from, to))
-      .sort((a, b) => a.startDate.localeCompare(b.startDate) || (a.startTime || "").localeCompare(b.startTime || ""));
-    return sendJson(res, 200, { items, canManage: store.can(me, "events.manage"), types: calendar.EVENT_TYPES });
+    return sendJson(res, 200, personalCalendar.read(me, new URL(req.url, "http://localhost").searchParams));
   }
   if (pathname.startsWith("/api/events")) {
     if (!store.can(me, "events.manage")) throw httpError(403, "You don't have permission to manage the calendar.");

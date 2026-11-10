@@ -6,9 +6,10 @@
     <meta name="robots" content="noindex, nofollow">
     <title>HN Group Staff Portal</title>
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
-    <link rel="stylesheet" href="/assets/style.css?v=20261110-portal-redesign-1">
+    <link rel="stylesheet" href="/assets/style.css?v=20261110-portal-feedback-2">
     <link rel="stylesheet" href="/assets/hn-motion.css?v=1">
-    <link rel="stylesheet" href="/assets/portal-ui.css?v=20261110-redesign-1">
+    <link rel="stylesheet" href="/assets/position-chart.css?v=20261110-feedback-2">
+    <link rel="stylesheet" href="/assets/portal-ui.css?v=20261110-feedback-2">
     <script src="/assets/hn-motion.js?v=1" defer></script>
     <script src="/assets/theme-boot.js?v=20261109-midnight"></script><script src="/assets/hn-theme.js?v=20261109-midnight"></script>
 </head>
@@ -28,17 +29,6 @@
         </div>
     </header>
 
-    <aside class="deprecation-banner" aria-label="Staff Portal notice">
-        <div class="deprecation-inner">
-            <span class="deprecation-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10 18-6v16L3 14zM7 15l1 6h4l-2-5M3 10v4"/></svg></span>
-            <div class="deprecation-copy">
-                <span class="deprecation-label">Staff Portal update</span>
-                <strong>The Staff Portal in its current form is being deprecated.</strong>
-                <p>A further announcement with more details will be released later.</p>
-            </div>
-        </div>
-    </aside>
-
     <div class="imp-banner" id="imp-banner" role="status" hidden></div>
     <div class="status-banner" id="status-banner" role="alert" hidden></div>
 
@@ -54,7 +44,7 @@
             <nav class="pf-col" aria-label="Your work"><h2>Your work</h2><a href="https://hr.hngroup.org.uk/leave" data-link>Leave &amp; absence</a><a href="/rotas" data-link>Rotas &amp; timesheets</a><a href="/payslips" data-link>Payslips</a><a href="/expenses" data-link>Expenses</a><a href="/training" data-link>Training</a></nav>
             <nav class="pf-col" aria-label="Workplace"><h2>Workplace</h2><a href="/announcements" data-link>Announcements</a><a href="/calendar" data-link>Calendar</a><a href="/directory" data-link>Staff directory</a><a href="/wiki" data-link>Knowledge base</a></nav>
             <nav class="pf-col" aria-label="HN Group websites"><h2>HN Group</h2><a href="https://docs.hngroup.org.uk/" target="_blank" rel="noopener">HN Group Docs</a><a href="https://contract.hngroup.org.uk/" target="_blank" rel="noopener">Contracts</a><a href="https://wiki.hngroup.org.uk/" target="_blank" rel="noopener">Wiki</a><a href="https://status.hngroup.org.uk/" target="_blank" rel="noopener">Service status</a><a href="https://accounts.hngroup.org.uk/" target="_blank" rel="noopener">HN Account</a></nav>
-            <nav class="pf-col" aria-label="Help"><h2>Help</h2><a href="/helpdesk" data-link>IT Helpdesk</a><a href="/on-call" data-link>On call</a><a href="/settings" data-link>Settings</a><a href="/about" data-link>About the portal</a></nav>
+            <nav class="pf-col" aria-label="Help"><h2>Help</h2><a href="/helpdesk" data-link>Raise a issue</a><a href="/on-call" data-link>On call</a><a href="/settings" data-link>Settings</a><a href="/about" data-link>About the portal</a></nav>
         </div>
         <div class="pf-bottom"><p>&copy; <span id="year"></span> HN Group Limited. Internal use only.</p><a href="https://hngroup.org.uk/" target="_blank" rel="noopener">hngroup.org.uk</a></div>
     </footer>
@@ -63,7 +53,9 @@
     <div class="toast" id="toast" role="status" hidden></div>
 
     <script src="/assets/dropdowns.js?v=1"></script>
-    <script src="/assets/portal-ui.js?v=20261110-redesign-1"></script>
-    <script src="/assets/app.js?v=20261110-portal-redesign-1"></script>
+    <script src="/assets/position-chart.js?v=20261110-feedback-2"></script>
+    <script src="/assets/personal-calendar.js?v=20261110-feedback-2"></script>
+    <script src="/assets/portal-ui.js?v=20261110-feedback-2"></script>
+    <script src="/assets/app.js?v=20261110-portal-feedback-2"></script>
 </body>
 </html>

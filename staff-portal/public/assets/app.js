@@ -2,6 +2,8 @@
     "use strict";
     const HR_APP = document.documentElement.dataset.hnApp === "hr";
 
+    const HELP_LABEL = document.documentElement.dataset.hnApp ? "IT Helpdesk" : "Raise a issue";
+
     // ================= Helpers =================
 
     const ICONS = {
@@ -420,7 +422,7 @@
                 { title: "Service status", desc: "Are our websites up?", href: "/status", icon: "activity", badge: "servicesDown" },
                 { title: "Activity reports", desc: "Monthly summary as a PDF", href: "/reports", icon: "chart", requires: "reports.view" },
                 { title: "About HN Group", desc: "Our companies, brand colours and logos", href: "/about", icon: "building" },
-                { title: "IT Helpdesk", desc: "Raise and track support tickets", href: "/helpdesk", icon: "lifebuoy", badge: "helpdeskBadge" },
+                { title: HELP_LABEL, desc: "Raise and track support tickets", href: "/helpdesk", icon: "lifebuoy", badge: "helpdeskBadge" },
                 { title: "On call", desc: "Who to contact out of hours", href: "/on-call", icon: "phone" },
                 { title: "Website enquiries", desc: "Messages from hngroup.org.uk", href: "/enquiries", icon: "mail", requires: "enquiries.manage", badge: "enquiriesNew" },
             ],
@@ -1238,6 +1240,22 @@
                 b.setAttribute("aria-selected", String(b.dataset.view === view));
             });
             $$("#dir-companies [data-company]").forEach(function (b) { b.classList.toggle("active", b.dataset.company === company); });
+
+            const positionChart = view === "tree" && window.HNOrgChart;
+            $("#dir-companies", root).hidden = !!positionChart;
+            $("#dir-search", root).closest(".toolbar").hidden = !!positionChart;
+            $("#dir-count", root).hidden = !!positionChart;
+            const chartBody = $("#dir-body", root);
+            chartBody.classList.toggle('portal-position-chart', !!positionChart);
+            if (positionChart) return window.HNOrgChart.mount(chartBody, {
+                company: company, api: api, avatar: avatar, directory: ctx,
+                current: function () { return current() && view === 'tree'; },
+                onCompany: function (chosen) { company = chosen; },
+                onPerson: async function (id, chosenCompany) {
+                    try { const fresh = await api('/api/directory'); if (current()) openPersonModal(id+'|'+chosenCompany,directoryContext(fresh.people)); }
+                    catch (error) { toast(error.message); }
+                },
+            });
 
             const list = ctx.entries.filter(matches);
             const nPeople = new Set(list.map(function (e) { return e.person.id; })).size;
@@ -2625,6 +2643,7 @@
         birthday: { icon: "gift", label: "Birthday" },
         anniversary: { icon: "star", label: "Work anniversary" },
         leave: { icon: "sun", label: "Leave" },
+        sick: { icon: "thermometer", label: "Sickness" },
     };
     const EVENT_TYPE_LABELS = { event: "Event", meeting: "Meeting", social: "Social", training: "Training", holiday: "Company holiday" };
 
@@ -2733,6 +2752,7 @@
     // ================= Calendar =================
 
     async function viewCalendar(root, current) {
+        if (window.HNPersonalCalendar) return window.HNPersonalCalendar.render(root, current, { state, api, icon, isoDay, render, openCalendarItem, openEventForm });
         if (state.pendingCalendarDate) {
             state.calendarMonth = state.pendingCalendarDate.slice(0, 7);
             state.pendingCalendarDate = null;
@@ -2840,7 +2860,8 @@
             (it.startTime ? '<div class="muted small">' + esc(it.startTime) + (it.endTime ? " – " + esc(it.endTime) : "") + "</div>" : it.kind === "event" ? '<div class="muted small">All day</div>' : "") + "</div></div>" +
             (it.location ? '<div class="detail-row">' + icon("pin") + "<div>" + esc(it.location) + "</div></div>" : "") +
             (it.description ? '<div class="detail-row">' + icon("file") + '<div class="ann-body">' + richText(it.description) + "</div></div>" : "") +
-            (it.companies ? '<div class="chips">' + audienceChips(it.companies) + "</div>" : "") +
+            (it.visibility === 'private' ? '<p class="muted small">Private · visible to selected attendees.</p>' : it.companies ? '<div class="chips">' + audienceChips(it.companies) + "</div>" : "") +
+            (it.halfDay ? '<p class="muted small">Half day · ' + (it.halfDay === 'am' ? 'morning' : 'afternoon') + '</p>' : '') +
             '<div class="modal-actions">' +
             (it.canEdit ? '<button type="button" class="btn btn-ghost danger-text" id="ev-delete">' + icon("trash") + "Delete</button>" +
                 '<button type="button" class="btn btn-ghost" id="ev-edit">' + icon("edit") + "Edit</button>" : "") +
@@ -2875,11 +2896,13 @@
             '<div><label for="ev-et">To</label><input type="time" id="ev-et" value="' + esc(v.endTime || "") + '"></div></div>' +
             '<label for="ev-loc">Location <span class="muted small">(optional)</span></label><input type="text" id="ev-loc" maxlength="150" value="' + esc(v.location || "") + '">' +
             '<label for="ev-desc">Details <span class="muted small">(optional)</span></label><textarea id="ev-desc" rows="3" maxlength="2000">' + esc(v.description || "") + "</textarea>" +
-            audienceField(v.companies || []) +
+            (window.HNPersonalCalendar ? window.HNPersonalCalendar.eventFields(v, state.calendarPeople) : '') +
+            (window.HNPersonalCalendar ? '<div id="ev-company-audience"'+(v.visibility === 'private' ? ' hidden' : '')+'>'+audienceField(v.companies || [])+'</div>' : audienceField(v.companies || [])) +
             '<div class="form-error" id="ev-error" hidden></div>' +
             '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">' + (ev ? "Save changes" : "Add to calendar") + "</button></div></form>",
             { wide: true }
         );
+        if ($("#ev-visibility", m.el)) $("#ev-visibility", m.el).addEventListener("change", function (e) { $("#ev-attendees", m.el).hidden = e.target.value !== 'private'; $("#ev-company-audience", m.el).hidden = e.target.value === 'private'; });
         $("#ev-allday", m.el).addEventListener("change", function (e) { $("#ev-times", m.el).hidden = e.target.checked; });
         $("#ev-start", m.el).addEventListener("change", function (e) { if ($("#ev-end", m.el).value < e.target.value) $("#ev-end", m.el).value = e.target.value; });
         $("#ev-form", m.el).addEventListener("submit", async function (e) {
@@ -2897,6 +2920,7 @@
                     location: $("#ev-loc", m.el).value,
                     description: $("#ev-desc", m.el).value,
                     companies: readAudience(m.el),
+                    ...(window.HNPersonalCalendar ? {visibility: $("#ev-visibility", m.el).value, attendeeIds: $$("[name=ev-attendee]:checked", m.el).map(function (input) { return input.value; })} : {}),
                 });
                 closeModal();
                 state.calendarMonth = $("#ev-start", m.el).value.slice(0, 7);
@@ -3701,7 +3725,8 @@
             d.people.forEach(function (p) { companiesOf(p).forEach(function (c) { counts[c] = (counts[c] || 0) + 1; }); });
         } catch (e) { counts = {}; }
         if (!current()) return;
-        const companies = BRANDS.filter(function (b) { return !b.logosOnly; });
+        const visibleBrands = window.HNPortal ? BRANDS.filter(function (brand) { return window.HNPortal.companyVisible(brand.name); }) : BRANDS;
+        const companies = visibleBrands.filter(function (b) { return !b.logosOnly; });
         let brandFilter = "";
 
         root.innerHTML =
@@ -3711,7 +3736,7 @@
             '<section class="about-hero">' +
             '<div class="about-hero-text"><p class="eyebrow">One group, ' + companies.length + " companies</p>" +
             "<h2>Building the digital infrastructure, products and media for tomorrow’s businesses.</h2>" +
-            '<p class="muted">HN Group Limited wholly owns Horizon Network, Horizon Media Group and HN Group Management. Horizon Development is part of Horizon Network, and Horizon Advertising is a Horizon Media Group subsidiary managed by Horizon Network. Each company has its own focus, and they share people, systems and standards across the group.</p></div>' +
+            '<p class="muted">HN Group brings together people and services across its companies. Horizon Development is part of Horizon Network, and Horizon Advertising is a Horizon Media Group subsidiary managed by Horizon Network. Each company has its own focus, and they share people, systems and standards across the group.</p></div>' +
             '<div class="about-hero-logo">' + brandImg(["hn-group-wordmark"], "logo-light-theme", "HN Group") + brandImg(["hn-group-wordmark-white"], "logo-dark-theme", "HN Group") + "</div>" +
             "</section>" +
 
@@ -3744,14 +3769,14 @@
             '<div class="info-card"><div class="info-label">' + icon("eye") + "Light or dark</div><p class=\"small\">Use the <strong>white</strong> versions on dark or photo backgrounds. SVG is best for print and the web; PNG works everywhere else.</p></div>" +
             "</div>" +
             '<div class="company-tabs" id="brand-tabs"><button type="button" data-brand="">All logos</button>' +
-            BRANDS.map(function (b) { return '<button type="button" data-brand="' + esc(b.name) + '">' + esc(b.name) + "</button>"; }).join("") + "</div>" +
+            visibleBrands.map(function (b) { return '<button type="button" data-brand="' + esc(b.name) + '">' + esc(b.name) + "</button>"; }).join("") + "</div>" +
             '<div id="brand-library"></div>';
 
         $$(".swatch-chip", root).forEach(function (el) { el.style.background = el.dataset.colour; });
 
         function drawLibrary() {
             $$("#brand-tabs [data-brand]").forEach(function (b) { b.classList.toggle("active", b.dataset.brand === brandFilter); });
-            $("#brand-library").innerHTML = BRANDS.filter(function (b) { return !brandFilter || b.name === brandFilter; }).map(function (b) {
+            $("#brand-library").innerHTML = visibleBrands.filter(function (b) { return !brandFilter || b.name === brandFilter; }).map(function (b) {
                 return '<section class="brand-group"><h3 class="detail-head">' + esc(b.name) + '</h3><div class="logo-grid">' + b.files.map(function (f) {
                     return '<div class="logo-tile"><div class="logo-preview' + (f[2] ? " on-dark" : "") + (/app-icon/.test(f[0]) ? " is-icon" : "") + '">' + brandImg(f, "", b.name + " " + f[1]) + "</div>" +
                         '<div class="logo-info"><span class="logo-name">' + esc(f[1]) + "</span>" +
@@ -5185,8 +5210,8 @@
         let filter = state.helpFilter && filters.some(function (f) { return f[0] === state.helpFilter; }) ? state.helpFilter : "open";
 
         root.innerHTML =
-            '<div class="page-head"><div><h1>IT Helpdesk</h1><p class="muted">' + (d.canManage ? "Every ticket raised across HN Group." : "Get help from the IT team. Raise a ticket and follow it here.") + "</p></div>" +
-            '<div class="page-actions"><button type="button" class="btn btn-primary" id="hd-new">' + icon("plus") + "New ticket</button></div></div>" +
+            '<div class="page-head"><div><h1>' + HELP_LABEL + '</h1><p class="muted">' + (d.canManage ? "Every ticket raised across HN Group." : "Get help from the IT team. Raise a ticket and follow it here.") + "</p></div>" +
+            '<div class="page-actions"><button type="button" class="btn btn-primary" id="hd-new">' + icon("plus") + (document.documentElement.dataset.hnApp ? "New ticket" : HELP_LABEL) + "</button></div></div>" +
             '<div class="company-tabs" id="hd-tabs">' + filters.map(function (f) {
                 return '<button type="button" data-f="' + f[0] + '">' + esc(f[1]) + ' <span class="tab-count">' + d.tickets.filter(f[2]).length + "</span></button>";
             }).join("") + "</div>" +
@@ -5226,7 +5251,7 @@
 
     function openNewTicket(d) {
         const m = openModal(
-            '<h2 class="modal-title">New IT ticket</h2><p class="muted">Tell the IT team what’s wrong. The more detail, the quicker they can fix it.</p>' +
+            '<h2 class="modal-title">' + (document.documentElement.dataset.hnApp ? "New IT ticket" : HELP_LABEL) + '</h2><p class="muted">Tell the IT team what’s wrong. The more detail, the quicker they can fix it.</p>' +
             '<form id="tk-form" novalidate>' +
             '<label for="tk-subject">Summary</label><input type="text" id="tk-subject" maxlength="150" placeholder="e.g. Can’t connect to the VPN from home">' +
             '<div class="grid-2"><div><label for="tk-cat">Category</label><select id="tk-cat">' + Object.keys(d.categories).map(function (k) {
@@ -5237,7 +5262,7 @@
             }).join("") + "</select></div></div>" +
             '<label for="tk-body">Details</label><textarea id="tk-body" rows="6" maxlength="5000" placeholder="What happened, what you expected, any error messages, and what you’ve tried."></textarea>' +
             '<div class="form-error" id="tk-error" hidden></div>' +
-            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">Raise ticket</button></div></form>'
+            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">' + (document.documentElement.dataset.hnApp ? "Raise ticket" : HELP_LABEL) + '</button></div></form>'
         );
         $("#tk-subject", m.el).focus();
         $("#tk-form", m.el).addEventListener("submit", async function (e) {
@@ -6313,7 +6338,7 @@
         ["leave", "Leave & absence"],
         ["rotas", "Rotas & timesheets"],
         ["payroll", "Payroll & funds"],
-        ["helpdesk", "IT Helpdesk"],
+        ["helpdesk", HELP_LABEL],
         ["cases", "HR cases"],
         ["system", "System Admin"],
     ];
@@ -6333,6 +6358,8 @@
             '<div class="form-error" id="pin-error" hidden></div>' +
             '<button type="submit" class="btn btn-primary btn-block" id="pin-go">Unlock</button>' +
             "</form></div></div>";
+        // Dynamic screens do not reliably apply the HTML autofocus attribute.
+        $("#pin", root).focus({ preventScroll: true });
         $("#pin").addEventListener("input", function (e) { e.target.value = e.target.value.replace(/\D/g, ""); });
         $("#pin-form").addEventListener("submit", async function (e) {
             e.preventDefault();
@@ -6665,7 +6692,10 @@
         try {
             state.me = (await api("/api/me")).user;
             applyTheme(state.me.theme);
-            if (!state.me.passwordTemporary && !state.me.passwordExpired && !state.me.codeSetupRequired) state.meta = await api("/api/meta");
+            if (!state.me.passwordTemporary && !state.me.passwordExpired && !state.me.codeSetupRequired) {
+                state.meta = await api("/api/meta");
+                if (window.HNPortal) state.meta.companies = state.meta.companies.filter(window.HNPortal.companyVisible);
+            }
         } catch (e) {
             if (window.HNPortal) {
                 document.body.classList.remove("app-loading");
@@ -8829,7 +8859,7 @@
     }
     // Side panels that fill the right-hand column (the user's request, 3 November 2026: "fill in that gap").
     function homeQuickActions() {
-        const acts = [["/leave", "sun", "Book leave"], ["/helpdesk", "lifebuoy", "Raise an IT ticket"], ["/expenses", "pound", "Claim an expense"],
+        const acts = [["/leave", "sun", "Book leave"], ["/helpdesk", "lifebuoy", HELP_LABEL], ["/expenses", "pound", "Claim an expense"],
             ["/kudos", "heart", "Give kudos"], ["/questions", "help", "Ask a question"], ["/ideas", "flag", "Share an idea"]];
         return '<h2 class="section-title">' + icon("tick") + "Quick actions</h2>" + '<div class="qa-grid">' +
             acts.map(function (a) { return '<a class="qa-btn" href="' + a[0] + '" data-link>' + icon(a[1]) + "<span>" + a[2] + "</span></a>"; }).join("") + "</div>";

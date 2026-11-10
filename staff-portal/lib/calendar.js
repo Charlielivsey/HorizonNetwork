@@ -61,14 +61,15 @@ function companiesOf(person) {
 }
 
 function canSee(person, e) {
-  if (!e.companies.length || store.can(person, "events.manage")) return true;
+  if (e.visibility === 'private') return e.createdBy === person.id || (Array.isArray(e.attendeeIds) && e.attendeeIds.includes(person.id));
+  if (!(e.companies || []).length || store.can(person, "events.manage")) return true;
   const mine = companiesOf(person);
   return e.companies.some((c) => mine.includes(c));
 }
 
 function validDay(value, label) {
   const v = String(value || "").trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(v) || isNaN(Date.parse(v + "T00:00:00Z"))) throw new store.ValidationError(`Enter a valid ${label}.`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v) || isNaN(Date.parse(v + "T00:00:00Z")) || new Date(v + "T00:00:00Z").toISOString().slice(0,10) !== v) throw new store.ValidationError(`Enter a valid ${label}.`);
   return v;
 }
 
@@ -86,6 +87,9 @@ function saveEvent(input, author, existing) {
   const endDate = input.endDate ? validDay(input.endDate, "end date") : startDate;
   if (endDate < startDate) throw new store.ValidationError("The end date can't be before the start date.");
   const allDay = !!input.allDay || !input.startTime;
+  const visibility = input.visibility === undefined ? existing && existing.visibility || 'company' : input.visibility;
+  if (!['company','private'].includes(visibility)) throw new store.ValidationError('Choose a valid event audience.');
+  const attendees = input.attendeeIds === undefined ? existing && existing.attendeeIds || [] : input.attendeeIds;
   const fields = {
     title,
     description: str(input.description, 2000),
@@ -97,8 +101,12 @@ function saveEvent(input, author, existing) {
     startTime: allDay ? null : validTime(input.startTime),
     endTime: allDay ? null : validTime(input.endTime),
     companies: (Array.isArray(input.companies) ? input.companies : []).filter((c, i, a) => store.COMPANIES.includes(c) && a.indexOf(c) === i),
+    visibility,
+    attendeeIds: visibility === 'private' ? [...new Set((Array.isArray(attendees) ? attendees : []).map(String))] : [],
     updatedAt: new Date().toISOString(),
   };
+  if (fields.attendeeIds.some(id => !/^[a-f0-9]{16}$/.test(id) || !store.getPerson(id) || store.getPerson(id).system)) throw new store.ValidationError('Choose current staff members as attendees.');
+  if (fields.visibility === 'private' && !fields.attendeeIds.length) throw new store.ValidationError('Choose at least one attendee.');
   if (existing) {
     Object.assign(existing, fields);
     save();
@@ -148,6 +156,8 @@ function itemsBetween(person, from, to) {
       endTime: e.endTime,
       companies: e.companies,
       canEdit: manager,
+      visibility: e.visibility || 'company',
+      attendeeIds: e.visibility === 'private' ? e.attendeeIds || [] : [],
     });
   }
 
