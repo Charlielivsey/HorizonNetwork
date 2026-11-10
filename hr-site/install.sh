@@ -25,6 +25,8 @@ done
 [ -f /var/lib/hn-status-sso/secret ] || echo 'Note: the staff portal integration secret is missing, so the staff list will show as unavailable until auth-site/install.sh has run.'
 mkdir -p /opt/hn-hr "$CHALLENGE_DIR" /etc/nginx/sites-available /etc/nginx/sites-enabled
 cp "$SCRIPT_DIR/server.js" /opt/hn-hr/
+mkdir -p /opt/hn-hr/public
+cp -r "$SCRIPT_DIR/public/." /opt/hn-hr/public/
 pm2 startOrRestart "$SCRIPT_DIR/ecosystem.config.cjs" --update-env
 healthy=0
 for attempt in {1..15}; do

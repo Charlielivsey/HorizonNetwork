@@ -1,6 +1,8 @@
 'use strict';
 // HR has its own hostname, Auth client and host-only session cookie. HR records stay with the private staff service.
 const http=require('node:http');
+const fs=require('node:fs');
+const nodePath=require('node:path');
 const ORIGIN=process.env.HR_ORIGIN || 'https://hr.hngroup.org.uk';
 const PAGES = new Set(['/home', '/leave', '/rotas', '/reviews', '/objectives', '/feedback', '/flexible', '/exit-interview', '/exit-interviews', '/staff-files', '/training', '/cases', '/employees', '/onboarding', '/jobs', '/job-descriptions', '/notifications']);
 const HR_API = /^\/api\/(leave|rotas|timesheets|reviews|objectives|feedback|flexible|exit-interview|exit-interviews|staff-files|training|cases|employees|onboarding|jobs|job-descriptions|positions)(\/|$)/;
@@ -12,6 +14,10 @@ function allowed(path,method){
 }
 function hrHtml(html){
  return html.replace(/<aside class="deprecation-banner"[^>]*>[\s\S]*?<\/aside>/g,'').replace('<html','<html data-hn-app="hr"')
+  .replace(/<link[^>]+href="\/assets\/(portal-ui|position-chart)\.css[^>]*>/g,'')
+  .replace(/<script[^>]+src="\/assets\/(portal-ui|position-chart|personal-calendar)\.js[^>]*><\/script>/g,'')
+  .replace('</head>','<link rel="stylesheet" href="/assets/hr-ui.css?v=hr-workspace-1"></head>')
+  .replace(/<script src="\/assets\/app\.js[^>]*><\/script>/, '<script src="/assets/hr-ui.js?v=hr-workspace-1"></script><script src="/assets/app.js?v=hr-workspace-1"></script>')
   .replaceAll('HN Group Staff Portal','HN Group HR').replaceAll('>Staff Portal<','>HR<')
   .replace('The staff portal for everyone across HN Group, Horizon Network and Horizon Media Group.','Leave, working hours, development and staff records across HN Group.')
   .replace(/<nav class="pf-col" aria-label="Your work">[\s\S]*?<\/nav>/, '<nav class="pf-col" aria-label="Your work"><h2>Your work</h2><a href="/leave" data-link>Leave &amp; absence</a><a href="/rotas" data-link>Rotas &amp; timesheets</a><a href="/reviews" data-link>Probation &amp; reviews</a><a href="/training" data-link>Training</a><a href="/staff-files" data-link>Staff documents</a></nav>')
@@ -21,6 +27,10 @@ function hrHtml(html){
 const server=http.createServer((req,res)=>{
  const path=new URL(req.url,'http://localhost').pathname;
  if(path==='/healthz'){res.writeHead(200,{'Content-Type':'application/json'});return res.end('{"ok":true,"service":"hn-hr"}');}
+ if((req.method==='GET'||req.method==='HEAD') && ['/assets/hr-ui.css','/assets/hr-ui.js'].includes(path)) {
+  const file=nodePath.join(__dirname,'public',path);
+  fs.readFile(file,(error,body)=>{if(error){res.writeHead(404);return res.end('Not found');}res.writeHead(200,{'Content-Type':path.endsWith('.css')?'text/css; charset=utf-8':'application/javascript; charset=utf-8','Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'});res.end(req.method==='HEAD'?undefined:body);});return;
+ }
  if(!allowed(path,req.method)){res.writeHead(404);return res.end('Not found');}
  if(!['GET','HEAD'].includes(req.method)&&req.headers.origin!==ORIGIN){res.writeHead(403);return res.end('This request must come from HN Group HR.');}
  const url=path==='/'?'/home'+new URL(req.url,'http://localhost').search:req.url;

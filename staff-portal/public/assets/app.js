@@ -440,6 +440,11 @@
     }
 
     function viewHrHome(root) {
+        if (window.HNHR) {
+            window.HNHR.home(root, {me: state.me, items: visibleItems({items: HR_ITEMS}), icon: icon, avatar: avatar});
+            loadMyOnboarding($('#hr-onboarding', root));
+            return;
+        }
         root.innerHTML = '<section class="page-head"><div><h1>HN Group HR</h1><p class="muted">Leave, working hours, development and your staff documents in one place.</p></div></section>' +
             '<section class="panel"><h2>Your HR tools</h2><div class="menu-grid">' + visibleItems({items: HR_ITEMS.filter(function (it) { return !HR_PEOPLE_PATHS.includes(it.href); })}).map(menuItemHtml).join('') + '</div></section><section class="panel"><h2>People &amp; recruitment</h2><div class="menu-grid">' + visibleItems({items: HR_ITEMS.filter(function (it) { return HR_PEOPLE_PATHS.includes(it.href); })}).map(menuItemHtml).join('') + '</div></section><section class="panel" id="hr-onboarding" hidden></section>';
         loadMyOnboarding($('#hr-onboarding', root));
@@ -512,12 +517,14 @@
             $('#mainnav').innerHTML = '<a href="/home" data-link class="nav-link" data-section="/home">Overview</a><a href="/leave" data-link class="nav-link" data-section="/leave">Leave &amp; absence</a><div class="nav-item"><button type="button" class="nav-link" data-menu aria-haspopup="true" aria-expanded="false" data-section="' + HR_PEOPLE_PATHS.join(' ') + '">People' + icon('chevron', 'chev') + '</button><div class="menu" role="menu" hidden>' + people.map(menuItemHtml).join('') + '</div></div><div class="nav-item"><button type="button" class="nav-link" data-menu aria-haspopup="true" aria-expanded="false" data-section="' + HR_PATHS.filter(function (p) { return p !== '/leave' && !HR_PEOPLE_PATHS.includes(p); }).join(' ') + '">HR tools' + icon('chevron', 'chev') + '</button><div class="menu menu-cols" role="menu" hidden>' + items.filter(function (it) { return it.href !== '/leave'; }).map(menuItemHtml).join('') + '</div></div>';
             $('#search-btn').hidden = false;
             $('#user-menu').innerHTML = '<button type="button" class="user-btn" data-menu aria-haspopup="true" aria-expanded="false">' + avatar(me, 'sm') + '<span class="user-meta"><span class="user-name">' + esc(me.displayName) + '</span></span>' + icon('chevron', 'chev') + '</button><div class="menu menu-right menu-user" role="menu" hidden><a class="menu-item compact" role="menuitem" href="https://accounts.hngroup.org.uk/">' + icon('user') + '<span>HN Account</span></a><a class="menu-item compact" role="menuitem" href="https://staff.hngroup.org.uk/">Staff Portal</a><a class="menu-item compact" role="menuitem" href="https://finance.hngroup.org.uk/">HN Group Finance</a><button type="button" class="menu-item compact danger" role="menuitem" data-action="logout">' + icon('logout') + '<span>Sign out</span></button></div>';
+            if (window.HNHR) window.HNHR.chrome({me: me, items: visibleItems({items: HR_ITEMS}), icon: icon, avatar: avatar});
             highlightNav();
         }
     }
 
     function highlightNav() {
         const path = window.location.pathname;
+        if (window.HNHR) window.HNHR.route(path);
         $$("#mainnav [data-section]").forEach(function (el) {
             el.classList.toggle("active", el.dataset.section.split(" ").indexOf(path) !== -1);
         });
@@ -801,6 +808,7 @@
         document.body.classList.add("modal-open");
 
         const modal = { el: backdrop.firstChild, onClose: opts.onClose };
+        if (window.HNHR) window.HNHR.dialog(modal);
         backdrop.addEventListener("mousedown", function (e) { if (e.target === backdrop) closeModal(); });
         backdrop.addEventListener("click", function (e) { if (e.target.closest("[data-close]")) closeModal(); });
         activeModal = modal;

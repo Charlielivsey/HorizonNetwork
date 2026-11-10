@@ -32,3 +32,13 @@ test('HR return paths stay on approved tools and preserve queries',()=>{
  for(const p of ['/home','/reviews?person=abc','/staff-files?person=abc#files','/employees','/onboarding','/jobs','/job-descriptions'])assert.equal(nextFor(req,p,()=>null),p);
  for(const p of ['https://evil.test/leave','//evil.test/leave','//[','/api/system','/roles','/leave\\evil','/leave\n'])assert.equal(nextFor(req,p,()=>null),null);
 });
+
+test('HR shell isolates its assets and removes portal-only components',()=>{
+ const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),{hrHtml}=require('./server');
+ const html=hrHtml(fs.readFileSync(path.join(__dirname,'../staff-portal/public/app.html'),'utf8'));
+ assert.doesNotMatch(html,/deprecation-banner|\/assets\/(portal-ui|position-chart|personal-calendar)\.(?:css|js)/);
+ assert.ok(html.indexOf('/assets/hr-ui.js?')<html.indexOf('/assets/app.js?'));
+ assert.match(html,/\/assets\/hr-ui\.css\?v=/);
+ const script=fs.readFileSync(path.join(__dirname,'public/assets/hr-ui.js'),'utf8');
+ for(const mode of [undefined,'finance']){const dataset=mode?{hnApp:mode}:{};vm.runInNewContext(script,{document:{documentElement:{dataset}}});assert.equal(dataset.hrUi,undefined);}
+});
