@@ -1,5 +1,7 @@
 (function () {
     "use strict";
+    const FINANCE_PATHS = ["/payslips", "/expenses", "/payroll", "/funds", "/invoices", "/bills"];
+    const HR_PATHS = ["/leave", "/rotas", "/reviews", "/objectives", "/feedback", "/flexible", "/exit-interview", "/exit-interviews", "/staff-files", "/training", "/cases"];
     const HR_APP = document.documentElement.dataset.hnApp === "hr";
 
     // ================= Helpers =================
@@ -400,7 +402,7 @@
         },
         {
             label: "HR", items: [
-                { title: "Leave & Absence", desc: "Book holidays and report absence", href: "https://hr.hngroup.org.uk/leave", icon: "sun", badge: "leaveApprovals" },
+                { title: "Leave & Absence", desc: "Book holidays and report absence", href: "/leave", icon: "sun", badge: "leaveApprovals" },
                 { title: "Rotas & Timesheets", desc: "Shifts, hours and approvals", href: "/rotas", icon: "clock", badge: "timesheetApprovals" },
                 { title: "Probation & reviews", desc: "Probation dates and reviews", href: "/reviews", icon: "star", badge: "reviewsDue" },
                 { title: "Goals", desc: "Quarterly goals and progress", href: "/objectives", icon: "flag" },
@@ -410,12 +412,7 @@
                 { title: "Staff documents", desc: "Contracts and personal documents", href: "/staff-files", icon: "file" },
                 { title: "Training", desc: "Courses, certificates and renewals", href: "/training", icon: "star", badge: "trainingDue" },
                 { title: "HR cases", desc: "Disciplinary and grievance records", href: "/cases", icon: "shield", requires: "cases.manage", badge: "casesOpen" },
-                { title: "Payslips", desc: "View and download your payslips", href: "/payslips", icon: "card" },
-                { title: "Expenses", desc: "Claim back money you spent for work", href: "/expenses", icon: "pound", badge: "expenseApprovals" },
-                { title: "Run payroll", desc: "Generate and issue payslips", href: "/payroll", icon: "wallet", requires: "payroll.manage" },
-                { title: "Company funds", desc: "Balances, budgets and statements", href: "/funds", icon: "pound", requires: "payroll.manage", badge: "budgetWarnings" },
-                { title: "Invoices", desc: "Bill customers and track payments", href: "/invoices", icon: "file", requires: "payroll.manage", badge: "invoicesOverdue" },
-                { title: "Bills", desc: "Supplier bills and when they're due", href: "/bills", icon: "card", requires: "payroll.manage", badge: "billsDue" },
+                { title: "HN Group Finance", desc: "Payslips, expenses, payroll, funds, invoices and bills", href: "https://finance.hngroup.org.uk/", icon: "pound" },
             ],
         },
         {
@@ -430,6 +427,22 @@
         },
     ];
 
+    const HR_ITEMS = NAV.find(function (section) { return section.label === "HR"; }).items;
+
+    function destination(href) {
+        if (!href || /^https?:/.test(href)) return href;
+        const path = href.split(/[?#]/)[0];
+        if (!HR_APP && HR_PATHS.includes(path)) return 'https://hr.hngroup.org.uk' + href;
+        if (FINANCE_PATHS.includes(path)) return 'https://finance.hngroup.org.uk' + href;
+        if (HR_APP && !['/home', '/notifications'].concat(HR_PATHS).includes(path)) return 'https://staff.hngroup.org.uk' + href;
+        return href;
+    }
+
+    function viewHrHome(root) {
+        root.innerHTML = '<section class="page-head"><div><h1>HN Group HR</h1><p class="muted">Leave, working hours, development and your staff documents in one place.</p></div></section>' +
+            '<section class="panel"><h2>Your HR tools</h2><div class="menu-grid">' + visibleItems({items: HR_ITEMS}).map(menuItemHtml).join('') + '</div></section>';
+    }
+
     function visibleItems(section) {
         return section.items.filter(function (it) { return !it.requires || can(it.requires); });
     }
@@ -440,14 +453,14 @@
             (it.soon ? ' <span class="soon">Soon</span>' : "") + (count ? ' <span class="count-badge">' + count + "</span>" : "") + '</span><span class="mi-desc">' + esc(it.desc) + "</span></span>";
         return it.soon
             ? '<button type="button" class="menu-item" role="menuitem" data-soon="' + esc(it.title) + '">' + inner + "</button>"
-            : '<a class="menu-item" role="menuitem" href="' + it.href + '" data-link>' + inner + "</a>";
+            : '<a class="menu-item" role="menuitem" href="' + destination(it.href) + '" data-link>' + inner + "</a>";
     }
 
     function renderChrome() {
         const me = state.me;
         $("#mainnav").innerHTML =
             '<a href="/home" data-link class="nav-link" data-section="/home">' + icon("home") + "<span>Home</span></a>" +
-            NAV.map(function (section) {
+            NAV.filter(function (section) { return section.label !== "HR"; }).map(function (section) {
                 const items = visibleItems(section);
                 const paths = items.map(function (it) { return it.href; }).filter(Boolean).join(" ");
                 return '<div class="nav-item">' +
@@ -492,8 +505,11 @@
                 '<button type="button" class="btn btn-small btn-light" data-action="stop-impersonating">Return to my account</button></div>';
         }
         if (HR_APP) {
-            $('#mainnav').innerHTML = '<a href="/leave" data-link class="nav-link active">' + icon('sun') + '<span>Leave &amp; absence</span></a><a class="nav-link" href="https://staff.hngroup.org.uk/">Staff Portal</a>';
-            $('#search-btn').hidden = true;
+            const items = visibleItems({items: HR_ITEMS});
+            $('#mainnav').innerHTML = '<a href="/home" data-link class="nav-link" data-section="/home">Overview</a><a href="/leave" data-link class="nav-link" data-section="/leave">Leave &amp; absence</a><div class="nav-item"><button type="button" class="nav-link" data-menu aria-haspopup="true" aria-expanded="false" data-section="' + HR_PATHS.filter(function (p) { return p !== '/leave'; }).join(' ') + '">HR tools' + icon('chevron', 'chev') + '</button><div class="menu menu-cols" role="menu" hidden>' + items.filter(function (it) { return it.href !== '/leave'; }).map(menuItemHtml).join('') + '</div></div>';
+            $('#search-btn').hidden = false;
+            $('#user-menu').innerHTML = '<button type="button" class="user-btn" data-menu aria-haspopup="true" aria-expanded="false">' + avatar(me, 'sm') + '<span class="user-meta"><span class="user-name">' + esc(me.displayName) + '</span></span>' + icon('chevron', 'chev') + '</button><div class="menu menu-right menu-user" role="menu" hidden><a class="menu-item compact" role="menuitem" href="https://accounts.hngroup.org.uk/">' + icon('user') + '<span>HN Account</span></a><a class="menu-item compact" role="menuitem" href="https://staff.hngroup.org.uk/">Staff Portal</a><a class="menu-item compact" role="menuitem" href="https://finance.hngroup.org.uk/">HN Group Finance</a><button type="button" class="menu-item compact danger" role="menuitem" data-action="logout">' + icon('logout') + '<span>Sign out</span></button></div>';
+            highlightNav();
         }
     }
 
@@ -655,9 +671,8 @@
     };
 
     function navigate(href, replace) {
+        href = destination(href);
         if (/^https?:/.test(href)) return window.location.assign(href);
-        if (!HR_APP && href.split('?')[0] === '/leave') return window.location.assign('https://hr.hngroup.org.uk' + href);
-        if (HR_APP && href.split('?')[0] !== '/leave') return window.location.assign('https://staff.hngroup.org.uk' + href);
 
         history[replace ? "replaceState" : "pushState"]({}, "", href);
         render();
@@ -742,9 +757,9 @@
         document.body.classList.remove("locked");
 
         const path = window.location.pathname;
-        if (!HR_APP && path === '/leave') return window.location.assign('https://hr.hngroup.org.uk/leave');
-        if (HR_APP && path !== '/leave') return window.location.assign('https://staff.hngroup.org.uk' + path);
-        let view = ROUTES[path];
+        const target = destination(path + location.search + location.hash);
+        if (/^https?:/.test(target)) return window.location.assign(target);
+        let view = HR_APP && path === "/home" ? viewHrHome : ROUTES[path];
         if (!view) return navigate("/home", true);
         const NEEDS = { "/employees": "staff.manage", "/onboarding": "onboarding.manage", "/roles": "access.manage", "/payroll": "payroll.manage", "/funds": "payroll.manage", "/invoices": "payroll.manage", "/cases": "cases.manage", "/reports": "reports.view", "/bills": "payroll.manage", "/exit-interviews": "staff.manage", "/enquiries": "enquiries.manage" };
         if (NEEDS[path] && !can(NEEDS[path])) view = viewNoAccess;
@@ -878,10 +893,10 @@
             (me.onboardingTasks ? '<a class="hero-chip" href="#home-onboarding">' + icon("check") + me.onboardingTasks + " onboarding task" + (me.onboardingTasks === 1 ? "" : "s") + "</a>" : "") +
             (me.payrollOverdrawn ? '<a class="hero-chip danger" href="/funds" data-link>' + icon("alert") + "Company funds overdrawn \u2013 next payroll can\u2019t be met</a>" : "") +
             (me.reviewsDue ? '<a class="hero-chip" href="/reviews" data-link>' + icon("star") + me.reviewsDue + (me.reviewsDue === 1 ? " probation or review" : " probations or reviews") + " coming up</a>" : "") +
-            (me.returnToWorkDue ? '<a class="hero-chip" href="/leave" data-link data-rtw-chip>' + icon("thermometer") + me.returnToWorkDue + " return-to-work form" + (me.returnToWorkDue === 1 ? "" : "s") + " to do</a>" : "") +
+            (me.returnToWorkDue ? '<a class="hero-chip" href="/leave?tab=rtw" data-link data-rtw-chip>' + icon("thermometer") + me.returnToWorkDue + " return-to-work form" + (me.returnToWorkDue === 1 ? "" : "s") + " to do</a>" : "") +
             (me.servicesDown ? '<a class="hero-chip danger" href="/status" data-link>' + icon("alert") + me.servicesDown + (me.servicesDown === 1 ? " service is" : " services are") + " down</a>" : "") +
-            (me.leaveApprovals ? '<a class="hero-chip" href="/leave" data-link>' + icon("sun") + me.leaveApprovals + " leave request" + (me.leaveApprovals === 1 ? "" : "s") + " to approve</a>" : "") +
-            (me.timesheetApprovals ? '<a class="hero-chip" href="/rotas" data-link data-rota-approvals>' + icon("clock") + me.timesheetApprovals + " timesheet" + (me.timesheetApprovals === 1 ? "" : "s") + " to approve</a>" : "") +
+            (me.leaveApprovals ? '<a class="hero-chip" href="/leave?tab=approvals" data-link>' + icon("sun") + me.leaveApprovals + " leave request" + (me.leaveApprovals === 1 ? "" : "s") + " to approve</a>" : "") +
+            (me.timesheetApprovals ? '<a class="hero-chip" href="/rotas?tab=approvals" data-link data-rota-approvals>' + icon("clock") + me.timesheetApprovals + " timesheet" + (me.timesheetApprovals === 1 ? "" : "s") + " to approve</a>" : "") +
             (me.expenseApprovals ? '<a class="hero-chip" href="/expenses" data-link>' + icon("pound") + me.expenseApprovals + " expense claim" + (me.expenseApprovals === 1 ? "" : "s") + " to deal with</a>" : "") +
             (me.budgetWarnings ? '<a class="hero-chip warn" href="/funds" data-link>' + icon("flag") + me.budgetWarnings + (me.budgetWarnings === 1 ? " budget is" : " budgets are") + " nearly used up</a>" : "") +
             (me.exitInterviewDue ? '<a class="hero-chip" href="/exit-interview" data-link>' + icon("logout") + "Fill in your exit interview</a>" : "") +
@@ -965,7 +980,7 @@
         if ($("#home-status")) $("#home-status").addEventListener("click", openStatusModal);
         if ($("[data-rota-approvals]", root)) $("[data-rota-approvals]", root).addEventListener("click", function () { state.rotaTab = "approvals"; });
         if ($("[data-rtw-chip]", root)) $("[data-rtw-chip]", root).addEventListener("click", function () { state.leaveTab = "rtw"; });
-        if (me.leaveApprovals) $('.hero-chip[href="/leave"]', root).addEventListener("click", function () { state.leaveTab = "approvals"; });
+
         $$('a[href^="#home-"]', root).forEach(function (a) {
             a.addEventListener("click", function (e) {
                 e.preventDefault();
@@ -3763,7 +3778,7 @@
         const overlay = document.createElement("div");
         overlay.className = "search-overlay";
         overlay.innerHTML = '<div class="search-palette" role="dialog" aria-modal="true" aria-label="Search">' +
-            '<div class="sp-input">' + icon("search") + '<input type="search" id="sp-q" placeholder="Search people, documents, announcements, events…" autocomplete="off" aria-label="Search">' +
+            '<div class="sp-input">' + icon("search") + '<input type="search" id="sp-q" placeholder="' + (HR_APP ? 'Search HR tools…' : 'Search people, documents, announcements, events…') + '" autocomplete="off" aria-label="Search">' +
             '<kbd>Esc</kbd></div><div class="sp-results" id="sp-results"><p class="sp-hint muted small">Type at least two letters.</p></div></div>';
         document.body.appendChild(overlay);
         const input = $("#sp-q", overlay);
@@ -3778,8 +3793,8 @@
             overlay.remove();
             document.removeEventListener("keydown", onKey, true);
         };
-        const pages = NAV.reduce(function (all, s) { return all.concat(visibleItems(s).filter(function (it) { return it.href; })); }, [
-            { title: "Home", href: "/home", icon: "home" }, { title: "Settings", href: "/settings", icon: "settings" },
+        const pages = (HR_APP ? [{items: HR_ITEMS}] : NAV).reduce(function (all, s) { return all.concat(visibleItems(s).filter(function (it) { return it.href; })); }, [
+            { title: "Home", href: "/home", icon: "home" }, ...(HR_APP ? [] : [{ title: "Settings", href: "/settings", icon: "settings" }]),
         ]);
         function go(it) {
             close();
@@ -3788,7 +3803,7 @@
             else if (it.kind === "announcement") { state.pendingAnnouncement = it.id; navigate("/announcements"); }
             else if (it.kind === "event") { state.pendingCalendarDate = it.date; navigate("/calendar"); }
             else if (it.kind === "poll") { state.pendingPoll = it.id; navigate("/polls"); }
-            else if (it.kind === "page") navigate("/wiki?p=" + it.id);
+            else if (it.kind === "page" && it.id) navigate("/wiki?p=" + it.id);
             else if (it.kind === "question") navigate("/questions?q=" + it.id);
             else navigate(it.href);
         }
@@ -3816,6 +3831,7 @@
             const mySeq = ++seq;
             const pageHits = pages.filter(function (p) { return q && p.title.toLowerCase().indexOf(q.toLowerCase()) !== -1; })
                 .map(function (p) { return { kind: "page", href: p.href, title: p.title, icon: p.icon, sub: "Page" }; });
+            if (HR_APP) { draw([{ label: "HR tools", items: pageHits }]); return; }
             if (q.length < 2) {
                 if (!pageHits.length) results.innerHTML = '<p class="sp-hint muted small">Type at least two letters.</p>';
                 else draw([{ label: "Pages", items: pageHits }]);
@@ -4328,13 +4344,15 @@
     const LEAVE_ICONS = { annual: "sun", sick: "thermometer", compassionate: "heart", unpaid: "calendar", other: "calendar", toil: "clock" };
 
     async function viewLeave(root, current) {
-        const year = state.leaveYear || new Date().getFullYear();
+        const query = new URLSearchParams(location.search);
+        const year = state.leaveYear || (/^\d{4}$/.test(query.get("year") || "") ? Number(query.get("year")) : new Date().getFullYear());
         const d = await api("/api/leave?year=" + year);
         if (!current()) return;
-        let tab = state.leaveTab || ((d.extraApprovals || []).length ? "extra" : d.approvals.length ? "approvals" : "mine");
+        let tab = state.leaveTab || query.get("tab") || ((d.extraApprovals || []).length ? "extra" : d.approvals.length ? "approvals" : "mine");
         if (tab === "approvals" && !d.isApprover) tab = "mine";
         if ((tab === "allowances" || tab === "shutdowns") && !d.canManage) tab = "mine";
         if (tab === "rtw" && !d.returnToWork.length && !d.canManage) tab = "mine";
+        if (!["mine", "extra", "approvals", "off", "calendar", "rtw", "allowances", "shutdowns"].includes(tab)) tab = "mine";
         const s = d.summary;
 
         const tabs = [["mine", "My leave", d.mine.length], ["extra", "Additional days", (d.extraApprovals || []).length]];
@@ -4658,14 +4676,16 @@
     const SHEET_STATUS = { draft: "Draft", submitted: "Waiting for approval", approved: "Approved", rejected: "Sent back" };
 
     async function viewRotas(root, current) {
-        const week = state.rotaWeek || mondayOf(isoDay(new Date()));
+        const query = new URLSearchParams(location.search);
+        const week = state.rotaWeek || (/^\d{4}-\d{2}-\d{2}$/.test(query.get("week") || "") ? mondayOf(query.get("week")) : mondayOf(isoDay(new Date())));
         const [rota, mine] = await Promise.all([
             api("/api/rotas?week=" + week),
             state.me.system ? Promise.resolve(null) : api("/api/timesheets/mine?week=" + week),
         ]);
         const review = rota.isApprover ? await api("/api/timesheets/review") : null;
         if (!current()) return;
-        let tab = state.rotaTab || "rota";
+        let tab = state.rotaTab || query.get("tab") || "rota";
+        if (!["rota", "timesheet", "approvals"].includes(tab)) tab = "rota";
         if (tab === "timesheet" && !mine) tab = "rota";
         if (tab === "approvals" && !review) tab = "rota";
         let company = state.rotaCompany || "";
@@ -6014,7 +6034,7 @@
     // ================= Staff documents =================
 
     async function viewStaffFiles(root, current) {
-        const personId = state.staffFilesPerson || "";
+        const personId = state.staffFilesPerson || new URLSearchParams(location.search).get("person") || "";
         const d = await api("/api/staff-files" + (personId ? "?person=" + personId : ""));
         if (!current()) return;
         const own = d.person.id === state.me.id;
@@ -8340,7 +8360,7 @@
     }
 
     function noteItemHtml(n) {
-        return '<button type="button" class="note-item' + (n.read ? "" : " unread") + '" data-note="' + esc(n.id) + '" data-href="' + esc(n.link || "") + '">' +
+        return '<button type="button" class="note-item' + (n.read ? "" : " unread") + '" data-note="' + esc(n.id) + '" data-href="' + esc(destination(n.link || "")) + '">' +
             '<span class="note-icon">' + icon(NOTE_ICONS[n.type] || "bell") + '</span><span class="note-text"><span class="note-title">' + esc(n.title) + "</span>" +
             (n.body ? '<span class="note-body">' + esc(n.body) + "</span>" : "") + '<span class="note-time">' + esc(timeAgo(n.at)) + "</span></span></button>";
     }
@@ -9290,6 +9310,8 @@
     // it with stuff"): shortcuts to the pages you use, your colleagues at a glance, and the other HN Group websites.
     const HOME_SHORTCUTS = ["/directory", "/leave", "/calendar", "/documents", "/payslips", "/rotas", "/expenses", "/helpdesk", "/chat", "/kudos", "/wiki", "/polls"];
     const HN_SITES = [
+        { title: "HN Group HR", desc: "Leave, working hours, development and staff records", href: "https://hr.hngroup.org.uk/", icon: "users" },
+        { title: "HN Group Finance", desc: "Payslips, expenses and company finances", href: "https://finance.hngroup.org.uk/", icon: "pound" },
         { title: "HN Group Docs", desc: "Write and store documents", href: "https://docs.hngroup.org.uk/", icon: "file" },
         { title: "Contracts", desc: "Send and sign contracts", href: "https://contract.hngroup.org.uk/", icon: "edit" },
         { title: "Wiki", desc: "The companies of HN Group", href: "https://wiki.hngroup.org.uk/", icon: "book" },
@@ -9308,7 +9330,7 @@
             '</div><div class="quick-grid">' +
             picks.map(function (it) {
                 const count = it.badge ? state.me[it.badge] || 0 : 0;
-                return '<a class="quick-tile" href="' + it.href + '" data-link><span class="qt-icon">' + icon(it.icon) + '</span><span class="qt-text"><span class="qt-title">' + esc(it.title) +
+                return '<a class="quick-tile" href="' + destination(it.href) + '" data-link><span class="qt-icon">' + icon(it.icon) + '</span><span class="qt-text"><span class="qt-title">' + esc(it.title) +
                     (count ? ' <span class="count-badge">' + count + "</span>" : "") + '</span><span class="qt-desc">' + esc(it.desc) + "</span></span></a>";
             }).join("") + "</div></section>" : "") +
             '<section class="home-block" id="home-colleagues" hidden></section>' +

@@ -24,7 +24,18 @@ function readSecret() {
 }
 
 // Auth sign-in is used whenever the shared secret is installed; otherwise the portal keeps its own form.
-function clientFor(req) { return req.headers['x-hn-hr-app'] === '1' && ['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress) ? 'hr' : 'portal'; }
+function clientFor(req) {
+  if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress)) return 'portal';
+  return req.headers['x-hn-hr-app'] === '1' ? 'hr' : 'portal';
+}
+function nextFor(req, value, legacy) {
+  if (clientFor(req) === 'hr' && typeof value === 'string' && /^\/(?!\/)/.test(value) && value.length < 2048 && !/[\\\x00-\x20\x7f]/.test(value)) {
+    const url = new URL(value, 'https://hr.hngroup.org.uk');
+    if (value.startsWith('/') && url.origin === 'https://hr.hngroup.org.uk' && /^\/(home|leave|rotas|reviews|objectives|feedback|flexible|exit-interview|exit-interviews|staff-files|training|cases|notifications)$/.test(url.pathname)) return url.pathname + url.search + url.hash;
+  }
+  return legacy(value);
+}
+
 function enabled() { return !!readSecret(); }
 
 function createPortalAuth({ store, sessions, resume, createSession, cookieFor, parseCookies, send, redirect, logEvent, loginNext, clientIp }) {
@@ -41,7 +52,7 @@ function createPortalAuth({ store, sessions, resume, createSession, cookieFor, p
     for (const [s, v] of states) if (v.expires <= Date.now()) states.delete(s);
     if (states.size >= 10000) return send(res, 503, 'Please try again shortly.', { 'Content-Type': 'text/plain' });
     const state = crypto.randomBytes(32).toString('hex');
-    states.set(state, { client: clientFor(req), next: loginNext(next) || null, expires: Date.now() + STATE_TTL_MS });
+    states.set(state, { client: clientFor(req), next: nextFor(req, next, loginNext) || null, expires: Date.now() + STATE_TTL_MS });
     send(res, 302, '', {
       Location: `${AUTH_ORIGIN}/authorize?client_id=${clientFor(req)}&state=${state}`,
       'Cache-Control': 'no-store',
@@ -98,7 +109,7 @@ function createPortalAuth({ store, sessions, resume, createSession, cookieFor, p
     // An old portal "Resume session" token on this browser is retired: Auth remembers the account now.
     const old = parseCookies(req)[resume.COOKIE];
     if (old) { resume.forget(old); cookies.push(resume.cookie(req, '', true)); }
-    send(res, 302, '', { Location: pending.next || (pending.client === 'hr' ? '/leave' : '/home'), 'Cache-Control': 'no-store', 'Set-Cookie': cookies });
+    send(res, 302, '', { Location: pending.next || '/home', 'Cache-Control': 'no-store', 'Set-Cookie': cookies });
   }
 
   // Returns true when it handled the request.
@@ -113,4 +124,4 @@ function createPortalAuth({ store, sessions, resume, createSession, cookieFor, p
   };
 }
 
-module.exports = { createPortalAuth, enabled };
+module.exports = { createPortalAuth, enabled, clientFor, nextFor };

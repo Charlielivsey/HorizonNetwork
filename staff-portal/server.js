@@ -2441,7 +2441,7 @@ const portalAuth = portalAuthLib.createPortalAuth({ store, sessions, resume, cre
 async function route(req, res) {
   const pathname = new URL(req.url, "http://localhost").pathname;
   const session = getSession(req);
-  if (pathname === '/leave' && req.headers['x-hn-hr-app'] !== '1') return redirect(res, 'https://hr.hngroup.org.uk/leave');
+  if (/^\/(leave|rotas|reviews|objectives|feedback|flexible|exit-interview|exit-interviews|staff-files|training|cases)$/.test(pathname) && portalAuthLib.clientFor(req) !== 'hr') return redirect(res, 'https://hr.hngroup.org.uk' + req.url);
 
   if (await statusSso(req, res, pathname, session)) return;
   if (await portalAuth(req, res, pathname)) return;
@@ -2457,7 +2457,7 @@ async function route(req, res) {
   if (pathname === "/" || pathname === "/dashboard") return redirect(res, session ? "/home" : "/login");
 
   if (pathname === "/login") {
-    const next = loginNext(new URL(req.url, "http://localhost").searchParams.get("next"));
+    const next = portalAuthLib.nextFor(req, new URL(req.url, "http://localhost").searchParams.get("next"), loginNext);
     // Opening the sign-in page always ends any existing sign-in.
     if (session) {
       sessions.delete(session.token);
@@ -2478,7 +2478,7 @@ async function route(req, res) {
 
   // A valid portal session survives page navigation and refresh; normal expiry and account checks still apply.
   if (APP_ROUTES.has(pathname)) {
-    if (!session) return redirect(res, "/login");
+    if (!session) return redirect(res, portalAuthLib.clientFor(req) !== "portal" ? "/login?next=" + encodeURIComponent(req.url) : "/login");
     if (store.maintenance().on && !store.hasOwnerAccess(session.person)) {
       sessions.delete(session.token);
       return send(res, 302, "", { Location: "/login?maintenance=1", "Cache-Control": "no-store", "Set-Cookie": sessionCookie(req, "", 0) });
