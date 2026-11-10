@@ -4,7 +4,7 @@ A staff-only site with the approved logos, colours, multicolour stripe, typograp
 
 - **Staff only.** Every page and brand file needs a sign-in through HN Group Auth, as the registered `branding` application. Any enabled staff account can use it. Only the stylesheet, script, font, tab icon and the HN Group header wordmark are public.
 - **Logos** are the original files from `brand/logos/` (SVG) and the staff portal's PNG exports, copied into `public/assets/brand/`. Downloads are served with `private, no-store`.
-- **Email signatures** link to the staff portal's signature maker.
+- **Email signatures** link to HN Account’s signature maker.
 - **No data is stored.** Sign-in sessions are kept in memory, so restarting the service signs everyone out.
 
 ## Install or update

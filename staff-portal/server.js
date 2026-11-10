@@ -1401,6 +1401,11 @@ async function routeApi(req, res, pathname, session) {
     return sendFile(res, banner.file, { "Content-Type": banner.mime, "Cache-Control": "private, max-age=86400" });
   }
 
+  if (method === "GET" && pathname === "/api/signature-people") {
+    if (!store.can(me, "staff.manage")) throw httpError(403, "You need Manage staff to make signatures for other people.");
+    return sendJson(res, 200, { people: store.employees().map(store.publicView) });
+  }
+
   if (method === "GET" && pathname === "/api/directory") {
     return sendJson(res, 200, { people: store.employees().map(store.publicView) });
   }
@@ -2440,6 +2445,7 @@ const portalAuth = portalAuthLib.createPortalAuth({ store, sessions, resume, cre
 
 async function route(req, res) {
   const pathname = new URL(req.url, "http://localhost").pathname;
+  if (pathname === "/signature") return redirect(res, "https://accounts.hngroup.org.uk/" + new URL(req.url, "http://localhost").search + "#signature");
   const session = getSession(req);
   if (pathname === '/leave' && req.headers['x-hn-hr-app'] !== '1') return redirect(res, 'https://hr.hngroup.org.uk/leave');
 

@@ -8,6 +8,7 @@ The public face of the staff account service. PM2 `hn-account-web`, loopback por
 
 - **Overview**: account health (password, PIN, photo), roles and permissions.
 - **Profile**: photo (resized to 600px in the browser), display name, phone, location, time zone, skills, languages and About me, the same fields staff can edit in the staff portal.
+- **Email signature**: branded signatures from the current staff profile, company roles and email addresses, editable locally with rich-text/HTML copy, PNG export and Gmail/Outlook/Apple Mail guidance. People with `staff.manage` can also choose another staff member; the backend rechecks that permission. Open `/#signature`; old Staff Portal `/signature` links redirect here.
 - **Password & PIN**: change the password (needs the current one) and the six-digit sign-in PIN.
 - **Devices**: every signed-in session, with sign out of one or all others.
 - **Websites**: every HN Group website that uses staff accounts and whether this account can use it.
@@ -36,3 +37,5 @@ The public face of the staff account service. PM2 `hn-account-web`, loopback por
 ## Tests
 
 `node --test accounts-site/test.cjs` runs the real staff account service and the real HN Group Auth with temporary data. It covers the sign-in flow, profile, devices, CSRF/origin/allowlist checks, admin-only access, password change, disabling (which signs the person out), password reset and sign-out. `node --test accounts-site/sign-in-accounts.test.cjs` covers sign-in accounts: converted logins, the staff portal refusing to create accounts, creating accounts with several profiles, a default and their own permissions, the profile choice at Auth and what applications receive, profile-id account checks, disabling, accounts with no profile, and deletion.
+
+`CHROMIUM_EXECUTABLE=/path/to/chrome node --test accounts-site/signature.test.cjs` covers signature permissions, old links, company roles, logo assets, desktop/mobile copying and exports, and refresh with the real Auth and temporary staff data. Omit the executable override when Playwright’s bundled Chromium is installed.

@@ -27,6 +27,7 @@ const fail = (status, message) => Object.assign(new Error(message), { status });
 // The account requests this site passes on. Admin requests also need owner-level access or Super Admin
 // membership (as Auth reports it); the account service then applies its own permission checks too.
 const ROUTES = [
+  ['GET', /^\/api\/signature-people$/],
   ['GET', /^\/api\/me$/], ['POST', /^\/api\/me\/profile$/], ['POST', /^\/api\/me\/password$/], ['POST', /^\/api\/me\/code$/],
   ['POST', /^\/api\/me\/avatar$/, 2.5 * 1024 * 1024], ['POST', /^\/api\/me\/avatar\/remove$/], ['POST', /^\/api\/me\/discord-photo$/],
   ['GET', /^\/api\/me\/sessions$/], ['POST', /^\/api\/me\/sessions\/(?:[a-f0-9]{12}\/end|end-others)$/],

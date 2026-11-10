@@ -82,6 +82,7 @@
   const PAGES = [
     ['overview', 'Overview', 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z'],
     ['profile', 'Profile', 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c1.5-4 4.5-6 8-6s6.5 2 8 6'],
+    ['signature', 'Email signature', 'M3 5h18v14H3zM3 5l9 7 9-7'],
     ['security', 'Password & PIN', 'M6 10h12v11H6zM8 10V7a4 4 0 0 1 8 0v3'],
     ['devices', 'Devices', 'M3 4h18v12H3zM8 20h8M12 16v4'],
     ['websites', 'Websites', 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18'],
@@ -441,7 +442,8 @@
       h('section', { class: 'card' }, search, h('div', { class: 'table-wrap' }, h('table', { class: 'staff-table accounts-table' }, h('thead', {}, h('tr', {}, ['Account', 'Profiles', 'Permissions', 'Status', 'Last sign-in', ''].map((t) => h('th', { text: t })))), body)))];
   }
 
-  const VIEWS = { overview, profile, security, devices, websites, accounts, staff };
+  const signature = async () => { me = (await api('/api/me')).user; return window.HNSignature({ me, api, toast }); };
+  const VIEWS = { overview, profile, signature, security, devices, websites, accounts, staff };
   let seq = 0;
   async function render(name) {
     name = String(name || '').split('/')[0];

@@ -87,8 +87,8 @@ function homePage(user) {
     '<div class="rule do"><h3>Do</h3><ul><li>Use the original files from this page.</li><li>Use the regular logo on light backgrounds and the white logo on dark ones.</li><li>Keep the original proportions; resize by width or height only.</li><li>Leave clear space around the logo.</li><li>Use the logo of the company you’re representing.</li></ul></div>' +
     '<div class="rule dont"><h3>Don’t</h3><ul><li>Crop, stretch, squash or rotate a logo.</li><li>Recolour a logo or change its lettering.</li><li>Redraw a logo or type the name in its place.</li><li>Put a logo on a busy or low-contrast background.</li><li>Use HN Group Management’s logo in place of HN Group’s, or swap any company’s logo for another’s.</li></ul></div></div></section>' +
 
-    '<section class="block" id="email"><h2>Email signatures</h2><p class="intro">Make your own branded signature in the staff portal. It fills in your details from your staff profile and works in Gmail, Outlook and Apple Mail.</p>' +
-    '<p><a class="button" href="https://staff.hngroup.org.uk/signature">Open the signature maker →</a></p><h3 class="sub">Signature logos</h3><div class="tiles">' + emailLogos + '</div></section>' +
+    '<section class="block" id="email"><h2>Email signatures</h2><p class="intro">Make your own branded signature in HN Account. It fills in your details from your staff profile and works in Gmail, Outlook and Apple Mail.</p>' +
+    '<p><a class="button" href="https://accounts.hngroup.org.uk/#signature">Open the signature maker →</a></p><h3 class="sub">Signature logos</h3><div class="tiles">' + emailLogos + '</div></section>' +
 
     '<section class="block" id="discord"><h2>Discord logos</h2><p class="intro">Icons for our Discord servers and the picture and banner of the HN Group Auth bot. Upload them as they are (1024 × 1024 for icons): Discord shows icons as a circle, as below.</p>' + discord + '</section>' +
     '<section class="block" id="icon"><h2>Tab icon</h2><div class="icon-row"><div class="preview icon-preview"><img src="/assets/favicon.svg" alt="HN Group tab icon" width="64" height="64"></div>' +

@@ -1,0 +1,31 @@
+.sig-layout { display: grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); gap: 1.25rem; align-items: start; }
+.sig-form .panel-title, .sig-preview-panel .panel-title, .sig-help .panel-title { display: flex; align-items: center; gap: 0.45rem; margin: 0; }
+.sig-form .panel-title { margin-bottom: 0.25rem; }
+.sig-right { display: flex; flex-direction: column; gap: 1.25rem; min-width: 0; }
+.sig-mail { border: 1px solid var(--border); border-radius: 14px; overflow: hidden; background: #ffffff; box-shadow: 0 10px 30px -18px rgba(28, 33, 53, 0.35); }
+.sig-mail-bar { display: flex; gap: 6px; padding: 0.6rem 0.8rem; background: #f1f2f6; border-bottom: 1px solid #e3e5ec; }
+.sig-mail-bar span { width: 10px; height: 10px; border-radius: 50%; background: #d4d7e2; }
+.sig-mail-bar span:first-child { background: #f06a6a; }
+.sig-mail-bar span:nth-child(2) { background: #f4c04e; }
+.sig-mail-bar span:nth-child(3) { background: #5fc27e; }
+.sig-mail-body { padding: 1.5rem 1.6rem 1.8rem; color: #1a1a1a; overflow-x: auto; }
+.sig-mail-text { font-family: Arial, Helvetica, sans-serif; font-size: 14px; margin-bottom: 1.1rem; color: #1a1a1a; }
+#sig-preview a { pointer-events: none; }
+.sig-tabs { margin: 0.9rem 0 0.4rem; }
+.sig-steps { padding-left: 1.3rem; display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.9rem; margin-top: 0.6rem; }
+.sig-steps li::marker { color: var(--link); font-weight: 800; }
+@media (max-width: 1100px) { .sig-layout { grid-template-columns: 1fr; } }
+.sig-form { display: grid; gap: .5rem; min-width: 0; }
+.sig-form input, .sig-form select { width: 100%; min-width: 0; font: inherit; padding: .62rem .85rem; border: 1.5px solid var(--border-strong); border-radius: 12px; background: var(--surface); color: var(--text); }
+.sig-form input:focus, .sig-form select:focus { outline: none; border-color: var(--link); box-shadow: 0 0 0 4px var(--accent-soft); }
+.sig-form label { font-weight: 700; font-size: .88rem; }
+.sig-contact { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.sig-preview-panel { min-width: 0; }
+.sig-preview-panel .panel-head { display: flex; flex-wrap: wrap; gap: .8rem; justify-content: space-between; margin-bottom: 1rem; }
+.sig-preview-panel .btn-row, .sig-tabs { display: flex; flex-wrap: wrap; gap: .5rem; }
+.sig-tabs button { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 999px; padding: .5rem 1rem; font: inherit; cursor: pointer; }
+.sig-tabs button.active { background: var(--accent-soft); color: var(--link); }
+.sig-steps[hidden] { display: none; }
+#sig-preview { min-width: 560px; }
+.sig-mail-body p { color: #1a1a1a; }
+@media (max-width: 500px) { .sig-contact { grid-template-columns: 1fr; } .sig-mail-body { padding: 1rem; } }
