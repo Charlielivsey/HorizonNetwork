@@ -1,6 +1,8 @@
 'use strict';
 // Public destinations only. Shortcuts never grant sign-in or website permissions.
 const SITES=[
+ ['https://finance.hngroup.org.uk/',['hn group finance','hn finance','finance','payroll','payslips','expenses','company funds','invoices','bills']],
+ ['https://it.hngroup.org.uk/',['hn group it','hn it','it','technology','it support','it cases']],
  ['https://hr.hngroup.org.uk/',['hn group hr','hn hr','hr','human resources','leave','annual leave','holidays','absence']],
  ['https://echo.hngroup.org.uk/',['echo','hn echo','hn group echo','character library']],
  // HN Mail (the user's choice, 6 November 2026): "mail" and "gmail" open HN Group's own Gmail app.
