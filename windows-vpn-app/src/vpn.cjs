@@ -14,7 +14,7 @@ function keyPair(){const{publicKey,privateKey}=crypto.generateKeyPairSync('x2551
 const quote=value=>"'"+String(value).replace(/'/g,"'\\''")+"'";
 const psQuote=value=>"'"+String(value).replace(/'/g,"''")+"'";
 
-// macOS: shares the helper, configuration and sudo rule with HN Secure Gateway, so either app
+// macOS: shares the helper, configuration and sudo rule with HN Secure Access Terminal, so either app
 // can turn the same connection on and off. Setting up asks for the Mac password once.
 class MacController{
  constructor({helperSource,user=os.userInfo().username}={}){this.helper='/usr/local/libexec/hn-vpn/hn-vpn-ctl';this.helperSource=helperSource;this.user=user;this.supported=true;this.toolsName='WireGuard tools (Homebrew)';}
@@ -131,7 +131,7 @@ class FakeController{constructor(){this.supported=true;this.toolsName='WireGuard
 function controllerFor(platform,options){return platform==='darwin'?new MacController(options):platform==='win32'?new WindowsController(options):platform==='linux'?new LinuxController(options):new UnsupportedController();}
 
 class VPN{
- // client/appName/deviceName let HN Secure Gateway for Windows share this file with HN Browser.
+ // client/appName/deviceName let HN Secure Access Terminal for Windows share this file with HN Browser.
  constructor({vault,controller,stateFile,openTab,closeTab,changed,fetcher=fetch,origin=ORIGIN,version='0',hostname=os.hostname(),reach=reachable,client='hn-browser',appName='HN Browser',deviceName}){Object.assign(this,{vault,controller,stateFile,openTab,closeTab,changed,fetch:fetcher,origin,version,hostname,reach,client,appName});this.deviceName=deviceName||(appName+' on '+hostname);this.token=null;this.user=null;this.devices=[];this.limit=5;this.deviceId=null;this.ready=false;this.tools=false;this.connected=false;this.reachable=null;this.publicIp=null;this.viaVpn=null;this.lastHandshake=null;this.polling=null;this.removed=false;this.busy=null;this.error='';this.pending=null;this.generation=0;try{const saved=JSON.parse(fs.readFileSync(stateFile,'utf8'));this.deviceId=saved.deviceId||null;this.configVersion=saved.configVersion||0;}catch{}}
  snapshot(){const device=this.devices.find(d=>d.id===this.deviceId)||null;return{outdated:!!(this.ready&&device&&(this.configVersion||0)<CONFIG_VERSION),supported:this.controller.supported,toolsName:this.controller.toolsName,signedIn:!!this.token,user:this.user,device:device&&{name:device.name,address:device.address},publicIp:this.publicIp,viaVpn:this.viaVpn,lastHandshake:this.lastHandshake||device?.lastHandshake||null,removed:this.removed,devices:this.devices.length,limit:this.limit,tools:this.tools,ready:this.ready,shared:this.ready&&!device,connected:this.connected,reachable:this.reachable,busy:this.busy,error:this.error,server:SERVER,signingIn:!!this.pending};}
  note(){this.changed?.(this.snapshot());}
@@ -186,7 +186,7 @@ class VPN{
   this.poll().then(()=>{if(this.connected&&this.reachable===false){this.error='The tunnel started, but the HN server is not answering. UDP 51820 may be blocked by your network or the hosting provider firewall. Check the VPN handshake and try again.';this.note();}}).catch(()=>{});});}
  disconnect(){return this.task('disconnecting',async()=>{await this.controller.down();await this.poll();});}
  toggle(){return this.connected?this.disconnect():this.connect();}
- // HN Secure Gateway asks for the HN account's six-digit PIN before every connection; vpn.hngroup.org.uk
+ // HN Secure Access Terminal asks for the HN account's six-digit PIN before every connection; vpn.hngroup.org.uk
  // checks it with the staff backend (five wrong tries lock it for 15 minutes).
  async verifyPin(pin){if(!/^\d{6}$/.test(String(pin||'')))throw Error('Enter your six-digit PIN.');if(!this.token)throw Error('Sign in to the HN VPN first.');try{await this.call('api/app/verify-pin',{method:'POST',body:{pin:String(pin)}});}catch(e){if(e.status===404)throw Error('The VPN server needs its latest update before it can check PINs. Please try again later.');if(e.status===401){this.forgetToken();this.error='Your HN VPN sign-in ended. Sign in again.';this.note();}throw e;}}
  // Removes this computer's VPN connection and its registration.

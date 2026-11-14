@@ -1,6 +1,6 @@
 'use strict';
-// This computer's HN Group device identity, shared by HN Browser, HN Secure Gateway and HN Group App Manager
-// (identical copies in each app's src/device.cjs; the Mac Secure Gateway app reads the same files in Swift).
+// This computer's HN Group device identity, shared by HN Browser, HN Secure Access Terminal and HN Group App Manager
+// (identical copies in each app's src/device.cjs; the Mac Secure Access Terminal app reads the same files in Swift).
 // A device must be approved on devices.hngroup.org.uk before the apps can be used, installed or updated there.
 //
 // The identity (a random id and secret) is made once and kept in a folder every HN app on this computer shares:

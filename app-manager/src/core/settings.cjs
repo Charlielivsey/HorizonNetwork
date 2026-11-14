@@ -39,7 +39,7 @@ const NETWORK_LINUX = {
   connectOnLaunch: bool('Startup', 'Ask to connect when it opens', false, 'It opens on your PIN, so connecting takes one step.'),
 };
 const NETWORK_MAC = {
-  launchAtLogin: bool('Startup', 'Open when I log in', false, 'Needs HN Secure Gateway 2.4.1 or later.'),
+  launchAtLogin: bool('Startup', 'Open when I log in', false, 'Needs HN Secure Access Terminal 2.4.1 or later.'),
   sshUser: { type: 'text', group: 'SSH', label: 'Server username', hint: 'Filled in on the SSH page. You still type the password each time.', default: 'root' },
 };
 const LABELS = { 'midnight-lavender': 'Midnight Lavender', daylight: 'Daylight', 'deep-ocean': 'Deep Ocean', forest: 'Forest', rose: 'Rose Quartz', newtab: 'A new tab', restore: 'My tabs from last time', system: 'Match the computer', light: 'Light', dark: 'Dark', google: 'Google', bing: 'Bing', duckduckgo: 'DuckDuckGo' };

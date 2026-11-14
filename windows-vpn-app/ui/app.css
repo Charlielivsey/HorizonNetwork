@@ -1,4 +1,4 @@
-/* HN Secure Gateway for Windows: the HN Group design (Plus Jakarta Sans, HN palette and stripe, purple
+/* HN Secure Access Terminal for Windows: the HN Group design (Plus Jakarta Sans, HN palette and stripe, purple
    actions, rounded cards), matching the Mac app. Light and dark follow Windows or Settings. Animations move
    only transform and opacity, and reduce motion turns them off. */
 @font-face{font-family:"Plus Jakarta Sans";src:url(assets/plus-jakarta-sans.woff2) format("woff2");font-weight:200 800;font-display:block}
@@ -266,3 +266,5 @@ body[data-view=welcome] .titlebar::after,body[data-view=setup] .titlebar::after{
 
 @media (max-width:980px){.tiles{grid-template-columns:1fr}.hero{grid-template-columns:1fr;justify-items:center;text-align:center}.hero .row,.hero .meta{justify-content:center}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:1ms!important;animation-delay:0s!important;animation-iteration-count:1!important;transition-duration:1ms!important}}
+
+.access-terminal-mark{width:156px;height:156px;object-fit:contain;filter:drop-shadow(0 16px 32px #100d1c55)}

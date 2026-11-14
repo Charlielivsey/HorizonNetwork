@@ -1,5 +1,5 @@
 'use strict';
-// HN Secure Gateway for Windows, end to end in the real app: sign in through the loopback callback, set
+// HN Secure Access Terminal for Windows, end to end in the real app: sign in through the loopback callback, set
 // up this PC, connect and disconnect, SSH, profile, settings, an update, and sign out. The VPN service,
 // downloads site and OS storage are test stand-ins; the WireGuard connection lives in memory.
 //   xvfb-run -a node test/desktop.cjs      (screenshots: windows-vpn-app/screenshots/)
@@ -11,7 +11,7 @@ const pkg=require('../package.json'),shots=path.join(__dirname,'..','screenshots
 const RELEASE=LINUX?{key:'secure-network-linux',file:'HN-Secure-Network-'+pkg.version+'-linux-x86_64.AppImage'}:{key:'secure-network-windows',file:'HN-Secure-Network-'+pkg.version+'-windows-x64.exe'};
 (async()=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-secure-network-')),profileDir=path.join(dir,'profile'),fixture=path.join(dir,'fixture'),key=crypto.randomBytes(32).toString('hex'),token='c'.repeat(64);
- const installer=Buffer.from('HN Secure Gateway test installer '.repeat(64)),sha=crypto.createHash('sha256').update(installer).digest('hex');
+ const installer=Buffer.from('HN Secure Access Terminal test installer '.repeat(64)),sha=crypto.createHash('sha256').update(installer).digest('hex');
  fs.mkdirSync(fixture);fs.mkdirSync(shots,{recursive:true});
  fs.writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'hn-secure-network-fixture',version:pkg.version,main:'main.cjs'}));
  fs.writeFileSync(path.join(fixture,'main.cjs'),`const crypto=require('node:crypto'),key=Buffer.from('${key}','hex'),electron=require('electron');
@@ -29,7 +29,7 @@ global.fetch=async(url,options={})=>{const u=new URL(url),method=options.method|
   if(u.pathname==='/api/ip')return Response.json({ip:'217.154.34.205',viaVpn:true});
   if(u.pathname==='/api/devices'&&method==='POST'){const d={id:'e'.repeat(24),name:body.name,address:'10.88.0.9',lastHandshake:new Date().toISOString(),connected:true};devices.unshift(d);return Response.json({device:d,connection:{config:'[Interface]\\nPrivateKey = <this device’s private key>\\nAddress = 10.88.0.9/32\\n[Peer]\\nAllowedIPs = 0.0.0.0/0, ::/0\\n',configVersion:3}},{status:201});}
   if(/^\\/api\\/devices\\/[a-f0-9]{24}$/.test(u.pathname)&&method==='DELETE'){const i=devices.findIndex(d=>u.pathname.endsWith(d.id));if(i>=0)devices.splice(i,1);return Response.json({ok:true});}
-  if(u.pathname==='/api/profile')return Response.json({user,devices,limit:5,sessions:[{id:'1'.repeat(16),kind:'app',client:'HN Secure Gateway',appVersion:'${pkg.version}',createdAt:'2026-10-22T09:12:00Z',lastUsedAt:'2026-10-22T16:40:00Z',current:true},{id:'2'.repeat(16),kind:'web',client:'Website',createdAt:'2026-10-21T14:02:00Z',lastUsedAt:'2026-10-21T14:30:00Z',current:false}],activity:[{at:'2026-10-22T09:12:00Z',action:'Signed in',detail:'HN Secure Gateway'},{at:'2026-10-22T09:13:00Z',action:'Added a device',detail:'LAPTOP (Windows)'}]});
+  if(u.pathname==='/api/profile')return Response.json({user,devices,limit:5,sessions:[{id:'1'.repeat(16),kind:'app',client:'HN Secure Access Terminal',appVersion:'${pkg.version}',createdAt:'2026-10-22T09:12:00Z',lastUsedAt:'2026-10-22T16:40:00Z',current:true},{id:'2'.repeat(16),kind:'web',client:'Website',createdAt:'2026-10-21T14:02:00Z',lastUsedAt:'2026-10-21T14:30:00Z',current:false}],activity:[{at:'2026-10-22T09:12:00Z',action:'Signed in',detail:'HN Secure Access Terminal'},{at:'2026-10-22T09:13:00Z',action:'Added a device',detail:'LAPTOP (Windows)'}]});
   if(u.pathname.startsWith('/api/sessions/')&&method==='DELETE')return Response.json({ok:true});
   if(u.pathname==='/api/avatar')return new Response(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==','base64'),{headers:{'Content-Type':'image/png'}});
   if(u.pathname==='/api/sign-out')return Response.json({ok:true});
@@ -61,7 +61,7 @@ require(${JSON.stringify(path.resolve(__dirname,'../src/main.cjs'))});`);
   const start=new URL(signIn);assert.equal(start.origin+start.pathname,'https://vpn.hngroup.org.uk/auth/login');assert.match(start.searchParams.get('app'),/^[a-f0-9]{64}$/);
   await page.getByText('Finish signing in in your browser').waitFor();await page.waitForTimeout(400);await shot('signing-in');
   const done=await fetch('http://127.0.0.1:'+start.searchParams.get('loopback')+'/vpn-callback?code='+'d'.repeat(64));
-  assert.equal(done.status,200);assert.match(await done.text(),/HN VPN is ready in HN Secure Gateway/);
+  assert.equal(done.status,200);assert.match(await done.text(),/HN VPN is ready in HN Secure Access Terminal/);
   step('set up');
   // Set up this PC: a key made here, registered, configuration installed.
   await page.locator('#set-up').waitFor({state:'visible'});
@@ -71,7 +71,7 @@ require(${JSON.stringify(path.resolve(__dirname,'../src/main.cjs'))});`);
   await page.locator('#set-up').click();
   await page.locator('#power').waitFor({state:'visible'});
   const fetched=await test(()=>global.__fixtureLog);
-  assert.ok(fetched.filter(x=>x.url.startsWith('/api/')&&x.url!=='/api/app/exchange').every(x=>x.client==='secure-network'),'sign-ins are labelled HN Secure Gateway');
+  assert.ok(fetched.filter(x=>x.url.startsWith('/api/')&&x.url!=='/api/app/exchange').every(x=>x.client==='secure-network'),'sign-ins are labelled HN Secure Access Terminal');
   const installed=await test(()=>global.__secureNetworkTest.vpn().controller.installed);
   assert.match(installed,/PrivateKey = [A-Za-z0-9+/]{43}=/);assert.ok(!installed.includes('<this device'),'the private key made here is in the configuration');
   await page.waitForTimeout(500);await shot('disconnected');
@@ -142,12 +142,12 @@ require(${JSON.stringify(path.resolve(__dirname,'../src/main.cjs'))});`);
   await test(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].webContents.send('sn:go',{page:'connection',connect:true}));await page.locator('#pin').waitFor();await page.locator('#pin-cancel').click();await page.locator('#layer').waitFor({state:'hidden'});
   step('sign out');
   // Sign out (asked in the window first) removes this PC from the VPN.
-  await page.locator('[data-page=settings]').click();await page.locator('#sign-out').click();await page.locator('#dialog',{hasText:'Sign out of HN Secure Gateway?'}).waitFor();await page.waitForTimeout(450);await shot('sign-out');
+  await page.locator('[data-page=settings]').click();await page.locator('#sign-out').click();await page.locator('#dialog',{hasText:'Sign out of HN Secure Access Terminal?'}).waitFor();await page.waitForTimeout(450);await shot('sign-out');
   await page.locator('#dialog [data-choice=ok]').click();await page.locator('#sign-in').waitFor({state:'visible'});
   assert.equal(await test(()=>global.__secureNetworkTest.vpn().controller.installed),null,'signing out removes the VPN configuration');
   assert.ok(!fs.existsSync(path.join(profileDir,'vpn.enc')),'and the saved sign-in');
   assert.deepEqual(await test(()=>global.__nativeDialogs),[],'no plain Windows boxes');
   await test(()=>{for(const x of global.__secureNetworkTest.log)if(x.terminal)x.terminal.child.kill();});
-  console.log((LINUX?'Linux':'Windows')+' Secure Gateway desktop passed: sign-in, setup, PIN before every connection, SSH in its own window, profile, settings, verified update and sign-out. Screenshots in windows-vpn-app/screenshots.');
+  console.log((LINUX?'Linux':'Windows')+' Secure Access Terminal desktop passed: sign-in, setup, PIN before every connection, SSH in its own window, profile, settings, verified update and sign-out. Screenshots in windows-vpn-app/screenshots.');
  }finally{await app?.evaluate(({app})=>{for(const x of global.__secureNetworkTest?.log||[])if(x.terminal)x.terminal.child.kill();setTimeout(()=>app.exit(0),50);}).catch(()=>{});await app?.close().catch(()=>{});sshServer?.close();fs.rmSync(dir,{recursive:true,force:true});}
 })().catch(e=>{console.error(e);process.exitCode=1;});

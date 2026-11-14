@@ -1,5 +1,5 @@
 'use strict';
-// Makes the installer icon (build/icon.png, build/icon.ico) from the HN Secure Gateway app icon and the
+// Makes the installer icon (build/icon.png, build/icon.ico) from the HN Secure Access Terminal app icon and the
 // two system tray icons (ui/assets/tray.png, and tray-on.png with a green dot while connected).
 const fs=require('node:fs'),path=require('node:path'),{Resvg}=require('@resvg/resvg-js');
 const root=path.join(__dirname,'..'),png=(svg,size)=>new Resvg(svg,{fitTo:{mode:'width',value:size}}).render().asPng();

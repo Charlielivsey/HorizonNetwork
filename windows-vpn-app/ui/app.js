@@ -1,5 +1,5 @@
 'use strict';
-// HN Secure Gateway for Windows and Linux: the page is built once (index.html) and kept up to date from the state the
+// HN Secure Access Terminal for Windows and Linux: the page is built once (index.html) and kept up to date from the state the
 // main process sends, so nothing is redrawn while you type and animations only play when something changes.
 const api=window.secureNetwork;
 const $=id=>document.getElementById(id),$$=(selector,root=document)=>[...root.querySelectorAll(selector)];
@@ -121,7 +121,7 @@ for(const b of $$('[data-open]'))b.addEventListener('click',()=>act('open',b.dat
 for(const b of $$('[data-go]'))b.addEventListener('click',()=>go(b.dataset.go));
 for(const b of $$('.nav'))b.addEventListener('click',()=>go(b.dataset.page));
 $('side-status').addEventListener('click',()=>go('connection'));$('side-user').addEventListener('click',()=>go('profile'));$('side-update').addEventListener('click',()=>go('settings'));
-const signOut=()=>confirmThen({title:'Sign out of HN Secure Gateway?',text:'Signing out disconnects and removes this '+pc()+' from the VPN. You can sign in and set it up again at any time.',confirm:'Sign out',danger:true,icon:'signout',tone:'danger'},()=>act('sign-out'));
+const signOut=()=>confirmThen({title:'Sign out of HN Secure Access Terminal?',text:'Signing out disconnects and removes this '+pc()+' from the VPN. You can sign in and set it up again at any time.',confirm:'Sign out',danger:true,icon:'signout',tone:'danger'},()=>act('sign-out'));
 $('sign-out').addEventListener('click',signOut);$('setup-sign-out').addEventListener('click',signOut);
 $('remove').addEventListener('click',e=>{const b=e.currentTarget;confirmThen({title:'Remove this '+pc()+' from the HN VPN?',text:'It disconnects and this '+pc()+'’s VPN key is deleted. You can set it up again at any time.',confirm:'Remove this '+pc(),danger:true,icon:'trash',tone:'danger'},()=>busy(b,()=>act('remove')));});
 for(const b of $$('[data-pref]'))b.addEventListener('click',()=>act('preference',{key:b.dataset.pref,value:!state.prefs[b.dataset.pref]}));
@@ -216,7 +216,7 @@ function renderApp(v){
  if(page==='settings'){
   setText('version','Version '+state.version+(state.build?' (build '+state.build+')':'')+(linux()?' for Linux':' for Windows'));
   const b=$('update-button');if(!b.classList.contains('working')){setText(b,u.status==='available'?'Download update':u.status==='ready'?'Install and restart':u.status==='checking'?'Checking…':u.status==='downloading'?'Downloading…':'Check for updates');b.classList.toggle('primary',['available','ready'].includes(u.status));b.disabled=['checking','downloading'].includes(u.status);}
-  const text={checking:'Checking for updates…',current:'You have the latest version.',available:'Version '+(u.latest||'')+' is available.',downloading:'Downloading the update… '+(u.progress||0)+'%',ready:'The update is ready. Installing restarts HN Secure Gateway.',error:u.error||'Couldn’t check for updates.'}[u.status]||'';
+  const text={checking:'Checking for updates…',current:'You have the latest version.',available:'Version '+(u.latest||'')+' is available.',downloading:'Downloading the update… '+(u.progress||0)+'%',ready:'The update is ready. Installing restarts HN Secure Access Terminal.',error:u.error||'Couldn’t check for updates.'}[u.status]||'';
   setText('update-text',text);showIf('update-text',!!text);$('update-text').classList.toggle('bad',u.status==='error');
   showIf('update-progress',u.status==='downloading');$('update-progress').firstElementChild.style.transform='scaleX('+((u.progress||0)/100)+')';
   for(const sw of $$('[data-pref]'))sw.setAttribute('aria-checked',String(!!state.prefs[sw.dataset.pref]));

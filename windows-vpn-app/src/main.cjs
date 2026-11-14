@@ -1,5 +1,5 @@
 'use strict';
-// HN Secure Gateway for Windows and Linux: the HN Group VPN (all of this computer's traffic goes through HN Group's
+// HN Secure Access Terminal for Windows and Linux: the HN Group VPN (all of this computer's traffic goes through HN Group's
 // server, which is 10.88.0.1 inside the VPN) and SSH sessions to that server in their own terminal window.
 // On Linux (Bazzite, Fedora and other desktops) the VPN is a NetworkManager WireGuard connection, SSH opens the
 // system's OpenSSH in the desktop's own terminal (src/linux-ssh.cjs), and the app is an AppImage that updates itself.
@@ -19,7 +19,7 @@ const{Device,testFetcher}=require('./device.cjs'),{createDeviceGate}=require('./
 // Desktop tests only (never in an installed copy): a profile folder, an in-memory VPN connection and an SSH
 // window that runs with pipes instead of a console.
 const TESTING=!app.isPackaged&&!!process.env.HN_SECURE_NETWORK_TEST;
-// The app was renamed HN Secure Gateway (31 October 2026); its data stays in the "HN Secure Network" folder, so sign-ins,
+// The app was renamed HN Secure Access Terminal (31 October 2026); its data stays in the "HN Secure Network" folder, so sign-ins,
 // the VPN set-up and settings carry over (App Manager writes the same folder).
 if(TESTING&&process.env.HN_SECURE_NETWORK_PROFILE)app.setPath('userData',process.env.HN_SECURE_NETWORK_PROFILE);else app.setPath('userData',path.join(app.getPath('appData'),'HN Secure Network'));
 const UI=path.join(__dirname,'..','ui'),DATA=app.getPath('userData');
@@ -42,7 +42,7 @@ else{
  app.whenReady().then(start).catch(e=>{console.error(e);app.quit();});
 }
 
-function requireDevice(){if(!device.state().allowed)throw Error('This '+PC+' isn’t approved on devices.hngroup.org.uk, so HN Secure Gateway can’t be updated here.');}
+function requireDevice(){if(!device.state().allowed)throw Error('This '+PC+' isn’t approved on devices.hngroup.org.uk, so HN Secure Access Terminal can’t be updated here.');}
 function show(){if(!win||win.isDestroyed())return;if(win.isMinimized())win.restore();win.show();win.focus();}
 function send(channel,value){if(win&&!win.isDestroyed())win.webContents.send(channel,value);}
 function changed(){if(stateTimer)return;stateTimer=setTimeout(()=>{stateTimer=null;const s=snapshot();send('sn:state',s);updateTray(s);},16);}
@@ -52,7 +52,7 @@ function snapshot(){const v=vpn.snapshot();if(v.connected&&!connectedAt)connecte
 const TERMINAL_NAMES={konsole:'Konsole',ptyxis:'Ptyxis',kgx:'Console','gnome-terminal':'GNOME Terminal','xfce4-terminal':'Xfce Terminal','mate-terminal':'MATE Terminal',tilix:'Tilix',alacritty:'Alacritty',kitty:'kitty',foot:'foot',wezterm:'WezTerm','xdg-terminal-exec':'your terminal','x-terminal-emulator':'your terminal',xterm:'XTerm'};
 const terminalName=LINUX?(TESTING?'Konsole':TERMINAL_NAMES[terminalOrder().find(n=>which(n))]||null):null;
 // Open when I sign in: Windows' login items, or a desktop entry in ~/.config/autostart on Linux (AppImage only).
-function applyLoginItem(on){if(TESTING)return;if(LINUX){if(on&&!process.env.APPIMAGE)return;try{appimage.setAutostart(on,{id:'hn-secure-network',name:'HN Secure Gateway',exec:process.env.APPIMAGE,args:['--hidden'],comment:'The HN Group VPN and SSH'});}catch{}return;}app.setLoginItemSettings({openAtLogin:on,args:['--hidden']});}
+function applyLoginItem(on){if(TESTING)return;if(LINUX){if(on&&!process.env.APPIMAGE)return;try{appimage.setAutostart(on,{id:'hn-secure-network',name:'HN Secure Access Terminal',exec:process.env.APPIMAGE,args:['--hidden'],comment:'The HN Group VPN and SSH'});}catch{}return;}app.setLoginItemSettings({openAtLogin:on,args:['--hidden']});}
 // Takes the person to a page, and optionally straight to the PIN for connecting.
 function go(page,extra={}){show();send('sn:go',{page,...extra});}
 
@@ -60,26 +60,26 @@ const colors=()=>nativeTheme.shouldUseDarkColors?{color:'#0E1020',symbolColor:'#
 async function start(){
  app.setAppUserModelId('uk.org.hngroup.securenetwork');
  // Linux: an AppImage opened from Downloads adds itself to the app menu (src/appimage.cjs).
- if(LINUX&&app.isPackaged){try{appimage.integrate({id:'hn-secure-network',name:'HN Secure Gateway',comment:'The HN Group VPN and SSH',categories:'Network;Security;',icon:path.join(UI,'assets','app-icon.png')});}catch{}}
+ if(LINUX&&app.isPackaged){try{appimage.integrate({id:'hn-secure-network',name:'HN Secure Access Terminal',comment:'The HN Group VPN and SSH',categories:'Network;Security;',icon:path.join(UI,'assets','app-icon.png')});}catch{}}
  nativeTheme.themeSource=['light','dark'].includes(prefs.theme)?prefs.theme:'system';
  // This PC must be approved on devices.hngroup.org.uk before the app opens (desktop tests answer from a file).
  device=new Device({app:'secure-network',version:app.getVersion(),...(TESTING?{dir:path.join(DATA,'device'),fetcher:testFetcher(path.join(DATA,'device-status.txt')),machine:'0'.repeat(64),name:'Test PC'}:{})});
- deviceGate=createDeviceGate({device,appName:'HN Secure Gateway',electron:require('electron'),uiDir:UI,preloadDir:__dirname,icon:path.join(UI,'assets','tray.png')});
+ deviceGate=createDeviceGate({device,appName:'HN Secure Access Terminal',electron:require('electron'),uiDir:UI,preloadDir:__dirname,icon:path.join(UI,'assets','tray.png')});
  await deviceGate.ensure();
  const controller=TESTING&&process.env.HN_SECURE_NETWORK_FAKE_VPN?new FakeController():controllerFor(process.platform);
- vpn=new VPN({vault:new Vault(path.join(DATA,'vpn.enc'),safeStorage),controller,stateFile:path.join(DATA,'vpn.json'),changed,client:'secure-network',appName:'HN Secure Gateway',deviceName:os.hostname()+(LINUX?' (Linux)':' (Windows)'),version:app.getVersion()+(build?' ('+build+')':''),...(TESTING?{reach:async()=>true}:{}),
+ vpn=new VPN({vault:new Vault(path.join(DATA,'vpn.enc'),safeStorage),controller,stateFile:path.join(DATA,'vpn.json'),changed,client:'secure-network',appName:'HN Secure Access Terminal',deviceName:os.hostname()+(LINUX?' (Linux)':' (Windows)'),version:app.getVersion()+(build?' ('+build+')':''),...(TESTING?{reach:async()=>true}:{}),
   openTab:async url=>{if(TESTING){testLog.push({signIn:url});return null;}await shell.openExternal(url);return null;}});
  updates=new Updates({dir:path.join(DATA,'updates'),current:{version:app.getVersion(),build},changed,platform:PLATFORM});
  terminals=new(LINUX?LinuxTerminals:Terminals)({file:path.join(DATA,'ssh.json'),launch:LINUX?(TESTING?testTerminal:launchTerminal):openSSHWindow,
   ...(TESTING&&process.env.HN_SECURE_NETWORK_SSH_PORT?{host:'127.0.0.1',port:Number(process.env.HN_SECURE_NETWORK_SSH_PORT)}:{}),
   verify:({host,fingerprint})=>ask({kind:'trust',title:'Check the HN Group server',text:'This is the first SSH session from this '+PC+'. Check that this fingerprint matches the one HN Group gave you before trusting '+host+'.',detail:fingerprint,
-   note:'It’s remembered on this '+PC+', and HN Secure Gateway refuses to connect if it ever changes.',buttons:[{id:'cancel',label:'Don’t connect'},{id:'trust',label:'Trust the server',primary:true}]}).then(choice=>choice==='trust')});
+   note:'It’s remembered on this '+PC+', and HN Secure Access Terminal refuses to connect if it ever changes.',buttons:[{id:'cancel',label:'Don’t connect'},{id:'trust',label:'Trust the server',primary:true}]}).then(choice=>choice==='trust')});
  terminals.on('changed',changed);
  applyLoginItem(!!prefs.launchAtLogin);
  createWindow(!process.argv.includes('--hidden'));createTray();
  nativeTheme.on('updated',()=>{if(win&&!win.isDestroyed()&&process.platform!=='darwin')win.setTitleBarOverlay(colors());changed();});
  await vpn.restore().catch(()=>{});
- // "Ask to connect when HN Secure Gateway opens": the window opens on the PIN (connecting always needs it).
+ // "Ask to connect when HN Secure Access Terminal opens": the window opens on the PIN (connecting always needs it).
  if(prefs.connectOnLaunch&&vpn.ready&&!vpn.connected&&vpn.token){const open=()=>go('connection',{connect:true});if(win.webContents.isLoading())win.webContents.once('did-finish-load',open);else open();}
  // The connection is checked every 10 seconds while the window is open (30 while it's in the tray).
  let ticks=0;setInterval(()=>{ticks++;if(win?.isVisible()||ticks%3===0)vpn.poll().catch(()=>{});},10000).unref();
@@ -90,7 +90,7 @@ async function start(){
 }
 
 function createWindow(visible){
- win=new BrowserWindow({width:1080,height:760,minWidth:900,minHeight:640,show:false,title:'HN Secure Gateway',backgroundColor:nativeTheme.shouldUseDarkColors?'#0E1020':'#F6F4FA',autoHideMenuBar:true,
+ win=new BrowserWindow({width:1080,height:760,minWidth:900,minHeight:640,show:false,title:'HN Secure Access Terminal',backgroundColor:nativeTheme.shouldUseDarkColors?'#0E1020':'#F6F4FA',autoHideMenuBar:true,
   ...(process.platform!=='darwin'?{titleBarStyle:'hidden',titleBarOverlay:{...colors(),height:40}}:{}),icon:path.join(UI,'assets',LINUX?'app-icon.png':'tray.png'),
   webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,sandbox:true,nodeIntegration:false,webSecurity:true,spellcheck:false,backgroundThrottling:false}});
  win.removeMenu();
@@ -101,18 +101,18 @@ function createWindow(visible){
  win.loadFile(path.join(UI,'index.html'));
  win.once('ready-to-show',()=>{if(visible)show();});
  // Closing the window keeps the VPN and the tray icon; Quit is in the tray menu.
- win.on('close',e=>{if(quitting)return;e.preventDefault();win.hide();if(!prefs.trayHint&&Notification.isSupported()){prefs.trayHint=true;savePrefs();new Notification({title:'HN Secure Gateway is still running',body:LINUX?'Find it in the system tray, or open HN Secure Gateway again. Your VPN connection stays as it is.':'Find it in the system tray. Your VPN connection stays as it is.',silent:true}).show();}});
+ win.on('close',e=>{if(quitting)return;e.preventDefault();win.hide();if(!prefs.trayHint&&Notification.isSupported()){prefs.trayHint=true;savePrefs();new Notification({title:'HN Secure Access Terminal is still running',body:LINUX?'Find it in the system tray, or open HN Secure Access Terminal again. Your VPN connection stays as it is.':'Find it in the system tray. Your VPN connection stays as it is.',silent:true}).show();}});
 }
 
 function trayImage(on){const file=path.join(UI,'assets',on?'tray-on.png':'tray.png');return fs.existsSync(file)?nativeImage.createFromPath(file):nativeImage.createEmpty();}
-function createTray(){tray=new Tray(trayImage(false));tray.setToolTip('HN Secure Gateway');tray.on('click',show);tray.on('double-click',show);updateTray(snapshot());}
+function createTray(){tray=new Tray(trayImage(false));tray.setToolTip('HN Secure Access Terminal');tray.on('click',show);tray.on('double-click',show);updateTray(snapshot());}
 let trayKey='';
-function updateTray(s){if(!tray)return;const v=s.vpn,key=[v.connected,v.ready,v.signedIn,v.busy].join();if(key===trayKey)return;trayKey=key;tray.setImage(trayImage(v.connected));tray.setToolTip('HN Secure Gateway · '+(v.connected?'Protected':v.ready?'Not connected':'Not set up'));
+function updateTray(s){if(!tray)return;const v=s.vpn,key=[v.connected,v.ready,v.signedIn,v.busy].join();if(key===trayKey)return;trayKey=key;tray.setImage(trayImage(v.connected));tray.setToolTip('HN Secure Access Terminal · '+(v.connected?'Protected':v.ready?'Not connected':'Not set up'));
  tray.setContextMenu(Menu.buildFromTemplate([{label:v.connected?'Protected · connected':v.ready?'Not connected':v.signedIn?'This '+PC+' isn’t set up':'Not signed in',enabled:false},{type:'separator'},
   ...(v.ready?[v.connected?{label:'Disconnect',enabled:!v.busy,click:()=>vpn.disconnect().catch(e=>notify(e.message))}:{label:'Connect…',enabled:!v.busy,click:()=>go('connection',{connect:true})}]:[]),
-  {label:'SSH to the server…',enabled:v.ready,click:()=>go('ssh')},{label:'Open HN Secure Gateway',click:show},{type:'separator'},
+  {label:'SSH to the server…',enabled:v.ready,click:()=>go('ssh')},{label:'Open HN Secure Access Terminal',click:show},{type:'separator'},
   {label:'Quit',click:()=>{quitting=true;app.quit();}}]));}
-function notify(body){if(Notification.isSupported())new Notification({title:'HN Secure Gateway',body,silent:true}).show();}
+function notify(body){if(Notification.isSupported())new Notification({title:'HN Secure Access Terminal',body,silent:true}).show();}
 
 // Opens only HN Group and WireGuard web pages in the default browser.
 function openWeb(url){let u;try{u=new URL(url);}catch{return;}if(u.protocol==='https:'&&(/(^|\.)hngroup\.org\.uk$/.test(u.hostname)||u.hostname==='www.wireguard.com'))shell.openExternal(u.href);}
@@ -164,7 +164,7 @@ function openSSHWindow(args){
  if(TESTING){const child=spawn(process.execPath,[path.join(__dirname,'ssh-console.cjs'),...args],{env:{...process.env,ELECTRON_RUN_AS_NODE:'1'},stdio:['pipe','pipe','pipe']});
   const entry={child,output:''};child.stdout.on('data',d=>{entry.output+=d;});child.stderr.on('data',d=>{entry.output+=d;});testLog.push({terminal:entry});return;}
  const exe=path.join(process.resourcesPath,'ssh','HN Secure Network SSH.exe');
- if(!app.isPackaged||!fs.existsSync(exe))throw Error('The SSH window is missing. Reinstall HN Secure Gateway from downloads.hngroup.org.uk.');
+ if(!app.isPackaged||!fs.existsSync(exe))throw Error('The SSH window is missing. Reinstall HN Secure Access Terminal from downloads.hngroup.org.uk.');
  return ps('Start-Process -FilePath '+psQuote(exe)+' -ArgumentList '+args.map(psQuote).join(','),30000).then(r=>{if(!r.ok)throw Error('The SSH window couldn’t be opened. '+(r.err.split(/\r?\n/)[0]||''));});
 }
 // Desktop tests on Linux: the "terminal" runs the session with pipes.
@@ -206,7 +206,7 @@ ipcMain.handle('sn:action',async(event,name,data)=>{trusted(event);try{let resul
  case'check-update':await updates.check();break;
  case'download-update':requireDevice();await updates.download();break;
  case'install-update':{requireDevice();const file=await updates.verifiedFile();if(TESTING){testLog.push({install:file});break;}
-  if(LINUX)appimage.installUpdate(file,{appName:'HN Secure Gateway'});else{const child=spawn(file,['/S','--force-run'],{detached:true,stdio:'ignore',windowsHide:true});child.on('error',()=>{});child.unref();}
+  if(LINUX)appimage.installUpdate(file,{appName:'HN Secure Access Terminal'});else{const child=spawn(file,['/S','--force-run'],{detached:true,stdio:'ignore',windowsHide:true});child.on('error',()=>{});child.unref();}
   quitting=true;setTimeout(()=>app.quit(),500);break;}
  case'open':{const pages={vpn:VPN_ORIGIN+'/',devices:VPN_ORIGIN+'/#devices',downloads:DOWNLOADS+'/',wireguard:WIREGUARD_PAGE};if(!pages[data])throw Error('Unknown page.');openWeb(pages[data]);break;}
  default:throw Error('Unknown action.');}

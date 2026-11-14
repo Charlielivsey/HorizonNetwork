@@ -120,14 +120,17 @@ struct VisualEffect: NSViewRepresentable {
     func updateNSView(_ view: NSVisualEffectView, context: Context) { view.material = material }
 }
 
-/// The HN Secure Gateway mark: a shield on the brand gradient.
+/// The HN Secure Access Terminal mark: a shield on the brand gradient.
 struct AppMark: View {
     var size: CGFloat = 34
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: size * 0.28, style: .continuous).fill(Theme.brand)
-            RoundedRectangle(cornerRadius: size * 0.28, style: .continuous).strokeBorder(Color.white.opacity(0.18))
-            Image(systemName: "lock.shield.fill").font(.system(size: size * 0.5, weight: .semibold)).foregroundStyle(.white)
+        Group {
+            if let url = Bundle.main.url(forResource: "AppIcon", withExtension: "png"),
+               let image = NSImage(contentsOf: url) {
+                Image(nsImage: image).resizable().scaledToFit()
+            } else {
+                Image(systemName: "terminal.fill").resizable().scaledToFit().foregroundStyle(Theme.purple)
+            }
         }
         .frame(width: size, height: size)
         .shadow(color: Theme.purple.opacity(0.35), radius: size * 0.2, y: size * 0.08)

@@ -148,7 +148,7 @@ test('checking finds updates; a change for an open app waits until it’s quit, 
     t.platform.open.delete('network'); t.platform.failNext = 'Windows blocked the installer.';
     t.manager.enqueue('network', 'update');
     await until(() => !t.manager.working);
-    assert.match(t.store.activity[0].message, /HN Secure Gateway: Windows blocked the installer\./);
+    assert.match(t.store.activity[0].message, /HN Secure Access Terminal: Windows blocked the installer\./);
     assert.ok(t.log.tail().some((l) => l.includes('ERROR') && l.includes('Windows blocked')), 'and written to the log');
     // Removing.
     t.manager.enqueue('network', 'remove');
@@ -178,7 +178,7 @@ test('settings are read from and written to the app, only while it’s closed', 
     assert.equal(JSON.parse(fs.readFileSync(path.join(t.dir, 'HN Browser', 'preferences.json'), 'utf8')).theme, 'forest');
     t.platform.open.add('browser');
     await assert.rejects(t.manager.saveSettings('browser', { theme: 'rose' }), /Quit HN Browser first/);
-    await assert.rejects(t.manager.saveSettings('network', { theme: 'dark' }), /Install HN Secure Gateway first/);
+    await assert.rejects(t.manager.saveSettings('network', { theme: 'dark' }), /Install HN Secure Access Terminal first/);
   } finally { t.done(); }
 });
 
@@ -234,7 +234,7 @@ test('Windows: installed apps are found under their versioned names, icon/uninst
   const { APPS } = require('../src/core/catalog.cjs');
   assert.ok(namedAs('HN Browser 1.2.7', ['HN Browser']));
   assert.ok(namedAs('HN Browser', ['HN Browser']));
-  assert.ok(namedAs('HN Secure Network 2.2.0', ['HN Secure Gateway', 'HN Secure Network']));
+  assert.ok(namedAs('HN Secure Network 2.2.0', ['HN Secure Access Terminal', 'HN Secure Network']));
   assert.ok(!namedAs('HN Browser Helper', ['HN Browser']));
   assert.ok(!namedAs('Not HN Browser 1.0.0', ['HN Browser']));
   const dir = 'C:\\Users\\Kay\\AppData\\Local\\Programs\\HN Browser';

@@ -19,5 +19,5 @@ const{_electron:electron}=require('playwright'),assert=require('node:assert/stri
  // Approved before: opens straight away, with no gate window at all.
  app=await electron.launch({executablePath:require('electron'),args:[...((process.getuid?.()===0||process.env.CI)?['--no-sandbox']:[]),path.resolve(__dirname,'..')],env:{...process.env,HN_SECURE_NETWORK_TEST:'1',HN_SECURE_NETWORK_FAKE_VPN:'1',HN_SECURE_NETWORK_PROFILE:dir}});
  const again=await app.firstWindow();assert.doesNotMatch(again.url(),/device\.html$/);
- console.log('Device desktop passed: unapproved computers see the not-authorised window with their code, and HN Secure Gateway opens once approved.');
+ console.log('Device desktop passed: unapproved computers see the not-authorised window with their code, and HN Secure Access Terminal opens once approved.');
 }finally{if(app)await app.close();fs.rmSync(dir,{recursive:true,force:true,maxRetries:10,retryDelay:100});}})().catch(e=>{console.error(e);process.exitCode=1;});

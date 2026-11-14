@@ -83,7 +83,7 @@ function sshArgs({host,port,username,type,dir}){
 function sessionScript({host,port,username,type,dir,ssh}){
  const args=sshArgs({host,port,username,type,dir}).map(quote).join(' ');
  return['#!/bin/sh',"printf '\\033]0;HN Group server · ssh\\007'",
-  'echo '+quote('HN Secure Gateway · SSH to '+username+'@'+host+' through the HN Group VPN'),'echo',
+  'echo '+quote('HN Secure Access Terminal · SSH to '+username+'@'+host+' through the HN Group VPN'),'echo',
   'SSH_ASKPASS='+quote(path.join(dir,'askpass'))+' SSH_ASKPASS_REQUIRE=force '+quote(ssh)+' '+args,
   'code=$?','rm -f '+quote(path.join(dir,'secret')),'echo "$code" > '+quote(path.join(dir,'exit')),
   'echo','if [ "$code" -eq 0 ]; then echo "The session has ended."; else echo "The session couldn’t open or ended with an error ($code)."; fi',

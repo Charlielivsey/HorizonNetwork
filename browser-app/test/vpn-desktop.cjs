@@ -64,12 +64,12 @@ const savedPrefs=async(file,ok)=>{for(let i=0;i<100;i++){try{const p=JSON.parse(
   await page.keyboard.press(mod+'+w');await page.waitForFunction(n=>document.querySelectorAll('.tab').length===n,before);
   await page.keyboard.press(mod+'+Shift+t');await page.waitForFunction(n=>document.querySelectorAll('.tab').length===n+1,before);
   await app.close();app=null;
-  // Never connects by itself, even with the old preference saved; quitting turns the VPN off unless HN Secure Gateway is open.
+  // Never connects by itself, even with the old preference saved; quitting turns the VPN off unless HN Secure Access Terminal is open.
   const prefsFile=path.join(profile,'preferences.json');let saved={};try{saved=JSON.parse(fs.readFileSync(prefsFile,'utf8'));}catch{}fs.writeFileSync(prefsFile,JSON.stringify({...saved,vpnAutoConnect:true}));
   const quitWith=async(fake,extra={})=>{fs.rmSync(path.join(profile,'vpn-on-quit.txt'),{force:true});const a=await electron.launch({executablePath:require('electron'),args:[...((process.getuid?.()===0||process.env.CI)?['--no-sandbox']:[]),fixture],env:{...process.env,HN_BROWSER_TEST_PROFILE:profile,HN_BROWSER_VPN_FAKE:fake,...extra}});const w=await a.firstWindow();await w.waitForFunction(()=>document.querySelector('#version')?.textContent);await w.waitForTimeout(2500);const closed=Date.now();await a.close();assert.ok(Date.now()-closed<12000,'HN Browser quits promptly');return fs.readFileSync(path.join(profile,'vpn-on-quit.txt'),'utf8');};
   assert.equal(await quitWith('set-up'),'off already','the VPN is not connected when HN Browser opens');
   assert.equal(await quitWith('connected'),'turned off','quitting HN Browser turns the VPN off');
-  assert.equal(await quitWith('connected',{HN_BROWSER_TEST_SECURE_NETWORK_OPEN:'1'}),'left on for HN Secure Gateway','left on while HN Secure Gateway is open');
-  console.log('VPN desktop passed: VPN set-up, connect and disconnect from the browser, status in menu, no automatic connecting, the VPN turned off on quit unless HN Secure Gateway is open, VPN sign-out and sign-in tab, no tokens in the renderer, find in page, tab icons and tab shortcuts.');
+  assert.equal(await quitWith('connected',{HN_BROWSER_TEST_SECURE_NETWORK_OPEN:'1'}),'left on for HN Secure Access Terminal','left on while HN Secure Access Terminal is open');
+  console.log('VPN desktop passed: VPN set-up, connect and disconnect from the browser, status in menu, no automatic connecting, the VPN turned off on quit unless HN Secure Access Terminal is open, VPN sign-out and sign-in tab, no tokens in the renderer, find in page, tab icons and tab shortcuts.');
  }finally{if(app)await app.close();server?.close();fs.rmSync(dir,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 })().catch(e=>{console.error(e);process.exitCode=1;});

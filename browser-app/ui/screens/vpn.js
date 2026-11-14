@@ -21,7 +21,7 @@ function renderVPN(state){
  $('vpn-step').hidden=!step;
  if(step){$('vpn-step-number').textContent=step[0]?String(step[0]):'!';$('vpn-step-title').textContent=step[1];$('vpn-step-text').textContent=step[2];const b=$('vpn-step-button');b.hidden=!step[3];if(step[3]){b.dataset.vpnAction=step[3][0];b.textContent=step[3][1];b.disabled=!!busy;}const second=$('vpn-step-secondary');second.hidden=!step[4];if(step[4]){second.dataset.vpnAction=step[4][0];second.textContent=step[4][1];}}
  $('vpn-ip').textContent=v.publicIp||'Not connected';$('vpn-route').textContent=v.viaVpn===true?'Verified · traffic through HN VPN':v.connected?'Checking public route…':'Full tunnel · all traffic';$('vpn-handshake').textContent=v.lastHandshake?new Date(v.lastHandshake).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'Not yet';$('vpn-reach').textContent=v.reachable===true?'HN server reachable':v.reachable===false?'Check UDP 51820 and VPN connection':'Server not checked';
- $('vpn-device').textContent=v.device?v.device.name+' · '+v.device.address:v.shared?'Set up by Secure Gateway':'Not set up';$('vpn-user').textContent=v.user?v.user.displayName:'Not signed in';$('vpn-server').textContent=v.server||'10.88.0.1';
+ $('vpn-device').textContent=v.device?v.device.name+' · '+v.device.address:v.shared?'Set up by Secure Access Terminal':'Not set up';$('vpn-user').textContent=v.user?v.user.displayName:'Not signed in';$('vpn-server').textContent=v.server||'10.88.0.1';
  $('vpn-sign-out').hidden=!v.signedIn;$('vpn-remove').hidden=!v.ready;$('vpn-manage').disabled=!v.supported&&!v.signedIn;
 }
 function vpnStep(button){const kind=button.dataset.vpnAction;if(kind==='account')action('panel','account');else action(kind);}

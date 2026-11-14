@@ -180,7 +180,7 @@ struct DeviceGateView: View {
         switch gate.status {
         case .unknown: return gate.offline ? "HN Group Devices can’t be reached, and this Mac hasn’t been approved before. Check your internet connection, then try again." : "Checking with HN Group whether this Mac may use HN Group apps."
         case .unlinked: return "HN Group apps only work on computers HN Group has approved. Add this one to your account with this code."
-        case .pending: return "This Mac has been added\(gate.owner.map { " by " + $0 } ?? ""). HN Secure Gateway opens by itself as soon as an HN Group administrator approves it."
+        case .pending: return "This Mac has been added\(gate.owner.map { " by " + $0 } ?? ""). HN Secure Access Terminal opens by itself as soon as an HN Group administrator approves it."
         case .revoked: return "This Mac’s access to HN Group apps was revoked. If you think that’s a mistake, contact HN Group."
         case .mismatch: return "This Mac is using an identity copied from another computer. An HN Group administrator needs to approve this Mac before HN Group apps can be used."
         case .authorised: return "Opening…"

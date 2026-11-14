@@ -1,9 +1,9 @@
 {
   "name": "hn-secure-network-windows",
-  "version": "2.2.1",
-  "productName": "HN Secure Gateway",
+  "version": "2.3.0",
+  "productName": "HN Secure Access Terminal",
   "private": true,
-  "description": "HN Secure Gateway for Windows and Linux: the HN Group VPN (connect with your PIN) and SSH sessions to the HN Group server in their own terminal window",
+  "description": "HN Secure Access Terminal for Windows and Linux: the HN Group VPN (connect with your PIN) and SSH sessions to the HN Group server in their own terminal window",
   "author": "HN Group",
   "license": "UNLICENSED",
   "main": "src/main.cjs",
@@ -29,7 +29,7 @@
   },
   "build": {
     "appId": "uk.org.hngroup.securenetwork",
-    "productName": "HN Secure Gateway",
+    "productName": "HN Secure Access Terminal",
     "executableName": "HN Secure Network",
     "asar": true,
     "directories": {
@@ -68,7 +68,7 @@
       "runAfterFinish": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "HN Secure Gateway",
+      "shortcutName": "HN Secure Access Terminal",
       "include": "assets/installer.nsh",
       "deleteAppDataOnUninstall": false
     },
@@ -84,7 +84,7 @@
       "description": "The HN Group VPN (connect with your PIN) and SSH sessions to the HN Group server in their own terminal window.",
       "desktop": {
         "entry": {
-          "Name": "HN Secure Gateway",
+          "Name": "HN Secure Access Terminal",
           "Categories": "Network;Security;",
           "Keywords": "HN;VPN;WireGuard;SSH;"
         }

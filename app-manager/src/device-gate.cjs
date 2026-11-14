@@ -1,5 +1,5 @@
 'use strict';
-// "This device is not authorised": a window of its own, shown by HN Browser and HN Secure Gateway for Windows
+// "This device is not authorised": a window of its own, shown by HN Browser and HN Secure Access Terminal for Windows
 // instead of the app until devices.hngroup.org.uk has approved this computer (identical copies in each app's
 // src/device-gate.cjs, with ui/device.html, ui/device.js, ui/device.css and src/device-preload.cjs). It shows the
 // code to add the computer with, opens devices.hngroup.org.uk, and checks again by itself every 15 seconds.

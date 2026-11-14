@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HN Secure Gateway</title>
+<title>HN Secure Access Terminal</title>
 <link rel="stylesheet" href="app.css">
 </head>
 <body data-view="loading">
 <!-- The window's own title bar: drag it to move the window; Windows and Linux draw their buttons on the right. -->
 <header class="titlebar">
  <img class="title-icon" src="assets/tray.png" alt="">
- <span class="title-name">HN Secure Gateway</span>
+ <span class="title-name">HN Secure Access Terminal</span>
  <span class="title-status" id="title-status" hidden><i class="dot"></i><span></span></span>
 </header>
 
@@ -20,12 +20,12 @@
  <section class="view split" id="view-welcome" hidden>
   <aside class="brand-pane">
    <img class="wordmark" src="assets/hn-group-wordmark-white.svg" alt="HN Group">
-   <div class="art"><div class="shield"><svg data-icon="shield"></svg></div><h2>Private by default.</h2><p class="sub">Encrypted. Fast. Yours.</p></div>
+   <div class="art"><img class="access-terminal-mark" src="assets/app-icon.png" alt="HN Secure Access Terminal"><h2>Private by default.</h2><p class="sub">Encrypted. Fast. Yours.</p></div>
    <div class="staff"><svg data-icon="check"></svg>For HN Group staff</div>
   </aside>
   <main class="content-pane">
    <div class="stack" data-mode="idle">
-    <p class="eyebrow">HN Secure Gateway</p>
+    <p class="eyebrow">HN Secure Access Terminal</p>
     <h1>Welcome back.</h1>
     <p class="lede" data-linux="Send all of this computer’s internet traffic through HN Group’s private VPN, and open SSH sessions to the HN Group server in their own terminal window.">Send all of this PC’s internet traffic through HN Group’s private VPN, and open SSH sessions to the HN Group server in their own terminal window.</p>
     <div class="row"><button class="btn primary large" id="sign-in">Sign in with HN Group Auth<svg data-icon="arrow"></svg></button></div>
@@ -67,7 +67,7 @@
 
  <!-- Signed in and set up -->
  <section class="view shell" id="view-app" hidden>
-  <nav class="side" aria-label="HN Secure Gateway">
+  <nav class="side" aria-label="HN Secure Access Terminal">
    <img class="wordmark only-light" src="assets/hn-group-wordmark.svg" alt="HN Group"><img class="wordmark only-dark" src="assets/hn-group-wordmark-white.svg" alt="HN Group">
    <p class="menu-label">Menu</p>
    <button class="nav" data-page="connection"><svg data-icon="power"></svg>Connection</button>
@@ -110,7 +110,7 @@
     <div class="console">
      <div class="console-bar"><i></i><i></i><i></i><svg data-icon="lock"></svg><span><span class="ssh-as">root</span>@<span class="ssh-host">10.88.0.1</span> — ssh</span><span class="console-pill" id="ssh-pill"><i class="dot"></i><span>VPN off</span></span></div>
      <div class="console-body">
-      <p class="dim">HN Secure Gateway · encrypted session through the HN Group VPN</p>
+      <p class="dim">HN Secure Access Terminal · encrypted session through the HN Group VPN</p>
       <label class="prompt" for="ssh-user"><span class="ok">➜</span> ssh <input id="ssh-user" class="inline" spellcheck="false" autocomplete="off" aria-label="Server username" size="4"><span class="host">@<span class="ssh-host">10.88.0.1</span></span></label>
       <label class="password" for="ssh-password"><span class="dim"><span class="ssh-as">root</span>@<span class="ssh-host">10.88.0.1</span>’s password:</span><input id="ssh-password" class="inline secret" type="password" autocomplete="off" aria-label="Server password"></label>
       <div class="row"><button class="btn primary" id="ssh-open"><svg data-icon="terminal"></svg><span>Open in a terminal window</span></button><span class="console-note" id="ssh-note">Opens in its own terminal window</span></div>
@@ -120,7 +120,7 @@
     <div class="chips"><span class="chip"><svg data-icon="shield"></svg>Encrypted through the VPN</span><span class="chip"><svg data-icon="key"></svg>Password only, never saved</span><span class="chip"><svg data-icon="check"></svg>Server identity remembered</span></div>
     <div class="card">
      <h2><svg data-icon="key"></svg>How it works</h2>
-     <p class="muted small" data-linux="Your password is typed here and handed once to the terminal that opens; it is never saved or put on a command line. SSH keys, agents and your SSH settings on this computer are never read or offered. The first time, HN Secure Gateway shows the server’s fingerprint for you to check; after that it refuses to connect if the server’s identity ever changes.">Your password is typed here and handed once to the SSH window that opens; it is never saved or put on a command line. SSH keys on this PC are never read or offered. The first time, HN Secure Gateway shows the server’s fingerprint for you to check; after that it refuses to connect if the server’s identity ever changes.</p>
+     <p class="muted small" data-linux="Your password is typed here and handed once to the terminal that opens; it is never saved or put on a command line. SSH keys, agents and your SSH settings on this computer are never read or offered. The first time, HN Secure Access Terminal shows the server’s fingerprint for you to check; after that it refuses to connect if the server’s identity ever changes.">Your password is typed here and handed once to the SSH window that opens; it is never saved or put on a command line. SSH keys on this PC are never read or offered. The first time, HN Secure Access Terminal shows the server’s fingerprint for you to check; after that it refuses to connect if the server’s identity ever changes.</p>
      <p class="small fingerprint" id="ssh-fingerprint">The server’s identity hasn’t been confirmed on this PC yet.</p>
     </div>
    </section>
@@ -139,14 +139,14 @@
    <section class="page" data-page-id="settings" hidden>
     <header><p class="eyebrow">Settings</p><h1>Settings</h1></header>
     <div class="card">
-     <div class="head"><div><h2>HN Secure Gateway</h2><p class="muted small" id="version"></p></div><button class="btn small" id="update-button">Check for updates</button></div>
+     <div class="head"><div><h2>HN Secure Access Terminal</h2><p class="muted small" id="version"></p></div><button class="btn small" id="update-button">Check for updates</button></div>
      <p class="small muted" id="update-text" hidden></p>
      <div class="progress" id="update-progress" hidden><i></i></div>
      <p class="muted small">Updates come from downloads.hngroup.org.uk and are checked twice before they install by themselves.</p>
     </div>
     <div class="card">
      <h2>Startup</h2>
-     <div class="toggle"><div><strong data-linux="Open when I sign in">Open when I sign in to Windows</strong><small>HN Secure Gateway waits in the system tray.</small></div><button class="switch" role="switch" data-pref="launchAtLogin" aria-label="Open when I sign in to Windows" data-linux-label="Open when I sign in"></button></div>
+     <div class="toggle"><div><strong data-linux="Open when I sign in">Open when I sign in to Windows</strong><small>HN Secure Access Terminal waits in the system tray.</small></div><button class="switch" role="switch" data-pref="launchAtLogin" aria-label="Open when I sign in to Windows" data-linux-label="Open when I sign in"></button></div>
      <div class="toggle"><div><strong>Ask to connect when the app opens</strong><small>Opens straight on your PIN, so connecting takes one step.</small></div><button class="switch" role="switch" data-pref="connectOnLaunch" aria-label="Ask to connect when the app opens"></button></div>
     </div>
     <div class="card">

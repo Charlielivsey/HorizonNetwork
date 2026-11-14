@@ -3,7 +3,7 @@ import AppKit
 import ServiceManagement
 import Darwin
 
-/// HN Secure Gateway for HN Group staff: the HN Group VPN (a private link to the server) and
+/// HN Secure Access Terminal for HN Group staff: the HN Group VPN (a private link to the server) and
 /// SSH to the server, in a full app window with a shield in the menu bar for quick access.
 @main
 struct HNGroupVPNApp: App {
@@ -13,7 +13,7 @@ struct HNGroupVPNApp: App {
     init() { Theme.registerFont() }
 
     var body: some Scene {
-        Window("HN Secure Gateway", id: "main") {
+        Window("HN Secure Access Terminal", id: "main") {
             MainView().environmentObject(model)
         }
         .windowStyle(.hiddenTitleBar)
@@ -31,7 +31,7 @@ struct HNGroupVPNApp: App {
         } label: {
             // Connected: a filled shield with a tick. Off: an outline shield. Working: a half-filled shield.
             Image(systemName: model.busy ? "shield.lefthalf.filled" : model.connected ? "checkmark.shield.fill" : "shield")
-                .accessibilityLabel(model.connected ? "HN Secure Gateway: connected" : "HN Secure Gateway: not connected")
+                .accessibilityLabel(model.connected ? "HN Secure Access Terminal: connected" : "HN Secure Access Terminal: not connected")
         }
         .menuBarExtraStyle(.window)
     }
@@ -277,7 +277,7 @@ struct WelcomeView: View {
                             ProgressView().controlSize(.small)
                             Text("Finish signing in in your browser").font(Theme.font(26, .heavy)).tracking(-0.4)
                         }
-                        Text("When HN Group Auth asks, allow your browser to open HN Secure Gateway. You’ll come straight back here.")
+                        Text("When HN Group Auth asks, allow your browser to open HN Secure Access Terminal. You’ll come straight back here.")
                             .foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true).lineSpacing(3)
                         HStack(spacing: 10) {
                             Button("Open the sign-in page again") { model.signIn() }.buttonStyle(HNButtonStyle(primary: false))
@@ -368,7 +368,7 @@ struct SignedInView: View {
     @ViewBuilder private var notices: some View {
         if let release = model.update {
             Banner(kind: .info, icon: "arrow.down.circle.fill",
-                   title: "Secure Gateway \(release.version) is ready",
+                   title: "Secure Access Terminal \(release.version) is ready",
                    text: model.updateState == .downloading ? "Downloading…" : model.updateState == .installing ? "Installing… the app will reopen by itself." : "You have \(AppInfo.version). The update installs here, with no need to download the app again.",
                    action: ("Update now", { Task { await model.installUpdate() } }),
                    busy: model.updateState == .downloading || model.updateState == .installing)
@@ -549,7 +549,7 @@ struct SetupCard: View {
                     .animation(.easeInOut(duration: 0.5), value: toolsDone)
                 }
                 StepRow(number: 1, done: toolsDone, active: !toolsDone, title: "Install the WireGuard tools",
-                        text: "The fast, secure open-source VPN behind Secure Gateway. This opens Terminal and installs it with Homebrew; come back here when it finishes.") {
+                        text: "The fast, secure open-source VPN behind Secure Access Terminal. This opens Terminal and installs it with Homebrew; come back here when it finishes.") {
                     Button("Install WireGuard tools") { model.installWireGuard() }.buttonStyle(HNButtonStyle())
                 }
                 StepRow(number: 2, done: false, active: toolsDone, title: "Set up this Mac",
@@ -741,7 +741,7 @@ struct SSHPage: View {
                 // Console
                 VStack(alignment: .leading, spacing: 14) {
                     Group {
-                        Text("HN Secure Gateway · encrypted session through the HN Group VPN").foregroundColor(.white.opacity(0.35))
+                        Text("HN Secure Access Terminal · encrypted session through the HN Group VPN").foregroundColor(.white.opacity(0.35))
                         HStack(spacing: 0) {
                             Text("➜ ").foregroundColor(Theme.green)
                             Text("ssh ").foregroundColor(.white.opacity(0.9))
@@ -870,8 +870,8 @@ struct HNFieldStyle: TextFieldStyle {
 
 struct ProfilePage: View {
     @EnvironmentObject var model: VPNModel
-    private let labels = ["sign-in.web": "Signed in on the website", "sign-in.app": "Signed in to Secure Gateway", "sign-out.other": "Signed out another sign-in",
-                          "device.add": "Added a device", "device.remove": "Removed a device", "mac-app.publish": "Published a Secure Gateway build"]
+    private let labels = ["sign-in.web": "Signed in on the website", "sign-in.app": "Signed in to Secure Access Terminal", "sign-out.other": "Signed out another sign-in",
+                          "device.add": "Added a device", "device.remove": "Removed a device", "mac-app.publish": "Published a Secure Access Terminal build"]
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             // Header card with the brand banner.
@@ -918,7 +918,7 @@ struct ProfilePage: View {
                         SectionHeading(title: "Where you’re signed in", icon: "key.fill")
                         ForEach(p.sessions) { s in
                             ListRow(icon: s.kind == "app" ? "laptopcomputer" : "globe",
-                                    title: (s.kind == "app" ? "Secure Gateway" + (s.appVersion.map { " " + $0 } ?? "") : "Website") + (s.current ? " · this Mac" : ""),
+                                    title: (s.kind == "app" ? "Secure Access Terminal" + (s.appVersion.map { " " + $0 } ?? "") : "Website") + (s.current ? " · this Mac" : ""),
                                     subtitle: "Signed in \(When.short(s.createdAt)) · last used \(When.short(s.lastUsedAt))") {
                                 if s.current { Badge(text: "Current", colour: Theme.success) }
                                 else { Button("Sign out") { Task { await model.endSignIn(s) } }.buttonStyle(HNButtonStyle(primary: false)) }
@@ -1033,7 +1033,7 @@ struct SettingsPage: View {
                 HStack(spacing: 16) {
                     AppMark(size: 58)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("HN Secure Gateway").font(Theme.font(17, .bold))
+                        Text("HN Secure Access Terminal").font(Theme.font(17, .bold))
                         Text(AppInfo.label).font(Theme.font(13)).foregroundStyle(Theme.muted)
                         updateStatus.font(Theme.font(12, .semibold)).padding(.top, 2)
                     }
@@ -1046,7 +1046,7 @@ struct SettingsPage: View {
                     SectionHeading(title: "General", icon: "slider.horizontal.3")
                     Toggle(isOn: Binding(get: { model.launchAtLogin }, set: { model.setLaunchAtLogin($0) })) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Open Secure Gateway when I log in").font(Theme.font(14, .semibold))
+                            Text("Open Secure Access Terminal when I log in").font(Theme.font(14, .semibold))
                             Text("The shield stays in the menu bar for quick access.").font(Theme.font(12)).foregroundStyle(Theme.muted)
                         }
                     }
@@ -1134,7 +1134,7 @@ struct MenuView: View {
                     Button { open(.ssh) } label: { HStack(spacing: 8) { Image(systemName: "terminal"); Text("SSH to the server") } }
                         .buttonStyle(HNButtonStyle(primary: false, wide: true))
                 }
-                Button { open(nil) } label: { Text("Open Secure Gateway") }.buttonStyle(HNButtonStyle(wide: true))
+                Button { open(nil) } label: { Text("Open Secure Access Terminal") }.buttonStyle(HNButtonStyle(wide: true))
             }
             .padding(14)
             Rectangle().fill(Theme.border.opacity(0.8)).frame(height: 1)

@@ -1,10 +1,10 @@
 #!/bin/bash
-# Builds "HN Secure Gateway.app" (Apple Silicon and Intel) and HN-Secure-Network-macOS.zip.
+# Builds "HN Secure Access Terminal.app" (Apple Silicon and Intel) and HN-Secure-Network-macOS.zip.
 # Needs a Mac with Xcode or the Command Line Tools (xcode-select --install). Run: bash mac-vpn-app/build.sh
 set -euo pipefail
 cd "$(dirname "$0")"
 OUT=build
-APP="$OUT/HN Secure Gateway.app"
+APP="$OUT/HN Secure Access Terminal.app"
 rm -rf "$OUT"; mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$OUT/obj"
 for arch in arm64 x86_64; do
   swiftc -O -parse-as-library -swift-version 5 -target "$arch-apple-macos13.0" \
@@ -19,7 +19,7 @@ VERSION=$(tr -d '[:space:]' < VERSION)
 BUILD=${BUILD_NUMBER:-${GITHUB_RUN_NUMBER:-$(git rev-list --count HEAD 2>/dev/null || echo 1)}}
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" -c "Set :CFBundleVersion $BUILD" "$APP/Contents/Info.plist"
 echo "Version $VERSION (build $BUILD)"
-cp Resources/wordmark.png Resources/wordmark-white.png Resources/PlusJakartaSans.ttf "$APP/Contents/Resources/"
+cp Resources/wordmark.png Resources/wordmark-white.png Resources/PlusJakartaSans.ttf Resources/AppIcon.png "$APP/Contents/Resources/"
 install -m 755 Resources/hn-vpn-ctl "$APP/Contents/Resources/hn-vpn-ctl"
 # App icon from the 1024px artwork.
 ICONSET="$OUT/AppIcon.iconset"; mkdir -p "$ICONSET"
@@ -31,4 +31,4 @@ iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
 # Ad-hoc signature: enough to run on Macs that open it with right-click > Open the first time.
 codesign --force --deep --sign - "$APP"
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$OUT/HN-Secure-Network-macOS.zip"
-echo "Built: mac-vpn-app/$OUT/HN Secure Gateway.app and mac-vpn-app/$OUT/HN-Secure-Network-macOS.zip"
+echo "Built: mac-vpn-app/$OUT/HN Secure Access Terminal.app and mac-vpn-app/$OUT/HN-Secure-Network-macOS.zip"

@@ -153,7 +153,7 @@ class MacPlatform {
     }
   }
   preferencesFile(id) { return id === 'browser' ? path.join(this.home, 'Library', 'Application Support', entry(id).data, 'preferences.json') : null; }
-  // HN Secure Gateway for Mac keeps its settings in macOS: the SSH username in its user defaults, and its login item
+  // HN Secure Access Terminal for Mac keeps its settings in macOS: the SSH username in its user defaults, and its login item
   // (2.4.1 and later), which only the app itself can change, through its fixed --app-manager-login-item mode.
   async readNative(id, found) {
     const out = {};
@@ -168,9 +168,9 @@ class MacPlatform {
   async writeNative(id, found, patch) {
     if (Object.hasOwn(patch, 'sshUser')) { const r = await run('/usr/bin/defaults', ['write', entry(id).bundle, 'sshUser', '-string', patch.sshUser]); if (r.code !== 0) throw fail('The SSH username couldn’t be saved.'); }
     if (Object.hasOwn(patch, 'launchAtLogin')) {
-      if (newer('2.4.1', found.version)) throw fail('Update HN Secure Gateway to change this here.');
+      if (newer('2.4.1', found.version)) throw fail('Update HN Secure Access Terminal to change this here.');
       const r = await run(found.exe, ['--app-manager-login-item', String(patch.launchAtLogin)], { timeout: 20000 });
-      if (r.code !== 0 || (r.out.trim() === 'true') !== patch.launchAtLogin) throw fail('macOS didn’t allow it. Approve HN Secure Gateway in System Settings → General → Login Items, then try again.');
+      if (r.code !== 0 || (r.out.trim() === 'true') !== patch.launchAtLogin) throw fail('macOS didn’t allow it. Approve HN Secure Access Terminal in System Settings → General → Login Items, then try again.');
     }
   }
   // ---------- App Manager itself ----------

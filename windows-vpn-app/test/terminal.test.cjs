@@ -55,6 +55,6 @@ test('only the window that was opened, with its ticket, gets the password',async
   await assert.rejects(new Promise((res,rej)=>{const s=net.connect({host:'127.0.0.1',port});s.on('connect',()=>{s.destroy();res();});s.on('error',rej);}));
   await assert.rejects(new Terminals({file:path.join(dir,'ssh.json'),launch:()=>{},verify:async()=>false,timeout:200}).open({username:'root',password:'x'}),/didn’t open/);
   // The helper refuses to run without the app.
-  const lone=spawn(process.execPath,[HELPER,'nope']);let text='';lone.stdout.on('data',d=>{text+=d;});assert.equal(await new Promise(r=>lone.on('exit',r)),2);assert.match(text,/Open SSH from HN Secure Gateway/);
+  const lone=spawn(process.execPath,[HELPER,'nope']);let text='';lone.stdout.on('data',d=>{text+=d;});assert.equal(await new Promise(r=>lone.on('exit',r)),2);assert.match(text,/Open SSH from HN Secure Access Terminal/);
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
