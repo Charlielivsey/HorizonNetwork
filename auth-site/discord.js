@@ -16,7 +16,9 @@
 // restart. Without client_id/client_secret the option is hidden; the bot only needs bot_token.
 const fs = require('node:fs');
 const { startPresence } = require('./discord-gateway');
+const { OWNER_ID } = require('./owner-audit');
 const { createBotManager } = require('./bot-manager');
+const { createManagedBots } = require('./managed-bots');
 const path = require('node:path');
 
 const DISCORD_API = 'https://discord.com/api/v10';
@@ -46,7 +48,7 @@ function createDiscord({ origin, staff, send, profile, entryFor, setCookie, cook
     try {
       const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
       const id = String(raw.client_id || '').trim(), secret = String(raw.client_secret || '').trim(), bot = String(raw.bot_token || '').trim();
-      value = { id: ID.test(id) ? id : null, secret: secret.length >= 8 ? secret : null, bot: bot.length >= 50 ? bot : null };
+      value = { ownerAuditRecipient: OWNER_ID, id: ID.test(id) ? id : null, secret: secret.length >= 8 ? secret : null, bot: bot.length >= 50 ? bot : null };
     } catch {}
     cached = { mtimeMs: stat.mtimeMs, value };
     return value;
@@ -98,18 +100,20 @@ function createDiscord({ origin, staff, send, profile, entryFor, setCookie, cook
     try {
       const { value } = await staff('/api/auth/discord-accounts', pending ? { pending: true } : {});
       const updates = [];
-      for (const id of (value.ids || []).filter((x) => ID.test(x))) {
+      const ids=(value.ids || []).filter((x) => ID.test(x));
+      for (const id of ids) {
         let r;
-        try { r = await fetcher(DISCORD_API + '/users/' + id, { headers: { Authorization: 'Bot ' + c.bot, Accept: 'application/json' }, signal: AbortSignal.timeout(10000), redirect: 'error' }); } catch { if(strict)throw fail(503,'Discord could not be reached for profile synchronisation.'); continue; }
+        try { r = await manager.observeBotRequests(fetcher)(DISCORD_API + '/users/' + id, { headers: { Authorization: 'Bot ' + c.bot, Accept: 'application/json' }, signal: AbortSignal.timeout(10000), redirect: 'error' }); } catch { if(strict)throw fail(503,'Discord could not be reached for profile synchronisation.'); continue; }
         if (r.status === 429) { if(strict)throw fail(429,'Discord rate-limited profile synchronisation. Try again later.'); const wait = Number((await r.json().catch(() => ({}))).retry_after || 1); await new Promise((ok) => setTimeout(ok, Math.min(30, wait) * 1000)); continue; }
         if (r.status === 401) { if(strict)throw fail(503,'Discord rejected the bot token. Review Credentials & setup.'); break; } // the bot token isn't valid
         const u = r.ok ? await r.json().catch(() => null) : null;
         if (u && typeof u.username === 'string') updates.push(profileOf(u));
         await new Promise((ok) => setTimeout(ok, 250));
       }
-      if (!updates.length) return 0;
-      return (await staff('/api/auth/discord-update', { updates })).value.changed || 0;
-    } catch(e) { if(strict)throw e;return 0; } finally { refreshing = false; }
+      if (!updates.length) { manager.record(null,'profiles.lookup.completed',{pendingOnly:pending,checked:ids.length,updated:0});return 0; }
+      const changed=(await staff('/api/auth/discord-update', { updates })).value.changed || 0;
+      manager.record(null,'profiles.lookup.completed',{pendingOnly:pending,checked:ids.length,updated:updates.length,changed});return changed;
+    } catch(e) { manager.record(null,'profiles.lookup.failed',{pendingOnly:pending});if(strict)throw e;return 0; } finally { refreshing = false; }
   }
   let presence=null;
   const manager=createBotManager({file:path.join(path.dirname(file),'discord-bot.json'),configFile:file,config,fetcher,refresh:()=>refreshNames(true),staff,presence:()=>presence});
@@ -117,11 +121,12 @@ function createDiscord({ origin, staff, send, profile, entryFor, setCookie, cook
   if(refreshEvery>0)setInterval(()=>{const s=manager.settings();if(s.enabled)refreshNames(false,true).catch(()=>{});},60000).unref();
   // Discord roles follow Horizon Network positions on the staff portal: checked every minute, and straight after the bot connects.
   if(refreshEvery>0)setInterval(()=>{manager.syncPositions().catch(()=>{});},60000).unref();
-  presence=process.env.HN_DISCORD_PRESENCE==='0'?null:startPresence(()=> (config()||{}).bot||null,{settings:manager.settings,onInteraction:manager.interaction,onReady:()=>{manager.registerBuiltins();manager.syncPositions(true).catch(()=>{});},log:{log:message=>{console.log(message);manager.record(null,'gateway.event',{message});}}});
+  presence=process.env.HN_DISCORD_PRESENCE==='0'?null:startPresence(()=> (config()||{}).bot||null,{settings:manager.settings,onAction:(action,details)=>manager.record(null,action,details),onInteraction:manager.interaction,onAuditLog:manager.onAuditLog,onReady:()=>{manager.registerBuiltins();manager.syncPositions(true).catch(()=>{});},log:{log:message=>{console.log(message);manager.record(null,'gateway.event',{message});}}});
   // When Auth is stopped (website control's power off runs `pm2 stop hn-auth`, which sends SIGINT/SIGTERM), the bot goes
   // fully offline at once (the user's request, 3 November 2026): it turns invisible and closes its Discord connection
   // normally, so Discord shows it offline straight away instead of after the connection times out.
-  if(presence)goOfflineOnStop(presence);
+  const fleet=createManagedBots({dir:path.dirname(file),primary:manager,primaryConfig:config,fetcher,gatewayEnabled:process.env.HN_DISCORD_PRESENCE!=='0'});
+  if(presence)goOfflineOnStop({snapshot:()=>({phase:fleet.live()?'online':presence.snapshot().phase}),stop:()=>{presence.stop();fleet.stop();}});
 
   async function discord(req, res, route, data) {
     if (route === '/api/discord' && req.method === 'GET') { send(res, 200, { enabled: !!client() }); return true; }
@@ -178,7 +183,7 @@ function createDiscord({ origin, staff, send, profile, entryFor, setCookie, cook
   discord.enabled = () => !!client();
   discord.refreshNames = refreshNames;
   discord.presence = presence;
-  discord.manager = manager;
+  discord.manager = fleet;
   return discord;
 }
 module.exports = { createDiscord, BINDING, TICKET, goOfflineOnStop };

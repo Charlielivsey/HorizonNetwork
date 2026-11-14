@@ -126,3 +126,20 @@ dialog h2 { font-size: 1.5rem; }
 }
 @media (max-width: 760px) { .metrics, .split, .form-grid { grid-template-columns: minmax(0, 1fr); } .kv > div { flex-direction: column; gap: .2rem; } .kv dd { text-align: left; } }
 @media (prefers-reduced-motion: reduce) { .connection-dot, #toast { animation: none; } .metric, .workspace aside nav button::before, tbody tr { transition: none; } }
+
+.bot-picker { padding:16px; margin-bottom:24px; border:1px solid var(--border); border-radius:14px; background:var(--surface); }
+.bot-picker label { display:block; font-size:10px; font-weight:800; letter-spacing:.12em; color:var(--muted); margin-bottom:10px; }
+.bot-picker select { width:100%; margin:0; background:var(--surface-2,var(--surface)); color:var(--text); border:1px solid var(--border); border-radius:9px; padding:10px; font:inherit; font-weight:700; cursor:pointer; }
+.bot-picker select:focus-visible { outline:2px solid var(--primary); outline-offset:3px; }
+.bot-picker .help { display:block; font-size:10px; overflow-wrap:anywhere; margin-top:9px; }
+.bot-picker select:disabled { opacity:.65; cursor:wait; }
+
+/* Fast workspace feedback: retain HN motion without long reveal queues or continuous hero work. */
+.hn-reveal { transition-duration:160ms !important; transition-delay:0ms !important; transform:translateY(5px); }
+.hn-reveal.hn-in { transform:none; }
+.hn-enter,.hn-header-in { animation-duration:160ms !important; }
+.hn-steps span,.hn-steps.hn-alive span { animation:hn-step-in 180ms var(--hn-ease) both !important; animation-delay:0ms !important; }
+.hn-glow::before { animation:none; }
+.hn-stripe-draw,.hn-stripe-draw > span { animation-duration:180ms !important; animation-delay:0ms !important; }
+.metric,.hn-lift,.workspace aside nav button { transition-duration:120ms; }
+@media(prefers-reduced-motion:reduce) { .hn-reveal { transition:none !important; transform:none; opacity:1; } .hn-enter,.hn-header-in,.hn-steps span,.hn-steps.hn-alive span,.hn-stripe-draw,.hn-stripe-draw > span { animation:none !important; } }

@@ -14,6 +14,7 @@ test('Auth callback is state-bound; management requires an authorised session an
   const send=(origin,data,content='application/json')=>fetch(base+'/api/bot',{method:'POST',headers:{Cookie:cookie,Origin:origin,'Content-Type':content},body:JSON.stringify(data)});
   assert.equal((await send('https://evil.test',{action:'connection',payload:{operation:'stop'}})).status,403);assert.equal((await send(base,{action:'state'},'text/plain')).status,403);assert.equal((await send(base,{action:'not-a-real-operation'})).status,400);assert.equal(calls.length,0);
   assert.equal((await send(base,{action:'state'})).status,200);assert.equal(calls[0].session,'b'.repeat(64));assert.equal(calls[0].action,'state');
+  const selected=await fetch(base+'/api/bot',{method:'POST',headers:{Cookie:cookie,Origin:base,'Content-Type':'application/json'},body:JSON.stringify({action:'state',botId:'hn-logs'})});assert.equal(selected.status,200);assert.equal(calls.at(-1).botId,'hn-logs');
   const now=Date.now;role=false;owner=false;Date.now=()=>now()+61000;
   try{assert.equal((await fetch(base+'/api/me',{headers:{Cookie:cookie}})).status,403);}finally{Date.now=now;}
   role=true;owner=true;

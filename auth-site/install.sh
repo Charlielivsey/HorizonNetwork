@@ -41,12 +41,16 @@ bash "$SCRIPT_DIR/../status-site/install-portal-sso.sh"
 
 mkdir -p "$APP_DIR/public" "$DATA_DIR" "$SSL_DIR" "$CHALLENGE_DIR" /etc/nginx/sites-available /etc/nginx/sites-enabled
 chmod 700 "$DATA_DIR"
-cp "$SCRIPT_DIR/server.js" "$SCRIPT_DIR/native.js" "$SCRIPT_DIR/google.js" "$SCRIPT_DIR/discord.js" "$SCRIPT_DIR/discord-gateway.js" "$SCRIPT_DIR/bot-manager.js" "$SCRIPT_DIR/server-setup.js" "$SCRIPT_DIR/position-sync.js" "$SCRIPT_DIR/hn-roles.json" "$SCRIPT_DIR/supervisor.js" "$APP_DIR/"
+cp "$SCRIPT_DIR/server.js" "$SCRIPT_DIR/native.js" "$SCRIPT_DIR/google.js" "$SCRIPT_DIR/discord.js" "$SCRIPT_DIR/discord-gateway.js" "$SCRIPT_DIR/bot-manager.js" "$SCRIPT_DIR/managed-bots.js" "$SCRIPT_DIR/network.js" "$SCRIPT_DIR/owner-audit.js" "$SCRIPT_DIR/server-audit.js" "$SCRIPT_DIR/moderation.js" "$SCRIPT_DIR/server-setup.js" "$SCRIPT_DIR/position-sync.js" "$SCRIPT_DIR/hn-roles.json" "$SCRIPT_DIR/supervisor.js" "$APP_DIR/"
 # Server layouts for /server-setup: replaced as a whole so removed layouts go too.
 rm -rf "$APP_DIR/discord-layouts"
 mkdir -p "$APP_DIR/discord-layouts"
 cp -r "$SCRIPT_DIR/discord-layouts/." "$APP_DIR/discord-layouts/"
 cp -r "$SCRIPT_DIR/public/." "$APP_DIR/public/"
+install -d -m 755 /var/www/hn-auth-offline
+install -m 644 "$SCRIPT_DIR/offline/index.html" /var/www/hn-auth-offline/index.html
+install -m 644 "$SCRIPT_DIR/public/assets/brand/hn-group-wordmark-white.svg" /var/www/hn-auth-offline/
+install -m 644 "$SCRIPT_DIR/public/assets/fonts/plus-jakarta-sans.woff2" /var/www/hn-auth-offline/
 # Keep a deliberately stopped Auth portal stopped during deployments.
 AUTH_OFF=0
 if [ -f /var/lib/hn-control/accounts-independent ] && [ -f /var/lib/hn-control/state.json ]; then

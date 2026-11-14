@@ -10,6 +10,8 @@ const {createDiscord}=require('./discord');
 const ORIGIN = 'https://auth.hngroup.org.uk';
 // Registered applications: fixed callbacks and who may use them.
 const CLIENTS = {
+  it: {name:'HN Group IT',callback:'https://it.hngroup.org.uk/auth/callback',allowed:u=>!u.standalone,denied:'A staff profile is required to use IT.'},
+  finance: {name:'HN Group Finance',callback:'https://finance.hngroup.org.uk/auth/callback',allowed:u=>!u.standalone,denied:'A staff profile is required to use Finance.'},
   hr: {name:'HN Group HR',callback:'https://hr.hngroup.org.uk/auth/callback',allowed:u=>!u.standalone,denied:'A staff profile is required to use HR.'},
   // HN Mail (the user's request, 6 November 2026): only sign-in accounts with a Google account linked, never while
   // logged in as someone else.
@@ -30,7 +32,7 @@ const CLIENTS = {
   branding: { name: 'HN Group brand centre', callback: 'https://branding.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use the HN Group brand centre.' },
   accounts: { name: 'HN Account', callback: 'https://accounts.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use HN Account.' },
   investors: { name: 'HN Group Investors', callback: 'https://investors.hngroup.org.uk/auth/callback', allowed: user => !!user.ownerAccess || (Array.isArray(user.companies) ? user.companies : [user.company]).includes('HN Group'), denied: 'Only staff with a role at HN Group can sign in to the investors website.' },
-  vpn: { name: 'HN Group VPN', callback: 'https://vpn.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use the HN Group VPN.' },
+  vpn: { name: 'HN Secure Access Terminal', callback: 'https://vpn.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use the HN Secure Access Terminal.' },
   devices: { name: 'HN Group Devices', callback: 'https://devices.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use HN Group Devices.' },
   docs: { name: 'HN Group Docs', callback: 'https://docs.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use HN Group Docs.' },
   // Anyone can sign in to sign what they've been sent; sending needs the "Send contracts for signing" permission.
@@ -182,7 +184,7 @@ const server = http.createServer(async (req, res) => {
       if(!application||application.client!=='bots'||application.expires<=Date.now())throw fail(401,'Bot management sign-in expired.');
       const user=await profile(application.entry||sessions.get(application.session),true);requireReady(user);
       if(!CLIENTS.bots.allowed(user))throw fail(403,CLIENTS.bots.denied);
-      const result=await discord.manager.handle(data.action,data.payload,{email:user.email,owner:user.ownerAccess===true});
+      const result=await discord.manager.handle(data.action,data.payload,{email:user.email,owner:user.ownerAccess===true},data.botId);
       return send(res,200,{result});
     }
     if(await native(req,res,route))return;
@@ -208,7 +210,7 @@ const server = http.createServer(async (req, res) => {
       if (detachedEntry) { const application = applicationSessions.get(hash(applicationToken)); if (application && application.expires !== entry.expires) { application.expires = entry.expires; saveAppSessions(); } }
       requireReady(user);
       if (!CLIENTS[clientId].allowed(user)) throw fail(403, guestDenied(clientId, user));
-      if (clientId === 'portal' || clientId === 'accounts' || clientId === 'hr') {
+      if (clientId === 'portal' || clientId === 'accounts' || clientId === 'hr' || clientId === 'finance' || clientId === 'it') {
         // The application starts its own session (HN Account swaps this one for its own on the staff
         // account service); this Auth sign-in has done its job.
         sessions.delete(token);
