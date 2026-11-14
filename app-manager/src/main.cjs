@@ -1,8 +1,8 @@
 'use strict';
 // HN Group App Manager 3: installs, updates and removes HN Browser and HN Secure Access Terminal from checked downloads,
 // changes their settings while they're closed, and keeps itself up to date in the app. It opens only on a computer
-// approved on devices.hngroup.org.uk, after signing in with an HN Group account (HN Group Auth) and unlocking it with
-// the six-digit PIN. Everything it does is written to a log (Settings → Diagnostics). This file only starts things
+// approved on devices.hngroup.org.uk, after signing in with an HN Group account (HN Group Auth).
+// Saved sign-ins are validated on opening without an extra PIN prompt. Everything it does is written to a log (Settings → Diagnostics). This file only starts things
 // and connects the window to src/core/; the work is done there.
 const electron = require('electron');
 const { app, BrowserWindow, ipcMain, shell, nativeTheme, Notification, Tray, Menu, nativeImage, safeStorage, clipboard } = electron;
@@ -131,7 +131,7 @@ function start() {
     wc.on('render-process-gone', (_e, d) => log.error('window', 'The window stopped: ' + d.reason));
     win.loadFile(path.join(UI, 'index.html'));
     win.once('ready-to-show', () => { if (visible) win.show(); });
-    win.on('hide', () => { clearTimeout(away); away = setTimeout(() => account && account.lock().catch(() => {}), 15 * 60000); away.unref?.(); });
+    // Hiding or reopening the app keeps a validated session; Lock remains an explicit action.
     win.on('show', () => clearTimeout(away));
     // Closing keeps App Manager in the menu bar or tray when it runs in the background.
     win.on('close', (e) => {
@@ -192,12 +192,13 @@ function start() {
   }
 
   // ---------- Requests from the window ----------
-  const OPEN = new Set(['state', 'sign-in', 'sign-in-cancel', 'unlock', 'sign-out', 'dialog-answer', 'website', 'theme', 'diagnostics', 'copy-diagnostics', 'open-logs']);
+  const OPEN = new Set(['state', 'restore', 'sign-in', 'sign-in-cancel', 'unlock', 'sign-out', 'dialog-answer', 'website', 'theme', 'diagnostics', 'copy-diagnostics', 'open-logs']);
   const handlers = {
     state: () => snapshot(),
     'sign-in': async () => { account.lastError = null; await account.start(); },
     'sign-in-cancel': () => account.cancel(),
     unlock: async (code) => { account.lastError = null; try { await account.unlock(code); store.record('account', 'Unlocked as ' + account.user.displayName + '.'); } finally { changed(); } },
+    restore: async () => { account.lastError = null; await account.restore(); changed(); },
     lock: () => account.lock(),
     'sign-out': async () => { if (manager.working) throw Error('Wait for the current change to finish first.'); await account.signOut(); store.record('account', 'Signed out.'); },
     check: () => checkNow(false),
@@ -254,7 +255,7 @@ function start() {
     deviceGate = createDeviceGate({ device, appName: 'HN Group App Manager', electron, uiDir: UI, preloadDir: __dirname });
     await deviceGate.ensure();
     log.info('device', 'This computer is ' + device.state().status);
-    // The HN account: remembered (encrypted by the operating system) and locked until the PIN is entered.
+    // Validate the encrypted remembered sign-in with Auth; no launch PIN is required.
     const storage = TEST ? { isEncryptionAvailable: () => true, getSelectedStorageBackend: () => 'test', encryptString: (s) => Buffer.from('test:' + s), decryptString: (b) => String(b).replace(/^test:/, '') } : safeStorage;
     account = new Account({ vault: new Vault(path.join(DATA, 'account.enc'), storage), fetcher,
       open: async (url) => { log.info('account', 'Opening HN Group Auth in the browser'); if (TEST) return void testLog.push({ signIn: url }); await shell.openExternal(url); },

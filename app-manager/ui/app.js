@@ -395,3 +395,5 @@ setInterval(() => { if (state && (page === 'apps' || page === 'activity' || page
 paintIcons();
 api.onState(receive);
 call('state').then((s) => { if (!state) receive(s); }).catch((e) => toast(e.message, true));
+
+$('restore-session').addEventListener('click', async () => { try { await call('restore'); } catch(e) { toast(e.message); } });

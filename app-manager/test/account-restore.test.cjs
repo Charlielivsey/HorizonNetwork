@@ -1,0 +1,9 @@
+'use strict';
+const {test}=require('node:test'),assert=require('node:assert/strict');
+const {Account}=require('../src/account.cjs');
+const token='a'.repeat(64),user={displayName:'Test User',email:'test@example.test'};
+function fixture(reply){const calls=[],events=[];let cleared=false;const account=new Account({open:async()=>{},vault:{load:()=>token,loadProfile:()=>({user}),clear:()=>{cleared=true;}},changed:e=>events.push(e),fetcher:async(url)=>{calls.push(new URL(url).pathname);if(url.endsWith('/avatar'))return new Response('',{status:404});return reply();}});return{account,calls,events,get cleared(){return cleared;}};}
+test('saved sign-in is validated before opening without a PIN request',async()=>{const f=fixture(()=>Response.json({user}));f.account.load();assert.equal(f.account.status,'restoring');assert.equal(f.account.unlocked,false);await f.account.restore();assert.equal(f.account.unlocked,true);assert.deepEqual(f.calls,['/api/native/session','/api/native/avatar']);});
+for(const status of [401,403,423])test('revoked or locked account '+status+' cannot restore',async()=>{const f=fixture(()=>Response.json({error:'Account unavailable'},{status}));await f.account.restore();assert.equal(f.account.status,'signed-out');assert.equal(f.cleared,true);});
+test('Auth outage never unlocks from cached identity and can be retried',async()=>{let offline=true;const f=fixture(()=>{if(offline)throw Error('offline');return Response.json({user});});await f.account.restore();assert.equal(f.account.unlocked,false);assert.equal(f.account.status,'restoring');assert.ok(f.events.some(e=>e.error));offline=false;await f.account.restore();assert.equal(f.account.unlocked,true);});
+test('manual lock remains locked after background refresh',async()=>{const f=fixture(()=>Response.json({user}));await f.account.restore();await f.account.lock();await f.account.refresh();assert.equal(f.account.status,'locked');assert.equal(f.account.unlocked,false);});

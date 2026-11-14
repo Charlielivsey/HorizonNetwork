@@ -2,7 +2,7 @@
 // Your HN Group account in App Manager, through HN Group Auth like HN Browser: the sign-in opens in the default
 // web browser (Auth's public `app-manager` client, S256 PKCE and a one-use loopback callback, no shared secret),
 // and the account is then remembered with a revocable token kept encrypted by the operating system. Every time
-// App Manager opens it starts locked, and the person's six-digit HN Group PIN unlocks it (checked by Auth).
+// App Manager validates the saved session before opening, without an additional PIN prompt.
 // Passwords and PINs are never stored, and the token never reaches the window.
 const http=require('node:http'),crypto=require('node:crypto');
 const AUTH='https://auth.hngroup.org.uk',CLIENT='app-manager';
@@ -13,7 +13,7 @@ const page=(title,text)=>'<!doctype html><meta charset="utf-8"><meta name="viewp
 class Account{
  constructor({open,changed=()=>{},fetcher=fetch,origin=AUTH,vault}){Object.assign(this,{open,changed,fetch:fetcher,origin,vault});this.token=null;this.user=null;this.remembered=null;this.locked=false;this.pending=null;this.generation=0;this.avatar=null;this.avatarAt=0;this.cached=null;}
  // signed-out, waiting (finishing in the browser), locked (needs the PIN) or unlocked.
- get status(){return this.pending?'waiting':!this.token?'signed-out':this.locked?'locked':'unlocked';}
+ get status(){return this.pending?'waiting':!this.token?'signed-out':this.locked?'locked':!this.user?'restoring':'unlocked';}
  get unlocked(){return!!this.token&&!this.locked&&!!this.user;}
  snapshot(){const u=this.user||this.remembered;return{status:this.status,user:u?{displayName:String(u.displayName||u.email||''),email:String(u.email||''),jobTitle:u.jobTitle?String(u.jobTitle):null}:null,avatar:this.avatar};}
  async call(route,data={},token=this.token){let response;try{response=await this.fetch(this.origin+'/api/native/'+route,{method:'POST',headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify(data),signal:AbortSignal.timeout(15000),redirect:'error'});}catch{throw Error('HN Group Auth can’t be reached. Check your internet connection and try again.');}
@@ -45,8 +45,8 @@ class Account{
   const url=new URL('/authorize',this.origin);for(const[k,v]of Object.entries({client_id:CLIENT,state,redirect_uri:redirect,code_challenge:challenge,code_challenge_method:'S256'}))url.searchParams.set(k,v);
   try{await this.open(url.href);}catch(e){this.cancel();throw e;}}
  finish(){if(this.pending){clearTimeout(this.pending.timer);const s=this.pending.server;setTimeout(()=>s.close(),1000).unref?.();this.pending=null;}}
- // Opening App Manager: the remembered account is ready (and locked) at once, so the PIN can be asked straight away.
- load(){if(this.token)return true;const token=this.vault?.load();if(!token)return false;this.token=token;this.locked=true;const saved=this.vault?.loadProfile?.();if(saved){this.remembered=saved.user;this.avatar=saved.avatar;this.cached=JSON.stringify(saved);}return true;}
+ // Restore the encrypted token; cached identity is display-only until Auth validates it.
+ load(){if(this.token)return true;const token=this.vault?.load();if(!token)return false;this.token=token;this.locked=false;const saved=this.vault?.loadProfile?.();if(saved){this.remembered=saved.user;this.avatar=saved.avatar;this.cached=JSON.stringify(saved);}return true;}
  async restore(){if(!this.load())return;await this.refresh();}
  keep(){if(!this.remembered||!this.vault?.saveProfile)return;const value=JSON.stringify({user:this.remembered,avatar:this.avatar});if(value===this.cached)return;this.cached=value;try{this.vault.saveProfile({user:this.remembered,avatar:this.avatar});}catch{}}
  forget(){this.cached=null;this.token=null;this.user=null;this.remembered=null;this.locked=false;this.avatar=null;this.avatarAt=0;this.vault?.clear();}
@@ -58,7 +58,7 @@ class Account{
  async refresh(){if(!this.token)return;const token=this.token;
   try{const result=await this.call('session',{},token);if(this.token!==token)return;this.remembered=result.user;if(!this.locked)this.user=result.user;
    if(!this.avatarAt||Date.now()-this.avatarAt>300000){const avatar=await this.picture(token);if(this.token!==token)return;this.avatar=avatar;this.avatarAt=Date.now();}this.keep();this.changed({user:this.user});}
-  catch(e){if(this.token!==token)return;if([401,403].includes(e.status)){this.forget();this.changed({user:null,error:'Your HN Group session ended. Sign in again.'});}}}
+  catch(e){if(this.token!==token)return;if([401,403,423].includes(e.status)||e.restart){this.forget();this.changed({user:null,error:e.status===423?e.message:'Your HN Group session ended. Sign in again.'});}else{this.changed({error:e.message});}}}
  async lock(){if(!this.token||this.locked)return;const token=this.token;this.locked=true;this.user=null;this.changed({user:null});await this.call('lock',{},token).catch(()=>{});}
  async signOut(){this.cancel();const token=this.token;this.forget();this.changed({user:null});if(token)await this.call('logout',{},token).catch(()=>{});}
 }

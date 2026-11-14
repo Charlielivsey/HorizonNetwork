@@ -56,8 +56,7 @@ per app) and 2.1.0 (HN Group Auth, device authorisation, Mac self-update fixes).
 - Every question is a card in the window in the HN design, never a plain system box. The safe choice has focus;
   Escape cancels. It follows the standard HN Group theme throughout.
 - Sign-in through HN Group Auth in the default browser (Auth's `app-manager` client, S256 PKCE, one-use loopback
-  callback), remembered with an encrypted revocable token; it opens locked on the six-digit PIN and locks after
-  15 minutes hidden. It only opens on a computer approved on devices.hngroup.org.uk.
+  callback), remembered with an encrypted revocable token; it validates its saved sign-in on opening without a PIN prompt; manual Lock still requires the PIN. It only opens on a computer approved on devices.hngroup.org.uk.
 
 ## Its own in-app updates
 
