@@ -1,11 +1,11 @@
 {
- "tag": "app-manager-v3.3.0-18",
- "version": "3.3.0",
- "build": 18,
- "publishedAt": "2026-11-14T03:10:39.678Z",
+ "tag": "app-manager-v3.3.1-19",
+ "version": "3.3.1",
+ "build": 19,
+ "publishedAt": "2026-11-14T17:20:44.738Z",
  "asset": {
-  "name": "HN-Group-App-Manager-3.3.0-mac-universal.zip",
-  "size": 230493430,
-  "sha256": "33698376cf3c69f300e8d0adfa8afba0c6af6b664ee24e375d8a1ab07be10e46"
+  "name": "HN-Group-App-Manager-3.3.1-mac-universal.zip",
+  "size": 230493585,
+  "sha256": "5ced6078362e086521219c395be59226dee8566d81b52659bd6ed277e1adf523"
  }
 }
