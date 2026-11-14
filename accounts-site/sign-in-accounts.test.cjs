@@ -13,7 +13,7 @@ const freePort = async () => { const s = http.createServer(); await new Promise(
 const cookieOf = (res, name) => (res.headers.getSetCookie().find((c) => c.startsWith(name + '=')) || '').split(';')[0];
 const waitFor = async (url) => { for (let i = 0; i < 100; i++) { try { if ((await fetch(url)).ok) return; } catch {} await new Promise((r) => setTimeout(r, 50)); } throw new Error('did not start: ' + url); };
 
-test('sign-in accounts: made on HN Account, several profiles with a default, own permissions, none at all', async () => {
+test('sign-in accounts: administered on IT, personal HN Account, profiles, defaults and permissions', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-sign-in-accounts-'));
   process.env.DATA_DIR = dir; // Keep Auth and optional integration configuration inside the test fixture.
 
@@ -56,9 +56,18 @@ test('sign-in accounts: made on HN Account, several profiles with a default, own
       assert.equal(done.status, 302);
       const cookie = cookieOf(done, 'hn_account');
       const csrf = (await (await fetch(ACC + '/api/session', { headers: { Cookie: cookie } })).json()).csrf;
+      // Administrative requests now use an independently scoped IT sign-in.
+      const itStart=await fetch(staffBase+'/auth/start?next=/accounts',{headers:{'x-hn-it-app':'1'},redirect:'manual'});
+      const itState=new URL(itStart.headers.get('location')).searchParams.get('state');
+      const itSigned=await authSignIn(username,password,pin);
+      const itGrant=await(await authPost('/api/continue',{client_id:'it',state:itState},itSigned.session)).json();
+      const itBack=new URL(itGrant.redirect);
+      const itDone=await fetch(staffBase+itBack.pathname+itBack.search,{headers:{Cookie:cookieOf(itStart,'hn_staff_auth_state'),'x-hn-it-app':'1'},redirect:'manual'});
+      assert.equal(itDone.status,302);const itCookie=cookieOf(itDone,'hn_it_session');
+      const administrative=p=>/^\/api\/(logins|employees|roles)(\/|$)/.test(p);
       return {
-        get: (p) => fetch(ACC + p, { headers: { Cookie: cookie } }),
-        post: (p, body) => fetch(ACC + p, { method: 'POST', headers: { Cookie: cookie, 'Content-Type': 'application/json', Origin: ACC, 'X-CSRF-Token': csrf }, body: JSON.stringify(body) }),
+        get: (p) => administrative(p)?fetch(staffBase+p,{headers:{Cookie:itCookie,'x-hn-it-app':'1'}}):fetch(ACC + p, { headers: { Cookie: cookie } }),
+        post: (p, body) => administrative(p)?fetch(staffBase+p,{method:'POST',headers:{Cookie:itCookie,'x-hn-it-app':'1','Content-Type':'application/json'},body:JSON.stringify(body)}):fetch(ACC + p, { method: 'POST', headers: { Cookie: cookie, 'Content-Type': 'application/json', Origin: ACC, 'X-CSRF-Token': csrf }, body: JSON.stringify(body) }),
       };
     }
 
@@ -120,12 +129,12 @@ test('sign-in accounts: made on HN Account, several profiles with a default, own
     const adaGroup = data.profiles.find((p) => p.personId === ada.id && p.company === 'HN Group');
     assert.notEqual(samNetwork.profileId, sam.id, 'other companies have their own profile id');
 
-    // Accounts are only made on HN Account: the staff portal can't create one any more.
+    // Accounts are only made on HN Group IT: the staff portal can't create one any more.
     const portalLogin = await fetch(staffBase + '/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: 'ada.test@hngroup.org.uk', password: 'Ada-password-582!' }) });
     const portalCode = await fetch(staffBase + '/api/login/code', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ challenge: (await portalLogin.json()).challenge, code: '582947' }) });
     const portal = cookieOf(portalCode, 'hn_staff_session');
     const refused = await fetch(staffBase + '/api/employees/' + nia.id + '/account', { method: 'POST', headers: { Cookie: portal, 'Content-Type': 'application/json' }, body: '{}' });
-    assert.equal(refused.status, 403); assert.match((await refused.json()).error, /HN Account/);
+    assert.equal(refused.status, 403); assert.match((await refused.json()).error, /HN Group IT/);
     assert.equal((await fetch(staffBase + '/api/logins', { headers: { Cookie: portal } })).status, 403);
     // The real staff directory websites use (Contracts' "Who signs") answers, with legal names (the user's report,
     // 6 November 2026: "The staff list is unavailable").
@@ -149,12 +158,14 @@ test('sign-in accounts: made on HN Account, several profiles with a default, own
     assert.match(again.headers.get('location'), /^\/auth\/login\?return=/, 'a used ticket falls back to signing in, to the same place');
     for (const route of ['/jobs', '/jobs', '/employees', '/jobs']) {
       const page = await fetch(staffBase + route, { headers: { Cookie: portal }, redirect: 'manual' });
-      assert.equal(page.status, 200, 'portal navigation and refresh preserve the session: ' + route);
+      assert.equal(page.status, 302, 'migrated People tools redirect to HR: ' + route);
+      assert.equal(page.headers.get('location'), 'https://hr.hngroup.org.uk' + route);
+      assert.equal((await fetch(staffBase + '/home', { headers: { Cookie: portal }, redirect: 'manual' })).status, 200, 'portal sign-in still survives navigation');
     }
     const odd = await (await fetch(staffBase + '/api/accounts-handoff', { method: 'POST', headers: { Cookie: portal, 'Content-Type': 'application/json' }, body: JSON.stringify({ next: 'https://evil.example/' }) })).json();
     assert.equal(new URL(odd.url).searchParams.get('return'), '/#overview', 'only places on HN Account');
     assert.equal((await fetch(staffBase + '/api/auth/accounts-handoff', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ticket: 'a'.repeat(64) }) })).status === 200, false, 'the swap needs the service secret');
-    // ...but HN Account can, for a staff record (its own account) or as a separate account.
+    // ...but HN Group IT can, for a staff record (its own account) or as a separate account.
     const niaOwn = await admin.post('/api/employees/' + nia.id + '/account', {});
     assert.equal(niaOwn.status, 200); assert.equal((await niaOwn.json()).username, 'nia.test@hngroup.org.uk');
 
@@ -175,6 +186,8 @@ test('sign-in accounts: made on HN Account, several profiles with a default, own
     assert.equal(signed.user.profiles.length, 2);
     assert.equal(signed.user.profiles.find((p) => p.default).key, samNetwork.key);
     assert.equal(signed.user.company, 'Horizon Network', 'starts as the default profile');
+    assert.equal(signed.user.mainCompany,'HN Group');
+    assert.equal(require('../brand/web/hn-staff-brand').resolve(signed.user).name,'Horizon Network','brand follows the selected Auth company rather than the staff record main company');
     assert.equal(signed.user.id, samNetwork.profileId);
     assert.equal(signed.user.jobTitle, 'Network engineer');
     assert.deepEqual(signed.user.companies, ['Horizon Network']);
@@ -190,6 +203,7 @@ test('sign-in accounts: made on HN Account, several profiles with a default, own
     let chosen = await authPost('/api/profile/select', { key: adaGroup.key }, signed.session);
     assert.equal(chosen.status, 200);
     let user = (await chosen.json()).user;
+    assert.equal(require('../brand/web/hn-staff-brand').resolve(user).name,'HN Group','switching Auth profiles changes the brand with it');
     assert.equal(user.id, ada.id); assert.equal(user.displayName, 'Ada Test'); assert.equal(user.statusAdminAllowed, false); assert.equal(user.ownerAccess, false);
     assert.equal((await authPost('/api/profile/select', { key: 'f'.repeat(16) + ':' + 'a'.repeat(8) }, signed.session)).status, 400, 'only its own profiles');
     // The chosen profile is what applications get.
