@@ -1481,7 +1481,7 @@ enum Snapshots {
             for (name, model, size, _) in pages {
                 shoot(MainView().environmentObject(model), size: size, dark: dark, to: folder.appendingPathComponent("\(name)-\(dark ? "dark" : "light").png"))
             }
-            shoot(WorkspaceAccountPanel().environmentObject(sample()), size: CGSize(width: 320, height: 390), dark: dark, to: folder.appendingPathComponent("workspace-account-\(dark ? "dark" : "light").png"))
+            shoot(WorkspaceAccountPanel().environmentObject(sample()), size: CGSize(width: 320, height: 470), dark: dark, to: folder.appendingPathComponent("workspace-account-\(dark ? "dark" : "light").png"))
             let menuModel = sample()
             shoot(MenuView().environmentObject(menuModel), size: CGSize(width: 320, height: 290), dark: dark, to: folder.appendingPathComponent("menu-\(dark ? "dark" : "light").png"))
             let pinMenu = askingForPin(sample(connected: false))
