@@ -4,7 +4,7 @@ import ServiceManagement
 import Darwin
 
 /// HN Secure Access Terminal for HN Group staff: the HN Group VPN (a private link to the server) and
-/// SSH to the server, in a full app window with a shield in the menu bar for quick access.
+/// SSH to the server, in a full app window with its terminal mark in the menu bar for quick access.
 @main
 struct HNGroupVPNApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
@@ -68,7 +68,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Task { @MainActor in await VPNModel.shared.completeSignIn(url) }
         }
     }
-    // Closing the window keeps the VPN (and the menu bar shield) running.
+    // Closing the window keeps the VPN (and the menu bar icon) running.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 }
 
@@ -391,64 +391,148 @@ struct SignedInView: View {
     }
 }
 
+/// Metrics and structure mirror portal-ui.css: brand, workspace navigation, and account footer.
 struct Sidebar: View {
     @EnvironmentObject var model: VPNModel
     @Namespace private var selection
+    @State private var accountOpen = false
+    @State private var accountHover = false
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HNWordmark(height: 38)
-                .padding(.horizontal, 10).padding(.top, 48).padding(.bottom, 26)
-
-            Text("MENU").font(Theme.font(10, .heavy)).tracking(1.2).foregroundStyle(Theme.muted.opacity(0.8)).padding(.horizontal, 12).padding(.bottom, 4)
-            NavItem(icon: "power", title: "Connection", section: .connection, selection: selection)
-            NavItem(icon: "terminal", title: "SSH", section: .ssh, selection: selection)
-            NavItem(icon: "person.crop.circle", title: "Profile", section: .profile, selection: selection)
-            NavItem(icon: "gearshape", title: "Settings", section: .settings, selection: selection, dot: model.update != nil)
-
-            Spacer()
-
-            // Live status, always visible.
-            HStack(spacing: 10) {
-                ZStack {
-                    Circle().fill((model.connected ? Theme.green : Theme.muted).opacity(0.2)).frame(width: 22, height: 22)
-                    Circle().fill(model.connected ? Theme.green : Theme.muted.opacity(0.6)).frame(width: 8, height: 8)
-                }
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(model.connected ? "Protected" : model.isSetUp ? "Not protected" : "Not set up yet").font(Theme.font(12, .bold))
-                    Text(model.connected ? (model.ip?.ip ?? "Through HN Group") : "VPN off").font(Theme.font(11)).foregroundStyle(Theme.muted).lineLimit(1)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(10)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.surface2))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.border.opacity(0.7)))
-            .padding(.bottom, 8)
-            .animation(.easeInOut(duration: 0.25), value: model.connected)
-
-            Button { model.show(.profile) } label: {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 15) {
+                HNWordmark(height: 43).frame(width: 126, alignment: .leading)
                 HStack(spacing: 10) {
-                    AvatarView(image: model.avatar, name: model.user?.displayName ?? "", size: 34)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(model.user?.displayName ?? "Signed in").font(Theme.font(13, .bold)).lineLimit(1)
-                        Text(model.user?.email ?? "").font(Theme.font(11)).foregroundStyle(Theme.muted).lineLimit(1).truncationMode(.middle)
-                    }
-                    Spacer(minLength: 0)
+                    Text("Secure Access workspace")
+                        .font(Theme.font(12, .bold)).tracking(0.36).foregroundStyle(Theme.muted)
+                    Circle().fill(Theme.pink).frame(width: 6, height: 6)
                 }
-                .padding(8)
-                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(model.section == .profile ? Theme.accentSoft : Color.clear))
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .help("Your VPN profile")
+            // Leave room for the native macOS window controls above the shared brand header.
+            .padding(.horizontal, 24).padding(.top, 48).padding(.bottom, 22)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("YOUR WORKSPACE")
+                        .font(Theme.font(9, .heavy)).tracking(1.26).foregroundStyle(Theme.muted)
+                        .padding(.horizontal, 11).padding(.bottom, 7)
+                    NavItem(icon: "power", title: "Connection", section: .connection, selection: selection)
+                    NavItem(icon: "terminal", title: "SSH", section: .ssh, selection: selection)
+                    NavItem(icon: "person.crop.circle", title: "Profile", section: .profile, selection: selection)
+                    NavItem(icon: "gearshape", title: "Settings", section: .settings, selection: selection, dot: model.update != nil)
+                }
+                .padding(.top, 12).padding(.bottom, 16)
+            }
+            .padding(.horizontal, 13)
+
+            VStack(spacing: 10) {
+                HStack(spacing: 7) {
+                    Circle().fill(model.connected ? Theme.green : Theme.muted).frame(width: 6, height: 6)
+                    Text(model.connected ? "Protected" : model.isSetUp ? "Not protected" : "Not set up yet")
+                        .font(Theme.font(10, .semibold))
+                    Spacer()
+                    Text(model.connected ? "VPN on" : "VPN off").font(Theme.font(9))
+                }
+                .foregroundStyle(Theme.muted).padding(.horizontal, 8)
+                Button { accountOpen.toggle() } label: {
+                    HStack(spacing: 10) {
+                        AvatarView(image: model.avatar, name: model.user?.displayName ?? "", size: 30)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(model.user?.displayName ?? "Signed in").font(Theme.font(11, .bold))
+                                .foregroundStyle(Theme.text).lineLimit(1)
+                            Text("Your account").font(Theme.font(9)).foregroundStyle(Theme.muted)
+                        }
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.down").font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Theme.muted).rotationEffect(.degrees(accountOpen ? 180 : 0))
+                    }
+                    .padding(8).frame(minHeight: 50)
+                    .background(RoundedRectangle(cornerRadius: 10).fill(accountOpen || accountHover ? Theme.surface2 : Color.clear))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain).onHover { accountHover = $0 }
+                .accessibilityLabel("Your account")
+                .accessibilityValue(accountOpen ? "Expanded" : "Collapsed")
+                .popover(isPresented: $accountOpen, arrowEdge: .trailing) {
+                    WorkspaceAccountPanel { accountOpen = false }.environmentObject(model)
+                }
+            }
+            .padding(.horizontal, 13).padding(.vertical, 10)
+            .overlay(alignment: .top) { Rectangle().fill(Theme.border).frame(height: 1) }
         }
-        .padding(12)
-        .frame(width: 232)
-        .background(Theme.sidebar)
+        .frame(width: 238)
+        .background(Theme.surface)
+        .animation(.easeOut(duration: 0.18), value: accountOpen)
+    }
+}
+
+/// The compact account panel shared by the HN workspaces, with native popover dismissal.
+struct WorkspaceAccountPanel: View {
+    @EnvironmentObject var model: VPNModel
+    var close: () -> Void = {}
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("YOUR ACCOUNT").font(Theme.font(10, .bold)).tracking(0.9)
+                .foregroundStyle(Theme.muted).padding(.horizontal, 10).padding(.bottom, 8)
+            Text(model.user?.email ?? "").font(Theme.font(12)).foregroundStyle(Theme.muted)
+                .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 10).padding(.bottom, 18)
+            HStack(spacing: 8) {
+                Circle().fill(model.connected ? Theme.green : Theme.muted).frame(width: 7, height: 7)
+                Text(model.connected ? "VPN connected" : "VPN disconnected").font(Theme.font(12, .semibold))
+                Spacer()
+            }
+            .foregroundStyle(Theme.text).padding(14)
+            .background(RoundedRectangle(cornerRadius: 10).fill(Theme.surface2))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.border))
+            .padding(.bottom, 14)
+            WorkspaceAccountAction(icon: "person", title: "HN Account", external: true) {
+                close(); NSWorkspace.shared.open(URL(string: "https://accounts.hngroup.org.uk")!)
+            }
+            WorkspaceAccountAction(icon: "person.crop.circle", title: "Profile") { close(); model.show(.profile) }
+            WorkspaceAccountAction(icon: "gearshape", title: "Settings") { close(); model.show(.settings) }
+            WorkspaceAccountAction(icon: "rectangle.portrait.and.arrow.right", title: "Sign out") {
+                close(); Task { await model.signOut() }
+            }
+            .disabled(model.busy)
+            Rectangle().fill(Theme.border).frame(height: 1).padding(.top, 8).padding(.bottom, 12)
+            WorkspaceAccountAction(icon: nil, title: "Explore all HN sites", external: true, small: true) {
+                close(); NSWorkspace.shared.open(URL(string: "https://sites.hngroup.org.uk")!)
+            }
+        }
+        .padding(.horizontal, 12).padding(.top, 18).padding(.bottom, 12)
+        .frame(width: 320).background(Theme.surface)
+    }
+}
+
+struct WorkspaceAccountAction: View {
+    let icon: String?
+    let title: String
+    var external = false
+    var small = false
+    let action: () -> Void
+    @State private var hover = false
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 11) {
+                if let icon = icon {
+                    Image(systemName: icon).font(.system(size: 16)).frame(width: 18).opacity(0.8)
+                }
+                Text(title).font(Theme.font(small ? 11 : 12, small ? .regular : .semibold))
+                Spacer()
+                if external { Image(systemName: "arrow.up.right").font(.system(size: 12)).opacity(0.65) }
+            }
+            .foregroundStyle(hover ? Theme.text : Theme.muted)
+            .padding(10).frame(minHeight: small ? 34 : 42)
+            .background(RoundedRectangle(cornerRadius: 9).fill(hover ? Theme.surface2 : Color.clear))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain).onHover { hover = $0 }
     }
 }
 
 struct NavItem: View {
     @EnvironmentObject var model: VPNModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let icon: String
     let title: String
     let section: VPNModel.Section
@@ -457,28 +541,28 @@ struct NavItem: View {
     @State private var hover = false
     var body: some View {
         let selected = model.section == section
-        Button { withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) { model.show(section) } } label: {
-            HStack(spacing: 12) {
-                Image(systemName: icon).font(.system(size: 14, weight: .semibold)).frame(width: 20)
-                Text(title).font(Theme.font(14, selected ? .bold : .medium))
+        Button { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) { model.show(section) } } label: {
+            HStack(spacing: 11) {
+                Image(systemName: icon).font(.system(size: 16)).frame(width: 16).opacity(selected ? 1 : 0.8)
+                Text(title).font(Theme.font(11, selected ? .bold : .semibold))
                 Spacer()
-                if dot { Circle().fill(Theme.pink).frame(width: 8, height: 8) }
+                if dot { Circle().fill(Theme.pink).frame(width: 6, height: 6) }
             }
-            .foregroundStyle(selected ? Theme.accent : Theme.text.opacity(hover ? 1 : 0.85))
-            .padding(.horizontal, 12).padding(.vertical, 9)
+            .foregroundStyle(selected ? Theme.accent : hover ? Theme.text : Theme.muted)
+            .padding(.horizontal, 11).padding(.vertical, 7).frame(minHeight: 34)
             .background {
                 if selected {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.accentSoft)
-                        .overlay(alignment: .leading) { Capsule().fill(Theme.accent).frame(width: 3, height: 16).padding(.leading, 2) }
+                    RoundedRectangle(cornerRadius: 9).fill(Theme.accentSoft)
+                        .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Theme.accent.opacity(0.2)))
                         .matchedGeometryEffect(id: "selection", in: selection)
                 } else if hover {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.text.opacity(0.05))
+                    RoundedRectangle(cornerRadius: 9).fill(Theme.surface2)
                 }
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .onHover { hover = $0 }
+        .buttonStyle(.plain).onHover { hover = $0 }
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 }
 
@@ -1397,6 +1481,7 @@ enum Snapshots {
             for (name, model, size, _) in pages {
                 shoot(MainView().environmentObject(model), size: size, dark: dark, to: folder.appendingPathComponent("\(name)-\(dark ? "dark" : "light").png"))
             }
+            shoot(WorkspaceAccountPanel().environmentObject(sample()), size: CGSize(width: 320, height: 390), dark: dark, to: folder.appendingPathComponent("workspace-account-\(dark ? "dark" : "light").png"))
             let menuModel = sample()
             shoot(MenuView().environmentObject(menuModel), size: CGSize(width: 320, height: 290), dark: dark, to: folder.appendingPathComponent("menu-\(dark ? "dark" : "light").png"))
             let pinMenu = askingForPin(sample(connected: false))
