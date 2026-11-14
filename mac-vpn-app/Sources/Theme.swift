@@ -16,14 +16,15 @@ enum Theme {
     static let navy = Color(hex: 0x1C2135)
 
     // Surfaces and text, matching the staff portal in light and dark.
-    static let background = Color.dynamic(light: 0xF6F4FA, dark: 0x0E1020)
-    static let surface = Color.dynamic(light: 0xFFFFFF, dark: 0x161A2E)
-    static let surface2 = Color.dynamic(light: 0xF8F7FB, dark: 0x1C2138)
-    static let text = Color.dynamic(light: 0x1B1A21, dark: 0xECEBF4)
-    static let muted = Color.dynamic(light: 0x5E6070, dark: 0xA4A7BA)
-    static let border = Color.dynamic(light: 0xE2DDEB, dark: 0x2A2F4A)
-    static let accent = Color.dynamic(light: 0x5514B4, dark: 0xB794F6)
-    static let accentSoft = Color.dynamic(light: 0xEEE6FA, dark: 0x2A2350)
+    static let background = Color.dynamic(light: 0xFAF8FD, dark: 0x100D1A)
+    static let sidebar = Color.dynamic(light: 0xF3EEFA, dark: 0x211A2E)
+    static let surface = Color.dynamic(light: 0xFFFFFF, dark: 0x211A2E)
+    static let surface2 = Color.dynamic(light: 0xEFE8F9, dark: 0x2B233C)
+    static let text = Color.dynamic(light: 0x1D1630, dark: 0xF4F0FD)
+    static let muted = Color.dynamic(light: 0x66597C, dark: 0xB3A6C5)
+    static let border = Color.dynamic(light: 0xE8E0F2, dark: 0x372D48)
+    static let accent = Color.dynamic(light: 0x6731AD, dark: 0xC3A2FF)
+    static let accentSoft = Color.dynamic(light: 0xEFE8F9, dark: 0x39304D)
     static let success = Color.dynamic(light: 0x2E7D4F, dark: 0x7CD3A0)
     static let danger = Color.dynamic(light: 0xB4234F, dark: 0xF28AA8)
 
@@ -109,18 +110,32 @@ struct Card<Content: View>: View {
     }
 }
 
-/// The window's native translucent material (used for the sidebar).
-struct VisualEffect: NSViewRepresentable {
-    var material: NSVisualEffectView.Material = .sidebar
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.material = material; view.blendingMode = .behindWindow; view.state = .followsWindowActiveState
-        return view
+/// The new terminal/lock mark, rendered as a native template for either menu-bar appearance.
+struct MenuBarMark: View {
+    let connected: Bool
+    let busy: Bool
+    private var image: NSImage? {
+        let name = connected ? "MenuBarConnectedTemplate" : "MenuBarTemplate"
+        guard let url = Bundle.main.url(forResource: name + "@2x", withExtension: "png"),
+              let image = NSImage(contentsOf: url) else { return nil }
+        image.size = NSSize(width: 22, height: 20)
+        image.isTemplate = true
+        return image
     }
-    func updateNSView(_ view: NSVisualEffectView, context: Context) { view.material = material }
+    var body: some View {
+        Group {
+            if let image = image {
+                Image(nsImage: image).renderingMode(.template)
+            } else {
+                Image(systemName: "terminal")
+            }
+        }
+        .frame(width: 22, height: 20)
+        .opacity(busy ? 0.6 : 1)
+    }
 }
 
-/// The HN Secure Access Terminal mark: a shield on the brand gradient.
+/// The HN Secure Access Terminal application mark.
 struct AppMark: View {
     var size: CGFloat = 34
     var body: some View {

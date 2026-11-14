@@ -20,6 +20,7 @@ BUILD=${BUILD_NUMBER:-${GITHUB_RUN_NUMBER:-$(git rev-list --count HEAD 2>/dev/nu
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" -c "Set :CFBundleVersion $BUILD" "$APP/Contents/Info.plist"
 echo "Version $VERSION (build $BUILD)"
 cp Resources/wordmark.png Resources/wordmark-white.png Resources/PlusJakartaSans.ttf Resources/AppIcon.png "$APP/Contents/Resources/"
+cp Resources/MenuBar*Template*.png "$APP/Contents/Resources/"
 install -m 755 Resources/hn-vpn-ctl "$APP/Contents/Resources/hn-vpn-ctl"
 # App icon from the 1024px artwork.
 ICONSET="$OUT/AppIcon.iconset"; mkdir -p "$ICONSET"

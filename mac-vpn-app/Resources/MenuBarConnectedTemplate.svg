@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 22" width="22" height="20" aria-label="HN Secure Access Terminal connected">
+<title>HN Secure Access Terminal menu bar mark, connected</title>
+<g fill="none" stroke="#000" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">
+<path d="M11.5 5H3.5A2 2 0 0 0 1.5 7V18.5A2 2 0 0 0 3.5 20.5H20.5A2 2 0 0 0 22.5 18.5V13"/>
+<path d="M5.1 10.1L8.2 13L5.1 15.9M11 14.3L13 16.3L16.5 12.8"/>
+<path d="M16 4.5V3.5A2.5 2.5 0 0 1 21 3.5V4.5"/>
+<rect x="14.5" y="4.5" width="8" height="7" rx="1.7"/>
+</g><circle cx="18.5" cy="7.8" r=".9" fill="#000"/>
+</svg>

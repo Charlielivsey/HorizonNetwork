@@ -18,6 +18,8 @@ jobs:
           lipo -archs "$APP/Contents/MacOS/HN Secure Network"
           codesign --verify --deep "$APP"
           plutil -lint "$APP/Contents/Info.plist"
+          test -s "$APP/Contents/Resources/MenuBarTemplate@2x.png"
+          test -s "$APP/Contents/Resources/MenuBarConnectedTemplate@2x.png"
           /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" -c "Print :CFBundleVersion" "$APP/Contents/Info.plist"
       - name: Screenshots of every screen (light and dark)
         run: |
