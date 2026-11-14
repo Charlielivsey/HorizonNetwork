@@ -453,6 +453,7 @@ final class VPNModel: ObservableObject {
     /// The password is handed to ssh once through a private, self-deleting askpass helper; it's never
     /// saved, put on a command line or shown.
     func openSSH(password: String) async {
+        guard !sshBusy else { return }
         let user = sshUser.trimmingCharacters(in: .whitespaces)
         guard user.range(of: "^[a-z_][a-z0-9_.-]{0,31}$", options: .regularExpression) != nil else { error = "Enter a valid username."; return }
         guard !password.isEmpty else { error = "Enter your password."; return }

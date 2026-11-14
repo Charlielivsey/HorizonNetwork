@@ -1183,7 +1183,10 @@ struct MenuView: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var gate = DeviceGate.shared
+    @State private var sshPrompt = false
+    @State private var sshPassword = ""
     static let width: CGFloat = 320
+    init(showSSH: Bool = false) { _sshPrompt = State(initialValue: showSSH) }
 
     var body: some View {
         // Not approved on devices.hngroup.org.uk: the menu only explains why, with the code to add this Mac.
@@ -1215,8 +1218,24 @@ struct MenuView: View {
                     .padding(.bottom, 2)
                 }
                 if model.stage == .ready && model.isSetUp {
-                    Button { open(.ssh) } label: { HStack(spacing: 8) { Image(systemName: "terminal"); Text("SSH to the server") } }
+                    Button { model.error = nil; sshPassword = ""; sshPrompt = true } label: { HStack(spacing: 8) { Image(systemName: "terminal"); Text("SSH to the server") } }
                         .buttonStyle(HNButtonStyle(primary: false, wide: true))
+                        .disabled(model.sshBusy || model.busy || model.pinRequest != nil)
+                    if sshPrompt {
+                        MenuSSHForm(password: $sshPassword, cancel: {
+                            sshPassword = ""; sshPrompt = false; model.error = nil
+                        }, submit: {
+                            let password = sshPassword
+                            sshPassword = ""
+                            Task {
+                                await model.openSSH(password: password)
+                                if model.error == nil { sshPrompt = false }
+                            }
+                        })
+                    } else if let error = model.error {
+                        Text(error).font(Theme.font(11)).foregroundStyle(Theme.danger)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 Button { open(nil) } label: { Text("Open Secure Access Terminal") }.buttonStyle(HNButtonStyle(wide: true))
             }
@@ -1235,6 +1254,13 @@ struct MenuView: View {
         .fixedSize(horizontal: false, vertical: true)
         .background(Theme.background)
         .foregroundStyle(Theme.text)
+        .onDisappear { sshPassword = ""; sshPrompt = false }
+        .onChange(of: model.stage) { stage in
+            if stage != .ready { sshPassword = ""; sshPrompt = false }
+        }
+        .onChange(of: gate.allowed) { allowed in
+            if !allowed { sshPassword = ""; sshPrompt = false }
+        }
     }
 
     /// The status: the HN Group logo, who's signed in, and a power switch with the connection details.
@@ -1302,6 +1328,57 @@ struct MenuView: View {
         if let section = section { model.show(section) }
         openWindow(id: "main")
         NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
+/// Password entry stays in the menu-bar window; opening SSH uses the existing secure askpass path.
+struct MenuSSHForm: View {
+    @EnvironmentObject var model: VPNModel
+    @Binding var password: String
+    var cancel: () -> Void
+    var submit: () -> Void
+    @FocusState private var passwordFocused: Bool
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Open SSH").font(Theme.font(14, .bold))
+            Text("Enter the server password. It is used once to open Terminal.")
+                .font(Theme.font(11)).foregroundStyle(Theme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Username").font(Theme.font(11, .semibold)).foregroundStyle(Theme.muted)
+                TextField("Username", text: $model.sshUser).textFieldStyle(.roundedBorder)
+                    .accessibilityLabel("SSH username")
+            }
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Password").font(Theme.font(11, .semibold)).foregroundStyle(Theme.muted)
+                SecureField("Server password", text: $password).textFieldStyle(.roundedBorder)
+                    .focused($passwordFocused).onSubmit { connect() }
+                    .accessibilityLabel("SSH server password")
+            }
+            if let error = model.error {
+                Text(error).font(Theme.font(11)).foregroundStyle(Theme.danger)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(spacing: 8) {
+                Button("Cancel", action: cancel).buttonStyle(HNButtonStyle(primary: false))
+                    .disabled(model.sshBusy)
+                Button(model.sshBusy ? "Opening…" : "Open SSH") { connect() }
+                    .buttonStyle(HNButtonStyle()).disabled(password.isEmpty || model.sshBusy || model.busy)
+            }
+            if !model.connected {
+                Text("Your VPN PIN will be requested here before connecting.")
+                    .font(Theme.font(10)).foregroundStyle(Theme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surface))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.border))
+        .onAppear { passwordFocused = true }
+    }
+    private func connect() {
+        guard !password.isEmpty, !model.sshBusy, !model.busy else { return }
+        submit()
     }
 }
 
@@ -1484,6 +1561,7 @@ enum Snapshots {
             shoot(WorkspaceAccountPanel().environmentObject(sample()), size: CGSize(width: 320, height: 470), dark: dark, to: folder.appendingPathComponent("workspace-account-\(dark ? "dark" : "light").png"))
             let menuModel = sample()
             shoot(MenuView().environmentObject(menuModel), size: CGSize(width: 320, height: 290), dark: dark, to: folder.appendingPathComponent("menu-\(dark ? "dark" : "light").png"))
+            shoot(MenuView(showSSH: true).environmentObject(sample()), size: CGSize(width: 320, height: 580), dark: dark, to: folder.appendingPathComponent("menu-ssh-\(dark ? "dark" : "light").png"))
             let pinMenu = askingForPin(sample(connected: false))
             shoot(MenuView().environmentObject(pinMenu), size: CGSize(width: 320, height: 300), dark: dark, to: folder.appendingPathComponent("menu-pin-\(dark ? "dark" : "light").png"))
         }
