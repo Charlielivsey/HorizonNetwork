@@ -1,6 +1,7 @@
 {
   "_note": "Every site HN Group Sites lists (sites.hngroup.org.uk). The page, its search and the live status dots come from this file. group: companies | staff | services. access: public | staff (any HN Group Auth account) | restricted (named people or a separate permission). Use logo (a file in public/assets/brand, without -white/.svg) for company logos, otherwise icon. Private pages that aren't meant to be found (old staff portal, evan) are never listed.",
   "sites": [
+    {"id": "appeals", "group": "services", "name": "HN Group Appeals", "url": "https://appeals.hngroup.org.uk/", "host": "appeals.hngroup.org.uk", "icon": "mail", "label": "Public", "access": "public", "desc": "Information and contact details for appealing an HN Group moderation decision.", "keywords": "appeals appeal moderation ban kick timeout review"},
     { "id": "hr", "group": "staff", "name": "HN Group HR", "url": "https://hr.hngroup.org.uk/", "host": "hr.hngroup.org.uk", "icon": "user", "label": "Staff", "access": "staff", "desc": "Annual leave, absence, supervisor approvals, additional days, return-to-work forms, TOIL and leave settings.", "keywords": "hr human resources leave annual holiday sickness absence balance" },
     { "id": "hngroup", "group": "companies", "name": "HN Group", "url": "https://hngroup.org.uk/", "host": "hngroup.org.uk", "logo": "hn-group-wordmark", "label": "The group", "access": "public", "wide": true,
       "desc": "Our group and its companies: who we are, what we do, careers and how to get in touch.", "keywords": "group home about contact" },

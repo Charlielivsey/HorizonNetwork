@@ -1,6 +1,7 @@
 'use strict';
 // Public destinations only. Shortcuts never grant sign-in or website permissions.
 const SITES=[
+ ['https://appeals.hngroup.org.uk/',['hn group appeals','hn appeals','appeals','appeal','moderation appeal']],
  ['https://finance.hngroup.org.uk/',['hn group finance','hn finance','finance','payroll','payslips','expenses','company funds','invoices','bills']],
  ['https://it.hngroup.org.uk/',['hn group it','hn it','it','technology','it support','it cases']],
  ['https://hr.hngroup.org.uk/',['hn group hr','hn hr','hr','human resources','leave','annual leave','holidays','absence']],

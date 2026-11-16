@@ -1,5 +1,14 @@
 [
   {
+    "id": "appeals",
+    "name": "HN Group Appeals",
+    "process": "hn-appeals",
+    "port": 5720,
+    "hosts": [
+      "appeals.hngroup.org.uk"
+    ]
+  },
+  {
     "id": "hr",
     "name": "HN Group HR",
     "process": "hn-hr",
