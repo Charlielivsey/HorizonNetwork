@@ -119,7 +119,11 @@ struct MainWindowRegistration: NSViewRepresentable {
     final class RegistrationView: NSView {
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
-            if let window = window { MainWindowPresence.shared.register(window) }
+            // The lifecycle runner registers its own real AppKit window, avoiding races with
+            // SwiftUI's automatically opened launch window on the shared Mac build host.
+            if !CommandLine.arguments.contains("--test-window-lifecycle"), let window = window {
+                MainWindowPresence.shared.register(window)
+            }
         }
     }
 }
