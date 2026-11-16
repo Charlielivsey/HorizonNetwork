@@ -318,37 +318,29 @@ struct WorkspaceAccountPanel: View {
     @EnvironmentObject var model: VPNModel
     var close: () -> Void = {}
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("YOUR ACCOUNT").font(Theme.font(10, .bold)).tracking(0.9)
-                .foregroundStyle(Theme.muted).padding(.horizontal, 10).padding(.bottom, 8)
-            Text(model.user?.email ?? "").font(Theme.font(12)).foregroundStyle(Theme.muted)
-                .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 10).padding(.bottom, 18)
-            HStack(spacing: 8) {
-                Circle().fill(model.connected ? Theme.green : Theme.muted).frame(width: 7, height: 7)
-                Text(model.connected ? "VPN connected" : "VPN disconnected").font(Theme.font(12, .semibold))
-                Spacer()
-            }
-            .foregroundStyle(Theme.text).padding(14)
-            .background(RoundedRectangle(cornerRadius: 10).fill(Theme.surface2))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.border))
-            .padding(.bottom, 14)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 11) {
+                AvatarView(image: model.avatar, name: model.user?.displayName ?? "", size: 36)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(model.user?.displayName ?? "Your account").font(Theme.font(13, .bold))
+                    Text(model.user?.email ?? "").font(Theme.font(10)).foregroundStyle(Theme.muted).lineLimit(1).truncationMode(.middle)
+                }
+                Spacer(minLength: 0)
+            }.padding(10).padding(.bottom, 6)
+            Rectangle().fill(Theme.border).frame(height: 1).padding(.horizontal, 10).padding(.bottom, 6)
+            WorkspaceAccountAction(icon: "person.crop.circle", title: "Profile") { close(); model.show(.profile) }
+            WorkspaceAccountAction(icon: "slider.horizontal.3", title: "Settings") { close(); model.show(.settings) }
             WorkspaceAccountAction(icon: "person", title: "HN Account", external: true) {
                 close(); NSWorkspace.shared.open(URL(string: "https://accounts.hngroup.org.uk")!)
             }
-            WorkspaceAccountAction(icon: "person.crop.circle", title: "Profile") { close(); model.show(.profile) }
-            WorkspaceAccountAction(icon: "gearshape", title: "Settings") { close(); model.show(.settings) }
             WorkspaceAccountAction(icon: "rectangle.portrait.and.arrow.right", title: "Sign out") {
                 close(); Task { await model.signOut() }
-            }
-            .disabled(model.busy)
-            Rectangle().fill(Theme.border).frame(height: 1).padding(.top, 8).padding(.bottom, 12)
-            WorkspaceAccountAction(icon: nil, title: "Explore all HN sites", external: true, small: true) {
+            }.disabled(model.busy)
+            Rectangle().fill(Theme.border).frame(height: 1).padding(.horizontal, 10).padding(.vertical, 6)
+            WorkspaceAccountAction(icon: "square.grid.2x2", title: "All HN sites", external: true, small: true) {
                 close(); NSWorkspace.shared.open(URL(string: "https://sites.hngroup.org.uk")!)
             }
-        }
-        .padding(.horizontal, 12).padding(.top, 18).padding(.bottom, 12)
-        .frame(width: 320).background(Theme.surface)
+        }.padding(8).frame(width: 288).background(Theme.surface)
     }
 }
 
@@ -370,7 +362,7 @@ struct WorkspaceAccountAction: View {
                 if external { Image(systemName: "arrow.up.right").font(.system(size: 12)).opacity(0.65) }
             }
             .foregroundStyle(hover ? Theme.text : Theme.muted)
-            .padding(10).frame(minHeight: small ? 34 : 42)
+            .padding(10).frame(minHeight: small ? 32 : 36)
             .background(RoundedRectangle(cornerRadius: 9).fill(hover ? Theme.surface2 : Color.clear))
             .contentShape(Rectangle())
         }
@@ -389,7 +381,7 @@ struct MenuView: View {
     @State private var sshPrompt = false
     @State private var sshPassword = ""
     static let width: CGFloat = 360
-    static let height: CGFloat = 456
+    static let height: CGFloat = 408
     init(showSSH: Bool = false) { _sshPrompt = State(initialValue: showSSH) }
 
     var body: some View {
@@ -447,27 +439,29 @@ struct MenuView: View {
                     AvatarView(image: model.avatar, name: user.displayName, size: 27)
                 }
             }
-            HStack(spacing: 13) {
-                Button { Task { await model.toggle() } } label: {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 16).fill(model.connected ? AnyShapeStyle(AccessDesign.fill) : AnyShapeStyle(Color.white.opacity(0.08)))
-                        RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(0.14))
-                        if model.busy { ProgressView().controlSize(.small).tint(.white) }
-                        else { Image(systemName: "power").font(.system(size: 22, weight: .medium)).foregroundStyle(.white) }
-                    }.frame(width: 52, height: 52)
-                }.buttonStyle(.plain)
-                    .disabled(model.busy || model.sshBusy || model.pinRequest != nil || model.stage != .ready || !model.isSetUp)
-                    .accessibilityLabel(model.connected ? "Disconnect VPN" : "Connect VPN")
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(model.busy ? "Please wait…" : model.connected ? "Connected." : "Ready to connect.")
-                        .font(Theme.font(21, .bold)).tracking(-0.5).foregroundStyle(.white)
-                    HStack(spacing: 5) {
-                        Circle().fill(model.connected ? Color(hex: 0x88DFC0) : .white.opacity(0.35)).frame(width: 5, height: 5)
-                        Text(model.connected ? "United Kingdom · HN Group" : "Your private HN connection")
-                            .font(Theme.font(10)).foregroundStyle(.white.opacity(0.55))
+            if !sshPrompt && model.pinRequest == nil {
+                HStack(spacing: 13) {
+                    Button { Task { await model.toggle() } } label: {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 16).fill(model.connected ? AnyShapeStyle(AccessDesign.fill) : AnyShapeStyle(Color.white.opacity(0.08)))
+                            RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(0.14))
+                            if model.busy { ProgressView().controlSize(.small).tint(.white) }
+                            else { Image(systemName: "power").font(.system(size: 22, weight: .medium)).foregroundStyle(.white) }
+                        }.frame(width: 52, height: 52)
+                    }.buttonStyle(.plain)
+                        .disabled(model.busy || model.sshBusy || model.pinRequest != nil || model.stage != .ready || !model.isSetUp)
+                        .accessibilityLabel(model.connected ? "Disconnect VPN" : "Connect VPN")
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(model.busy ? "Please wait…" : model.connected ? "Connected." : "Ready to connect.")
+                            .font(Theme.font(21, .bold)).tracking(-0.5).foregroundStyle(.white)
+                        HStack(spacing: 5) {
+                            Circle().fill(model.connected ? Color(hex: 0x88DFC0) : .white.opacity(0.35)).frame(width: 5, height: 5)
+                            Text(model.connected ? "United Kingdom · HN Group" : "Your private HN connection")
+                                .font(Theme.font(10)).foregroundStyle(.white.opacity(0.55))
+                        }
                     }
+                    Spacer(minLength: 0)
                 }
-                Spacer(minLength: 0)
             }
         }.padding(.horizontal, 20).padding(.vertical, 20)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -809,7 +803,7 @@ enum Snapshots {
             }
             shoot(AccessProfile(initialPanel: .sessions).environmentObject(sample()).padding(28).background(Theme.background).foregroundStyle(Theme.text), size: CGSize(width: 820, height: 520), dark: dark, to: folder.appendingPathComponent("profile-sessions-\(dark ? "dark" : "light").png"))
             shoot(AccessProfile(initialPanel: .activity).environmentObject(sample()).padding(28).background(Theme.background).foregroundStyle(Theme.text), size: CGSize(width: 820, height: 520), dark: dark, to: folder.appendingPathComponent("profile-activity-\(dark ? "dark" : "light").png"))
-            shoot(WorkspaceAccountPanel().environmentObject(sample()), size: CGSize(width: 320, height: 470), dark: dark, to: folder.appendingPathComponent("workspace-account-\(dark ? "dark" : "light").png"))
+            shoot(WorkspaceAccountPanel().environmentObject(sample()), size: CGSize(width: 288, height: 340), dark: dark, to: folder.appendingPathComponent("workspace-account-\(dark ? "dark" : "light").png"))
             let menuModel = sample()
             shoot(MenuView().environmentObject(menuModel), size: CGSize(width: MenuView.width, height: MenuView.height), dark: dark, to: folder.appendingPathComponent("menu-\(dark ? "dark" : "light").png"))
             shoot(MenuView(showSSH: true).environmentObject(sample()), size: CGSize(width: MenuView.width, height: MenuView.height), dark: dark, to: folder.appendingPathComponent("menu-ssh-\(dark ? "dark" : "light").png"))

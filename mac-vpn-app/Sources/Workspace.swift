@@ -73,7 +73,7 @@ struct AccessRail: View {
                 AvatarView(image: model.avatar, name: model.user?.displayName ?? "", size: 31)
                     .overlay(Circle().strokeBorder(Theme.border))
             }.buttonStyle(.plain).help("Your account")
-                .popover(isPresented: $account, arrowEdge: .trailing) { WorkspaceAccountPanel().environmentObject(model) }
+                .popover(isPresented: $account, arrowEdge: .trailing) { WorkspaceAccountPanel(close: { account = false }).environmentObject(model) }
         }.padding(.top, 22).padding(.bottom, 18).frame(width: 76)
             .background(Theme.sidebar.opacity(0.45))
             .overlay(alignment: .trailing) { Rectangle().fill(AccessDesign.line).frame(width: 1) }
@@ -157,7 +157,7 @@ struct AccessConnection: View {
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 5) {
                     Text("Your connection").font(Theme.font(23, .bold)).tracking(-0.6)
-                    Text("A little closer to your network.").font(Theme.font(12)).foregroundStyle(Theme.muted)
+                    Text("Private access to HN Group.").font(Theme.font(12)).foregroundStyle(Theme.muted)
                 }
                 Spacer()
                 Label("United Kingdom", systemImage: "globe.europe.africa").font(Theme.font(11, .semibold)).foregroundStyle(Theme.muted)
@@ -165,7 +165,7 @@ struct AccessConnection: View {
             if !model.isSetUp || !model.wireGuardInstalled { AccessSetup() }
             else {
                 HStack(spacing: 24) {
-                    AccessRouteArtwork(connected: model.connected).frame(maxWidth: .infinity).frame(height: 318)
+                    AccessRouteArtwork(connected: model.connected).frame(maxWidth: .infinity).frame(height: 304)
                     control.frame(width: 272)
                 }
                 HStack(spacing: 0) {
@@ -273,7 +273,7 @@ struct AccessSSH: View {
                     Text("Your server. One secure session away.").font(Theme.font(12)).foregroundStyle(Theme.muted)
                 }
                 Spacer()
-                Label(model.connected && model.serverReachable == true ? "Server available" : "VPN connection required", systemImage: "circle.fill")
+                Label(model.connected ? (model.serverReachable == true ? "Server available" : model.serverReachable == false ? "Server not responding" : "Checking server…") : "VPN required", systemImage: "circle.fill")
                     .font(Theme.font(10, .semibold)).foregroundStyle(model.connected && model.serverReachable == true ? Theme.success : Theme.muted)
             }
             HStack(alignment: .top, spacing: 26) {
