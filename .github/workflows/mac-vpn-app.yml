@@ -31,7 +31,7 @@ jobs:
           "$APP/Contents/MacOS/HN Secure Network" --snapshot "$PWD/mac-vpn-app/screenshots" &
           pid=$!; for i in $(seq 1 180); do kill -0 $pid 2>/dev/null || break; sleep 1; done; kill $pid 2>/dev/null || true
           wait "$pid"
-          for page in welcome connected disconnected setup ssh profile settings pin menu menu-ssh menu-pin; do
+          for page in welcome connected connected-small disconnected setup ssh ssh-small profile profile-sessions profile-activity settings pin menu menu-ssh menu-pin; do
             for appearance in dark light; do
               test -s "mac-vpn-app/screenshots/$page-$appearance.png"
             done

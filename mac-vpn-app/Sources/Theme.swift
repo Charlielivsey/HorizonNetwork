@@ -168,15 +168,12 @@ private struct HNButtonLabel: View {
     let wide: Bool
     @Environment(\.isEnabled) private var enabled
     var body: some View {
-        configuration.label
-            .font(Theme.font(12, .semibold))
-            .foregroundStyle(primary ? Theme.background : Theme.text)
-            .padding(.horizontal, 15).padding(.vertical, 10)
-            .frame(maxWidth: wide ? .infinity : nil, minHeight: 36)
-            .background(RoundedRectangle(cornerRadius: 10).fill(primary ? Theme.accent : Theme.surface2))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(primary ? Theme.accent : Theme.border))
-            .opacity(enabled ? (configuration.isPressed ? 0.75 : 1) : 0.45)
-            .contentShape(RoundedRectangle(cornerRadius: 10))
+        configuration.label.font(Theme.font(12, .semibold))
+            .foregroundStyle(primary ? Color.white : Theme.text)
+            .padding(.horizontal, 16).frame(maxWidth: wide ? .infinity : nil, minHeight: 40)
+            .background(RoundedRectangle(cornerRadius: 12).fill(primary ? AnyShapeStyle(AccessDesign.fill) : AnyShapeStyle(Theme.surface2)))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(primary ? Color.white.opacity(0.14) : Theme.border))
+            .opacity(enabled ? (configuration.isPressed ? 0.78 : 1) : 0.45)
     }
 }
 

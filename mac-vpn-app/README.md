@@ -57,3 +57,9 @@ The Connection, SSH, Profile, Settings, sign-in and setup screens use compact HN
 The red close button removes the app from the Dock while the menu-bar controls and VPN stay running. Open Secure Access Terminal from the menu bar or reopen the app to restore the main window and Dock icon. Quit still exits the app. VPN connections continue to require the HN Group PIN. SSH passwords are used once, cleared from the forms and never saved.
 
 Mac CI runs `--test-window-lifecycle` against real AppKit windows and captures every page in light/dark appearance. Tunnel connectivity still requires validation on a real connected Mac.
+
+### 3.1 Mac app presentation
+
+Replaces the website-style sidebar and card dashboard with a compact Mac app frame, navigation rail and integrated toolbar. A purpose-drawn private-route illustration and focused connection controls share the main screen. SSH has a dedicated terminal preview and credential form; Profile has Devices, Sign-ins and Activity tabs; Settings uses grouped preference rows. Matching actions, typography and menu-bar presentation retain the approved HN wordmark and palette.
+
+Every main screen is captured at the normal 980×680 window size; Connection and SSH also at the minimum 880×620. CI checks the profile tabs, both appearances and the existing Dock/menu-window lifecycle. VPN, identity, PIN, one-use password and updater behaviour are unchanged.

@@ -15,7 +15,7 @@ enum WindowLifecycleChecks {
         window.performClose(nil)
         try? await Task.sleep(nanoseconds: 200_000_000)
         precondition(!window.isVisible && NSApp.activationPolicy() == .accessory, "Red close must hide the Dock icon")
-        let menu = NSPanel(contentRect: NSRect(x: 100, y: 100, width: 352, height: 432),
+        let menu = NSPanel(contentRect: NSRect(x: 100, y: 100, width: MenuView.width, height: MenuView.height),
                            styleMask: [.borderless], backing: .buffered, defer: false)
         menu.isReleasedWhenClosed = false
         menu.contentView = MenuWindowAnchor.AnchorView(enabled: true)
