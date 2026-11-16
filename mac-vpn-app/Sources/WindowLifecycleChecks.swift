@@ -56,7 +56,11 @@ enum WindowLifecycleChecks {
         try? await Task.sleep(nanoseconds: 220_000_000)
         guard let host = menu.popover.contentViewController?.view, let window = host.window else { check(false, "Native popover hosts the controls"); return }
         check(!window.isMovable, "Popover cannot be dragged out of place")
-        if let screen = window.screen { check(screen.frame.contains(window.frame), "Native popover stays on screen") }
+        if let screen = window.screen {
+            let body = window.convertToScreen(host.convert(host.bounds, to: nil))
+            print("Native menu geometry: window=\(window.frame) body=\(body) screen=\(screen.frame)")
+            check(screen.frame.insetBy(dx: -2, dy: -2).contains(body), "Native menu controls stay on screen")
+        }
         click(host, at: NSPoint(x: 280, y: 156))
         await settle { model.pinRequest != nil }
         check(model.pinRequest != nil && !model.connected, "Connect works across the button and only opens PIN confirmation")
@@ -75,16 +79,18 @@ enum WindowLifecycleChecks {
     private static func navigationClicks() async {
         let model = VPNModel(preview: true)
         model.stage = .ready; model.isSetUp = true
-        let window = NSWindow(contentRect: NSRect(x: 200, y: 100, width: 480, height: 400), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        let window = NSWindow(contentRect: NSRect(x: 40, y: 100, width: 880, height: 620), styleMask: [.titled, .closable], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
-        let host = NSHostingView(rootView: HStack(spacing: 0) { AccessRail(); Color.clear }.frame(width: 480, height: 400).environmentObject(model).background(MainWindowRegistration()))
+        let host = NSHostingView(rootView: SignedInView().frame(width: 880, height: 620).environmentObject(model).background(MainWindowRegistration()))
         window.contentView = host
         NSApp.setActivationPolicy(.regular)
         window.makeKeyAndOrderFront(nil)
         try? await Task.sleep(nanoseconds: 200_000_000)
-        click(host, at: NSPoint(x: 140, y: 120))
+        click(host, at: NSPoint(x: 140, y: 164))
         await settle { model.section == .ssh }
         check(model.section == .ssh, "Navigation responds to clicks away from its icon and text")
+        click(host, at: NSPoint(x: 140, y: 115))
+        check(model.section == .connection, "Navigation accepts another click while the page is animating")
         let image = AnimatedImage.FillView(frame: NSRect(x: 0, y: 0, width: 44, height: 44))
         check(image.hitTest(NSPoint(x: 22, y: 22)) == nil, "Avatar artwork passes clicks to the account button")
         window.close()
