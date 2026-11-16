@@ -21,13 +21,21 @@ jobs:
           test -s "$APP/Contents/Resources/MenuBarTemplate@2x.png"
           test -s "$APP/Contents/Resources/MenuBarConnectedTemplate@2x.png"
           /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" -c "Print :CFBundleVersion" "$APP/Contents/Info.plist"
+      - name: Check red-close and menu-only Dock behaviour
+        run: '"mac-vpn-app/build/HN Secure Access Terminal.app/Contents/MacOS/HN Secure Network" --test-window-lifecycle'
+        timeout-minutes: 1
       - name: Screenshots of every screen (light and dark)
         run: |
           APP="mac-vpn-app/build/HN Secure Access Terminal.app"
           rm -rf mac-vpn-app/screenshots
           "$APP/Contents/MacOS/HN Secure Network" --snapshot "$PWD/mac-vpn-app/screenshots" &
           pid=$!; for i in $(seq 1 180); do kill -0 $pid 2>/dev/null || break; sleep 1; done; kill $pid 2>/dev/null || true
-          ls -la mac-vpn-app/screenshots || true
+          wait "$pid"
+          for page in welcome connected disconnected setup ssh profile settings pin menu menu-ssh menu-pin; do
+            for appearance in dark light; do
+              test -s "mac-vpn-app/screenshots/$page-$appearance.png"
+            done
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: HN-Secure-Network-macOS

@@ -40,7 +40,7 @@ enum Theme {
     static let heroOff = LinearGradient(colors: [Color(hex: 0x17152B), Color(hex: 0x100E22)], startPoint: .topLeading, endPoint: .bottomTrailing)
     /// The HN stripe's colours as a ring (for the connect orb).
     static let ring = AngularGradient(colors: [pink, purple, teal, green, yellow, raspberry, pink], center: .center)
-    static let radius: CGFloat = 18
+    static let radius: CGFloat = 14
 
     static func font(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
         .custom("Plus Jakarta Sans", size: size).weight(weight)
@@ -98,7 +98,7 @@ struct HNWordmark: View {
 
 /// A rounded HN card.
 struct Card<Content: View>: View {
-    var padding: CGFloat = 22
+    var padding: CGFloat = 18
     @ViewBuilder var content: Content
     var body: some View {
         VStack(alignment: .leading, spacing: 0) { content }
@@ -106,7 +106,6 @@ struct Card<Content: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous).fill(Theme.surface))
             .overlay(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous).strokeBorder(Theme.border.opacity(0.8)))
-            .shadow(color: Color.black.opacity(0.05), radius: 10, y: 4)
     }
 }
 
@@ -168,25 +167,16 @@ private struct HNButtonLabel: View {
     let primary: Bool
     let wide: Bool
     @Environment(\.isEnabled) private var enabled
-    @State private var hover = false
     var body: some View {
         configuration.label
-            .font(Theme.font(13.5, .bold))
-            .foregroundStyle(primary ? Color.white : Theme.text)
-            .padding(.horizontal, 18).padding(.vertical, 10)
-            .frame(maxWidth: wide ? .infinity : nil)
-            .background(
-                Capsule().fill(primary ? AnyShapeStyle(Theme.brand) : AnyShapeStyle(configuration.isPressed ? Theme.accentSoft : hover ? Theme.surface2 : Theme.surface))
-            )
-            .overlay(Capsule().strokeBorder(primary ? Color.white.opacity(0.14) : Theme.border, lineWidth: 1))
-            .shadow(color: primary && enabled ? Theme.purple.opacity(hover ? 0.4 : 0.25) : .clear, radius: hover ? 12 : 8, y: 4)
-            .brightness(primary && hover && enabled ? 0.05 : 0)
-            .opacity(enabled ? 1 : 0.5)
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
-            .animation(.easeOut(duration: 0.15), value: hover)
-            .contentShape(Capsule())
-            .onHover { hover = $0 }
+            .font(Theme.font(12, .semibold))
+            .foregroundStyle(primary ? Theme.background : Theme.text)
+            .padding(.horizontal, 15).padding(.vertical, 10)
+            .frame(maxWidth: wide ? .infinity : nil, minHeight: 36)
+            .background(RoundedRectangle(cornerRadius: 10).fill(primary ? Theme.accent : Theme.surface2))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(primary ? Theme.accent : Theme.border))
+            .opacity(enabled ? (configuration.isPressed ? 0.75 : 1) : 0.45)
+            .contentShape(RoundedRectangle(cornerRadius: 10))
     }
 }
 

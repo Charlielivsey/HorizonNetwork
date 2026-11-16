@@ -49,3 +49,11 @@ build number. The app checks vpn.hngroup.org.uk for a newer build when it starts
 and signature, swaps it in place and reopens the app: there's no need to download it again from the
 website. To release a new version, bump `VERSION` and push; CI builds and publishes it, and the VPS
 update command makes it available.
+
+### 3.0 Mac workspace redesign
+
+The Connection, SSH, Profile, Settings, sign-in and setup screens use compact HN staff-theme cards and flat actions. The fixed-size menu panel switches between connection controls, SSH and the VPN PIN without resizing; it remains beneath the menu bar. Connection labels report WireGuard state and SSH reachability, rather than treating the VPN website’s source IP as proof of an Internet exit address.
+
+The red close button removes the app from the Dock while the menu-bar controls and VPN stay running. Open Secure Access Terminal from the menu bar or reopen the app to restore the main window and Dock icon. Quit still exits the app. VPN connections continue to require the HN Group PIN. SSH passwords are used once, cleared from the forms and never saved.
+
+Mac CI runs `--test-window-lifecycle` against real AppKit windows and captures every page in light/dark appearance. Tunnel connectivity still requires validation on a real connected Mac.

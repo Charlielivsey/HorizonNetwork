@@ -59,17 +59,69 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 Darwin.exit(1)
             }
         }
+        if args.contains("--test-window-lifecycle") {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                await WindowLifecycleChecks.run()
+                NSApp.terminate(nil)
+            }
+        }
         if let i = args.firstIndex(of: "--snapshot"), i + 1 < args.count {
             Task { @MainActor in Snapshots.render(to: URL(fileURLWithPath: args[i + 1])); NSApp.terminate(nil) }
         }
     }
     func application(_ application: NSApplication, open urls: [URL]) {
+        MainWindowPresence.shared.reopen()
         for url in urls {
             Task { @MainActor in await VPNModel.shared.completeSignIn(url) }
         }
     }
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        MainWindowPresence.shared.reopen()
+        return false
+    }
     // Closing the window keeps the VPN (and the menu bar icon) running.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+}
+
+/// Main-window visibility owns Dock presence; menu panels and temporary SSH windows do not.
+@MainActor
+final class MainWindowPresence {
+    static let shared = MainWindowPresence()
+    private weak var mainWindow: NSWindow?
+    private var observers: [NSObjectProtocol] = []
+    func register(_ window: NSWindow) {
+        guard mainWindow !== window else { return }
+        observers.forEach { NotificationCenter.default.removeObserver($0) }
+        mainWindow = window
+        window.isReleasedWhenClosed = false
+        observers = [
+            NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
+                DispatchQueue.main.async {
+                    guard let window = self?.mainWindow, !window.isVisible else { return }
+                    NSApp.setActivationPolicy(.accessory)
+                }
+            },
+            NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: window, queue: .main) { _ in
+                NSApp.setActivationPolicy(.regular)
+            }
+        ]
+    }
+    func reopen() {
+        NSApp.setActivationPolicy(.regular)
+        mainWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+}
+struct MainWindowRegistration: NSViewRepresentable {
+    func makeNSView(context: Context) -> RegistrationView { RegistrationView() }
+    func updateNSView(_ view: RegistrationView, context: Context) {}
+    final class RegistrationView: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if let window = window { MainWindowPresence.shared.register(window) }
+        }
+    }
 }
 
 // MARK: - Shared pieces
@@ -202,116 +254,47 @@ struct MainView: View {
         .animation(reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.34, dampingFraction: 0.86), value: model.pinRequest)
         .frame(minWidth: 900, minHeight: 620)
         .background(Theme.background)
+        .background(MainWindowRegistration())
         .font(Theme.font(14))
         .foregroundStyle(Theme.text)
         .ignoresSafeArea(.container, edges: .top)
     }
 }
 
-/// The animated connect orb: HN stripe colours turning around a glass button.
-struct Orb: View {
-    let on: Bool
-    let busy: Bool
-    var size: CGFloat = 200
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var spin = false
-    @State private var breathe = false
-    var body: some View {
-        ZStack {
-            Glow(color: (on ? Theme.violet : Theme.purple).opacity(on ? 0.6 : 0.22), size: size * 1.3)
-                .scaleEffect(breathe && on && !reduceMotion ? 1.12 : 0.92)
-            Circle().stroke(Color.white.opacity(0.06), lineWidth: 1).frame(width: size, height: size)
-            Circle().stroke(Color.white.opacity(on ? 0.09 : 0.05), lineWidth: 1).frame(width: size * 0.86, height: size * 0.86)
-            Circle().trim(from: 0, to: on || busy ? 1 : 0.0)
-                .stroke(Theme.ring, style: StrokeStyle(lineWidth: size * 0.035, lineCap: .round))
-                .frame(width: size * 0.74, height: size * 0.74)
-                .rotationEffect(.degrees(spin && !reduceMotion ? 360 : 0))
-                .opacity(on || busy ? 1 : 0)
-            Circle().stroke(Color.white.opacity(0.12), lineWidth: size * 0.035).frame(width: size * 0.74, height: size * 0.74).opacity(on || busy ? 0 : 1)
-            Circle().fill(on ? AnyShapeStyle(Theme.brand) : AnyShapeStyle(LinearGradient(colors: [Color(hex: 0x2A2650), Color(hex: 0x1A1736)], startPoint: .top, endPoint: .bottom)))
-                .frame(width: size * 0.6, height: size * 0.6)
-                .overlay(Circle().strokeBorder(Color.white.opacity(on ? 0.3 : 0.12), lineWidth: 1))
-                .overlay(Circle().fill(LinearGradient(colors: [Color.white.opacity(0.22), .clear], startPoint: .top, endPoint: .center)).padding(3))
-                .shadow(color: (on ? Theme.violet : Color.black).opacity(0.5), radius: size * 0.08, y: size * 0.04)
-            if busy { ProgressView().controlSize(.large).tint(.white) }
-            else { Image(systemName: "power").font(.system(size: size * 0.2, weight: .semibold)).foregroundStyle(on ? Color.white : Color.white.opacity(0.75)) }
-        }
-        .frame(width: size, height: size)
-        .animation(reduceMotion ? nil : .spring(response: 0.6, dampingFraction: 0.8), value: on)
-        .onAppear {
-            guard !reduceMotion else { return }
-            withAnimation(.linear(duration: 6).repeatForever(autoreverses: false)) { spin = true }
-            withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true)) { breathe = true }
-        }
-    }
-}
-
-/// Signed out: the HN orb on a night panel, and sign-in.
 struct WelcomeView: View {
     @EnvironmentObject var model: VPNModel
-
     var body: some View {
         HStack(spacing: 0) {
-            ZStack {
-                Theme.heroOn
-                Glow(color: Theme.pink.opacity(0.18), size: 260).offset(x: -90, y: -160)
-                Glow(color: Theme.teal.opacity(0.18), size: 240).offset(x: 110, y: 170)
-                VStack(spacing: 26) {
-                    Orb(on: true, busy: false, size: 220)
-                    VStack(spacing: 8) {
-                        Text("Private by default.").font(Theme.font(26, .heavy)).foregroundStyle(.white)
-                        Text("Encrypted. Fast. Yours.").font(Theme.font(15, .medium)).foregroundStyle(.white.opacity(0.65))
-                    }
-                }
-                VStack { Spacer(); HStack(spacing: 8) { Image(systemName: "checkmark.seal.fill"); Text("For HN Group staff") }.font(Theme.font(12, .semibold)).foregroundStyle(.white.opacity(0.6)).padding(.bottom, 26) }
-            }
-            .frame(width: 400)
-            .clipped()
-
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 24) {
+                HNWordmark(height: 34)
                 Spacer()
-                HNWordmark(height: 44)
-                if model.stage == .waiting {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack(spacing: 10) {
-                            ProgressView().controlSize(.small)
-                            Text("Finish signing in in your browser").font(Theme.font(26, .heavy)).tracking(-0.4)
-                        }
-                        Text("When HN Group Auth asks, allow your browser to open HN Secure Access Terminal. You’ll come straight back here.")
-                            .foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true).lineSpacing(3)
-                        HStack(spacing: 10) {
-                            Button("Open the sign-in page again") { model.signIn() }.buttonStyle(HNButtonStyle(primary: false))
-                            Button("Cancel") { model.cancelSignIn() }.buttonStyle(HNButtonStyle(primary: false))
-                        }
-                    }
-                    .transition(.opacity.combined(with: .offset(y: 8)))
-                } else {
-                    VStack(alignment: .leading, spacing: 14) {
-                        Text("Welcome back.").font(Theme.font(34, .heavy)).tracking(-0.8)
-                        Text("Send all of this Mac’s internet traffic through HN Group’s private VPN, and open SSH sessions to the server with just your password.")
-                            .foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true).lineSpacing(3)
-                        VStack(alignment: .leading, spacing: 12) {
-                            Feature(icon: "lock.fill", title: "Encrypted with WireGuard", text: "Modern, fast and audited.")
-                            Feature(icon: "globe.europe.africa.fill", title: "All your traffic, protected", text: "Through HN Group’s UK server.")
-                            Feature(icon: "terminal.fill", title: "SSH in one step", text: "Straight to the HN Group server.")
-                        }
-                        .padding(.vertical, 6)
-                        Button { model.signIn() } label: { HStack(spacing: 8) { Text("Sign in with HN Group Auth"); Image(systemName: "arrow.up.right") } }
-                            .buttonStyle(HNButtonStyle(wide: true))
-                            .keyboardShortcut(.defaultAction)
-                        Text("Your browser opens HN Group Auth. You’ll need your password and six-digit PIN.")
-                            .font(Theme.font(12)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
-                    }
-                    .transition(.opacity.combined(with: .offset(y: 8)))
-                }
-                if let error = model.error { Banner(kind: .error, icon: "exclamationmark.circle.fill", title: error) }
+                Image(systemName: "terminal.fill").font(.system(size: 38, weight: .medium)).foregroundStyle(Theme.accent)
+                Text("Your connection.\nYour workspace.").font(Theme.font(30, .bold)).tracking(-0.7)
+                Text("A private connection to HN Group’s network, with server access close at hand.")
+                    .font(Theme.font(14)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                HNStripe().frame(height: 3).padding(.top, 12)
                 Spacer()
-                Text(AppInfo.label).font(Theme.font(11)).foregroundStyle(Theme.muted)
+                Text("HN SECURE ACCESS TERMINAL").font(Theme.font(9, .bold)).tracking(1.3).foregroundStyle(Theme.muted)
             }
-            .padding(.horizontal, 54).padding(.vertical, 34)
-            .frame(maxWidth: 520, alignment: .leading)
-            .frame(maxWidth: .infinity)
-            .animation(.easeInOut(duration: 0.25), value: model.stage)
+            .padding(36).frame(width: 330).background(Theme.sidebar)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    PageTitle(eyebrow: "Get started", title: model.stage == .waiting ? "Continue in your browser" : "Welcome to Secure Access", text: model.stage == .waiting ? "Finish signing in with HN Group Auth, then allow your browser to return to this app." : "Sign in with your staff account to connect this Mac.")
+                    if model.stage == .waiting {
+                        HStack(spacing: 10) { ProgressView().controlSize(.small); Text("Waiting for sign-in…").font(Theme.font(13)).foregroundStyle(Theme.muted) }
+                        Button("Reopen sign-in page") { model.signIn() }.buttonStyle(HNButtonStyle(wide: true))
+                        Button("Cancel sign-in") { model.cancelSignIn() }.buttonStyle(.plain).foregroundStyle(Theme.muted)
+                    } else {
+                        Feature(icon: "lock.shield", title: "WireGuard VPN", text: "Connect to HN Group’s UK server.")
+                        Feature(icon: "terminal", title: "Direct SSH access", text: "Open Terminal with a one-use password.")
+                        Feature(icon: "menubar.rectangle", title: "Always within reach", text: "Close the window and keep working from the menu bar.")
+                        Button { model.signIn() } label: { Label("Sign in with HN Group Auth", systemImage: "arrow.up.right") }
+                            .buttonStyle(HNButtonStyle(wide: true)).keyboardShortcut(.defaultAction)
+                    }
+                    if let error = model.error { Banner(kind: .error, icon: "exclamationmark.circle", title: error) }
+                    Text(AppInfo.label).font(Theme.font(11)).foregroundStyle(Theme.muted)
+                }.padding(36).frame(maxWidth: 510)
+            }.frame(maxWidth: .infinity)
         }
     }
 }
@@ -341,7 +324,6 @@ struct SignedInView: View {
             Sidebar()
             Rectangle().fill(Theme.border.opacity(0.7)).frame(width: 1)
             ZStack(alignment: .topTrailing) {
-                Glow(color: Theme.violet.opacity(0.10), size: 420).offset(x: 140, y: -160).allowsHitTesting(false)
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
                         notices
@@ -354,12 +336,12 @@ struct SignedInView: View {
                             }
                         }
                         .id(model.section)
-                        .transition(reduceMotion ? .opacity : .asymmetric(insertion: .opacity.combined(with: .offset(y: 12)), removal: .opacity))
+                        .transition(.opacity)
                     }
-                    .padding(.horizontal, 36).padding(.top, 42).padding(.bottom, 32)
-                    .frame(maxWidth: 780, alignment: .leading)
+                    .padding(.horizontal, 28).padding(.top, 46).padding(.bottom, 28)
+                    .frame(maxWidth: 940, alignment: .leading)
                     .frame(maxWidth: .infinity)
-                    .animation(.easeOut(duration: 0.25), value: model.section)
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: model.section)
                 }
             }
         }
@@ -572,9 +554,9 @@ struct PageTitle: View {
     var text: String? = nil
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(eyebrow).font(Theme.font(11, .heavy)).tracking(1.4).textCase(.uppercase).foregroundStyle(Theme.accent)
-            Text(title).font(Theme.font(30, .heavy)).tracking(-0.6)
-            if let text = text { Text(text).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true) }
+            Text(eyebrow).font(Theme.font(9, .bold)).tracking(1.2).textCase(.uppercase).foregroundStyle(Theme.accent)
+            Text(title).font(Theme.font(25, .bold)).tracking(-0.5)
+            if let text = text { Text(text).font(Theme.font(13)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true) }
         }
         .padding(.bottom, 4)
     }
@@ -584,64 +566,51 @@ struct PageTitle: View {
 
 struct ConnectionPage: View {
     @EnvironmentObject var model: VPNModel
-    private var greeting: String {
-        let hour = Calendar.current.component(.hour, from: Date())
-        let part = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening"
-        return part + (model.user.map { ", " + ($0.displayName.split(separator: " ").first.map(String.init) ?? $0.displayName) } ?? "")
-    }
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            PageTitle(eyebrow: Date().formatted(.dateTime.weekday(.wide).day().month(.wide)), title: greeting)
+            PageTitle(eyebrow: "Your workspace", title: "Connection", text: "Your Mac’s link to the HN Group network.")
             if !model.wireGuardInstalled || !model.isSetUp {
                 SetupCard()
             } else {
                 ConnectCard()
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)], spacing: 14) {
-                    InfoTile(icon: "network", label: "Your traffic appears as", value: model.ip?.ip ?? "Checking…",
-                             note: model.ip.map { $0.viaVpn ? "HN Group VPN address" : "Your own connection" } ?? "", good: model.ip?.viaVpn == true)
-                    InfoTile(icon: "mappin.and.ellipse", label: "Location", value: model.connected ? "United Kingdom" : "Where you are",
-                             note: model.connected ? "HN Group's UK server" : "Connect to go through the UK", good: model.connected)
-                    InfoTile(icon: "server.rack", label: "HN Group server", value: VPNModel.serverAddress,
-                             note: !model.connected ? "Connect to reach it" : model.serverReachable == nil ? "Checking…" : model.serverReachable == true ? "Reachable for SSH" : "Not answering yet",
-                             good: model.serverReachable == true)
-                    InfoTile(icon: "laptopcomputer", label: "This Mac", value: model.deviceName ?? "—", note: "Its key never leaves this Mac")
+                HStack { Text("CONNECTION DETAILS").font(Theme.font(9, .bold)).tracking(1.2).foregroundStyle(Theme.muted); Spacer() }
+                    .padding(.top, 4)
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                    InfoTile(icon: "server.rack", label: "VPN server", value: "United Kingdom", note: VPNModel.serverAddress, good: model.connected)
+                    InfoTile(icon: "laptopcomputer", label: "This Mac", value: model.deviceName ?? "This device", note: "Private key stored on this Mac")
                 }
+                Card {
+                    HStack(spacing: 14) {
+                        Image(systemName: "terminal").font(.system(size: 21)).foregroundStyle(Theme.accent)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Server access").font(Theme.font(14, .bold))
+                            Text(model.connected ? (model.serverReachable == true ? "The server is ready for SSH." : model.serverReachable == false ? "The server is not responding yet." : "Checking server availability…") : "Connect to the VPN before opening a server session.")
+                                .font(Theme.font(12)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 10)
+                        Button("Open SSH") { model.show(.ssh) }.buttonStyle(HNButtonStyle(primary: false))
+                    }
+                }
+                Text("Closing this window keeps the VPN and menu-bar controls running.")
+                    .font(Theme.font(11)).foregroundStyle(Theme.muted)
             }
         }
     }
 }
 
-/// The two setup steps, with progress.
 struct SetupCard: View {
     @EnvironmentObject var model: VPNModel
     var body: some View {
-        let toolsDone = model.wireGuardInstalled
-        Card(padding: 28) {
-            VStack(alignment: .leading, spacing: 20) {
-                HStack(alignment: .center) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Badge(text: "Set up · step \(toolsDone ? 2 : 1) of 2")
-                        Text("Let’s get this Mac ready").font(Theme.font(24, .heavy)).tracking(-0.4)
-                    }
-                    Spacer()
-                    ZStack {
-                        Circle().stroke(Theme.border, lineWidth: 5)
-                        Circle().trim(from: 0, to: toolsDone ? 0.5 : 0.08).stroke(Theme.brand, style: StrokeStyle(lineWidth: 5, lineCap: .round)).rotationEffect(.degrees(-90))
-                        Text(toolsDone ? "1/2" : "0/2").font(Theme.font(12, .heavy))
-                    }
-                    .frame(width: 54, height: 54)
-                    .animation(.easeInOut(duration: 0.5), value: toolsDone)
+        Card {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack { SectionHeading(title: "Prepare this Mac", icon: "laptopcomputer"); Spacer(); Badge(text: model.wireGuardInstalled ? "Step 2 of 2" : "Step 1 of 2") }
+                StepRow(number: 1, done: model.wireGuardInstalled, active: !model.wireGuardInstalled, title: "Install WireGuard", text: "Install the VPN tools in Terminal, then return here.") {
+                    Button("Install tools") { model.installWireGuard() }.buttonStyle(HNButtonStyle())
                 }
-                StepRow(number: 1, done: toolsDone, active: !toolsDone, title: "Install the WireGuard tools",
-                        text: "The fast, secure open-source VPN behind Secure Access Terminal. This opens Terminal and installs it with Homebrew; come back here when it finishes.") {
-                    Button("Install WireGuard tools") { model.installWireGuard() }.buttonStyle(HNButtonStyle())
-                }
-                StepRow(number: 2, done: false, active: toolsDone, title: "Set up this Mac",
-                        text: "Registers this Mac with a key that never leaves it. While it’s on, all of this Mac’s traffic will use the VPN. macOS asks for your Mac password once.") {
+                StepRow(number: 2, done: false, active: model.wireGuardInstalled, title: "Register this Mac", text: "Create this Mac’s private connection. macOS will ask for your Mac password.") {
                     Button { Task { await model.setUp() } } label: {
                         HStack(spacing: 8) { if model.busy { ProgressView().controlSize(.small) }; Text(model.busy ? "Setting up…" : "Set up this Mac") }
-                    }
-                    .buttonStyle(HNButtonStyle()).disabled(model.busy || !toolsDone)
+                    }.buttonStyle(HNButtonStyle()).disabled(model.busy || !model.wireGuardInstalled)
                 }
             }
         }
@@ -680,82 +649,46 @@ struct StepRow<Action: View>: View {
 /// The hero: a night panel with the connect orb, status and a live timer.
 struct ConnectCard: View {
     @EnvironmentObject var model: VPNModel
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     var body: some View {
-        HStack(spacing: 28) {
-            Button { Task { await model.toggle() } } label: { Orb(on: model.connected, busy: model.busy, size: 184) }
-                .buttonStyle(.plain)
-                .disabled(model.busy)
-                .accessibilityLabel(model.connected ? "Disconnect" : "Connect")
-
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 8) {
-                    Circle().fill(model.connected ? Theme.green : Color.white.opacity(0.4)).frame(width: 8, height: 8)
-                        .shadow(color: model.connected ? Theme.green : .clear, radius: 6)
-                    Text(model.busy ? "WORKING…" : model.connected ? "PROTECTED" : "NOT PROTECTED").font(Theme.font(11, .heavy)).tracking(1.6)
+        VStack(alignment: .leading, spacing: 20) {
+            HStack(alignment: .top, spacing: 14) {
+                Image(systemName: model.connected ? "network.badge.shield.half.filled" : "network")
+                    .font(.system(size: 25, weight: .medium)).foregroundStyle(model.connected ? Theme.success : Theme.accent)
+                    .frame(width: 52, height: 52).background(RoundedRectangle(cornerRadius: 14).fill(Theme.surface2))
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(model.busy ? "Updating connection…" : model.connected ? "VPN connected" : "Ready to connect")
+                        .font(Theme.font(23, .bold)).tracking(-0.5)
+                    Text(model.connected ? "WireGuard is running on this Mac." : "Connect to HN Group’s United Kingdom server.")
+                        .font(Theme.font(13)).foregroundStyle(Theme.muted)
                 }
-                .foregroundStyle(Color.white.opacity(0.75))
-                .padding(.horizontal, 10).padding(.vertical, 5)
-                .background(Capsule().fill(Color.white.opacity(0.08)))
-                Text(model.connected ? "You’re protected" : "You’re not protected").font(Theme.font(30, .heavy)).tracking(-0.8).foregroundStyle(.white)
-                    .lineLimit(1).minimumScaleFactor(0.75)
-                Text(model.connected ? "All of this Mac’s internet traffic is encrypted and going through HN Group’s UK server." : "Turn on the VPN to encrypt all of this Mac’s traffic through HN Group’s UK server.")
-                    .foregroundStyle(Color.white.opacity(0.7)).fixedSize(horizontal: false, vertical: true).lineSpacing(2)
-                if model.connected, let since = model.connectedSince {
-                    TimelineView(.periodic(from: .now, by: 1)) { context in
-                        Label(Self.duration(context.date.timeIntervalSince(since)), systemImage: "clock")
-                            .font(Theme.font(13, .semibold).monospacedDigit()).foregroundStyle(Color.white.opacity(0.8))
-                    }
-                }
-                HStack(spacing: 10) {
-                    Button { Task { await model.toggle() } } label: { Text(model.connected ? "Disconnect" : "Connect") }
-                        .buttonStyle(HeroButtonStyle(filled: !model.connected))
-                        .disabled(model.busy)
-                    if model.connected {
-                        Button { model.show(.ssh) } label: { HStack(spacing: 7) { Image(systemName: "terminal"); Text("Open SSH") } }
-                            .buttonStyle(HeroButtonStyle(filled: false))
-                    }
-                }
-                .padding(.top, 6)
+                Spacer(minLength: 0)
+                Circle().fill(model.connected ? Theme.success : Theme.muted).frame(width: 8, height: 8).padding(.top, 8)
             }
-            Spacer(minLength: 0)
+            Rectangle().fill(Theme.border).frame(height: 1)
+            HStack(spacing: 14) {
+                VStack(alignment: .leading, spacing: 4) {
+                    if model.connected, let since = model.connectedSince {
+                        TimelineView(.periodic(from: .now, by: 1)) { context in
+                            Text(Self.duration(context.date.timeIntervalSince(since))).font(Theme.font(12, .semibold).monospacedDigit())
+                        }
+                    } else { Text("PIN required to connect").font(Theme.font(12, .semibold)) }
+                    Text(model.connected ? "You can manage your connection from the menu bar." : "Use your six-digit HN Group PIN.")
+                        .font(Theme.font(11)).foregroundStyle(Theme.muted)
+                }
+                Spacer(minLength: 8)
+                if model.busy { ProgressView().controlSize(.small) }
+                Button { Task { await model.toggle() } } label: {
+                    Label(model.connected ? "Disconnect" : "Connect VPN", systemImage: "power")
+                }.buttonStyle(HNButtonStyle(primary: !model.connected)).disabled(model.busy || model.sshBusy)
+            }
         }
-        .padding(28)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            ZStack {
-                RoundedRectangle(cornerRadius: 24, style: .continuous).fill(model.connected ? Theme.heroOn : Theme.heroOff)
-                Glow(color: Theme.pink.opacity(model.connected ? 0.22 : 0.06), size: 260).offset(x: 260, y: -90)
-                Glow(color: Theme.teal.opacity(model.connected ? 0.22 : 0.05), size: 220).offset(x: -220, y: 110)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        )
-        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Color.white.opacity(0.08)))
-        .shadow(color: (model.connected ? Theme.purple : Color.black).opacity(0.28), radius: 24, y: 12)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.45), value: model.connected)
+        .padding(22).background(RoundedRectangle(cornerRadius: 16).fill(Theme.surface))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.border))
+        .overlay(alignment: .top) { HNStripe().frame(height: 3).clipShape(RoundedRectangle(cornerRadius: 2)).padding(.horizontal, 22) }
     }
-
     static func duration(_ t: TimeInterval) -> String {
         let s = max(0, Int(t)); let h = s / 3600, m = (s % 3600) / 60, sec = s % 60
         return h > 0 ? String(format: "Connected for %d:%02d:%02d", h, m, sec) : String(format: "Connected for %02d:%02d", m, sec)
-    }
-}
-
-/// Buttons on the dark hero panel.
-struct HeroButtonStyle: ButtonStyle {
-    let filled: Bool
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(Theme.font(13.5, .bold))
-            .foregroundStyle(filled ? Theme.purple : Color.white)
-            .lineLimit(1).fixedSize()
-            .padding(.horizontal, 20).padding(.vertical, 11)
-            .background(Capsule().fill(filled ? Color.white : Color.white.opacity(configuration.isPressed ? 0.2 : 0.1)))
-            .overlay(Capsule().strokeBorder(Color.white.opacity(filled ? 0 : 0.2)))
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
-            .contentShape(Capsule())
     }
 }
 
@@ -781,8 +714,7 @@ struct InfoTile: View {
         .padding(16)
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.surface))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(hover ? Theme.accent.opacity(0.35) : Theme.border.opacity(0.8)))
-        .shadow(color: .black.opacity(hover ? 0.08 : 0.04), radius: hover ? 12 : 8, y: hover ? 6 : 3)
-        .offset(y: hover ? -2 : 0)
+
         .animation(.easeOut(duration: 0.18), value: hover)
         .onHover { hover = $0 }
     }
@@ -797,106 +729,62 @@ struct SSHPage: View {
     @State private var password = ""
     @FocusState private var focus: Field?
     enum Field { case user, password }
-
     private var ready: Bool { !model.sshBusy && !model.busy && !password.isEmpty && model.isSetUp }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            PageTitle(eyebrow: "SSH", title: "HN Group server", text: "Open a secure shell on the server, straight through the VPN.")
-
-            VStack(alignment: .leading, spacing: 0) {
-                // Title bar
-                HStack(spacing: 8) {
-                    HStack(spacing: 7) {
-                        Circle().fill(Color(hex: 0xFF5F57)); Circle().fill(Color(hex: 0xFEBC2E)); Circle().fill(Color(hex: 0x28C840))
+        VStack(alignment: .leading, spacing: 18) {
+            PageTitle(eyebrow: "Server access", title: "SSH", text: "Open a session on the HN Group server in Terminal.")
+            Card {
+                HStack(spacing: 12) {
+                    Image(systemName: "server.rack").font(.system(size: 22)).foregroundStyle(Theme.accent)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("HN Group server").font(Theme.font(14, .bold))
+                        Text(VPNModel.serverAddress + " · port 22").font(.system(size: 12, design: .monospaced)).foregroundStyle(Theme.muted)
                     }
-                    .frame(width: 54, height: 12)
                     Spacer()
-                    Image(systemName: "lock.fill").font(.system(size: 10, weight: .bold)).foregroundStyle(.white.opacity(0.4))
-                    Text("\(user)@\(VPNModel.serverAddress) — ssh").font(.system(size: 12, weight: .medium, design: .monospaced)).foregroundStyle(.white.opacity(0.55))
-                    Spacer()
-                    StatusPill(on: model.connected && model.serverReachable == true,
-                               text: !model.connected ? "VPN off" : model.serverReachable == true ? "Online" : model.serverReachable == false ? "Not answering" : "Checking")
+                    Badge(text: !model.connected ? "VPN required" : model.serverReachable == true ? "Available" : model.serverReachable == false ? "Unavailable" : "Checking", colour: model.serverReachable == true && model.connected ? Theme.success : Theme.muted)
                 }
-                .padding(.horizontal, 16).padding(.vertical, 12)
-                .background(Color.white.opacity(0.04))
-                .overlay(alignment: .bottom) { Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1) }
-
-                // Console
-                VStack(alignment: .leading, spacing: 14) {
-                    Group {
-                        Text("HN Secure Access Terminal · encrypted session through the HN Group VPN").foregroundColor(.white.opacity(0.35))
-                        HStack(spacing: 0) {
-                            Text("➜ ").foregroundColor(Theme.green)
-                            Text("ssh ").foregroundColor(.white.opacity(0.9))
-                            TextField("root", text: $model.sshUser)
-                                .textFieldStyle(.plain).foregroundColor(Color(hex: 0xC9B4FF))
-                                .disableAutocorrection(true)
-                                .focused($focus, equals: .user)
-                                .onSubmit { focus = .password }
-                                .fixedSize()
-                            Text("@\(VPNModel.serverAddress)").foregroundColor(Color(hex: 0xC9B4FF))
-                            Spacer(minLength: 0)
+            }
+            Card {
+                VStack(alignment: .leading, spacing: 18) {
+                    SectionHeading(title: "Start a session", icon: "terminal")
+                    HStack(alignment: .top, spacing: 14) {
+                        VStack(alignment: .leading, spacing: 7) {
+                            Text("Username").font(Theme.font(12, .semibold)).foregroundStyle(Theme.muted)
+                            TextField("root", text: $model.sshUser).textFieldStyle(.plain).disableAutocorrection(true)
+                                .focused($focus, equals: .user).onSubmit { focus = .password }
+                                .padding(12).background(RoundedRectangle(cornerRadius: 10).fill(Theme.background))
+                                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(focus == .user ? Theme.accent : Theme.border))
+                        }.frame(maxWidth: 180)
+                        VStack(alignment: .leading, spacing: 7) {
+                            Text("Server password").font(Theme.font(12, .semibold)).foregroundStyle(Theme.muted)
+                            SecureField("Enter password", text: $password).textFieldStyle(.plain)
+                                .focused($focus, equals: .password).onSubmit(go)
+                                .padding(12).background(RoundedRectangle(cornerRadius: 10).fill(Theme.background))
+                                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(focus == .password ? Theme.accent : Theme.border))
                         }
-                        HStack(spacing: 10) {
-                            Text("password:").foregroundColor(.white.opacity(0.55))
-                            SecureField("", text: $password)
-                                .textFieldStyle(.plain).foregroundColor(.white)
-                                .focused($focus, equals: .password)
-                                .onSubmit(go)
-                            if model.sshBusy { ProgressView().controlSize(.small).tint(.white) }
-                        }
-                        .padding(.horizontal, 12).padding(.vertical, 10)
-                        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(focus == .password ? 0.08 : 0.05)))
-                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(focus == .password ? Theme.violet.opacity(0.8) : Color.white.opacity(0.08)))
-                        .animation(.easeOut(duration: 0.15), value: focus)
                     }
-                    .font(.system(size: 14, design: .monospaced))
-
                     HStack(spacing: 12) {
-                        Button(action: go) {
-                            HStack(spacing: 8) {
-                                Text(model.connected ? "Open session" : "Connect & open session")
-                                Image(systemName: "return")
-                            }
-                        }
-                        .buttonStyle(HeroButtonStyle(filled: true))
-                        .keyboardShortcut(.defaultAction)
-                        .disabled(!ready)
-                        .opacity(ready ? 1 : 0.55)
-                        Text(model.isSetUp ? "Opens in Terminal" : "Set up this Mac on the Connection page first")
-                            .font(Theme.font(12, .medium)).foregroundStyle(model.isSetUp ? Color.white.opacity(0.45) : Theme.danger)
+                        Button(action: go) { Label(model.connected ? "Open SSH" : "Connect & open SSH", systemImage: "arrow.up.right") }
+                            .buttonStyle(HNButtonStyle()).keyboardShortcut(.defaultAction).disabled(!ready)
+                        if model.sshBusy { ProgressView().controlSize(.small) }
+                        Spacer()
                     }
-                    .padding(.top, 2)
+                    if !model.isSetUp {
+                        Button("Set up this Mac first") { model.show(.connection) }.buttonStyle(.plain).foregroundStyle(Theme.accent)
+                    } else if !model.connected {
+                        Text("You’ll be asked for your HN Group PIN before the VPN connects.").font(Theme.font(11)).foregroundStyle(Theme.muted)
+                    }
                 }
-                .padding(20)
             }
-            .background(
-                ZStack {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Theme.night)
-                    Glow(color: Theme.violet.opacity(0.16), size: 260).offset(x: 240, y: 60)
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-            )
-            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Color.white.opacity(0.09)))
-            .shadow(color: .black.opacity(0.28), radius: 22, y: 12)
-            .environment(\.colorScheme, .dark)
-
-            HStack(spacing: 10) {
-                Chip(icon: "lock.shield.fill", text: "Encrypted through the VPN")
-                Chip(icon: "key.slash", text: "Password never saved")
-                Chip(icon: "checkmark.seal.fill", text: "Server key remembered")
-            }
+            Feature(icon: "key.slash", title: "Used once, then cleared", text: "Your server password is never saved in the app. Terminal opens separately.")
+            Feature(icon: "checkmark.shield", title: "Server identity checked", text: "The SSH session remembers the server’s host key.")
         }
         .onAppear { focus = .password }
+        .onDisappear { password = "" }
     }
-
-    private var user: String { model.sshUser.trimmingCharacters(in: .whitespaces).isEmpty ? "root" : model.sshUser }
-
     private func go() {
         guard ready else { return }
-        let typed = password
-        password = ""
+        let typed = password; password = ""
         Task { await model.openSSH(password: typed) }
     }
 }
@@ -958,44 +846,19 @@ struct ProfilePage: View {
                           "device.add": "Added a device", "device.remove": "Removed a device", "mac-app.publish": "Published a Secure Access Terminal build"]
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            // Header card with the brand banner.
-            VStack(alignment: .leading, spacing: 0) {
-                ZStack {
-                    Theme.heroOn
-                    Glow(color: Theme.pink.opacity(0.28), size: 240).offset(x: 240, y: -30)
-                    Glow(color: Theme.teal.opacity(0.22), size: 200).offset(x: -60, y: 50)
-                }
-                .frame(height: 104)
-                .frame(maxWidth: .infinity)
-                .clipped()
-                HStack(alignment: .top, spacing: 20) {
-                    AvatarView(image: model.avatar, name: model.user?.displayName ?? "", size: 104)
-                        .padding(5)
-                        .background(Circle().fill(Theme.surface))
-                        .shadow(color: Theme.purple.opacity(0.28), radius: 14, y: 6)
-                        .offset(y: -52).padding(.bottom, -52)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(model.user?.displayName ?? "").font(Theme.font(26, .heavy)).tracking(-0.5).lineLimit(1).minimumScaleFactor(0.7)
-                        Text(model.user?.email ?? "").font(Theme.font(14)).foregroundStyle(Theme.muted).lineLimit(1).truncationMode(.middle)
-                        HStack(spacing: 8) {
-                            Pill(icon: model.user?.admin == true ? "checkmark.shield.fill" : "person.fill",
-                                 text: model.user?.admin == true ? "VPN administrator" : "HN Group staff", colour: Theme.accent)
-                            if let p = model.profile { Pill(icon: "laptopcomputer", text: "\(p.devices.count) of \(p.limit) devices", colour: Theme.success) }
-                        }
-                        .padding(.top, 8)
+            PageTitle(eyebrow: "Your account", title: "Profile", text: "Manage your devices and active sign-ins.")
+            Card {
+                HStack(spacing: 16) {
+                    AvatarView(image: model.avatar, name: model.user?.displayName ?? "", size: 52)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(model.user?.displayName ?? "").font(Theme.font(19, .bold))
+                        Text(model.user?.email ?? "").font(Theme.font(12)).foregroundStyle(Theme.muted).lineLimit(1).truncationMode(.middle)
                     }
-                    .padding(.top, 14)
-                    Spacer(minLength: 0)
+                    Spacer(minLength: 8)
+                    Button("HN Account ↗") { NSWorkspace.shared.open(URL(string: "https://accounts.hngroup.org.uk")!) }
+                        .buttonStyle(HNButtonStyle(primary: false))
                 }
-                .padding(.horizontal, 24).padding(.bottom, 22)
             }
-            .background(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous).fill(Theme.surface))
-            .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous).strokeBorder(Theme.border.opacity(0.8)))
-            .shadow(color: .black.opacity(0.05), radius: 10, y: 4)
-            Text("Your name and photo come from your HN Group staff profile. Change them in the staff portal or HN Browser.")
-                .font(Theme.font(12)).foregroundStyle(Theme.muted)
-
             if let p = model.profile {
                 Card {
                     VStack(alignment: .leading, spacing: 10) {
@@ -1112,12 +975,12 @@ struct SettingsPage: View {
     @EnvironmentObject var model: VPNModel
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            PageTitle(eyebrow: "Settings", title: "Settings")
+            PageTitle(eyebrow: "Preferences", title: "Settings", text: "Make Secure Access work your way.")
             Card {
                 HStack(spacing: 16) {
-                    AppMark(size: 58)
+                    AppMark(size: 42)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("HN Secure Access Terminal").font(Theme.font(17, .bold))
+                        Text("HN Secure Access Terminal").font(Theme.font(15, .bold))
                         Text(AppInfo.label).font(Theme.font(13)).foregroundStyle(Theme.muted)
                         updateStatus.font(Theme.font(12, .semibold)).padding(.top, 2)
                     }
@@ -1130,8 +993,8 @@ struct SettingsPage: View {
                     SectionHeading(title: "General", icon: "slider.horizontal.3")
                     Toggle(isOn: Binding(get: { model.launchAtLogin }, set: { model.setLaunchAtLogin($0) })) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Open Secure Access Terminal when I log in").font(Theme.font(14, .semibold))
-                            Text("The shield stays in the menu bar for quick access.").font(Theme.font(12)).foregroundStyle(Theme.muted)
+                            Text("Launch at login").font(Theme.font(14, .semibold))
+                            Text("Keep the menu-bar controls ready when your Mac starts.").font(Theme.font(12)).foregroundStyle(Theme.muted)
                         }
                     }
                     .toggleStyle(.switch).tint(Theme.purple)
@@ -1178,6 +1041,7 @@ struct SettingsPage: View {
 
 // MARK: - Menu bar
 
+/// A stable menu-bar panel: switching views never changes the native window's size.
 struct MenuView: View {
     @EnvironmentObject var model: VPNModel
     @Environment(\.openWindow) private var openWindow
@@ -1185,200 +1049,267 @@ struct MenuView: View {
     @ObservedObject var gate = DeviceGate.shared
     @State private var sshPrompt = false
     @State private var sshPassword = ""
-    static let width: CGFloat = 320
+    static let width: CGFloat = 352
+    static let height: CGFloat = 432
     init(showSSH: Bool = false) { _sshPrompt = State(initialValue: showSSH) }
 
     var body: some View {
-        // Not approved on devices.hngroup.org.uk: the menu only explains why, with the code to add this Mac.
-        if !gate.allowed {
-            VStack(spacing: 0) {
-                HNStripe().frame(height: 3)
-                DeviceGateView(gate: gate, compact: true)
-            }
-            .frame(width: Self.width)
-            .fixedSize(horizontal: false, vertical: true)
-            .background(Theme.background)
-            .foregroundStyle(Theme.text)
-        } else {
-            menu
-        }
-    }
-
-    private var menu: some View {
         VStack(spacing: 0) {
-            header
-            HNStripe().frame(height: 3)
-            VStack(spacing: 8) {
-                if let release = model.update {
-                    Button { open(.settings) } label: {
-                        Label("Version \(release.version) is ready to install", systemImage: "arrow.down.circle.fill")
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .buttonStyle(.plain).foregroundStyle(Theme.accent).font(Theme.font(12, .bold))
-                    .padding(.bottom, 2)
-                }
-                if model.stage == .ready && model.isSetUp {
-                    Button { model.error = nil; sshPassword = ""; sshPrompt = true } label: { HStack(spacing: 8) { Image(systemName: "terminal"); Text("SSH to the server") } }
-                        .buttonStyle(HNButtonStyle(primary: false, wide: true))
-                        .disabled(model.sshBusy || model.busy || model.pinRequest != nil)
-                    if sshPrompt {
-                        MenuSSHForm(password: $sshPassword, cancel: {
-                            sshPassword = ""; sshPrompt = false; model.error = nil
-                        }, submit: {
-                            let password = sshPassword
-                            sshPassword = ""
-                            Task {
-                                await model.openSSH(password: password)
-                                if model.error == nil { sshPrompt = false }
-                            }
-                        })
-                    } else if let error = model.error {
-                        Text(error).font(Theme.font(11)).foregroundStyle(Theme.danger)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                Button { open(nil) } label: { Text("Open Secure Access Terminal") }.buttonStyle(HNButtonStyle(wide: true))
-            }
-            .padding(14)
-            Rectangle().fill(Theme.border.opacity(0.8)).frame(height: 1)
-            HStack {
-                Button("VPN website") { NSWorkspace.shared.open(API.base) }.buttonStyle(.plain).foregroundStyle(Theme.accent)
-                Spacer()
-                Button("Quit") { NSApplication.shared.terminate(nil) }.buttonStyle(.plain).keyboardShortcut("q")
-            }
-            .font(Theme.font(12, .semibold))
-            .padding(.horizontal, 16).padding(.vertical, 11)
-        }
-        // A fixed width and the content's own height, so the menu bar window is always laid out the same way.
-        .frame(width: Self.width)
-        .fixedSize(horizontal: false, vertical: true)
-        .background(Theme.background)
-        .foregroundStyle(Theme.text)
-        .onDisappear { sshPassword = ""; sshPrompt = false }
-        .onChange(of: model.stage) { stage in
-            if stage != .ready { sshPassword = ""; sshPrompt = false }
-        }
-        .onChange(of: gate.allowed) { allowed in
-            if !allowed { sshPassword = ""; sshPrompt = false }
-        }
-    }
-
-    /// The status: the HN Group logo, who's signed in, and a power switch with the connection details.
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 8) {
-                HNWordmark(height: 22)
-                Spacer(minLength: 8)
-                if model.stage == .ready, let user = model.user {
-                    AvatarView(image: model.avatar, name: user.displayName, size: 26)
-                        .overlay(Circle().strokeBorder(Color.white.opacity(0.25), lineWidth: 1))
-                }
-            }
-            if model.stage == .ready && model.isSetUp && model.pinRequest != nil {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Enter your PIN to connect").font(Theme.font(16, .heavy)).foregroundStyle(.white)
-                    PinEntry(compact: true)
-                    HStack {
-                        Text(model.pinError ?? "Your six-digit HN Group PIN")
-                            .font(Theme.font(11, .semibold)).foregroundStyle(model.pinError == nil ? Color.white.opacity(0.7) : Color(hex: 0xFFB4C8))
-                            .fixedSize(horizontal: false, vertical: true)
-                        Spacer(minLength: 8)
-                        Button("Cancel") { model.cancelPin() }.buttonStyle(.plain).font(Theme.font(12, .bold)).foregroundStyle(.white.opacity(0.85))
-                    }
-                }
-                .transition(.opacity)
-            } else if model.stage == .ready && model.isSetUp {
-                HStack(spacing: 14) {
-                    Button { Task { await model.toggle() } } label: { PowerSwitch(on: model.connected, busy: model.busy) }
-                        .buttonStyle(.plain).disabled(model.busy)
-                        .accessibilityLabel(model.connected ? "Disconnect" : "Connect")
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(model.busy ? "Working…" : model.connected ? "Protected" : "Not protected")
-                            .font(Theme.font(18, .heavy)).foregroundStyle(.white)
-                        Text(model.connected ? (model.ip?.ip ?? "Through HN Group") : "Click to connect")
-                            .font(Theme.font(12)).foregroundStyle(.white.opacity(0.7)).lineLimit(1)
-                        if model.connected {
-                            Label("United Kingdom", systemImage: "mappin.circle.fill")
-                                .font(Theme.font(11, .semibold)).foregroundStyle(Theme.green)
+            if !gate.allowed {
+                HNStripe().frame(height: 2)
+                ScrollView { DeviceGateView(gate: gate, compact: true) }
+            } else {
+                header
+                HNStripe().frame(height: 2)
+                ScrollView(.vertical) {
+                    Group {
+                        if model.stage == .ready && model.pinRequest != nil {
+                            pinForm
+                        } else if sshPrompt && model.stage == .ready && model.isSetUp {
+                            MenuSSHForm(password: $sshPassword, cancel: cancelSSH, submit: submitSSH)
+                        } else {
+                            home
                         }
                     }
-                    Spacer(minLength: 0)
+                    .padding(16).frame(maxWidth: .infinity, alignment: .topLeading)
                 }
-            } else {
-                Text(model.stage == .ready ? "Finish setting up this Mac in the app." : "Sign in to use the VPN.")
-                    .font(Theme.font(13)).foregroundStyle(.white.opacity(0.8))
-                    .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                Rectangle().fill(Theme.border).frame(height: 1)
+                HStack {
+                    Button { NSWorkspace.shared.open(API.base) } label: {
+                        Label("VPN website", systemImage: "arrow.up.right")
+                    }
+                    .buttonStyle(.plain).foregroundStyle(Theme.muted)
+                    Spacer()
+                    Button("Quit") { NSApplication.shared.terminate(nil) }
+                        .buttonStyle(.plain).foregroundStyle(Theme.muted).keyboardShortcut("q")
+                }
+                .font(Theme.font(11, .semibold)).padding(.horizontal, 16).frame(height: 40)
             }
         }
-        .padding(16)
-        .frame(width: Self.width, alignment: .leading)
-        .background(
-            ZStack {
-                model.connected ? Theme.heroOn : Theme.heroOff
-                Glow(color: Theme.pink.opacity(model.connected ? 0.25 : 0.08), size: 180).offset(x: 120, y: -40)
-            }
-        )
-        .clipped()
-        .environment(\.colorScheme, .dark)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: model.connected)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: model.pinRequest)
+        .frame(width: Self.width, height: Self.height)
+        .background(Theme.background)
+        .foregroundStyle(Theme.text)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.border))
+        .background(MenuWindowAnchor(enabled: !model.preview))
+        .onDisappear { sshPassword = ""; sshPrompt = false }
+        .onChange(of: model.stage) { if $0 != .ready { cancelSSH() } }
+        .onChange(of: gate.allowed) { if !$0 { cancelSSH() } }
     }
 
-    private func open(_ section: VPNModel.Section?) {
-        if let section = section { model.show(section) }
-        openWindow(id: "main")
-        NSApp.activate(ignoringOtherApps: true)
-    }
-}
-
-/// Password entry stays in the menu-bar window; opening SSH uses the existing secure askpass path.
-struct MenuSSHForm: View {
-    @EnvironmentObject var model: VPNModel
-    @Binding var password: String
-    var cancel: () -> Void
-    var submit: () -> Void
-    @FocusState private var passwordFocused: Bool
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Open SSH").font(Theme.font(14, .bold))
-            Text("Enter the server password. It is used once to open Terminal.")
-                .font(Theme.font(11)).foregroundStyle(Theme.muted)
-                .fixedSize(horizontal: false, vertical: true)
-            VStack(alignment: .leading, spacing: 5) {
-                Text("Username").font(Theme.font(11, .semibold)).foregroundStyle(Theme.muted)
-                TextField("Username", text: $model.sshUser).textFieldStyle(.roundedBorder)
-                    .accessibilityLabel("SSH username")
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 17) {
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 5) {
+                    HNWordmark(height: 22)
+                    Text("SECURE ACCESS TERMINAL").font(Theme.font(8, .bold)).tracking(1)
+                        .foregroundStyle(Theme.muted)
+                }
+                Spacer()
+                if let user = model.user, model.stage == .ready {
+                    AvatarView(image: model.avatar, name: user.displayName, size: 30)
+                }
             }
-            VStack(alignment: .leading, spacing: 5) {
-                Text("Password").font(Theme.font(11, .semibold)).foregroundStyle(Theme.muted)
-                SecureField("Server password", text: $password).textFieldStyle(.roundedBorder)
-                    .focused($passwordFocused).onSubmit { connect() }
-                    .accessibilityLabel("SSH server password")
+            HStack(spacing: 12) {
+                Button { Task { await model.toggle() } } label: {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 13).fill(model.connected ? Theme.accentSoft : Theme.surface2)
+                        if model.busy { ProgressView().controlSize(.small) }
+                        else { Image(systemName: "power").font(.system(size: 22, weight: .medium)) }
+                    }
+                    .foregroundStyle(model.connected ? Theme.accent : Theme.muted).frame(width: 46, height: 46)
+                }
+                .buttonStyle(.plain)
+                .disabled(model.busy || model.sshBusy || model.pinRequest != nil || model.stage != .ready || !model.isSetUp)
+                .accessibilityLabel(model.connected ? "Disconnect VPN" : "Connect VPN")
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(model.busy ? "Connecting…" : model.connected ? "Connected" : "Not connected")
+                        .font(Theme.font(18, .bold))
+                    Text(model.connected ? "United Kingdom server" : "Your HN network connection")
+                        .font(Theme.font(11)).foregroundStyle(Theme.muted)
+                }
+                Spacer(minLength: 0)
+                Circle().fill(model.connected ? Theme.green : Theme.muted).frame(width: 7, height: 7)
+            }
+        }
+        .padding(.horizontal, 18).padding(.vertical, 17)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.surface)
+    }
+
+    private var home: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if model.stage == .ready && model.isSetUp {
+                HStack {
+                    Image(systemName: "server.rack").foregroundStyle(Theme.accent).font(.system(size: 17))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("HN Group server").font(Theme.font(11, .semibold))
+                        Text(VPNModel.serverAddress).font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.muted)
+                    }
+                    Spacer()
+                    Text(model.connected ? (model.serverReachable == true ? "SSH ready" : "Checking…") : "VPN required")
+                        .font(Theme.font(10, .semibold)).foregroundStyle(Theme.muted)
+                }
+                .padding(12).background(RoundedRectangle(cornerRadius: 12).fill(Theme.surface))
+                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.border))
+                Button {
+                    model.error = nil; sshPassword = ""; sshPrompt = true
+                } label: {
+                    Label("SSH to the server", systemImage: "terminal").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(MenuActionStyle(primary: true)).disabled(model.busy || model.sshBusy)
+            } else {
+                Text(model.stage == .ready ? "Finish setting up this Mac in the app." : "Sign in to use your HN connection.")
+                    .font(Theme.font(12)).foregroundStyle(Theme.muted)
+            }
+            Button { open(nil) } label: {
+                HStack { Text("Open Secure Access Terminal"); Spacer(); Image(systemName: "arrow.up.right") }
+            }
+            .buttonStyle(MenuActionStyle())
+            if let release = model.update {
+                Button { open(.settings) } label: {
+                    Label("Update \(release.version) available", systemImage: "arrow.down.circle")
+                }.buttonStyle(.plain).font(Theme.font(11, .semibold)).foregroundStyle(Theme.accent)
             }
             if let error = model.error {
                 Text(error).font(Theme.font(11)).foregroundStyle(Theme.danger)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            HStack(spacing: 8) {
-                Button("Cancel", action: cancel).buttonStyle(HNButtonStyle(primary: false))
-                    .disabled(model.sshBusy)
-                Button(model.sshBusy ? "Opening…" : "Open SSH") { connect() }
-                    .buttonStyle(HNButtonStyle()).disabled(password.isEmpty || model.sshBusy || model.busy)
+        }
+    }
+
+    private var pinForm: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Connect to the VPN").font(Theme.font(16, .bold))
+            Text("Enter your six-digit HN Group PIN.").font(Theme.font(11)).foregroundStyle(Theme.muted)
+            PinEntry(compact: true)
+            if let error = model.pinError { Text(error).font(Theme.font(11)).foregroundStyle(Theme.danger) }
+            Button("Cancel") { model.cancelPin(); cancelSSH() }.buttonStyle(MenuActionStyle())
+                .disabled(model.pinBusy || model.busy)
+        }
+    }
+    private func cancelSSH() { sshPassword = ""; sshPrompt = false }
+    private func submitSSH() {
+        let password = sshPassword
+        sshPassword = ""
+        Task {
+            await model.openSSH(password: password)
+            if model.error == nil { sshPrompt = false }
+        }
+    }
+    private func open(_ section: VPNModel.Section?) {
+        cancelSSH()
+        if let section = section { model.show(section) }
+        NSApp.setActivationPolicy(.regular)
+        openWindow(id: "main")
+        NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
+/// Compact, themed menu actions without hover scaling or oversized glowing shadows.
+struct MenuActionStyle: ButtonStyle {
+    var primary = false
+    @Environment(\.isEnabled) private var enabled
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.font(Theme.font(12, .semibold))
+            .foregroundStyle(primary ? Theme.background : Theme.text)
+            .frame(maxWidth: .infinity, minHeight: 38)
+            .padding(.horizontal, 12)
+            .background(RoundedRectangle(cornerRadius: 10).fill(primary ? Theme.accent : Theme.surface))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(primary ? Theme.accent : Theme.border))
+            .opacity(enabled ? (configuration.isPressed ? 0.75 : 1) : 0.45)
+    }
+}
+
+struct MenuSSHForm: View {
+    @EnvironmentObject var model: VPNModel
+    @Binding var password: String
+    var cancel: () -> Void
+    var submit: () -> Void
+    private enum Field: Hashable { case username, password }
+    @FocusState private var focused: Field?
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 9) {
+                Button(action: cancel) { Image(systemName: "chevron.left").frame(width: 24, height: 24) }
+                    .buttonStyle(.plain).foregroundStyle(Theme.accent).disabled(model.sshBusy)
+                    .accessibilityLabel("Back to connection")
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("SSH to the server").font(Theme.font(15, .bold))
+                    Text("Your password is used once.").font(Theme.font(10)).foregroundStyle(Theme.muted)
+                }
             }
-            if !model.connected {
-                Text("Your VPN PIN will be requested here before connecting.")
-                    .font(Theme.font(10)).foregroundStyle(Theme.muted)
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Username").font(Theme.font(10, .semibold)).foregroundStyle(Theme.muted)
+                TextField("Username", text: $model.sshUser).textFieldStyle(.plain)
+                    .font(Theme.font(12)).padding(10)
+                    .background(RoundedRectangle(cornerRadius: 9).fill(Theme.surface))
+                    .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(focused == .username ? Theme.accent : Theme.border))
+                    .focused($focused, equals: .username).accessibilityLabel("SSH username")
+            }
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Server password").font(Theme.font(10, .semibold)).foregroundStyle(Theme.muted)
+                SecureField("Enter password", text: $password).textFieldStyle(.plain)
+                    .font(Theme.font(12)).padding(10)
+                    .background(RoundedRectangle(cornerRadius: 9).fill(Theme.surface))
+                    .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(focused == .password ? Theme.accent : Theme.border))
+                    .focused($focused, equals: .password).onSubmit { connect() }
+                    .accessibilityLabel("SSH server password")
+            }
+            if let error = model.error {
+                Text(error).font(Theme.font(10)).foregroundStyle(Theme.danger)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            Button(action: connect) {
+                HStack(spacing: 8) {
+                    if model.sshBusy { ProgressView().controlSize(.small) }
+                    Text(model.sshBusy ? "Opening Terminal…" : model.connected ? "Open SSH" : "Connect & open SSH")
+                    Spacer()
+                    Image(systemName: "arrow.right")
+                }
+            }
+            .buttonStyle(MenuActionStyle(primary: true))
+            .disabled(password.isEmpty || model.sshBusy || model.busy)
+            .opacity(password.isEmpty || model.sshBusy || model.busy ? 0.5 : 1)
         }
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surface))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.border))
-        .onAppear { passwordFocused = true }
+        .onAppear { focused = .password }
     }
     private func connect() {
         guard !password.isEmpty, !model.sshBusy, !model.busy else { return }
         submit()
+    }
+}
+
+/// MenuBarExtra's window must remain a menu-bar panel, not a draggable detached window.
+struct MenuWindowAnchor: NSViewRepresentable {
+    let enabled: Bool
+    func makeNSView(context: Context) -> AnchorView { AnchorView(enabled: enabled) }
+    func updateNSView(_ view: AnchorView, context: Context) { view.enabled = enabled }
+    final class AnchorView: NSView {
+        var enabled: Bool
+        private var observer: NSObjectProtocol?
+        init(enabled: Bool) { self.enabled = enabled; super.init(frame: .zero) }
+        required init?(coder: NSCoder) { return nil }
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if let observer = observer { NotificationCenter.default.removeObserver(observer) }
+            guard let window = window, enabled, !window.styleMask.contains(.titled) else { return }
+            observer = NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: window, queue: .main) { [weak self] _ in self?.anchor() }
+            DispatchQueue.main.async { [weak self] in self?.anchor() }
+        }
+        private func anchor() {
+            guard enabled, let window = window, !window.styleMask.contains(.titled), let screen = window.screen else { return }
+            window.isMovable = false
+            window.isMovableByWindowBackground = false
+            window.isOpaque = false
+            window.backgroundColor = .clear
+            window.hasShadow = true
+            let bounds = screen.visibleFrame
+            let x = max(bounds.minX + 8, min(window.frame.minX, bounds.maxX - window.frame.width - 8))
+            window.setFrameTopLeftPoint(NSPoint(x: x, y: bounds.maxY - 6))
+        }
+        deinit { if let observer = observer { NotificationCenter.default.removeObserver(observer) } }
     }
 }
 
@@ -1426,10 +1357,10 @@ struct PinEntry: View {
         let filled = i < code.count, current = focused && i == min(code.count, 5) && !model.pinBusy
         let size: CGFloat = compact ? 38 : 48
         return RoundedRectangle(cornerRadius: compact ? 10 : 12, style: .continuous)
-            .fill(compact ? Color.white.opacity(filled ? 0.18 : 0.08) : (filled ? Theme.accentSoft : Theme.surface2))
+            .fill(filled ? Theme.accentSoft : Theme.surface2)
             .overlay(RoundedRectangle(cornerRadius: compact ? 10 : 12, style: .continuous)
-                .strokeBorder(current ? Theme.violet : (compact ? Color.white.opacity(0.22) : Theme.border), lineWidth: current ? 2 : 1))
-            .overlay(Circle().fill(compact ? Color.white : Theme.accent).frame(width: compact ? 9 : 11, height: compact ? 9 : 11)
+                .strokeBorder(current ? Theme.accent : Theme.border, lineWidth: current ? 2 : 1))
+            .overlay(Circle().fill(Theme.accent).frame(width: compact ? 9 : 11, height: compact ? 9 : 11)
                 .scaleEffect(filled ? 1 : 0.2).opacity(filled ? 1 : 0))
             .frame(width: size, height: size + (compact ? 4 : 8))
             .animation(reduceMotion ? nil : .spring(response: 0.25, dampingFraction: 0.7), value: filled)
@@ -1489,26 +1420,6 @@ struct PinSheet: View {
     }
 }
 
-/// The menu's compact power switch: a glowing round button that fills with the brand colour when on.
-struct PowerSwitch: View {
-    let on: Bool
-    let busy: Bool
-    @State private var hover = false
-    var body: some View {
-        ZStack {
-            Circle().fill(on ? AnyShapeStyle(Theme.brand) : AnyShapeStyle(Color.white.opacity(0.08)))
-            Circle().strokeBorder(on ? AnyShapeStyle(Theme.ring) : AnyShapeStyle(Color.white.opacity(0.22)), lineWidth: 2.5)
-            if busy { ProgressView().controlSize(.small).tint(.white) }
-            else { Image(systemName: "power").font(.system(size: 20, weight: .bold)).foregroundStyle(on ? Color.white : Color.white.opacity(0.8)) }
-        }
-        .frame(width: 58, height: 58)
-        .shadow(color: on ? Theme.violet.opacity(0.6) : .clear, radius: 10)
-        .scaleEffect(hover ? 1.05 : 1)
-        .animation(.easeOut(duration: 0.15), value: hover)
-        .onHover { hover = $0 }
-    }
-}
-
 // MARK: - Screenshots (--snapshot <folder>), used by CI to check the design
 
 @MainActor
@@ -1560,10 +1471,10 @@ enum Snapshots {
             }
             shoot(WorkspaceAccountPanel().environmentObject(sample()), size: CGSize(width: 320, height: 470), dark: dark, to: folder.appendingPathComponent("workspace-account-\(dark ? "dark" : "light").png"))
             let menuModel = sample()
-            shoot(MenuView().environmentObject(menuModel), size: CGSize(width: 320, height: 290), dark: dark, to: folder.appendingPathComponent("menu-\(dark ? "dark" : "light").png"))
-            shoot(MenuView(showSSH: true).environmentObject(sample()), size: CGSize(width: 320, height: 580), dark: dark, to: folder.appendingPathComponent("menu-ssh-\(dark ? "dark" : "light").png"))
+            shoot(MenuView().environmentObject(menuModel), size: CGSize(width: MenuView.width, height: MenuView.height), dark: dark, to: folder.appendingPathComponent("menu-\(dark ? "dark" : "light").png"))
+            shoot(MenuView(showSSH: true).environmentObject(sample()), size: CGSize(width: MenuView.width, height: MenuView.height), dark: dark, to: folder.appendingPathComponent("menu-ssh-\(dark ? "dark" : "light").png"))
             let pinMenu = askingForPin(sample(connected: false))
-            shoot(MenuView().environmentObject(pinMenu), size: CGSize(width: 320, height: 300), dark: dark, to: folder.appendingPathComponent("menu-pin-\(dark ? "dark" : "light").png"))
+            shoot(MenuView().environmentObject(pinMenu), size: CGSize(width: MenuView.width, height: MenuView.height), dark: dark, to: folder.appendingPathComponent("menu-pin-\(dark ? "dark" : "light").png"))
         }
     }
 
