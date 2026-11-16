@@ -46,10 +46,17 @@ enum WindowLifecycleChecks {
         view is NSSecureTextField || view.subviews.contains { hasSecureField($0) }
     }
     private static func menuClicks() async {
-        let model = VPNModel(preview: true)
+        let model = VPNModel.shared
         model.stage = .ready; model.isSetUp = true
-        let menu = MenuBarController(model: model)
-        defer { menu.remove() }
+        let menu = MenuBarController.shared
+        defer { menu.close() }
+        func anchorReady() -> Bool {
+            guard let button = menu.statusItem.button, let barWindow = button.window, let screen = barWindow.screen else { return false }
+            let anchor = barWindow.convertToScreen(button.convert(button.bounds, to: nil))
+            return anchor.midY > screen.frame.maxY - NSStatusBar.system.thickness - 8
+        }
+        await settle { anchorReady() }
+        check(anchorReady(), "Menu bar item is positioned before opening its popover")
         menu.show()
         await settle { menu.popover.isShown }
         check(menu.popover.isShown, "Native menu popover opens")
