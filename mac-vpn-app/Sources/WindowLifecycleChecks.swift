@@ -21,19 +21,7 @@ enum WindowLifecycleChecks {
         window.performClose(nil)
         await settle { !window.isVisible && NSApp.activationPolicy() == .accessory }
         check(!window.isVisible && NSApp.activationPolicy() == .accessory, "Red close hides the Dock icon")
-        let menu = NSPanel(contentRect: NSRect(x: 100, y: 100, width: MenuView.width, height: MenuView.height),
-                           styleMask: [.borderless], backing: .buffered, defer: false)
-        menu.isReleasedWhenClosed = false
-        menu.contentView = MenuWindowAnchor.AnchorView(enabled: true)
-        menu.orderFrontRegardless()
-        NotificationCenter.default.post(name: NSWindow.didBecomeKeyNotification, object: menu)
-        await settle { !menu.isMovable && !menu.isMovableByWindowBackground }
-        check(!menu.isMovable && !menu.isMovableByWindowBackground, "Menu panel cannot detach by dragging")
-        if let screen = menu.screen {
-            await settle { abs(menu.frame.maxY - (screen.visibleFrame.maxY - 6)) < 1 }
-            check(abs(menu.frame.maxY - (screen.visibleFrame.maxY - 6)) < 1, "Menu stays beneath the menu bar")
-        } else { check(false, "Menu must be attached to a screen") }
-        menu.orderOut(nil)
+        await menuClicks()
         check(NSApp.activationPolicy() == .accessory, "Menu-bar use keeps the Dock icon hidden")
         presence.reopen()
         await settle { window.isVisible && NSApp.activationPolicy() == .regular }
@@ -41,8 +29,65 @@ enum WindowLifecycleChecks {
         window.performClose(nil)
         await settle { NSApp.activationPolicy() == .accessory }
         check(NSApp.activationPolicy() == .accessory, "Repeated close keeps menu-only mode")
+        await navigationClicks()
         await manualPinEntry()
         print("All window lifecycle and manual PIN checks passed")
+    }
+    private static func click(_ view: NSView, at point: NSPoint) {
+        guard let window = view.window else { check(false, "Click target has a window"); return }
+        let local = NSPoint(x: point.x, y: view.isFlipped ? point.y : view.bounds.height - point.y)
+        let location = view.convert(local, to: nil)
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            guard let event = NSEvent.mouseEvent(with: type, location: location, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0) else { check(false, "Mouse event can be created"); return }
+            window.sendEvent(event)
+        }
+    }
+    private static func hasSecureField(_ view: NSView) -> Bool {
+        view is NSSecureTextField || view.subviews.contains { hasSecureField($0) }
+    }
+    private static func menuClicks() async {
+        let model = VPNModel(preview: true)
+        model.stage = .ready; model.isSetUp = true
+        let menu = MenuBarController(model: model)
+        defer { menu.remove() }
+        menu.show()
+        await settle { menu.popover.isShown }
+        check(menu.popover.isShown, "Native menu popover opens")
+        try? await Task.sleep(nanoseconds: 220_000_000)
+        guard let host = menu.popover.contentViewController?.view, let window = host.window else { check(false, "Native popover hosts the controls"); return }
+        check(!window.isMovable, "Popover cannot be dragged out of place")
+        if let screen = window.screen { check(screen.frame.contains(window.frame), "Native popover stays on screen") }
+        click(host, at: NSPoint(x: 280, y: 156))
+        await settle { model.pinRequest != nil }
+        check(model.pinRequest != nil && !model.connected, "Connect works across the button and only opens PIN confirmation")
+        try? await Task.sleep(nanoseconds: 220_000_000)
+        click(host, at: NSPoint(x: 35, y: 272))
+        await settle { model.pinRequest == nil }
+        check(model.pinRequest == nil && !model.connected, "Cancel works across the whole button")
+        try? await Task.sleep(nanoseconds: 220_000_000)
+        click(host, at: NSPoint(x: 180, y: 214))
+        await settle { hasSecureField(host) }
+        check(hasSecureField(host), "The whole server terminal card opens its form")
+        menu.close()
+        await settle { !menu.popover.isShown && menu.popover.contentViewController == nil }
+        check(menu.popover.contentViewController == nil, "Closing the menu releases all form state")
+    }
+    private static func navigationClicks() async {
+        let model = VPNModel(preview: true)
+        model.stage = .ready; model.isSetUp = true
+        let window = NSWindow(contentRect: NSRect(x: 200, y: 100, width: 480, height: 400), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        let host = NSHostingView(rootView: HStack(spacing: 0) { AccessRail(); Color.clear }.frame(width: 480, height: 400).environmentObject(model).background(MainWindowRegistration()))
+        window.contentView = host
+        NSApp.setActivationPolicy(.regular)
+        window.makeKeyAndOrderFront(nil)
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        click(host, at: NSPoint(x: 140, y: 120))
+        await settle { model.section == .ssh }
+        check(model.section == .ssh, "Navigation responds to clicks away from its icon and text")
+        let image = AnimatedImage.FillView(frame: NSRect(x: 0, y: 0, width: 44, height: 44))
+        check(image.hitTest(NSPoint(x: 22, y: 22)) == nil, "Avatar artwork passes clicks to the account button")
+        window.close()
     }
     private static func manualPinEntry() async {
         let model = VPNModel(preview: true)

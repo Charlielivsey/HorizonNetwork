@@ -26,14 +26,7 @@ struct HNGroupVPNApp: App {
             }
         }
 
-        MenuBarExtra {
-            MenuView().environmentObject(model)
-        } label: {
-            MenuBarMark(connected: model.connected, busy: model.busy)
-                .accessibilityLabel(model.busy ? "HN Secure Access Terminal: changing connection" : model.connected ? "HN Secure Access Terminal: connected" : "HN Secure Access Terminal: not connected")
-                .help(model.busy ? "Changing connection…" : model.connected ? "HN Secure Access Terminal · Connected" : "HN Secure Access Terminal · Not connected")
-        }
-        .menuBarExtraStyle(.window)
+
     }
 }
 
@@ -59,6 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 Darwin.exit(1)
             }
         }
+        _ = MenuBarController.shared
         if args.contains("--test-window-lifecycle") {
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 300_000_000)
@@ -88,7 +82,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @MainActor
 final class MainWindowPresence {
     static let shared = MainWindowPresence()
-    private weak var mainWindow: NSWindow?
+    private var mainWindow: NSWindow?
     private var observers: [NSObjectProtocol] = []
     func register(_ window: NSWindow) {
         guard mainWindow !== window else { return }
@@ -117,6 +111,7 @@ struct MainWindowRegistration: NSViewRepresentable {
     func makeNSView(context: Context) -> RegistrationView { RegistrationView() }
     func updateNSView(_ view: RegistrationView, context: Context) {}
     final class RegistrationView: NSView {
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             // The lifecycle runner registers its own real AppKit window, avoiding races with
@@ -165,6 +160,7 @@ struct AnimatedImage: NSViewRepresentable {
 
     final class FillView: NSView {
         let imageView = NSImageView()
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
         override init(frame: NSRect) {
             super.init(frame: frame)
             wantsLayer = true
@@ -255,7 +251,7 @@ struct MainView: View {
                 case .ready: SignedInView().transition(.opacity)
                 } }
             }
-            if gate.allowed, model.stage == .ready, model.pinRequest != nil { PinSheet() }
+            if gate.allowed, model.stage == .ready { ConnectionPromptOverlay() }
         }
         .frame(minWidth: 880, minHeight: 620)
         .background(Theme.background)
@@ -293,14 +289,18 @@ struct SignedInView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
                         notices
-                        Group {
-                            switch model.section {
-                            case .connection: AccessConnection()
-                            case .ssh: AccessSSH()
-                            case .profile: AccessProfile()
-                            case .settings: AccessSettings()
-                            }
-                        }.id(model.section).transition(.opacity)
+                        ZStack(alignment: .topLeading) {
+                            Group {
+                                switch model.section {
+                                case .connection: AccessConnection()
+                                case .ssh: AccessSSH()
+                                case .profile: AccessProfile()
+                                case .settings: AccessSettings()
+                                }
+                            }.id(model.section)
+                                .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 5)))
+                        }.frame(maxWidth: .infinity, alignment: .leading)
+                            .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: model.section)
                     }
                     .padding(.horizontal, 30).padding(.top, 28).padding(.bottom, 24)
                     .frame(maxWidth: 1040, alignment: .leading).frame(maxWidth: .infinity)
@@ -396,7 +396,6 @@ struct WorkspaceAccountAction: View {
 /// A stable menu-bar panel: switching views never changes the native window's size.
 struct MenuView: View {
     @EnvironmentObject var model: VPNModel
-    @Environment(\.openWindow) private var openWindow
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var gate = DeviceGate.shared
     @State private var sshPrompt = false
@@ -423,9 +422,13 @@ struct MenuView: View {
                             home
                         }
                     }
+                    .id(model.pinRequest != nil ? "pin" : sshPrompt ? "ssh" : "home")
+                    .transition(.opacity)
                     .padding(16).frame(maxWidth: .infinity, alignment: .topLeading)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: model.pinRequest != nil)
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: sshPrompt)
                 Rectangle().fill(Theme.border).frame(height: 1)
                 HStack {
                     Button { NSWorkspace.shared.open(API.base) } label: {
@@ -442,9 +445,7 @@ struct MenuView: View {
         .frame(width: Self.width, height: Self.height)
         .background(Theme.background)
         .foregroundStyle(Theme.text)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.border))
-        .background(MenuWindowAnchor(enabled: !model.preview))
+
         .onDisappear { sshPassword = ""; sshPrompt = false }
         .onChange(of: model.stage) { if $0 != .ready { cancelSSH() } }
         .onChange(of: gate.allowed) { if !$0 { cancelSSH() } }
@@ -494,6 +495,7 @@ struct MenuView: View {
                         Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold)).foregroundStyle(Theme.muted)
                     }.padding(11).background(RoundedRectangle(cornerRadius: 12).fill(Theme.surface))
                         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.border))
+                        .contentShape(RoundedRectangle(cornerRadius: 12))
                 }.buttonStyle(.plain).disabled(model.busy || model.sshBusy)
             } else {
                 Text(model.stage == .ready ? "Finish setting up this Mac in the app." : "Sign in to use your HN connection.")
@@ -534,9 +536,8 @@ struct MenuView: View {
     private func open(_ section: VPNModel.Section?) {
         cancelSSH()
         if let section = section { model.show(section) }
-        NSApp.setActivationPolicy(.regular)
-        openWindow(id: "main")
-        NSApp.activate(ignoringOtherApps: true)
+        MenuBarController.shared.close()
+        MainWindowPresence.shared.reopen()
     }
 }
 
@@ -552,6 +553,7 @@ struct MenuActionStyle: ButtonStyle {
             .background(RoundedRectangle(cornerRadius: 10).fill(primary ? AnyShapeStyle(AccessDesign.fill) : AnyShapeStyle(Theme.surface)))
             .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(primary ? Color.white.opacity(0.14) : Theme.border))
             .opacity(enabled ? (configuration.isPressed ? 0.75 : 1) : 0.45)
+            .contentShape(RoundedRectangle(cornerRadius: 10))
     }
 }
 
@@ -565,7 +567,7 @@ struct MenuSSHForm: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 9) {
-                Button(action: cancel) { Image(systemName: "chevron.left").frame(width: 24, height: 24) }
+                Button(action: cancel) { Image(systemName: "chevron.left").frame(width: 32, height: 32).contentShape(Rectangle()) }
                     .buttonStyle(.plain).foregroundStyle(Theme.accent).disabled(model.sshBusy)
                     .accessibilityLabel("Back to connection")
                 VStack(alignment: .leading, spacing: 3) {
@@ -611,38 +613,6 @@ struct MenuSSHForm: View {
     private func connect() {
         guard !password.isEmpty, !model.sshBusy, !model.busy else { return }
         submit()
-    }
-}
-
-/// MenuBarExtra's window must remain a menu-bar panel, not a draggable detached window.
-struct MenuWindowAnchor: NSViewRepresentable {
-    let enabled: Bool
-    func makeNSView(context: Context) -> AnchorView { AnchorView(enabled: enabled) }
-    func updateNSView(_ view: AnchorView, context: Context) { view.enabled = enabled }
-    final class AnchorView: NSView {
-        var enabled: Bool
-        private var observer: NSObjectProtocol?
-        init(enabled: Bool) { self.enabled = enabled; super.init(frame: .zero) }
-        required init?(coder: NSCoder) { return nil }
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            if let observer = observer { NotificationCenter.default.removeObserver(observer) }
-            guard let window = window, enabled, !window.styleMask.contains(.titled) else { return }
-            observer = NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: window, queue: .main) { [weak self] _ in self?.anchor() }
-            DispatchQueue.main.async { [weak self] in self?.anchor() }
-        }
-        private func anchor() {
-            guard enabled, let window = window, !window.styleMask.contains(.titled), let screen = window.screen else { return }
-            window.isMovable = false
-            window.isMovableByWindowBackground = false
-            window.isOpaque = false
-            window.backgroundColor = .clear
-            window.hasShadow = true
-            let bounds = screen.visibleFrame
-            let x = max(bounds.minX + 8, min(window.frame.minX, bounds.maxX - window.frame.width - 8))
-            window.setFrameTopLeftPoint(NSPoint(x: x, y: bounds.maxY - 6))
-        }
-        deinit { if let observer = observer { NotificationCenter.default.removeObserver(observer) } }
     }
 }
 
@@ -713,6 +683,17 @@ struct PinConfirmation: View {
         guard code.count == 6, !working else { return }
         let pin = code
         Task { await model.submitPin(pin) }
+    }
+}
+
+/// A lightweight transition on the prompt alone; input remains live during the fade.
+struct ConnectionPromptOverlay: View {
+    @EnvironmentObject var model: VPNModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var body: some View {
+        ZStack {
+            if model.pinRequest != nil { PinSheet().transition(.opacity) }
+        }.animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: model.pinRequest != nil)
     }
 }
 
@@ -811,6 +792,7 @@ enum Snapshots {
             shoot(MenuView().environmentObject(pinMenu), size: CGSize(width: MenuView.width, height: MenuView.height), dark: dark, to: folder.appendingPathComponent("menu-pin-\(dark ? "dark" : "light").png"))
         }
         nativeChrome(to: folder)
+        nativeMenu(to: folder)
     }
 
     /// Capture the real SwiftUI Window scene and native toolbar, including its macOS controls.
@@ -830,6 +812,21 @@ enum Snapshots {
             guard let frame = window.contentView?.superview, let image = frame.bitmapImageRepForCachingDisplay(in: frame.bounds) else { fatalError("Native titlebar capture failed") }
             frame.cacheDisplay(in: frame.bounds, to: image)
             try? image.representation(using: .png, properties: [:])?.write(to: folder.appendingPathComponent("native-window-\(dark ? "dark" : "light").png"))
+        }
+    }
+
+    static func nativeMenu(to folder: URL) {
+        let menu = MenuBarController.shared
+        for dark in [true, false] {
+            menu.show(appearance: NSAppearance(named: dark ? .darkAqua : .aqua))
+            RunLoop.current.run(until: Date().addingTimeInterval(0.4))
+            guard let window = menu.popover.contentViewController?.view.window,
+                  let frame = window.contentView?.superview,
+                  let image = frame.bitmapImageRepForCachingDisplay(in: frame.bounds) else { fatalError("Native menu capture failed") }
+            frame.cacheDisplay(in: frame.bounds, to: image)
+            try? image.representation(using: .png, properties: [:])?.write(to: folder.appendingPathComponent("native-menu-\(dark ? "dark" : "light").png"))
+            menu.close()
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
         }
     }
 

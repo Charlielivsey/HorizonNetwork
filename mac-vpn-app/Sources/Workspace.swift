@@ -23,6 +23,7 @@ struct AccessActionStyle: ButtonStyle {
     var primary = true
     var wide = false
     @Environment(\.isEnabled) private var enabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.font(Theme.font(12, .bold))
             .foregroundStyle(primary ? Color.white : Theme.text)
@@ -32,6 +33,8 @@ struct AccessActionStyle: ButtonStyle {
             .shadow(color: primary && enabled ? Theme.purple.opacity(0.18) : .clear, radius: 8, y: 3)
             .opacity(enabled ? (configuration.isPressed ? 0.78 : 1) : 0.45)
             .contentShape(RoundedRectangle(cornerRadius: 12))
+            .scaleEffect(configuration.isPressed && enabled && !reduceMotion ? 0.985 : 1)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.09), value: configuration.isPressed)
     }
 }
 
@@ -62,32 +65,44 @@ struct AccessRail: View {
     @EnvironmentObject var model: VPNModel
     @State private var account = false
     var body: some View {
-        VStack(spacing: 12) {
-            nav("power", "Connect", .connection)
+        VStack(alignment: .leading, spacing: 7) {
+            Text("WORKSPACE").font(Theme.font(8, .bold)).tracking(1.2).foregroundStyle(Theme.muted)
+                .padding(.horizontal, 12).padding(.bottom, 10)
+            nav("power", "Connection", .connection)
             nav("terminal", "Terminal", .ssh)
             nav("person.crop.circle", "Profile", .profile)
             Spacer(minLength: 20)
             nav("slider.horizontal.3", "Settings", .settings)
-            Rectangle().fill(Theme.border.opacity(0.7)).frame(width: 32, height: 1).padding(.vertical, 4)
+            Rectangle().fill(Theme.border).frame(height: 1).padding(.horizontal, 8).padding(.vertical, 10)
             Button { account.toggle() } label: {
-                AvatarView(image: model.avatar, name: model.user?.displayName ?? "", size: 31)
-                    .overlay(Circle().strokeBorder(Theme.border))
+                HStack(spacing: 9) {
+                    AvatarView(image: model.avatar, name: model.user?.displayName ?? "", size: 28)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(model.user?.displayName ?? "Your account").font(Theme.font(10, .bold)).foregroundStyle(Theme.text).lineLimit(1)
+                        Text("Your account").font(Theme.font(8)).foregroundStyle(Theme.muted)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold)).foregroundStyle(Theme.muted)
+                }.padding(.horizontal, 8).frame(height: 44).contentShape(RoundedRectangle(cornerRadius: 11))
             }.buttonStyle(.plain).help("Your account")
                 .popover(isPresented: $account, arrowEdge: .trailing) { WorkspaceAccountPanel(close: { account = false }).environmentObject(model) }
-        }.padding(.top, 22).padding(.bottom, 18).frame(width: 76)
-            .background(Theme.sidebar.opacity(0.45))
-            .overlay(alignment: .trailing) { Rectangle().fill(AccessDesign.line).frame(width: 1) }
+        }.padding(.horizontal, 10).padding(.top, 24).padding(.bottom, 12).frame(width: 168)
+            .background(Theme.sidebar)
+            .overlay(alignment: .trailing) { Rectangle().fill(Theme.border).frame(width: 1) }
     }
     private func nav(_ icon: String, _ label: String, _ section: VPNModel.Section) -> some View {
         Button { model.show(section) } label: {
-            VStack(spacing: 6) {
-                Image(systemName: icon).font(.system(size: 19, weight: .medium)).frame(height: 22)
-                Text(label).font(Theme.font(8, .semibold))
+            HStack(spacing: 11) {
+                Image(systemName: icon).font(.system(size: 16, weight: .medium)).frame(width: 20)
+                Text(label).font(Theme.font(11, .semibold))
+                Spacer(minLength: 0)
             }.foregroundStyle(model.section == section ? Theme.accent : Theme.muted)
-                .frame(width: 56, height: 56)
-                .background(RoundedRectangle(cornerRadius: 14).fill(model.section == section ? Theme.accentSoft : .clear))
-                .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(model.section == section ? Theme.accent.opacity(0.22) : .clear))
+                .padding(.horizontal, 12).frame(height: 42)
+                .background(RoundedRectangle(cornerRadius: 11).fill(model.section == section ? Theme.accentSoft : .clear))
+                .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(model.section == section ? Theme.accent.opacity(0.2) : .clear))
+                .contentShape(RoundedRectangle(cornerRadius: 11))
         }.buttonStyle(.plain).help(label).accessibilityLabel(label)
+            .accessibilityIdentifier("access-nav-\(section)")
             .accessibilityAddTraits(model.section == section ? .isSelected : [])
     }
 }
@@ -209,7 +224,7 @@ struct AccessConnection: View {
                 HStack(spacing: 8) { if model.busy { ProgressView().controlSize(.small).tint(.white) }; Image(systemName: "power"); Text(model.busy ? "Please wait…" : model.connected ? "Disconnect" : "Connect VPN"); Spacer(); Image(systemName: "arrow.right") }
             }.buttonStyle(AccessActionStyle(wide: true)).disabled(model.busy || model.sshBusy || model.pinRequest != nil)
             Button { model.show(.ssh) } label: {
-                HStack(spacing: 8) { Image(systemName: "terminal"); Text("Open server terminal"); Spacer(); Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)) }
+                HStack(spacing: 8) { Image(systemName: "terminal"); Text("Open server terminal"); Spacer(); Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)) }.frame(minHeight: 36).contentShape(Rectangle())
             }.buttonStyle(.plain).font(Theme.font(11, .semibold)).foregroundStyle(Theme.muted).padding(.horizontal, 2)
         }.padding(.vertical, 12)
     }
@@ -376,7 +391,7 @@ struct AccessProfile: View {
                     ForEach(Panel.allCases, id: \.self) { item in
                         Button { panel = item } label: {
                             Text(item.rawValue).font(Theme.font(12, .semibold)).foregroundStyle(panel == item ? Theme.accent : Theme.muted)
-                                .padding(.vertical, 16).overlay(alignment: .bottom) { Capsule().fill(panel == item ? Theme.accent : .clear).frame(height: 2) }
+                                .padding(.horizontal, 5).padding(.vertical, 16).contentShape(Rectangle()).overlay(alignment: .bottom) { Capsule().fill(panel == item ? Theme.accent : .clear).frame(height: 2) }
                         }.buttonStyle(.plain).accessibilityAddTraits(panel == item ? .isSelected : [])
                     }
                     Spacer()
@@ -486,7 +501,7 @@ struct AccessSettings: View {
                 }
                 separator
                 settingsRow("person.crop.circle", "Your account & devices", "Manage access to your HN network.") {
-                    Button { NSWorkspace.shared.open(API.base) } label: { Image(systemName: "arrow.up.right").frame(width: 32, height: 32) }
+                    Button { NSWorkspace.shared.open(API.base) } label: { Image(systemName: "arrow.up.right").frame(width: 36, height: 36).contentShape(Rectangle()) }
                         .buttonStyle(.plain).foregroundStyle(Theme.accent).help("Manage account and devices on the web")
                 }
             }.background(RoundedRectangle(cornerRadius: 20).fill(Theme.surface))
