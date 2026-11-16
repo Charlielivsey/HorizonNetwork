@@ -445,6 +445,8 @@ struct MenuView: View {
         .frame(width: Self.width, height: Self.height)
         .background(Theme.background)
         .foregroundStyle(Theme.text)
+        // Clip content only; the native popover supplies the sole outline and shadow.
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
         .onDisappear { sshPassword = ""; sshPrompt = false }
         .onChange(of: model.stage) { if $0 != .ready { cancelSSH() } }
