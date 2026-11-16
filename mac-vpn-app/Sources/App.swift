@@ -409,7 +409,7 @@ struct Sidebar: View {
             VStack(spacing: 10) {
                 HStack(spacing: 7) {
                     Circle().fill(model.connected ? Theme.green : Theme.muted).frame(width: 6, height: 6)
-                    Text(model.connected ? "Protected" : model.isSetUp ? "Not protected" : "Not set up yet")
+                    Text(model.connected ? "Connected" : model.isSetUp ? "Disconnected" : "Not set up yet")
                         .font(Theme.font(10, .semibold))
                     Spacer()
                     Text(model.connected ? "VPN on" : "VPN off").font(Theme.font(9))

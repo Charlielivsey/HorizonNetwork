@@ -18,7 +18,15 @@ enum WindowLifecycleChecks {
         let menu = NSPanel(contentRect: NSRect(x: 100, y: 100, width: 352, height: 432),
                            styleMask: [.borderless], backing: .buffered, defer: false)
         menu.isReleasedWhenClosed = false
+        menu.contentView = MenuWindowAnchor.AnchorView(enabled: true)
+        menu.orderFrontRegardless()
         NotificationCenter.default.post(name: NSWindow.didBecomeKeyNotification, object: menu)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        precondition(!menu.isMovable && !menu.isMovableByWindowBackground, "Menu panel must not detach by dragging")
+        if let screen = menu.screen {
+            precondition(abs(menu.frame.maxY - (screen.visibleFrame.maxY - 6)) < 1, "Menu panel must stay beneath the menu bar")
+        } else { preconditionFailure("Menu panel must be attached to a screen") }
+        menu.orderOut(nil)
         precondition(NSApp.activationPolicy() == .accessory, "Menu-bar use must not restore the Dock icon")
         presence.reopen()
         precondition(window.isVisible && NSApp.activationPolicy() == .regular, "Reopening after close must restore the Dock icon")
