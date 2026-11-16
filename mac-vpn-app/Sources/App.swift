@@ -122,6 +122,10 @@ struct MainWindowRegistration: NSViewRepresentable {
             // The lifecycle runner registers its own real AppKit window, avoiding races with
             // SwiftUI's automatically opened launch window on the shared Mac build host.
             if !CommandLine.arguments.contains("--test-window-lifecycle"), let window = window {
+                window.titleVisibility = .hidden
+                window.titlebarAppearsTransparent = true
+                window.toolbarStyle = .unifiedCompact
+                window.backgroundColor = NSColor(Theme.background)
                 MainWindowPresence.shared.register(window)
             }
         }
@@ -185,7 +189,7 @@ struct AnimatedImage: NSViewRepresentable {
     func makeNSView(context: Context) -> FillView { FillView() }
     func updateNSView(_ view: FillView, context: Context) {
         if view.imageView.image !== image { view.imageView.image = image; view.needsLayout = true }
-        view.imageView.animates = !reduceMotion
+        if view.imageView.animates != !reduceMotion { view.imageView.animates = !reduceMotion }
     }
 }
 
@@ -251,17 +255,30 @@ struct MainView: View {
                 case .ready: SignedInView().transition(.opacity)
                 } }
             }
-            .animation(.easeInOut(duration: 0.3), value: model.stage)
-            .animation(.easeInOut(duration: 0.3), value: gate.allowed)
             if gate.allowed, model.stage == .ready, model.pinRequest != nil { PinSheet() }
         }
-        .animation(reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.34, dampingFraction: 0.86), value: model.pinRequest)
         .frame(minWidth: 880, minHeight: 620)
         .background(Theme.background)
         .background(MainWindowRegistration())
         .font(Theme.font(14))
         .foregroundStyle(Theme.text)
-        .ignoresSafeArea(.container, edges: .top)
+        .toolbar {
+            if !model.preview {
+                ToolbarItem(placement: .navigation) {
+                    HStack(spacing: 15) {
+                        HNWordmark(height: 22)
+                        Rectangle().fill(Theme.border).frame(width: 1, height: 20)
+                        Text("Secure Access Terminal").font(Theme.font(12, .semibold)).foregroundStyle(Theme.muted)
+                    }.padding(.leading, 8)
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    if model.stage == .ready {
+                        Button { Task { await model.refresh() } } label: { Image(systemName: "arrow.clockwise") }
+                            .help("Refresh connection and account")
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -270,7 +287,7 @@ struct SignedInView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var body: some View {
         VStack(spacing: 0) {
-            AccessToolbar()
+            if model.preview { AccessToolbar() }
             HStack(spacing: 0) {
                 AccessRail()
                 ScrollView {
@@ -289,7 +306,7 @@ struct SignedInView: View {
                     .frame(maxWidth: 1040, alignment: .leading).frame(maxWidth: .infinity)
                 }
             }
-        }.animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: model.section)
+        }
     }
 
     @ViewBuilder private var notices: some View {
@@ -434,93 +451,75 @@ struct MenuView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            HStack(spacing: 10) {
-                HNWordmark(height: 24).environment(\.colorScheme, .dark)
-                Spacer()
-                Text("SECURE ACCESS").font(Theme.font(7, .bold)).tracking(1.5).foregroundStyle(.white.opacity(0.42))
-                if let user = model.user, model.stage == .ready {
-                    AvatarView(image: model.avatar, name: user.displayName, size: 27)
-                }
+        HStack(spacing: 13) {
+            HNWordmark(height: 23)
+            Rectangle().fill(Theme.border).frame(width: 1, height: 20)
+            Text("Secure Access").font(Theme.font(11, .semibold)).foregroundStyle(Theme.muted)
+            Spacer(minLength: 0)
+            if let user = model.user, model.stage == .ready {
+                AvatarView(image: model.avatar, name: user.displayName, size: 25)
             }
-            if !sshPrompt && model.pinRequest == nil {
-                HStack(spacing: 13) {
-                    Button { Task { await model.toggle() } } label: {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 16).fill(model.connected ? AnyShapeStyle(AccessDesign.fill) : AnyShapeStyle(Color.white.opacity(0.08)))
-                            RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(0.14))
-                            if model.busy { ProgressView().controlSize(.small).tint(.white) }
-                            else { Image(systemName: "power").font(.system(size: 22, weight: .medium)).foregroundStyle(.white) }
-                        }.frame(width: 52, height: 52)
-                    }.buttonStyle(.plain)
-                        .disabled(model.busy || model.sshBusy || model.pinRequest != nil || model.stage != .ready || !model.isSetUp)
-                        .accessibilityLabel(model.connected ? "Disconnect VPN" : "Connect VPN")
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(model.busy ? "Please wait…" : model.connected ? "Connected." : "Ready to connect.")
-                            .font(Theme.font(21, .bold)).tracking(-0.5).foregroundStyle(.white)
-                        HStack(spacing: 5) {
-                            Circle().fill(model.connected ? Color(hex: 0x88DFC0) : .white.opacity(0.35)).frame(width: 5, height: 5)
-                            Text(model.connected ? "United Kingdom · HN Group" : "Your private HN connection")
-                                .font(Theme.font(10)).foregroundStyle(.white.opacity(0.55))
-                        }
-                    }
-                    Spacer(minLength: 0)
-                }
-            }
-        }.padding(.horizontal, 20).padding(.vertical, 20)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(LinearGradient(colors: [Color(hex: 0x2B1946), AccessDesign.ink, Color(hex: 0x172A32)], startPoint: .topLeading, endPoint: .bottomTrailing))
+        }.padding(.horizontal, 18).frame(height: 64).background(Theme.sidebar.opacity(0.6))
     }
 
     private var home: some View {
         VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 11) {
+                Image(systemName: "lock.shield").font(.system(size: 23, weight: .medium)).foregroundStyle(model.connected ? Theme.success : Theme.accent)
+                    .frame(width: 42, height: 42).background(RoundedRectangle(cornerRadius: 13).fill(Theme.surface2))
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(model.busy ? "Updating connection…" : model.connected ? "Connected" : "Not connected").font(Theme.font(18, .bold)).tracking(-0.4)
+                    Text("United Kingdom · HN Group").font(Theme.font(10)).foregroundStyle(Theme.muted)
+                }
+            }
             if model.stage == .ready && model.isSetUp {
-                HStack {
-                    Image(systemName: "server.rack").foregroundStyle(Theme.accent).font(.system(size: 17))
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("HN Group server").font(Theme.font(11, .semibold))
-                        Text(VPNModel.serverAddress).font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.muted)
+                Button { Task { await model.toggle() } } label: {
+                    HStack(spacing: 8) {
+                        if model.busy { ProgressView().controlSize(.small).tint(.white) }
+                        Image(systemName: "power")
+                        Text(model.busy ? "Please wait…" : model.connected ? "Disconnect VPN" : "Connect VPN")
+                        Spacer(); Image(systemName: "arrow.right")
                     }
-                    Spacer()
-                    Text(model.connected ? (model.serverReachable == true ? "SSH ready" : "Checking…") : "VPN required")
-                        .font(Theme.font(10, .semibold)).foregroundStyle(Theme.muted)
-                }
-                .padding(12).background(RoundedRectangle(cornerRadius: 12).fill(Theme.surface))
-                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.border))
-                Button {
-                    model.error = nil; sshPassword = ""; sshPrompt = true
-                } label: {
-                    Label("SSH to the server", systemImage: "terminal").frame(maxWidth: .infinity)
-                }
-                .buttonStyle(MenuActionStyle(primary: true)).disabled(model.busy || model.sshBusy)
+                }.buttonStyle(AccessActionStyle(wide: true))
+                    .disabled(model.busy || model.pinBusy || model.sshBusy || model.pinRequest != nil)
+                Button { model.error = nil; sshPassword = ""; sshPrompt = true } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "terminal").font(.system(size: 18)).foregroundStyle(Theme.accent)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Server terminal").font(Theme.font(11, .semibold)).foregroundStyle(Theme.text)
+                            Text(VPNModel.serverAddress).font(.system(size: 10, design: .monospaced)).foregroundStyle(Theme.muted)
+                        }
+                        Spacer()
+                        Text(model.connected && model.serverReachable == true ? "Ready" : "SSH").font(Theme.font(9, .medium)).foregroundStyle(Theme.muted)
+                        Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold)).foregroundStyle(Theme.muted)
+                    }.padding(11).background(RoundedRectangle(cornerRadius: 12).fill(Theme.surface))
+                        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.border))
+                }.buttonStyle(.plain).disabled(model.busy || model.sshBusy)
             } else {
                 Text(model.stage == .ready ? "Finish setting up this Mac in the app." : "Sign in to use your HN connection.")
-                    .font(Theme.font(12)).foregroundStyle(Theme.muted)
+                    .font(Theme.font(11)).foregroundStyle(Theme.muted)
             }
             Button { open(nil) } label: {
                 HStack { Text("Open Secure Access Terminal"); Spacer(); Image(systemName: "arrow.up.right") }
-            }
-            .buttonStyle(MenuActionStyle())
+            }.buttonStyle(MenuActionStyle())
             if let release = model.update {
-                Button { open(.settings) } label: {
-                    Label("Update \(release.version) available", systemImage: "arrow.down.circle")
-                }.buttonStyle(.plain).font(Theme.font(11, .semibold)).foregroundStyle(Theme.accent)
+                Button { open(.settings) } label: { Label("Update \(release.version) available", systemImage: "arrow.down.circle") }
+                    .buttonStyle(.plain).font(Theme.font(10, .semibold)).foregroundStyle(Theme.accent)
             }
-            if let error = model.error {
-                Text(error).font(Theme.font(11)).foregroundStyle(Theme.danger)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            if let error = model.error { Text(error).font(Theme.font(10)).foregroundStyle(Theme.danger).fixedSize(horizontal: false, vertical: true) }
         }
     }
 
     private var pinForm: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Connect to the VPN").font(Theme.font(16, .bold))
-            Text("Enter your six-digit HN Group PIN.").font(Theme.font(11)).foregroundStyle(Theme.muted)
-            PinEntry(compact: true)
-            if let error = model.pinError { Text(error).font(Theme.font(11)).foregroundStyle(Theme.danger) }
-            Button("Cancel") { model.cancelPin(); cancelSSH() }.buttonStyle(MenuActionStyle())
-                .disabled(model.pinBusy || model.busy)
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 10) {
+                Image(systemName: "lock.shield").font(.system(size: 21)).foregroundStyle(Theme.accent)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Confirm connection").font(Theme.font(17, .bold))
+                    Text("United Kingdom · HN Group").font(Theme.font(10)).foregroundStyle(Theme.muted)
+                }
+            }
+            PinConfirmation(compact: true)
         }
     }
     private func cancelSSH() { sshPassword = ""; sshPrompt = false }
@@ -649,107 +648,104 @@ struct MenuWindowAnchor: NSViewRepresentable {
 
 // MARK: - PIN before connecting
 
-/// Six masked boxes for the HN Group PIN. Typing the sixth digit checks it once; a wrong PIN shakes
-/// the boxes and clears them. One hidden field takes the typing (and pasting) so the boxes stay simple.
+/// Entering digits only edits a draft. Connection requires an explicit button/Return action.
 struct PinEntry: View {
-    @EnvironmentObject var model: VPNModel
+    @Binding var code: String
     var compact = false
-    @State private var code = ""
-    @State private var shakes: CGFloat = 0
+    var submit: () -> Void = {}
     @FocusState private var focused: Bool
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     var body: some View {
         ZStack {
             SecureField("", text: $code)
-                .textFieldStyle(.plain)
-                .focused($focused)
+                .textFieldStyle(.plain).focused($focused)
                 .frame(width: 1, height: 1).opacity(0.01)
-                .accessibilityLabel("Six-digit PIN")
+                .accessibilityLabel("Six-digit HN Group PIN")
                 .onChange(of: code) { typed in
-                    let digits = String(typed.filter { $0.isASCII && $0.isNumber }.prefix(6))
-                    if digits != typed { code = digits; return }
-                    if digits.count == 6 && !model.pinBusy { Task { await model.submitPin(digits) } }
+                    let clean = String(typed.filter { $0.isASCII && $0.isNumber }.prefix(6))
+                    if clean != typed { code = clean }
                 }
-            HStack(spacing: compact ? 7 : 10) {
-                ForEach(0..<6, id: \.self) { i in box(i) }
+                .onSubmit(submit)
+            HStack(spacing: 8) {
+                ForEach(0..<6, id: \.self) { i in
+                    let filled = i < code.count
+                    RoundedRectangle(cornerRadius: 10).fill(Theme.background)
+                        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(focused && i == min(code.count, 5) ? Theme.accent : Theme.border, lineWidth: 1))
+                        .overlay(Circle().fill(Theme.accent).frame(width: 7, height: 7).opacity(filled ? 1 : 0))
+                        .frame(width: compact ? 42 : 44, height: compact ? 46 : 48)
+                }
+            }.contentShape(Rectangle()).onTapGesture { focused = true }
+        }
+        .onAppear { focused = true }
+    }
+}
+
+/// Shared manual confirmation in the main window and menu bar.
+struct PinConfirmation: View {
+    @EnvironmentObject var model: VPNModel
+    var compact = false
+    @State private var code = ""
+    private var working: Bool { model.pinBusy || model.busy }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 15) {
+            Text("Enter your six-digit HN Group PIN.").font(Theme.font(11)).foregroundStyle(Theme.muted)
+            PinEntry(code: $code, compact: compact, submit: confirm).disabled(working)
+            if let message = model.pinError {
+                Text(message).font(Theme.font(10)).foregroundStyle(Theme.danger).fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("Press Connect when you’re ready.").font(Theme.font(10)).foregroundStyle(Theme.muted)
             }
-            .contentShape(Rectangle())
-            .onTapGesture { focused = true }
-        }
-        .modifier(Shake(amount: shakes))
-        .opacity(model.pinBusy ? 0.6 : 1)
-        .onAppear { code = ""; focused = true; DispatchQueue.main.async { focused = true } }
-        .onChange(of: model.pinError) { message in
-            guard message != nil else { return }
-            code = ""; focused = true
-            if !reduceMotion { withAnimation(.linear(duration: 0.4)) { shakes += 1 } }
-        }
+            HStack(spacing: 10) {
+                Button("Cancel") { code = ""; model.cancelPin() }
+                    .buttonStyle(AccessActionStyle(primary: false)).keyboardShortcut(.cancelAction).disabled(working)
+                Button(action: confirm) {
+                    HStack(spacing: 8) {
+                        if working { ProgressView().controlSize(.small).tint(.white) }
+                        Text(working ? "Checking…" : model.pinRequest?.ssh == nil ? "Connect VPN" : "Connect & open SSH")
+                        Spacer(minLength: 0)
+                        Image(systemName: "arrow.right")
+                    }
+                }.buttonStyle(AccessActionStyle(wide: true)).disabled(code.count != 6 || working)
+            }
+        }.onChange(of: model.pinError) { error in if error != nil { code = "" } }
+            .onDisappear { code = "" }
     }
-
-    private func box(_ i: Int) -> some View {
-        let filled = i < code.count, current = focused && i == min(code.count, 5) && !model.pinBusy
-        let size: CGFloat = compact ? 38 : 48
-        return RoundedRectangle(cornerRadius: compact ? 10 : 12, style: .continuous)
-            .fill(filled ? Theme.accentSoft : Theme.surface2)
-            .overlay(RoundedRectangle(cornerRadius: compact ? 10 : 12, style: .continuous)
-                .strokeBorder(current ? Theme.accent : Theme.border, lineWidth: current ? 2 : 1))
-            .overlay(Circle().fill(Theme.accent).frame(width: compact ? 9 : 11, height: compact ? 9 : 11)
-                .scaleEffect(filled ? 1 : 0.2).opacity(filled ? 1 : 0))
-            .frame(width: size, height: size + (compact ? 4 : 8))
-            .animation(reduceMotion ? nil : .spring(response: 0.25, dampingFraction: 0.7), value: filled)
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: current)
+    private func confirm() {
+        guard code.count == 6, !working else { return }
+        let pin = code
+        Task { await model.submitPin(pin) }
     }
 }
 
-/// A short side-to-side shake for a wrong PIN.
-struct Shake: GeometryEffect {
-    var amount: CGFloat
-    var animatableData: CGFloat { get { amount } set { amount = newValue } }
-    func effectValue(size: CGSize) -> ProjectionTransform {
-        ProjectionTransform(CGAffineTransform(translationX: 9 * sin(amount * .pi * 6), y: 0))
-    }
-}
-
-/// The window's PIN card, centred over a lightly dimmed page.
+/// The confirmation uses the same surfaces, typography and controls as the Mac workspace.
 struct PinSheet: View {
     @EnvironmentObject var model: VPNModel
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var body: some View {
         ZStack {
-            Color.black.opacity(0.32).ignoresSafeArea().onTapGesture { if !model.pinBusy { model.cancelPin() } }
-                .transition(.opacity)
-            VStack(spacing: 16) {
+            Color.black.opacity(0.35).ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 20) {
+                HStack(spacing: 12) {
+                    Image(systemName: "lock.shield").font(.system(size: 22, weight: .medium)).foregroundStyle(Theme.accent)
+                        .frame(width: 42, height: 42).background(RoundedRectangle(cornerRadius: 13).fill(Theme.surface2))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Confirm connection").font(Theme.font(19, .bold)).tracking(-0.4)
+                        Text("United Kingdom · HN Group").font(Theme.font(10)).foregroundStyle(Theme.muted)
+                    }
+                    Spacer(minLength: 0)
+                }
+                Rectangle().fill(Theme.border.opacity(0.6)).frame(height: 1)
                 if let user = model.user {
-                    AvatarView(image: model.avatar, name: user.displayName, size: 56)
-                        .overlay(Circle().strokeBorder(Theme.border, lineWidth: 1))
+                    HStack(spacing: 9) {
+                        AvatarView(image: model.avatar, name: user.displayName, size: 25)
+                        Text(user.displayName).font(Theme.font(11, .semibold))
+                        Spacer()
+                    }
                 }
-                VStack(spacing: 5) {
-                    Text(model.pinRequest?.ssh == nil ? "Enter your PIN to connect" : "Enter your PIN to connect and open SSH")
-                        .font(Theme.font(19, .heavy)).multilineTextAlignment(.center)
-                    Text("Your six-digit HN Group PIN")
-                        .font(Theme.font(13)).foregroundStyle(Theme.muted).multilineTextAlignment(.center)
-                }
-                PinEntry()
-                ZStack {
-                    if model.pinBusy { HStack(spacing: 8) { ProgressView().controlSize(.small); Text("Checking…") }.foregroundStyle(Theme.muted) }
-                    else if let message = model.pinError { Text(message).foregroundStyle(Theme.danger).multilineTextAlignment(.center) }
-                    else { Text("You’re asked every time you connect.").foregroundStyle(Theme.muted) }
-                }
-                .font(Theme.font(12, .semibold)).frame(minHeight: 18)
-                Button("Cancel") { model.cancelPin() }
-                    .buttonStyle(HNButtonStyle(primary: false))
-                    .keyboardShortcut(.cancelAction)
-                    .disabled(model.pinBusy)
+                PinConfirmation()
             }
-            .padding(.horizontal, 30).padding(.vertical, 26)
-            .frame(width: 400)
-            .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Theme.surface))
-            .overlay(alignment: .top) { HNStripe().frame(height: 4).clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous)) }
-            .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Theme.border))
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .shadow(color: .black.opacity(0.3), radius: 30, y: 16)
-            .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.94)).combined(with: .offset(y: 10)))
+            .padding(24).frame(width: 380)
+            .background(RoundedRectangle(cornerRadius: 22).fill(Theme.surface))
+            .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(Theme.border))
+            .shadow(color: .black.opacity(0.2), radius: 18, y: 8)
         }
     }
 }
@@ -813,6 +809,27 @@ enum Snapshots {
             shoot(MenuView(showSSH: true).environmentObject(sample()), size: CGSize(width: MenuView.width, height: MenuView.height), dark: dark, to: folder.appendingPathComponent("menu-ssh-\(dark ? "dark" : "light").png"))
             let pinMenu = askingForPin(sample(connected: false))
             shoot(MenuView().environmentObject(pinMenu), size: CGSize(width: MenuView.width, height: MenuView.height), dark: dark, to: folder.appendingPathComponent("menu-pin-\(dark ? "dark" : "light").png"))
+        }
+        nativeChrome(to: folder)
+    }
+
+    /// Capture the real SwiftUI Window scene and native toolbar, including its macOS controls.
+    static func nativeChrome(to folder: URL) {
+        let model = VPNModel.shared
+        let sample = sample(section: .ssh)
+        model.user = sample.user; model.avatar = sample.avatar
+        model.stage = .ready; model.isSetUp = true; model.section = .ssh
+        RunLoop.current.run(until: Date().addingTimeInterval(0.8))
+        guard let window = NSApp.windows.first(where: { $0.title == "HN Secure Access Terminal" && $0.styleMask.contains(.titled) }) else { fatalError("Native app window is missing") }
+        window.setContentSize(NSSize(width: 980, height: 680))
+        window.orderFrontRegardless()
+        for dark in [true, false] {
+            window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+            guard window.toolbar != nil else { fatalError("Native toolbar is missing") }
+            guard let frame = window.contentView?.superview, let image = frame.bitmapImageRepForCachingDisplay(in: frame.bounds) else { fatalError("Native titlebar capture failed") }
+            frame.cacheDisplay(in: frame.bounds, to: image)
+            try? image.representation(using: .png, properties: [:])?.write(to: folder.appendingPathComponent("native-window-\(dark ? "dark" : "light").png"))
         }
     }
 

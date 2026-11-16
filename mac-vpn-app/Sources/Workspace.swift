@@ -52,7 +52,7 @@ struct AccessToolbar: View {
                     .buttonStyle(.plain).foregroundStyle(Theme.muted).help("Refresh connection and account")
             }
         }
-        .padding(.leading, 86).padding(.trailing, 22).frame(height: 62)
+        .padding(.leading, 86).padding(.trailing, 22).frame(height: 44)
         .background(Theme.sidebar.opacity(0.6))
         .overlay(alignment: .bottom) { Rectangle().fill(AccessDesign.line).frame(height: 1) }
     }
@@ -100,7 +100,7 @@ struct AccessRouteArtwork: View {
             let w = geometry.size.width, h = geometry.size.height
             ZStack {
                 RoundedRectangle(cornerRadius: 26).fill(LinearGradient(colors: [Color(hex: 0x221539), AccessDesign.ink, Color(hex: 0x152C36)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                Canvas { context, size in
+                Canvas(rendersAsynchronously: true) { context, size in
                     for column in 0..<24 {
                         for row in 0..<17 {
                             let rect = CGRect(x: CGFloat(column) * size.width / 23, y: CGFloat(row) * size.height / 16, width: 1.4, height: 1.4)
@@ -137,7 +137,7 @@ struct AccessRouteArtwork: View {
                 }.padding(.horizontal, 24).position(x: w / 2, y: h * 0.84)
             }.clipShape(RoundedRectangle(cornerRadius: 26))
                 .overlay(RoundedRectangle(cornerRadius: 26).strokeBorder(.white.opacity(0.07)))
-        }.accessibilityHidden(true)
+        }.transaction { $0.animation = nil }.accessibilityHidden(true)
     }
     private func endpoint(_ icon: String, _ title: String, _ subtitle: String) -> some View {
         VStack(spacing: 6) {
@@ -527,7 +527,7 @@ struct AccessWelcome: View {
     @EnvironmentObject var model: VPNModel
     var body: some View {
         VStack(spacing: 0) {
-            AccessToolbar()
+            if model.preview { AccessToolbar() }
             HStack(spacing: 48) {
                 AccessRouteArtwork(connected: false).frame(maxWidth: .infinity).frame(height: 370)
                 VStack(alignment: .leading, spacing: 20) {

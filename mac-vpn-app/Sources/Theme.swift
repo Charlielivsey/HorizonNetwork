@@ -81,13 +81,28 @@ struct HNStripe: View {
     }
 }
 
+/// Decode bundled artwork once, rather than rereading PNGs during every focus/state update.
+enum BundledArt {
+    private static let images: [String: NSImage] = {
+        var result: [String: NSImage] = [:]
+        for name in ["wordmark", "wordmark-white", "AppIcon", "MenuBarTemplate@2x", "MenuBarConnectedTemplate@2x"] {
+            if let url = Bundle.main.url(forResource: name, withExtension: "png"), let image = NSImage(contentsOf: url) {
+                if name.hasPrefix("MenuBar") { image.size = NSSize(width: 22, height: 20); image.isTemplate = true }
+                result[name] = image
+            }
+        }
+        return result
+    }()
+    static func image(_ name: String) -> NSImage? { images[name] }
+}
+
 /// The approved HN Group wordmark, light or dark.
 struct HNWordmark: View {
     @Environment(\.colorScheme) private var scheme
     let height: CGFloat
     init(height: CGFloat = 30) { self.height = height }
     var body: some View {
-        if let url = Bundle.main.url(forResource: scheme == .dark ? "wordmark-white" : "wordmark", withExtension: "png"), let image = NSImage(contentsOf: url) {
+        if let image = BundledArt.image(scheme == .dark ? "wordmark-white" : "wordmark") {
             Image(nsImage: image).resizable().interpolation(.high).aspectRatio(contentMode: .fit).frame(height: height)
                 .accessibilityLabel("HN Group")
         } else {
@@ -114,12 +129,7 @@ struct MenuBarMark: View {
     let connected: Bool
     let busy: Bool
     private var image: NSImage? {
-        let name = connected ? "MenuBarConnectedTemplate" : "MenuBarTemplate"
-        guard let url = Bundle.main.url(forResource: name + "@2x", withExtension: "png"),
-              let image = NSImage(contentsOf: url) else { return nil }
-        image.size = NSSize(width: 22, height: 20)
-        image.isTemplate = true
-        return image
+        BundledArt.image(connected ? "MenuBarConnectedTemplate@2x" : "MenuBarTemplate@2x")
     }
     var body: some View {
         Group {
@@ -139,8 +149,7 @@ struct AppMark: View {
     var size: CGFloat = 34
     var body: some View {
         Group {
-            if let url = Bundle.main.url(forResource: "AppIcon", withExtension: "png"),
-               let image = NSImage(contentsOf: url) {
+            if let image = BundledArt.image("AppIcon") {
                 Image(nsImage: image).resizable().scaledToFit()
             } else {
                 Image(systemName: "terminal.fill").resizable().scaledToFit().foregroundStyle(Theme.purple)

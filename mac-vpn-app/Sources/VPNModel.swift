@@ -55,6 +55,9 @@ final class VPNModel: ObservableObject {
 
     private let api = API()
     private var timer: Timer?
+    private var checkingStatus = false
+    private var serverTask: Task<Shell.Result, Never>?
+    private var refreshing = false
 
     init(preview: Bool = false) {
         self.preview = preview
@@ -141,6 +144,8 @@ final class VPNModel: ObservableObject {
     // MARK: Status
 
     func refresh() async {
+        guard !refreshing else { return }
+        refreshing = true; defer { refreshing = false }
         do {
             let me = try await api.send("api/me", as: Me.self)
             user = me.user
@@ -167,18 +172,39 @@ final class VPNModel: ObservableObject {
         } catch { self.error = error.localizedDescription }
     }
 
-    func checkStatus() async {
-        guard Paths.helperInstalled else { connected = false; return }
+    /// Poll only the local interface here. Optional network diagnostics must never hold a button busy.
+    func checkStatus(force: Bool = false) async {
+        guard force || (!checkingStatus && !busy) else { return }
+        checkingStatus = true; defer { checkingStatus = false }
+        guard Paths.helperInstalled else {
+            if connected { connected = false; connectedSince = nil }
+            if serverReachable != nil { serverReachable = nil }
+            return
+        }
         let result = await Shell.run("/usr/bin/sudo", ["-n", Paths.helper, "status"])
+        guard force || !busy else { return }
         let now = result.output.trimmingCharacters(in: .whitespacesAndNewlines) == "up"
-        if now != connected || ip == nil { connected = now; connectedSince = now ? (connectedSince ?? Date()) : nil; await checkIP() }
-        if connected { await checkServer() } else { serverReachable = nil }
+        if now != connected {
+            connected = now
+            connectedSince = now ? Date() : nil
+        }
+        if now { Task { await checkServer() } }
+        else if serverReachable != nil { serverReachable = nil }
     }
 
-    /// Checks the server's SSH port answers through the VPN.
+    /// Coalesce timer/manual/SSH probes and discard answers from a connection that has since ended.
     func checkServer() async {
-        let result = await Shell.run("/usr/bin/nc", ["-z", "-G", "3", "-w", "3", VPNModel.serverAddress, "22"])
-        serverReachable = result.status == 0
+        let since = connectedSince
+        if let task = serverTask {
+            let result = await task.value
+            if connected && connectedSince == since && serverReachable != (result.status == 0) { serverReachable = result.status == 0 }
+            return
+        }
+        let task = Task { await Shell.run("/usr/bin/nc", ["-z", "-G", "3", "-w", "3", VPNModel.serverAddress, "22"]) }
+        serverTask = task
+        let result = await task.value
+        serverTask = nil
+        if connected && connectedSince == since && serverReachable != (result.status == 0) { serverReachable = result.status == 0 }
     }
 
     /// Fetches this Mac's current VPN configuration and installs it (one password prompt), for
@@ -195,7 +221,7 @@ final class VPNModel: ObservableObject {
             Keychain.set("configVersion", VPNModel.configVersion)
             needsReconfigure = false
             if wasConnected { _ = await Shell.run("/usr/bin/sudo", ["-n", Paths.helper, "up"]) }
-            await checkStatus()
+            await checkStatus(force: true)
         } catch { self.error = error.localizedDescription }
     }
 
@@ -264,7 +290,7 @@ final class VPNModel: ObservableObject {
 
     /// Asks for the PIN; the VPN comes on once the server has accepted it.
     func requestConnect(ssh password: String? = nil) {
-        guard !busy, !connected || password != nil else { return }
+        guard !busy, !pinBusy, pinRequest == nil, stage == .ready, isSetUp, !connected || password != nil else { return }
         pinError = nil
         pinRequest = PinRequest(ssh: password)
     }
@@ -302,8 +328,7 @@ final class VPNModel: ObservableObject {
         error = nil; busy = true; defer { busy = false }
         let result = await Shell.run("/usr/bin/sudo", ["-n", Paths.helper, "up"])
         if result.status != 0 { error = "Couldn’t connect. " + lastLine(result.output) }
-        try? await Task.sleep(nanoseconds: 1_200_000_000)
-        await checkStatus(); await checkIP()
+        await checkStatus(force: true)
     }
 
     /// Used when this Mac stops being approved on devices.hngroup.org.uk.
@@ -317,7 +342,7 @@ final class VPNModel: ObservableObject {
         error = nil; busy = true; defer { busy = false }
         let result = await Shell.run("/usr/bin/sudo", ["-n", Paths.helper, "down"])
         if result.status != 0 { error = "Couldn’t disconnect. " + lastLine(result.output) }
-        await checkStatus(); await checkIP()
+        await checkStatus(force: true)
     }
 
     private func lastLine(_ text: String) -> String {

@@ -63,3 +63,9 @@ Mac CI runs `--test-window-lifecycle` against real AppKit windows and captures e
 Replaces the website-style sidebar and card dashboard with a compact Mac app frame, navigation rail and integrated toolbar. A purpose-drawn private-route illustration and focused connection controls share the main screen. SSH has a dedicated terminal preview and credential form; Profile has Devices, Sign-ins and Activity tabs; Settings uses grouped preference rows. Matching actions, typography and menu-bar presentation retain the approved HN wordmark and palette.
 
 Every main screen is captured at the normal 980×680 window size; Connection and SSH also at the minimum 880×620. CI checks the profile tabs, both appearances and the existing Dock/menu-window lifecycle. VPN, identity, PIN, one-use password and updater behaviour are unchanged.
+
+### 3.1.1 Manual connection and interaction polish
+
+PIN entry now requires an explicit Connect/Return action; typing the sixth digit never starts verification or the VPN. Launch/sign-in/status refresh do not start the tunnel. Shared confirmation controls in the main window and menu bar use the current app typography and surfaces. The menu panel uses matching compact chrome and explicit connection/terminal controls.
+
+Connection buttons wait only for the helper operation and local state, without the old fixed delay or redundant public-IP requests. Server diagnostics run independently, duplicate refresh/probe work is coalesced, route artwork renders asynchronously, bundled artwork is decoded once, and animated avatars are not restarted on unrelated view updates. Broad navigation/PIN spring animations are removed. A native macOS toolbar aligns branding with the standard window controls; CI captures the actual Window scene as well as page fixtures and types six digits into the real secure field to verify manual confirmation.
