@@ -16,7 +16,7 @@ final class DeviceGate: ObservableObject {
     static let origin = URL(string: "https://devices.hngroup.org.uk")!
     static let trustFor: Double = 7 * 86400 * 1000
     /// Screenshots and the App Manager login-item mode never check (and are never blocked).
-    static let shared = DeviceGate(preview: CommandLine.arguments.contains("--snapshot") || CommandLine.arguments.contains("--app-manager-login-item"))
+    static let shared = DeviceGate(preview: CommandLine.arguments.contains("--snapshot") || CommandLine.arguments.contains("--app-manager-login-item") || CommandLine.arguments.contains("--test-window-lifecycle"))
 
     @Published private(set) var status: Status = .unknown
     @Published private(set) var allowed = false

@@ -17,7 +17,7 @@ final class VPNModel: ObservableObject {
     enum UpdateState: Equatable { case idle, checking, upToDate, downloading, installing, failed(String) }
 
     /// One model for the app, so links back from the browser reach it.
-    static let shared = VPNModel()
+    static let shared = VPNModel(preview: CommandLine.arguments.contains("--test-window-lifecycle"))
 
     @Published var stage: Stage = .signIn
     @Published var busy = false
