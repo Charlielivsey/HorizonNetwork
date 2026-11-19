@@ -1,8 +1,6 @@
 name: Build and publish HN Browser
 on:
-  push:
-    branches: [claude/confident-volta-gxjboo]
-    paths: ['browser-app/**', '.github/workflows/hn-browser.yml']
+  # Discontinued: only deliberate manual archive builds remain available.
   workflow_dispatch:
 permissions:
   contents: read
