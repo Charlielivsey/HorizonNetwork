@@ -11,6 +11,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     private let model: VPNModel
     private var changes: AnyCancellable?
     private var initialPin: UUID?
+    private var escapeMonitor: Any?
 
     init(model: VPNModel) {
         self.model = model
@@ -44,16 +45,28 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         popover.animates = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         popover.appearance = appearance ?? NSApp.effectiveAppearance
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        NSApp.activate(ignoringOtherApps: true)
+        popover.contentViewController?.view.window?.makeKey()
         popover.contentViewController?.view.window?.isMovable = false
+        escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self, self.popover.isShown, event.keyCode == 53 else { return event }
+            self.close()
+            return nil
+        }
     }
     func close() { popover.performClose(nil) }
+    private func stopEscapeMonitor() {
+        if let monitor = escapeMonitor { NSEvent.removeMonitor(monitor); escapeMonitor = nil }
+    }
     func popoverDidClose(_ notification: Notification) {
+        stopEscapeMonitor()
         if model.pinRequest?.id != initialPin && !model.pinBusy && !model.busy { model.cancelPin() }
         // Release all form state immediately, including any typed SSH password or PIN draft.
         popover.contentViewController = nil
         initialPin = nil
     }
     func remove() {
+        stopEscapeMonitor()
         close()
         changes?.cancel()
         NSStatusBar.system.removeStatusItem(statusItem)

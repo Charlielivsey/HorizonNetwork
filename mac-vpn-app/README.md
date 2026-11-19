@@ -75,3 +75,7 @@ Connection buttons wait only for the helper operation and local state, without t
 The menu bar now uses one native NSPopover instead of a SwiftUI rounded panel inside a separate native window frame. macOS owns the outline, anchoring, corners and outside-click behaviour; form state is released when the popover closes. The left navigation uses compact icon-and-text rows, matching the app surfaces and selected controls. Plain controls have explicit full-row hit shapes; decorative native image/background views pass mouse events through to their buttons.
 
 A short scoped fade opens the manual connection confirmation, pages fade/shift 5 points over 160 ms, and pressed primary controls respond over 90 ms. These honour Reduce Motion and keep the static route artwork out of animation transactions. Native CI mouse checks click blank areas of Connect, Cancel, server-terminal and navigation rows, alongside the existing manual-PIN and Dock checks. Actual native popover screenshots cover both appearances.
+
+### 3.1.3 Menu-bar keyboard and PIN
+
+Escape dismisses the native menu-bar popover even while a secure field has focus. Completing its six-digit PIN starts verification once, and an accepted PIN continues directly to the existing VPN/SSH connection flow. Partial or rejected PINs never connect; failures clear the draft for retry. Opening the panel does not connect. Main-window confirmation is unchanged. Native checks cover Escape, incomplete PINs, menu auto-submit and main-window manual confirmation; preview connections never invoke the real VPN helper.

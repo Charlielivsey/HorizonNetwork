@@ -326,6 +326,8 @@ final class VPNModel: ObservableObject {
     private func connect() async {
         guard !busy else { return }
         error = nil; busy = true; defer { busy = false }
+        // Native UI checks must never execute a real helper or alter the CI host's network.
+        if preview { connected = true; connectedSince = Date(); return }
         let result = await Shell.run("/usr/bin/sudo", ["-n", Paths.helper, "up"])
         if result.status != 0 { error = "Couldn’t connect. " + lastLine(result.output) }
         await checkStatus(force: true)

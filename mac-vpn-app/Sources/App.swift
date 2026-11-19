@@ -620,7 +620,7 @@ struct MenuSSHForm: View {
 
 // MARK: - PIN before connecting
 
-/// Entering digits only edits a draft. Connection requires an explicit button/Return action.
+/// PIN input is sanitised here; the enclosing confirmation controls submission.
 struct PinEntry: View {
     @Binding var code: String
     var compact = false
@@ -651,12 +651,13 @@ struct PinEntry: View {
     }
 }
 
-/// Shared manual confirmation in the main window and menu bar.
+/// Menu-bar entry submits a complete PIN immediately; the main window retains manual confirmation.
 struct PinConfirmation: View {
     @EnvironmentObject var model: VPNModel
     var compact = false
     @State private var code = ""
-    private var working: Bool { model.pinBusy || model.busy }
+    @State private var submitting = false
+    private var working: Bool { submitting || model.pinBusy || model.busy }
     var body: some View {
         VStack(alignment: .leading, spacing: 15) {
             Text("Enter your six-digit HN Group PIN.").font(Theme.font(11)).foregroundStyle(Theme.muted)
@@ -664,7 +665,7 @@ struct PinConfirmation: View {
             if let message = model.pinError {
                 Text(message).font(Theme.font(10)).foregroundStyle(Theme.danger).fixedSize(horizontal: false, vertical: true)
             } else {
-                Text("Press Connect when you’re ready.").font(Theme.font(10)).foregroundStyle(Theme.muted)
+                Text(compact ? "Connects automatically when your PIN is accepted." : "Press Connect when you’re ready.").font(Theme.font(10)).foregroundStyle(Theme.muted)
             }
             HStack(spacing: 10) {
                 Button("Cancel") { code = ""; model.cancelPin() }
@@ -678,13 +679,20 @@ struct PinConfirmation: View {
                     }
                 }.buttonStyle(AccessActionStyle(wide: true)).disabled(code.count != 6 || working)
             }
+        }.onChange(of: code) { value in
+            if compact && value.count == 6 { confirm() }
         }.onChange(of: model.pinError) { error in if error != nil { code = "" } }
             .onDisappear { code = "" }
     }
     private func confirm() {
-        guard code.count == 6, !working else { return }
+        guard code.range(of: "^[0-9]{6}$", options: .regularExpression) != nil, !working else { return }
         let pin = code
-        Task { await model.submitPin(pin) }
+        submitting = true
+        Task {
+            await model.submitPin(pin)
+            code = ""
+            submitting = false
+        }
     }
 }
 

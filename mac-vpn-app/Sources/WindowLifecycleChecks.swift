@@ -30,7 +30,8 @@ enum WindowLifecycleChecks {
         await settle { NSApp.activationPolicy() == .accessory }
         check(NSApp.activationPolicy() == .accessory, "Repeated close keeps menu-only mode")
         await navigationClicks()
-        await manualPinEntry()
+        await pinEntry(automatic: false)
+        await pinEntry(automatic: true)
         print("All window lifecycle and manual PIN checks passed")
     }
     private static func click(_ view: NSView, at point: NSPoint) {
@@ -79,9 +80,11 @@ enum WindowLifecycleChecks {
         click(host, at: NSPoint(x: 180, y: 214))
         await settle { hasSecureField(host) }
         check(hasSecureField(host), "The whole server terminal card opens its form")
-        menu.close()
+        if let escape = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53) {
+            NSApp.postEvent(escape, atStart: true)
+        } else { check(false, "Escape key event can be created") }
         await settle { !menu.popover.isShown && menu.popover.contentViewController == nil }
-        check(menu.popover.contentViewController == nil, "Closing the menu releases all form state")
+        check(!menu.popover.isShown && menu.popover.contentViewController == nil, "Escape closes the menu from a secure form and releases its draft")
     }
     private static func navigationClicks() async {
         let model = VPNModel(preview: true)
@@ -102,14 +105,14 @@ enum WindowLifecycleChecks {
         check(image.hitTest(NSPoint(x: 22, y: 22)) == nil, "Avatar artwork passes clicks to the account button")
         window.close()
     }
-    private static func manualPinEntry() async {
+    private static func pinEntry(automatic: Bool) async {
         let model = VPNModel(preview: true)
         model.stage = .ready; model.isSetUp = true
         model.requestConnect()
         check(model.pinRequest != nil && !model.connected, "Requesting connection only opens confirmation")
         let window = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 360, height: 260), styleMask: [.titled, .closable], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
-        let host = NSHostingView(rootView: PinConfirmation(compact: true).environmentObject(model).padding(16))
+        let host = NSHostingView(rootView: PinConfirmation(compact: automatic).environmentObject(model).padding(16))
         window.contentView = host
         NSApp.setActivationPolicy(.regular)
         window.makeKeyAndOrderFront(nil)
@@ -122,11 +125,19 @@ enum WindowLifecycleChecks {
         guard let field = secureField(host) else { check(false, "PIN input is available to keyboard users"); return }
         window.makeFirstResponder(field)
         guard let editor = field.currentEditor() as? NSTextView else { check(false, "PIN input receives keyboard focus"); return }
-        editor.insertText("123456", replacementRange: NSRange(location: NSNotFound, length: 0))
+        editor.insertText("12345", replacementRange: NSRange(location: NSNotFound, length: 0))
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        check(model.pinRequest != nil && !model.connected && !model.pinBusy, "An incomplete PIN never starts verification")
+        editor.insertText("6", replacementRange: NSRange(location: NSNotFound, length: 0))
         try? await Task.sleep(nanoseconds: 200_000_000)
-        check(model.pinRequest != nil && !model.connected && !model.busy && !model.pinBusy, "Typing six PIN digits never starts the VPN")
-        model.cancelPin()
-        check(model.pinRequest == nil && !model.connected, "Cancel leaves the VPN off")
+        if automatic {
+            await settle { model.connected && model.pinRequest == nil }
+            check(model.connected && model.pinRequest == nil, "Menu PIN connects after the sixth digit without Return or another click")
+        } else {
+            check(model.pinRequest != nil && !model.connected && !model.busy && !model.pinBusy, "Main-window PIN still waits for confirmation")
+            model.cancelPin()
+            check(model.pinRequest == nil && !model.connected, "Cancel leaves the VPN off")
+        }
         window.close()
         withExtendedLifetime(model) {}
     }
