@@ -79,3 +79,7 @@ A short scoped fade opens the manual connection confirmation, pages fade/shift 5
 ### 3.1.3 Menu-bar keyboard and PIN
 
 Escape dismisses the native menu-bar popover even while a secure field has focus. Completing its six-digit PIN starts verification once, and an accepted PIN continues directly to the existing VPN/SSH connection flow. Partial or rejected PINs never connect; failures clear the draft for retry. Opening the panel does not connect. Main-window confirmation is unchanged. Native checks cover Escape, incomplete PINs, menu auto-submit and main-window manual confirmation; preview connections never invoke the real VPN helper.
+
+### 3.1.4 Menu-bar SSH panel
+
+The server terminal panel now groups credentials in a compact form, identifies the server and VPN state, and uses a clearer Open Terminal action. Passwords remain single-use. Username Return moves focus to the password; password Return opens the existing SSH/PIN flow. Escape and automatic menu-bar PIN submission are retained. Disabled actions use one opacity treatment for readability.

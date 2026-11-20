@@ -431,8 +431,8 @@ struct MenuView: View {
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: sshPrompt)
                 Rectangle().fill(Theme.border).frame(height: 1)
                 HStack {
-                    Button { NSWorkspace.shared.open(API.base) } label: {
-                        Label("VPN website", systemImage: "arrow.up.right")
+                    Button { NSWorkspace.shared.open(URL(string: "https://sat.hngroup.org.uk")!) } label: {
+                        Label("Secure Access website", systemImage: "arrow.up.right")
                     }
                     .buttonStyle(.plain).foregroundStyle(Theme.muted)
                     Spacer()
@@ -568,52 +568,67 @@ struct MenuSSHForm: View {
     @FocusState private var focused: Field?
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 9) {
-                Button(action: cancel) { Image(systemName: "chevron.left").frame(width: 32, height: 32).contentShape(Rectangle()) }
-                    .buttonStyle(.plain).foregroundStyle(Theme.accent).disabled(model.sshBusy)
+            HStack(spacing: 10) {
+                Button(action: cancel) {
+                    Image(systemName: "chevron.left").font(.system(size: 12, weight: .semibold))
+                        .frame(width: 32, height: 32)
+                        .background(RoundedRectangle(cornerRadius: 9).fill(Theme.surface))
+                        .contentShape(Rectangle())
+                }.buttonStyle(.plain).foregroundStyle(Theme.accent).disabled(model.sshBusy)
                     .accessibilityLabel("Back to connection")
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("SSH to the server").font(Theme.font(15, .bold))
-                    Text("Your password is used once.").font(Theme.font(10)).foregroundStyle(Theme.muted)
+                    Text("Server terminal").font(Theme.font(17, .bold))
+                    Text("A secure session, ready when you are.").font(Theme.font(10)).foregroundStyle(Theme.muted)
                 }
             }
-            VStack(alignment: .leading, spacing: 5) {
-                Text("Username").font(Theme.font(10, .semibold)).foregroundStyle(Theme.muted)
-                TextField("Username", text: $model.sshUser).textFieldStyle(.plain)
-                    .font(Theme.font(12)).padding(10)
-                    .background(RoundedRectangle(cornerRadius: 9).fill(Theme.surface))
-                    .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(focused == .username ? Theme.accent : Theme.border))
-                    .focused($focused, equals: .username).accessibilityLabel("SSH username")
+            HStack(spacing: 6) {
+                Image(systemName: "server.rack").foregroundStyle(Theme.accent)
+                Text(VPNModel.serverAddress + " · 22").font(.system(size: 10, design: .monospaced))
+                Spacer(minLength: 4)
+                Circle().fill(model.connected ? Theme.success : Theme.muted).frame(width: 5, height: 5)
+                Text(model.connected ? "VPN connected" : "VPN required").font(Theme.font(9, .medium))
+            }.foregroundStyle(Theme.muted)
+            VStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Label("Username", systemImage: "person").font(Theme.font(9, .semibold)).foregroundStyle(Theme.muted)
+                    TextField("root", text: $model.sshUser).textFieldStyle(.plain)
+                        .font(.system(size: 12, design: .monospaced))
+                        .focused($focused, equals: .username)
+                        .onSubmit { focused = .password }
+                        .accessibilityLabel("SSH username")
+                }.padding(10).frame(maxWidth: .infinity, alignment: .leading)
+                Rectangle().fill(Theme.border).frame(height: 1)
+                VStack(alignment: .leading, spacing: 4) {
+                    Label("Server password", systemImage: "key").font(Theme.font(9, .semibold)).foregroundStyle(Theme.muted)
+                    SecureField("Enter your server password", text: $password).textFieldStyle(.plain)
+                        .font(Theme.font(12)).focused($focused, equals: .password)
+                        .onSubmit { connect() }.accessibilityLabel("SSH server password")
+                }.padding(10).frame(maxWidth: .infinity, alignment: .leading)
             }
-            VStack(alignment: .leading, spacing: 5) {
-                Text("Server password").font(Theme.font(10, .semibold)).foregroundStyle(Theme.muted)
-                SecureField("Enter password", text: $password).textFieldStyle(.plain)
-                    .font(Theme.font(12)).padding(10)
-                    .background(RoundedRectangle(cornerRadius: 9).fill(Theme.surface))
-                    .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(focused == .password ? Theme.accent : Theme.border))
-                    .focused($focused, equals: .password).onSubmit { connect() }
-                    .accessibilityLabel("SSH server password")
-            }
+            .background(RoundedRectangle(cornerRadius: 11).fill(Theme.surface))
+            .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(focused == nil ? Theme.border : Theme.accent.opacity(0.7)))
+            .disabled(model.sshBusy || model.busy)
             if let error = model.error {
-                Text(error).font(Theme.font(10)).foregroundStyle(Theme.danger)
-                    .fixedSize(horizontal: false, vertical: true)
+                Text(error).font(Theme.font(10)).foregroundStyle(Theme.danger).fixedSize(horizontal: false, vertical: true)
             }
             Button(action: connect) {
                 HStack(spacing: 8) {
-                    if model.sshBusy { ProgressView().controlSize(.small) }
-                    Text(model.sshBusy ? "Opening Terminal…" : model.connected ? "Open SSH" : "Connect & open SSH")
-                    Spacer()
-                    Image(systemName: "arrow.right")
+                    if model.sshBusy { ProgressView().controlSize(.small).tint(.white) }
+                    else { Image(systemName: "terminal") }
+                    Text(model.sshBusy ? "Opening Terminal…" : model.connected ? "Open Terminal" : "Connect & open Terminal")
+                    Spacer(minLength: 0)
+                    Image(systemName: "arrow.up.right")
                 }
-            }
-            .buttonStyle(MenuActionStyle(primary: true))
-            .disabled(password.isEmpty || model.sshBusy || model.busy)
-            .opacity(password.isEmpty || model.sshBusy || model.busy ? 0.5 : 1)
+            }.buttonStyle(MenuActionStyle(primary: true))
+                .disabled(password.isEmpty || model.sshUser.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.sshBusy || model.busy)
+            Label("Opens in macOS Terminal. Your password isn’t saved.", systemImage: "lock.shield")
+                .font(Theme.font(9)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
         }
         .onAppear { focused = .password }
     }
+
     private func connect() {
-        guard !password.isEmpty, !model.sshBusy, !model.busy else { return }
+        guard !password.isEmpty, !model.sshUser.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !model.sshBusy, !model.busy else { return }
         submit()
     }
 }
