@@ -54,3 +54,9 @@ test('Compass 2 accepts only the renamed verified artifacts while older browser 
   assert.throws(()=>installer({version:'2.0.0-70',assets:{[id]:{...asset,name:asset.name.replace('Horizon-Compass','HN-Browser')}}},platform,arch,'1.3.7-62'));
  }
 });
+
+test('Compass 2.0.1 uses the short-name installers and retains the 2.0.0 migration path',()=>{
+ const a={url:'/download/windows-x64',name:'Compass-2.0.1-win-x64.exe',size:10,sha256:'a'.repeat(64)};
+ assert.equal(installer({version:'2.0.1-66',assets:{'windows-x64':a}},'win32','x64','2.0.0-65').name,a.name);
+ assert.throws(()=>installer({version:'2.0.1-66',assets:{'windows-x64':{...a,name:'Horizon-Compass-2.0.1-win-x64.exe'}}},'win32','x64','2.0.0-65'));
+});

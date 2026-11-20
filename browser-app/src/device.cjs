@@ -1,5 +1,5 @@
 'use strict';
-// This computer's HN Group device identity, shared by Horizon Compass, HN Secure Access Terminal and HN Group App Manager
+// This computer's HN Group device identity, shared by Compass, HN Secure Access Terminal and HN Group App Manager
 // (identical copies in each app's src/device.cjs; the Mac Secure Access Terminal app reads the same files in Swift).
 // A device must be approved on devices.hngroup.org.uk before the apps can be used, installed or updated there.
 //

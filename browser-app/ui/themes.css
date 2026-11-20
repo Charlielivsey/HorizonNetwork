@@ -1,4 +1,4 @@
-/* Horizon Compass themes: one set of colour tokens per theme, shared by the toolbar, menus, suggestions and the
+/* Compass themes: one set of colour tokens per theme, shared by the toolbar, menus, suggestions and the
    new tab page. Purple actions and the HN stripe stay the same in every theme. */
 :root,body{
  --bg:#100d1a;--chrome:#100d1a;--toolbar:#1a1528;--panel:#1f1930;--raised:#2a2240;--hover:#ffffff0f;--press:#ffffff17;--sunken:#140f20;

@@ -20,3 +20,5 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
 @media(max-width:430px){.shortcut-group nav{grid-template-columns:1fr}.watermark{display:none}}
 @keyframes rise{from{opacity:0;transform:translateY(8px)}}
 body[data-motion=reduced] *{animation:none!important;transition:none!important}@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+img.watermark{width:clamp(320px,44vw,700px);height:auto;right:-60px;bottom:-130px;opacity:.035}

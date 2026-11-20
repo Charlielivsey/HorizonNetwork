@@ -25,7 +25,7 @@ function render(state,action,motion){const list=document.getElementById('tabs'),
  state.tabs.forEach((t,index)=>{let node=nodes.get(t.id);if(!node){node=make(t,action);nodes.set(t.id,node);if(!motion)node.classList.remove('entering');}
   const live=[...list.children].filter(n=>!n.classList.contains('closing'));if(live[index]!==node)list.insertBefore(node,live[index]||null);
   node.classList.toggle('active',t.id===state.active);node.classList.toggle('pinned',!!t.pinned);node.classList.toggle('loading',!!t.loading);
-  const image=node.querySelector('.tab-icon'),show=!!t.icon&&!t.loading;if(show&&image.getAttribute('src')!==t.icon)image.src=t.icon;image.hidden=!show;node.querySelector('.tab-indicator').hidden=show;
+  const image=node.querySelector('.tab-icon'),source=t.url==='hn-browser://start/'?'assets/compass.svg':t.icon,show=!!source&&!t.loading;if(show&&image.getAttribute('src')!==source)image.src=source;image.hidden=!show;node.querySelector('.tab-indicator').hidden=show;
   const label=node.querySelector('.tab-title'),text=(t.muted?'🔇 ':'')+(t.title||'New tab');label.setAttribute('aria-selected',String(t.id===state.active));if(label.textContent!==text)label.textContent=text;if(node.title!==t.title)node.title=t.title;
   node.querySelector('.close').setAttribute('aria-label','Close '+t.title);});
  if(motion)for(const[id,node]of nodes){const was=before.get(id);if(was===undefined)continue;const dx=was-node.getBoundingClientRect().top;if(Math.abs(dx)>1)node.animate([{transform:'translateY('+dx+'px)'},{transform:'none'}],{duration:240,easing:'cubic-bezier(.2,.8,.2,1)'});}

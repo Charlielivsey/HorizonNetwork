@@ -128,7 +128,7 @@ function actionButtons(a, large) {
   const p = primary(a), out = [];
   if (p) out.push(el('button', { class: 'btn ' + (p.kind === 'cancel' ? '' : 'primary') + (large ? ' big' : ''), 'data-action': p.kind, disabled: p.disabled || null, onclick: (e) => busy(e.currentTarget, () => perform(a.id, p.kind, e.currentTarget)) }, icon(p.icon), el('span', {}, p.label)));
   if (moreItems(a).length) out.push(el('button', { class: 'btn icon-only' + (large ? ' big' : ''), 'aria-label': 'More for ' + a.name, 'aria-haspopup': 'menu', 'data-action': 'more', onclick: (e) => openMenu(e.currentTarget, moreItems(a)) }, icon('more')));
-  if (!a.available) out.push(el('span', { class: 'small muted' }, a.id === 'browser' && mac() ? 'Horizon Compass needs a Mac with Apple silicon.' : 'Not available for this computer.'));
+  if (!a.available) out.push(el('span', { class: 'small muted' }, a.id === 'browser' && mac() ? 'Compass needs a Mac with Apple silicon.' : 'Not available for this computer.'));
   else if (!a.installed && !a.latest && !jobFor(a.id)) out.push(el('span', { class: 'small muted' }, state.manager.checkedAt ? 'There’s no download for this computer yet.' : 'Check for updates to install it.'));
   return out;
 }

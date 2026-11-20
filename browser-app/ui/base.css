@@ -1,4 +1,4 @@
-/* Horizon Compass design system: type, motion, buttons, fields, switches and cards. Used by the toolbar and the
+/* Compass design system: type, motion, buttons, fields, switches and cards. Used by the toolbar and the
    overlay (menus and windows). Only transform and opacity are animated, so motion stays smooth. */
 @font-face{font-family:Jakarta;src:url('assets/plus-jakarta-sans.woff2');font-weight:200 800;font-display:block}
 :root{--out:cubic-bezier(.2,.8,.2,1);--spring:cubic-bezier(.3,1.4,.55,1);--in:cubic-bezier(.4,0,1,1);--fast:.14s;--mid:.22s;--slow:.34s;--radius:14px}
@@ -78,6 +78,6 @@ progress{appearance:none;width:100%;height:5px;border:0;border-radius:5px;overfl
 progress::-webkit-progress-bar{background:var(--line);border-radius:5px}
 progress::-webkit-progress-value{background:linear-gradient(90deg,var(--action),var(--accent));border-radius:5px;transition:width .3s var(--out)}
 
-/* ---------- Reduce motion: Horizon Compass's setting and the computer's ---------- */
+/* ---------- Reduce motion: Compass's setting and the computer's ---------- */
 body[data-motion=reduced] *,body[data-motion=reduced] *::before,body[data-motion=reduced] *::after{animation-duration:1ms!important;animation-delay:0s!important;animation-iteration-count:1!important;transition-duration:1ms!important}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:1ms!important;animation-delay:0s!important;animation-iteration-count:1!important;transition-duration:1ms!important}}

@@ -1,6 +1,6 @@
-# Horizon Compass 2.0
+# Compass 2.0
 
-Horizon Compass for macOS Apple silicon, Windows x64 and Linux x64, rebuilt with a vertical tab rail and HN workspace home. Intel Macs remain unsupported.
+Compass for macOS Apple silicon, Windows x64 and Linux x64, rebuilt with a vertical tab rail and HN workspace home. Intel Macs remain unsupported.
 
 ## 2.0 — floating side tabs and your HN workspace
 

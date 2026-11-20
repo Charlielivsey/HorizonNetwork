@@ -1,5 +1,5 @@
 'use strict';
-// Horizon Compass settings: defaults, and the only values each one accepts. Saved in preferences.json.
+// Compass settings: defaults, and the only values each one accepts. Saved in preferences.json.
 const{theme}=require('./policy.cjs');
 const DEFAULTS=Object.freeze({
  theme:'midnight-lavender',sidebarExpanded:false,hnThemes:true,homeButton:true,reduceMotion:false,defaultZoom:0,

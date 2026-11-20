@@ -103,7 +103,7 @@ body[data-platform=darwin] .mac-space{width:78px}
 
 @media(max-width:900px){#account-label{display:none}.account-chip{padding-right:3px}.address-hint{display:none}}
 
-/* Horizon Compass 2 — a single toolbar and a vertical workspace rail. */
+/* Compass 2 — a single toolbar and a vertical workspace rail. */
 body{--rail-width:76px;overflow:hidden}
 body.sidebar-expanded{--rail-width:232px}
 .browser-top{height:76px}

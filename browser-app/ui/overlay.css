@@ -1,7 +1,7 @@
 /* Menus and windows, drawn on a transparent layer over the live page.
    popover: small menus that open under their toolbar button (account, appearance, menu, VPN, downloads, about)
    sheet:   floating windows centred over the page (settings, history, bookmarks, SSH)
-   lock:    the PIN box, a pop-over under the account button (opens by itself when Horizon Compass starts locked) */
+   lock:    the PIN box, a pop-over under the account button (opens by itself when Compass starts locked) */
 html,body{background:transparent!important}
 body{user-select:text}
 

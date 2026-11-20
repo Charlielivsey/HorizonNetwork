@@ -32,7 +32,7 @@ test('HN VPN sign-in through a tab, set-up, connect, remove and sign-out',async(
   assert.ok(service.headers.some(h=>h&&h['X-HN-VPN-Client']==='hn-browser'&&h['X-HN-VPN-App']==='0.6.0'));
   // Set up: the server gets only the public key; the private key goes straight into the configuration.
   assert.equal(vpn.snapshot().ready,false);await assert.rejects(vpn.connect(),/Set up/);
-  await vpn.setUp();const s=vpn.snapshot();assert.equal(s.ready,true);assert.equal(s.device.name,'Horizon Compass on Test-PC');assert.equal(s.shared,false);
+  await vpn.setUp();const s=vpn.snapshot();assert.equal(s.ready,true);assert.equal(s.device.name,'Compass on Test-PC');assert.equal(s.shared,false);
   assert.doesNotMatch(controller.installed,/this device’s private key/);const priv=/PrivateKey = (\S+)/.exec(controller.installed)[1];assert.notEqual(priv,service.devices[0].publicKey);assert.ok(!JSON.stringify(service.headers).includes(priv));
   assert.ok(!fs.readFileSync(path.join(dir,'vpn.json'),'utf8').includes(priv));
   await vpn.connect();assert.equal(vpn.snapshot().connected,true,'connected as soon as the tunnel is up');await vpn.poll();assert.equal(vpn.snapshot().reachable,true,'the server check follows in the background');assert.equal(vpn.snapshot().server,SERVER);

@@ -13,9 +13,9 @@ class Account {
    const url=new URL(req.url,'http://'+req.headers.host);
    if(url.pathname!=='/callback'||url.searchParams.get('state')!==state){res.writeHead(400);return res.end('This sign-in request has expired.');}
    if(!this.pending||this.pending.used||generation!==this.generation){res.writeHead(400);return res.end('Sign-in already completed or cancelled.');}this.pending.used=true;
-   let text='You are signed in. Return to Horizon Compass.',status=200;
+   let text='You are signed in. Return to Compass.',status=200;
    try{if(url.searchParams.has('error'))throw Error('HN account sign-in was cancelled.');const result=await this.call('exchange',{code:url.searchParams.get('code'),state,code_verifier:verifier,redirect_uri:this.pending.redirect});if(generation!==this.generation){await this.call('logout',{},result.token).catch(()=>{});throw Error('Sign-in cancelled.');}const previous=this.token;this.token=result.token;this.locked=false;this.unlockKey=/^[a-f0-9]{64}$/.test(result.unlock||'')?result.unlock:null;this.remembered=result.user;this.user=result.user;this.avatar=null;this.avatarAt=0;try{this.vault?.save(this.token);}catch(e){this.changed({error:e.message});}if(previous&&previous!==this.token)await this.call('logout',{},previous).catch(()=>{});await this.refresh();}
-   catch(e){text='Sign-in could not be completed. Return to Horizon Compass and try again.';status=400;this.changed({error:e.message});}
+   catch(e){text='Sign-in could not be completed. Return to Compass and try again.';status=400;this.changed({error:e.message});}
    res.writeHead(status,{'Content-Type':'text/plain; charset=utf-8'});res.end(text);if(generation===this.generation)this.cancel();
   });
   await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});
@@ -38,7 +38,7 @@ class Account {
  // Locks the browser: the PIN is needed again, and the unlock key for profile changes is cancelled.
  async lock(){if(!this.token||this.locked)return;const token=this.token;this.locked=true;this.user=null;this.unlockKey=null;this.changed({user:null});await this.call('lock',{},token).catch(()=>{});}
  // Your HN account profile (Settings → Your profile). The staff service also checks the unlock key.
- async account(route='',data={}){if(!this.token||this.locked||!this.user)throw Error('Unlock Horizon Compass with your PIN first.');if(!this.unlockKey)throw Object.assign(Error('Lock and unlock Horizon Compass with your PIN to change your profile.'),{relock:true});const token=this.token;try{const value=await this.call('account'+(route?'/'+route:''),{...data,unlock:this.unlockKey},token);if(this.token!==token)throw Error('Your account changed. Try again.');if(value.user){this.user=value.user;this.remembered=value.user;}if(route==='photo'){this.avatarAt=0;this.avatar=await this.picture(token);this.avatarAt=Date.now();}this.changed({user:this.user});return value.profile;}catch(e){if(e.status===423){this.unlockKey=null;throw Object.assign(Error('For your security, enter your PIN again to change your profile.'),{relock:true});}throw e;}}
+ async account(route='',data={}){if(!this.token||this.locked||!this.user)throw Error('Unlock Compass with your PIN first.');if(!this.unlockKey)throw Object.assign(Error('Lock and unlock Compass with your PIN to change your profile.'),{relock:true});const token=this.token;try{const value=await this.call('account'+(route?'/'+route:''),{...data,unlock:this.unlockKey},token);if(this.token!==token)throw Error('Your account changed. Try again.');if(value.user){this.user=value.user;this.remembered=value.user;}if(route==='photo'){this.avatarAt=0;this.avatar=await this.picture(token);this.avatarAt=Date.now();}this.changed({user:this.user});return value.profile;}catch(e){if(e.status===423){this.unlockKey=null;throw Object.assign(Error('For your security, enter your PIN again to change your profile.'),{relock:true});}throw e;}}
  async signOut(){this.cancel();const token=this.token;this.forget();this.changed({user:null});if(token)await this.call('logout',{},token).catch(()=>{});}
 }
 module.exports={Account,AUTH};
