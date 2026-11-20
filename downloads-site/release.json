@@ -1,26 +1,26 @@
 {
- "tag": "browser-v2.0.0-64",
- "publishedAt": "2026-11-20T22:56:26.624Z",
+ "tag": "browser-v2.0.1-66",
+ "publishedAt": "2026-11-20T23:17:09.130Z",
  "assets": {
   "linux-x64": {
-   "name": "Horizon-Compass-2.0.0-linux-x86_64.AppImage",
-   "size": 126027935,
-   "sha256": "140e62db67c8b6de646ba7b3288ca443ad1234b8c29d8ae4d7f9bfbf3b83f1d7"
+   "name": "Compass-2.0.1-linux-x86_64.AppImage",
+   "size": 126105821,
+   "sha256": "0739e4b32b88362f6b6de3e7ffac3b6b9a94ae48e6664049def6789765f32658"
   },
   "mac-arm64": {
-   "name": "Horizon-Compass-2.0.0-mac-arm64.dmg",
-   "size": 128713728,
-   "sha256": "c66f31a40ace66f1d80f37ec26f6f233dd6a0061f36e444b1e808b1f568ea0d5"
+   "name": "Compass-2.0.1-mac-arm64.dmg",
+   "size": 128976539,
+   "sha256": "00c79d3685258cffde2aa7d26433821fa9966715696d8021c6d4ff1159bebe95"
   },
   "mac-arm64-zip": {
-   "name": "Horizon-Compass-2.0.0-mac-arm64.zip",
-   "size": 128869979,
-   "sha256": "1aa7f4d6c8c802eacfd22dd1b911e098c842bcdd27a485c83984adf0972a3304"
+   "name": "Compass-2.0.1-mac-arm64.zip",
+   "size": 129004303,
+   "sha256": "a09839e1bfa59aeb4e815d91a026584dddbc2c2599bf3b6ffb15d5c88f8e8024"
   },
   "windows-x64": {
-   "name": "Horizon-Compass-2.0.0-win-x64.exe",
-   "size": 113010636,
-   "sha256": "88a8bf94c80db5202b1e93e29039c962881122574c048cc0fcc33f6ee640132f"
+   "name": "Compass-2.0.1-win-x64.exe",
+   "size": 113083133,
+   "sha256": "5e4d59fa2766ed80c94267b1b06caf3e4a99726d4d8b2b48b91817c1e25f748b"
   }
  }
 }
