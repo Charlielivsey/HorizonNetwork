@@ -1,11 +1,11 @@
 {
- "tag": "app-manager-v3.3.0-18",
- "version": "3.3.0",
- "build": 18,
- "publishedAt": "2026-11-14T03:10:40.098Z",
+ "tag": "app-manager-v3.3.2-20",
+ "version": "3.3.2",
+ "build": 20,
+ "publishedAt": "2026-11-20T23:00:59.073Z",
  "asset": {
-  "name": "HN-Group-App-Manager-3.3.0-linux-x86_64.AppImage",
-  "size": 125667204,
-  "sha256": "5a2f6da2f2dde28e2f9ab718993303be1b57f7ad91e1e61bf1db4565dfa25fae"
+  "name": "HN-Group-App-Manager-3.3.2-linux-x86_64.AppImage",
+  "size": 125667200,
+  "sha256": "205bb2b475ed2640b93d24abae999e340107f5fc5e93d144b14be90b5bcb5e0e"
  }
 }
