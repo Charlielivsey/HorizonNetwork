@@ -1,14 +1,14 @@
 'use strict';
-// HN Browser settings: defaults, and the only values each one accepts. Saved in preferences.json.
+// Horizon Compass settings: defaults, and the only values each one accepts. Saved in preferences.json.
 const{theme}=require('./policy.cjs');
 const DEFAULTS=Object.freeze({
- theme:'midnight-lavender',hnThemes:true,homeButton:true,reduceMotion:false,defaultZoom:0,
+ theme:'midnight-lavender',sidebarExpanded:false,hnThemes:true,homeButton:true,reduceMotion:false,defaultZoom:0,
  greeting:true,recentSites:true,startup:'newtab',confirmClose:true,newTabNextToCurrent:false,popups:true,
  searchEngine:'google',suggestions:true,saveHistory:true,
  askDownload:true,downloadPath:'',downloadNotify:true,openDownloadsOnStart:false,
  autoLock:0,lockOnSleep:false,
 });
-const BOOLEAN=['hnThemes','homeButton','reduceMotion','greeting','recentSites','confirmClose','newTabNextToCurrent','popups','suggestions','saveHistory','askDownload','downloadNotify','openDownloadsOnStart','lockOnSleep'];
+const BOOLEAN=['sidebarExpanded','hnThemes','homeButton','reduceMotion','greeting','recentSites','confirmClose','newTabNextToCurrent','popups','suggestions','saveHistory','askDownload','downloadNotify','openDownloadsOnStart','lockOnSleep'];
 const CHOICES={searchEngine:['google','bing','duckduckgo'],startup:['newtab','restore'],autoLock:[0,5,15,30,60],defaultZoom:[-1,0,1,2]};
 // Returns the accepted value for a setting, or throws when it isn't allowed.
 function validate(key,value){

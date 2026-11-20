@@ -47,7 +47,7 @@ const savedPrefs=async(file,ok)=>{for(let i=0;i<100;i++){try{const p=JSON.parse(
   await top.locator('[data-settings=security]').click();await top.locator('[data-preference-select=autoLock]').selectOption('15');
   await top.locator('[data-settings=startup]').click();await top.locator('input[name=startup][value=restore]').check();
   await top.locator('[data-settings=accessibility]').click();await top.locator('[data-section=accessibility] [data-preference=reduceMotion]').check();await top.waitForFunction(()=>document.body.dataset.motion==='reduced');await top.locator('[data-section=accessibility] [data-preference=reduceMotion]').uncheck();
-  await top.locator('[data-settings=shortcuts]').click();assert.match(await top.locator('#shortcut-list').textContent(),/Lock HN Browser/);
+  await top.locator('[data-settings=shortcuts]').click();assert.match(await top.locator('#shortcut-list').textContent(),/Lock Horizon Compass/);
   await top.waitForFunction(()=>window.browser.state().then(s=>s.preferences.autoLock===15&&s.preferences.startup==='restore'));const prefs=await savedPrefs(path.join(profile,'preferences.json'),p=>p.autoLock===15&&p.reduceMotion===false);assert.equal(prefs.autoLock,15);assert.equal(prefs.reduceMotion,false);
   await top.keyboard.press('Escape');await top.locator('#overlay').waitFor({state:'hidden'});
   // ---- History, bookmarks and suggestions ----
@@ -71,13 +71,13 @@ const savedPrefs=async(file,ok)=>{for(let i=0;i<100;i++){try{const p=JSON.parse(
   for(let i=0;i<50&&!((await popupShown())&&(await popupItems()).some(x=>x.cls.includes('bookmark')));i++)await page.waitForTimeout(100);
   const index=(await popupItems()).findIndex(x=>x.cls.includes('bookmark'));assert.ok(index>=0);for(let i=0;i<=index;i++)await page.keyboard.press('ArrowDown');await page.keyboard.press('Enter');
   await page.waitForFunction(u=>window.browser.state().then(s=>s.tabs.find(t=>t.id===s.active).url===u),site+'beta');await top.locator('#overlay').waitFor({state:'hidden'});
-  await page.keyboard.press(mod+'+t');await page.waitForFunction(()=>document.querySelectorAll('.tab').length===2);
+  await page.keyboard.press(mod+'+t');await (await require('./layers.cjs').railOf(app)).waitForFunction(()=>document.querySelectorAll('.tab').length===2);
   await page.locator('#browser-menu').click();await top.locator('#menu-panel [data-panel=bookmarks]').click();await top.locator('#bookmarks-panel').waitFor({state:'visible'});
   await top.locator('#bookmarks-list .library-row').hover();await top.locator('#bookmarks-list button[title=Rename]').click();await top.locator('#bookmarks-list input.rename').fill('Beta bookmark');await top.keyboard.press('Enter');await top.waitForFunction(()=>window.browser.state().then(s=>s.bookmarks[0]?.title==='Beta bookmark'));
   await top.keyboard.press('Escape');await top.locator('#overlay').waitFor({state:'hidden'});
   // ---- New tab page: greeting and most visited ----
-  const home=await app.evaluate(async({webContents})=>{const tab=webContents.getAllWebContents().find(w=>w.getURL()==='hn-browser://start/');return tab.executeJavaScript('({greeting:document.querySelector(".greeting").textContent,recent:[...document.querySelectorAll(".recent a")].map(a=>a.href)})');});
-  assert.match(home.greeting,/^Good (morning|afternoon|evening), Sam$/);assert.ok(home.recent.includes(site+'beta'));
+  const home=await app.evaluate(async({webContents})=>{const tab=webContents.getAllWebContents().find(w=>w.getURL()==='hn-browser://start/');return tab.executeJavaScript('({greeting:document.querySelector("h1").textContent,recent:[...document.querySelectorAll(".recent a")].map(a=>a.href)})');});
+  assert.match(home.greeting,/^Hello, Sam\.$/);assert.ok(home.recent.includes(site+'beta'));
   // ---- Locking ----
   await page.locator('#browser-menu').click();await top.locator('#menu-lock').click();await top.locator('#account-pin').waitFor({state:'visible'});
   const locked=await top.evaluate(()=>window.browser.state());assert.ok(locked.locked);assert.equal(locked.user,null);assert.equal(locked.profileEditable,false);assert.ok(authLog().some(x=>x.route==='lock'));await page.locator('#toolbar-lock').waitFor({state:'visible'});

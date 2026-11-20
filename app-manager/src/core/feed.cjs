@@ -33,7 +33,7 @@ function release(feed, id, platform, arch) {
     if (!parts(version)) return null;
     route = { mac: 'mac-arm64-zip', windows: 'windows-x64', linux: 'linux-x64' }[os];
     asset = r.assets && r.assets[route];
-    name = 'HN-Browser-' + short(version) + { mac: '-mac-arm64.zip', windows: '-win-x64.exe', linux: '-linux-x86_64.AppImage' }[os];
+    name = (Number(version.split('.')[0]) >= 2 ? 'Horizon-Compass-' : 'HN-Browser-') + short(version) + { mac: '-mac-arm64.zip', windows: '-win-x64.exe', linux: '-linux-x86_64.AppImage' }[os];
     publishedAt = r.publishedAt;
   } else if (id === 'network' || id === 'manager') {
     const key = id === 'network' ? { mac: 'secure-network', windows: 'secure-network-windows', linux: 'secure-network-linux' }[os] : 'app-manager-' + os;

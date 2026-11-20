@@ -13,7 +13,7 @@ const BROWSER = {
   hnThemes: bool('Appearance', 'Theme HN Group websites to match', true, 'HN websites take on your browser theme.'),
   reduceMotion: bool('Appearance', 'Reduce animations', false),
   homeButton: bool('Appearance', 'Show the Home button', true),
-  startup: choice('Tabs', 'When HN Browser opens', ['newtab', 'restore'], 'newtab'),
+  startup: choice('Tabs', 'When Horizon Compass opens', ['newtab', 'restore'], 'newtab'),
   confirmClose: bool('Tabs', 'Ask before closing several tabs', true),
   newTabNextToCurrent: bool('Tabs', 'Open new tabs beside the current one', false),
   greeting: bool('New tab page', 'Show a greeting', true),

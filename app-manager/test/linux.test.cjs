@@ -41,11 +41,11 @@ test('Linux: install into ~/Applications with a menu entry, find it, notice itâ€
     assert.equal(p.supported, true); assert.equal(await p.find('browser'), null);
     const v1 = fakeAppImage('1.1.8'), r1 = rel('browser', '1.1.8-43', v1), f1 = path.join(dl, 'a'); fs.writeFileSync(f1, v1);
     const installed = await p.install('browser', f1, r1);
-    const target = path.join(home, 'Applications', 'HN-Browser.AppImage');
+    const target = path.join(home, 'Applications', 'Horizon-Compass.AppImage');
     assert.equal(installed.path, target); assert.equal(installed.version, '1.1.8'); assert.equal(installed.build, 43);
     assert.equal(fs.statSync(target).mode & 0o777, 0o755);
     const menu = fs.readFileSync(path.join(home, '.local', 'share', 'applications', 'hn-browser.desktop'), 'utf8');
-    assert.match(menu, /^Exec=\S+HN-Browser\.AppImage %U$/m); assert.match(menu, /^Icon=hn-browser$/m); assert.match(menu, /^StartupWMClass=hn-browser$/m);
+    assert.match(menu, /^Exec=\S+Horizon-Compass\.AppImage %U$/m); assert.match(menu, /^Icon=hn-browser$/m); assert.match(menu, /^StartupWMClass=hn-browser$/m);
     assert.ok(fs.existsSync(path.join(home, '.local', 'share', 'icons', 'hicolor', 'scalable', 'apps', 'hn-browser.svg')));
     // A wrong file is never installed.
     fs.writeFileSync(f1, 'not an appimage'); await assert.rejects(p.install('network', f1, rel('network', '2.1.0-1', Buffer.from('not an appimage'))), /isnâ€™t an AppImage/);
@@ -63,7 +63,7 @@ test('Linux: install into ~/Applications with a menu entry, find it, notice itâ€
     try {
       for (let i = 0; i < 50 && !await p.running(found); i++) await new Promise((r) => setTimeout(r, 50));
       assert.equal(await p.running(found), true);
-      await assert.rejects(p.install('browser', (fs.writeFileSync(f1, v2), f1), rel('browser', '1.2.0-50', v2)), /Quit HN Browser first/);
+      await assert.rejects(p.install('browser', (fs.writeFileSync(f1, v2), f1), rel('browser', '1.2.0-50', v2)), /Quit Horizon Compass first/);
     } finally { child.kill(); }
     // Settings go to the app's own data folder; Secure Access Terminal's "open when I sign in" is an autostart entry.
     assert.equal(p.preferencesFile('browser'), path.join(home, '.config', 'HN Browser', 'preferences.json'));
@@ -74,8 +74,8 @@ test('Linux: install into ~/Applications with a menu entry, find it, notice itâ€
     fs.mkdirSync(path.join(home, '.config', 'HN Browser'), { recursive: true }); fs.writeFileSync(path.join(home, '.config', 'HN Browser', 'preferences.json'), '{}');
     await p.uninstall('browser', found);
     assert.equal(fs.existsSync(target), false); assert.equal(await p.find('browser'), null);
-    assert.ok(fs.existsSync(path.join(home, '.local', 'share', 'Trash', 'files', 'HN-Browser.AppImage')));
-    assert.match(fs.readFileSync(path.join(home, '.local', 'share', 'Trash', 'info', 'HN-Browser.AppImage.trashinfo'), 'utf8'), /^Path=.*\/Applications\/HN-Browser\.AppImage$/m);
+    assert.ok(fs.existsSync(path.join(home, '.local', 'share', 'Trash', 'files', 'Horizon-Compass.AppImage')));
+    assert.match(fs.readFileSync(path.join(home, '.local', 'share', 'Trash', 'info', 'Horizon-Compass.AppImage.trashinfo'), 'utf8'), /^Path=.*\/Applications\/Horizon-Compass\.AppImage$/m);
     assert.equal(fs.existsSync(path.join(home, '.local', 'share', 'applications', 'hn-browser.desktop')), false);
     assert.ok(fs.existsSync(path.join(home, '.config', 'HN Browser', 'preferences.json')), 'the appâ€™s data is kept');
     await p.uninstall('network', net);
@@ -131,7 +131,7 @@ test('Bazzite: a home folder behind a link (/home â†’ /var/home), downloads unde
     // Updating moves it into ~/Applications with a menu entry, and the download goes to the Bin.
     const v2 = fakeAppImage('1.2.1'), dl = path.join(root, 'dl'); fs.writeFileSync(dl, v2);
     const now = await p.install('browser', dl, rel('browser', '1.2.1-45', v2));
-    assert.equal(now.path, path.join(realHome, 'Applications', 'HN-Browser.AppImage')); assert.equal(now.managed, true);
+    assert.equal(now.path, path.join(realHome, 'Applications', 'Horizon-Compass.AppImage')); assert.equal(now.managed, true);
     assert.equal(fs.existsSync(download), false); assert.equal(fs.readdirSync(path.join(realHome, '.local', 'share', 'Trash', 'files')).length, 1);
     // App Manager installed in ~/Applications: run from there (resolved path) it's installed, not "temporary".
     const installed = path.join(realHome, 'Applications', 'HN-Group-App-Manager.AppImage'); fs.writeFileSync(installed, fakeAppImage('3.1.0'), { mode: 0o755 });

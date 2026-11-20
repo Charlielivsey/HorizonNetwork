@@ -123,7 +123,7 @@ test('checking finds updates; a change for an open app waits until it’s quit, 
     await until(() => !t.manager.snapshot().job);
     assert.deepEqual(t.platform.events, [{ install: 'browser', version: '1.1.6-41' }]);
     assert.equal(t.manager.snapshot().apps.find((a) => a.id === 'browser').update, false);
-    assert.equal(t.store.activity[0].message, 'HN Browser was updated to 1.1.6.');
+    assert.equal(t.store.activity[0].message, 'Horizon Compass was updated to 1.1.6.');
     // Cancelled while waiting: nothing happens.
     t.platform.open.add('browser');
     t.manager.enqueue('browser', 'reinstall');
@@ -177,7 +177,7 @@ test('settings are read from and written to the app, only while it’s closed', 
     await t.manager.saveSettings('browser', { theme: 'forest' });
     assert.equal(JSON.parse(fs.readFileSync(path.join(t.dir, 'HN Browser', 'preferences.json'), 'utf8')).theme, 'forest');
     t.platform.open.add('browser');
-    await assert.rejects(t.manager.saveSettings('browser', { theme: 'rose' }), /Quit HN Browser first/);
+    await assert.rejects(t.manager.saveSettings('browser', { theme: 'rose' }), /Quit Horizon Compass first/);
     await assert.rejects(t.manager.saveSettings('network', { theme: 'dark' }), /Install HN Secure Access Terminal first/);
   } finally { t.done(); }
 });
@@ -247,4 +247,13 @@ test('Windows: installed apps are found under their versioned names, icon/uninst
   // No usable installed-apps entry: the usual per-user folder still finds it.
   assert.equal(locate([], APPS.browser, [dir], exists).dir, dir);
   assert.equal(locate([{ DisplayName: 'HN Browser 1.2.7', InstallLocation: 'C:\\Elsewhere' }], APPS.browser, [], exists), null, 'only a folder holding the app counts');
+});
+
+test('Compass release and Windows detection accept new installations and preserve the legacy profile identity',()=>{
+ const {APPS}=require('../src/core/catalog.cjs'),{locate}=require('../src/core/windows.cjs');
+ const a=APPS.browser,dir='C:\\Apps\\Compass',exe=dir+'\\Horizon Compass.exe';
+ assert.equal(a.data,'HN Browser');assert.ok(a.macOld.includes('HN Browser.app'));
+ assert.equal(locate([{DisplayName:'Horizon Compass',InstallLocation:dir}],a,[],p=>p===exe).dir,dir);
+ const asset={name:'Horizon-Compass-2.0.0-win-x64.exe',url:'/download/windows-x64',size:12,sha256:'a'.repeat(64)};
+ assert.equal(require('../src/core/feed.cjs').release({release:{version:'2.0.0-70',assets:{'windows-x64':asset}}},'browser','win32','x64').name,asset.name);
 });

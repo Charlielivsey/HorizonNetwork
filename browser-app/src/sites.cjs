@@ -2,9 +2,9 @@
 // Public destinations only. Shortcuts never grant sign-in or website permissions.
 const SITES=[
  ['https://appeals.hngroup.org.uk/',['hn group appeals','hn appeals','appeals','appeal','moderation appeal']],
- ['https://finance.hngroup.org.uk/',['hn group finance','hn finance','finance','payroll','payslips','expenses','company funds','invoices','bills']],
- ['https://it.hngroup.org.uk/',['hn group it','hn it','it','technology','it support','it cases']],
- ['https://hr.hngroup.org.uk/',['hn group hr','hn hr','hr','human resources','leave','annual leave','holidays','absence']],
+ ['https://staff.hngroup.org.uk/finance',['hn group finance','hn finance','finance','payroll','payslips','expenses','company funds','invoices','bills']],
+ ['https://staff.hngroup.org.uk/it',['hn group it','hn it','it','technology','it support','it cases']],
+ ['https://staff.hngroup.org.uk/hr',['hn group hr','hn hr','hr','human resources','leave','annual leave','holidays','absence']],
  ['https://echo.hngroup.org.uk/',['echo','hn echo','hn group echo','character library']],
  // HN Mail (the user's choice, 6 November 2026): "mail" and "gmail" open HN Group's own Gmail app.
  ['https://mail.hngroup.org.uk/',['mail','gmail','email','hn mail','hn group mail','google mail']],
@@ -20,13 +20,13 @@ const SITES=[
  ['https://people.hngroup.org.uk/',['people','hn people','hn group people','staff list','org chart','org charts']],
  ['https://branding.hngroup.org.uk/',['branding','brand centre','brand center','hn group branding','brand','logos','hn logos']],
  ['https://companies.hngroup.org.uk/',['companies','company register','companies register','hn group company register','register','companies house']],
- ['https://vpn.hngroup.org.uk/',['vpn','hn vpn','hn group vpn','secure gateway','hn secure gateway','secure access terminal','hn secure access terminal','secure network','hn secure network','secure terminal','hn group secure terminal']],
+ ['https://sat.hngroup.org.uk/',['vpn','hn vpn','hn group vpn','secure gateway','hn secure gateway','secure access terminal','hn secure access terminal','secure network','hn secure network','secure terminal','hn group secure terminal']],
  ['https://media.hngroup.org.uk/',['media','media group','horizon media','horizon media group']],
  ['https://development.hngroup.org.uk/',['development','horizon development']],
  ['https://hngroup.org.uk/support',['support','hn support','hn group support','help']],
  ['https://careers.hngroup.org.uk/',['careers','hn careers','hn group careers']],
  ['https://news.hngroup.org.uk/',['news','hn news','hn group news']],
- ['https://accounts.hngroup.org.uk/',['hn account','my account','hn group account','account settings','accounts']],
+ ['https://auth.hngroup.org.uk/account/',['hn account','my account','hn group account','account settings','accounts']],
  ['https://devices.hngroup.org.uk/',['hn group devices','hn devices','my devices','device approval','devices']],
  ['https://contract.hngroup.org.uk/',['hn group contracts','hn contracts','contracts','sign contract','contract signing']],
  ['https://private.companies.hngroup.org.uk/',['private company register','private companies','private register','hn group private company register','private companies house']],

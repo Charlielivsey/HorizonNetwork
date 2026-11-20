@@ -1,9 +1,9 @@
 {
   "name": "hn-group-browser",
-  "version": "1.3.8",
-  "productName": "HN Browser",
+  "version": "2.0.0",
+  "productName": "Horizon Compass",
   "private": true,
-  "description": "HN Browser \u2014 a Chromium-powered browser with HN Group account sign-in, for macOS, Windows and Linux",
+  "description": "Horizon Compass \u2014 the HN Group browser with a floating vertical tab panel and your HN workspace",
   "author": "HN Group",
   "license": "UNLICENSED",
   "main": "src/main.cjs",
@@ -11,7 +11,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test test/*.test.cjs",
-    "test:desktop": "node test/desktop.cjs && node test/device-desktop.cjs && node test/downloads-desktop.cjs && node test/account-desktop.cjs && node test/features-desktop.cjs && node test/vpn-desktop.cjs && node test/library-desktop.cjs && node test/rebuild-desktop.cjs",
+    "test:desktop": "node test/desktop.cjs && node test/device-desktop.cjs && node test/downloads-desktop.cjs && node test/account-desktop.cjs && node test/features-desktop.cjs && node test/vpn-desktop.cjs && node test/library-desktop.cjs && node test/rebuild-desktop.cjs && node test/side-tabs-desktop.cjs",
     "icons": "node scripts/icons.cjs",
     "pack": "electron-builder --dir --publish never",
     "build:mac": "electron-builder --mac --publish never",
@@ -32,7 +32,7 @@
   },
   "build": {
     "appId": "uk.org.hngroup.browser",
-    "productName": "HN Browser",
+    "productName": "Horizon Compass",
     "asar": true,
     "directories": {
       "output": "dist"
@@ -42,7 +42,7 @@
       "ui/**",
       "package.json"
     ],
-    "artifactName": "HN-Browser-${version}-${os}-${arch}.${ext}",
+    "artifactName": "Horizon-Compass-${version}-${os}-${arch}.${ext}",
     "mac": {
       "target": [
         "dmg",
@@ -76,7 +76,7 @@
       "description": "A Chromium-powered browser with HN Group account sign-in, the HN VPN and SSH to the HN Group server.",
       "desktop": {
         "entry": {
-          "Name": "HN Browser",
+          "Name": "Horizon Compass",
           "Keywords": "HN;Browser;Web;Internet;",
           "Categories": "Network;WebBrowser;"
         }
@@ -84,7 +84,7 @@
       "syncDesktopName": true
     },
     "appImage": {
-      "artifactName": "HN-Browser-${version}-linux-x86_64.AppImage",
+      "artifactName": "Horizon-Compass-${version}-linux-x86_64.AppImage",
       "executableArgs": []
     },
     "npmRebuild": false,

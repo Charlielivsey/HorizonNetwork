@@ -16,6 +16,8 @@ jobs:
       matrix:
         include:
           - {os: macos-15, target: mac, arch: universal}
+          - {os: windows-latest, target: win, arch: x64}
+          - {os: ubuntu-latest, target: linux, arch: x64}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -86,11 +88,11 @@ jobs:
         run: |
           VERSION=$(node -p "require('./app-manager/package.json').version")
           TAG="app-manager-v$VERSION-$GITHUB_RUN_NUMBER"
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "HN Group App Manager $VERSION · build $GITHUB_RUN_NUMBER" --notes 'HN Group App Manager: install, update, reinstall and remove HN Browser and HN Secure Access Terminal from verified downloads, change their settings, update all at once, and keep App Manager itself up to date. This release contains only the universal Mac build for Apple silicon and Intel; Windows and Linux releases are unchanged. Preview installers are not yet developer-signed or notarised.' installers/*
-          PLATFORMS=mac VERSION="$VERSION" TAG="$TAG" node app-manager/scripts/manifest.cjs
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "HN Group App Manager $VERSION · build $GITHUB_RUN_NUMBER" --notes 'HN Group App Manager: install, update, reinstall and remove Horizon Compass and HN Secure Access Terminal from verified downloads, change their settings, update all at once, and keep App Manager itself up to date. Universal Mac, Windows x64 and Linux x64 builds. Preview installers are not yet developer-signed or notarised.' installers/*
+          VERSION="$VERSION" TAG="$TAG" node app-manager/scripts/manifest.cjs
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add downloads-site/app-manager-mac.json
+          git add downloads-site/app-manager-{mac,windows,linux}.json
           git commit -m "Publish HN Group App Manager $VERSION (build $GITHUB_RUN_NUMBER)"
           for attempt in 1 2 3; do
             if git pull --rebase origin "$GITHUB_REF_NAME" && git push origin "HEAD:$GITHUB_REF_NAME"; then exit 0; fi

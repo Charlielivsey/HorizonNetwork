@@ -1,6 +1,12 @@
-# HN Browser 1.0
+# Horizon Compass 2.0
 
-HN Browser for macOS Apple silicon and Windows x64, rebuilt around a compact chrome renderer and a live workspace overlay. Intel Macs remain unsupported.
+Horizon Compass for macOS Apple silicon, Windows x64 and Linux x64, rebuilt with a vertical tab rail and HN workspace home. Intel Macs remain unsupported.
+
+## 2.0 — floating side tabs and your HN workspace
+
+The top toolbar keeps navigation, the address bar, bookmarks, downloads, VPN, account and settings. Tabs sit in a left-hand rail: icons in compact mode, or names in the expanded list. The expansion choice is saved. Tabs support keyboard selection, drag ordering, pinning and closing; webpages keep their own sandbox and receive bounds beside the rail. The home page uses HN colours, a name/role greeting when signed in, search, real HN apps and recent sites. HR, Finance and IT shortcuts use the unified Staff Portal; Account and SAT use their current hosts. The prior Browser 1.x archive is retained.
+
+A new installation does not replace a user’s installed browser remotely. Existing profiles, tabs, history and encrypted account storage remain in their existing locations.
 
 ## Linux (Bazzite) — 1.2.0
 

@@ -13,8 +13,9 @@ function hnBadge(name,typed=false){const badge=$('hn-badge');badge.hidden=!name;
 function render(state){
  if(state.avatarSame)state.avatar=avatar;else avatar=state.avatar;for(const t of state.tabs)if(t.iconSame)t.icon=icons.get(t.id)||null;icons=new Map(state.tabs.map(t=>[t.id,t.icon]));current=state;
  window.HNTheme.schedule({theme:state.theme,at:state.themeAt,revision:state.themeRevision,reduceMotion:state.preferences.reduceMotion});
+ document.body.classList.toggle('sidebar-expanded',!!state.preferences.sidebarExpanded);
  document.body.dataset.platform=state.platform;$('version').textContent='v'+state.version;
- window.HNTabs.render(state,action,motion());
+
  const tab=state.tabs.find(t=>t.id===state.active);
  if(tab){if(!editing){const value=tab.url===HOME?'':tab.url;if($('address').value!==value)$('address').value=value;hnBadge(tab.hn);}
   $('back').disabled=!tab.back;$('forward').disabled=!tab.forward;$('reload-icon').setAttribute('href','icons.svg#'+(tab.loading?'close':'reload'));$('reload').setAttribute('aria-label',tab.loading?'Stop loading':'Reload');
@@ -41,7 +42,7 @@ new ResizeObserver(()=>requestAnimationFrame(sendAnchors)).observe(document.quer
 
 function togglePanel(name){opener=document.activeElement;action('panel',current?.panel===name?null:name);}
 for(const[id,name]of Object.entries(PANELS))$(id).onclick=()=>togglePanel(name);
-for(const id of['back','forward','home','new-tab'])$(id).onclick=async()=>{await action('panel',null);action(id==='new-tab'?'new':id);};
+for(const id of['back','forward','home'])$(id).onclick=async()=>{await action('panel',null);action(id==='new-tab'?'new':id);};
 $('reload').onclick=()=>action(current?.tabs.find(t=>t.id===current.active)?.loading?'stop':'reload');
 $('star').onclick=()=>action('bookmark-toggle');$('zoom-pill').onclick=()=>action('zoom-reset');
 $('address-form').onmousedown=e=>{if(e.target===$('address-form')||e.target.closest('.omni-lead')){e.preventDefault();$('address').focus();}};

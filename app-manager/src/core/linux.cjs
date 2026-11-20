@@ -42,7 +42,7 @@ function cleanEnv(env = process.env) {
 
 const real = (p) => { try { return fs.realpathSync(p); } catch { return p; } };
 // Is this file name an AppImage of the app with this key? (Case and punctuation don't matter.)
-const matches = (spec, name) => !name.startsWith('.') && /\.appimage$/i.test(name) && name.toLowerCase().replace(/[^a-z0-9.]/g, '').startsWith(spec.key);
+const matches = (spec, name) => !name.startsWith('.') && /\.appimage$/i.test(name) && [spec.key, ...(spec.keysOld || [])].some(key => name.toLowerCase().replace(/[^a-z0-9.]/g, '').startsWith(key));
 
 class LinuxPlatform {
   constructor({ log, home = os.homedir(), env = process.env, arch = process.arch, packaged = true, dataDir, ui = path.join(__dirname, '..', '..', 'ui') } = {}) {

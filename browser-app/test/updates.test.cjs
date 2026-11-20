@@ -46,3 +46,11 @@ test('Linux: an AppImage opened from Downloads adds itself to the app menu, with
   assert.equal(integrate({...spec,env:{XDG_DATA_HOME:data}}),false,'only from an AppImage');
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
+
+test('Compass 2 accepts only the renamed verified artifacts while older browser releases retain their names',()=>{
+ for(const [platform,arch,id,suffix] of [['darwin','arm64','mac-arm64-zip','mac-arm64.zip'],['win32','x64','windows-x64','win-x64.exe'],['linux','x64','linux-x64','linux-x86_64.AppImage']]){
+  const asset={url:'/download/'+id,name:'Horizon-Compass-2.0.0-'+suffix,size:10,sha256:'a'.repeat(64)};
+  assert.equal(installer({version:'2.0.0-70',assets:{[id]:asset}},platform,arch,'1.3.7-62').name,asset.name);
+  assert.throws(()=>installer({version:'2.0.0-70',assets:{[id]:{...asset,name:asset.name.replace('Horizon-Compass','HN-Browser')}}},platform,arch,'1.3.7-62'));
+ }
+});

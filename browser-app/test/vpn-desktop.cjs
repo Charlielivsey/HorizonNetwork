@@ -48,21 +48,21 @@ const savedPrefs=async(file,ok)=>{for(let i=0;i<100;i++){try{const p=JSON.parse(
   let opened='';for(let i=0;i<50&&!opened;i++){opened=(await app.evaluate(()=>globalThis.vpnRequests))[0]||'';if(!opened)await page.waitForTimeout(100);}
   assert.match(opened,/^https:\/\/vpn\.hngroup\.org\.uk\/auth\/login\?app=[a-f0-9]{64}&loopback=[0-9]+$/);
   assert.equal((await page.evaluate(()=>window.browser.state())).vpn.signingIn,true);
-  await page.locator('.tab .close').last().click();
+  await (await require('./layers.cjs').railOf(app)).locator('.tab .close').last().click();
   // Find in page, tab icons and shortcuts on an ordinary website.
-  await page.locator('#address').fill(site);await page.keyboard.press('Enter');await page.waitForFunction(()=>[...document.querySelectorAll('.tab-title')].some(t=>t.textContent.includes('Find fixture')));
-  await page.waitForFunction(()=>{const i=document.querySelector('.tab.active .tab-icon');return i&&!i.hidden&&i.src.startsWith('data:image/png');});
+  await page.locator('#address').fill(site);await page.keyboard.press('Enter');await (await require('./layers.cjs').railOf(app)).waitForFunction(()=>[...document.querySelectorAll('.tab-title')].some(t=>t.textContent.includes('Find fixture')));
+  await (await require('./layers.cjs').railOf(app)).waitForFunction(()=>{const i=document.querySelector('.tab.active .tab-icon');return i&&!i.hidden&&i.src.startsWith('data:image/png');});
   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].webContents.focus());await page.keyboard.press(mod+'+f');await top.locator('#find-bar').waitFor({state:'visible'});await top.waitForFunction(()=>document.activeElement.id==='find-input');
   await top.keyboard.type('needle');await top.waitForFunction(()=>document.querySelector('#find-count').textContent==='1 of 3');
   await top.keyboard.press('Enter');await top.waitForFunction(()=>document.querySelector('#find-count').textContent==='2 of 3');
   await top.keyboard.press('Shift+Enter');await top.waitForFunction(()=>document.querySelector('#find-count').textContent==='1 of 3');
   await top.keyboard.press('Escape');await top.locator('#find-bar').waitFor({state:'hidden'});
   const count=()=>page.evaluate(()=>document.querySelectorAll('.tab').length),activeIndex=()=>page.evaluate(()=>[...document.querySelectorAll('.tab')].findIndex(t=>t.classList.contains('active')));
-  const before=await count();await page.keyboard.press(mod+'+t');await page.waitForFunction(n=>document.querySelectorAll('.tab').length===n+1,before);
-  await page.keyboard.press(mod+'+1');await page.waitForFunction(()=>document.querySelector('.tab').classList.contains('active'));
-  await page.keyboard.press('Control+Tab');await page.waitForFunction(()=>document.querySelectorAll('.tab')[1].classList.contains('active'));assert.equal(await activeIndex(),1);
-  await page.keyboard.press(mod+'+w');await page.waitForFunction(n=>document.querySelectorAll('.tab').length===n,before);
-  await page.keyboard.press(mod+'+Shift+t');await page.waitForFunction(n=>document.querySelectorAll('.tab').length===n+1,before);
+  const before=await count();await page.keyboard.press(mod+'+t');await (await require('./layers.cjs').railOf(app)).waitForFunction(n=>document.querySelectorAll('.tab').length===n+1,before);
+  await page.keyboard.press(mod+'+1');await (await require('./layers.cjs').railOf(app)).waitForFunction(()=>document.querySelector('.tab').classList.contains('active'));
+  await page.keyboard.press('Control+Tab');await (await require('./layers.cjs').railOf(app)).waitForFunction(()=>document.querySelectorAll('.tab')[1].classList.contains('active'));assert.equal(await activeIndex(),1);
+  await page.keyboard.press(mod+'+w');await (await require('./layers.cjs').railOf(app)).waitForFunction(n=>document.querySelectorAll('.tab').length===n,before);
+  await page.keyboard.press(mod+'+Shift+t');await (await require('./layers.cjs').railOf(app)).waitForFunction(n=>document.querySelectorAll('.tab').length===n+1,before);
   await app.close();app=null;
   // Never connects by itself, even with the old preference saved; quitting turns the VPN off unless HN Secure Access Terminal is open.
   const prefsFile=path.join(profile,'preferences.json');let saved={};try{saved=JSON.parse(fs.readFileSync(prefsFile,'utf8'));}catch{}fs.writeFileSync(prefsFile,JSON.stringify({...saved,vpnAutoConnect:true}));

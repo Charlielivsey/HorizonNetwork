@@ -10,7 +10,7 @@ function installer(release,platform,arch,current){
  if(!base||!newer(release?.version,current))return null;
  const zip=base==='mac-arm64'&&release?.assets?.['mac-arm64-zip'],id=zip?'mac-arm64-zip':base,asset=release?.assets?.[id];if(!asset)return null;
  const v=version(release.version),suffix={'mac-arm64-zip':'mac-arm64.zip','mac-arm64':'mac-arm64.dmg','windows-x64':'win-x64.exe','linux-x64':'linux-x86_64.AppImage'}[id];
- if(asset.url!=='/download/'+id||asset.name!=='HN-Browser-'+v.slice(0,3).join('.')+'-'+suffix||!/^[a-f0-9]{64}$/.test(asset.sha256)||!Number.isSafeInteger(asset.size)||asset.size<1||asset.size>MAX_BYTES)throw Error('The update information could not be verified.');
+ if(asset.url!=='/download/'+id||asset.name!==(v[0]>=2?'Horizon-Compass-':'HN-Browser-')+v.slice(0,3).join('.')+'-'+suffix||!/^[a-f0-9]{64}$/.test(asset.sha256)||!Number.isSafeInteger(asset.size)||asset.size<1||asset.size>MAX_BYTES)throw Error('The update information could not be verified.');
  return{...asset,kind:{'mac-arm64-zip':'zip','mac-arm64':'dmg','windows-x64':'exe','linux-x64':'appimage'}[id],version:release.version,url:ORIGIN+asset.url};
 }
 class Updates{

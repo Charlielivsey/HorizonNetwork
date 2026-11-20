@@ -6,10 +6,10 @@
 // its desktop entry/program name.
 const APPS = Object.freeze({
   browser: Object.freeze({
-    id: 'browser', name: 'HN Browser', bundle: 'uk.org.hngroup.browser', mac: 'HN Browser.app', exe: 'HN Browser.exe', data: 'HN Browser', icon: 'browser.svg',
+    id: 'browser', name: 'Horizon Compass', nameOld: ['HN Browser'], bundle: 'uk.org.hngroup.browser', mac: 'Horizon Compass.app', macOld: ['HN Browser.app'], exe: 'Horizon Compass.exe', exeOld: ['HN Browser.exe'], winDir: 'hn-group-browser', data: 'HN Browser', icon: 'browser.svg',
     kind: 'Web browser', tagline: 'Your tabs, your HN account, every HN website one click away.',
     macArch: ['arm64'], // HN Browser is built for Apple silicon Macs only.
-    linux: Object.freeze({ file: 'HN-Browser.AppImage', key: 'hnbrowser', desktop: 'hn-browser' }),
+    linux: Object.freeze({ file: 'Horizon-Compass.AppImage', key: 'horizoncompass', keysOld: ['hnbrowser'], desktop: 'hn-browser' }),
   }),
   network: Object.freeze({
     id: 'network', name: 'HN Secure Access Terminal', bundle: 'uk.org.hngroup.vpn', mac: 'HN Secure Access Terminal.app', macOld: ['HN Secure Gateway.app', 'HN Secure Network.app', 'HN Group VPN.app'], exe: 'HN Secure Network.exe', winDir: 'hn-secure-network-windows', data: 'HN Secure Network', nameOld: ['HN Secure Gateway', 'HN Secure Network'], icon: 'secure-network.svg',

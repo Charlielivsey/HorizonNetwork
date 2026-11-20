@@ -46,9 +46,9 @@ function locate(items, a, fallbacks, exists) {
   for (const v of items) {
     if (!v || !namedAs(v.DisplayName, names)) continue;
     const dir = folderOf(v); if (!dir) continue;
-    const exe = path.win32.join(dir, a.exe); if (exists(exe)) return { dir, exe, registered: v };
+    for (const name of [a.exe, ...(a.exeOld || [])]) { const exe = path.win32.join(dir, name); if (exists(exe)) return { dir, exe, registered: v }; }
   }
-  for (const dir of fallbacks) { const exe = path.win32.join(dir, a.exe); if (exists(exe)) return { dir, exe, registered: {} }; }
+  for (const dir of fallbacks) for (const name of [a.exe, ...(a.exeOld || [])]) { const exe = path.win32.join(dir, name); if (exists(exe)) return { dir, exe, registered: {} }; }
   return null;
 }
 const folderPrefix = (dir) => path.win32.resolve(dir).replace(/[\\/]+$/, '') + '\\';
