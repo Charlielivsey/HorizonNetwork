@@ -1,26 +1,26 @@
 {
- "tag": "browser-v2.0.1-66",
- "publishedAt": "2026-11-20T23:17:09.130Z",
+ "tag": "browser-v3.0.0-67",
+ "publishedAt": "2026-11-21T17:43:21.174Z",
  "assets": {
   "linux-x64": {
-   "name": "Compass-2.0.1-linux-x86_64.AppImage",
-   "size": 126105821,
-   "sha256": "0739e4b32b88362f6b6de3e7ffac3b6b9a94ae48e6664049def6789765f32658"
+   "name": "Compass-3.0.0-linux-x86_64.AppImage",
+   "size": 126114049,
+   "sha256": "287fbd6a382327eebf7625aed72ca21e726d9dcc7bd66b469d1920857b46c119"
   },
   "mac-arm64": {
-   "name": "Compass-2.0.1-mac-arm64.dmg",
-   "size": 128976539,
-   "sha256": "00c79d3685258cffde2aa7d26433821fa9966715696d8021c6d4ff1159bebe95"
+   "name": "Compass-3.0.0-mac-arm64.dmg",
+   "size": 128990924,
+   "sha256": "b6348267d23ac29526dc4c7e44c0a7541096c5afe21e837f95ba86bf3fc800e1"
   },
   "mac-arm64-zip": {
-   "name": "Compass-2.0.1-mac-arm64.zip",
-   "size": 129004303,
-   "sha256": "a09839e1bfa59aeb4e815d91a026584dddbc2c2599bf3b6ffb15d5c88f8e8024"
+   "name": "Compass-3.0.0-mac-arm64.zip",
+   "size": 129009046,
+   "sha256": "cf7eed1aeae652d17b2a75406af1c712376e9fd72ee057b7c7358f4936849f62"
   },
   "windows-x64": {
-   "name": "Compass-2.0.1-win-x64.exe",
-   "size": 113083133,
-   "sha256": "5e4d59fa2766ed80c94267b1b06caf3e4a99726d4d8b2b48b91817c1e25f748b"
+   "name": "Compass-3.0.0-win-x64.exe",
+   "size": 113087331,
+   "sha256": "16f1e541f77aecf3b0400be6c1020cb0190f6005a92652b7f3713e8b64698ad5"
   }
  }
 }
