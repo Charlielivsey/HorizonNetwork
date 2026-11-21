@@ -437,6 +437,17 @@ function calendarItems(from, to) {
     });
 }
 
+// Private calendar projection: no reasons, approval notes or medical details leave HR.
+function personalCalendarItems(personId, from, to, opts = {}) {
+  const person = store.getPerson(personId);
+  if (!person) return [];
+  return db.data.requests.filter(r => r.personId === personId && r.endDate >= from && r.startDate <= to &&
+    (opts.annualOnly ? r.type === 'annual' && r.status === 'approved' : ['approved','pending'].includes(r.status)))
+    .map(r => ({kind:r.type === 'sick' ? 'sick' : 'leave',id:'lv-'+r.id,personId,
+      title:person.displayName+' · '+(TYPES[r.type] || 'Absence')+(r.status === 'pending' ? ' (pending)' : ''),
+      leaveType:r.type,status:r.status,startDate:r.startDate,endDate:r.endDate,allDay:true,halfDay:r.halfDay || '',canEdit:false}));
+}
+
 function isOffToday(personId) {
   const t = today();
   return db.data.requests.some((r) => r.personId === personId && r.status === "approved" && r.startDate <= t && r.endDate >= t);
@@ -678,6 +689,6 @@ module.exports = { hasDirectSupervisor, requestExtra, decideExtra, extraMine, ex
   TOIL_HOURS_PER_DAY, clashFor, setMaxOffPerCompany, grid, createShutdown, deleteShutdown, shutdowns, toilBalance, addToil, toilHistory, leaveBetween,
   syncStatuses,
   TYPES, MANAGE, init, workingDays, summary, createRequest, getRequest, decide, cancel, mine, approvals,
-  pendingApprovalCount, team, calendarItems, isOffToday, allowances, setAllowance, setDefaultAllowance, allowanceFor,
+  pendingApprovalCount, team, calendarItems, personalCalendarItems, isOffToday, allowances, setAllowance, setDefaultAllowance, allowanceFor,
   setMaxCarryOver, pendingReturnToWork, completeReturnToWork, returnToWorkFor, absenceStats,
 };

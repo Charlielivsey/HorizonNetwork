@@ -1,8 +1,9 @@
 'use strict';
 // A fixed allowlist: no request may choose an arbitrary process or hostname.
 const sites=[
-['compass','Compass','hn-compass',5690,['compass.hngroup.org.uk']],
 ['appeals','HN Group Appeals','hn-appeals',5720,['appeals.hngroup.org.uk']],
+['it','HN Group IT','hn-it',5710,['it.hngroup.org.uk']],
+['finance','HN Group Finance','hn-finance',5690,['finance.hngroup.org.uk']],
 ['hr','HN Group HR','hn-hr',5680,['hr.hngroup.org.uk']],
 ['people','HN Group People','hn-people',5670,['people.hngroup.org.uk']],
 ['mail','HN Mail','hn-mail',5660,['mail.hngroup.org.uk']],
@@ -18,7 +19,7 @@ const sites=[
 ['wiki','HN Group Wiki','hn-wiki',3800,['wiki.hngroup.org.uk']],
 ['branding','Brand centre','hn-branding',4800,['branding.hngroup.org.uk']],
 ['companies','Company register','hn-companies',4900,['companies.hngroup.org.uk']],
-['vpn','HN Group VPN','hn-vpn',5000,['vpn.hngroup.org.uk']],
+['vpn','HN Secure Access Terminal','hn-vpn',5000,['sat.hngroup.org.uk','vpn.hngroup.org.uk']],
 ['investors','HN Group Investors','hn-investors',5200,['investors.hngroup.org.uk']],
 ['accounts','HN Account','hn-account-web',5300,['accounts.hngroup.org.uk']],
 ['devices','HN Group Devices','hn-devices',5400,['devices.hngroup.org.uk']],

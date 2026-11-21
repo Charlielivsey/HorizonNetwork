@@ -1,4 +1,4 @@
-# HN Group VPN
+# HN Secure Access Terminal
 
 A staff VPN on the VPS. All of a connected device's internet traffic goes through the server
 (217.154.34.205).

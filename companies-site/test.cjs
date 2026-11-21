@@ -13,6 +13,8 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 
 const freePort = () => new Promise((r) => { const s = http.createServer(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => r(p)); }); });
+// Historical migration fixtures deliberately keep their historical class semantics; current defaults are tested separately.
+function legacyStore(file){delete require.cache[require.resolve(file)];const s=require(file),init=s.init,save=s.saveCompany;s.init=dir=>init(dir,{legacyShares:true});s.saveCompany=(slug,input,actor,opts)=>save(slug,input,actor,{...opts,shareModel:'legacy'});return s;}
 const PDF = Buffer.from('%PDF-1.4\n1 0 obj << /Type /Page >> endobj\ntrailer << >>\n%%EOF\n');
 
 test('company register: public records, customers, requests, submissions and staff review', async () => {
@@ -408,7 +410,7 @@ test('company register: public records, customers, requests, submissions and sta
 test('company register: group structure update', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-companies-group-'));
   const store = path.join(__dirname, 'lib', 'store.js');
-  const fresh = () => { delete require.cache[require.resolve(store)]; return require(store); };
+  const fresh = () => legacyStore(store);
   try {
     // The register before the update.
     process.env.COMPANIES_GROUP_UPDATES = 'off';
@@ -467,7 +469,7 @@ test('company register: group structure update', () => {
 test('company register: HN Group shareholding of 28 October 2026', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-companies-hng-'));
   const store = path.join(__dirname, 'lib', 'store.js');
-  const fresh = () => { delete require.cache[require.resolve(store)]; return require(store); };
+  const fresh = () => legacyStore(store);
   try {
     process.env.COMPANIES_GROUP_UPDATES = 'off';
     let s = fresh(); s.init(dir);
@@ -525,7 +527,7 @@ test('company register: HN Group shareholding of 28 October 2026', () => {
 test('company register: shareholdings of 30 October 2026', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-companies-1030-'));
   const store = path.join(__dirname, 'lib', 'store.js');
-  const fresh = () => { delete require.cache[require.resolve(store)]; return require(store); };
+  const fresh = () => legacyStore(store);
   try {
     process.env.COMPANIES_GROUP_UPDATES = 'off';
     let s = fresh(); s.init(dir);
@@ -582,7 +584,7 @@ test('company register: shareholdings of 30 October 2026', () => {
 test('company register: holdings move to HN Group Investments on 2 November 2026', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-companies-1102-'));
   const store = path.join(__dirname, 'lib', 'store.js');
-  const fresh = () => { delete require.cache[require.resolve(store)]; return require(store); };
+  const fresh = () => legacyStore(store);
   const DONE = ['group-structure-2026-10-18', 'charlie-managing-director', 'rename-hn-group-management', 'hn-group-shareholding-2026-10-28', 'clivsey-holdings-parent-2026-10-28',
     'shareholdings-2026-10-30-hn-group', 'shareholdings-2026-10-30-horizon-network', 'shareholdings-2026-10-30-horizon-media-group', 'shareholdings-2026-10-30-horizon-advertising'];
   try {
@@ -655,7 +657,7 @@ test('company register: share classes and voting power', () => {
   delete require.cache[require.resolve(store)];
   process.env.COMPANIES_GROUP_UPDATES = 'off';
   try {
-    const s = require(store); s.init(dir);
+    const s = legacyStore(store); s.init(dir);
     const c = s.saveCompany('', { legalName: 'Class Test Limited', incorporated: '2026-01-01' }, 't', { officer: { name: 'Clara Chair', role: 'Secretary' }, psc: { name: 'Xavier Public', kind: 'Individual', classA: '60' } });
     const err = (fn) => { try { fn(); } catch (e) { return e.message; } return ''; };
     const votes = () => { const v = s.votingPower(s.company(c.slug)); return Object.fromEntries(s.company(c.slug).psc.filter((p) => !p.ceased).map((p) => [p.name, v[p.id]])); };
@@ -708,7 +710,7 @@ test('company register: share classes and voting power', () => {
 test('company register: one-off reset deletes every company, keeps accounts and a full backup', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-companies-reset-'));
   const store = path.join(__dirname, 'lib', 'store.js');
-  const fresh = () => { delete require.cache[require.resolve(store)]; return require(store); };
+  const fresh = () => legacyStore(store);
   process.env.COMPANIES_GROUP_UPDATES = 'off';
   try {
     let s = fresh(); s.init(dir);
@@ -751,7 +753,7 @@ test('company register: staff change (backdate) an incorporation date with its f
   delete require.cache[require.resolve(store)];
   process.env.COMPANIES_GROUP_UPDATES = 'off';
   try {
-    const s = require(store); s.init(dir);
+    const s = legacyStore(store); s.init(dir);
     const c = s.saveCompany('', { legalName: 'Backdate Limited', incorporated: '2026-06-01' }, 't', { officer: { name: 'Olive Officer', role: 'Director' }, psc: { name: 'Olive Officer', kind: 'Individual', share: '100' } });
     s.saveItem(c.slug, 'officers', '', { name: 'Later Director', role: 'Director', appointed: '2026-08-01' }, 't');
     const err = (input) => { try { s.changeIncorporation(c.slug, input, 't'); } catch (e) { return e.message; } return ''; };
@@ -785,7 +787,7 @@ test('company register: staff change (backdate) an incorporation date with its f
 test('company register: ownership reset on 7 November 2026', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hn-companies-1107-'));
   const store = path.join(__dirname, 'lib', 'store.js');
-  const fresh = () => { delete require.cache[require.resolve(store)]; return require(store); };
+  const fresh = () => legacyStore(store);
   const skip = process.env.COMPANIES_SKIP_UPDATES;
   try {
     process.env.COMPANIES_GROUP_UPDATES = 'off';

@@ -366,10 +366,8 @@ body.leaving .login-card { transition: transform 0.35s ease, opacity 0.35s ease;
 /* ---------- Top bar & navigation ---------- */
 .deprecation-banner {
     padding: 1rem 1.5rem;
-    background: var(--surface);
-    background: linear-gradient(110deg, color-mix(in srgb, #c2304c 16%, var(--surface)), color-mix(in srgb, #c2304c 5%, var(--surface)));
+    background: transparent;
     color: var(--text);
-    border-bottom: 1px solid color-mix(in srgb, #c2304c 35%, var(--border));
     line-height: 1.5;
 }
 :root[data-hn-app] .deprecation-banner { display: none; }
@@ -4415,6 +4413,11 @@ select option, select optgroup { background: var(--surface); color: var(--text);
 [data-hn-app="hr"] .page-head .page-actions { flex-basis: 100%; justify-content: flex-start; }
 [data-hn-app="hr"] .page-head > div:not(.page-actions):not(.segmented) { min-width: min(100%, 320px); }
 
+/* The finance overview uses the same cards and responsive spacing as the portal menus. */
+[data-hn-app="finance"] .panel + .panel { margin-top:1.5rem; }
+:is([data-hn-app="finance"], [data-hn-app="hr"]) .menu-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; margin-top:1rem; }
+:is([data-hn-app="finance"], [data-hn-app="hr"]) .menu-grid .menu-item { border:1px solid var(--border); border-radius:18px; padding:1.25rem; }
+@media(max-width:640px) { :is([data-hn-app="finance"], [data-hn-app="hr"]) .menu-grid { grid-template-columns:1fr; } }
 
 /* Additional allowance request: calm, compact fields and errors only when there is a message. */
 .hr-extra-dialog { width: min(520px, calc(100vw - 32px)); }
@@ -4436,3 +4439,21 @@ select option, select optgroup { background: var(--surface); color: var(--text);
 .hr-extra-dialog .form-error[hidden] { display: none !important; }
 .hr-extra-footer { display: flex; align-items: center; justify-content: flex-end; gap: .65rem; padding-top: 1.15rem; margin-top: 1rem; border-top: 1px solid var(--border); }
 @media(max-width:480px) { .hr-extra-fields { grid-template-columns: 1fr; } .hr-extra-footer .btn { flex: 1; } }
+
+[data-hn-app="hr"] #view > .panel + .panel { margin-top: 1.5rem; }
+
+/* Native selects remain successful form controls; the themed trigger receives touch on iOS. */
+.hn-select-wrap{position:relative;display:block;width:100%;margin-bottom:1rem}.hn-select-wrap>select{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;opacity:0!important;pointer-events:none!important;margin:0!important}
+.hn-select-trigger{display:block;width:100%;min-height:44px;padding:.65rem 2.4rem .65rem .9rem;border:1px solid var(--border-strong);border-radius:12px;background:var(--input-bg,var(--surface));color:var(--text);font:inherit;text-align:left;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.hn-select-wrap:after{content:'⌄';position:absolute;right:14px;top:10px;color:var(--text-muted);pointer-events:none}.hn-select-trigger:focus-visible{outline:3px solid var(--primary);outline-offset:2px}.hn-select-trigger:disabled{opacity:.55;cursor:default}
+.pos-report .hn-select-wrap{margin:0;min-width:160px}.role-row .hn-select-wrap{margin-bottom:0}
+
+.pos-list li{grid-template-columns:minmax(120px,1fr) minmax(220px,1.5fr) auto auto auto}.pos-report .hn-select-wrap{flex:1;min-width:0}.pos-list button[data-move]{padding:4px;min-width:30px}@media(max-width:640px){.pos-list li{grid-template-columns:minmax(0,1fr) auto auto auto}.pos-report{grid-column:1/-1;grid-row:2}}
+
+/* Email names and themed domain selectors each keep a usable column. */
+.email-input{display:grid;grid-template-columns:minmax(160px,1fr) auto minmax(180px,1fr);align-items:center;gap:.65rem}.email-input .email-local{width:100%;margin:0}.email-input .hn-select-wrap{min-width:0;margin:0}.email-input .hn-select-trigger{margin:0}.email-at{justify-self:center}
+@media(max-width:520px){.email-input{grid-template-columns:minmax(100px,1fr) auto minmax(120px,1fr)}}
+
+.it-status-history{display:flex;gap:3px;margin:18px 0}.it-status-history span{height:20px;flex:1;background:var(--border);border-radius:3px}.it-status-history .ok{background:var(--good,#5fae7b)}.it-status-history .issue{background:var(--danger)}.it-status-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.it-status-metrics small{display:block;color:var(--text-muted);margin-bottom:6px}.it-status-incident{padding:20px 0;border-top:1px solid var(--border)}.it-status-incident p{white-space:pre-wrap}
+
+/* Current share ownership on staff profiles. */
+.pv-ownership{margin:0}.pv-ownership>div{display:flex;justify-content:space-between;align-items:start;gap:16px;padding:12px 0;border-bottom:1px solid var(--border)}.pv-ownership>div:last-child{border-bottom:0}.pv-ownership dt{font-weight:600}.pv-ownership dd{margin:0;text-align:right}.pv-ownership dd strong,.pv-ownership dd span{display:block}

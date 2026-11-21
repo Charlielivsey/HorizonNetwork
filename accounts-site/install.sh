@@ -6,6 +6,7 @@
 # /api/auth/accounts-session: run auth-site/install.sh and staff-portal/install.sh first (the root
 # install.sh does both).
 set -euo pipefail
+bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/offline-site/install.sh"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOMAIN=accounts.hngroup.org.uk
 EMAIL="${1:-}"
@@ -28,7 +29,7 @@ for config in /etc/nginx/sites-enabled/* /etc/nginx/conf.d/*.conf; do
 done
 mkdir -p /opt/hn-account-web "$CHALLENGE_DIR" /etc/nginx/sites-available /etc/nginx/sites-enabled
 rm -rf /opt/hn-account-web/public
-cp "$SCRIPT_DIR/server.js" /opt/hn-account-web/server.js
+cp "$SCRIPT_DIR/server.js" "$SCRIPT_DIR/profile-gate.cjs" /opt/hn-account-web/
 cp -r "$SCRIPT_DIR/public" /opt/hn-account-web/
 if ! grep -q "accounts: { name: 'HN Account'" /opt/hn-auth/server.js 2>/dev/null; then
     echo 'Note: HN Group Auth does not know the HN Account yet, so staff cannot sign in.'

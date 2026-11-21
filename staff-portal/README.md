@@ -4,6 +4,24 @@ Internal staff portal for the whole of HN Group, served at **https://staff.hngro
 
 **Default login:** `admin@hngroup.org.uk` / `admin`. Change this straight away under **Settings → Security**. Staff sign in with their work email address.
 
+## Staff badges
+
+The main portal's **Staff badges** menu provides **My staff badge** (`/badge`) and, with `badges.manage`, **Manage staff badges** (`/badges/manage`). Staff can download PNG/SVG or print a 54 × 85.6 mm portrait card. Full staff name, photo and company are captured at issuance; subsequent profile edits do not change them. The larger-name/smaller-photo card has a patterned shield detail and no issue date or staff-identification caption. Its number is the person’s permanent employee number and stays the same through reissues.
+
+The single private staff backend keeps `staff-badges.json` and immutable copies in `badge-photos/` under its existing data directory. Initial startup backfills existing staff; new staff are registered automatically and their first badge is issued when a profile picture becomes available. Missing photos are shown explicitly. System accounts are excluded. A one-time migration gives existing staff-management roles and Super Admin the independent **Manage staff badges** permission; further grants/revocations use IT Roles. System Admin permission alone does not grant badge management.
+
+Managers can view all current badges, filter/search, and reissue one, selected people, or all staff with a confirmation. Missing-photo records are skipped with a result count. Reissues preserve history and mark older artwork superseded. All badge APIs and artwork require authentication and recheck ownership or management permission; deleted staff records are no longer accessible. The feature grants no physical access and introduces no public verification endpoint. Back up both the register and photo directory together with existing staff data.
+
+Checks: `node --test staff-portal/badges.test.cjs`; `CHROMIUM_EXECUTABLE=/path/to/chrome node --test staff-portal/badges.integration.test.cjs` (isolated fixture accounts, desktop only).
+
+## Multiple appointments and employee numbers
+
+HR → People → Employee management now supports additional positions in the **same company** or another company. Each appointment has its own title, department, supervisor position and temporary flag. Duplicate company/title pairs are refused. Existing cross-company appointments are retained; company-scoped Auth profile keys and permission roles stay unchanged. Directories and charts show every appointment, with temporary status attached to the relevant position.
+
+Each staff record has one server-assigned `employeeNumber`. Existing staff adopt their current badge number; new staff get a number when their record is created, even while waiting for a badge photo. Names, roles and badge reissues never change it. Staff/HR views and current payroll details use this identity; the Finance field is read-only, and historical payslips keep their saved numbers. Public People projections do not expose employee numbers.
+
+Checks: `appointments.test.cjs` covers migration, per-appointment status/supervisors, duplicate rejection, stable numbers and payroll history; `appointments.integration.test.cjs` uses isolated HTTP services and a desktop browser to save/reopen same-company appointments.
+
 ## Features
 
 - **Home page.** Shows the current date and time on your device, and the time where your profile location is set, with the difference between the two. It also shows the latest announcements, anything you need to acknowledge, your onboarding tasks, what's coming up on the calendar and your status.
@@ -356,3 +374,7 @@ sudo certbot renew --dry-run      # test certificate renewal
   ```bash
   sudo DATA_DIR=/var/lib/hn-staff-portal node /opt/hn-staff-portal/reset-admin.js && pm2 restart hn-staff-portal
   ```
+
+### Unified workspace (18 November 2026)
+
+HR, Finance and IT tools are served by the main Staff Portal, with their existing permissions, staff data writer, payroll and confidential case checks. Former workspace hosts redirect to the corresponding Staff Portal pages; IT cases use `/it-cases`, HR cases `/cases`. Old-origin writes are rejected rather than forwarded. Account administration remains restricted to owners/Super Admins. Backend PIN/access responses must pass through nginx unchanged; actual maintenance gates remain enforced.

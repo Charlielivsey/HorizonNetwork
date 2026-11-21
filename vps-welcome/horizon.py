@@ -15,6 +15,8 @@ import signal
 import subprocess
 import sys
 import time
+import urllib.request
+import urllib.error
 
 REPO = Path('/root/HorizonNetwork')
 FALLBACK = Path(__file__).resolve().with_name('catalog.json')
@@ -183,6 +185,7 @@ MENU = [
     ('2', 'codex', 'Open Codex', 'Continue in the HorizonNetwork project.'),
     ('3', 'pm2', 'PM2 process controls', 'Start or stop all managed services.'),
     ('4', 'power', 'Power management', 'Restart, shut down or power up.'),
+    ('5', 'unlock-account', 'Unlock an HN account', 'Enter the account’s sign-in email.'),
 ]
 PM2_MENU = [
     ('1', 'start-all', 'Start all PM2 processes', 'pm2 start all'),
@@ -265,7 +268,7 @@ def welcome(pm2=False, power=False):
         line()
     if not framed:
         print(colour('╰' + '─' * inner + '╯', '38;5;141'))
-    print(colour('  Choose 1–4 or B, then press Enter.' if power else '  Choose 1–3 or B, then press Enter.' if pm2 else '  Choose 1–4 or L, then press Enter.', '2'))
+    print(colour('  Choose 1–4 or B, then press Enter.' if power else '  Choose 1–3 or B, then press Enter.' if pm2 else '  Choose 1–5 or L, then press Enter.', '2'))
 
 
 def pm2_menu():
@@ -410,7 +413,48 @@ def power_action(action):
     return result
 
 
+def unlock_account():
+    if os.geteuid() != 0:
+        print('Use sudo horizon unlock-account to recover an HN account.', file=sys.stderr)
+        return 1
+    if not unlock_pm2():
+        return 1
+    try:
+        email = input('  Sign-in email (B to go back) › ').strip().lower()
+        if email == 'b':
+            return 0
+        if len(email) > 254 or '@' not in email or any(c.isspace() for c in email):
+            print('  Enter the full sign-in email address.')
+            return 1
+        secret = Path('/var/lib/hn-status-sso/secret').read_text().strip()
+        request = urllib.request.Request(
+            'http://127.0.0.1:3250/api/auth/account-unlock',
+            data=json.dumps({'email': email}).encode(), method='POST',
+            headers={'Authorization': 'Bearer ' + secret, 'Content-Type': 'application/json'})
+        # Recovery stays on loopback, including on hosts with HTTP proxy variables.
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        with opener.open(request, timeout=10) as response:
+            result = json.load(response)
+        print('  ' + result['username'] + ' unlocked.' + ('' if result['enabled'] else ' Sign-in remains disabled.'))
+        return 0
+    except urllib.error.HTTPError as error:
+        try:
+            message = json.load(error).get('error', 'Account recovery failed.')
+        except (ValueError, OSError):
+            message = 'Account recovery failed.'
+        print('  ' + message)
+        return 1
+    except (OSError, ValueError, KeyError):
+        print('  Account recovery is unavailable. Check that hn-accounts is running.')
+        return 1
+    except (EOFError, KeyboardInterrupt):
+        print('\n  Account recovery cancelled.')
+        return 0
+
+
 def execute(command, process=None, unlocked=False):
+    if command == 'unlock-account':
+        return unlock_account()
     if command in ('start-all', 'stop-all', 'sites', 'restart-server', 'soft-shutdown', 'power-up') and not unlocked and not unlock_pm2():
         return 1
     if command == 'power':
@@ -503,7 +547,7 @@ def main(argv=None):
             print(colour('  Signed out. See you soon.', '38;5;73'))
             return LOGOUT
         if choice not in commands:
-            print('  Choose 1, 2, 3 or 4, or L to log out.')
+            print('  Choose 1, 2, 3, 4 or 5, or L to log out.')
             continue
         try:
             result = execute(commands[choice])

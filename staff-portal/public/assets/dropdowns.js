@@ -5,6 +5,23 @@
     let active = null, serial = 0;
     const eligible = el => el instanceof HTMLSelectElement && !el.multiple && el.size <= 1;
     const enabled = option => !option.disabled && !option.hidden && !option.parentElement.disabled && !option.parentElement.hidden;
+    const resolveSelect = target => target.closest('select') || target.closest('.hn-select-trigger')?.hnSelect;
+    function syncTrigger(select){
+        const button=select.hnTrigger;if(!button)return;
+        const text=select.selectedOptions[0]?.textContent||'Choose an option';
+        if(button.textContent!==text)button.textContent=text;
+        button.disabled=select.matches(':disabled');button.setAttribute('aria-label',label(select)+': '+text);
+        button.setAttribute('aria-expanded',String(active?.select===select));
+        if(active?.select===select)button.setAttribute('aria-controls',active.list.id);else button.removeAttribute('aria-controls');
+    }
+    function enhance(select){
+        if(!eligible(select)||select.hnTrigger)return;
+        const wrapper=document.createElement('span'),button=document.createElement('button');wrapper.className='hn-select-wrap';
+        button.type='button';button.className='hn-select-trigger';button.setAttribute('role','combobox');button.setAttribute('aria-haspopup','listbox');
+        select.before(wrapper);wrapper.append(select,button);select.hnTrigger=button;button.hnSelect=select;
+        select.tabIndex=-1;select.setAttribute('aria-hidden','true');syncTrigger(select);
+    }
+    function scan(root){if(root instanceof HTMLSelectElement)enhance(root);root.querySelectorAll?.('select').forEach(enhance);}
     const normal = value => value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
     function label(select) {
         return select.getAttribute('aria-label') || (select.getAttribute('aria-labelledby') || '').split(/\s+/).map(id => document.getElementById(id)?.textContent || '').join(' ').trim() || Array.from(select.labels || []).map(l => l.textContent).join(' ').trim() || 'Choose an option';
@@ -19,7 +36,8 @@
         state.select.removeAttribute('aria-controls'); state.select.removeAttribute('aria-activedescendant');
         if (typeof state.popup.hidePopover === 'function' && state.popup.matches(':popover-open')) state.popup.hidePopover();
         state.popup.remove();
-        if (focus && state.select.isConnected) state.select.focus({ preventScroll: true });
+        syncTrigger(state.select);
+        if (focus && state.select.isConnected) (state.select.hnTrigger||state.select).focus({ preventScroll: true });
     }
     function position() {
         const s = active; if (!s) return;
@@ -70,7 +88,7 @@
         if (!s.list.childElementCount) { const empty = document.createElement('p'); empty.className = 'hn-dropdown-empty'; empty.textContent = 'No matching options'; empty.setAttribute('role', 'status'); s.list.append(empty); }
         const selected = s.select.selectedIndex;
         highlight(s.visible.includes(previous) ? previous : s.visible.includes(selected) ? selected : s.visible[0] ?? -1, false);
-        s.selected = selected; position();
+        s.selected = selected; syncTrigger(s.select); position();
     }
     function choose(index) {
         const s = active, option = s?.select.options[index];
@@ -81,7 +99,7 @@
     }
     function open(select, searchFocus) {
         if (!eligible(select) || select.matches(':disabled')) return;
-        close(false); select.focus({ preventScroll: true });
+        close(false); (select.hnTrigger||select).focus({ preventScroll: true });
         const popup = document.createElement('div'), search = document.createElement('input'), list = document.createElement('div'), id = 'hn-dropdown-' + (++serial);
         popup.className = 'hn-dropdown'; popup.id = id; popup.setAttribute('popover', 'manual'); popup.dataset.open = '';
         list.className = 'hn-dropdown-options'; list.id = id + '-options'; list.setAttribute('role', 'listbox'); list.setAttribute('aria-label', label(select));
@@ -104,18 +122,18 @@
         if (searchFocus && !search.hidden) search.focus({ preventScroll: true });
     }
     document.addEventListener('pointerdown', event => {
-        const select = event.target.closest('select');
+        const select = resolveSelect(event.target);
         if (eligible(select) && !select.matches(':disabled') && event.button === 0) {
             event.preventDefault(); if (active?.select === select) close(true); else open(select, true);
         } else if (active && !active.popup.contains(event.target)) close(false);
     }, true);
     document.addEventListener('click', event => {
-        const select = event.target.closest('select'); if (!eligible(select) || select.matches(':disabled')) return;
+        const select = resolveSelect(event.target); if (!eligible(select) || select.matches(':disabled')) return;
         event.preventDefault(); if (event.detail === 0 && active?.select !== select) open(select, true);
     }, true);
     document.addEventListener('keydown', event => {
-        const s = active, select = event.target.closest('select'), searching = s && event.target === s.search;
-        if (s && (event.target === s.select || searching)) {
+        const s = active, select = resolveSelect(event.target), searching = s && event.target === s.search;
+        if (s && (event.target === s.select || event.target === s.select.hnTrigger || searching)) {
             if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(true); return; }
             if (event.key === 'Tab') { close(searching); return; }
             if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) && (!searching || event.key.startsWith('Arrow'))) {
@@ -139,9 +157,14 @@
             }
         }
     }, true);
-    document.addEventListener('focusin', event => { if (active && event.target !== active.select && !active.popup.contains(event.target)) close(false); });
-    document.addEventListener('change', event => { if (active?.select === event.target) render(); }, true);
+    document.addEventListener('focusin', event => { if (active && event.target !== active.select && event.target !== active.select.hnTrigger && !active.popup.contains(event.target)) close(false); });
+    document.addEventListener('reset',event=>setTimeout(()=>event.target.querySelectorAll('select').forEach(syncTrigger),0));
+    document.addEventListener('change', event => { if(eligible(event.target))syncTrigger(event.target); if (active?.select === event.target) render(); }, true);
     document.addEventListener('scroll', event => { if (active && !active.popup.contains(event.target)) close(false); }, true);
     window.addEventListener('resize', position); window.visualViewport?.addEventListener('resize', position);
     window.addEventListener('popstate', () => close(false));
+    const observer=new MutationObserver(records=>{for(const r of records){for(const node of r.addedNodes||[])if(node.nodeType===1)scan(node);const select=r.target.closest?.('select');if(select)syncTrigger(select);if(r.target instanceof HTMLSelectElement)syncTrigger(r.target);}});
+    scan(document);observer.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['disabled','selected','label','hidden']});
+    document.addEventListener('focusin',event=>{if(eligible(event.target)&&event.target.hnTrigger)event.target.hnTrigger.focus();});
+
 })();

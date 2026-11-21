@@ -10,6 +10,7 @@
 # This also installs or updates the public website (hngroup.org.uk, see hngroup-site/), so one
 # command updates both:  cd /root/HorizonNetwork && git pull && sudo bash staff-portal/install.sh
 set -e
+bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/offline-site/install.sh"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOMAIN="${1:-staff.hngroup.org.uk}"

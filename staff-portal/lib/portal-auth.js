@@ -6,6 +6,7 @@
 // The portal has no sign-in page of its own any more (the user's request, 27 October 2026): remembering the
 // account, the PIN and Sign in with Google all happen on HN Group Auth, so the portal never issues its own
 // "Resume session" token and retires any it gave out before.
+const {chooseOnArrival,arrivalCookie}=require('./profile-gate.cjs');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 
@@ -24,7 +25,23 @@ function readSecret() {
 }
 
 // Auth sign-in is used whenever the shared secret is installed; otherwise the portal keeps its own form.
-function clientFor(req) { return req.headers['x-hn-hr-app'] === '1' && ['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress) ? 'hr' : 'portal'; }
+function clientFor(req) {
+  if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress)) return 'portal';
+  if (req.headers['x-hn-it-app'] === '1') return 'it';
+  if (req.headers['x-hn-finance-app'] === '1') return 'finance';
+  return req.headers['x-hn-hr-app'] === '1' ? 'hr' : 'portal';
+}
+function nextFor(req, value, legacy) {
+  if(clientFor(req)==='portal'&&typeof value==='string'&&/^\/(?!\/)[^\s\\]*$/.test(value)&&value.length<2048&&!/^\/(auth|api|assets)(\/|$)/.test(value))return value;
+  if (clientFor(req) === 'hr' && typeof value === 'string' && /^\/(?!\/)/.test(value) && value.length < 2048 && !/[\\\x00-\x20\x7f]/.test(value)) {
+    const url = new URL(value, 'https://hr.hngroup.org.uk');
+    if (value.startsWith('/') && url.origin === 'https://hr.hngroup.org.uk' && /^\/(home|leave|rotas|reviews|objectives|feedback|flexible|exit-interview|exit-interviews|staff-files|training|cases|employees|onboarding|jobs|job-descriptions|notifications)$/.test(url.pathname)) return url.pathname + url.search + url.hash;
+  }
+  if (clientFor(req) === 'it' && typeof value === 'string' && /^\/(home|cases|accounts|staff-accounts|status|on-call|notifications)(?:[?#]|$)/.test(value) && !/[\\\x00-\x20\x7f]/.test(value)) return value;
+  return legacy(value);
+}
+function sessionCookieName(req) { return clientFor(req) === 'it' ? 'hn_it_session' : clientFor(req) === 'finance' ? 'hn_finance_session' : 'hn_staff_session'; }
+
 function enabled() { return !!readSecret(); }
 
 function createPortalAuth({ store, sessions, resume, createSession, cookieFor, parseCookies, send, redirect, logEvent, loginNext, clientIp }) {
@@ -41,7 +58,7 @@ function createPortalAuth({ store, sessions, resume, createSession, cookieFor, p
     for (const [s, v] of states) if (v.expires <= Date.now()) states.delete(s);
     if (states.size >= 10000) return send(res, 503, 'Please try again shortly.', { 'Content-Type': 'text/plain' });
     const state = crypto.randomBytes(32).toString('hex');
-    states.set(state, { client: clientFor(req), next: loginNext(next) || null, expires: Date.now() + STATE_TTL_MS });
+    states.set(state, { client: clientFor(req), next: nextFor(req, next, loginNext) || null, expires: Date.now() + STATE_TTL_MS });
     send(res, 302, '', {
       Location: `${AUTH_ORIGIN}/authorize?client_id=${clientFor(req)}&state=${state}`,
       'Cache-Control': 'no-store',
@@ -84,6 +101,7 @@ function createPortalAuth({ store, sessions, resume, createSession, cookieFor, p
     // Auth checked the password and PIN (and the profile chosen) through its own staff session: carry on as that
     // sign-in account and profile, and end Auth's session now the browser gets its own.
     const used = HEX.test(staffSession || '') && sessions.get(staffSession);
+    if (['finance','it'].includes(pending.client) && !used) return back(req, res, 'auth_error=expired');
     const person = used ? store.getPerson(used.personId) : user && store.getPerson(user.id);
     // A sign-in account with no staff profile can use other HN Group websites, but not the staff portal.
     if (!person || !person.account || !person.account.enabled || person.standalone) return back(req, res, 'auth_error=denied');
@@ -94,15 +112,18 @@ function createPortalAuth({ store, sessions, resume, createSession, cookieFor, p
     const token = createSession(store.sessionIdOf(person), req, { allowPageLoad: true });
     console.log(`${store.meView(person).username} signed in from ${clientIp(req)} (HN Group Auth)`);
     logEvent(req, null, 'signed-in', { actor: store.loginName(person), detail: 'HN Group Auth', ua: String(req.headers['user-agent'] || '').slice(0, 300) });
-    const cookies = [cookieFor(req, token), stateCookie(req, '', 0)];
+    const cookies = [cookieFor(req, token), stateCookie(req, '', 0),arrivalCookie(req.headers['x-forwarded-proto']==='https')];
     // An old portal "Resume session" token on this browser is retired: Auth remembers the account now.
     const old = parseCookies(req)[resume.COOKIE];
     if (old) { resume.forget(old); cookies.push(resume.cookie(req, '', true)); }
-    send(res, 302, '', { Location: pending.next || (pending.client === 'hr' ? '/leave' : '/home'), 'Cache-Control': 'no-store', 'Set-Cookie': cookies });
+    send(res, 302, '', { Location: pending.next || '/home', 'Cache-Control': 'no-store', 'Set-Cookie': cookies });
   }
 
   // Returns true when it handled the request.
   return async function handle(req, res, pathname) {
+    const secure=req.headers['x-forwarded-proto']==='https';
+    if(await chooseOnArrival(req,res,new URL(req.url,'http://localhost'),{client:clientFor(req),staffSession:()=>{const raw=parseCookies(req)[sessionCookieName(req)],key=raw&&crypto.createHash('sha256').update(raw).digest('hex'),active=key&&sessions.get(key);return active&&active.expires>Date.now()&&!active.impersonatorId?key:null;},backend:AUTH_BACKEND,secretFile:SECRET_FILE,authOrigin:AUTH_ORIGIN,secure,stateCookie:STATE_COOKIE,statePath:'/auth/',stateValue:(state,next)=>{for(const [key,value]of states)if(value.expires<=Date.now())states.delete(key);if(states.size>=10000)throw Object.assign(Error('Please try again shortly.'),{status:503});states.set(state,{client:clientFor(req),next,expires:Date.now()+STATE_TTL_MS});return state;},safeNext:p=>/^\/(?!\/)[^\s\\]*$/.test(p)?p:'/home'}))return true;
+
     if (pathname !== '/auth/start' && pathname !== '/auth/callback') return false;
     if (req.method !== 'GET') { send(res, 405, 'Method not allowed', { Allow: 'GET' }); return true; }
     const url = new URL(req.url, 'http://localhost');
@@ -113,4 +134,4 @@ function createPortalAuth({ store, sessions, resume, createSession, cookieFor, p
   };
 }
 
-module.exports = { createPortalAuth, enabled };
+module.exports = { createPortalAuth, enabled, clientFor, sessionCookieName, nextFor };

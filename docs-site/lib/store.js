@@ -138,7 +138,7 @@ function view(d, user, full) {
     owner: d.owner, ownerId: d.ownerId, createdAt: d.createdAt, updatedAt: d.updatedAt, updatedBy: d.updatedBy, mine: d.ownerId === user.id,
     readOnly: !canEdit(d, user), canManage: canManage(d, user), confidential: !!d.confidential, protected: !!d.protected,
     canDelete: canManage(d, user) && !d.protected };
-  if (full) { v.fields = d.fields; v.body = d.body; v.history = (d.policy && d.policy.history) || []; }
+  if (full) { v.fields = d.fields; v.body = d.body; v.history = (d.policy && d.policy.history) || []; v.draftHistory = (d.policy && d.policy.drafts) || []; }
   return v;
 }
 const fileView = (f, user) => ({ kind: 'file', id: f.id, name: f.name, mime: f.mime, size: f.size, company: f.company, owner: f.owner, ownerId: f.ownerId,
@@ -179,22 +179,49 @@ function get(id, user) {
   return d;
 }
 
-function cleanFields(t, input) {
+function cleanFields(t, input, previous = {}, legacyDirective = false) {
   const out = {};
-  for (const f of [...t.head, ...t.foot]) out[f.key] = plain(f.fixed ? f.value : input && input[f.key], f.multiline ? 600 : 200, !!f.multiline);
+  for (const f of [...t.head, ...t.foot]) out[f.key] = plain(f.generated ? previous[f.key] : f.fixed ? (legacyDirective ? previous[f.key] : f.value) : input && input[f.key], f.multiline ? 600 : 200, !!f.multiline);
   return out;
+}
+
+// References belong to saved documents, never to a browser preview. Keep a durable high-water mark
+// and scan legacy/manual references so new and duplicated EDs cannot reuse an existing number.
+function nextDirectiveReference() {
+  let next = Number.isSafeInteger(data.directiveSequence) && data.directiveSequence >= 0 ? data.directiveSequence : 0;
+  for (const d of Object.values(data.documents)) {
+    const match = /^ED[- ]?(\d+)$/i.exec(String(d.fields?.reference || '').trim());
+    if (match && Number.isSafeInteger(Number(match[1]))) next = Math.max(next, Number(match[1]));
+  }
+  if (next >= Number.MAX_SAFE_INTEGER) throw fail(507, 'The ED reference sequence is exhausted.');
+  data.directiveSequence = next + 1;
+  return 'ED' + String(data.directiveSequence).padStart(4, '0');
+}
+
+function recordDraft(d, user, before) {
+  const changes = before ? describeChanges(before, d) : ['Initial draft'];
+  if (before && (before.fields.version || '') !== (d.fields.version || '')) changes.push('Changed the draft version');
+  if (!changes.length) return;
+  const p = d.policy || (d.policy = { history: [], snapshot: null });
+  p.drafts = p.drafts || [];
+  p.drafts.push({ version: d.fields.version || 'Unnumbered', draft: true, revision: d.version, at: now(), date: catalog.longDate(new Date()), by: user.fullName || user.displayName, changes: changes.slice(0, 20) });
+  if (p.drafts.length > 100) p.drafts.splice(0, p.drafts.length - 100);
 }
 
 function create(user, input) {
   const c = catalog.company(input.company), t = catalog.template(input.template);
   if (!c) throw fail(400, 'Choose a company.');
   if (!t) throw fail(400, 'Choose a template.');
+  if (t.company && c.id !== t.company) throw fail(400, 'This executive-directive template uses Horizon Network letterhead and its Operations Policy.');
   if (Object.keys(data.documents).length >= MAX_DOCS) throw fail(507, 'There are too many documents. Delete some first.');
   const start = catalog.start(t, c, user);
+  if (input.body !== undefined && String(input.body).length > 600000) throw fail(413, 'This document is too long.');
   const d = { id: crypto.randomUUID(), title: plain(input.title, 160) || start.title || (t.id === 'blank' ? 'Untitled document' : t.name), company: c.id, template: t.id,
-    fields: start.fields, body: sanitize(start.body), status: 'draft', sharing: input.sharing === 'staff' ? 'staff' : 'private', version: 1,
+    fields: input.fields === undefined ? start.fields : cleanFields(t, input.fields), body: sanitize(input.body === undefined ? start.body : input.body), status: 'draft', sharing: input.sharing === 'staff' ? 'staff' : 'private', version: 1,
     confidential: input.confidential === true || (input.confidential === undefined && !!t.confidential), protected: false,
     owner: user.displayName, ownerId: user.id, ownerEmail: user.email, createdAt: now(), updatedAt: now(), updatedBy: user.displayName };
+  if (t.id === 'executive-directive') d.fields.reference = nextDirectiveReference();
+  if (t.id === 'policy') recordDraft(d, user, null);
   data.documents[d.id] = d;
   audit(user, 'created', d); save();
   return view(d, user, true);
@@ -205,10 +232,12 @@ function update(id, user, input) {
   if (!canEdit(d, user)) throw fail(403, 'This document is in someone else’s private storage, so you can open it but not change it.');
   if (Number(input.version) !== d.version) throw fail(409, d.updatedBy + ' changed this document while you were editing it. Reload to see their changes.');
   const t = catalog.template(d.template);
+  const before = { title: d.title, body: d.body, fields: { ...d.fields } };
+  const legacyDirective = d.template === 'executive-directive' && d.company !== 'horizon-network';
   if (input.title !== undefined) d.title = plain(input.title, 160) || 'Untitled document';
-  if (input.company !== undefined) { if (!catalog.company(input.company)) throw fail(400, 'Choose a company.'); d.company = input.company; }
-  if (input.fields !== undefined) d.fields = cleanFields(t, input.fields);
-  for (const f of [...t.head, ...t.foot]) if (f.fixed) d.fields[f.key] = f.value;
+  if (input.company !== undefined) { if (!catalog.company(input.company)) throw fail(400, 'Choose a company.'); if (t.company && !legacyDirective && input.company !== t.company) throw fail(400, 'This directive must stay on Horizon Network letterhead.'); d.company = input.company; }
+  if (input.fields !== undefined) d.fields = cleanFields(t, input.fields, d.fields, legacyDirective);
+  for (const f of [...t.head, ...t.foot]) if (f.fixed && !legacyDirective) d.fields[f.key] = f.value;
   if (input.body !== undefined) { if (String(input.body).length > 600000) throw fail(413, 'This document is too long.'); d.body = sanitize(input.body); }
   if (input.sharing !== undefined && input.sharing !== d.sharing) {
     if (!SHARING.includes(input.sharing)) throw fail(400, 'Unknown sharing.');
@@ -234,6 +263,8 @@ function update(id, user, input) {
     d.status = input.status;
   }
   d.version++; d.updatedAt = now(); d.updatedBy = user.displayName;
+  if (d.template === 'executive-directive' && (!String(d.fields.reference || '').trim() || /^\[[^\]]*\]$/.test(String(d.fields.reference).trim()))) d.fields.reference = nextDirectiveReference();
+  if (d.template === 'policy' && d.status === 'draft') recordDraft(d, user, before);
   save();
   return view(d, user, true);
 }
@@ -283,7 +314,7 @@ function finalisePolicy(d, user) {
   }
   d.fields.version = version.slice(0, 20);
   snap.fields.version = d.fields.version;
-  p.history.push({ version: d.fields.version, date: catalog.longDate(new Date()), by: user.fullName || user.displayName, changes: changes.slice(0, 20) });
+  p.history.push({ version: d.fields.version, at: now(), date: catalog.longDate(new Date()), by: user.fullName || user.displayName, changes: changes.slice(0, 20) });
   if (p.history.length > 100) p.history.splice(0, p.history.length - 100);
   p.snapshot = snap;
 }
@@ -292,12 +323,14 @@ function duplicate(id, user) {
   const s = get(id, user);
   const d = { ...JSON.parse(JSON.stringify(s)), id: crypto.randomUUID(), title: (s.title + ' (copy)').slice(0, 160), status: 'draft', version: 1,
     sharing: s.sharing === 'staff' && canEdit(s, user) ? s.sharing : 'private', owner: user.displayName, ownerId: user.id, ownerEmail: user.email, createdAt: now(), updatedAt: now(), updatedBy: user.displayName };
-  for (const f of [...catalog.template(d.template).head, ...catalog.template(d.template).foot]) if (f.fixed) d.fields[f.key] = f.value;
+  for (const f of [...catalog.template(d.template).head, ...catalog.template(d.template).foot]) if (f.fixed && !(d.template === 'executive-directive' && d.company !== 'horizon-network')) d.fields[f.key] = f.value;
   if (d.template === 'executive-directive') {
+    d.fields.reference = nextDirectiveReference();
     const start = catalog.start(catalog.template(d.template), catalog.company(d.company), user);
     for (const key of ['senderName', 'senderRole', 'signature', 'signed']) d.fields[key] = start.fields[key];
   }
   delete d.policy; d.protected = false; delete d.protectedBy; delete d.protectedAt;
+  if (d.template === 'policy') recordDraft(d, user, null);
   data.documents[d.id] = d;
   audit(user, 'duplicated', d); save();
   return view(d, user, true);

@@ -6,8 +6,12 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const store = require("./lib/store");
+const badges = require("./lib/badges");
+const ownership = require("./lib/ownership").createOwnership({backend:process.env.COMPANIES_BACKEND||"http://127.0.0.1:4900"});
 const workplace = require("./lib/workplace");
 const calendar = require("./lib/calendar");
+const personalCalendar = require("./lib/personal-calendar");
+const portalPeople = require("./lib/people-public");
 const polls = require("./lib/polls");
 const onboarding = require("./lib/onboarding");
 const backup = require("./lib/backup");
@@ -53,9 +57,9 @@ const portalAuthLib = require("./lib/portal-auth");
 const PORT = parseInt(process.env.PORT || "3200", 10);
 const HOST = process.env.HOST || "127.0.0.1";
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
+const liveRevision = require("./lib/live-revision")(DATA_DIR);
 const PUBLIC_DIR = path.join(__dirname, "public");
 
-const SESSION_COOKIE = "hn_staff_session";
 // A sign-in ends when the browser closes, or after 12 hours without using the portal.
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const MAX_FAILED_ATTEMPTS = 10;
@@ -64,7 +68,7 @@ const MAX_BODY_BYTES = 64 * 1024;
 const MAX_AVATAR_BODY_BYTES = 2 * 1024 * 1024;
 
 // Pages of the single-page app; the browser handles routing between them.
-const APP_ROUTES = new Set([
+const APP_ROUTES = new Set(["/it-cases", "/badge", "/badges/manage","/accounts","/staff-accounts",
   "/home", "/directory", "/employees", "/settings", "/system", "/announcements", "/documents",
   "/calendar", "/polls", "/onboarding", "/roles", "/about", "/signature",
   "/leave", "/rotas", "/payslips", "/payroll", "/funds", "/helpdesk", "/reviews", "/staff-files", "/status",
@@ -250,6 +254,7 @@ function createSession(personId, req, extra = {}) {
     createdAt: now,
     lastSeen: now,
     ...extra,
+    ...(["finance","it"].includes(portalAuthLib.clientFor(req)) ? { app: portalAuthLib.clientFor(req) } : {}),
   };
   data.expires = now + SESSION_TTL_MS;
   sessions.set(hashToken(token), data);
@@ -257,7 +262,7 @@ function createSession(personId, req, extra = {}) {
 }
 
 function getSession(req) {
-  const raw = parseCookies(req)[SESSION_COOKIE];
+  const raw = parseCookies(req)[portalAuthLib.sessionCookieName(req)];
   if (!raw) return null;
   const key = hashToken(raw);
   const session = sessions.get(key);
@@ -265,10 +270,16 @@ function getSession(req) {
     sessions.delete(key);
     return null;
   }
+  const scopedApp = ["finance","it"].includes(portalAuthLib.clientFor(req)) ? portalAuthLib.clientFor(req) : null;
+  if ((session.app || null) !== scopedApp) return null;
   const person = store.getPerson(session.personId);
   if (!person || !person.account || !person.account.enabled) {
     sessions.delete(key);
     return null;
+  }
+  if (["finance","it"].includes(session.app)) {
+    const guest = person.__login && person.__login.guest;
+    if (person.standalone || (guest && !guest.sites.includes(session.app))) { sessions.delete(key); return null; }
   }
   const now = Date.now();
   session.expires = now + SESSION_TTL_MS; // sliding expiry
@@ -345,7 +356,7 @@ function cookieFor(req, token) {
 }
 
 function sessionCookie(req, token, maxAgeSeconds) {
-  const parts = [`${SESSION_COOKIE}=${token}`, "Path=/", "HttpOnly", "SameSite=Lax"];
+  const parts = [`${portalAuthLib.sessionCookieName(req)}=${token}`, "Path=/", "HttpOnly", "SameSite=Lax"];
   if (maxAgeSeconds != null) parts.push(`Max-Age=${maxAgeSeconds}`);
   if (req.headers["x-forwarded-proto"] === "https") parts.push("Secure");
   return parts.join("; ");
@@ -515,6 +526,13 @@ function maintenanceReply(req, res, person) {
   return sendJson(res, 503, { maintenance: { message: m.message, since: m.since }, error: "The staff portal is in maintenance mode." });
 }
 
+const ACCOUNT_LOCKED_MESSAGE = "Your HN account has been locked. Please contact the IT team for more information and help restoring access.";
+function accountLockedReply(res){return sendJson(res,423,{error:ACCOUNT_LOCKED_MESSAGE,code:'ACCOUNT_LOCKED',restart:true});}
+function accountFailure(req,person){
+ if(!store.noteAccountFailure(person))return false;
+ const id=person.__login ? 'p~'+person.__login.id : store.sessionIdOf(person);
+ endAllFor(id);logEvent(req,null,'account-locked',{actor:'System',target:store.loginName(person),detail:'Two consecutive incorrect password or PIN attempts'});return true;
+}
 async function handleLogin(req, res) {
   const ip = clientIp(req);
   if (isLockedOut(ip)) {
@@ -522,8 +540,10 @@ async function handleLogin(req, res) {
     return sendJson(res, 429, { error: "Too many failed attempts. Please try again in 15 minutes." });
   }
   const { username, password } = await readJsonBody(req);
-  const person = store.findByLogin(username);
+  const person = store.findByLogin(username, true);
+  if(person?.account?.locked)return accountLockedReply(res);
   if (!person || !store.verifyPassword(person, password)) {
+    if(person && accountFailure(req,person))return accountLockedReply(res);
     recordFailure(ip);
     console.warn(`Failed login for "${String(username).slice(0, 64)}" from ${ip}`);
     logEvent(req, null, "sign-in-failed", { actor: String(username || "").trim().toLowerCase().slice(0, 100) || "(blank)" });
@@ -554,6 +574,7 @@ function discordLogin(req, res, { id, username }) {
     return sendJson(res, 429, { error: "Too many failed attempts. Please try again in 15 minutes." });
   }
   const person = store.findByDiscord(id);
+  if(person?.account?.locked)return accountLockedReply(res);
   if (!person || !person.account || !person.account.enabled) {
     logEvent(req, null, "sign-in-discord-unknown", { actor: String(username || "").slice(0, 64) || "(unknown)" });
     return sendJson(res, 404, { error: "That Discord account isn’t connected to an HN Group sign-in account. Sign in with your email and password, then connect Discord." });
@@ -571,6 +592,7 @@ function googleLogin(req, res, { sub, email }) {
     return sendJson(res, 429, { error: "Too many failed attempts. Please try again in 15 minutes." });
   }
   const person = store.findByGoogle(sub);
+  if(person?.account?.locked)return accountLockedReply(res);
   if (!person || !person.account || !person.account.enabled) {
     logEvent(req, null, "sign-in-google-unknown", { actor: String(email || "").toLowerCase().slice(0, 100) || "(unknown)" });
     return sendJson(res, 404, { error: "That Google account isn’t connected to an HN Group staff account. Sign in with your email and password, then connect Google." });
@@ -587,6 +609,8 @@ function googleLogin(req, res, { sub, email }) {
 }
 
 function completeLogin(req, res, person, how) {
+  if(person.account?.locked)return accountLockedReply(res);
+  store.clearAccountFailures(person);
   store.recordLogin(person);
   const token = createSession(store.sessionIdOf(person), req, { allowPageLoad: true });
   console.log(`${store.meView(person).username} signed in from ${clientIp(req)}${how ? ` (${how})` : ""}`);
@@ -667,6 +691,7 @@ async function handleResume(req, res, pathname) {
   if (!store.hasCode(person)) return sendJson(res, 403, { error: "This account signs in with Google or Discord. Choose one of those to continue." });
   const { code } = await readJsonBody(req);
   if (!store.verifyCode(person, String(code || ""))) {
+    if(accountFailure(req,person))return accountLockedReply(res);
     recordFailure(ip);
     logEvent(req, null, "sign-in-code-failed", { actor: store.loginName(person), detail: "Resume session" });
     if (resume.fail(raw)) {
@@ -679,27 +704,30 @@ async function handleResume(req, res, pathname) {
   completeLogin(req, res, person, "resumed");
 }
 
-// HN Secure Gateway asks for the person's six-digit PIN each time it connects the VPN; the VPN service
+// HN Secure Access Terminal asks for the person's six-digit PIN each time it connects the VPN; the VPN service
 // checks it here. Five wrong PINs lock VPN connections for that person (and the address) for 15 minutes.
 function verifyVpnPin(personId, code, ip, client) {
   // The VPN knows people by their profile id; any enabled sign-in account using that profile can confirm with its PIN.
   const candidates = store.loginsForId(String(personId || "")).filter((l) => l.account && l.account.enabled).map((l) => store.loginAsPerson(l));
   const legacy = !candidates.length && store.getPerson(String(personId || ""));
   const usable = candidates.length ? candidates : legacy && legacy.account && legacy.account.enabled ? [legacy] : [];
+  if(!usable.length && store.loginsForId(String(personId||"" )).some(l=>l.account?.locked))return {status:423,error:ACCOUNT_LOCKED_MESSAGE};
   if (!usable.length) return { status: 403, error: "This account can’t use the VPN right now." };
   const withPin = usable.filter((p) => store.hasCode(p));
   if (!withPin.length) return { status: 403, error: "Set up your six-digit PIN in HN Group Auth first." };
   const person = withPin.find((p) => /^\d{6}$/.test(String(code || "")) && store.verifyCode(p, String(code))) || withPin[0];
   const key = "vpn:" + person.id, entry = pinFailures.get(key), fresh = entry && Date.now() - entry.first <= LOCKOUT_WINDOW_MS;
-  const req = { socket: { remoteAddress: "127.0.0.1" }, headers: { "x-real-ip": ip || "127.0.0.1", "user-agent": client || "HN Secure Gateway" } };
+  const req = { socket: { remoteAddress: "127.0.0.1" }, headers: { "x-real-ip": ip || "127.0.0.1", "user-agent": client || "HN Secure Access Terminal" } };
   if ((fresh && entry.count >= MAX_PIN_ATTEMPTS) || (ip && isLockedOut(ip))) return { status: 429, error: "Too many wrong PINs. Try again in 15 minutes." };
   if (!/^\d{6}$/.test(String(code || "")) || !store.verifyCode(person, String(code))) {
+    if(accountFailure(req,person))return {status:423,error:ACCOUNT_LOCKED_MESSAGE};
     if (ip) recordFailure(ip);
     if (!fresh) pinFailures.set(key, { count: 1, first: Date.now() }); else entry.count++;
     logEvent(req, null, "sign-in-code-failed", { actor: store.loginName(person), detail: "HN VPN connect" });
     const left = MAX_PIN_ATTEMPTS - pinFailures.get(key).count;
     return { status: left > 0 ? 401 : 429, error: left > 0 ? "That PIN isn’t right. " + left + (left === 1 ? " try" : " tries") + " left." : "Too many wrong PINs. Try again in 15 minutes." };
   }
+  store.clearAccountFailures(person);
   pinFailures.delete(key);
   logEvent(req, null, "vpn-pin-confirmed", { actor: store.loginName(person), detail: "HN VPN connect" });
   return null;
@@ -708,7 +736,8 @@ function verifyVpnPin(personId, code, ip, client) {
 function verifyBrowserPin(req, person, raw, code) {
   const ip=clientIp(req);
   if(isLockedOut(ip))return {status:429,error:'Too many failed attempts. Please try again in 15 minutes.',restart:true};
-  if(!store.verifyCode(person,String(code||''))){recordFailure(ip);logEvent(req,null,'sign-in-code-failed',{actor:store.loginName(person),detail:'HN Browser unlock'});const restart=resume.fail(raw);return {status:401,error:restart?'Too many wrong PINs. Sign in with your email and password again.':"That PIN isn’t right. Please try again.",restart};}
+  if(person.account?.locked)return {status:423,error:ACCOUNT_LOCKED_MESSAGE,restart:true};
+  if(!store.verifyCode(person,String(code||''))){if(accountFailure(req,person))return {status:423,error:ACCOUNT_LOCKED_MESSAGE,restart:true};recordFailure(ip);logEvent(req,null,'sign-in-code-failed',{actor:store.loginName(person),detail:'HN Browser unlock'});const restart=resume.fail(raw);return {status:401,error:restart?'Too many wrong PINs. Sign in with your email and password again.':"That PIN isn’t right. Please try again.",restart};}
   failedAttempts.delete(ip);resume.resetFailures(raw);store.recordLogin(person);logEvent(req,null,'signed-in',{actor:store.loginName(person),detail:'HN Browser PIN unlock'});return null;
 }
 
@@ -721,11 +750,13 @@ async function handleLoginCode(req, res) {
   const { challenge, code } = await readJsonBody(req);
   const entry = codeChallenges.get(String(challenge || ""));
   const person = entry && entry.expires > Date.now() ? store.getPerson(entry.personId) : null;
+  if(person?.account?.locked){codeChallenges.delete(String(challenge || ""));return accountLockedReply(res);}
   if (!person || !person.account || !person.account.enabled) {
     codeChallenges.delete(String(challenge || ""));
     return sendJson(res, 401, { error: "Your sign-in timed out. Please enter your email and password again.", restart: true });
   }
   if (!store.verifyCode(person, String(code || ""))) {
+    if(accountFailure(req,person))return accountLockedReply(res);
     recordFailure(ip);
     entry.attempts++;
     logEvent(req, null, "sign-in-code-failed", { actor: store.loginName(person) });
@@ -785,6 +816,7 @@ function meResponse(session) {
   user.bioPublic = session.person.bioPublic !== false;
   user.peopleBio = session.person.peopleBio !== false;
   if (store.can(session.person, enquiries.MANAGE)) user.enquiriesNew = enquiries.newCount();
+  user.canManageAccounts = require("./lib/status-sso").allowed(session,store);
   user.onCallNow = oncall.current();
   user.pulseDue = !session.person.system && !pulse.hasAnswered(session.person);
   user.flexibleDecisions = flexible.pendingCount(session.person);
@@ -1279,12 +1311,18 @@ async function routeApi(req, res, pathname, session) {
   if (pathname.startsWith('/api/documents')) req.docsPoliciesReadOnly = true;
   if (!session) return sendJson(res, 401, { error: "Not signed in." });
   const me = session.person;
+  const accountAction=/^\/api\/employees\/[a-f0-9]{16}\/(account(?:\/(disable|enable))?|code\/reset)$/.test(pathname);
+  if(accountAction){
+    if(!['portal','it'].includes(portalAuthLib.clientFor(req)) || !require('./lib/status-sso').allowed(session,store))throw httpError(403,'Account administration is available on HN Group IT to authorised administrators.');
+  }
+
   // Maintenance mode signs everyone but the owner out, including "log in as" sessions.
   if (store.maintenance().on && !store.hasOwnerAccess(me)) {
     sessions.delete(session.token);
     return sendJson(res, 503, { error: "The staff portal is in maintenance mode.", code: "MAINTENANCE" }, { "Set-Cookie": sessionCookie(req, "", 0) });
   }
 
+  if (method === "GET" && pathname === "/api/live") return sendJson(res,200,{revision:liveRevision()});
   if (method === "GET" && pathname === "/api/me") {
     // Keeps this browser's theme cookie in step with the account (every HN website reads it).
     return sendJson(res, 200, { user: meResponse(session) }, session.data.impersonatorId ? {} : { "Set-Cookie": themeCookie(req, store.themeOf(me)) });
@@ -1300,6 +1338,33 @@ async function routeApi(req, res, pathname, session) {
   // ...and until a sign-in code has been set.
   if (!store.hasCode(me) && !session.data.impersonatorId) {
     return sendJson(res, 403, { error: "Please set your sign-in code first.", code: "CODE_SETUP_REQUIRED" });
+  }
+
+  if (pathname === '/api/badges' || pathname.startsWith('/api/badges/')) {
+    if (portalAuthLib.clientFor(req) !== 'portal') throw httpError(403, 'Staff badges are available on the main Staff Portal.');
+    const manager = store.can(me, badges.MANAGE);
+    if (method === 'GET' && pathname === '/api/badges/me') return sendJson(res, 200, { staffBadge: badges.mine(me.id), canManage: manager });
+    if (method === 'GET' && pathname === '/api/badges') {
+      if (!manager) throw httpError(403, 'Badge management permission is required.');
+      return sendJson(res, 200, { badges: badges.list() });
+    }
+    if (method === 'POST' && pathname === '/api/badges/reissue') {
+      if (!manager) throw httpError(403, 'Badge management permission is required.');
+      let sameOrigin = false;
+      try { const origin = new URL(req.headers.origin); sameOrigin = /^https?:$/.test(origin.protocol) && origin.host === req.headers.host; } catch {}
+      if (!sameOrigin) throw httpError(403, 'Open badge management on the Staff Portal to reissue badges.');
+      const result = badges.reissue(await readJsonBody(req), store.loginName(me));
+      logEvent(req, session, 'staff-badges-reissued', { detail: result.issued.map(x => x.personId + ' issue ' + x.issue).join(', ') });
+      return sendJson(res, 200, result);
+    }
+    const art = /^\/api\/badges\/([a-f0-9]{24})\/artwork\.svg$/.exec(pathname);
+    if (method === 'GET' && art) {
+      const record = badges.getIssue(art[1]);
+      if (!record || !store.employees().some(p => p.id === record.personId) || (!manager && record.personId !== me.id)) throw httpError(404, 'Badge not found.');
+      const output = badges.artwork(record.id);
+      return send(res, 200, output.body, { 'Content-Type': 'image/svg+xml; charset=utf-8', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:; sandbox", 'Content-Disposition': ((new URL(req.url, 'http://localhost')).searchParams.has('download') ? 'attachment' : 'inline') + '; filename="' + record.number + '.svg"' });
+    }
+    throw httpError(404, 'Badge endpoint not found.');
   }
 
   // The owner can turn maintenance mode off from the banner on any page.
@@ -1402,11 +1467,22 @@ async function routeApi(req, res, pathname, session) {
     return sendFile(res, banner.file, { "Content-Type": banner.mime, "Cache-Control": "private, max-age=86400" });
   }
 
+  if (method === "GET" && pathname === "/api/signature-profile") {
+    return sendJson(res, 200, {person:store.signatureProfile(me)});
+  }
+
   if (method === "GET" && pathname === "/api/signature-people") {
     if (!store.can(me, "staff.manage")) throw httpError(403, "You need Manage staff to make signatures for other people.");
     return sendJson(res, 200, { people: store.employees().map(store.publicView) });
   }
 
+  const ownershipMatch=/^\/api\/directory\/([a-f0-9]{16})\/ownership$/.exec(pathname);
+  if(method==='GET'&&ownershipMatch){
+    const person=store.employees().find(p=>p.id===ownershipMatch[1]);
+    if(!person)throw httpError(404,'Staff profile not found.');
+    try{return sendJson(res,200,await ownership.forPerson(person));}
+    catch{return sendJson(res,503,{error:'Ownership information is temporarily unavailable. Please try again shortly.'});}
+  }
   if (method === "GET" && pathname === "/api/directory") {
     return sendJson(res, 200, { people: store.employees().map(store.publicView) });
   }
@@ -1421,11 +1497,11 @@ async function routeApi(req, res, pathname, session) {
     const body = await readJsonBody(req);
     const next = typeof body.next === "string" && /^\/#(?:accounts|staff|overview)(?:\/create\/[a-f0-9]{16})?$/.test(body.next) ? body.next : "/#overview";
     const ticket = accountsHandoff(session.data.personId);
-    return sendJson(res, 200, { url: "https://accounts.hngroup.org.uk/auth/handoff?ticket=" + ticket + "&return=" + encodeURIComponent(next) });
+    return sendJson(res, 200, { url: "https://auth.hngroup.org.uk/account/auth/handoff?ticket=" + ticket + "&return=" + encodeURIComponent(next) });
   }
   if (pathname.startsWith("/api/logins")) {
     requireManager(session);
-    if (session.data.via !== "accounts") throw httpError(403, "Sign-in accounts are managed on HN Account at accounts.hngroup.org.uk.");
+    if (!["portal","it"].includes(portalAuthLib.clientFor(req)) || !require("./lib/status-sso").allowed(session,store)) throw httpError(403, "Account administration is available to authorised administrators on HN Group IT.");
     const myLogin = me.__login && me.__login.id;
     // Roles that include a permission only its holders can give out can only be given or taken away by them.
     const guardRoles = (before, after) => {
@@ -1448,10 +1524,18 @@ async function routeApi(req, res, pathname, session) {
       logEvent(req, session, "login-created", { target: credentials.username, detail: store.loginProfiles(login).map((p) => p.displayName + " (" + p.company + ")").join(", ") || "No staff profile" });
       return sendJson(res, 201, { ...credentials, account: store.loginView(login) });
     }
-    if (method === "POST" && (m = /^\/api\/logins\/([a-f0-9]{16})(?:\/(reset|code\/reset|disable|enable|delete|permanent))?$/.exec(pathname))) {
+    if (method === "POST" && (m = /^\/api\/logins\/([a-f0-9]{16})(?:\/(reset|code\/reset|disable|enable|lock|unlock|delete|permanent))?$/.exec(pathname))) {
       const l = store.getLogin(m[1]), action = m[2];
       if (!l) throw httpError(404, "Account not found.");
       const own = l.primaryFor && store.getPerson(l.primaryFor);
+      if ((store.loginView(l).ownerAccess || store.loginView(l).systemOwner) && !store.hasOwnerAccess(me)) throw httpError(403,"Only an owner can change an owner account.");
+      if(action==='lock'||action==='unlock'){
+        if(l.id===myLogin)throw httpError(400,"You cannot lock or unlock your own account.");
+        store.setAccountLocked(store.loginAsPerson(l),action==='lock',store.loginName(me));
+        if(action==='lock')endAllFor('p~'+l.id);
+        logEvent(req,session,action==='lock'?'account-locked':'account-unlocked',{target:store.loginView(l).username});
+        return sendJson(res,200,{account:store.loginView(l)});
+      }
       if (own && store.isOwner(own) && !store.hasOwnerAccess(me)) throw httpError(403, "Only the system owner can change the system owner's account.");
       // Owner-level accounts can do anything, including to their own account (the user's request, 28 October 2026).
       const ownerLevel = store.hasOwnerAccess(me);
@@ -1514,7 +1598,7 @@ async function routeApi(req, res, pathname, session) {
     requireManager(session);
 
     if (method === "GET" && pathname === "/api/employees") {
-      return sendJson(res, 200, { employees: store.employees().map(store.manageView) });
+      return sendJson(res, 200, { employees: (new URL(req.url,"http://localhost").searchParams.get("view")==="offboarded"?store.offboardedEmployees():store.employees()).map(store.manageView) });
     }
     // Staff profiles without a Discord account (the user's request, 5 November 2026: every profile needs one, and people
     // who can change it are asked when they sign in). The owner's record only for those who can change it.
@@ -1534,9 +1618,10 @@ async function routeApi(req, res, pathname, session) {
       logEvent(req, session, "employee-added", { target: person.displayName, detail: `${person.jobTitle}, ${person.company}` });
       return sendJson(res, 201, { employee: store.manageView(person) });
     }
-    if (method === "POST" && (m = /^\/api\/employees\/([a-f0-9]{16})(?:\/(delete|discord|permanent|account|account\/disable|account\/enable|code\/reset))?$/.exec(pathname))) {
+    if (method === "POST" && (m = /^\/api\/employees\/([a-f0-9]{16})(?:\/(offboard|delete|discord|permanent|account|account\/disable|account\/enable|code\/reset))?$/.exec(pathname))) {
       const action = m[2];
       const person = requireEmployee(m[1], me, action);
+      if(person.offboardedAt && action!=="offboard")throw httpError(400,"This employee is offboarded and retained for reference.");
 
       if (action === "permanent") {
         const done = store.makeRecordPermanent(person.id);
@@ -1550,6 +1635,7 @@ async function routeApi(req, res, pathname, session) {
         logEvent(req, session, "employee-updated", { target: person.displayName, detail: "Discord account" });
         return sendJson(res, 200, { employee: store.manageView(person) });
       }
+      if (person.offboardedAt) throw httpError(400,"This employee is offboarded; the record is retained for reference.");
       if (!action) {
         const before = snapshot(person);
         const body = await readJsonBody(req);
@@ -1560,19 +1646,18 @@ async function routeApi(req, res, pathname, session) {
         if (changed.length) logEvent(req, session, "employee-updated", { target: person.displayName, detail: changed.join(", ") });
         return sendJson(res, 200, { employee: store.manageView(person) });
       }
-      if (action === "delete") {
-        if (person.id === me.id) throw httpError(400, "You can't delete your own record.");
-        store.deleteEmployee(person);
-        onboarding.removePerson(person.id);
-        payslips.removePerson(person.id);
-        endSessionsFor(person.id);
-        logEvent(req, session, "employee-deleted", { target: person.displayName });
-        return sendJson(res, 200, { ok: true });
+      if (action === "delete") throw httpError(410,"Use Offboard employee; staff records are retained.");
+      if (action === "offboard") {
+        if(person.id===me.id)throw httpError(400,"You cannot offboard yourself.");
+        store.offboardEmployee(person,store.loginName(me));endSessionsFor(person.id);
+        logEvent(req,session,'employee-offboarded',{target:person.displayName});
+        return sendJson(res,200,{ok:true,employee:store.manageView(person)});
       }
+
       if (action === "account") {
         if (person.id === me.id) throw httpError(400, "Use Profile & settings to change your own password.");
         // New sign-in accounts are made on HN Account, not the staff portal (the user's request, 28 October 2026).
-        if (!person.account && session.data.via !== "accounts") throw httpError(403, "Sign-in accounts are created on HN Account at accounts.hngroup.org.uk.");
+        if (!["portal","it"].includes(portalAuthLib.clientFor(req))) throw httpError(403, "Sign-in accounts are managed in the Staff Portal.");
         const hadAccount = !!person.account;
         const credentials = store.issueTemporaryPassword(person);
         endSessionsFor(person.id);
@@ -1630,16 +1715,11 @@ async function routeApi(req, res, pathname, session) {
     return sendJson(res, 200, search(me, new URL(req.url, "http://localhost").searchParams.get("q") || ""));
   }
 
+  if (pathname === "/api/org-chart" && method === "GET") return sendJson(res, 200, portalPeople.staffOrgChart(store));
+
   // ----- Calendar -----
   if (pathname === "/api/calendar" && method === "GET") {
-    const q = new URL(req.url, "http://localhost").searchParams;
-    const from = q.get("from") || new Date().toISOString().slice(0, 10);
-    const to = q.get("to") || from;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || to < from) throw httpError(400, "Choose a valid date range.");
-    if ((Date.parse(to) - Date.parse(from)) / 86400000 > 120) throw httpError(400, "Choose a shorter date range.");
-    const items = calendar.itemsBetween(me, from, to).concat(leave.calendarItems(from, to))
-      .sort((a, b) => a.startDate.localeCompare(b.startDate) || (a.startTime || "").localeCompare(b.startTime || ""));
-    return sendJson(res, 200, { items, canManage: store.can(me, "events.manage"), types: calendar.EVENT_TYPES });
+    return sendJson(res, 200, personalCalendar.read(me, new URL(req.url, "http://localhost").searchParams));
   }
   if (pathname.startsWith("/api/events")) {
     if (!store.can(me, "events.manage")) throw httpError(403, "You don't have permission to manage the calendar.");
@@ -1894,9 +1974,11 @@ async function routeApi(req, res, pathname, session) {
   }
 
   // ----- Service status -----
+  if (method === "POST" && pathname.startsWith("/api/status/")) throw httpError(410,"Manage monitors and incidents on HN Group Status at status.hngroup.org.uk.");
   if (pathname.startsWith("/api/status")) {
     const it = store.can(me, uptime.MANAGE);
     if (method === "GET" && pathname === "/api/status") {
+      if(['portal','it'].includes(portalAuthLib.clientFor(req))){try{const r=await fetch((process.env.STATUS_BACKEND || 'http://127.0.0.1:3300')+'/api/status',{signal:AbortSignal.timeout(7000),redirect:'error'});if(!r.ok)throw Error('Status unavailable');const data=await r.json();if(!Array.isArray(data.services)||!Array.isArray(data.incidents))throw Error('Invalid status feed');return sendJson(res,200,{...data,source:'https://status.hngroup.org.uk',canManage:it});}catch{return sendJson(res,503,{error:'The Status site is temporarily unavailable. Please try again shortly.'});}}
       return sendJson(res, 200, { monitors: uptime.list(), canManage: it });
     }
     if (method === "POST" && (m = /^\/api\/status\/monitors(?:\/([a-f0-9]{16})(?:\/(delete|check))?)?$/.exec(pathname))) {
@@ -2130,7 +2212,7 @@ async function routeApi(req, res, pathname, session) {
 
   // ----- Company funds (Human Resources only) -----
   if (pathname.startsWith("/api/funds")) {
-    if (!store.can(me, payslips.MANAGE)) throw httpError(403, "Only Human Resources can see company funds.");
+    if (!store.can(me, payslips.MANAGE)) throw httpError(403, "Only people who run payroll & finance can see company funds.");
     if (method === "GET" && pathname === "/api/funds") {
       return sendJson(res, 200, { ...fundsSummary(), transactions: funds.history(300), sources: funds.SOURCES });
     }
@@ -2193,7 +2275,7 @@ async function routeApi(req, res, pathname, session) {
 
   // ----- Payroll (Human Resources only) -----
   if (pathname.startsWith("/api/payroll")) {
-    if (!store.can(me, payslips.MANAGE)) throw httpError(403, "Only Human Resources can run payroll.");
+    if (!store.can(me, payslips.MANAGE)) throw httpError(403, "Only people who run payroll & finance can run payroll.");
     const q = new URL(req.url, "http://localhost").searchParams;
     if (method === "GET" && pathname === "/api/payroll") {
       const now = new Date();
@@ -2272,7 +2354,7 @@ async function routeApi(req, res, pathname, session) {
       if (method === "POST") {
         if (m[2] === "issue" || m[2] === "withdraw") {
           payslips.setIssued(slip, m[2] === "issue", me);
-          if (m[2] === "issue") notifications.notify([slip.personId], { type: "payslip", title: `Your payslip for ${label} is ready`, link: "/payslips" }, me);
+          if (m[2] === "issue") notifications.notify([slip.personId], { type: "payslip", title: `Your payslip for ${label} is ready`, link: "https://staff.hngroup.org.uk/payslips" }, me);
           logEvent(req, session, m[2] === "issue" ? "payslip-issued" : "payslip-withdrawn", { target: who, detail: label });
         } else if (m[2] === "delete") {
           payslips.deletePayslip(slip, me);
@@ -2292,7 +2374,7 @@ async function routeApi(req, res, pathname, session) {
         if (s.status !== "draft") continue;
         if (payslips.approvalRequired() && !payslips.getPayslip(s.id).approvedBy) { waiting++; continue; }
         payslips.setIssued(payslips.getPayslip(s.id), true, me);
-        notifications.notify([s.personId], { type: "payslip", title: `Your payslip for ${payslips.periodLabel(period)} is ready`, link: "/payslips" }, me);
+        notifications.notify([s.personId], { type: "payslip", title: `Your payslip for ${payslips.periodLabel(period)} is ready`, link: "https://staff.hngroup.org.uk/payslips" }, me);
         n++;
       }
       if (n) logEvent(req, session, "payslip-issued", { detail: `${payslips.periodLabel(period)}: ${n} payslip${n === 1 ? "" : "s"}` });
@@ -2301,35 +2383,46 @@ async function routeApi(req, res, pathname, session) {
   }
 
   // ----- IT Helpdesk -----
-  if (pathname.startsWith("/api/helpdesk")) {
-    if (method === "GET" && pathname === "/api/helpdesk") {
+  if (method === "GET" && pathname === "/api/requests/options") return sendJson(res,200,{teams:helpdesk.routing(),companies:store.COMPANIES,priorities:helpdesk.PRIORITIES});
+  const hrRequests = pathname === "/api/hr-requests" || pathname.startsWith("/api/hr-requests/");
+  const itRequests = pathname === "/api/it-requests" || pathname.startsWith("/api/it-requests/");
+  const serviceRequests = hrRequests || itRequests;
+  const requestTeam = itRequests ? "technology" : "hr";
+  const caseOrigin = "https://staff.hngroup.org.uk";
+  if (serviceRequests && !["portal",itRequests ? "it" : "hr"].includes(portalAuthLib.clientFor(req))) throw httpError(404,"Not found.");
+  if (pathname.startsWith("/api/helpdesk") && !(method === "POST" && pathname === "/api/helpdesk")) throw httpError(410,"Case access is no longer available from the Staff Portal.");
+  const requestPath = serviceRequests ? pathname.replace(/^\/api\/(hr|it)-requests/,"/api/helpdesk") : pathname;
+  if (requestPath.startsWith("/api/helpdesk")) {
+    if (method === "GET" && requestPath === "/api/helpdesk") {
       return sendJson(res, 200, {
-        tickets: helpdesk.list(me),
-        canManage: helpdesk.isAgent(me),
-        agents: helpdesk.agents(),
+        tickets: helpdesk.list(me).filter(t=>(t.team || "technology") === requestTeam),
+        canManage: helpdesk.isAgent(me,{team:requestTeam}),
+        agents: helpdesk.isAgent(me,{team:requestTeam}) ? helpdesk.agents({team:requestTeam}) : [],
+        teams: helpdesk.routing(),
+        companies: store.COMPANIES,
         categories: helpdesk.CATEGORIES,
         priorities: helpdesk.PRIORITIES,
         statuses: helpdesk.STATUSES,
       });
     }
-    if (method === "POST" && pathname === "/api/helpdesk") {
+    if (!serviceRequests && method === "POST" && pathname === "/api/helpdesk") {
       const t = helpdesk.createTicket(me, await readJsonBody(req));
-      logEvent(req, session, "ticket-raised", { target: `#${t.number}`, detail: t.subject });
-      notifications.notify(helpdesk.agents().map((a) => a.id), { type: "helpdesk", title: `New IT ticket #${t.number} from ${me.displayName}`, body: t.subject, link: "/helpdesk" }, me);
-      return sendJson(res, 201, { ticket: helpdesk.fullView(t, me), user: meResponse(session) });
+      logEvent(req, session, "ticket-raised", { target: `#${t.number}`, detail: `${helpdesk.TEAMS[t.team].label} · ${t.company}` });
+      notifications.notify(helpdesk.recipients(t), { type: "helpdesk", title: `New ${helpdesk.TEAMS[t.team].label} request #${t.number}`, body: `${t.company} · A new request is ready in your team queue.`, link: t.team === "hr" ? "https://staff.hngroup.org.uk/cases" : t.team === "technology" ? "https://staff.hngroup.org.uk/it-cases" : "" }, me);
+      return sendJson(res, 201, { receipt: {number:t.number,team:t.team,teamLabel:helpdesk.TEAMS[t.team].label,company:t.company} });
     }
-    if ((m = /^\/api\/helpdesk\/([a-f0-9]{16})(?:\/(reply|update))?$/.exec(pathname))) {
+    if ((m = /^\/api\/helpdesk\/([a-f0-9]{16})(?:\/(reply|update))?$/.exec(requestPath))) {
       const t = helpdesk.getTicket(m[1]);
-      if (!t || !helpdesk.canSee(me, t)) throw httpError(404, "Ticket not found.");
+      if (!serviceRequests || !t || (t.team || "technology") !== requestTeam || !helpdesk.canSee(me, t)) throw httpError(404, "Ticket not found.");
       if (method === "GET" && !m[2]) return sendJson(res, 200, { ticket: helpdesk.fullView(t, me) });
       if (method === "POST" && m[2] === "reply") {
         const body = await readJsonBody(req);
         helpdesk.reply(t, me, body);
-        if (!(body.internal && helpdesk.isAgent(me))) {
-          const to = me.id === t.createdBy ? (t.assigneeId ? [t.assigneeId] : helpdesk.agents().map((a) => a.id)) : [t.createdBy];
-          notifications.notify(to, { type: "helpdesk", title: `${me.displayName} replied on ticket #${t.number}`, body: t.subject, link: "/helpdesk" }, me);
+        if (!(body.internal && helpdesk.isAgent(me,t))) {
+          const to = helpdesk.replyRecipients(t,me);
+          notifications.notify(to, { type: "helpdesk", title: `Reply on request #${t.number}`, body: "There is a new reply on this request.", link: caseOrigin + (itRequests ? "/it-cases" : "/cases") }, me);
         }
-        logEvent(req, session, body.internal && helpdesk.isAgent(me) ? "ticket-note-added" : "ticket-replied", { target: `#${t.number}` });
+        logEvent(req, session, body.internal && helpdesk.isAgent(me,t) ? "ticket-note-added" : "ticket-replied", { target: `#${t.number}` });
         return sendJson(res, 200, { ticket: helpdesk.fullView(t, me), user: meResponse(session) });
       }
       if (method === "POST" && m[2] === "update") {
@@ -2450,7 +2543,6 @@ async function route(req, res) {
   if (await require('./lib/docs-administration')(req, res, pathname, { sendJson, routeWorkplace, extraRoutes })) return;
   if (pathname === '/document-storage' || pathname === '/documents') return redirect(res, 'https://docs.hngroup.org.uk' + (pathname === '/document-storage' ? '/administration/storage' : '/administration/documents') + new URL(req.url, 'http://localhost').search);
   const session = getSession(req);
-  if (pathname === '/leave' && req.headers['x-hn-hr-app'] !== '1') return redirect(res, 'https://hr.hngroup.org.uk/leave');
 
   if (await statusSso(req, res, pathname, session)) return;
   if (await portalAuth(req, res, pathname)) return;
@@ -2466,7 +2558,8 @@ async function route(req, res) {
   if (pathname === "/" || pathname === "/dashboard") return redirect(res, session ? "/home" : "/login");
 
   if (pathname === "/login") {
-    const next = loginNext(new URL(req.url, "http://localhost").searchParams.get("next"));
+    if (["finance","it"].includes(portalAuthLib.clientFor(req)) && !portalAuthLib.enabled()) return sendJson(res, 503, { error: "HN Group Auth is temporarily unavailable." });
+    const next = portalAuthLib.nextFor(req, new URL(req.url, "http://localhost").searchParams.get("next"), loginNext);
     // Opening the sign-in page always ends any existing sign-in.
     if (session) {
       sessions.delete(session.token);
@@ -2487,7 +2580,7 @@ async function route(req, res) {
 
   // A valid portal session survives page navigation and refresh; normal expiry and account checks still apply.
   if (APP_ROUTES.has(pathname)) {
-    if (!session) return redirect(res, "/login");
+    if (!session) return redirect(res, "/login?next=" + encodeURIComponent(req.url));
     if (store.maintenance().on && !store.hasOwnerAccess(session.person)) {
       sessions.delete(session.token);
       return send(res, 302, "", { Location: "/login?maintenance=1", "Cache-Control": "no-store", "Set-Cookie": sessionCookie(req, "", 0) });

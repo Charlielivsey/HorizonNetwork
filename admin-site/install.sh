@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Install central website control. Never execute shutdown or maintenance actions during installation.
 set -euo pipefail
+bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/offline-site/install.sh"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 DOMAIN=admin.hngroup.org.uk

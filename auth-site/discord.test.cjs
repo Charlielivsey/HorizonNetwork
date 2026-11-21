@@ -20,6 +20,8 @@ test('Continue with Discord: Discord ID on the staff record, connect, sign in, b
   const realFetch = global.fetch, fake = { next: null, names: { '111111111111111111': 'dee_new_name' }, codes: new Set() };
   global.fetch = async (url, options = {}) => {
     const u = String(url);
+    if(u==='https://discord.com/api/v10/users/@me/channels')return Response.json({id:'777777777777777777'});
+    if(u==='https://discord.com/api/v10/channels/777777777777777777/messages')return Response.json({id:'888888888888888888'});
     if (u === 'https://discord.com/api/v10/oauth2/token') {
       const form = new URLSearchParams(options.body);
       assert.equal(form.get('client_id'), '1564969421800472698'); assert.equal(form.get('client_secret'), 'discord-secret-123');
@@ -47,6 +49,15 @@ test('Continue with Discord: Discord ID on the staff record, connect, sign in, b
   const me = { id: '111111111111111111', username: 'dee_discord' };
   try {
     let ready = false; for (let i = 0; i < 100; i++) { try { if ((await realFetch(process.env.STAFF_PORTAL_BACKEND + '/healthz')).ok) { ready = true; break; } } catch {} await new Promise((r) => setTimeout(r, 50)); } assert.ok(ready);
+    const staffListUrl = process.env.STAFF_PORTAL_BACKEND + '/api/auth/discord-staff-list';
+    assert.equal((await realFetch(staffListUrl, { method: 'POST', body: '{}' })).status, 401);
+    const staffList = await realFetch(staffListUrl, { method: 'POST', headers: { Authorization: 'Bearer ' + 'f'.repeat(64), 'Content-Type': 'application/json' }, body: '{}' });
+    assert.equal(staffList.status, 200);
+    const directory = (await staffList.json()).people;
+    assert.equal(directory.length, 1);
+    assert.equal(directory[0].name, person.displayName);
+    assert.deepEqual(directory[0].roles, [{ company: person.company, title: person.jobTitle, supervisor: null }]);
+    assert.ok(!JSON.stringify(directory).includes('dee.scord@'));
     assert.deepEqual(await (await fetch(base + '/api/discord')).json(), { enabled: false }, 'hidden until set up');
     fs.writeFileSync(discordFile, JSON.stringify({ client_id: '1564969421800472698', client_secret: 'discord-secret-123', bot_token: 'b'.repeat(70) }));
     assert.deepEqual(await (await fetch(base + '/api/discord')).json(), { enabled: true });

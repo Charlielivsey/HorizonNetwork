@@ -1,0 +1,10 @@
+{
+  "script": "brand/web/hn-staff-brand.js",
+  "copies": [
+    "staff-portal/public/assets/hn-staff-brand.js",
+    "accounts-site/public/assets/hn-staff-brand.js",
+    "docs-site/public/assets/hn-staff-brand.js",
+    "contracts-site/public/assets/hn-staff-brand.js",
+    "mail-site/public/assets/hn-staff-brand.js"
+  ]
+}

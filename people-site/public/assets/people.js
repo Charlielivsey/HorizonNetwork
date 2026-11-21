@@ -3,7 +3,7 @@
   'use strict';
   var view = document.getElementById('view');
   var data = null, raw = '', query = '', company = '';
-  var chartScale = null, fittedScale = 1;
+  var chartScale = null, fittedScale = 1, selectedCompanies = [];
   var LOGOS = { 'HN Group': 'hn-group-wordmark', 'Horizon Network': 'horizon-network-wordmark', 'Horizon Advertising': 'horizon-advertising-logo', 'Horizon Development': 'horizon-development-logo', 'Horizon Media Group': 'horizon-media-group-logo' };
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
   var slug = function (s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); };
@@ -20,7 +20,7 @@
   function logo(c, cls) {
     var f = LOGOS[c];
     if (!f) return '<span class="' + (cls || 'co-logo') + ' co-text">' + esc(c) + '</span>';
-    return '<span class="' + (cls || 'co-logo') + '"><img class="on-light" src="/assets/brand/' + f + '.svg" alt="' + esc(c) + '"><img class="on-dark" src="/assets/brand/' + f + '-white.svg" alt=""></span>';
+    return '<span class="' + (cls || 'co-logo') + '"><img class="on-light" src="/assets/brand/' + f + '.svg?v=20261120-company-logos" alt="' + esc(c) + '"><img class="on-dark" src="/assets/brand/' + f + '-white.svg?v=20261120-company-logos" alt=""></span>';
   }
   function title(r) { return r.jobTitle || 'Team member'; }
   function link(href, inner, cls) { return '<a href="' + href + '"' + (cls ? ' class="' + cls + '"' : '') + ' data-route>' + inner + '</a>'; }
@@ -83,9 +83,15 @@
   // the position it reports to. Everyone holding a position is shown in it, so someone with several positions appears
   // once for each. A company's chart has that company's positions; a position reporting to another company's starts a
   // branch with "Reports to …". The whole-group chart has every company's positions together.
+  var positionLabel = function(p){return p.collective || p.kind === 'board' || p.board ? (p.company === 'Horizon Network' ? 'Board of Directors' : p.company + ' Board of Directors') : p.title;};
   var posKey = function (p) { return p.company + '\n' + String(p.title).toLowerCase(); };
-  function chartNodes(c) {
-    var list = (data.positions || []).filter(function (p) { return !c || p.company === c; });
+  function normaliseCompanies(companies) {
+    var selected = Array.isArray(companies) ? companies : (companies ? [companies] : []);
+    return (data.companies || []).filter(function (company) { return selected.indexOf(company) >= 0; });
+  }
+  function companyKey(companies) { return companies.map(slug).join(',') || '*'; }
+  function chartNodes(companies) {
+    var list = (data.positions || []).filter(function (p) { return !companies.length || companies.indexOf(p.company) >= 0; });
     var nodes = list.map(function (p) { return { id: p.key || posKey(p), pos: p, parentId: null, outside: null }; });
     nodes.forEach(function (n) {
       if (!n.pos.reportsTo) return;
@@ -102,7 +108,7 @@
       var keep = {};
       nodes.forEach(function (n) {
         var holders = n.pos.holders || [];
-        var match = chartFilter === 'filled' ? holders.length > 0 : chartFilter === 'vacant' ? !holders.length : holders.some(function (id) { return byId(id) && byId(id).temporary; });
+        var match = chartFilter === 'filled' ? holders.length > 0 || n.pos.collective : chartFilter === 'vacant' ? !holders.length && !n.pos.collective : temporaryHolders(n.pos).length > 0;
         n.context = !match;
         if (match) { var at = n; while (at && !keep[at.id]) { keep[at.id] = true; at = ids[at.parentId]; } }
       });
@@ -117,9 +123,10 @@
   var coClass = function (c) { return 'co-' + (CO_COLOURS[c] || 'lavender'); };
   var collapsed = {}, chartQuery = '', chartKey = '', chartFilter = '';
   var ICON_PERSON = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/></svg>';
-  function holderHtml(id) {
+  function temporaryHolders(pos){return Array.isArray(pos.temporaryHolders)?pos.temporaryHolders:(pos.holders||[]).filter(function(id){return byId(id)&&byId(id).temporary;});}
+  function holderHtml(id, temporary) {
     var p = byId(id);
-    return p ? link('/people/' + p.id, avatar(p, 'sm') + '<span class="org-who"><span class="org-name">' + esc(p.name) + '</span>' + (p.temporary ? '<span class="temp-tag">Temporary</span>' : '') + '</span>', 'org-holder') : '';
+    return p ? link('/people/' + p.id, avatar(p, 'sm') + '<span class="org-who"><span class="org-name">' + esc(p.name) + '</span>' + (temporary ? '<span class="temp-tag">Temporary</span>' : '') + '</span>', 'org-holder') : '';
   }
   function treeHtml(nodes, group) {
     var kids = {}, order = {};
@@ -129,19 +136,28 @@
     function li(n) {
       var below = kids[n.id] || [], holders = n.pos.holders || [], shut = !!collapsed[n.id], under = count(n);
       var names = holders.map(function (id) { var p = byId(id); return p ? p.name : ''; }).join(' ');
-      return '<li' + (shut ? ' class="collapsed"' : '') + ' data-node="' + esc(n.id) + '"><div class="org-node ' + coClass(n.pos.company) + (holders.length ? '' : ' vacant') + (n.context ? ' org-context' : '') + '" data-find="' + esc((n.pos.title + ' ' + n.pos.company + ' ' + names).toLowerCase()) + '">' +
-        '<div class="org-pos"><strong>' + esc(n.pos.title) + '</strong>' + (group ? '<span class="org-co"><i></i>' + esc(n.pos.company) + '</span>' : '') +
-        (n.outside ? '<span class="org-outside">Reports to ' + esc(n.outside.title) + (n.outside.company !== n.pos.company ? ', ' + esc(n.outside.company) : '') + '</span>' : '') + '</div>' +
-        (holders.length ? '<div class="org-holders">' + holders.map(holderHtml).join('') + '</div>' : '<div class="org-vacant"><span class="org-empty">' + ICON_PERSON + '</span><span>Vacant</span></div>') +
-        (below.length ? '<button type="button" class="org-toggle" aria-expanded="' + !shut + '" aria-label="' + (shut ? 'Show' : 'Hide') + ' the ' + under + ' position' + (under === 1 ? '' : 's') + ' under ' + esc(n.pos.title) + '"><span>' + under + '</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>' : '') +
+      return '<li' + (shut ? ' class="collapsed"' : '') + ' data-node="' + esc(n.id) + '"><div class="org-node ' + coClass(n.pos.company) + (holders.length || n.pos.collective ? '' : ' vacant') + (n.context ? ' org-context' : '') + '" data-find="' + esc((positionLabel(n.pos) + ' ' + n.pos.company + ' ' + names).toLowerCase()) + '">' +
+        '<div class="org-pos"><strong>' + esc(positionLabel(n.pos)) + '</strong>' + (group ? '<span class="org-co"><i></i>' + esc(n.pos.company) + '</span>' : '') +
+        (n.outside ? '<span class="org-outside">Reports to ' + esc(positionLabel(n.outside)) + (n.outside.company !== n.pos.company ? ', ' + esc(n.outside.company) : '') + '</span>' : '') + '</div>' +
+        (n.pos.collective ? '' : holders.length ? '<div class="org-holders">' + holders.map(function(id){return holderHtml(id,temporaryHolders(n.pos).includes(id));}).join('') + '</div>' : '<div class="org-vacant"><span class="org-empty">' + ICON_PERSON + '</span><span>'+(n.pos.collective?'Collective board':'Vacant')+'</span></div>') +
+        (below.length ? '<button type="button" class="org-toggle" aria-expanded="' + !shut + '" aria-label="' + (shut ? 'Show' : 'Hide') + ' the ' + under + ' position' + (under === 1 ? '' : 's') + ' under ' + esc(positionLabel(n.pos)) + '"><span>' + under + '</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>' : '') +
         '</div>' + (below.length ? '<ul>' + below.map(li).join('') + '</ul>' : '') + '</li>';
     }
     var roots = kids[''] || [];
-    return roots.length ? '<div class="org-scroll" role="group" aria-label="Org chart; use arrow keys to move when zoomed" tabindex="0"><div class="org-canvas"><ul class="org-tree">' + roots.map(li).join('') + '</ul></div></div>' : '<div class="empty card"><p>No positions are listed here yet.</p></div>';
+    return roots.length ? '<div class="org-scroll" role="group" aria-label="Organisation chart. Use arrow keys, drag when zoomed, or pinch to zoom." tabindex="0"><div class="org-canvas"><ul class="org-tree">' + roots.map(li).join('') + '</ul></div></div>' : '<div class="empty card"><p>No positions are listed here yet.</p></div>';
   }
-  function renderOrg(c) {
+  function setOrgLocation(companies, replace) {
+    var next = '/org', params = new URLSearchParams();
+    if (companies.length === 1) next += '/' + slug(companies[0]);
+    else if (companies.length > 1) params.set('companies', companies.map(slug).join(','));
+    var href = next + (params.toString() ? '?' + params : '');
+    history[replace ? 'replaceState' : 'pushState'](null, '', href);
+  }
+  function renderOrg(companies) {
     setNav('org');
-    if (chartKey !== (c || '*')) { chartKey = c || '*'; chartQuery = ''; }
+    selectedCompanies = normaliseCompanies(companies);
+    var key = companyKey(selectedCompanies), selectedOne = selectedCompanies.length === 1 ? selectedCompanies[0] : '';
+    if (chartKey !== key) { chartKey = key; chartQuery = ''; }
     var previous = view.querySelector('.org-scroll'), left = previous ? previous.scrollLeft : 0, top = previous ? previous.scrollTop : 0;
     setTimeout(function () {
       fitChart();
@@ -149,33 +165,41 @@
       if (box && chartScale !== null) { box.scrollLeft = left; box.scrollTop = top; }
     }, 0);
     var count = function (x) { return (data.positions || []).filter(function (p) { return p.company === x; }).length; };
-    var nodes = chartNodes(c), filled = nodes.filter(function (n) { return n.pos.holders.length; }).length;
+    var nodes = chartNodes(selectedCompanies), filled = nodes.filter(function (n) { return n.pos.collective || n.pos.holders.length; }).length;
     var who = {}; nodes.forEach(function (n) { n.pos.holders.forEach(function (h) { who[h] = 1; }); });
     var stats = '<div class="org-stats"><span><b>' + nodes.length + '</b> positions</span><span><b>' + filled + '</b> filled</span><span><b>' + (nodes.length - filled) + '</b> vacant</span><span><b>' + Object.keys(who).length + '</b> people</span></div>';
     var tools = '<div class="org-tools"><label class="org-find"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span class="sr-only">Find a person or position</span><input type="search" id="org-q" placeholder="Find a person or position" autocomplete="off" value="' + esc(chartQuery) + '"><span class="org-hits" id="org-hits"></span></label>' +
       '<div class="org-btns"><button type="button" class="org-btn" data-branches="expand">Expand all</button><button type="button" class="org-btn" data-branches="collapse">Collapse all</button>' +
       '<div class="org-zoom" role="group" aria-label="Chart zoom"><button type="button" class="icon" data-zoom="out" aria-label="Zoom out">−</button><output id="org-scale" aria-live="polite">Fit</output><button type="button" class="icon" data-zoom="in" aria-label="Zoom in">+</button><button type="button" data-zoom="actual">100%</button><button type="button" data-zoom="fit">Fit to screen</button></div></div></div>';
-    var legend = '<nav class="org-legend" aria-label="Org chart filters"><button type="button" data-org-everyone class="org-filter' + (!c && !chartFilter ? ' active' : '') + '">Everyone</button>' +
-      ['filled', 'vacant', 'temporary'].map(function (f) { return '<button type="button" class="org-filter' + (chartFilter === f ? ' active' : '') + '" data-org-filter="' + f + '" aria-pressed="' + (chartFilter === f) + '">' + (f === 'temporary' ? '<span class="temp-tag">Temporary</span>' : '<i class="lg-' + f + '"></i>' + (f === 'filled' ? 'Filled' : 'Vacant')) + '</button>'; }).join('') +
-      data.companies.filter(count).map(function (x) { return link('/org/' + slug(x), '<i class="' + coClass(x) + '"></i>' + esc(x), 'org-filter' + (c === x ? ' active' : '')); }).join('') + '</nav>';
-    view.innerHTML = pageHead('Org charts', c ? esc(c) + '<span class="dot">.</span>' : 'The whole group<span class="dot">.</span>',
-      (c ? 'Every position at ' + esc(c) + ' and who it reports to.' : 'Every position at HN Group and its companies in one chart.'), stats) +
-      '<section class="section org-section"><div class="wrap org-wrap">' + '<div class="org-panel">' + tools + legend + treeHtml(nodes, !c) + '</div>' +
+    var legend = '<nav class="org-legend" aria-label="Org chart filters"><button type="button" data-org-everyone class="org-filter' + (!selectedCompanies.length && !chartFilter ? ' active' : '') + '" aria-pressed="' + (!selectedCompanies.length) + '">Everyone</button>' +
+      ['filled', 'vacant'].map(function (f) { return '<button type="button" class="org-filter' + (chartFilter === f ? ' active' : '') + '" data-org-filter="' + f + '" aria-pressed="' + (chartFilter === f) + '">' + (f === 'temporary' ? '<span class="temp-tag">Temporary</span>' : '<i class="lg-' + f + '"></i>' + (f === 'filled' ? 'Filled' : 'Vacant')) + '</button>'; }).join('') +
+      data.companies.filter(count).map(function (x) { var active = selectedCompanies.indexOf(x) >= 0; return '<button type="button" class="org-filter' + (active ? ' active' : '') + '" data-chart-company="' + esc(x) + '" aria-pressed="' + active + '"><i class="' + coClass(x) + '"></i>' + esc(x) + '</button>'; }).join('') + '</nav>';
+    var heading = selectedOne ? esc(selectedOne) + '<span class="dot">.</span>' : (selectedCompanies.length ? selectedCompanies.length + ' companies<span class="dot">.</span>' : 'The whole group<span class="dot">.</span>');
+    var lead = selectedOne ? 'Every position at ' + esc(selectedOne) + ' and who it reports to.' : (selectedCompanies.length ? 'Every position across ' + selectedCompanies.map(esc).join(' and ') + '.' : 'Every position at HN Group and its companies in one chart.');
+    view.innerHTML = pageHead('Org charts', heading, lead, stats) +
+      '<section class="section org-section"><div class="wrap org-wrap">' + '<div class="org-panel">' + tools + legend + treeHtml(nodes, selectedCompanies.length !== 1) + '</div>' +
       '<p class="muted small org-note">Select anyone to see their profile. When zoomed in, scroll or use the chart’s arrow keys to move around. When filtering, supervisors remain visible to show reporting lines. Positions and reporting lines are set on the HN Group staff portal.</p></div></section>';
     view.querySelectorAll('[data-zoom]').forEach(function (button) { button.addEventListener('click', function () {
       var action = button.dataset.zoom, current = chartScale === null ? fittedScale : chartScale;
       chartScale = action === 'fit' ? null : action === 'actual' ? 1 : Math.max(.1, Math.min(2, Math.round((current + (action === 'in' ? .1 : -.1)) * 100) / 100));
       fitChart();
     }); });
-    view.querySelector('[data-org-everyone]').addEventListener('click', function () { chartFilter = ''; history.pushState(null, '', '/org'); render(); });
+    view.querySelector('[data-org-everyone]').addEventListener('click', function () { chartFilter = ''; selectedCompanies = []; setOrgLocation(selectedCompanies); renderOrg(selectedCompanies); });
     view.querySelectorAll('[data-org-filter]').forEach(function (button) { button.addEventListener('click', function () {
       chartFilter = chartFilter === button.dataset.orgFilter ? '' : button.dataset.orgFilter;
-      renderOrg(c);
+      renderOrg(selectedCompanies);
+    }); });
+    view.querySelectorAll('[data-chart-company]').forEach(function (button) { button.addEventListener('click', function () {
+      var selected = button.dataset.chartCompany;
+      selectedCompanies = selectedCompanies.indexOf(selected) >= 0 ? selectedCompanies.filter(function (company) { return company !== selected; }) : selectedCompanies.concat(selected);
+      setOrgLocation(selectedCompanies);
+      renderOrg(selectedCompanies);
     }); });
     wireChart();
   }
   function wireChart() {
     var box = view.querySelector('.org-scroll'); if (!box) return;
+    wirePan(box);
     var q = document.getElementById('org-q');
     var find = function () {
       chartQuery = q.value.trim();
@@ -208,6 +232,30 @@
     if (shut) collapsed[li.getAttribute('data-node')] = 1; else delete collapsed[li.getAttribute('data-node')];
     var t = li.querySelector(':scope > .org-node .org-toggle');
     if (t) { t.setAttribute('aria-expanded', String(!shut)); t.setAttribute('aria-label', t.getAttribute('aria-label').replace(/^(Show|Hide)/, shut ? 'Show' : 'Hide')); }
+  }
+
+  function wirePan(box) {
+    var drag = null, moved = false, pointers = {};
+    box.addEventListener('keydown', function (e) { if (e.target !== box) return; var steps = { ArrowLeft: [-90, 0], ArrowRight: [90, 0], ArrowUp: [0, -90], ArrowDown: [0, 90] }; if (steps[e.key]) { e.preventDefault(); box.scrollBy(steps[e.key][0], steps[e.key][1]); } });
+    function points() { return Object.keys(pointers).map(function (key) { return pointers[key]; }); }
+    box.addEventListener('pointerdown', function (e) {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      if (e.target.closest('button,a,input')) return;
+      pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
+      if (e.pointerType === 'touch' && points().length === 2) { var pair = points(); drag = { pinch: true, distance: Math.hypot(pair[0].x - pair[1].x, pair[0].y - pair[1].y), scale: chartScale === null ? fittedScale : chartScale }; box.setPointerCapture(e.pointerId); return; }
+      drag = { id: e.pointerId, x: e.clientX, y: e.clientY, left: box.scrollLeft, top: box.scrollTop }; moved = false;
+    });
+    box.addEventListener('pointermove', function (e) {
+      if (pointers[e.pointerId]) pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
+      if (!drag) return;
+      if (drag.pinch) { var pair = points(); if (pair.length < 2) return; var distance = Math.hypot(pair[0].x - pair[1].x, pair[0].y - pair[1].y); if (Math.abs(distance - drag.distance) < 4) return; chartScale = Math.max(.1, Math.min(2, Math.round(drag.scale * (distance / drag.distance) * 100) / 100)); moved = true; box.classList.add('dragging'); fitChart(); return; }
+      if (drag.id !== e.pointerId) return;
+      var dx = e.clientX - drag.x, dy = e.clientY - drag.y; if (!moved && Math.abs(dx) + Math.abs(dy) < 5) return;
+      moved = true; box.setPointerCapture(e.pointerId); box.scrollLeft = drag.left - dx; box.scrollTop = drag.top - dy; box.classList.add('dragging');
+    });
+    var end = function (e) { delete pointers[e.pointerId]; if (drag && (drag.id === e.pointerId || drag.pinch)) drag = null; box.classList.remove('dragging'); };
+    box.addEventListener('pointerup', end); box.addEventListener('pointercancel', end);
+    box.addEventListener('click', function (e) { if (moved) { e.preventDefault(); e.stopImmediatePropagation(); moved = false; } }, true);
   }
 
   // Fit is the default. Manual zoom uses a scaled canvas, so every enlarged card remains reachable by scrolling.
@@ -246,8 +294,8 @@
     var reports = function (c) { return data.people.filter(function (x) { var r = roleAt(x, c); return r && r.reportsTo && r.reportsTo.id === p.id; }); };
     var roles = p.roles.map(function (r) {
       var boss = r.reportsTo && byId(r.reportsTo.id), team = reports(r.company);
-      return '<article class="card role">' + logo(r.company) + '<h3>' + esc(title(r)) + '</h3><p class="muted">' + esc(r.company) + (r.department ? ' · ' + esc(r.department) : '') + (r.main ? ' · <span class="tag">Main role</span>' : '') + '</p>' +
-        (boss ? '<p class="small"><span class="muted">Reports to</span> ' + link('/people/' + boss.id, avatar(boss, 'xs') + esc(boss.name), 'mini-person') + '</p>' : '') +
+      return '<article class="card role">' + logo(r.company) + '<h3>' + esc(title(r)) + (r.temporary ? ' <span class="temp-tag">Temporary</span>' : '') + '</h3><p class="muted">' + esc(r.company) + (r.department ? ' · ' + esc(r.department) : '') + (r.main ? ' · <span class="tag">Main role</span>' : '') + '</p>' +
+        (r.reportsTo?.board ? '<p class="small"><span class="muted">Reports to</span> '+esc(positionLabel(r.reportsTo))+'</p>' : boss ? '<p class="small"><span class="muted">Reports to</span> ' + link('/people/' + boss.id, avatar(boss, 'xs') + esc(boss.name), 'mini-person') + '</p>' : '') +
         (team.length ? '<p class="small"><span class="muted">Their team</span></p><div class="mini-list">' + team.map(function (t) { return link('/people/' + t.id, avatar(t, 'xs') + esc(t.name), 'mini-person'); }).join('') + '</div>' : '') +
         '<p class="small">' + link('/org/' + slug(r.company), 'See ' + esc(r.company) + '’s org chart', 'link-arrow') + '</p></article>';
     }).join('');
@@ -267,8 +315,8 @@
     if (path === '/') {
       var u = new URL(location.href); query = u.searchParams.get('q') || ''; company = companyOfSlug(u.searchParams.get('company') || '') || '';
       renderList();
-    } else if (path === '/org') renderOrg('');
-    else if ((m = /^\/org\/([a-z0-9-]+)$/.exec(path))) { var c = companyOfSlug(m[1]); if (c) { renderOrg(c); document.title = c + ' org chart · HN Group People'; } else renderOrg(''); }
+    } else if (path === '/org') { var selected = (new URL(location.href)).searchParams.get('companies'); renderOrg(selected ? selected.split(',').map(companyOfSlug).filter(Boolean) : []); }
+    else if ((m = /^\/org\/([a-z0-9-]+)$/.exec(path))) { var c = companyOfSlug(m[1]); if (c) { renderOrg([c]); document.title = c + ' org chart · HN Group People'; } else renderOrg([]); }
     else if ((m = /^\/people\/([a-f0-9]{16})$/.exec(path))) renderPerson(m[1]);
     else renderList();
   }

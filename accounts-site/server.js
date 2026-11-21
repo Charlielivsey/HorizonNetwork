@@ -6,6 +6,7 @@
 // staff account service (hn-accounts), which stays off the internet: the browser only ever talks to
 // this site, and only a fixed list of account requests is passed on, so every change goes through the
 // account service's own checks and permissions.
+const {chooseOnArrival,arrivalCookie}=require('./profile-gate.cjs');
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -17,6 +18,8 @@ const AUTH_BACKEND = process.env.AUTH_BACKEND || 'http://127.0.0.1:3400';
 const STAFF_BACKEND = process.env.STAFF_BACKEND || 'http://127.0.0.1:3250';
 const SECRET_FILE = process.env.STATUS_SSO_SECRET_FILE || '/var/lib/hn-status-sso/secret';
 const PUBLIC = process.env.ACCOUNTS_PUBLIC_DIR || path.join(__dirname, 'public');
+const BASE_PATH=process.env.ACCOUNTS_BASE_PATH==='/account'?'/account':'';
+const localPath=p=>BASE_PATH&&p.startsWith('/')&&!p.startsWith('//')&&!p.startsWith(BASE_PATH+'/')?BASE_PATH+p:p;
 const SECURE = ORIGIN.startsWith('https://');
 const COOKIE = (SECURE ? '__Host-' : '') + 'hn_account', STATE = (SECURE ? '__Host-' : '') + 'hn_account_state';
 const HEX = /^[a-f0-9]{64}$/;
@@ -28,15 +31,12 @@ const fail = (status, message) => Object.assign(new Error(message), { status });
 // membership (as Auth reports it); the account service then applies its own permission checks too.
 const ROUTES = [
   ['GET', /^\/api\/signature-people$/],
+  ['GET', /^\/api\/signature-profile$/],
   ['GET', /^\/api\/me$/], ['POST', /^\/api\/me\/profile$/], ['POST', /^\/api\/me\/password$/], ['POST', /^\/api\/me\/code$/],
   ['POST', /^\/api\/me\/avatar$/, 2.5 * 1024 * 1024], ['POST', /^\/api\/me\/avatar\/remove$/], ['POST', /^\/api\/me\/discord-photo$/],
   ['GET', /^\/api\/me\/sessions$/], ['POST', /^\/api\/me\/sessions\/(?:[a-f0-9]{12}\/end|end-others)$/],
   ['GET', /^\/api\/avatars\/[a-f0-9]{16}$/],
-  ['GET', /^\/api\/employees$/, 0, true], ['GET', /^\/api\/roles$/, 0, true],
-  ['POST', /^\/api\/employees\/[a-f0-9]{16}\/(?:account|account\/disable|account\/enable|code\/reset)$/, 0, true],
-  // Sign-in accounts (made and managed only here): their profiles, default profile and permissions.
-  ['GET', /^\/api\/logins$/, 0, true], ['POST', /^\/api\/logins$/, 0, true],
-  ['POST', /^\/api\/logins\/[a-f0-9]{16}(?:\/(?:reset|code\/reset|disable|enable|delete|permanent))?$/, 0, true],
+
 ];
 const isAdmin = (u) => !!(u && (u.ownerAccess || u.statusAdminAllowed));
 
@@ -66,14 +66,15 @@ const safeBack = (p) => (typeof p === 'string' && /^\/(?!\/)[^\s\\]*$/.test(p) &
 
 function send(res, status, body, headers) { res.writeHead(status, { 'Cache-Control': 'no-store', ...(headers || {}) }); res.end(body); }
 function json(res, status, value, headers) { send(res, status, JSON.stringify(value), { 'Content-Type': 'application/json; charset=utf-8', ...(headers || {}) }); }
-function redirect(res, location, cookies) { send(res, 302, '', { Location: location, 'Set-Cookie': cookies || [] }); }
+function redirect(res, location, cookies) { send(res, 302, '', { Location: localPath(location), 'Set-Cookie': cookies || [] }); }
+function mountHtml(html){if(!BASE_PATH)return html;return html.replace('<html lang="en-GB"','<html lang="en-GB" data-account-base="'+BASE_PATH+'"').replace(/((?:href|src|action)=["'])\/(?!\/)/g,'$1'+BASE_PATH+'/');}
 function page(res, status, file, headers) {
-  const html = fs.readFileSync(path.join(PUBLIC, file), 'utf8');
+  const html = mountHtml(fs.readFileSync(path.join(PUBLIC, file), 'utf8'));
   send(res, status, html, { 'Content-Type': 'text/html; charset=utf-8', ...(headers || {}) });
 }
 function messagePage(res, status, title, text, cookies) {
   const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const html = fs.readFileSync(path.join(PUBLIC, 'message.html'), 'utf8').replace('{{title}}', esc(title)).replace('{{title}}', esc(title)).replace('{{text}}', esc(text));
+  const html = mountHtml(fs.readFileSync(path.join(PUBLIC, 'message.html'), 'utf8')).replace('{{title}}', esc(title)).replace('{{title}}', esc(title)).replace('{{text}}', esc(text));
   send(res, status, html, { 'Content-Type': 'text/html; charset=utf-8', 'Set-Cookie': cookies || [] });
 }
 function readBody(req, limit) {
@@ -106,7 +107,10 @@ async function relay(req, res, s, route) {
 }
 
 async function handle(req, res) {
+  if(BASE_PATH&&(req.url===BASE_PATH||req.url.startsWith(BASE_PATH+'/')||req.url.startsWith(BASE_PATH+'?')))req.url=req.url.slice(BASE_PATH.length)||'/';
   const url = new URL(req.url, ORIGIN), route = url.pathname;
+  if(await chooseOnArrival(req,res,url,{client:'accounts',staffSession:()=>{const s=current(req);return s&&crypto.createHash('sha256').update(s.staff).digest('hex');},backend:AUTH_BACKEND,secretFile:SECRET_FILE,authOrigin:AUTH_ORIGIN,secure:SECURE,stateCookie:STATE,statePath:BASE_PATH+'/auth',safeNext:safeBack}))return;
+  if(/^\/api\/(logins|employees|roles)(\/|$)/.test(route))return json(res,410,{error:'Account administration has moved to HN Group IT.'});
   if (route === '/healthz') return json(res, 200, { ok: true });
 
   if (route === '/auth/login' && req.method === 'GET') {
@@ -127,7 +131,7 @@ async function handle(req, res) {
       const old = cookieOf(req, COOKIE); if (old) sessions.delete(old);
       const token = crypto.randomBytes(32).toString('hex');
       sessions.set(token, { staff: result.token, user: result.user, csrf: crypto.randomBytes(24).toString('hex'), expires: Date.now() + 12 * 3600000, fresh: true });
-      return redirect(res, safeBack(Buffer.from(back || '', 'base64url').toString()), [clear, setCookie(COOKIE, token, 12 * 3600)]);
+      return redirect(res, safeBack(Buffer.from(back || '', 'base64url').toString()), [clear, arrivalCookie(SECURE), setCookie(COOKIE, token, 12 * 3600)]);
     } catch (e) { return messagePage(res, e.status === 403 ? 403 : 503, 'Sign-in failed', e.message, [clear]); }
   }
   // Opened from the staff portal with a one-time ticket (the user's request, 6 November 2026: "Open HN Account" after
@@ -143,7 +147,7 @@ async function handle(req, res) {
       const old = cookieOf(req, COOKIE); if (old) sessions.delete(old);
       const token = crypto.randomBytes(32).toString('hex');
       sessions.set(token, { staff: result.token, user: result.user, csrf: crypto.randomBytes(24).toString('hex'), expires: Date.now() + 12 * 3600000, fresh: true });
-      return redirect(res, safeBack(url.searchParams.get('return')), [setCookie(COOKIE, token, 12 * 3600)]);
+      return redirect(res, safeBack(url.searchParams.get('return')), [arrivalCookie(SECURE),setCookie(COOKIE, token, 12 * 3600)]);
     } catch (e) {
       // An expired or used link: sign in the usual way and still end up in the same place.
       return redirect(res, '/auth/login?return=' + encodeURIComponent(safeBack(url.searchParams.get('return'))));
@@ -183,7 +187,7 @@ async function handle(req, res) {
   // Refreshing HN Account keeps a valid sign-in and the current hash destination.
   if (route === '/' || route === '/index.html') {
     if (s) return page(res, 200, 'app.html');
-    return page(res, 200, 'index.html');
+    return redirect(res, '/auth/login');
   }
   return messagePage(res, 404, 'Not found', 'That page isn’t part of HN Account.');
 }

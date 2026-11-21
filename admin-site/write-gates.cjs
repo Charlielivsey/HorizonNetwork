@@ -15,6 +15,7 @@ error_page 403 = @hn_control_hold;
 location = /__hn_control/gate {
         internal;
         auth_request off;
+        proxy_intercept_errors off; # A denied gate must reach auth_request as 403.
         proxy_pass http://127.0.0.1:${port}/_edge/gate;
         proxy_pass_request_body off;
         proxy_set_header Content-Length "";
@@ -31,6 +32,7 @@ ${headers}
 }
 location @hn_control_hold {
         auth_request off;
+        proxy_intercept_errors off; # Keep the deliberate maintenance response.
         if ($hn_control_action = shutdown) { return 444; }
         proxy_pass http://127.0.0.1:${port};
         proxy_pass_request_body off;

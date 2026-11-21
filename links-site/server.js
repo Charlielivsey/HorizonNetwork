@@ -13,6 +13,7 @@ const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&':
 const DATA = JSON.parse(fs.readFileSync(path.join(__dirname, 'sites.json'), 'utf8')).sites;
 const GROUPS = [
   ['companies', 'Our companies', 'The group and the companies in it.'],
+  ['workspaces', 'Staff workspaces', 'HR, Finance and IT are all part of the Staff Portal.'],
   ['staff', 'Staff services', 'Sign in with your HN Group Auth account. Some need a named account or a separate permission.'],
   ['services', 'Services & resources', 'Help, updates, careers and information, open to everyone.'],
 ];
@@ -40,7 +41,6 @@ const ICONS = {
   download: '<path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/>',
   mail: '<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m4 7 8 6 8-6"/>',
   chart: '<path d="M4 20V4M4 20h16"/><path d="m7 15 4-4 3 3 5-6"/>',
-  compass: '<circle cx="12" cy="12" r="9"/><path d="m15.8 8.2-2.3 5.3-5.3 2.3 2.3-5.3z"/>',
 };
 const ACCESS = { public: ['Open to everyone', 'open'], staff: ['Staff sign-in', 'staff'], restricted: ['Restricted', 'restricted'] };
 
@@ -73,7 +73,7 @@ function page() {
     '<script src="/assets/hn-motion.js" defer></script><script src="/app.js?v=2" defer></script></head><body>' +
     '<a class="skip" href="#directory">Skip to the sites</a>' +
     '<header class="site-header"><div class="wrap header-inner"><a class="brand" href="/" aria-label="HN Group Sites home"><img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="120" height="42"><img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="120" height="42"><span class="brand-label">Sites</span></a>' +
-    '<nav class="site-nav sites-nav" aria-label="Sections"><a href="#companies">Companies</a><a href="#staff">Staff</a><a href="#services">Services</a></nav>' +
+    '<nav class="site-nav sites-nav" aria-label="Sections"><a href="#companies">Companies</a><a href="#workspaces">Workspaces</a><a href="#staff">Staff services</a><a href="#services">Services</a></nav>' +
     '<a class="status-pill" id="status-pill" href="https://status.hngroup.org.uk/"><span class="dot" aria-hidden="true"></span><span id="status-pill-text">Service status</span></a></div></header>' +
     '<main id="main"><section class="hero sites-hero hn-glow"><div class="wrap">' +
     '<div class="head-steps" data-hn-steps="alive" aria-hidden="true"></div>' +

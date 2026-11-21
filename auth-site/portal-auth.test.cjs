@@ -25,6 +25,7 @@ test('portal sign-in only goes through Auth and returns to the portal; old porta
   const child = spawn(process.execPath, ['staff-portal/server.js'], { cwd: path.join(__dirname, '..'), env: { ...process.env, PORT: String(portalPort), DATA_DIR: dir, AUTH_BACKEND: authBase }, stdio: ['ignore', 'ignore', 'pipe'] });
   let errors = ''; child.stderr.on('data', c => errors += c);
   process.env.STAFF_PORTAL_BACKEND = portalBase;
+  process.env.DATA_DIR = dir;
   const { server } = require('./server'); await new Promise(r => server.listen(authPort, '127.0.0.1', r));
   const authPost = (route, data, cookie = '') => fetch(authBase + route, { method: 'POST', headers: { Origin: 'https://auth.hngroup.org.uk', 'Content-Type': 'application/json', Cookie: cookie }, body: JSON.stringify(data) });
   const portalGet = (route, cookie = '') => fetch(portalBase + route, { headers: { Cookie: cookie }, redirect: 'manual' });

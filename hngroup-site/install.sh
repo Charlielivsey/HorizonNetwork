@@ -13,6 +13,7 @@
 # Encrypt certificate, with a temporary self-signed one until that's issued (the email is only
 # needed if this server has never had a Let's Encrypt certificate before).
 set -e
+bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/offline-site/install.sh"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOMAIN="hngroup.org.uk"

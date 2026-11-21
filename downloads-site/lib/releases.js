@@ -5,7 +5,7 @@ function readRelease(release){
  if(!release||release.draft||!/^browser-v\d+\.\d+\.\d+-\d+$/.test(release.tag_name))return null;
  // DMGs, the Windows installer and the Linux AppImage are for people; the Mac zips let HN Browser update itself in place.
  const platforms={'mac-arm64':/-mac-arm64\.dmg$/,'windows-x64':/-win-x64\.exe$/,'mac-arm64-zip':/-mac-arm64\.zip$/,'linux-x64':/-linux-x86_64\.AppImage$/};
- const assets={};for(const[id,pattern]of Object.entries(platforms)){const a=(release.assets||[]).find(a=>pattern.test(a.name)&&/^(?:HN-Browser|Compass)-[0-9A-Za-z._\-]+$/.test(a.name)&&a.browser_download_url?.startsWith(BASE+release.tag_name+'/'));if(a)assets[id]={name:a.name,url:a.browser_download_url,size:a.size,sha256:/^sha256:[a-f0-9]{64}$/.test(a.digest||'')?a.digest.slice(7):null};}
+ const assets={};for(const[id,pattern]of Object.entries(platforms)){const a=(release.assets||[]).find(a=>pattern.test(a.name)&&/^(?:HN-Browser|Horizon-Compass|Compass)-[0-9A-Za-z._\-]+$/.test(a.name)&&a.browser_download_url?.startsWith(BASE+release.tag_name+'/'));if(a)assets[id]={name:a.name,url:a.browser_download_url,size:a.size,sha256:/^sha256:[a-f0-9]{64}$/.test(a.digest||'')?a.digest.slice(7):null};}
  return Object.keys(assets).length?{version:release.tag_name.replace(/^browser-v/,''),publishedAt:release.published_at,assets}:null;
 }
 // CI records each browser release in downloads-site/release.json (version, file names, sizes, SHA-256),
@@ -21,7 +21,7 @@ function createReleases(dir,{fetcher=fetch,bundled=path.join(__dirname,'..','rel
  fs.mkdirSync(dir,{recursive:true,mode:0o700});const file=path.join(dir,'release.json');let value=null,at=0,pending,source='saved',checked=null,problems=[];
  try{value=readRelease(JSON.parse(fs.readFileSync(file)));}catch{}
  function offer(release,from){const parsed=readRelease(release);if(!parsed||(value&&!newer(parsed.version,value.version)&&parsed.version!==value.version))return;if(value&&parsed.version===value.version&&source!=='saved')return;value=parsed;source=from;try{fs.writeFileSync(file+'.tmp',JSON.stringify(release),{mode:0o600});fs.renameSync(file+'.tmp',file);}catch{}}
- async function refresh(){if(pending)return pending;if(Date.now()-at<120000)return value;at=Date.now();pending=(async()=>{problems=[];let manifest=false;
+ async function refresh(){if(process.env.HN_BROWSER_DISCONTINUED==='1'){if(!value)try{offer(fromManifest(JSON.parse(fs.readFileSync(bundled,'utf8'))),'discontinued archive');}catch{}checked=new Date().toISOString();source='discontinued archive';return value;}if(pending)return pending;if(Date.now()-at<120000)return value;at=Date.now();pending=(async()=>{problems=[];let manifest=false;
   try{offer(fromManifest(JSON.parse(fs.readFileSync(bundled,'utf8'))),'installed copy');}catch{}
   try{const m=await fetcher(MANIFEST,{headers:{'User-Agent':'HN-Group-Downloads'},signal:AbortSignal.timeout(10000)});if(m.ok){const release=fromManifest(await m.json());offer(release,'GitHub release.json');manifest=!!readRelease(release);}else problems.push('release.json: HTTP '+m.status);}catch(e){problems.push('release.json: '+(e.cause?.code||e.message));}
   // The API (60 requests an hour without a key) is only needed when release.json couldn't be read.

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Isolated HN Group Devices site (devices.hngroup.org.uk). Keeps its data (/var/lib/hn-devices) and every other service.
 set -euo pipefail
+bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/offline-site/install.sh"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOMAIN=devices.hngroup.org.uk
 EMAIL="${1:-}"

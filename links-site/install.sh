@@ -3,6 +3,7 @@
 # now redirects there once sites.hngroup.org.uk has its certificate; the user's request: "change the domain to sites").
 # Internal names stay: PM2 hn-links, port 3700, /opt/hn-links. Existing websites, Auth and staff services are untouched.
 set -euo pipefail
+bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/offline-site/install.sh"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOMAIN=sites.hngroup.org.uk
 OLD_DOMAIN=links.hngroup.org.uk

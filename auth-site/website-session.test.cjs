@@ -18,8 +18,8 @@ test('website sign-ins survive Auth page loads and restarts, and last 30 days fr
   const c=await post('/api/continue',{client_id:'docs',state},authCookie);const code=new URL((await c.json()).redirect).searchParams.get('code');
   const exchanged=await sso('exchange',{code,state});assert.equal(exchanged.status,200);const site=await exchanged.json();
   assert.ok(site.expires>Date.now()+29*86400000,'a website sign-in lasts 30 days');
-  // Auth's own page loading again ends Auth's browser session, but not the website's.
-  const page=await fetch(base+'/',{headers:{Cookie:authCookie}});assert.match(page.headers.get('set-cookie')||'',/__Host-hn_auth_session=;/,'Auth ends its own session');
+  // Auth page refresh preserves the sign-in so profile selection needs no new password or PIN.
+  const page=await fetch(base+'/',{headers:{Cookie:authCookie}});assert.doesNotMatch(page.headers.get('set-cookie')||'',/__Host-hn_auth_session=;/,'Auth preserves its session');
   assert.equal((await sso('session',{session:site.session})).status,200);
   // Restarting Auth (and the staff service) keeps it.
   await new Promise(r=>setTimeout(r,2500));

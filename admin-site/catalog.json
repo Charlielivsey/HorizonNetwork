@@ -1,20 +1,29 @@
 [
   {
-    "id": "compass",
-    "name": "Compass",
-    "process": "hn-compass",
-    "port": 5690,
-    "hosts": [
-      "compass.hngroup.org.uk"
-    ]
-  },
-  {
     "id": "appeals",
     "name": "HN Group Appeals",
     "process": "hn-appeals",
     "port": 5720,
     "hosts": [
       "appeals.hngroup.org.uk"
+    ]
+  },
+  {
+    "id": "it",
+    "name": "HN Group IT",
+    "process": "hn-it",
+    "port": 5710,
+    "hosts": [
+      "it.hngroup.org.uk"
+    ]
+  },
+  {
+    "id": "finance",
+    "name": "HN Group Finance",
+    "process": "hn-finance",
+    "port": 5690,
+    "hosts": [
+      "finance.hngroup.org.uk"
     ]
   },
   {
@@ -160,10 +169,11 @@
   },
   {
     "id": "vpn",
-    "name": "HN Group VPN",
+    "name": "HN Secure Access Terminal",
     "process": "hn-vpn",
     "port": 5000,
     "hosts": [
+      "sat.hngroup.org.uk",
       "vpn.hngroup.org.uk"
     ]
   },

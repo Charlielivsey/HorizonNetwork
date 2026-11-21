@@ -5,6 +5,7 @@
 # articles from the private register only (private-companies-site, loopback port 5610). Nothing is shared with
 # wiki.hngroup.org.uk. Every page signs in through HN Group Auth's `private-wiki` client.
 set -euo pipefail
+bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/offline-site/install.sh"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SRC="$(cd "$SCRIPT_DIR/../wiki-site" && pwd)"
 DOMAIN=private.wiki.hngroup.org.uk

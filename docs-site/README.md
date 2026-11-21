@@ -14,6 +14,10 @@ its data in `/var/lib/hn-docs/old-help-site-<time>/`.
 - **Templates** (every template for every company): Letter, Memo, Report, Policy, Meeting minutes, Press release,
   Blank document, and the HR letters: Welcome letter, Onboarding letter, Resignation letter and Termination letter.
   Letter-style templates share the letter layout (address, date, reference, sign-off).
+- **Purchase Statement:** available under Finance documents for every company. Records original purchase price,
+  sale price, currency, purchase/sale dates, supplier, buyer, seller, payment status, amount received and balance due.
+  Includes editable price breakdown, handover, supporting records and confirmation sections, with standard saving
+  and PDF download. The author fills Prepared by; transaction parties and amounts are left for the user to enter.
 - **Shared** (all staff can see and edit) and **My storage** (private: your documents and uploaded files: PDF, Word,
   Excel, PowerPoint, pictures, text and CSV, up to 25 MB each, checked by content). New documents go to your storage
   unless you choose Shared with staff. Filter by company and type, and search.
@@ -64,3 +68,9 @@ sudo bash docs-site/install.sh        # install or update this site only
   former management APIs are retired. No second writer or copied policy data.
 - Migration checks: `node --test docs-site/administration.test.cjs`. Add `HN_DOCS_BROWSER=1` for
   desktop/mobile browser checks (and `CHROMIUM_EXECUTABLE` if using a system Chromium).
+
+## Horizon Network policy and executive directives — 20 November 2026
+
+The Horizon Network Operations Policy is a shared editable Policy draft in Docs. Saved draft content changes have a distinct draft-save history in the editor and PDF, separate from the existing final policy version history. Marking final still uses the existing publication-version calculation; draft history is not approval.
+
+The Executive Directive template is for Horizon Network, cites Article 1 of its Operations Policy and quotes the relevant ED provisions, including Article 1.9 and supporting Articles 4/5. It starts unsigned and undated for issue; the author must confirm policy approval before issuing. New EDs and duplicates receive server-generated immutable `ED0001`-style references. The single Docs writer persists a global high-water mark and scans existing references, so numbers survive restarts and deletions without reuse. Legacy user references and wording are preserved; blank/placeholder references receive a number on save.

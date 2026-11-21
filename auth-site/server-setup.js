@@ -258,20 +258,10 @@ function describe(steps) {
 }
 
 // ----- Doing it -----
-function createServerSetup({ config, fetcher = fetch, dir = path.join(__dirname, 'discord-layouts'), bound = () => ({}), bind = () => {}, record = () => {}, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
-  let running = false;
-  async function request(method, endpoint, body, reason) {
-    const c = config(); if (!c?.bot) throw fail('The bot token has not been configured.');
-    for (let attempt = 0; ; attempt++) {
-      const r = await fetcher(API + endpoint, { method, headers: { Authorization: 'Bot ' + c.bot, 'Content-Type': 'application/json', 'User-Agent': 'HN-Group-Auth/1.0', ...(reason ? { 'X-Audit-Log-Reason': encodeURIComponent(reason).slice(0, 500) } : {}) },
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(20000), redirect: 'error' });
-      if (r.status === 204) return null;
-      const value = await r.json().catch(() => ({}));
-      if (r.status === 429 && attempt < 6) { await sleep(Math.min(60, Math.max(0.5, Number(value.retry_after) || 1)) * 1000); continue; }
-      if (!r.ok) throw Object.assign(fail('Discord: ' + String(value.message || 'request refused (' + r.status + ')').slice(0, 200)), { status: r.status, code: value.code });
-      return value;
-    }
-  }
+function createServerSetup({ config, fetcher = fetch, dir = path.join(__dirname, 'discord-layouts'), bound = () => ({}), bind = () => {}, record = () => {}, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), checkpoint = () => null, saveCheckpoint = () => {}, now = () => Date.now(), staleAfter = 120000, watchdogEvery = 5000, requestTimeout = 20000 }) {
+  let running = false, worker = null;
+  const {createSetupRequests}=require('./discord-setup-requests');
+  const request=createSetupRequests({config,fetcher,sleep,now,requestTimeout,context:()=>worker,initialWait:()=>checkpoint()?.waitingUntil||0,onRateLimit:until=>{const saved=checkpoint();if(saved)saveCheckpoint({...saved,waitingUntil:until});}});
   const layoutsNow = () => loadLayouts(dir);
   // The layout for this server: the one named, or the one bound to / named after this server.
   function choose(name, guild) {
@@ -299,7 +289,7 @@ function createServerSetup({ config, fetcher = fetch, dir = path.join(__dirname,
     const g = s.guild.id, reason = 'HN Group server setup (' + layout.id + ') by ' + who, done = [], errors = [];
     const roleIds = new Map(p.roleIds);
     const FAILED = Symbol('failed');
-    const attempt = async (what, fn) => { try { return await fn(); } catch (e) { errors.push(what + ': ' + (e.layout ? e.message : 'failed')); return FAILED; } };
+    const attempt = async (what, fn) => { try { return await fn(); } catch (e) { if(e.stalled||e.cancelled||e.status===429)throw e;errors.push(what + ': ' + (e.layout ? e.message : 'failed')); return FAILED; } };
     const resolve = (list) => (list || []).filter((o) => roleIds.has(roleName(o.role))).map((o) => ({ id: roleIds.get(roleName(o.role)), type: 0, allow: o.allow, deny: o.deny }));
     // Old roles go first, so the layout's roles are then ordered among what remains.
     const removals = p.steps.filter((x) => x.kind === 'remove-role'), creations = p.steps.filter((x) => x.kind === 'role');
@@ -468,24 +458,40 @@ function createServerSetup({ config, fetcher = fetch, dir = path.join(__dirname,
   // and add these roles in this order").
   // Only when one of the layout's roles is missing, never when they're all there, and nothing at all if the plan has
   // problems (the bot's role too low, missing permissions).
-  async function autoApply(guildId, given, { force = false, who = 'HN Group Auth bot (roles were missing)', progress } = {}) {
-    if (running) return { busy: true };
-    running = true;
-    try {
-      const s = await snapshot(guildId), layout = given || choose(null, s.guild);
-      const have = new Set(s.roles.map((r) => roleName(r.name)));
-      const missing = layout.roles.filter((r) => !have.has(roleName(r.name))).map((r) => r.name);
-      if (!missing.length && !force) return { applied: false };
-      const p = plan(layout, s.guild, s.roles, s.channels, s.me.id, s.botRoles);
-      const bot = { username: 'HN Group Auth bot (automatic)', id: s.me.id };
-      if (p.problems.length) { record(bot, 'server-setup.auto.blocked', { guild: guildId, layout: layout.id, missing, problems: p.problems }); return { applied: false, problems: p.problems, guild: s.guild }; }
-      record(bot, 'server-setup.auto.start', { guild: guildId, layout: layout.id, missing });
-      const r = await execute(layout, s, p, who, progress);
-      record(bot, r.errors.length ? 'server-setup.auto.partial' : 'server-setup.auto.done', { guild: guildId, layout: layout.id, changes: r.done.length, errors: r.errors.slice(0, 20) });
-      return { applied: true, guild: s.guild, ...r };
-    } finally { running = false; }
+  async function autoApply(guildId, given, { force = false, who = 'HN Group Auth bot (roles were missing)', progress = () => {} } = {}) {
+    if(running)return {busy:true};running=true;
+    let timer,lastProgressAt=0;
+    const report=(stage,n,total,item)=>{const saved=checkpoint(guildId);if(saved&&(now()-lastProgressAt>5000||saved.progress?.stage!==stage||n===total)){saveCheckpoint({...saved,progress:{stage,n,total,item,at:now()}});lastProgressAt=now();}progress(stage,n,total,item);};
+    try{
+      for(let recovery=0;recovery<3;recovery++){
+        worker={controller:new AbortController(),lastActivity:now(),waitingUntil:0,progress:report};
+        const own=worker;
+        timer=setInterval(()=>{if(now()-own.lastActivity>staleAfter&&now()>own.waitingUntil)own.controller.abort(Object.assign(new Error('Setup stopped making progress.'),{stalled:true}));},watchdogEvery);
+        try{
+          const s=await snapshot(guildId),saved=checkpoint(guildId),resume=saved&&saved.guildId===guildId&&['running','paused'].includes(saved.status),layout=resume?saved.layout:(given||choose(null,s.guild));
+          const have=new Set(s.roles.map(r=>roleName(r.name))),missing=layout.roles.filter(r=>!have.has(roleName(r.name))).map(r=>r.name);
+          if(!missing.length&&!force&&!resume)return {applied:false};
+          const pending=resume?s.roles.filter(r=>(saved.removeIds||[]).includes(r.id)):[];
+          const p=resume?plan({...layout,removeRoles:false},s.guild,s.roles.filter(r=>!pending.includes(r)),s.channels,s.me.id,s.botRoles):plan(layout,s.guild,s.roles,s.channels,s.me.id,s.botRoles);
+          if(resume)p.steps.unshift(...pending.map(r=>({kind:'remove-role',id:r.id,name:r.name})));
+          const bot={username:'HN Group Auth bot (automatic)',id:s.me.id};
+          if(p.problems.length){record(bot,'server-setup.auto.blocked',{guild:guildId,layout:layout.id,missing,problems:p.problems});return {applied:false,problems:p.problems,guild:s.guild};}
+          saveCheckpoint({guildId,layout,who,removeIds:resume?saved.removeIds:p.steps.filter(x=>x.kind==='remove-role').map(x=>x.id),startedAt:resume?saved.startedAt:now(),status:'running',waitingUntil:0,recoveries:recovery});
+          record(bot,resume?'server-setup.auto.resumed':'server-setup.auto.start',{guild:guildId,layout:layout.id,missing});
+          const r=await execute(layout,s,p,who,report);
+          saveCheckpoint(r.errors.length?{...checkpoint(),status:'paused',waitingUntil:0}:null);
+          record(bot,r.errors.length?'server-setup.auto.partial':'server-setup.auto.done',{guild:guildId,layout:layout.id,changes:r.done.length,errors:r.errors.slice(0,20)});
+          return {applied:true,guild:s.guild,...r};
+        }catch(error){
+          const saved=checkpoint(guildId);if(saved)saveCheckpoint({...saved,status:'paused'});
+          if(!error.stalled||recovery===2)throw error;
+          record(null,'server-setup.recovering',{guild:guildId,attempt:recovery+1});report('Setup stopped responding — checking and resuming',0,1,'');
+        }finally{clearInterval(timer);worker=null;}
+      }
+    }finally{clearInterval(timer);worker=null;running=false;}
   }
-  return { interaction, autocomplete, run, definition, name: COMMAND, request, autoApply, busy: () => running };
+
+  return { interaction, autocomplete, run, definition, name: COMMAND, request, autoApply, status:()=>({running,lastActivity:worker?.lastActivity||0,waitingUntil:worker?.waitingUntil||0,progress:checkpoint()?.progress||null}), busy: () => running };
 }
 
 module.exports = { embed, createServerSetup, parseLayout, loadLayouts, plan, bits, ALLOWED_USERS, COMMAND, ALWAYS_GIVE, isSeparator, roleName, EVERYONE };

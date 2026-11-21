@@ -7,6 +7,7 @@ Interactive SSH logins show the approved lavender/teal HN Group ASCII menu:
 2. Open Codex in `/root/HorizonNetwork`.
 3. PM2 process controls: start all, confirmed stop all, or Individual sites → search → site actions.
 4. Power management: confirmed server restart, soft shutdown or power up.
+5. Unlock an HN account: enter the system-admin PIN, then the account’s full sign-in email.
 
 Press L then Enter to log out. B returns from submenus. Type `horizon` to reopen manually.
 PM2 and Power management require the configured system admin PIN, entered without echo. A salted
@@ -76,3 +77,7 @@ idle Bash prompt: Codex and every other foreground job are exempt, including whi
 Regression checks use an isolated fake Codex process; no live Codex session is stopped by testing.
 
 Power management option 4, **Shutdown server**, performs a full graceful VPS power-off. The system admin code is required to enter Power management and is requested again for this action, followed by an explicit confirmation. The detached job uses `systemctl poweroff`; afterwards the server must be started from the hosting control panel, since SSH and the Horizon power-up menu are unavailable while it is off. Soft shutdown remains option 2 for stopping services while retaining public SSH access.
+
+## Recover a locked HN account
+
+Run `sudo horizon unlock-account`, or run `horizon` as root and choose **5 — Unlock an HN account**. Enter the terminal’s existing system-admin PIN, then the sign-in email. Recovery goes through the running private account service, which clears the account lock and failed-attempt counter and records an audit event. Passwords and PINs are unchanged; an account disabled before locking stays disabled. The root-only service secret stays in an HTTP header on loopback, never in the command line or terminal output. The shortcut does not edit account files or restart services. If `hn-accounts` is stopped, start it through the normal PM2 controls before recovery.

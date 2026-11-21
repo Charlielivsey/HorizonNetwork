@@ -5,6 +5,7 @@
 # shared with companies.hngroup.org.uk, and every page signed in through HN Group Auth's `private-companies` client.
 # The main register, its data and its installer are untouched.
 set -euo pipefail
+bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/offline-site/install.sh"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SRC="$(cd "$SCRIPT_DIR/../companies-site" && pwd)"
 DOMAIN=private.companies.hngroup.org.uk

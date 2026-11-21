@@ -1,9 +1,7 @@
 'use strict';
 // Public staff website only. The private account backend is supervised by HN Group Auth.
 const http=require('node:http');
-const server=http.createServer((req,res)=>{delete req.headers['x-hn-hr-app'];const path=new URL(req.url,'http://localhost').pathname;
-if(path==='/leave'){res.writeHead(302,{Location:'https://hr.hngroup.org.uk/leave','Cache-Control':'no-store'});return res.end();}
-if(path.startsWith('/api/leave')){res.writeHead(410,{'Content-Type':'application/json'});return res.end('{"error":"Leave has moved to https://hr.hngroup.org.uk/"}');}
+const server=http.createServer((req,res)=>{delete req.headers['x-hn-it-app'];delete req.headers['x-hn-hr-app'];delete req.headers['x-hn-finance-app'];const path=new URL(req.url,'http://localhost').pathname;
 if(path==='/signature'){res.writeHead(302,{Location:'https://accounts.hngroup.org.uk/'+new URL(req.url,'http://localhost').search+'#signature','Cache-Control':'no-store'});return res.end();}
 if(path==='/document-storage'||path==='/documents'){res.writeHead(302,{Location:'https://docs.hngroup.org.uk'+(path==='/document-storage'?'/administration/storage':'/administration/documents')+new URL(req.url,'http://localhost').search,'Cache-Control':'no-store'});return res.end();}
 if(/^\/api\/(document-storage|docs-administration)(\/|$)/.test(path)||(/^\/api\/documents(\/|$)/.test(path)&&req.method!=='GET')){res.writeHead(410,{'Content-Type':'application/json','Cache-Control':'no-store'});return res.end('{"error":"Document administration has moved to HN Group Docs."}');}

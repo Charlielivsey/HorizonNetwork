@@ -391,12 +391,13 @@ function renderDocument(doc, company, template) {
     if (rows.length) y += 8 * MM;
   }
   // A policy's version history.
-  if (template.versions && (doc.history || []).length) {
+  const policyHistory = [...(doc.history || []), ...(doc.draftHistory || [])].sort((a, b) => (a.at || Date.parse(a.date) || 0) - (b.at || Date.parse(b.date) || 0));
+  if (template.versions && policyHistory.length) {
     room(40);
     pdf.text(page, PAGE.left, y + 10, 'VERSION HISTORY', { key: 'heavy', size: 9, color: C.muted, spacing: 0.8 });
     y += 6 * MM;
     table({ rows: [['Version', 'Date', 'By', 'Changes'].map((t) => ({ header: true, span: 1, runs: [{ text: t, bold: true, color: C.ink }] })),
-      ...doc.history.slice().reverse().map((h) => [h.version, h.date, h.by, h.changes.map((c) => '• ' + c).join('\n')].map((t, i) => ({ span: 1, runs: [{ text: String(t), bold: i === 0, color: C.ink }] })))], before: 0, after: 8 * MM });
+      ...policyHistory.slice().reverse().map((h) => [h.draft ? h.version + ' (draft, save ' + h.revision + ')' : h.version, h.date, h.by, h.changes.map((c) => '• ' + c).join('\n')].map((t, i) => ({ span: 1, runs: [{ text: String(t), bold: i === 0, color: C.ink }] })))], before: 0, after: 8 * MM });
   }
   const bodyBlocks = blocksOf(parseHtml(doc.body));
   for (const [i, b] of bodyBlocks.entries()) {

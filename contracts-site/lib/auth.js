@@ -4,6 +4,7 @@
 // and sign what it has been sent. Sending needs the staff portal's "Send contracts for signing" permission: HN Group
 // Auth passes every permission the account has with each check (at least once a minute), the same as every other
 // HN Group website. The site keeps a browser-session cookie tied to the Auth sign-in.
+const {chooseOnArrival,arrivalCookie}=require('./profile-gate.cjs');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 
@@ -24,6 +25,7 @@ function setCookie(name, value, maxAge) { return `${name}=${value}; Path=/; Http
 function userOf(u) {
   const full = [u.firstName, u.lastName].map((x) => String(x || '').trim()).filter(Boolean).join(' ');
   return { id: String(u.id || ''), accountId: String(u.accountId || ''), email: String(u.email || '').toLowerCase(), displayName: String(u.displayName || u.email || 'Staff member'),
+    mainCompany: String(u.mainCompany || u.company || '').slice(0,120), company: String(u.company || '').slice(0,120),
     fullName: full || String(u.displayName || ''), jobTitle: String(u.jobTitle || '').slice(0, 120), owner: u.ownerAccess === true, impersonated: u.impersonated === true,
     permissions: (Array.isArray(u.permissions) ? u.permissions : []).filter((k) => typeof k === 'string' && /^[a-z.]{1,40}$/.test(k)).slice(0, 100) };
 }
@@ -60,6 +62,7 @@ function createAuth(store) {
   }
   function redirect(res, location, cookies) { res.writeHead(302, { Location: location, 'Cache-Control': 'no-store', 'Set-Cookie': cookies || [] }); res.end(); }
   async function handle(req, res, url, showPage) {
+    if(await chooseOnArrival(req,res,url,{client:'contracts',session:()=>store.session(cookie(req,SESSION_COOKIE))?.authSession,backend:AUTH_BACKEND,secretFile:SECRET_FILE,authOrigin:AUTH_ORIGIN,secure:SECURE,stateCookie:STATE_COOKIE,safeNext}))return true;
     if (url.pathname === '/auth/login' && req.method === 'GET') {
       const state = crypto.randomBytes(32).toString('hex'), next = Buffer.from(safeNext(url.searchParams.get('next'))).toString('base64url');
       redirect(res, AUTH_ORIGIN + '/authorize?client_id=contracts&state=' + state, [setCookie(STATE_COOKIE, state + '.' + next, 600)]);
@@ -76,7 +79,7 @@ function createAuth(store) {
       const old = cookie(req, SESSION_COOKIE); if (old) store.endSession(old);
       const token = store.createSession(userOf(result.user), result.session, result.expires);
       let next = '/'; try { next = safeNext(Buffer.from(nextRaw || '', 'base64url').toString('utf8')); } catch {}
-      redirect(res, next, [clear, setCookie(SESSION_COOKIE, token, 30 * 86400)]);
+      redirect(res, next, [clear, arrivalCookie(SECURE), setCookie(SESSION_COOKIE, token, 30 * 86400)]);
       return true;
     }
     if (url.pathname === '/auth/logout' && req.method === 'POST') {

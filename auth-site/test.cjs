@@ -10,6 +10,8 @@ test('real staff password and PIN, minimal live profile, avatar, fixed clients a
   const store = require('../staff-portal/lib/store'); store.init(dir);
   const person = store.saveEmployee({ firstName: 'Test', lastName: 'Owner', jobTitle: 'System owner', company: store.COMPANIES[0], emails: [{ local: 'test.owner', domain: 'hngroup.org.uk', primary: true }] });
   store.issueTemporaryPassword(person); store.setPassword(person, 'Test-password-582!'); store.setCode(person, '582947');
+  store.setGoogle(person, { sub: 'linked-google-subject', email: 'test.owner@hngroup.org.uk' });
+  store.setDiscord(person, { id: '123456789012345678', username: 'test-owner' });
   const avatar = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6zSsAAAAASUVORK5CYII=';
   store.saveAvatar(person, 'data:image/png;base64,' + avatar);
   const settingsFile = path.join(dir, 'settings.json'), settings = JSON.parse(fs.readFileSync(settingsFile));
@@ -27,7 +29,13 @@ test('real staff password and PIN, minimal live profile, avatar, fixed clients a
   try {
     let started=false; for(let n=0;n<100;n++){try{if((await fetch(process.env.STAFF_PORTAL_BACKEND+'/healthz')).ok){started=true;break;}}catch{} await new Promise(r=>setTimeout(r,50));} assert.ok(started,errors);
     assert.equal((await fetch(base+'/api/me')).status,401);
-    assert.equal((await post('/api/login',{ username:'test.owner@hngroup.org.uk',password:'bad' })).status,401);
+    for (const provider of ['google', 'discord']) {
+      assert.deepEqual(await (await fetch(base+'/api/'+provider)).json(), {enabled:false});
+      assert.equal((await post('/api/'+provider+'/start', {mode:'login'})).status,410);
+      assert.equal((await post('/api/'+provider+'/start', {mode:'link'})).status,410);
+      assert.equal((await fetch(base+'/'+provider+'/callback?code=old&state=old')).status,410);
+    }
+    assert.equal((await post('/api/login',{ username:'unknown.fixture@hngroup.org.uk',password:'bad' })).status,401);
     assert.equal((await post('/api/login',{ username:'test.owner@hngroup.org.uk',password:'Test-password-582!' },'',{Origin:'https://evil.example'})).status,403);
     const login = await post('/api/login',{ username:'test.owner@hngroup.org.uk',password:'Test-password-582!' });
     assert.deepEqual(await login.json(),{codeRequired:true});
@@ -36,10 +44,32 @@ test('real staff password and PIN, minimal live profile, avatar, fixed clients a
     assert.equal((await post('/api/login/code',{code:'111111'},flow)).status,401);
     const verified = await post('/api/login/code',{code:'582947'},flow); assert.equal(verified.status,200);
     const account = (await verified.json()).user;
-    assert.deepEqual(Object.keys(account).sort(),['accountId','avatarUrl','companies','company','contactEmail','discord','displayName','email','firstName','google','id','jobTitle','lastName','ownerAccess','permissions','profileKey','profiles','statusAdminAllowed','storageAccess','storageGrants','theme','username'].sort());
+    assert.deepEqual(Object.keys(account).sort(),['accountId','avatarUrl','companies','company','contactEmail','discord','displayName','email','firstName','google','id','jobTitle','lastName','mainCompany','ownerAccess','permissions','profileKey','profiles','statusAdminAllowed','storageAccess','storageGrants','theme','username'].sort());
     assert.equal(account.email,'test.owner@hngroup.org.uk'); assert.equal(account.displayName,'Test Owner'); assert.equal(account.jobTitle,'System owner'); assert.equal(account.company,store.COMPANIES[0]); assert.equal(account.statusAdminAllowed,true); assert.equal(account.ownerAccess,true);
     const cookie = verified.headers.getSetCookie().find(c=>c.startsWith('__Host-hn_auth_session=')).split(';')[0];
     assert.ok(!verified.headers.get('set-cookie').includes('hn_staff_session='));
+    // Exercise the real UI with the fixture's linked providers. All traffic stays on loopback.
+    const {chromium}=require('../browser-app/node_modules/playwright');
+    const browser=await chromium.launch({args:['--no-sandbox']});
+    try {
+      const context=await browser.newContext();
+      await context.route('**/*',async route=>{
+        const request=route.request(),url=new URL(request.url());
+        if(url.hostname!=='auth.hngroup.org.uk')return route.abort();
+        const response=await fetch(base+url.pathname+url.search,{method:request.method(),headers:request.headers(),body:['GET','HEAD'].includes(request.method())?undefined:request.postDataBuffer(),redirect:'manual'});
+        const headers=Object.fromEntries(response.headers);const cookies=response.headers.getSetCookie();
+        if(cookies.length)headers['set-cookie']=cookies.join('\n');
+        await route.fulfill({status:response.status,headers,body:Buffer.from(await response.arrayBuffer())});
+      });
+      const page=await context.newPage();await page.goto('https://auth.hngroup.org.uk/');
+      await page.locator('#login').waitFor({state:'visible'});
+      assert.equal(await page.locator('#google-login').isVisible(),false);assert.equal(await page.locator('#discord-login').isVisible(),false);
+      await page.locator('#username').fill('test.owner@hngroup.org.uk');await page.locator('#password').fill('Test-password-582!');await page.locator('#login button[type=submit]').click();
+      await page.locator('#pin').waitFor({state:'visible'});assert.equal(await page.locator('#code').isVisible(),true);
+      await page.locator('#code').fill('582947');await page.locator('#account').waitFor({state:'visible'});
+      assert.equal(await page.locator('#google-row').isVisible(),false);assert.equal(await page.locator('#discord-row').isVisible(),false);
+    } finally {await browser.close();}
+
     // Every new site uses its registered callback and its own one-use grant.
     for (const client of ['media','development','careers','docs','news']) {
       const state = 'e'.repeat(64);
@@ -110,10 +140,9 @@ test('real staff password and PIN, minimal live profile, avatar, fixed clients a
     await fetch(base+'/',{headers:{Cookie:resumedSession+'; '+rotated}});
     assert.equal((await fetch(base+'/api/me',{headers:{Cookie:resumedSession}})).status,200);
     assert.equal((await (await fetch(base+'/api/resume',{headers:{Cookie:rotated}})).json()).available,true);
-    for(let i=0;i<5;i++) {
-      const wrong = await post('/api/resume',{code:'111111'},rotated); assert.equal(wrong.status,401);
-      if(i===4) { assert.equal((await wrong.json()).restart,true); assert.match(wrong.headers.get('set-cookie'),/Max-Age=0/); }
-    }
+    // Two failures now lock the central account; lock/unlock is covered by IT's account tests.
+    assert.equal((await post('/api/resume',{code:'111111'},rotated)).status,401);
+    assert.equal((await post('/api/resume/forget',{},rotated)).status,200);
     assert.equal((await post('/api/resume',{code:'582947'},rotated)).status,401);
     const again = await post('/api/login',{username:account.email,password:'Test-password-582!'});
     const againVerified = await post('/api/login/code',{code:'582947'},again.headers.getSetCookie()[0].split(';')[0]);

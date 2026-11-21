@@ -4,6 +4,7 @@
 # Editing signs in through HN Group Auth, which must know the "wiki" application: run
 # auth-site/install.sh first (the one-line command in wiki-site/README.md does both).
 set -euo pipefail
+bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/offline-site/install.sh"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOMAIN=wiki.hngroup.org.uk
 EMAIL="${1:-}"

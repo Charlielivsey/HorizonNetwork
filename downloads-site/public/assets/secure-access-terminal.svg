@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="HN Secure Access Terminal">
+<title>HN Secure Access Terminal</title>
+<defs>
+ <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#30213F"/><stop offset="1" stop-color="#100D1C"/></linearGradient>
+ <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#D8BEFF"/><stop offset="1" stop-color="#A77BEF"/></linearGradient>
+ <clipPath id="window"><rect x="196" y="294" width="632" height="460" rx="58"/></clipPath>
+</defs>
+<rect x="48" y="48" width="928" height="928" rx="218" fill="url(#tile)"/>
+<rect x="50" y="50" width="924" height="924" rx="216" fill="none" stroke="#5B426F" stroke-width="4"/>
+<rect x="196" y="294" width="632" height="460" rx="58" fill="#191323" stroke="url(#accent)" stroke-width="30"/>
+<g clip-path="url(#window)"><path d="M196 390H828" stroke="#695080" stroke-width="9"/>
+<path d="M210 738H310" stroke="#E97DE8" stroke-width="24"/><path d="M310 738H390" stroke="#5514B4" stroke-width="24"/><path d="M390 738H432" stroke="#E3E65B" stroke-width="24"/><path d="M432 738H570" stroke="#3E9BA3" stroke-width="24"/><path d="M570 738H638" stroke="#7A1F6C" stroke-width="24"/><path d="M638 738H706" stroke="#C2306B" stroke-width="24"/><path d="M706 738H814" stroke="#5FAE7B" stroke-width="24"/></g>
+<circle cx="257" cy="344" r="12" fill="#E97DE8"/><circle cx="299" cy="344" r="12" fill="#E3E65B"/><circle cx="341" cy="344" r="12" fill="#3E9BA3"/>
+<path d="M284 470L372 550L284 630M434 630H544" fill="none" stroke="#F5EFFF" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="591" y="372" width="178" height="202" rx="40" fill="#171022" stroke="#171022" stroke-width="48"/>
+<path d="M630 382V304C630 226 742 226 742 304V382" fill="none" stroke="#3E9BA3" stroke-width="30" stroke-linecap="round"/>
+<rect x="594" y="362" width="184" height="170" rx="38" fill="url(#accent)"/>
+<path d="M686 435V466" stroke="#241831" stroke-width="17" stroke-linecap="round"/><circle cx="686" cy="421" r="18" fill="#241831"/>
+</svg>

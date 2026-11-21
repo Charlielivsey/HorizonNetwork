@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Isolated HN Mail site (mail.hngroup.org.uk). Keeps its data (/var/lib/hn-mail) and every other service.
 set -euo pipefail
+bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/offline-site/install.sh"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOMAIN=mail.hngroup.org.uk
 EMAIL="${1:-}"

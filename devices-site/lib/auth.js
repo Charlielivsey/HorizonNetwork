@@ -3,6 +3,7 @@
 // with the fixed callback https://devices.hngroup.org.uk/auth/callback. Every enabled staff account that has
 // finished its password and PIN setup can sign in; owner-level and Super Admin accounts manage every computer.
 // The website keeps a browser-session cookie tied to the Auth sign-in, rechecked every minute.
+const {chooseOnArrival,arrivalCookie}=require('./profile-gate.cjs');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 
@@ -52,6 +53,7 @@ function createAuth(store) {
   }
   function redirect(res, location, cookies) { res.writeHead(302, { Location: location, 'Cache-Control': 'no-store', 'Set-Cookie': cookies || [] }); res.end(); }
   async function handle(req, res, url, showPage) {
+    if(await chooseOnArrival(req,res,url,{client:'devices',session:()=>store.session(cookie(req,SESSION_COOKIE))?.authSession,backend:AUTH_BACKEND,secretFile:SECRET_FILE,authOrigin:AUTH_ORIGIN,secure:SECURE,stateCookie:STATE_COOKIE,safeNext}))return true;
     if (url.pathname === '/auth/login' && req.method === 'GET') {
       const state = crypto.randomBytes(32).toString('hex'), next = Buffer.from(safeNext(url.searchParams.get('next'))).toString('base64url');
       redirect(res, AUTH_ORIGIN + '/authorize?client_id=devices&state=' + state, [setCookie(STATE_COOKIE, state + '.' + next, 600)]);
@@ -68,7 +70,7 @@ function createAuth(store) {
       const old = cookie(req, SESSION_COOKIE); if (old) store.endSession(old);
       const token = store.createSession(userOf(result.user), result.session, result.expires);
       let next = '/'; try { next = safeNext(Buffer.from(nextRaw || '', 'base64url').toString('utf8')); } catch {}
-      redirect(res, next, [clear, setCookie(SESSION_COOKIE, token)]);
+      redirect(res, next, [clear, arrivalCookie(SECURE), setCookie(SESSION_COOKIE, token)]);
       return true;
     }
     if (url.pathname === '/auth/logout' && req.method === 'POST') {

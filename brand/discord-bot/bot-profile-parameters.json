@@ -1,0 +1,50 @@
+[
+  {
+    "bot": "HN Utilities",
+    "file": "hn-utilities-avatar",
+    "width": 1024,
+    "height": 1024,
+    "aspectRatio": "1:1",
+    "format": "PNG",
+    "bytes": 497629,
+    "background": "Opaque",
+    "crop": "Circle-safe wordmark and label",
+    "svgSource": "hn-utilities-avatar.svg"
+  },
+  {
+    "bot": "HN Utilities",
+    "file": "hn-utilities-banner",
+    "width": 1360,
+    "height": 480,
+    "aspectRatio": "17:6",
+    "format": "PNG",
+    "bytes": 248737,
+    "background": "Opaque",
+    "crop": "Centre-safe text; lower-left reserved for overlapping profile picture",
+    "svgSource": "hn-utilities-banner.svg"
+  },
+  {
+    "bot": "HN Logs",
+    "file": "hn-logs-avatar",
+    "width": 1024,
+    "height": 1024,
+    "aspectRatio": "1:1",
+    "format": "PNG",
+    "bytes": 495600,
+    "background": "Opaque",
+    "crop": "Circle-safe wordmark and label",
+    "svgSource": "hn-logs-avatar.svg"
+  },
+  {
+    "bot": "HN Logs",
+    "file": "hn-logs-banner",
+    "width": 1360,
+    "height": 480,
+    "aspectRatio": "17:6",
+    "format": "PNG",
+    "bytes": 243063,
+    "background": "Opaque",
+    "crop": "Centre-safe text; lower-left reserved for overlapping profile picture",
+    "svgSource": "hn-logs-banner.svg"
+  }
+]

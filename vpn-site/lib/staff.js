@@ -19,7 +19,7 @@ function secret() {
 
 async function call(endpoint, data, client) {
   const headers = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + secret(), 'X-Forwarded-Proto': 'https' };
-  if (client) { headers['X-Real-IP'] = client.ip; headers['User-Agent'] = String(client.agent || 'HN Group VPN').slice(0, 300); }
+  if (client) { headers['X-Real-IP'] = client.ip; headers['User-Agent'] = String(client.agent || 'HN Secure Access Terminal').slice(0, 300); }
   let response;
   try { response = await fetch(BACKEND + endpoint, { method: 'POST', headers, body: JSON.stringify(data || {}), signal: AbortSignal.timeout(8000), redirect: 'error' }); }
   catch { throw fail(503, 'The staff account service is temporarily unavailable. Please try again shortly.'); }
@@ -34,7 +34,7 @@ async function accountStatus(ids) {
   try { const { value } = await call('/api/auth/account-status', { ids }); return value.accounts || null; } catch { return null; }
 }
 
-// HN Secure Gateway asks for the person's PIN before each VPN connection; the staff account service
+// HN Secure Access Terminal asks for the person's PIN before each VPN connection; the staff account service
 // checks it (with its own lockout). A wrong PIN is a 400 here so apps never mistake it for a sign-out.
 async function verifyPin(id, code, client) {
   try { await call('/api/auth/vpn-pin', { id, code: String(code || ''), ip: client.ip, client: client.agent }); }

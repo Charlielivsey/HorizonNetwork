@@ -8,6 +8,7 @@ store.saveAvatar(p,'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAA
 const secret=path.join(dir,'secret');fs.writeFileSync(secret,'d'.repeat(64));process.env.STATUS_SSO_SECRET_FILE=secret;
 const reserve=http.createServer();await new Promise(r=>reserve.listen(0,'127.0.0.1',r));const port=reserve.address().port;await new Promise(r=>reserve.close(r));
 const child=spawn(process.execPath,[root+'/staff-portal/server.js'],{env:{...process.env,PORT:String(port),DATA_DIR:dir},stdio:'ignore'});const staff=`http://127.0.0.1:${port}`;process.env.STAFF_PORTAL_BACKEND=staff;
+process.env.DATA_DIR=path.join(dir,'auth');fs.mkdirSync(process.env.DATA_DIR,{recursive:true});
 const auth=require(root+'/auth-site/server').server;await new Promise(r=>auth.listen(0,'127.0.0.1',r));const authBase=`http://127.0.0.1:${auth.address().port}`;process.env.AUTH_BACKEND=authBase;process.env.DATA_DIR=path.join(dir,'status');
 const status=require(root+'/status-site/server').server;await new Promise(r=>status.listen(0,'127.0.0.1',r));const statusBase=`http://127.0.0.1:${status.address().port}`;
 let browser, proxy, gateway;const sockets=new Set();try{let ready=false;for(let n=0;n<100;n++){try{if((await fetch(staff+'/healthz')).ok){ready=true;break}}catch{}await new Promise(r=>setTimeout(r,50));}assert.ok(ready);

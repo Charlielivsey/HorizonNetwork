@@ -549,6 +549,7 @@
   (async () => {
     $('year').textContent = new Date().getFullYear();
     try { me = await api('/api/me'); } catch (e) { if (e.message !== 'Signed out') main.replaceChildren(section(head('HN Group Contracts', 'Not available', e.message))); return; }
+    if(window.HNStaffBrand)window.HNStaffBrand.apply(me.user);
     $('who').hidden = false; $('who-name').textContent = me.user.displayName; $('who-avatar').replaceWith(face(me.user.id, me.user.displayName));
     for (const n of document.querySelectorAll('[data-sender]')) n.hidden = !me.canSend;
     for (const n of document.querySelectorAll('[data-manager]')) n.hidden = !me.canManage;

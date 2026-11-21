@@ -129,7 +129,7 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   try {
     if (url.pathname === '/healthz') return send(res, 200, { ok: true });
-    if (url.pathname.startsWith('/auth/') && await auth.handle(req, res, url, showPage)) return;
+    if (await auth.handle(req, res, url, showPage)) return;
     if (url.pathname.startsWith('/api/')) return await api(req, res, url);
     if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, { error: 'Not allowed.' });
     serveStatic(req, res, url);

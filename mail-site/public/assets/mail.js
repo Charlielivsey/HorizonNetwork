@@ -754,6 +754,7 @@
     app.classList.toggle('collapsed', prefs.collapsed); $('#menu-btn').setAttribute('aria-expanded', String(!prefs.collapsed));
     setImages(prefs.images);
     try { session = await api('GET', '/api/session'); } catch (e) { report(e); return; }
+    if(window.HNStaffBrand)window.HNStaffBrand.apply(session.user);
     $('#settings-gmail').textContent = session.gmail.connected ? 'Connected as ' + session.gmail.email + '. Disconnecting stops HN Mail showing your mail; nothing is deleted from Gmail.' : 'Gmail isn’t connected.';
     $('#disconnect').hidden = !session.gmail.connected;
     if (!session.gmail.connected) return showConnect();

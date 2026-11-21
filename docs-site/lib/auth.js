@@ -3,6 +3,7 @@
 // with the fixed callback https://docs.hngroup.org.uk/auth/callback. Every enabled staff account that has
 // finished its password and PIN setup can sign in; owner-level and Super Admin accounts can manage every shared document.
 // The website keeps a browser-session cookie tied to the Auth sign-in, rechecked every minute.
+const {chooseOnArrival,arrivalCookie}=require('./profile-gate.cjs');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 
@@ -26,6 +27,7 @@ function userOf(u) {
   const grants = (Array.isArray(u.storageGrants) ? u.storageGrants : []).filter((g) => g && typeof g.personId === 'string' && Date.parse(g.until) > Date.now())
     .slice(0, 200).map((g) => ({ personId: g.personId.slice(0, 64), name: String(g.name || '').slice(0, 120), until: String(g.until) }));
   return { id: String(u.id || ''), email: String(u.email || '').toLowerCase(), displayName: String(u.displayName || u.email || 'Staff member'), fullName: full || String(u.displayName || ''),
+    mainCompany: String(u.mainCompany || u.company || '').slice(0,120), company: String(u.company || '').slice(0,120),
     jobTitle: String(u.jobTitle || '').slice(0, 120), picture: !!u.avatarUrl, admin: u.ownerAccess === true || u.statusAdminAllowed === true,
     storageAccess: u.storageAccess === true || u.ownerAccess === true || u.statusAdminAllowed === true, storageGrants: grants,
     // The staff portal permissions HN Group Auth passes to every website (for sending documents to HN Group Contracts).
@@ -81,6 +83,7 @@ function createAuth(store) {
   }
   function redirect(res, location, cookies) { res.writeHead(302, { Location: location, 'Cache-Control': 'no-store', 'Set-Cookie': cookies || [] }); res.end(); }
   async function handle(req, res, url, showPage) {
+    if(await chooseOnArrival(req,res,url,{client:'docs',session:()=>store.session(cookie(req,SESSION_COOKIE))?.authSession,backend:AUTH_BACKEND,secretFile:SECRET_FILE,authOrigin:AUTH_ORIGIN,secure:SECURE,stateCookie:STATE_COOKIE,safeNext}))return true;
     if (url.pathname === '/auth/login' && req.method === 'GET') {
       const state = crypto.randomBytes(32).toString('hex'), next = Buffer.from(safeNext(url.searchParams.get('next'))).toString('base64url');
       redirect(res, AUTH_ORIGIN + '/authorize?client_id=docs&state=' + state, [setCookie(STATE_COOKIE, state + '.' + next, 600)]);
@@ -100,7 +103,7 @@ function createAuth(store) {
       store.notePerson(user);
       await refreshAvatar(store, user, result.session);
       let next = '/'; try { next = safeNext(Buffer.from(nextRaw || '', 'base64url').toString('utf8')); } catch {}
-      redirect(res, next, [clear, setCookie(SESSION_COOKIE, token, 30 * 86400)]);
+      redirect(res, next, [clear, arrivalCookie(SECURE), setCookie(SESSION_COOKIE, token, 30 * 86400)]);
       return true;
     }
     if (url.pathname === '/auth/logout' && req.method === 'POST') {

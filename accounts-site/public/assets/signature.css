@@ -29,3 +29,7 @@
 #sig-preview { min-width: 560px; }
 .sig-mail-body p { color: #1a1a1a; }
 @media (max-width: 500px) { .sig-contact { grid-template-columns: 1fr; } .sig-mail-body { padding: 1rem; } }
+
+/* Keep the white email preview independent of application table dividers. */
+#sig-preview td,#sig-preview th{border-bottom:0!important}
+#sig-preview td[bgcolor]{padding:0!important;height:3px!important;line-height:0!important}

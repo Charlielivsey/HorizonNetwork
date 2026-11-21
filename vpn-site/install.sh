@@ -5,12 +5,13 @@
 # and staff services are untouched. Device registrations, the server key and the published Mac app
 # are kept across updates.
 set -euo pipefail
+bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/offline-site/install.sh"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DOMAIN=vpn.hngroup.org.uk
+DOMAIN=sat.hngroup.org.uk
 EMAIL="${1:-}"
-SITE=/etc/nginx/sites-available/hn-vpn
-ENABLED=/etc/nginx/sites-enabled/hn-vpn
-CHALLENGE_DIR=/var/www/hn-vpn-acme
+SITE=/etc/nginx/sites-available/hn-sat
+ENABLED=/etc/nginx/sites-enabled/hn-sat
+CHALLENGE_DIR=/var/www/hn-sat-acme
 LE_DIR="/etc/letsencrypt/live/$DOMAIN"
 [ "$(id -u)" = 0 ] || { echo 'Run with sudo.'; exit 1; }
 for tool in node pm2 nginx certbot curl python3 openssl iptables; do command -v "$tool" >/dev/null || { echo "Required tool missing: $tool"; exit 1; }; done
@@ -157,6 +158,7 @@ done
 BACKUP="$(mktemp -d)"
 trap 'rm -rf "$BACKUP"' EXIT
 [ ! -f "$SITE" ] || cp "$SITE" "$BACKUP/site"
+[ ! -f /etc/nginx/sites-available/hn-vpn ] || cp /etc/nginx/sites-available/hn-vpn "$BACKUP/legacy-site"
 WAS_ENABLED=0
 [ ! -e "$ENABLED" ] || WAS_ENABLED=1
 write_config() {
@@ -165,15 +167,20 @@ write_config() {
         python3 - "$SITE" <<'PYCONF'
 from pathlib import Path
 import sys
-p=Path(sys.argv[1]);s=p.read_text();s=s[:s.index('    location / {')]+'    location / { return 301 https://vpn.hngroup.org.uk$request_uri; }\n}\n';p.write_text(s)
+p=Path(sys.argv[1]);s=p.read_text();s=s[:s.index('    location / {')]+'    location / { return 301 https://sat.hngroup.org.uk$request_uri; }\n}\n';p.write_text(s)
 PYCONF
         cat "$SCRIPT_DIR/nginx-https.conf" >> "$SITE"
     fi
     if [ ! -s /proc/net/if_inet6 ]; then sed -i '/listen \[::\]/d' "$SITE"; fi
     ln -sfn "$SITE" "$ENABLED"
+    if [ -f /etc/letsencrypt/live/vpn.hngroup.org.uk/fullchain.pem ]; then
+        cp "$SCRIPT_DIR/nginx-legacy.conf" /etc/nginx/sites-available/hn-vpn
+        ln -sfn /etc/nginx/sites-available/hn-vpn /etc/nginx/sites-enabled/hn-vpn
+    fi
     if ! nginx -t; then
         if [ -f "$BACKUP/site" ]; then cp "$BACKUP/site" "$SITE"; else rm -f "$SITE"; fi
         [ "$WAS_ENABLED" = 1 ] || rm -f "$ENABLED"
+        if [ -f "$BACKUP/legacy-site" ]; then cp "$BACKUP/legacy-site" /etc/nginx/sites-available/hn-vpn; else rm -f /etc/nginx/sites-available/hn-vpn /etc/nginx/sites-enabled/hn-vpn; fi
         echo 'VPN nginx configuration rolled back.'; exit 1
     fi
     systemctl reload nginx
@@ -236,7 +243,7 @@ if systemctl list-unit-files certbot.timer --no-legend 2>/dev/null | grep -q cer
 # Is anything reaching the VPN? Devices that never complete a handshake usually mean UDP 51820 is
 # blocked before it reaches this server (often the hosting provider's own firewall).
 PEERS=$(wg show wg-hn peers 2>/dev/null | wc -l); SEEN=$(wg show wg-hn latest-handshakes 2>/dev/null | awk '$2>0' | wc -l)
-if ! ss -ltn 2>/dev/null | grep -qE '(0\.0\.0\.0|\*|10\.88\.0\.1|\[::\]):22 '; then echo 'Warning: SSH (sshd) is not listening on port 22 for the VPN address, so Secure Gateway can’t open a session.'; fi
+if ! ss -ltn 2>/dev/null | grep -qE '(0\.0\.0\.0|\*|10\.88\.0\.1|\[::\]):22 '; then echo 'Warning: SSH (sshd) is not listening on port 22 for the VPN address, so Secure Access Terminal can’t open a session.'; fi
 if [ "$PEERS" -gt 0 ] && [ "$SEEN" -eq 0 ]; then echo "Warning: none of the $PEERS VPN devices has connected yet. Check that UDP port 51820 is allowed in your hosting provider's firewall (for example the IONOS Cloud Panel)."; else echo "VPN devices connected at least once: $SEEN of $PEERS."; fi
 echo 'HN Group VPN installed: https://vpn.hngroup.org.uk · PM2 hn-vpn · port 5000 · WireGuard wg-hn on UDP 51820.'
 echo 'If your hosting provider has its own firewall (for example the IONOS Cloud Panel), allow incoming UDP port 51820 there too.'

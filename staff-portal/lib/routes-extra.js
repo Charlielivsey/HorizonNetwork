@@ -84,7 +84,7 @@ async function handle(req, res, pathname, session) {
       const c = expenses.submit(me, meta, buffer);
       logEvent(req, session, "expense-claimed", { detail: `£${c.amount.toFixed(2)} – ${c.description}` });
       const person = store.getPerson(me.supervisorId);
-      if (person && notify) notify([person.id], { type: "expense", title: `${me.displayName} claimed £${c.amount.toFixed(2)} in expenses`, body: c.description, link: "/expenses" });
+      if (person && notify) notify([person.id], { type: "expense", title: `${me.displayName} claimed £${c.amount.toFixed(2)} in expenses`, body: c.description, link: "https://finance.hngroup.org.uk/expenses" });
       return sendJson(res, 201, { ok: true, user: meResponse(session) }), true;
     }
     if ((m = /^\/api\/expenses\/([a-f0-9]{16})\/(receipt|approve|reject|pay|cancel)$/.exec(pathname))) {
@@ -101,12 +101,12 @@ async function handle(req, res, pathname, session) {
       if (m[2] === "approve" || m[2] === "reject") {
         expenses.decide(c, m[2] === "approve", me, body.note);
         logEvent(req, session, m[2] === "approve" ? "expense-approved" : "expense-rejected", { target: who, detail: `£${c.amount.toFixed(2)} – ${c.description}` });
-        if (notify) notify([c.personId], { type: "expense", title: `Your expense claim was ${m[2] === "approve" ? "approved" : "rejected"}`, body: `£${c.amount.toFixed(2)} – ${c.description}${body.note ? ` · ${body.note}` : ""}`, link: "/expenses" });
+        if (notify) notify([c.personId], { type: "expense", title: `Your expense claim was ${m[2] === "approve" ? "approved" : "rejected"}`, body: `£${c.amount.toFixed(2)} – ${c.description}${body.note ? ` · ${body.note}` : ""}`, link: "https://finance.hngroup.org.uk/expenses" });
       } else if (m[2] === "pay") {
         needPay();
         expenses.pay(c, body.method === "payslip" ? "payslip" : "direct", me);
         logEvent(req, session, "expense-paid", { target: who, detail: `£${c.amount.toFixed(2)} ${body.method === "payslip" ? "with next payslip" : "from the main balance"}` });
-        if (notify) notify([c.personId], { type: "expense", title: body.method === "payslip" ? "Your expenses will be repaid with your next payslip" : "Your expenses have been repaid", body: `£${c.amount.toFixed(2)} – ${c.description}`, link: "/expenses" });
+        if (notify) notify([c.personId], { type: "expense", title: body.method === "payslip" ? "Your expenses will be repaid with your next payslip" : "Your expenses have been repaid", body: `£${c.amount.toFixed(2)} – ${c.description}`, link: "https://finance.hngroup.org.uk/expenses" });
       } else {
         expenses.cancel(c, me);
         logEvent(req, session, "expense-withdrawn", { target: who, detail: `£${c.amount.toFixed(2)} – ${c.description}` });
@@ -292,6 +292,22 @@ async function handle(req, res, pathname, session) {
   }
 
   // ----- Positions at each company (People → Job descriptions → Positions) -----
+  if(pathname === '/api/positions/rename') {
+    if(method!=='POST')throw httpError(405,'Method not allowed.');
+    if(!jobdescriptions.canManage(me))throw httpError(403,'Position management permission is required.');
+    let sameOrigin=false;try{const origin=new URL(req.headers.origin);sameOrigin=['http:','https:'].includes(origin.protocol)&&origin.host===String(req.headers['x-forwarded-host']||req.headers.host);}catch{}
+    if(!sameOrigin)throw httpError(403,'Open Positions on the Staff Portal to rename a position.');
+    const body=await readJsonBody(req),positions=store.renamePosition(body.company,body.title,body.newTitle,me);
+    logEvent(req,session,'position-renamed',{target:String(body.company||'')+' · '+String(body.title||''),detail:'Renamed to '+String(body.newTitle||'')});
+    return sendJson(res,200,{positions,positionReports:store.positionReports()}),true;
+  }
+  if(pathname === '/api/positions/reorder') {
+    if(method!=='POST')throw httpError(405,'Method not allowed.');
+    if(!jobdescriptions.canManage(me))throw httpError(403,'Position management permission is required.');
+    const body=await readJsonBody(req),positions=store.reorderPositions(body.company,body.titles);
+    logEvent(req,session,'positions-reordered',{target:body.company});
+    return sendJson(res,200,{positions,positionReports:store.positionReports()}),true;
+  }
   if (pathname === "/api/positions/reports") {
     if (method !== "POST") throw httpError(405, "Method not allowed.");
     if (!jobdescriptions.canManage(me)) throw httpError(403, "Only people who can manage job descriptions or staff can change positions.");
@@ -1073,7 +1089,7 @@ async function handle(req, res, pathname, session) {
       },
       logins: { total: signIns.length, people: new Set(signIns.map((e) => e.actor)).size, byDay, busiestDay: Object.entries(byDay).sort((a, b) => b[1] - a[1])[0] || null },
       leave: { byType: Object.entries(leaveDays).map(([type, days]) => ({ type, label: leave.TYPES[type] || type, days })), total: Object.values(leaveDays).reduce((n, d) => n + d, 0) },
-      helpdesk: helpdesk.statsBetween(from, to),
+      helpdesk: helpdesk.statsBetween(from, to, me),
       status: { incidents: uptime.incidentsBetween(from, to), services: uptime.list().map((x) => ({ name: x.name, uptime7d: x.uptime7d, state: x.state })) },
       engagement: {
         kudos: kudos.countBetween(from, to),

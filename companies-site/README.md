@@ -50,3 +50,4 @@ Each person with significant control can have their shareholding split into Clas
 Only 100% of a company's shares can be issued: the register refuses any shareholding that would take the total past 100%.
 
 The persons with significant control page shows the company's shares by class and each holder's classes and voting power. The public feed includes them for the wiki and the investors website.
+

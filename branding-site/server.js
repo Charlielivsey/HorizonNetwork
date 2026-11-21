@@ -1,11 +1,9 @@
 'use strict';
 // HN Group brand centre — branding.hngroup.org.uk. The approved logos, colours, type and usage
-// rules for HN Group and its companies. Staff only: every page and brand file needs an
-// HN Group Auth sign-in; only the stylesheet, script, font and tab icon are public.
+// rules for HN Group and its companies. The catalogue and approved downloads are public.
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
-const auth = require('./lib/auth');
 
 const PUBLIC = process.env.BRANDING_PUBLIC_DIR || path.join(__dirname, 'public');
 const MIME = { '.css': 'text/css; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8' };
@@ -18,12 +16,13 @@ const has = (dir, file) => fs.existsSync(path.join(PUBLIC, 'assets', 'brand', di
 // ---------- Brand content (from brand/README.md and the approved logo files) ----------
 
 const COMPANIES = [
+  { id:'hn-appeals', name:'HN Appeals', note:'The HN Group appeals service.', variants:[['hn-appeals-logo','Logo',false],['hn-appeals-logo-white','Logo, white',true],['hn-appeals-app-icon','Service icon',true]] },
   { id: 'hn-group', name: 'HN Group', note: 'The parent company of the group.', variants: [['hn-group-wordmark', 'Wordmark', false], ['hn-group-wordmark-white', 'Wordmark, white', true]], extras: [['hn-group-google-workspace', 'Google Workspace logo']] },
   { id: 'horizon-network', name: 'Horizon Network', note: 'A subsidiary of HN Group. Horizon Development is part of Horizon Network.', variants: [['horizon-network-wordmark', 'Wordmark', false], ['horizon-network-wordmark-white', 'Wordmark, white', true], ['horizon-network-wordmark-stacked', 'Stacked wordmark', false], ['horizon-network-wordmark-stacked-white', 'Stacked wordmark, white', true]] },
-  { id: 'horizon-media-group', name: 'Horizon Media Group', note: 'A subsidiary of HN Group.', variants: roundelSet('horizon-media-group') },
+  { id: 'horizon-media-group', name: 'Horizon Media Group', note: 'A subsidiary of HN Group.', variants: [['horizon-media-group-logo', 'Wordmark', false], ['horizon-media-group-logo-white', 'Wordmark, white', true], ['horizon-media-group-roundel', 'Compact mark', false], ['horizon-media-group-roundel-white', 'Compact mark, white', true], ['horizon-media-group-app-icon', 'App icon', false]] },
   { id: 'horizon-advertising', name: 'Horizon Advertising', note: 'A subsidiary of Horizon Media Group, managed by Horizon Network.', variants: roundelSet('horizon-advertising') },
-  { id: 'horizon-development', name: 'Horizon Development', note: 'Part of Horizon Network.', variants: roundelSet('horizon-development') },
-  { id: 'hn-group-management', name: 'HN Group Management', note: 'A subsidiary of HN Group that holds the group’s assets and domains. Use its own logo, never in place of HN Group’s.', variants: roundelSet('hn-group-management') },
+  { id: 'horizon-development', name: 'Horizon Development', note: 'Part of Horizon Network.', variants: [['horizon-development-logo', 'Full logo', false], ['horizon-development-logo-white', 'Full logo, white', true], ['horizon-development-roundel', 'Circle only', false], ['horizon-development-roundel-white', 'Circle only, white', true], ['horizon-development-app-icon', 'App icon', false]] },
+  { id: 'hn-secure-access-terminal', name: 'HN Secure Access Terminal', note: 'The HN Group VPN and server terminal application.', variants: [['hn-secure-access-terminal-logo', 'Product logo', false], ['hn-secure-access-terminal-logo-white', 'Product logo, white', true], ['hn-secure-access-terminal-app-icon', 'App icon', true]] },
 ];
 function roundelSet(id) {
   return [[id + '-logo', 'Logo', false], [id + '-logo-white', 'Logo, white', true], [id + '-roundel', 'Roundel', false], [id + '-roundel-white', 'Roundel, white', true], [id + '-app-icon', 'App icon', false]];
@@ -40,16 +39,17 @@ const STRIPE = [['pink', 14], ['purple', 14], ['yellow', 6], ['teal', 20], ['plu
 const DISCORD_SERVERS = [['horizon-network-hq', 'Horizon Network HQ'], ['horizon-advertising', 'Horizon Advertising'], ['horizon-development', 'Horizon Development'], ['horizon-network-staff', 'Horizon Network | Staff Server']];
 const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ');
 
+const artworkVersion = file => /^(?:horizon-advertising|horizon-media-group|horizon-development)/.test(file) ? '?v=20261120-development-full-logo' : /^discord-server-/.test(file) ? '?v=20261117-service-icons' : /^hn-(?:utilities|logs)-(?:avatar|banner)$/.test(file) ? '?v=20261114-horizon-network' : '';
 function downloads(file) {
   const links = [];
-  if (has('svg', file + '.svg')) links.push('<a class="dl" href="/assets/brand/svg/' + file + '.svg" download>SVG</a>');
-  if (has('png', file + '.png')) links.push('<a class="dl" href="/assets/brand/png/' + file + '.png" download>PNG</a>');
+  if (has('svg', file + '.svg')) links.push('<a class="dl" href="/assets/brand/svg/' + file + '.svg' + artworkVersion(file) + '" download>SVG</a>');
+  if (has('png', file + '.png')) links.push('<a class="dl" href="/assets/brand/png/' + file + '.png' + artworkVersion(file) + '" download>PNG</a>');
   return links.join('');
 }
-function tile(file, label, dark) {
+function tile(file, label, dark, parameters = '') {
   const src = has('svg', file + '.svg') ? '/assets/brand/svg/' + file + '.svg' : '/assets/brand/png/' + file + '.png';
-  return '<figure class="tile"><div class="preview' + (dark ? ' dark' : '') + '"><img src="' + src + '" alt="' + esc(label) + '" loading="lazy"></div>' +
-    '<figcaption><span>' + esc(label) + '</span><span class="dls">' + downloads(file) + '</span></figcaption></figure>';
+  return '<figure class="tile"><div class="preview' + (dark ? ' dark' : '') + '"><img src="' + src + artworkVersion(file) + '" alt="' + esc(label) + '" loading="lazy"></div>' +
+    '<figcaption><span>' + esc(label) + (parameters ? '<small class="asset-parameters">' + esc(parameters) + '</small>' : '') + '</span><span class="dls">' + downloads(file) + '</span></figcaption></figure>';
 }
 
 function homePage(user) {
@@ -61,14 +61,15 @@ function homePage(user) {
     '<ol class="stripe-list">' + STRIPE.map(([id, w]) => { const c = COLOURS.find((x) => x[0] === id); return '<li><span class="dot c-' + id + '"></span>' + esc(c[1]) + ' <span class="mono muted">' + c[2] + '</span> · ' + w + '%</li>'; }).join('') + '</ol>';
   // Discord logos (the user's request, 5 November 2026): the server icons and the HN Group Auth bot's picture and banner,
   // shown round as Discord shows them. Copies of brand/discord-servers and brand/discord-bot.
-  const discordTile = (file, label, kind) => '<figure class="tile discord-tile' + (kind === 'banner' ? ' wide' : '') + '"><div class="preview discord ' + kind + '"><img src="/assets/brand/png/' + file + '.png" alt="' + esc(label) + '" loading="lazy"></div>' +
-    '<figcaption><span>' + esc(label) + '</span><span class="dls">' + downloads(file) + '</span></figcaption></figure>';
-  const discord = '<h3 class="sub">Server icons</h3><div class="tiles">' + DISCORD_SERVERS.map(([f, l]) => discordTile('discord-server-' + f, l, 'icon')).join('') + '</div>' +
-    '<h3 class="sub">HN Group Auth bot</h3><div class="tiles">' + discordTile('discord-bot-avatar', 'Bot profile picture', 'icon') + discordTile('discord-bot-banner', 'Bot banner', 'banner') + '</div>';
+  const discordTile = (file, label, kind, parameters = '') => '<figure class="tile discord-tile' + (kind === 'banner' ? ' wide' : '') + '"><div class="preview discord ' + kind + '"><img src="/assets/brand/png/' + file + '.png' + artworkVersion(file) + '" alt="' + esc(label) + '" loading="lazy"></div>' +
+    '<figcaption><span>' + esc(label) + (parameters ? '<small class="asset-parameters">' + esc(parameters) + '</small>' : '') + '</span><span class="dls">' + downloads(file) + '</span></figcaption></figure>';
+  const discord = '<h3 class="sub">Server icons</h3><div class="tiles">' + DISCORD_SERVERS.map(([f, l]) => discordTile('discord-server-' + f, l, 'icon')).join('') + discordTile('hn-appeals-app-icon', 'HN Appeals', 'icon') + '</div>' +
+    '<h3 class="sub">HN Group Auth bot</h3><div class="tiles">' + discordTile('discord-bot-avatar', 'Bot profile picture', 'icon') + discordTile('discord-bot-banner', 'Bot banner', 'banner') + '</div>' +
+    [['utilities','HN Utilities'],['logs','HN Logs']].map(([id,name]) => '<div id="hn-' + id + '-discord"><h3 class="sub">' + name + '</h3><p>Upload the PNGs to the bot’s Discord profile. Profile pictures are circle-safe; banner text stays clear of the overlapping avatar.</p><div class="tiles">' + discordTile('hn-' + id + '-avatar', name + ' profile picture', 'icon', '1024 × 1024 · PNG · 1:1') + discordTile('hn-' + id + '-banner', name + ' banner', 'banner', '1360 × 480 · PNG · 17:6') + '</div></div>').join('');
   const emailLogos = COMPANIES.filter((c) => has('png', c.id + '-email-logo.png')).map((c) => tile(c.id + '-email-logo', c.name, false)).join('');
 
   const body =
-    '<section class="hero"><p class="eyebrow">HN Group · Staff only</p><h1>Brand centre.</h1>' +
+    '<section class="hero"><p class="eyebrow">HN Group · Brand centre</p><h1>Brand centre.</h1>' +
     '<p class="lede">The approved logos, colours and type for HN Group and its companies. Download what you need, and follow the guidance below so everything we make looks like it belongs together.</p>' +
     '<nav class="jump" aria-label="On this page"><a href="#logos">Logos</a><a href="#colours">Colours</a><a href="#stripe">Stripe</a><a href="#type">Typography</a><a href="#rules">Using the logos</a><a href="#email">Email signatures</a><a href="#discord">Discord logos</a><a href="#icon">Tab icon</a></nav></section>' +
 
@@ -85,12 +86,12 @@ function homePage(user) {
 
     '<section class="block" id="rules"><h2>Using the logos</h2><div class="rules">' +
     '<div class="rule do"><h3>Do</h3><ul><li>Use the original files from this page.</li><li>Use the regular logo on light backgrounds and the white logo on dark ones.</li><li>Keep the original proportions; resize by width or height only.</li><li>Leave clear space around the logo.</li><li>Use the logo of the company you’re representing.</li></ul></div>' +
-    '<div class="rule dont"><h3>Don’t</h3><ul><li>Crop, stretch, squash or rotate a logo.</li><li>Recolour a logo or change its lettering.</li><li>Redraw a logo or type the name in its place.</li><li>Put a logo on a busy or low-contrast background.</li><li>Use HN Group Management’s logo in place of HN Group’s, or swap any company’s logo for another’s.</li></ul></div></div></section>' +
+    '<div class="rule dont"><h3>Don’t</h3><ul><li>Crop, stretch, squash or rotate a logo.</li><li>Recolour a logo or change its lettering.</li><li>Redraw a logo or type the name in its place.</li><li>Put a logo on a busy or low-contrast background.</li><li>Swap one company’s logo for another’s.</li></ul></div></div></section>' +
 
     '<section class="block" id="email"><h2>Email signatures</h2><p class="intro">Make your own branded signature in HN Account. It fills in your details from your staff profile and works in Gmail, Outlook and Apple Mail.</p>' +
     '<p><a class="button" href="https://accounts.hngroup.org.uk/#signature">Open the signature maker →</a></p><h3 class="sub">Signature logos</h3><div class="tiles">' + emailLogos + '</div></section>' +
 
-    '<section class="block" id="discord"><h2>Discord logos</h2><p class="intro">Icons for our Discord servers and the picture and banner of the HN Group Auth bot. Upload them as they are (1024 × 1024 for icons): Discord shows icons as a circle, as below.</p>' + discord + '</section>' +
+    '<section class="block" id="discord"><h2>Discord logos</h2><p class="intro">Icons for our Discord servers and matching profile pictures and banners for HN Utilities and HN Logs. Legacy HN Group Auth artwork remains available below. Upload them as they are (1024 × 1024 for icons): Discord shows icons as a circle, as below.</p>' + discord + '</section>' +
     '<section class="block" id="icon"><h2>Tab icon</h2><div class="icon-row"><div class="preview icon-preview"><img src="/assets/favicon.svg" alt="HN Group tab icon" width="64" height="64"></div>' +
     '<p class="muted">The browser tab icon used across HN Group websites. Use it for new HN Group sites and tools.</p><p class="dls"><a class="dl" href="/assets/favicon.svg" download="hn-group-tab-icon.svg">SVG</a></p></div></section>';
   return layout({ title: 'Brand centre', user, body });
@@ -101,12 +102,12 @@ function layout(o) {
   return '<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
     '<meta name="theme-color" content="#5514B4"><meta name="robots" content="noindex, nofollow"><title>' + esc(o.title) + ' · HN Group</title>' +
     '<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="preload" href="/assets/fonts/plus-jakarta-sans.woff2" as="font" type="font/woff2" crossorigin>' +
-    '<link rel="stylesheet" href="/assets/branding.css?v=1"><script src="/assets/hn-theme.js?v=20261109-midnight"></script><script src="/assets/branding.js?v=1" defer></script></head><body>' +
+    '<link rel="stylesheet" href="/assets/branding.css?v=20261117-service-icons"><script src="/assets/hn-theme.js?v=20261109-midnight"></script><script src="/assets/branding.js?v=1" defer></script></head><body>' +
     '<div class="stripe" aria-hidden="true">' + STRIPE.map(([id, w]) => '<i class="c-' + id + ' f' + w + '"></i>').join('') + '</div>' +
     '<header class="top"><a class="brand" href="/"><img class="on-light" src="/assets/brand/svg/hn-group-wordmark.svg" alt="HN Group" width="92" height="32"><img class="on-dark" src="/assets/brand/svg/hn-group-wordmark-white.svg" alt="" width="92" height="32"><span class="brand-name">Brand centre</span></a>' +
     (user ? '<div class="user"><span>' + esc(user.name) + '</span><form method="post" action="/auth/logout"><input type="hidden" name="csrf" value="' + esc(user.csrf) + '"><button type="submit" class="link">Sign out</button></form></div>' : '') +
     '</header><main id="content">' + o.body + '</main>' +
-    '<footer class="foot"><div class="footer-brand"><img class="on-light" src="/assets/brand/svg/hn-group-wordmark.svg" alt="" height="32" loading="lazy"><img class="on-dark" src="/assets/brand/svg/hn-group-wordmark-white.svg" alt="" height="32" loading="lazy"></div><p>For HN Group staff only. Please don’t share these files outside the group without permission. © ' + new Date().getFullYear() + ' HN Group Limited.</p></footer>' +
+    '<footer class="foot"><div class="footer-brand"><img class="on-light" src="/assets/brand/svg/hn-group-wordmark.svg" alt="" height="32" loading="lazy"><img class="on-dark" src="/assets/brand/svg/hn-group-wordmark-white.svg" alt="" height="32" loading="lazy"></div><p>Approved HN Group brand assets. Please follow the usage guidelines above. © ' + new Date().getFullYear() + ' HN Group Limited.</p></footer>' +
     '<div class="toast" role="status" aria-live="polite" hidden></div></body></html>';
 }
 
@@ -128,7 +129,7 @@ function serveFile(res, route, isPublic) {
   if (!stat.isFile()) return false;
   res.writeHead(200, {
     'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Content-Length': stat.size,
-    // Brand files are staff-only, so browsers and proxies must not keep shared copies.
+    // Approved public downloads may be cached; the catalogue always revalidates.
     'Cache-Control': isPublic ? 'public, max-age=3600' : 'private, no-store',
   });
   fs.createReadStream(file).on('error', () => res.destroy()).pipe(res);
@@ -143,21 +144,19 @@ const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://localhost');
     const route = decodeURIComponent(url.pathname);
-    if (route === '/healthz') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); return res.end('{"ok":true}'); }
-    if (await auth.handle(req, res, url, messagePage)) return;
-    if (!['GET', 'HEAD'].includes(req.method)) return messagePage(res, 405, 'Not allowed', 'That action isn’t available here.');
-    if (PUBLIC_FILES.has(route) && serveFile(res, route, true)) return;
-    if (route === '/signed-out') return messagePage(res, 200, 'Signed out', 'You’ve signed out of the brand centre.', null, ['Sign in again', '/auth/login']);
-
-    // Everything else is for signed-in staff only.
-    const user = await auth.current(req);
-    if (!user) {
-      if (route.startsWith('/assets/')) { res.writeHead(401, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }); return res.end('Sign in to download HN Group brand files.'); }
-      res.writeHead(302, { Location: auth.loginUrl(route + url.search), 'Cache-Control': 'no-store' }); return res.end();
+    if(route==='/api/discord-server-branding'&&['GET','HEAD'].includes(req.method)){
+      const crypto=require('node:crypto');
+      const items=DISCORD_SERVERS.map(([key,name])=>({key,name,file:'discord-server-'+key+'.png'})).concat([{key:'appeals',name:'HN Appeals',file:'hn-appeals-app-icon.png'}]);
+      const assets=items.map(x=>({...x,url:'https://branding.hngroup.org.uk/assets/brand/png/'+x.file,sha256:crypto.createHash('sha256').update(fs.readFileSync(path.join(PUBLIC,'assets/brand/png',x.file))).digest('hex')}));
+      res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-cache'});return res.end(req.method==='HEAD'?'':JSON.stringify({assets}));
     }
-    if (route === '/') return send(res, 200, homePage(user));
-    if (route === '/assets/brand/OFL-LICENSE.txt') return serveFile(res, '/assets/fonts/OFL-LICENSE.txt', false) || messagePage(res, 404, 'Not found', 'That file isn’t here.');
-    if (route.startsWith('/assets/') && serveFile(res, route, false)) return;
+    if (route === '/healthz') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); return res.end('{"ok":true}'); }
+    if (!['GET', 'HEAD'].includes(req.method)) return messagePage(res, 405, 'Not allowed', 'That action isn’t available here.');
+    if (route === '/auth/login' || route === '/auth/callback' || route === '/signed-out') { res.writeHead(302,{Location:'/', 'Cache-Control':'no-store'}); return res.end(); }
+    if (/hn-group-management/i.test(route)) return messagePage(res,404,'Not found','That brand file is no longer available.');
+    if (route === '/') return send(res, 200, homePage(null));
+    if (route === '/assets/brand/OFL-LICENSE.txt') return serveFile(res, '/assets/fonts/OFL-LICENSE.txt', true) || messagePage(res, 404, 'Not found', 'That file isn’t here.');
+    if ((PUBLIC_FILES.has(route) || route.startsWith('/assets/')) && serveFile(res, route, true)) return;
     return messagePage(res, 404, 'Not found', 'That page isn’t part of the brand centre.', null, ['Go to the brand centre', '/']);
   } catch (err) {
     console.error(err);

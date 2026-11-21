@@ -9,6 +9,7 @@
 // which the app swaps, with the secret behind its challenge, for its own token (/api/app/exchange).
 // Apps that can't receive hngroupvpn:// links (HN Browser) add loopback=<port>: the code then goes to
 // http://127.0.0.1:<port>/vpn-callback on the same computer instead.
+const {chooseOnArrival,arrivalCookie}=require('./profile-gate.cjs');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 
@@ -93,6 +94,7 @@ function createAuth(store) {
 
   // /auth/login, /auth/callback and /auth/logout, plus the Mac app's code exchange.
   async function handle(req, res, url, showPage) {
+    if(await chooseOnArrival(req,res,url,{client:'vpn',session:()=>store.session(cookie(req,SESSION_COOKIE))?.authSession,backend:AUTH_BACKEND,secretFile:SECRET_FILE,authOrigin:AUTH_ORIGIN,secure:SECURE,stateCookie:STATE_COOKIE,stateValue:state=>state+'.web'}))return true;
     if (url.pathname === '/auth/login' && req.method === 'GET') {
       const state = crypto.randomBytes(32).toString('hex');
       const app = url.searchParams.get('app') || '';
@@ -108,7 +110,7 @@ function createAuth(store) {
       if (!HEX.test(state) || !HEX.test(expected || '') || !crypto.timingSafeEqual(Buffer.from(state), Buffer.from(expected))) {
         showPage(res, 400, 'Sign-in expired', 'That sign-in has expired or was started in another browser. Please try again.', [clear]); return true;
       }
-      if (url.searchParams.get('error')) { showPage(res, 403, 'Staff only', 'This account can’t use the HN Group VPN.', [clear]); return true; }
+      if (url.searchParams.get('error')) { showPage(res, 403, 'Staff only', 'This account can’t use the HN Secure Access Terminal.', [clear]); return true; }
       if (!HEX.test(url.searchParams.get('code') || '')) { showPage(res, 400, 'Sign-in failed', 'The sign-in code was missing or invalid.', [clear]); return true; }
       let result;
       try { result = await authApi('exchange', { code: url.searchParams.get('code'), state }); }
@@ -123,12 +125,12 @@ function createAuth(store) {
         const code = crypto.randomBytes(32).toString('hex');
         appCodes.set(hash(code), { token, challenge: app, expires: Date.now() + 3 * 60000 });
         if (/^[1-9][0-9]{3,4}$/.test(loopback || '')) { redirect(res, 'http://127.0.0.1:' + loopback + '/vpn-callback?code=' + code, [clear]); return true; }
-        showPage(res, 200, 'You’re signed in', 'Return to the HN Group VPN app to finish. If it doesn’t open by itself, use the button below.', [clear], APP_SCHEME + '?code=' + code);
+        showPage(res, 200, 'You’re signed in', 'Return to the HN Secure Access Terminal app to finish. If it doesn’t open by itself, use the button below.', [clear], APP_SCHEME + '?code=' + code);
         return true;
       }
       const old = cookie(req, SESSION_COOKIE); if (old) store.endSession(old);
       const token = store.createSession(user, { authSession: result.session, expires: Number(result.expires) || 0 });
-      redirect(res, '/', [clear, setCookie(SESSION_COOKIE, token)]);
+      redirect(res, '/', [clear, arrivalCookie(SECURE), setCookie(SESSION_COOKIE, token)]);
       return true;
     }
     if (url.pathname === '/auth/logout' && req.method === 'POST') {

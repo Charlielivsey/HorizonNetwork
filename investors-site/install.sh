@@ -4,6 +4,7 @@
 # and are kept. Staff sign in through HN Group Auth, which must know the "investors" application:
 # run auth-site/install.sh first (the root install.sh does both).
 set -euo pipefail
+bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/offline-site/install.sh"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOMAIN=investors.hngroup.org.uk
 EMAIL="${1:-}"

@@ -4,6 +4,7 @@
 # hn-old-staff-portal, data in /var/lib/hn-old-staff-portal) and is deliberately not on website control, Links, Status,
 # the browser or anywhere else (the user's request, 3 November 2026). Other websites are untouched.
 set -euo pipefail
+bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/offline-site/install.sh"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOMAIN=oldstaffportal.hngroup.org.uk
 EMAIL="${1:-}"

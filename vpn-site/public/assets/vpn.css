@@ -178,3 +178,5 @@ footer .footer-brand .footer-company strong { font-size: 1.02rem; font-weight: 7
 footer .footer-brand .footer-parent { opacity: .82; font-size: .88rem; }
 footer .footer-brand .on-dark { display: none; }
 @media (prefers-color-scheme: dark) { footer .footer-brand .on-light { display: none; } footer .footer-brand .on-dark { display: block; } }
+
+.access-art{width:280px;height:280px;position:relative;z-index:2;filter:drop-shadow(0 20px 40px #100d1c44)}

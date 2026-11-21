@@ -8,9 +8,9 @@ const LOGO_BASE = 'https://staff.hngroup.org.uk/assets/brand/png/';
 const COMPANIES = {
   'HN Group': { logo: 'hn-group-email-logo', accent: '#5514B4', web: 'hngroup.org.uk', legal: 'HN Group Limited' },
   'Horizon Network': { logo: 'horizon-network-email-logo', accent: '#5514B4', web: 'network.hngroup.org.uk', legal: 'Horizon Network Limited', parent: 'HN Group', parentLegal: 'HN Group Limited' },
-  'Horizon Advertising': { logo: 'horizon-advertising-email-logo', accent: '#7B52C4', web: 'horizonadvertising.co.uk', legal: 'Horizon Advertising Limited', parent: 'Horizon Media Group', parentLegal: 'Horizon Media Group Limited' },
+  'Horizon Advertising': { logo: 'horizon-advertising-email-logo', accent: '#5514B4', web: 'horizonadvertising.co.uk', legal: 'Horizon Advertising Limited', parent: 'Horizon Media Group', parentLegal: 'Horizon Media Group Limited' },
   'Horizon Development': { logo: 'horizon-development-email-logo', accent: '#5514B4', web: 'development.hngroup.org.uk', legal: 'Horizon Development', parent: 'Horizon Network', parentLegal: 'Horizon Network Limited' },
-  'Horizon Media Group': { logo: 'horizon-media-group-email-logo', accent: '#5514B4', web: 'hngroup.org.uk', legal: 'Horizon Media Group Limited', parent: 'HN Group', parentLegal: 'HN Group Limited' },
+  'Horizon Media Group': { logo: 'horizon-media-group-email-logo', logoHeight: 32, accent: '#5514B4', web: 'hngroup.org.uk', legal: 'Horizon Media Group Limited', parent: 'HN Group', parentLegal: 'HN Group Limited' },
 };
 const STRIPE = [['#E97DE8', 14], ['#5514B4', 14], ['#E3E65B', 6], ['#3E9BA3', 20], ['#7A1F6C', 10], ['#C2306B', 10], ['#5FAE7B', 13], ['#1C2235', 13]];
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -26,7 +26,7 @@ function hnSignature({ firstName, lastName, displayName, jobTitle, company, emai
   const label = COMPANIES[company] ? company : 'HN Group';
   return '<table cellpadding="0" cellspacing="0" border="0" role="presentation" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;color:#1A1A1A;max-width:560px;">' +
     '<tr><td valign="middle" style="padding:0 20px 0 0;width:200px;border-right:2px solid ' + c.accent + ';">' +
-    '<a href="' + esc(href) + '" style="text-decoration:none;"><img src="' + LOGO_BASE + c.logo + '.png" width="200" height="100" alt="' + esc(label) + '" style="display:block;border:0;width:200px;height:100px;"></a></td>' +
+    '<a href="' + esc(href) + '" style="text-decoration:none;"><img src="' + LOGO_BASE + c.logo + '.png?v=20261120-development-full-logo" width="200" height="' + (c.logoHeight || 100) + '" alt="' + esc(label) + '" style="display:block;border:0;width:200px;height:' + (c.logoHeight || 100) + 'px;"></a></td>' +
     '<td valign="middle" style="padding:0 0 0 20px;">' +
     '<p style="margin:0;font-size:17px;line-height:22px;font-weight:bold;color:#1A1A1A;">' + esc(name) + '</p>' +
     (jobTitle ? '<p style="margin:4px 0 10px;font-size:12px;line-height:18px;"><span style="color:' + c.accent + ';font-weight:bold;">' + esc(jobTitle) + '</span> &nbsp;<span style="color:#4A4A4A;">' + esc(c.legal) + '</span></p>'

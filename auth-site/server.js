@@ -5,7 +5,6 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const {nativeDestination,createNative}=require('./native');
-const {createGoogle}=require('./google');
 const {createDiscord}=require('./discord');
 const ORIGIN = 'https://auth.hngroup.org.uk';
 // Registered applications: fixed callbacks and who may use them.
@@ -15,10 +14,10 @@ const CLIENTS = {
   hr: {name:'HN Group HR',callback:'https://hr.hngroup.org.uk/auth/callback',allowed:u=>!u.standalone,denied:'A staff profile is required to use HR.'},
   // HN Mail (the user's request, 6 November 2026): only sign-in accounts with a Google account linked, never while
   // logged in as someone else.
-  mail: { name: 'HN Mail', callback: 'https://mail.hngroup.org.uk/auth/callback', allowed: u => !!(u.google && u.google.email) && !u.impersonated, denied: 'HN Mail only works with an account that has a Google account linked. Turn on Sign in with Google on this page first, then open HN Mail again.' },
+  mail: { name: 'HN Mail', callback: 'https://mail.hngroup.org.uk/auth/callback', allowed: u => !!(u.google && u.google.email) && !u.impersonated, denied: 'HN Mail only works with an account that has a Google account linked. Contact IT for linked mailbox access.' },
   echo: { name: 'Echo', callback: 'https://echo.hngroup.org.uk/auth/callback', allowed: u => ['catnap@hngroup.org.uk', 'charlie.livsey@hngroup.org.uk'].includes(String(u.username || '').trim().toLowerCase()) && !u.impersonated, denied: 'Echo is private to its authorised HN Group accounts.' },
   bots: {name:'HN Group Bots',callback:'https://bots.hngroup.org.uk/auth/callback',allowed:u=>!!(u.ownerAccess||u.statusAdminAllowed)&&!u.impersonated,denied:'Only owner-level accounts and Super Admin members can manage bots.'},
-  browser: { name: 'HN Browser', native: true, allowed: () => true, denied: 'This account cannot use HN Browser.' },
+  browser: { name: 'Compass', native: true, allowed: () => true, denied: 'This account cannot use Compass.' },
   'app-manager': { name: 'HN Group App Manager', native: true, allowed: () => true, denied: 'This account cannot use HN Group App Manager.' },
   media: { name: 'Horizon Media Group administration', callback: 'https://media.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage this website.' },
   development: { name: 'Horizon Development administration', callback: 'https://development.hngroup.org.uk/auth/callback', allowed: user => user.statusAdminAllowed, denied: 'Only the system owner and Super Admin members can manage this website.' },
@@ -30,9 +29,9 @@ const CLIENTS = {
   portal: { name: 'Staff portal', callback: 'https://staff.hngroup.org.uk/auth/callback', allowed: (user) => !user.standalone, denied: 'This account has no staff profile, so it can’t use the staff portal.' },
   wiki: { name: 'HN Group Wiki', callback: 'https://wiki.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot edit the HN Group Wiki.' },
   branding: { name: 'HN Group brand centre', callback: 'https://branding.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use the HN Group brand centre.' },
-  accounts: { name: 'HN Account', callback: 'https://accounts.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use HN Account.' },
+  accounts: { name: 'HN Account', callback: process.env.AUTH_ACCOUNT_CENTRE==='1'?'https://auth.hngroup.org.uk/account/auth/callback':'https://accounts.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use HN Account.' },
   investors: { name: 'HN Group Investors', callback: 'https://investors.hngroup.org.uk/auth/callback', allowed: user => !!user.ownerAccess || (Array.isArray(user.companies) ? user.companies : [user.company]).includes('HN Group'), denied: 'Only staff with a role at HN Group can sign in to the investors website.' },
-  vpn: { name: 'HN Secure Access Terminal', callback: 'https://vpn.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use the HN Secure Access Terminal.' },
+  vpn: { name: 'HN Secure Access Terminal', callback: process.env.AUTH_SAT_SITE==='1'?'https://sat.hngroup.org.uk/auth/callback':'https://vpn.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use the HN Secure Access Terminal.' },
   devices: { name: 'HN Group Devices', callback: 'https://devices.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use HN Group Devices.' },
   docs: { name: 'HN Group Docs', callback: 'https://docs.hngroup.org.uk/auth/callback', allowed: () => true, denied: 'This account cannot use HN Group Docs.' },
   // Anyone can sign in to sign what they've been sent; sending needs the "Send contracts for signing" permission.
@@ -161,12 +160,12 @@ async function persistentAvatar(token,res){
  const response=await fetch(backend+'/api/auth/browser-avatar',{method:'POST',headers:{Authorization:'Bearer '+secret(),'Content-Type':'application/json'},body:JSON.stringify({token}),signal:AbortSignal.timeout(5000),redirect:'error'});
  if(!response.ok)return send(res,response.status,{error:'Profile picture unavailable.'});res.writeHead(200,{'Content-Type':response.headers.get('content-type'),'Cache-Control':'no-store'});res.end(Buffer.from(await response.arrayBuffer()));
 }
+const reselections=new Map();
+async function forkEntry(entry){const {value}=await staff('/api/auth/session-fork',{session:entry.staffSession});return{staffSession:value.session,expires:value.expires};}
 const native=createNative({codes,applications:applicationSessions,profile,requireReady,send,body,serveAvatar,destination,persistentAvatar,
  issuePersistent:async(entry,req)=>(await staff('/api/auth/browser-issue',{session:entry.staffSession},req)).value,
  persistent:async(action,token,req,data={})=>(await staff('/api/auth/browser-'+action,{token,...(action==='unlock'?{code:data.code}:{}),...(action.startsWith('account')?{unlock:data.unlock,profile:data.profile,status:data.status,image:data.image,remove:!!data.remove}:{})},req)).value});
-// "Sign in with Google" (google.js): optional per person, and the PIN is still asked.
-const google=createGoogle({origin:ORIGIN,staff,send,profile,entryFor,setCookie,cookie,finishLogin,destination,random,hash,fail});
-// "Continue with Discord" (discord.js): the same as Google, plus the bot that keeps Discord usernames current.
+// Discord remains available for bot management and staff profile synchronisation only.
 const discord=createDiscord({origin:ORIGIN,staff,send,profile,entryFor,setCookie,cookie,finishLogin,destination,random,hash,fail});
 const staticFiles = { '/': 'index.html', '/authorize': 'index.html', '/style.css': 'style.css', '/hn-theme.js': 'hn-theme.js', '/app.js': 'app.js', '/assets/favicon.svg': 'assets/favicon.svg', '/assets/brand/hn-group-wordmark-white.svg': 'assets/brand/hn-group-wordmark-white.svg', '/assets/brand/hn-group-wordmark.svg': 'assets/brand/hn-group-wordmark.svg', '/assets/fonts/plus-jakarta-sans.woff2': 'assets/fonts/plus-jakarta-sans.woff2' };
 const mime = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'application/javascript', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' };
@@ -177,6 +176,12 @@ const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, ORIGIN), route = url.pathname;
     if (route === '/healthz') return send(res, 200, { ok: true });
+    // External identity providers are retired; retain bot/mail integration records.
+    if (/^\/api\/(google|discord)(?:\/|$)/.test(route) || /^\/(google|discord)\/callback$/.test(route)) {
+      if (req.method === 'GET' && /^\/api\/(google|discord)$/.test(route)) return send(res, 200, { enabled: false });
+      return send(res, 410, { error: 'Sign in with your username, password and PIN.' });
+    }
+    if(process.env.AUTH_ACCOUNT_CENTRE==='1'&&(route==='/account'||route.startsWith('/account/')))return require('./account-centre').proxyAccount(req,res,{backend:process.env.ACCOUNT_WEB_BACKEND||'http://127.0.0.1:5300'});
     if(route==='/api/service/bots'){
       if(req.method!=='POST')return send(res,405,{error:'POST required.'});
       if(req.headers['x-real-ip']||!['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress)||!service(req))return send(res,403,{error:'Private service only.'});
@@ -195,10 +200,20 @@ const server = http.createServer(async (req, res) => {
       // Status and website keep live Auth sessions; the portal starts its own staff session.
       const clientId = data.client_id || 'status';
       if (!Object.hasOwn(CLIENTS, clientId)||CLIENTS[clientId].native) return send(res, 400, { error: 'Unknown application.' });
+      if(route==='/api/sso/reselect'){
+        if(!HEX.test(data.state||''))throw fail(400,'Invalid selection request.');
+        let original;
+        if(['portal','hr','finance','it','accounts'].includes(clientId)&&HEX.test(data.staffSession||''))original={staffSession:data.staffSession,expires:Date.now()+60000};
+        else {const app=HEX.test(data.session||'')&&applicationSessions.get(hash(data.session));if(!app||app.client!==clientId||app.expires<=Date.now())throw fail(401,'Application sign-in expired.');original=app.entry||sessions.get(app.session);}
+        const user=await profile(original,true);requireReady(user);if(!CLIENTS[clientId].allowed(user))throw fail(403,guestDenied(clientId,user));
+        for(const [k,v]of reselections)if(v.expires<=Date.now())reselections.delete(k);
+        if(reselections.size>=5000)throw fail(503,'Please try again shortly.');
+        const ticket=random();reselections.set(hash(ticket),{client:clientId,state:data.state,entry:await forkEntry(original),expires:Date.now()+60000});return send(res,200,{ticket});
+      }
       if (route === '/api/sso/exchange') {
         const grant = codes.get(data.code); codes.delete(data.code);
         if (!grant || grant.expires <= Date.now() || grant.state !== data.state || grant.client !== clientId) throw fail(401, 'Sign-in link expired or already used.');
-        token = grant.session;
+        token = grant.session; detachedEntry=grant.entry;
       } else {
         if (!['/api/sso/session','/api/sso/avatar'].includes(route)) return send(res, 404, { error: 'Not found.' });
         const application = HEX.test(data.session || '') && applicationSessions.get(hash(data.session));
@@ -207,13 +222,12 @@ const server = http.createServer(async (req, res) => {
       }
       const entry = detachedEntry || (HEX.test(token || '') && sessions.get(token));
       const user = await profile(entry, !!detachedEntry);
-      if (detachedEntry) { const application = applicationSessions.get(hash(applicationToken)); if (application && application.expires !== entry.expires) { application.expires = entry.expires; saveAppSessions(); } }
+      if (detachedEntry && applicationToken) { const application = applicationSessions.get(hash(applicationToken)); if (application && application.expires !== entry.expires) { application.expires = entry.expires; saveAppSessions(); } }
       requireReady(user);
       if (!CLIENTS[clientId].allowed(user)) throw fail(403, guestDenied(clientId, user));
       if (clientId === 'portal' || clientId === 'accounts' || clientId === 'hr' || clientId === 'finance' || clientId === 'it') {
         // The application starts its own session (HN Account swaps this one for its own on the staff
         // account service); this Auth sign-in has done its job.
-        sessions.delete(token);
         return send(res, 200, { user, staffSession: entry.staffSession });
       }
       if (route === '/api/sso/avatar') return await serveAvatar(entry, res);
@@ -231,17 +245,12 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST') {
       if (req.headers.origin !== ORIGIN) throw fail(403, 'Request origin not allowed.');
       const data = await body(req);
-      if (route.startsWith('/api/google/') && await google(req, res, route, data)) return;
-      if (route.startsWith('/api/discord/') && await discord(req, res, route, data)) return;
       if (route === '/api/resume/forget') {
         await staff('/api/resume/forget', {}, req);
         sessions.delete(hash(cookie(req, COOKIE))); challenges.delete(hash(cookie(req, FLOW)));
         return send(res, 200, { ok: true }, [setCookie(REMEMBER, '', 0), setCookie(COOKIE, '', 0), setCookie(FLOW, '', 0)]);
       }
       if (route === '/api/resume') {
-        // An account with Sign in with Google turned on resumes with Google only, never the PIN (the user's request).
-        const { value: who } = await staff('/api/resume', null, req, false, 'GET');
-        if (who.google && google.enabled() && data.pin !== true) throw fail(403, 'This account signs in with Google. Choose Continue with Google.');
         const { response } = await staff('/api/resume', { code: data.code }, req, true);
         return await finishLogin(req, res, response);
       }
@@ -250,8 +259,6 @@ const server = http.createServer(async (req, res) => {
         const { value, response } = await staff('/api/login', { username: data.username, password: data.password }, req, true);
         if (value.codeRequired) {
           if (challenges.size >= 10000) throw fail(503, 'Please try again shortly.');
-          // With Sign in with Google turned on, the second step is Google, not the PIN (the user's request).
-          if (value.google && google.enabled() && data.pin !== true) return send(res, 200, { googleRequired: true, discord: !!value.discord && discord.enabled() }, [setCookie(FLOW, '', 0)]);
           const flow = random(); challenges.set(hash(flow), { challenge: value.challenge, expires: Date.now() + 5 * 60000 });
           return send(res, 200, { codeRequired: true }, [setCookie(FLOW, flow, 300)]);
         }
@@ -295,19 +302,18 @@ const server = http.createServer(async (req, res) => {
         requireReady(user);
         if (!client.allowed(user)) return send(res, 200, { redirect: client.callback + '?error=access_denied&state=' + client.state });
         if (codes.size >= 10000) throw fail(503, 'Please try again shortly.');
-        const code = random(); codes.set(code, { session: hash(cookie(req, COOKIE)), state: client.state, client: client.id, expires: Date.now() + 60000, ...(client.native?{native:true,redirect:client.callback,challenge:client.challenge,entry:{...entry}}:{}) });
+        const independent=client.native?null:await forkEntry(entry);
+        const code = random(); codes.set(code, { ...(independent?{entry:independent}:{}), session: hash(cookie(req, COOKIE)), state: client.state, client: client.id, expires: Date.now() + 60000, ...(client.native?{native:true,redirect:client.callback,challenge:client.challenge,entry:{...entry}}:{}) });
         return send(res, 200, { redirect: client.callback + '?code=' + code + '&state=' + client.state });
       }
       return send(res, 404, { error: 'Not found.' });
     }
     if (req.method !== 'GET') return send(res, 405, { error: 'Method not allowed.' });
-    if ((route === '/api/google' || route === '/google/callback') && await google(req, res, route, {})) return;
-    if ((route === '/api/discord' || route === '/discord/callback') && await discord(req, res, route, {})) return;
     if (route === '/api/resume') {
       const { value } = await staff('/api/resume', null, req, false, 'GET');
       if (value.avatarUrl) value.avatarUrl = '/api/resume/avatar';
-      value.google = !!value.google && google.enabled();
-      value.discord = !!value.discord && discord.enabled();
+      value.google = false;
+      value.discord = false;
       return send(res, 200, value, value.available ? [] : [setCookie(REMEMBER, '', 0)]);
     }
     if (route === '/api/resume/avatar') {
@@ -317,6 +323,14 @@ const server = http.createServer(async (req, res) => {
       if (!response.ok) return send(res, response.status, { error: 'Profile picture unavailable.' });
       res.writeHead(200, { 'Content-Type': response.headers.get('content-type'), 'Cache-Control': 'no-store' });
       return res.end(Buffer.from(await response.arrayBuffer()));
+    }
+    if(route==='/authorize'&&url.searchParams.has('handoff')){
+      const client=destination(url),key=hash(url.searchParams.get('handoff')||''),grant=reselections.get(key);reselections.delete(key);
+      if(!client||!grant||grant.client!==client.id||grant.state!==client.state||grant.expires<=Date.now())throw fail(401,'Profile selection link expired. Return to the website and refresh.');
+      const user=await profile(grant.entry);requireReady(user);if(!client.allowed(user))throw fail(403,guestDenied(client.id,user));
+      if(sessions.size>=10000)throw fail(503,'Please try again shortly.');
+      const token=random();sessions.set(hash(token),grant.entry);url.searchParams.delete('handoff');
+      res.writeHead(302,{'Location':url.pathname+url.search,'Cache-Control':'no-store','Set-Cookie':setCookie(COOKIE,token)});return res.end();
     }
     if (route === '/api/me') return send(res, 200, { user: await profile(entryFor(req)) });
     // A profile's picture on "Choose a profile" (only the signed-in account's own profiles).
@@ -342,6 +356,7 @@ const server = http.createServer(async (req, res) => {
         url.searchParams.delete('switch'); url.searchParams.set('account', 'other'); return redirect(res, url.pathname + url.search);
       }
     }
+    if(route==='/'&&process.env.AUTH_ACCOUNT_CENTRE==='1'){if(browserRemembered)res.setHeader('Set-Cookie',setCookie(REMEMBER,browserRemembered,30*86400));return redirect(res,'/account/');}
     const file = staticFiles[route];
     if (!file) return send(res, 404, { error: 'Not found.' });
     // Page reloads preserve the signed-in session. Discard only unfinished one-time login challenges.

@@ -13,7 +13,7 @@ fi
 bash "$SCRIPT_DIR/../auth-site/install.sh" "${1:-}"
 mkdir -p /opt/hn-website/control /var/lib/hn-website /var/www/hngroup
 chmod 700 /var/lib/hn-website
-cp "$SCRIPT_DIR/server.js" "$SCRIPT_DIR/auth.js" /opt/hn-website/
+cp "$SCRIPT_DIR/server.js" "$SCRIPT_DIR/auth.js" "$SCRIPT_DIR/profile-gate.cjs" /opt/hn-website/
 cp -r "$SCRIPT_DIR/control/." /opt/hn-website/control/
 cp -r "$SCRIPT_DIR/public/." /var/www/hngroup/
 chown -R www-data:www-data /var/www/hngroup

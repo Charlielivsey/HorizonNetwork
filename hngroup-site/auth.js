@@ -1,4 +1,5 @@
 'use strict';
+const {chooseOnArrival,arrivalCookie}=require('./profile-gate.cjs');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 const PORTAL_ORIGIN = 'https://auth.hngroup.org.uk';
@@ -53,6 +54,7 @@ function createAuth() {
     res.end(image);
   }
   async function handle(req, res, route) {
+    if(await chooseOnArrival(req,res,new URL(req.url,STATUS_ORIGIN),{client:'website',session:()=>sessions.get(cookie(req,SESSION_COOKIE))?.portalSession,backend:portalBackend,secretFile,authOrigin:PORTAL_ORIGIN,stateCookie:STATE_COOKIE,stateValue:state=>state,eligible:url=>url.pathname.startsWith('/admin')}))return true;
     if (route === '/auth/login' && req.method === 'GET') {
       const state = crypto.randomBytes(32).toString('hex');
       const next = '/authorize?client_id=website&state=' + state;
@@ -75,7 +77,7 @@ function createAuth() {
         if (sessions.size >= 1000) throw Object.assign(new Error('Please try signing in again shortly.'), { status: 503 });
         const token = crypto.randomBytes(32).toString('hex');
         sessions.set(token, { portalSession: result.session, expires: Math.min(result.expires, Date.now() + 12 * 60 * 60 * 1000) });
-        redirect(res, '/admin', [clearState, setCookie(SESSION_COOKIE, token)]);
+        redirect(res, '/admin', [clearState, arrivalCookie(), setCookie(SESSION_COOKIE, token)]);
       } catch (e) { redirect(res, '/admin/denied?reason=' + (e.status === 403 ? 'denied' : e.status === 503 ? 'unavailable' : 'expired'), [clearState]); }
       return true;
     }

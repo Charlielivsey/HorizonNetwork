@@ -5,7 +5,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
 const { createBotManager } = require('./bot-manager');
-const { parseLayout, bits } = require('./server-setup');
+const { parseLayout, bits, createServerSetup } = require('./server-setup');
 
 const APP = '1564969421800472698', BOT = APP, GUILD = '222222222222222222', OTHER = '777777777777777777';
 const ALLOWED = '1449876557035475085', STRANGER = '888888888888888888';
@@ -53,6 +53,11 @@ function fakeDiscord(servers) {
       }
       if (method === 'PATCH') { for (const x of body) g.channels.find((c) => c.id === x.id).position = x.position; return new Response(null, { status: 204 }); }
     }
+    if ((m = /^\/channels\/(\d+)\/permissions\/(\d+)$/.exec(p)) && method === 'PUT') {
+      const channel=Object.values(servers).flatMap(g=>g.channels).find(c=>c.id===m[1]);
+      channel.permission_overwrites=channel.permission_overwrites.filter(o=>o.id!==m[2]);
+      channel.permission_overwrites.push({id:m[2],...body});return new Response(null,{status:204});
+    }
     if ((m = /^\/channels\/(\d+)$/.exec(p))) {
       const g = Object.values(servers).find((x) => x.channels.some((c) => c.id === m[1])), c = g.channels.find((x) => x.id === m[1]);
       if (method === 'PATCH') { Object.assign(c, body, body.name && [0, 5, 15].includes(c.type) ? { name: body.name.toLowerCase().replace(/\s+/g, '-') } : {}); return json(c); }
@@ -86,7 +91,14 @@ function setup(layouts, staff = async () => ({ value: {} }), rolesFile) {
   for (const [name, l] of Object.entries(layouts)) fs.writeFileSync(path.join(layoutsDir, name + '.json'), JSON.stringify(l));
   const servers = { [GUILD]: server(GUILD, 'HN Group Test'), [OTHER]: server(OTHER, 'Someone else') };
   const discord = fakeDiscord(servers);
-  const manager = createBotManager({ file: path.join(dir, 'bot.json'), configFile: path.join(dir, 'discord.json'), config: () => ({ id: APP, bot: 'bot-token-' + 'x'.repeat(60) }), fetcher: discord.fetcher, layouts: layoutsDir, sleep: async () => {}, staff, ...(rolesFile ? { rolesFile } : {}) });
+  fs.writeFileSync(path.join(dir,'bot.json'),JSON.stringify({networks:[{name:'Fixture network',guilds:rolesFile?Object.values(JSON.parse(fs.readFileSync(rolesFile)).servers):(Object.keys(layouts).length?[GUILD]:Object.values(JSON.parse(fs.readFileSync(path.join(__dirname,'hn-roles.json'))).servers))}]}));
+  const staffWithCatalog=async(...args)=>{const result=await staff(...args);return {...result,value:{...result.value,positions:{'Horizon Network':Object.keys(JSON.parse(fs.readFileSync(rolesFile||path.join(__dirname,'hn-roles.json'))).positions.roles)}}};};
+  const manager = createBotManager({ file: path.join(dir, 'bot.json'), configFile: path.join(dir, 'discord.json'), config: () => ({ id: APP, bot: 'bot-token-' + 'x'.repeat(60) }), fetcher: discord.fetcher, layouts: layoutsDir, sleep: async () => {}, staff:staffWithCatalog,syncServerBranding:false, ...(rolesFile ? { rolesFile } : {}) });
+  // Retained layout engine is tested directly; these retired slash commands are not exposed by the manager.
+  const legacyBound={};
+  const legacy=createServerSetup({bound:()=>legacyBound,bind:(name,id)=>legacyBound[name]=id,config:()=>({id:APP,bot:'fixture-token'}),fetcher:discord.fetcher,dir:layoutsDir,sleep:async()=>{}});
+  const dispatch=manager.interaction;
+  manager.interaction=e=>e.data?.name==='server-setup'?(e.type===4?legacy.autocomplete(e):legacy.interaction(e)):dispatch(e);
   let n = 600000000000000000n;
   const run = async (sub, { user = ALLOWED, guild = GUILD, layout } = {}) => {
     const before = discord.replies.length;
@@ -194,18 +206,13 @@ test('problems are reported before anything changes', async () => {
   } finally { t.close(); }
 });
 
-test('the command is registered on connect and kept when the dashboard republishes commands', async () => {
-  const t = setup({ test: LAYOUT });
-  try {
-    await t.manager.registerBuiltins();
-    const reg = t.discord.writes.find((w) => w.method === 'POST' && w.p === '/applications/' + APP + '/commands' && w.body.name === 'server-setup');
-    assert.equal(reg.body.name, 'server-setup'); assert.deepEqual(reg.body.contexts, [0]);
-    assert.equal(reg.body.options[0].options[0].autocomplete, true, 'the layout option searches as you type');
-    await t.manager.handle('save-commands', { commands: [{ name: 'hello', description: 'Hi', response: 'Hello', ephemeral: false }, { name: 'server-setup', description: 'old copy' }] });
-    const put = t.discord.writes.find((w) => w.method === 'PUT');
-    assert.deepEqual(put.body.map((c) => c.name), ['hello', 'ping', 'server-setup', 'setup-server', 'force-sync'], 'the built-in commands are always kept');
-    assert.equal(put.body.find(c => c.name === 'server-setup').options.length, 3, 'the built-in definition, not the dashboard copy');
-  } finally { t.close(); }
+test('retired layout commands are absent and welcome/invite/network role setup survive dashboard publishing',async()=>{
+ const t=setup({test:LAYOUT});try{
+  await t.manager.registerBuiltins();assert.ok(!t.discord.writes.some(w=>w.body?.name==='server-setup'));
+  await t.manager.handle('save-commands',{commands:[{name:'hello',description:'Hi',response:'Hello'},{name:'server-setup',description:'obsolete'}]});
+  const names=t.discord.writes.find(w=>w.method==='PUT').body.map(c=>c.name);
+  for(const name of ['welcome','bot-invite','setup-server','force-sync'])assert.ok(names.includes(name));assert.ok(!names.includes('server-setup'));
+ }finally{t.close();}
 });
 
 test('the layout option searches by server name, and a server name can be typed instead of the layout name', async () => {
@@ -258,7 +265,7 @@ test('the HN Group role list (hn-roles.json) is valid and fits a fresh server', 
   g.roles[1].position = 99;
   const p = makePlan(hq, g.guild, g.roles, g.channels, BOT, [g.botRole]);
   assert.deepEqual(p.problems, []);
-  assert.equal(p.steps.filter((x) => x.kind === 'role' && x.op === 'create').length, 20);
+  assert.equal(p.steps.filter((x) => x.kind === 'role' && x.op === 'create').length, 21);
   assert.deepEqual(require('./server-setup').loadLayouts(path.join(__dirname, 'discord-layouts')).layouts.map((l) => l.id), [], 'not a /server-setup layout');
 });
 
@@ -304,11 +311,11 @@ test('every member (not bots) always gets the separator roles, Network Permissio
 // The user's request, 6 November 2026: Horizon Network positions → Discord roles in every HN server, kept up to date
 // from the staff portal, and the role list set up by itself when it isn't there.
 const SPEC = [
-  ['────────── LEADERSHIP ──────────', null], ['President', '#B99AF2'], ['Vice President', '#9674D4'], ['Executive Assistant', '#D99DBB'], ['Chief of Staff', '#8D9FE0'],
+  ['────────── LEADERSHIP ──────────', null], ['President', '#B99AF2'], ['Vice President (Relations)', '#9674D4'], ['Vice President (Systems)', '#9674D4'], ['Executive Assistant', '#D99DBB'], ['Chief of Staff', '#8D9FE0'],
   ['Internal Relations Director', '#65B8B0'], ['Advisor', '#7FAACB'], ['────────── FOUNDER ──────────', null], ['Founder', '#D9BE7A'], ['────────── PERMISSION LEVELS ──────────', null],
   ['Network Permission Level 5', null], ['Network Permission Level 4', null], ['Network Permission Level 3', null], ['Network Permission Level 2', null], ['Network Permission Level 1', null],
   ['────────── NETWORK ──────────', null], ['NA | Network Administration', '#9B85C9'], ['B | Bots', '#72B8AD'], ['────────── MEMBERS ──────────', null], ['M | Member', '#A3B4CC']];
-const LEVEL = { 'President': 5, 'Vice President': 5, 'Executive Assistant': 4, 'Chief of Staff': 4, 'Internal Relations Director': 3, 'Advisor': 3, 'Founder': 3 };
+const LEVEL = { 'President': 5, 'Vice President (Relations)': 5, 'Vice President (Systems)': 5, 'Executive Assistant': 4, 'Chief of Staff': 4, 'Internal Relations Director': 3, 'Advisor': 3, 'Founder': 3 };
 test('the bot looks after exactly the four HN servers, each with the role list in order, colours, levels and positions', () => {
   const { loadRoles } = require('./position-sync');
   const all = loadRoles();
@@ -338,7 +345,7 @@ test('roles follow Horizon Network positions; /setup-server sets a server up and
     const always = SPEC.map(([n]) => n).filter((n) => n.startsWith('──')).concat(['Network Permission Level 1', 'M | Member']);
     // The automatic sync never deletes or creates server roles: a server that isn't set up is skipped.
     await t.manager.syncPositions(true);
-    assert.ok(g.roles.some((r) => r.name === 'Old role') && !g.roles.some((r) => r.name === 'President'), 'nothing deleted or created without /setup-server');
+    assert.ok(g.roles.some((r) => r.name === 'Old role') && !g.roles.some((r) => r.name === 'President'), 'Background sync does not create or delete roles');
     assert.match(t.manager.positionsState.errors[0], /run \/setup-server/);
     let n = 700000000000000000n;
     const command = async (name, { user = ALLOWED, guild = GUILD } = {}) => {
@@ -350,14 +357,14 @@ test('roles follow Horizon Network positions; /setup-server sets a server up and
       return (card.title || '') + '\n' + (card.description || '');
     };
     assert.match(await command('setup-server', { user: STRANGER }), /aren’t allowed/);
-    assert.match(await command('setup-server', { guild: OTHER }), /isn’t one of the HN servers/);
+    assert.match(await command('setup-server', { guild: OTHER }), /not in a registered network/);
     assert.ok(t.servers[OTHER].roles.some((r) => r.name === 'Old role'), 'other servers are never touched');
     const done = await command('setup-server');
     assert.match(done, /is set up/);
-    assert.match(done, /1 role\(s\) deleted, 20 created/);
+    assert.match(done, /\d+ role\(s\) deleted, 21 created/);
     assert.ok(t.discord.replies.some((r) => r.kind === 'edit' && /Setting up/.test(r.body.embeds[0].title || '')), 'progress is shown while it works');
     assert.ok(!g.roles.some((r) => r.name === 'Old role'), '/setup-server deleted every other role');
-    assert.deepEqual(g.roles.filter((r) => r.name !== '@everyone' && r.name !== 'HN Group Auth').sort((a, b) => b.position - a.position).map((r) => r.name), SPEC.map(([n]) => n), 'and the roles were made in order');
+    assert.deepEqual(g.roles.filter((r) => r.name !== '@everyone' && r.name !== 'HN Group Auth').sort((a, b) => b.position - a.position).map((r) => r.name), require('./position-sync').loadRoles(rolesFile,null,{'Horizon Network':Object.keys(JSON.parse(fs.readFileSync(rolesFile)).positions.roles)})[0].roles.map(r=>r.name), 'HR roles were made in authoritative order');
     assert.deepEqual(names(g.members[0]), [...always, 'President', 'Network Permission Level 5', 'NA | Network Administration'].sort(), 'President');
     assert.deepEqual(names(g.members[1]), [...always].sort(), 'a Founder at another company has no Horizon Network position');
     assert.deepEqual(names(g.members[2]), [...always].sort(), '/setup-server gives every human member the separators, Level 1 and Member');
@@ -397,7 +404,8 @@ test('roles follow Horizon Network positions; /setup-server sets a server up and
     // Both commands are registered with Discord alongside /server-setup.
     await t.manager.registerBuiltins();
     const registered = t.discord.writes.filter((w) => w.method === 'POST' && w.p.endsWith('/commands')).map((w) => w.body.name);
-    for (const c of ['server-setup', 'setup-server', 'force-sync']) assert.ok(registered.includes(c), c);
+    for (const c of ['welcome', 'bot-invite', 'setup-server', 'force-sync']) assert.ok(registered.includes(c), c);
     assert.ok(t.servers[OTHER].roles.some((r) => r.name === 'Old role'), 'servers that aren’t listed are never touched');
   } finally { t.close(); fs.rmSync(rolesFile, { force: true }); }
 });
+

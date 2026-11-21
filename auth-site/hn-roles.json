@@ -1,5 +1,5 @@
 {
-  "_note": "HN Group Discord roles, kept up to date by HN Group Auth's bot by itself in every server below (position-sync.js; the user's request, 6 November 2026). Not a /server-setup layout. If any of these roles is missing in a server, the bot deletes every other role and creates these in this order; it gives each member linked to a staff record the roles of their Horizon Network position, and every human member the separator roles, Network Permission Level 1 and M | Member.",
+  "_note": "HN Discord role order and staff-title mappings for the four configured servers. /setup-server rebuilds the role list only on explicit request. Normal sync never rebuilds roles; the approved VP split migration adds Relations and Systems in place, preserving the legacy VP role for unmapped members.",
   "servers": {
     "HQ": "1360208008755413227",
     "Horizon Ads": "266973580900696065",
@@ -32,7 +32,7 @@
   ],
   "roles": [
     {
-      "name": "────────── LEADERSHIP ──────────",
+      "name": "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 LEADERSHIP \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
       "permissions": []
     },
     {
@@ -42,7 +42,13 @@
       "permissions": []
     },
     {
-      "name": "Vice President",
+      "name": "Vice President (Relations)",
+      "color": "#9674D4",
+      "hoist": false,
+      "permissions": []
+    },
+    {
+      "name": "Vice President (Systems)",
       "color": "#9674D4",
       "hoist": false,
       "permissions": []
@@ -72,7 +78,7 @@
       "permissions": []
     },
     {
-      "name": "────────── FOUNDER ──────────",
+      "name": "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 FOUNDER \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
       "permissions": []
     },
     {
@@ -82,7 +88,7 @@
       "permissions": []
     },
     {
-      "name": "────────── PERMISSION LEVELS ──────────",
+      "name": "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 PERMISSION LEVELS \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
       "permissions": []
     },
     {
@@ -233,7 +239,7 @@
       ]
     },
     {
-      "name": "────────── NETWORK ──────────",
+      "name": "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 NETWORK \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
       "permissions": []
     },
     {
@@ -249,7 +255,7 @@
       "permissions": []
     },
     {
-      "name": "────────── MEMBERS ──────────",
+      "name": "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 MEMBERS \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
       "permissions": []
     },
     {
@@ -264,7 +270,11 @@
       "Network Permission Level 5",
       "NA | Network Administration"
     ],
-    "Vice President": [
+    "Vice President (Relations)": [
+      "Network Permission Level 5",
+      "NA | Network Administration"
+    ],
+    "Vice President (Systems)": [
       "Network Permission Level 5",
       "NA | Network Administration"
     ],
@@ -300,8 +310,13 @@
         "Network Permission Level 5",
         "NA | Network Administration"
       ],
-      "Vice President": [
-        "Vice President",
+      "Vice President (Relations)": [
+        "Vice President (Relations)",
+        "Network Permission Level 5",
+        "NA | Network Administration"
+      ],
+      "Vice President (Systems)": [
+        "Vice President (Systems)",
         "Network Permission Level 5",
         "NA | Network Administration"
       ],

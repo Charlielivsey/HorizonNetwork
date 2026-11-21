@@ -5,6 +5,7 @@
 // Only what a public staff list needs: display name, every role (company, position, department, who it reports to),
 // About me (unless they untick "Show my About me on HN Group People"), skills, languages and whether they have a picture.
 // Never emails, phone numbers, locations, birthdays or anything else from the record.
+function boardLabel(company) { return company === 'Horizon Network' ? 'Board of Directors' : company + ' Board of Directors'; }
 function listed(store, p) {
   if (!p || p.system) return false;
   const logins = store.loginsForId ? store.loginsForId(p.id) : [];
@@ -15,17 +16,25 @@ function people(store) {
   return store.employees().filter((p) => listed(store, p));
 }
 function rolesOf(p) {
-  return [{ company: p.company, jobTitle: p.jobTitle || '', department: p.department || '', supervisorId: p.supervisorId || null, supervisorCompany: p.supervisorCompany || null, supervisorPosition: p.supervisorPosition, main: true },
-    ...(p.otherRoles || []).map((r) => ({ company: r.company, jobTitle: r.jobTitle || p.jobTitle || '', department: r.department || p.department || '', supervisorId: r.supervisorId || null, supervisorCompany: r.supervisorCompany || null, supervisorPosition: r.supervisorPosition, main: false }))]
+  return [{ company: p.company, jobTitle: p.jobTitle || '', department: p.department || '', supervisorId: p.supervisorId || null, supervisorCompany: p.supervisorCompany || null, supervisorPosition: p.supervisorPosition, temporary:!!p.temporary, main: true },
+    ...(p.otherRoles || []).map((r) => ({ company: r.company, jobTitle: r.jobTitle || p.jobTitle || '', department: r.department || p.department || '', supervisorId: r.supervisorId || null, supervisorCompany: r.supervisorCompany || null, supervisorPosition: r.supervisorPosition, temporary:!!r.temporary, main: false }))]
     .filter((r) => r.company);
 }
 function publicPeople(store) {
-  const list = people(store), ids = new Set(list.map((p) => p.id));
+  return projectPeople(store, people(store));
+}
+// The signed-in staff chart follows employment status, independently of login access.
+// Public People retains its separate account-visibility policy above.
+function staffOrgChart(store) {
+  return projectPeople(store, store.employees().filter(p => !p.system && !p.offboardedAt));
+}
+function projectPeople(store, list) {
+  const ids = new Set(list.map((p) => p.id));
   const out = list.map((p) => ({
     id: p.id,
     name: p.displayName || [p.firstName, p.lastName].filter(Boolean).join(' '),
-    roles: rolesOf(p).map((r) => ({ company: r.company, jobTitle: r.jobTitle, department: r.department, main: r.main,
-      reportsTo: r.supervisorId && r.supervisorId !== p.id && ids.has(r.supervisorId) ? { id: r.supervisorId, company: r.supervisorCompany || r.company } : null })),
+    roles: rolesOf(p).map((r) => ({ company: r.company, jobTitle: r.jobTitle, department: r.department, main: r.main, temporary:r.temporary,
+      reportsTo: r.supervisorPosition?.kind === 'board' ? {...r.supervisorPosition,board:true} : r.supervisorId && r.supervisorId !== p.id && ids.has(r.supervisorId) ? { id: r.supervisorId, company: r.supervisorCompany || r.company } : null })),
     about: p.peopleBio === false ? '' : String(p.bio || ''),
     skills: p.skills || [], languages: p.languages || [],
     photo: !!store.avatarFile(p),
@@ -58,18 +67,23 @@ function positionsOf(store, list) {
           const role = boss && rolesOf(boss).find((x) => x.company === (r.supervisorCompany || company));
           to = role ? { company: role.company, title: role.jobTitle } : null;
         }
-        to = to ? { company: to.company, title: to.title } : null;
+        to = to ? { company: to.company, title: to.title, ...(to.kind === 'board'?{kind:'board'}:{}) } : null;
         const key = JSON.stringify(to);
-        if (!groups.has(key)) groups.set(key, { reportsTo: to, holders: [] });
+        if (!groups.has(key)) groups.set(key, { reportsTo: to, holders: [], temporaryHolders: [] });
         const holders = groups.get(key).holders;
         if (!holders.includes(p.id)) holders.push(p.id);
+        if (r.temporary && !groups.get(key).temporaryHolders.includes(p.id)) groups.get(key).temporaryHolders.push(p.id);
       }
-      if (!groups.size) groups.set('vacant', { reportsTo: usual, holders: [] });
+      if (!groups.size) groups.set('vacant', { reportsTo: usual, holders: [], temporaryHolders: [] });
       // Holders of the same position may report to different positions. Separate those branches
       // instead of silently moving every holder when only one person's supervisor changed.
       for (const [key, group] of groups) out.push({ company, title, ...group,
         key: company + '\n' + title.toLowerCase() + '\n' + key, listed: (lists[company] || []).includes(title) });
     }
+  }
+  for(const node of out.slice())if(node.reportsTo?.kind==='board'&&!out.some(x=>x.company===node.reportsTo.company&&x.title===node.reportsTo.title)){
+    const company=node.reportsTo.company;
+    out.push({company,title:node.reportsTo.title,displayTitle:boardLabel(company),key:company+'\n'+node.reportsTo.title.toLowerCase(),collective:true,holders:[],temporaryHolders:[],reportsTo:null,listed:true});
   }
   return out;
 }
@@ -77,4 +91,4 @@ function avatarOf(store, id) {
   const p = people(store).find((x) => x.id === id);
   return p ? store.avatarFile(p) : null;
 }
-module.exports = { publicPeople, avatarOf, listed };
+module.exports = { publicPeople, staffOrgChart, avatarOf, listed, boardLabel };

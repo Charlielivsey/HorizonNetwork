@@ -16,7 +16,7 @@ function site(slug, dir) {
   const runtime = path.join(dir, slug); fs.mkdirSync(runtime);
   fs.cpSync(path.join(__dirname, 'public'), path.join(runtime, 'public'), { recursive: true });
   fs.cpSync(path.join(ROOT, slug + '-site/public'), path.join(runtime, 'public'), { recursive: true });
-  for (const f of ['config.json', 'auth.js']) fs.copyFileSync(path.join(ROOT, slug + '-site', f), path.join(runtime, f));
+  for (const f of ['config.json', 'auth.js', 'profile-gate.cjs']) fs.copyFileSync(path.join(ROOT, slug + '-site', f), path.join(runtime, f));
   fs.copyFileSync(path.join(__dirname, 'server.js'), path.join(runtime, 'server.js'));
   return path.join(runtime, 'server.js');
 }

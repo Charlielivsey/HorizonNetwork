@@ -12,11 +12,11 @@
     // Same layout as the signatures in brand/email-signature: logo on the left, details on the right,
     // the eight-colour stripe, the parent company line and the confidentiality notice.
     const SIGNATURE_COMPANIES = {
-        "HN Group": { logo: "hn-group-email-logo", accent: "#5514B4", web: "hngroup.org.uk", domain: "hngroup.org.uk", legal: "HN Group Limited" },
-        "Horizon Network": { logo: "horizon-network-email-logo", accent: "#5514B4", web: "network.hngroup.org.uk", domain: "horizon-network.co.uk", legal: "Horizon Network Limited", parent: "HN Group", parentLegal: "HN Group Limited" },
-        "Horizon Advertising": { logo: "horizon-advertising-email-logo", accent: "#7B52C4", web: "horizonadvertising.co.uk", domain: "horizonadvertising.co.uk", legal: "Horizon Advertising Limited", parent: "Horizon Media Group", parentLegal: "Horizon Media Group Limited" },
+        "HN Group": { logo: "hn-group-wordmark", logoHeight: 70, accent: "#5514B4", web: "hngroup.org.uk", domain: "hngroup.org.uk", legal: "HN Group Limited" },
+        "Horizon Network": { logo: "horizon-network-wordmark", logoHeight: 42, accent: "#5514B4", web: "network.hngroup.org.uk", domain: "horizon-network.co.uk", legal: "Horizon Network Limited", parent: "HN Group", parentLegal: "HN Group Limited" },
+        "Horizon Advertising": { logo: "horizon-advertising-email-logo", accent: "#5514B4", web: "horizonadvertising.co.uk", domain: "horizonadvertising.co.uk", legal: "Horizon Advertising Limited", parent: "Horizon Media Group", parentLegal: "Horizon Media Group Limited" },
         "Horizon Development": { logo: "horizon-development-email-logo", accent: "#5514B4", web: "development.hngroup.org.uk", legal: "Horizon Development", parent: "Horizon Network", parentLegal: "Horizon Network Limited" },
-        "Horizon Media Group": { logo: "horizon-media-group-email-logo", accent: "#5514B4", web: "hngroup.org.uk", domain: "media.hngroup.org.uk", legal: "Horizon Media Group Limited", parent: "HN Group", parentLegal: "HN Group Limited" },
+        "Horizon Media Group": { logo: "horizon-media-group-email-logo", logoHeight: 32, accent: "#5514B4", web: "hngroup.org.uk", domain: "media.hngroup.org.uk", legal: "Horizon Media Group Limited", parent: "HN Group", parentLegal: "HN Group Limited" },
     };
     const SIG_STRIPE = [["#E97DE8", 14], ["#5514B4", 14], ["#E3E65B", 6], ["#3E9BA3", 20], ["#7A1F6C", 10], ["#C2306B", 10], ["#5FAE7B", 13], ["#1C2235", 13]];
 
@@ -24,7 +24,7 @@
         const c = SIGNATURE_COMPANIES[v.company] || SIGNATURE_COMPANIES["HN Group"];
         const web = v.website.replace(/^https?:\/\//, "").replace(/\/$/, "");
         const href = "https://" + web;
-        const logo = window.location.origin + "/assets/brand/png/" + c.logo + ".png";
+        const logo = window.location.origin + (document.documentElement.dataset.accountBase||'') + "/assets/brand/png/" + c.logo + ".png?v=20261120-development-full-logo";
         const line = function (letter, inner) { return '<span style="color:#1A1A1A;font-weight:bold;">' + letter + "</span>&nbsp; " + inner; };
         const lines = [];
         if (v.email) lines.push(line("E", '<a href="mailto:' + esc(v.email) + '" style="color:#4A4A4A;text-decoration:none;">' + esc(v.email) + "</a>"));
@@ -33,15 +33,15 @@
         return '<table cellpadding="0" cellspacing="0" border="0" role="presentation" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;color:#1A1A1A;max-width:560px;">' +
             "<tr>" +
             '<td valign="middle" style="padding:0 20px 0 0;width:200px;border-right:2px solid ' + c.accent + ';">' +
-            '<a href="' + esc(href) + '" style="text-decoration:none;"><img src="' + esc(logo) + '" width="200" height="100" alt="' + esc(v.company) + '" style="display:block;border:0;width:200px;height:100px;"></a></td>' +
+            '<a href="' + esc(href) + '" style="text-decoration:none;"><img src="' + esc(logo) + '" width="200" height="' + (c.logoHeight || 100) + '" alt="' + esc(v.company) + '" style="display:block;border:0;width:200px;height:' + (c.logoHeight || 100) + 'px;"></a></td>' +
             '<td valign="middle" style="padding:0 0 0 20px;">' +
             '<p style="margin:0;font-size:17px;line-height:22px;font-weight:bold;color:#1A1A1A;">' + esc(v.name) + "</p>" +
-            '<p style="margin:4px 0 10px;font-size:12px;line-height:18px;"><span style="color:' + c.accent + ';font-weight:bold;">' + esc(v.title) + "</span> &nbsp;" +
-            '<span style="color:#4A4A4A;">' + esc(c.legal) + "</span></p>" +
+            '<p style="margin:4px 0 0;font-size:12px;line-height:18px;color:' + c.accent + ';font-weight:bold;">' + esc(v.title) + "</p>" +
+            '<p style="margin:0 0 10px;font-size:12px;line-height:18px;color:#4A4A4A;">' + esc(c.legal) + "</p>" +
             '<p style="margin:0;font-size:12px;line-height:19px;color:#4A4A4A;">' + lines.join("<br>") + "</p>" +
             "</td></tr>" +
             '<tr><td colspan="2" style="padding:14px 0 0;"><table cellpadding="0" cellspacing="0" border="0" role="presentation" width="100%" style="border-collapse:collapse;"><tr>' +
-            SIG_STRIPE.map(function (s) { return '<td height="3" width="' + s[1] + '%" bgcolor="' + s[0] + '" style="font-size:0;line-height:0;">&nbsp;</td>'; }).join("") +
+            SIG_STRIPE.map(function (s) { return '<td height="3" width="' + s[1] + '%" bgcolor="' + s[0] + '" style="padding:0;height:3px;font-size:0;line-height:0;">&nbsp;</td>'; }).join("") +
             "</tr></table></td></tr>" +
             (c.parent ? '<tr><td colspan="2" style="padding:10px 0 0;font-size:11px;line-height:18px;color:#1A1A1A;">A <strong>' + esc(c.parent) + "</strong> company</td></tr>" : "") +
             '<tr><td colspan="2" style="padding:12px 0 0;font-size:10px;line-height:14px;color:#9A9A9A;">' +
@@ -58,7 +58,7 @@
             const img = new Image();
             img.onload = function () { resolve(img); };
             img.onerror = function () { resolve(null); };
-            img.src = "/assets/brand/png/" + c.logo + ".png";
+            img.src = (document.documentElement.dataset.accountBase||'') + "/assets/brand/png/" + c.logo + ".png?v=20261120-development-full-logo";
         });
         const W = 560, PAD = 24, SCALE = 2, FONT = "Arial, Helvetica, sans-serif";
         const canvas = document.createElement("canvas");
@@ -78,7 +78,7 @@
         if (v.email) details.push(["E", v.email]);
         if (v.phone) details.push(["T", v.phone]);
         if (web) details.push(["W", web]);
-        const textH = 22 + 4 + 18 + 10 + details.length * 19;
+        const textH = 22 + 4 + 18 + 18 + 10 + details.length * 19;
         const topH = Math.max(100, textH);
         const H = PAD + topH + 14 + 3 + (c.parent ? 10 + 18 : 0) + 12 + noticeLines.length * 14 + PAD;
         canvas.width = (W + PAD * 2) * SCALE;
@@ -87,15 +87,15 @@
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, W + PAD * 2, H);
         ctx.textBaseline = "middle";
-        if (logo) ctx.drawImage(logo, PAD, PAD + (topH - 100) / 2, 200, 100);
+        if (logo) ctx.drawImage(logo, PAD, PAD + (topH - (c.logoHeight || 100)) / 2, 200, c.logoHeight || 100);
         ctx.fillStyle = c.accent;
         ctx.fillRect(PAD + 220, PAD, 2, topH);
         const x = PAD + 242;
         let y = PAD + (topH - textH) / 2;
         font(17, true); ctx.fillStyle = "#1A1A1A"; ctx.fillText(v.name, x, y + 11); y += 22 + 4;
         font(12, true); ctx.fillStyle = c.accent; ctx.fillText(v.title, x, y + 9);
-        const titleW = v.title ? ctx.measureText(v.title + "  ").width : 0;
-        font(12, false); ctx.fillStyle = "#4A4A4A"; ctx.fillText(c.legal, x + titleW, y + 9); y += 18 + 10;
+        y += 18;
+        font(12, false); ctx.fillStyle = "#4A4A4A"; ctx.fillText(c.legal, x, y + 9); y += 18 + 10;
         details.forEach(function (d) {
             font(12, true); ctx.fillStyle = "#1A1A1A"; ctx.fillText(d[0], x, y + 9.5);
             const w = ctx.measureText(d[0] + "  ").width;
@@ -140,9 +140,9 @@
         if (manager) {
             try { people = (await api("/api/signature-people")).people; } catch (e) { people = []; }
         }
-        const self = me;
-        if (!people.some(p => p.id === me.id)) people.unshift(me);
-        let person = me.system && people.length > 1 ? people[1] : self;
+        const self = (await api("/api/signature-profile")).person;
+        if (!people.some(p => p.id === self.id)) people.unshift(self);
+        let person = me.system && people.length > 1 ? people[1] : (people.find(p=>p.id===self.id) || self);
 
         root.innerHTML =
             '<div class="page-head"><div><h1>Email signature</h1><p class="muted">Your branded signature, built from your staff profile. Copy it straight into Gmail or Outlook.</p></div></div>' +
@@ -151,7 +151,7 @@
             (manager ? '<label for="sig-person">Person</label><select id="sig-person">' + people.map(function (p) {
                 return '<option value="' + p.id + '"' + (p.id === person.id ? " selected" : "") + ">" + esc(p.displayName) + (p.id === me.id ? " (you)" : "") + "</option>";
             }).join("") + "</select>" : "") +
-            '<label for="sig-role">Company</label><select id="sig-role"></select>' +
+            '<label for="sig-role">Position &amp; company</label><select id="sig-role"></select>' +
             '<label for="sig-name">Name</label><input type="text" id="sig-name" maxlength="80">' +
             '<label for="sig-title">Job title</label><input type="text" id="sig-title" maxlength="100">' +
             '<label for="sig-email">Email</label><select id="sig-email"></select>' +

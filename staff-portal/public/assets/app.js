@@ -1,6 +1,15 @@
 (function () {
     "use strict";
+    const FINANCE_APP = document.documentElement.dataset.hnApp === "finance";
+    const FINANCE_PATHS = ["/notifications", "/payslips", "/expenses", "/payroll", "/funds", "/invoices", "/bills"];
+    const HR_PATHS = ["/leave", "/rotas", "/reviews", "/objectives", "/feedback", "/flexible", "/exit-interview", "/exit-interviews", "/staff-files", "/training", "/cases", "/employees", "/onboarding", "/jobs", "/job-descriptions"];
+    const IT_APP = document.documentElement.dataset.hnApp === "it";
+    const IT_PATHS = ["/home","/cases","/accounts","/staff-accounts","/status","/on-call","/notifications"];
+    const requestApi = () => IT_APP || location.pathname === "/it-cases" ? "/api/it-requests" : "/api/hr-requests";
+    const IT_ITEMS = [{title:"Sign-in accounts",href:"/accounts",icon:"lock",desc:"Accounts, access and account locks",accountsAdmin:true},{title:"Staff logins",href:"/staff-accounts",icon:"users",desc:"Create and manage staff sign-in access",accountsAdmin:true},{title:"IT cases",href:"/cases",icon:"message",desc:"Your requests and the IT team queue"},{title:"Service status",href:"/status",icon:"shield",desc:"Internal services and incidents"},{title:"On-call",href:"/on-call",icon:"clock",desc:"Support cover and rotas"}];
     const HR_APP = document.documentElement.dataset.hnApp === "hr";
+
+    const HELP_LABEL = document.documentElement.dataset.hnApp ? "IT Helpdesk" : "Raise a issue";
 
     // ================= Helpers =================
 
@@ -111,12 +120,13 @@
     // one-time ticket and HN Account swaps it for its own sign-in. The tab is opened straight away (so pop-up blockers
     // allow it) and pointed at HN Account once the ticket arrives; without one it falls back to HN Account's sign-in.
     function openHnAccount(next) {
+        if(/^\/#(accounts|staff)(\/|$)/.test(next)){const m=/^\/#staff\/create\/([a-f0-9]{16})$/.exec(next);window.open("/"+(next.startsWith("/#staff")?"staff-accounts":"accounts")+(m?"?create="+m[1]:""),"_blank","noopener");return;}
         const w = window.open("about:blank", "_blank");
         if (w) w.opener = null;
         api("/api/accounts-handoff", { next: next }).then(function (r) {
             if (w) w.location.href = r.url; else location.href = r.url;
         }).catch(function () {
-            const fallback = "https://accounts.hngroup.org.uk/" + next.replace(/^\//, "");
+            const fallback = "https://auth.hngroup.org.uk/account/" + next.replace(/^\//, "");
             if (w) w.location.href = fallback; else location.href = fallback;
         });
     }
@@ -150,7 +160,7 @@
             state.me.codeSetupRequired = true;
             render();
         }
-        if (!res.ok) throw new Error(data.error || "Something went wrong. Please try again.");
+        if (!res.ok) throw Object.assign(new Error(data.error || "Something went wrong. Please try again."),{status:res.status});
         return data;
     }
 
@@ -370,6 +380,10 @@
     // ================= Navigation & menus =================
 
     const NAV = [
+        { label: "Staff badges", items: [
+            { title: "My staff badge", desc: "View and download your issued staff badge", href: "/badge", icon: "card" },
+            { title: "Manage staff badges", desc: "View and reissue staff badges", href: "/badges/manage", icon: "card", requires: "badges.manage" },
+        ] },
         {
             label: "People", items: [
                 { title: "Staff Directory", desc: "Find colleagues across the group", href: "/directory", icon: "users" },
@@ -379,10 +393,6 @@
                 { title: "Q&A", desc: "Ask a question, share what you know", href: "/questions", icon: "help" },
                 { title: "Knowledge base", desc: "How-to guides anyone can edit", href: "/wiki", icon: "book" },
                 { title: "Mentoring", desc: "Find a mentor and plan catch-ups", href: "/mentoring", icon: "users", badge: "mentoringDue" },
-                { title: "Employee Management", desc: "Add and manage staff records", href: "/employees", icon: "briefcase", requires: "staff.manage" },
-                { title: "Joiners & leavers", desc: "Onboarding and leaving checklists", href: "/onboarding", icon: "check", requires: "onboarding.manage" },
-                { title: "Jobs", desc: "Open roles, applications and referrals", href: "/jobs", icon: "briefcase", badge: "newApplicants" },
-                { title: "Job descriptions", desc: "What each role does, who it reports to and its authority", href: "/job-descriptions", icon: "file" },
                 { title: "Roles & permissions", desc: "Choose who can do what", href: "/roles", icon: "shield", requires: "access.manage" },
             ],
         },
@@ -397,7 +407,11 @@
         },
         {
             label: "HR", items: [
-                { title: "Leave & Absence", desc: "Book holidays and report absence", href: "https://hr.hngroup.org.uk/leave", icon: "sun", badge: "leaveApprovals" },
+                { title: "Employee Management", desc: "Add and manage staff records", href: "/employees", icon: "briefcase", requires: "staff.manage" },
+                { title: "Joiners & leavers", desc: "Onboarding and leaving checklists", href: "/onboarding", icon: "check", requires: "onboarding.manage" },
+                { title: "Jobs", desc: "Open roles, applications and referrals", href: "/jobs", icon: "briefcase", badge: "newApplicants" },
+                { title: "Job descriptions", desc: "What each role does, who it reports to and its authority", href: "/job-descriptions", icon: "file" },
+                { title: "Leave & Absence", desc: "Book holidays and report absence", href: "/leave", icon: "sun", badge: "leaveApprovals" },
                 { title: "Rotas & Timesheets", desc: "Shifts, hours and approvals", href: "/rotas", icon: "clock", badge: "timesheetApprovals" },
                 { title: "Probation & reviews", desc: "Probation dates and reviews", href: "/reviews", icon: "star", badge: "reviewsDue" },
                 { title: "Goals", desc: "Quarterly goals and progress", href: "/objectives", icon: "flag" },
@@ -406,13 +420,8 @@
                 { title: "Exit interviews", desc: "What leavers told us", href: "/exit-interviews", icon: "logout", requires: "staff.manage" },
                 { title: "Staff documents", desc: "Contracts and personal documents", href: "/staff-files", icon: "file" },
                 { title: "Training", desc: "Courses, certificates and renewals", href: "/training", icon: "star", badge: "trainingDue" },
-                { title: "HR cases", desc: "Disciplinary and grievance records", href: "/cases", icon: "shield", requires: "cases.manage", badge: "casesOpen" },
-                { title: "Payslips", desc: "View and download your payslips", href: "/payslips", icon: "card" },
-                { title: "Expenses", desc: "Claim back money you spent for work", href: "/expenses", icon: "pound", badge: "expenseApprovals" },
-                { title: "Run payroll", desc: "Generate and issue payslips", href: "/payroll", icon: "wallet", requires: "payroll.manage" },
-                { title: "Company funds", desc: "Balances, budgets and statements", href: "/funds", icon: "pound", requires: "payroll.manage", badge: "budgetWarnings" },
-                { title: "Invoices", desc: "Bill customers and track payments", href: "/invoices", icon: "file", requires: "payroll.manage", badge: "invoicesOverdue" },
-                { title: "Bills", desc: "Supplier bills and when they're due", href: "/bills", icon: "card", requires: "payroll.manage", badge: "billsDue" },
+                { title: "Cases", desc: "HR requests and authorized case records", href: "/cases", icon: "shield" },
+                { title: "HN Group Finance", desc: "Payslips, expenses, payroll, funds, invoices and bills", href: "https://finance.hngroup.org.uk/", icon: "pound" },
             ],
         },
         {
@@ -420,15 +429,67 @@
                 { title: "Service status", desc: "Are our websites up?", href: "/status", icon: "activity", badge: "servicesDown" },
                 { title: "Activity reports", desc: "Monthly summary as a PDF", href: "/reports", icon: "chart", requires: "reports.view" },
                 { title: "About HN Group", desc: "Our companies, brand colours and logos", href: "/about", icon: "building" },
-                { title: "IT Helpdesk", desc: "Raise and track support tickets", href: "/helpdesk", icon: "lifebuoy", badge: "helpdeskBadge" },
+                { title: HELP_LABEL, desc: "Send an issue to the right team", href: "/helpdesk", icon: "lifebuoy", badge: "helpdeskBadge" },
                 { title: "On call", desc: "Who to contact out of hours", href: "/on-call", icon: "phone" },
                 { title: "Website enquiries", desc: "Messages from hngroup.org.uk", href: "/enquiries", icon: "mail", requires: "enquiries.manage", badge: "enquiriesNew" },
             ],
         },
     ];
 
+    const HR_PEOPLE_PATHS = ["/employees", "/onboarding", "/jobs", "/job-descriptions"];
+    const HR_ITEMS = NAV.find(function (section) { return section.label === "HR"; }).items;
+
+    function destination(href) {
+        if (!document.documentElement.dataset.hnApp) {
+            if (/^https:\/\/(hr|finance|it)\.hngroup\.org\.uk\//.test(href || '')) { const u=new URL(href); return (u.pathname==='/home'||u.pathname==='/'?'/home?section='+({hr:'hr',finance:'finance',it:'it'}[u.hostname.split('.')[0]]):u.hostname.startsWith('it.')&&u.pathname==='/cases'?'/it-cases':u.pathname)+u.search+u.hash; }
+            return href;
+        }
+        if (!href || /^https?:/.test(href)) return href;
+        const path = href.split(/[?#]/)[0];
+        if (IT_APP && IT_PATHS.includes(path)) return href;
+        if (['/status','/on-call'].includes(path)) return 'https://it.hngroup.org.uk' + href;
+        if (IT_APP && !HR_PATHS.includes(path) && !FINANCE_PATHS.includes(path)) return 'https://staff.hngroup.org.uk' + href;
+        if (!HR_APP && HR_PATHS.includes(path)) return 'https://hr.hngroup.org.uk' + href;
+        if (!FINANCE_APP && FINANCE_PATHS.includes(path)) return 'https://finance.hngroup.org.uk' + href;
+        if (HR_APP && !['/home', '/notifications'].concat(HR_PATHS).includes(path)) return 'https://staff.hngroup.org.uk' + href;
+        return href;
+    }
+
+    function viewHrHome(root) {
+        if (window.HNHR) {
+            window.HNHR.home(root, {me: state.me, items: visibleItems({items: HR_ITEMS}), icon: icon, avatar: avatar});
+            loadMyOnboarding($('#hr-onboarding', root));
+            return;
+        }
+        root.innerHTML = '<section class="page-head"><div><h1>HN Group HR</h1><p class="muted">Leave, working hours, development and your staff documents in one place.</p></div></section>' +
+            '<section class="panel"><h2>Your HR tools</h2><div class="menu-grid">' + visibleItems({items: HR_ITEMS.filter(function (it) { return !HR_PEOPLE_PATHS.includes(it.href); })}).map(menuItemHtml).join('') + '</div></section><section class="panel"><h2>People &amp; recruitment</h2><div class="menu-grid">' + visibleItems({items: HR_ITEMS.filter(function (it) { return HR_PEOPLE_PATHS.includes(it.href); })}).map(menuItemHtml).join('') + '</div></section><section class="panel" id="hr-onboarding" hidden></section>';
+        loadMyOnboarding($('#hr-onboarding', root));
+    }
+
+    const FINANCE_ITEMS = [
+                { title: "Payslips", desc: "View and download your payslips", href: "/payslips", icon: "card" },
+                { title: "Expenses", desc: "Claim back money you spent for work", href: "/expenses", icon: "pound", badge: "expenseApprovals" },
+                { title: "Run payroll", desc: "Generate and issue payslips", href: "/payroll", icon: "wallet", requires: "payroll.manage" },
+                { title: "Company funds", desc: "Balances, budgets and statements", href: "/funds", icon: "pound", requires: "payroll.manage", badge: "budgetWarnings" },
+                { title: "Invoices", desc: "Bill customers and track payments", href: "/invoices", icon: "file", requires: "payroll.manage", badge: "invoicesOverdue" },
+                { title: "Bills", desc: "Supplier bills and when they're due", href: "/bills", icon: "card", requires: "payroll.manage", badge: "billsDue" },
+    ];
+
+    if (!document.documentElement.dataset.hnApp) {
+        NAV.push({label:'Finance',items:FINANCE_ITEMS});
+        NAV.push({label:'IT',items:IT_ITEMS.filter(it=>it.href!=='/home'&&it.href!=='/notifications').map(it=>({...it,href:it.href==='/cases'?'/it-cases':it.href}))});
+        HR_ITEMS.push({title:'HR cases',href:'/cases',icon:'message',desc:'Requests and confidential case records'});
+    }
+
+    function viewFinanceHome(root, current) {
+        if(window.HNFinance)return window.HNFinance.home(root,{me:state.me,items:visibleItems({items:FINANCE_ITEMS}),icon:icon,api:api,current:current});
+        root.innerHTML = '<section class="page-head"><div><h1>HN Group Finance</h1><p class="muted">Your pay, claims and company finances in one place.</p></div></section>' +
+            '<section class="panel"><h2>Your money</h2><div class="menu-grid">' + FINANCE_ITEMS.filter(function (it) { return !it.requires; }).map(menuItemHtml).join('') + '</div></section>' +
+            (can('payroll.manage') ? '<section class="panel"><h2>Company finance</h2><div class="menu-grid">' + FINANCE_ITEMS.filter(function (it) { return it.requires && can(it.requires); }).map(menuItemHtml).join('') + '</div></section>' : '');
+    }
+
     function visibleItems(section) {
-        return section.items.filter(function (it) { return !it.requires || can(it.requires); });
+        return section.items.filter(function (it) { return (!it.requires || can(it.requires)) && (!it.accountsAdmin || state.me.canManageAccounts); });
     }
 
     function menuItemHtml(it) {
@@ -437,7 +498,7 @@
             (it.soon ? ' <span class="soon">Soon</span>' : "") + (count ? ' <span class="count-badge">' + count + "</span>" : "") + '</span><span class="mi-desc">' + esc(it.desc) + "</span></span>";
         return it.soon
             ? '<button type="button" class="menu-item" role="menuitem" data-soon="' + esc(it.title) + '">' + inner + "</button>"
-            : '<a class="menu-item" role="menuitem" href="' + it.href + '" data-link>' + inner + "</a>";
+            : '<a class="menu-item" role="menuitem" href="' + destination(it.href) + '" data-link>' + inner + "</a>";
     }
 
     function renderChrome() {
@@ -468,7 +529,6 @@
                 (me.status ? statusPill(me.status) : '<span class="status-pill st-none"><span class="status-dot"></span>Set a status</span>') + "</button>") +
             '<div class="menu-sep"></div>' +
             '<a class="menu-item compact" role="menuitem" href="/settings" data-link>' + icon("settings") + "<span>Settings</span></a>" +
-            '<a class="menu-item compact" role="menuitem" href="/signature" data-link>' + icon("mail") + "<span>Email signature</span></a>" +
             (can("system.admin") && !me.impersonatedBy ? '<a class="menu-item compact" role="menuitem" href="/system" data-link>' + icon("shield") + "<span>System Admin</span></a>" : "") +
             '<div class="menu-sep"></div>' +
             '<button type="button" class="menu-item compact danger" role="menuitem" data-action="logout">' + icon("logout") + "<span>Sign out</span></button>" +
@@ -488,14 +548,33 @@
                 "). Everything you do is recorded as them.</span>" +
                 '<button type="button" class="btn btn-small btn-light" data-action="stop-impersonating">Return to my account</button></div>';
         }
+        if (window.HNPortal) window.HNPortal.chrome({
+            me: me, icon: icon, canAdmin: can("system.admin") && !me.impersonatedBy,
+            sections: NAV.map(function (section) {
+                return { label: section.label, items: visibleItems(section) };
+            }),
+        });
+        if (FINANCE_APP && window.HNFinance) window.HNFinance.chrome({me:me,items:visibleItems({items:FINANCE_ITEMS}),icon:icon,avatar:avatar});
+        if (IT_APP && window.HNIT) window.HNIT.chrome({me:me,items:IT_ITEMS.filter(it=>!it.accountsAdmin||state.me.canManageAccounts),icon:icon,avatar:avatar});
         if (HR_APP) {
-            $('#mainnav').innerHTML = '<a href="/leave" data-link class="nav-link active">' + icon('sun') + '<span>Leave &amp; absence</span></a><a class="nav-link" href="https://staff.hngroup.org.uk/">Staff Portal</a>';
-            $('#search-btn').hidden = true;
+            const items = visibleItems({items: HR_ITEMS.filter(function (it) { return !HR_PEOPLE_PATHS.includes(it.href); })});
+            const people = visibleItems({items: HR_ITEMS.filter(function (it) { return HR_PEOPLE_PATHS.includes(it.href); })});
+            $('#mainnav').innerHTML = '<a href="/home" data-link class="nav-link" data-section="/home">Overview</a><a href="/leave" data-link class="nav-link" data-section="/leave">Leave &amp; absence</a><div class="nav-item"><button type="button" class="nav-link" data-menu aria-haspopup="true" aria-expanded="false" data-section="' + HR_PEOPLE_PATHS.join(' ') + '">People' + icon('chevron', 'chev') + '</button><div class="menu" role="menu" hidden>' + people.map(menuItemHtml).join('') + '</div></div><div class="nav-item"><button type="button" class="nav-link" data-menu aria-haspopup="true" aria-expanded="false" data-section="' + HR_PATHS.filter(function (p) { return p !== '/leave' && !HR_PEOPLE_PATHS.includes(p); }).join(' ') + '">HR tools' + icon('chevron', 'chev') + '</button><div class="menu menu-cols" role="menu" hidden>' + items.filter(function (it) { return it.href !== '/leave'; }).map(menuItemHtml).join('') + '</div></div>';
+            $('#search-btn').hidden = false;
+            $('#user-menu').innerHTML = '<button type="button" class="user-btn" data-menu aria-haspopup="true" aria-expanded="false">' + avatar(me, 'sm') + '<span class="user-meta"><span class="user-name">' + esc(me.displayName) + '</span></span>' + icon('chevron', 'chev') + '</button><div class="menu menu-right menu-user" role="menu" hidden><a class="menu-item compact" role="menuitem" href="https://auth.hngroup.org.uk/account/">' + icon('user') + '<span>HN Account</span></a><a class="menu-item compact" role="menuitem" href="https://staff.hngroup.org.uk/">Staff Portal</a><a class="menu-item compact" role="menuitem" href="https://finance.hngroup.org.uk/">HN Group Finance</a><button type="button" class="menu-item compact danger" role="menuitem" data-action="logout">' + icon('logout') + '<span>Sign out</span></button></div>';
+            if (window.HNHR) window.HNHR.chrome({me: me, items: visibleItems({items: HR_ITEMS}), icon: icon, avatar: avatar});
+            highlightNav();
         }
+        if (window.HNStaffBrand) window.HNStaffBrand.apply(me);
     }
 
     function highlightNav() {
         const path = window.location.pathname;
+        if (window.HNPortal) window.HNPortal.route(path);
+        if (window.HNIT) window.HNIT.route(path);
+        if (window.HNFinance) window.HNFinance.route(path);
+        if (window.HNHR) window.HNHR.route(path);
+        if (window.HNWorkspaceNavigation) window.HNWorkspaceNavigation.route(path);
         $$("#mainnav [data-section]").forEach(function (el) {
             el.classList.toggle("active", el.dataset.section.split(" ").indexOf(path) !== -1);
         });
@@ -532,6 +611,7 @@
 
     function setMobileNav(open) {
         document.body.classList.toggle("nav-open", open);
+        if (window.HNPortal) window.HNPortal.mobile(open);
         $("#nav-toggle").setAttribute("aria-expanded", String(open));
         $("#nav-toggle").innerHTML = icon(open ? "x" : "menu");
     }
@@ -601,7 +681,12 @@
 
     // ================= Router =================
 
+    async function viewStaffBadge(root, current) {
+        return window.HNBadges.render(root, { api, esc, icon, toast, openModal, closeModal, current, setLiveRefresh: fn => { livePageRefresh = fn; } }, location.pathname === "/badges/manage");
+    }
     const ROUTES = {
+        "/badge": viewStaffBadge,
+        "/badges/manage": viewStaffBadge,
         "/home": viewHome,
         "/directory": viewDirectory,
         "/employees": viewEmployees,
@@ -626,6 +711,7 @@
         "/invoices": viewInvoices,
         "/training": viewTraining,
         "/cases": viewCases,
+        "/it-cases": viewCases,
         "/jobs": viewJobs,
         "/notifications": viewNotifications,
         "/kudos": viewKudos,
@@ -649,9 +735,9 @@
     };
 
     function navigate(href, replace) {
+        href = destination(href);
         if (/^https?:/.test(href)) return window.location.assign(href);
-        if (!HR_APP && href.split('?')[0] === '/leave') return window.location.assign('https://hr.hngroup.org.uk' + href);
-        if (HR_APP && href.split('?')[0] !== '/leave') return window.location.assign('https://staff.hngroup.org.uk' + href);
+        if (FINANCE_APP && href.split(/[?#]/)[0] !== '/home' && !FINANCE_PATHS.includes(href.split(/[?#]/)[0])) return window.location.assign('https://staff.hngroup.org.uk' + href);
 
         history[replace ? "replaceState" : "pushState"]({}, "", href);
         render();
@@ -715,13 +801,15 @@
     }
 
     let renderSeq = 0;
-    async function render() {
+    async function render(options) {
+        const live = !!(options && options.live), savedScroll = [window.scrollX,window.scrollY];
+        livePageRefresh = null;
         const seq = ++renderSeq;
         closeMenus();
         closeModal();
         // A fresh container each time, so listeners from the previous page don't pile up.
         const old = $("#view");
-        const root = old.cloneNode(false);
+        const root = old.cloneNode(live);
         old.replaceWith(root);
 
         if (state.me.passwordTemporary || state.me.passwordExpired) {
@@ -735,25 +823,34 @@
         document.body.classList.remove("locked");
 
         const path = window.location.pathname;
-        if (!HR_APP && path === '/leave') return window.location.assign('https://hr.hngroup.org.uk/leave');
-        if (HR_APP && path !== '/leave') return window.location.assign('https://staff.hngroup.org.uk' + path);
-        let view = ROUTES[path];
+        const target = destination(path + location.search + location.hash);
+        if (/^https?:/.test(target)) return window.location.assign(target);
+        if (FINANCE_APP && path !== '/home' && !FINANCE_PATHS.includes(path)) return window.location.assign('https://staff.hngroup.org.uk' + path + location.search + location.hash);
+        let view = ["/accounts","/staff-accounts"].includes(path) ? function(root){return window.HNAccountAdministration.mount(root,{api:api,me:state.me,view:path==="/staff-accounts"?"staff":"accounts"});} : IT_APP && path === "/home" ? function(root){window.HNIT.home(root,{me:state.me,items:IT_ITEMS.filter(it=>!it.accountsAdmin||state.me.canManageAccounts),icon:icon});} : HR_APP && path === "/home" ? viewHrHome : FINANCE_APP && path === "/home" ? viewFinanceHome : ROUTES[path];
+        if (window.HNWorkspaceNavigation && window.HNWorkspaceNavigation.hasView(path)) view = function(root) { window.HNWorkspaceNavigation.overview(root,path); };
         if (!view) return navigate("/home", true);
-        const NEEDS = { "/employees": "staff.manage", "/onboarding": "onboarding.manage", "/roles": "access.manage", "/payroll": "payroll.manage", "/funds": "payroll.manage", "/invoices": "payroll.manage", "/cases": "cases.manage", "/reports": "reports.view", "/bills": "payroll.manage", "/exit-interviews": "staff.manage", "/enquiries": "enquiries.manage" };
+        const NEEDS = { "/badges/manage": "badges.manage", "/employees": "staff.manage", "/onboarding": "onboarding.manage", "/roles": "access.manage", "/payroll": "payroll.manage", "/funds": "payroll.manage", "/invoices": "payroll.manage", "/reports": "reports.view", "/bills": "payroll.manage", "/exit-interviews": "staff.manage", "/enquiries": "enquiries.manage" };
         if (NEEDS[path] && !can(NEEDS[path])) view = viewNoAccess;
         if (path === "/system" && (!can("system.admin") || state.me.impersonatedBy)) view = viewNoSystemAccess;
 
         highlightNav();
-        root.innerHTML = '<div class="loading">Loading…</div>';
-        root.classList.add("view-enter");
+        if (!live) root.innerHTML = window.HNPortal ? window.HNPortal.loading() : '<div class="loading">Loading…</div>';
+        root.classList.toggle("view-enter",!live);
         try {
             await view(root, function () { return seq === renderSeq; });
         } catch (err) {
-            if (seq === renderSeq) root.innerHTML = '<div class="empty">' + esc(err.message) + "</div>";
+            if (seq === renderSeq) {
+                root.innerHTML = window.HNPortal ? window.HNPortal.error(err.message) : '<div class="empty">' + esc(err.message) + "</div>";
+                const retry = root.querySelector('[data-portal-retry]');
+                if (retry) retry.addEventListener('click', render);
+            }
         }
         if (seq !== renderSeq) return;
         decoratePageHead(root, path);
-        if (window.location.hash) {
+        if (window.HNFinance) window.HNFinance.decorate(root,path);
+        if (window.HNWorkspaceNavigation) window.HNWorkspaceNavigation.decorate(root,path);
+        if (live) { window.scrollTo(savedScroll[0],savedScroll[1]); }
+        else if (window.location.hash) {
             const target = document.getElementById(window.location.hash.slice(1));
             if (target) target.scrollIntoView({ block: "start" });
         } else {
@@ -763,7 +860,9 @@
 
     // ================= Modals =================
 
-    let activeModal = null;
+    let activeModal = null, liveModalRefresh = null, livePageRefresh = null;
+    const dirtyForms = new WeakSet();
+    document.addEventListener("input",function(e){const form=e.target.closest("form");if(form)dirtyForms.add(form);});
 
     function openModal(html, opts) {
         closeModal();
@@ -776,6 +875,10 @@
         document.body.classList.add("modal-open");
 
         const modal = { el: backdrop.firstChild, onClose: opts.onClose };
+        if (window.HNPortal) window.HNPortal.dialog(modal);
+        if (window.HNIT) window.HNIT.dialog(modal);
+        if (window.HNFinance) window.HNFinance.dialog(modal);
+        if (window.HNHR) window.HNHR.dialog(modal);
         backdrop.addEventListener("mousedown", function (e) { if (e.target === backdrop) closeModal(); });
         backdrop.addEventListener("click", function (e) { if (e.target.closest("[data-close]")) closeModal(); });
         activeModal = modal;
@@ -785,6 +888,7 @@
     }
 
     function closeModal() {
+        liveModalRefresh = null;
         if (!activeModal) return;
         const m = activeModal;
         activeModal = null;
@@ -831,13 +935,23 @@
         return '<p class="muted hero-sub">' + esc(main.jobTitle) + " \u00b7 " + esc(main.company) + "</p>";
     }
 
-    async function viewHome(root) {
+    async function viewHome(root, current) {
         // Fresh counts for the reminder chips (approvals and tickets change while you're signed in).
         try {
+            if(!state.bootstrapFresh){
             state.me = (await api("/api/me")).user;
             renderChrome();
+            }
+            state.bootstrapFresh=false;
         } catch (e) { /* keep what we have */ }
         const me = state.me;
+        if (window.HNPortal) return window.HNPortal.home(root, current, {
+            me: me, api: api, icon: icon, avatar: avatar, clock: clock,
+            statusPill: statusPill, rolesHtml: rolesHtml, mountAnnouncements: mountAnnouncements,
+            applyHomeLayout: applyHomeLayout, openHomeCustomiser: openHomeCustomiser,
+            loadComingUp: loadComingUp, loadWhosAround: loadWhosAround,
+            loadCelebrations: loadCelebrations, loadHomeColleagues: loadHomeColleagues,
+        });
         // Their own time comes from the time zone in their profile (not the device), and the second
         // clock is always UK time, where HN Group is based (shows BST or GMT).
         const profileTz = me.timezone || state.meta.defaultTimezone;
@@ -868,13 +982,12 @@
             (me.unreadAnnouncements ? '<a class="hero-chip" href="/announcements" data-link>' + icon("bell") + me.unreadAnnouncements + " new announcement" + (me.unreadAnnouncements === 1 ? "" : "s") + "</a>" : "") +
             (me.pendingAcks ? '<a class="hero-chip warn" href="#home-todo">' + icon("check") + me.pendingAcks + (me.pendingAcks === 1 ? " thing" : " things") + " to acknowledge</a>" : "") +
             (me.openPolls ? '<a class="hero-chip" href="/polls" data-link>' + icon("chart") + me.openPolls + (me.openPolls === 1 ? " poll" : " polls") + " to answer</a>" : "") +
-            (me.onboardingTasks ? '<a class="hero-chip" href="#home-onboarding">' + icon("check") + me.onboardingTasks + " onboarding task" + (me.onboardingTasks === 1 ? "" : "s") + "</a>" : "") +
             (me.payrollOverdrawn ? '<a class="hero-chip danger" href="/funds" data-link>' + icon("alert") + "Company funds overdrawn \u2013 next payroll can\u2019t be met</a>" : "") +
             (me.reviewsDue ? '<a class="hero-chip" href="/reviews" data-link>' + icon("star") + me.reviewsDue + (me.reviewsDue === 1 ? " probation or review" : " probations or reviews") + " coming up</a>" : "") +
-            (me.returnToWorkDue ? '<a class="hero-chip" href="/leave" data-link data-rtw-chip>' + icon("thermometer") + me.returnToWorkDue + " return-to-work form" + (me.returnToWorkDue === 1 ? "" : "s") + " to do</a>" : "") +
+            (me.returnToWorkDue ? '<a class="hero-chip" href="/leave?tab=rtw" data-link data-rtw-chip>' + icon("thermometer") + me.returnToWorkDue + " return-to-work form" + (me.returnToWorkDue === 1 ? "" : "s") + " to do</a>" : "") +
             (me.servicesDown ? '<a class="hero-chip danger" href="/status" data-link>' + icon("alert") + me.servicesDown + (me.servicesDown === 1 ? " service is" : " services are") + " down</a>" : "") +
-            (me.leaveApprovals ? '<a class="hero-chip" href="/leave" data-link>' + icon("sun") + me.leaveApprovals + " leave request" + (me.leaveApprovals === 1 ? "" : "s") + " to approve</a>" : "") +
-            (me.timesheetApprovals ? '<a class="hero-chip" href="/rotas" data-link data-rota-approvals>' + icon("clock") + me.timesheetApprovals + " timesheet" + (me.timesheetApprovals === 1 ? "" : "s") + " to approve</a>" : "") +
+            (me.leaveApprovals ? '<a class="hero-chip" href="/leave?tab=approvals" data-link>' + icon("sun") + me.leaveApprovals + " leave request" + (me.leaveApprovals === 1 ? "" : "s") + " to approve</a>" : "") +
+            (me.timesheetApprovals ? '<a class="hero-chip" href="/rotas?tab=approvals" data-link data-rota-approvals>' + icon("clock") + me.timesheetApprovals + " timesheet" + (me.timesheetApprovals === 1 ? "" : "s") + " to approve</a>" : "") +
             (me.expenseApprovals ? '<a class="hero-chip" href="/expenses" data-link>' + icon("pound") + me.expenseApprovals + " expense claim" + (me.expenseApprovals === 1 ? "" : "s") + " to deal with</a>" : "") +
             (me.budgetWarnings ? '<a class="hero-chip warn" href="/funds" data-link>' + icon("flag") + me.budgetWarnings + (me.budgetWarnings === 1 ? " budget is" : " budgets are") + " nearly used up</a>" : "") +
             (me.exitInterviewDue ? '<a class="hero-chip" href="/exit-interview" data-link>' + icon("logout") + "Fill in your exit interview</a>" : "") +
@@ -884,12 +997,11 @@
             (me.invoicesOverdue ? '<a class="hero-chip warn" href="/invoices" data-link>' + icon("file") + me.invoicesOverdue + " overdue invoice" + (me.invoicesOverdue === 1 ? "" : "s") + "</a>" : "") +
             (me.backupStale ? '<a class="hero-chip danger" href="/system#sys-backups" data-link>' + icon("archive") + "No backup in the last 36 hours</a>" : "") +
             (me.trainingDue ? '<a class="hero-chip warn" href="/training" data-link>' + icon("star") + me.trainingDue + " training item" + (me.trainingDue === 1 ? "" : "s") + " expiring or missing</a>" : "") +
-            (me.newApplicants ? '<a class="hero-chip" href="/jobs" data-link>' + icon("briefcase") + me.newApplicants + " new job applicant" + (me.newApplicants === 1 ? "" : "s") + "</a>" : "") +
             (me.chatUnread ? '<a class="hero-chip" href="/chat" data-link>' + icon("message") + me.chatUnread + " unread message" + (me.chatUnread === 1 ? "" : "s") + "</a>" : "") +
             (me.mentoringDue ? '<a class="hero-chip" href="/mentoring" data-link>' + icon("users") + me.mentoringDue + " mentoring catch-up" + (me.mentoringDue === 1 ? "" : "s") + " due</a>" : "") +
             (me.enquiriesNew ? '<a class="hero-chip" href="/enquiries" data-link>' + icon("mail") + me.enquiriesNew + " new website enquir" + (me.enquiriesNew === 1 ? "y" : "ies") + "</a>" : "") +
             (me.helpdeskBadge ? '<a class="hero-chip" href="/helpdesk" data-link>' + icon("lifebuoy") + me.helpdeskBadge + " IT ticket" + (me.helpdeskBadge === 1 ? "" : "s") + " need" + (me.helpdeskBadge === 1 ? "s" : "") + " attention</a>" : "") +
-            (!me.unreadAnnouncements && !me.pendingAcks && !me.openPolls && !me.onboardingTasks && !me.leaveApprovals && !me.timesheetApprovals && !me.helpdeskBadge && !me.payrollOverdrawn && !me.reviewsDue && !me.returnToWorkDue && !me.servicesDown && !me.expenseApprovals && !me.budgetWarnings && !me.invoicesOverdue && !me.trainingDue && !me.newApplicants && !me.backupStale && !me.billsDue && !me.exitInterviewDue && !me.feedbackDue && !me.flexibleDecisions && !me.chatUnread && !me.mentoringDue && !me.enquiriesNew ? '<span class="hero-chip calm">' + icon("tick") + "You\u2019re all caught up</span>" : "") +
+            (!me.unreadAnnouncements && !me.pendingAcks && !me.openPolls && !me.leaveApprovals && !me.timesheetApprovals && !me.helpdeskBadge && !me.payrollOverdrawn && !me.reviewsDue && !me.returnToWorkDue && !me.servicesDown && !me.expenseApprovals && !me.budgetWarnings && !me.invoicesOverdue && !me.trainingDue && !me.backupStale && !me.billsDue && !me.exitInterviewDue && !me.feedbackDue && !me.flexibleDecisions && !me.chatUnread && !me.mentoringDue && !me.enquiriesNew ? '<span class="hero-chip calm">' + icon("tick") + "You\u2019re all caught up</span>" : "") +
             "</div></div>" +
             '<div class="hero-clocks' + (sameAsUk ? " single" : "") + '">' +
             '<div class="glass-clock"><div class="gc-label" title="' + esc(placeName) + '">' + icon("pin") + '<span class="gc-place">Your time \u00b7 ' + esc(placeShort) + "</span></div>" +
@@ -909,7 +1021,6 @@
 
             '<aside class="home-side" id="home-side">' +
             '<section class="panel" id="home-todo" data-widget="todo" hidden></section>' +
-            '<section class="panel" id="home-onboarding" data-widget="onboarding" hidden></section>' +
             (me.pulseDue ? '<section class="panel" id="home-pulse" data-widget="pulse"></section>' : "") +
 
             '<section class="panel" id="home-celebrate" data-widget="celebrate" hidden></section>' +
@@ -958,7 +1069,7 @@
         if ($("#home-status")) $("#home-status").addEventListener("click", openStatusModal);
         if ($("[data-rota-approvals]", root)) $("[data-rota-approvals]", root).addEventListener("click", function () { state.rotaTab = "approvals"; });
         if ($("[data-rtw-chip]", root)) $("[data-rtw-chip]", root).addEventListener("click", function () { state.leaveTab = "rtw"; });
-        if (me.leaveApprovals) $('.hero-chip[href="/leave"]', root).addEventListener("click", function () { state.leaveTab = "approvals"; });
+
         $$('a[href^="#home-"]', root).forEach(function (a) {
             a.addEventListener("click", function (e) {
                 e.preventDefault();
@@ -976,7 +1087,6 @@
             box.innerHTML = pulseCardHtml(p.question);
             wirePulse(box);
         }).catch(function () {});
-        if ($("#home-onboarding")) loadMyOnboarding($("#home-onboarding"));
 
         if (me.pendingAcks && $("#home-todo")) {
             Promise.all([api("/api/documents"), api("/api/announcements")]).then(function (r) {
@@ -1021,7 +1131,7 @@
     }
 
     function companiesOf(p) {
-        return [p.company].concat((p.otherRoles || []).map(function (r) { return r.company; }));
+        return [...new Set([p.company].concat((p.otherRoles || []).map(function (r) { return r.company; })))];
     }
 
     function ownerBadge(p) {
@@ -1032,9 +1142,10 @@
     function roleEntries(people) {
         const out = [];
         people.forEach(function (p) {
-            companiesOf(p).forEach(function (c) {
-                const r = roleFor(p, c);
-                out.push({ key: p.id + "|" + c, person: p, company: c, jobTitle: r.jobTitle, department: r.department, supervisorId: r.supervisorId, supervisorCompany: r.supervisorCompany, main: r.main });
+            const used = new Set();
+            [{ company:p.company,jobTitle:p.jobTitle,department:p.department,supervisorId:p.supervisorId,supervisorCompany:p.supervisorCompany,supervisorPosition:p.supervisorPosition,temporary:!!p.temporary,main:true }].concat((p.otherRoles || []).map(r=>({...r,main:false}))).forEach(function(r,i){
+                const base=p.id+"|"+r.company,key=used.has(base)?base+"|"+i:base;used.add(base);
+                out.push({ key, person:p, company:r.company, jobTitle:r.jobTitle||p.jobTitle, department:r.department||p.department, supervisorId:r.supervisorId||(r.main?null:p.supervisorId), supervisorCompany:r.supervisorCompany, supervisorPosition:r.supervisorPosition, temporary:!!r.temporary, main:r.main });
             });
         });
         return out;
@@ -1046,16 +1157,19 @@
     function supervisorKey(entry, byId) {
         const s = byId[entry.supervisorId];
         if (!s || s.id === entry.person.id) return null;
+        if (entry.supervisorPosition) { const target=roleEntries([s]).find(r=>r.company===entry.supervisorPosition.company && r.jobTitle.toLowerCase()===entry.supervisorPosition.title.toLowerCase());if(target)return target.key; }
         if (entry.supervisorCompany && worksAt(s, entry.supervisorCompany)) return s.id + "|" + entry.supervisorCompany;
         return s.id + "|" + (worksAt(s, entry.company) ? entry.company : s.company);
     }
 
     // The signed-in user's roles: job title and supervisor at each company they work for.
+    function boardLabel(company) { return company === "Horizon Network" ? "Board of Directors" : company + " Board of Directors"; }
+    function supervisorText(value) { return /^Board of (HN Group|Horizon Network)$/.test(value || "") ? boardLabel(value.slice(9)) : value; }
     function rolesHtml(me) {
         return '<div class="role-list compact">' + (me.roles || []).map(function (r) {
-            return '<div class="role-item"><div><div class="role-company">' + esc(r.company) + (r.main && me.roles.length > 1 ? ' <span class="badge">Main</span>' : "") + "</div>" +
+            return '<div class="role-item"><div><div class="role-company">' + esc(r.company) + (r.temporary ? ' <span class="badge badge-temporary">Temporary</span>' : "") + (r.main && me.roles.length > 1 ? ' <span class="badge">Main</span>' : "") + "</div>" +
                 '<div class="small">' + esc(r.jobTitle) + (r.department ? ' <span class="muted">\u00b7 ' + esc(r.department) + "</span>" : "") + '</div></div><div class="small muted">' +
-                (r.supervisor ? "Reports to " + esc(r.supervisor.displayName) + " (" + esc(r.supervisor.jobTitle) + ")" : "No supervisor") + "</div></div>";
+                (r.supervisor ? "Reports to " + esc(r.supervisor.displayName) + (r.supervisor.jobTitle === "Collective board" ? "" : " (" + esc(r.supervisor.jobTitle) + ")") : "No supervisor") + "</div></div>";
         }).join("") + "</div>";
     }
 
@@ -1118,6 +1232,7 @@
             '<div id="dir-body"></div>';
 
         let company = "";
+        let chartCompanies = null;
 
         function matches(e) {
             if (company && e.company !== company) return false;
@@ -1125,6 +1240,7 @@
             const q = $("#dir-search").value.trim().toLowerCase();
             if (!q) return true;
             const p = e.person;
+            if ((p.employeeNumber || "").toLowerCase().includes(q)) return true;
             return [p.displayName, p.firstName, p.lastName, e.jobTitle, e.department, e.company, p.location]
                 .concat(p.skills || [], p.languages || [])
                 .concat(p.emails.map(function (x) { return x.address; }))
@@ -1132,12 +1248,13 @@
         }
 
         function supLabel(e) {
+            if(e.supervisorPosition?.kind === "board")return esc(boardLabel(e.supervisorPosition.company));
             const s = ctx.byKey[supervisorKey(e, ctx.byId)];
             return s ? esc(s.person.displayName) + ' <span class="muted">· ' + esc(s.jobTitle) + "</span>" : "";
         }
 
         function roleTag(e) {
-            return companiesOf(e.person).length > 1 ? (e.main ? '<span class="badge">Main role</span>' : '<span class="badge badge-soft">Additional role</span>') : "";
+            return ((e.person.otherRoles || []).length ? (e.main ? '<span class="badge">Main role</span>' : '<span class="badge badge-soft">Additional role</span>') : "") + (e.temporary ? '<span class="badge badge-temporary">Temporary</span>' : "");
         }
 
         function card(e) {
@@ -1218,6 +1335,22 @@
                 b.setAttribute("aria-selected", String(b.dataset.view === view));
             });
             $$("#dir-companies [data-company]").forEach(function (b) { b.classList.toggle("active", b.dataset.company === company); });
+
+            const positionChart = view === "tree" && window.HNOrgChart;
+            $("#dir-companies", root).hidden = !!positionChart;
+            $("#dir-search", root).closest(".toolbar").hidden = !!positionChart;
+            $("#dir-count", root).hidden = !!positionChart;
+            const chartBody = $("#dir-body", root);
+            chartBody.classList.toggle('portal-position-chart', !!positionChart);
+            if (positionChart) return window.HNOrgChart.mount(chartBody, {
+                company: company, companies: chartCompanies, api: api, avatar: avatar, directory: ctx,
+                current: function () { return current() && view === 'tree'; },
+                onCompany: function (chosen) { chartCompanies = Array.isArray(chosen) ? chosen.slice() : (chosen ? [chosen] : []); },
+                onPerson: async function (id, chosenCompany) {
+                    try { const fresh = await api('/api/directory'); if (current()) openPersonModal(id+'|'+chosenCompany,directoryContext(fresh.people)); }
+                    catch (error) { toast(error.message); }
+                },
+            });
 
             const list = ctx.entries.filter(matches);
             const nPeople = new Set(list.map(function (e) { return e.person.id; })).size;
@@ -1336,7 +1469,7 @@
         // Rebuilt from scratch (the user's request, 3 November 2026: "completely rebuild the view when you click on someone"):
         // a fixed identity column on the left (who they are, how to reach them, their time and dates) and tabbed detail
         // on the right, each scrolling on its own.
-        const supRow = supervisor ? personRow(supervisor) : '<div class="pv-top-of-org">' + icon("tree") + "Top of " + esc(e.company) + "</div>";
+        const supRow = e.supervisorPosition?.kind === "board" ? '<div class="pv-top-of-org">'+esc(boardLabel(e.supervisorPosition.company))+"</div>" : supervisor ? personRow(supervisor) : '<div class="pv-top-of-org">' + icon("tree") + "Top of " + esc(e.company) + "</div>";
         const dates = [];
         if (p.birthday) dates.push(['gift', "Birthday", p.birthday.day + " " + MONTHS[p.birthday.month - 1]]);
         if (p.startDate) {
@@ -1356,6 +1489,7 @@
         const overview =
             '<div class="pv-overview">' +
             card("tree", "Reports to", supRow) +
+            card("pound", "Ownership", '<div data-profile-ownership role="status"><p class="muted">Loading ownership from the Companies register…</p></div>') +
             (reports.length ? card("users", "Team <span class=\"tab-count\">" + reports.length + "</span>", '<div class="pv-team">' + reports.slice(0, 4).map(personRow).join("") + "</div>", reports.length > 4 ? seeAll("team", "See all " + reports.length) : "") : "") +
             (p.bio || (p.skills || []).length ? card("user", "About", (p.bio ? '<div class="pv-bio clamp">' + richText(p.bio) + "</div>" : "") + ((p.skills || []).length ? tags(p.skills.slice(0, 8)) : ""), seeAll("about", "More")) : "") +
             (roles.length > 1 ? card("briefcase", "Also works at", '<div class="pv-roles-mini">' + roles.filter(function (r) { return r.key !== key; }).map(function (r) {
@@ -1367,7 +1501,7 @@
         const rolesPanel = roles.length > 1 ? '<div class="pv-role-list">' + roles.map(function (r) {
             return '<button type="button" class="pv-role' + (r.key === key ? " current" : "") + '" data-entry="' + esc(r.key) + '">' + icon("building") +
                 '<span><strong>' + esc(r.company) + "</strong><span>" + esc(r.jobTitle) + (r.department ? " \u00b7 " + esc(r.department) : "") + "</span></span>" +
-                (r.main ? '<span class="badge">Main role</span>' : "") + (r.key === key ? '<span class="badge badge-soft">Viewing</span>' : "") + "</button>";
+                (r.main ? '<span class="badge">Main role</span>' : "") + (r.temporary ? '<span class="badge badge-temporary">Temporary</span>' : "") + (r.key === key ? '<span class="badge badge-soft">Viewing</span>' : "") + "</button>";
         }).join("") + "</div>" : "";
         const teamPanel = reports.length ? '<div class="pv-team pv-team-full">' + reports.map(personRow).join("") + "</div>" : "";
         const aboutPanel = (p.bio ? card("user", "About", '<div class="pv-bio">' + richText(p.bio) + "</div>") : "") +
@@ -1417,7 +1551,18 @@
             }).join("") + "</div></div></div>",
             { cls: "modal-person" }
         );
+        async function loadOwnership(){
+            const slot=m.el.querySelector('[data-profile-ownership]');if(!slot)return;
+            slot.innerHTML='<p class="muted">Loading ownership from the Companies register…</p>';
+            try{const data=await api('/api/directory/'+encodeURIComponent(p.id)+'/ownership');if(!m.el.isConnected)return;
+                const percent=value=>new Intl.NumberFormat('en-GB',{maximumFractionDigits:4}).format(value)+'%';
+                if(!data.holdings.length){slot.closest('.pv-card').remove();return;}
+                slot.innerHTML=data.holdings.length?'<dl class="pv-ownership">'+data.holdings.map(h=>'<div><dt><a href="'+esc(h.url)+'" target="_blank" rel="noopener">'+esc(h.company)+'</a></dt><dd><strong>'+esc(percent(h.ownershipPercent))+' ownership</strong>'+(h.votingPercent!==null?'<span class="muted small">'+esc(percent(h.votingPercent))+' voting power</span>':'')+(h.delegations||[]).map(d=>'<span class="muted small">'+esc(percent(d.votingPercent))+' voting power delegated to '+esc(d.name)+'</span>').join('')+(h.receivedFrom||[]).map(d=>'<span class="muted small">'+esc(percent(d.votes))+' voting power received from '+esc(d.name)+'</span>').join('')+'</dd></div>').join('')+'</dl><p class="muted small">From the Companies register.</p>':'<p class="muted">No current shareholdings found under their name in the Companies register.</p>';
+            }catch{if(m.el.isConnected)slot.innerHTML='<p class="muted">Ownership information is temporarily unavailable.</p><button type="button" class="pv-link" data-ownership-retry>Try again</button>';}
+        }
+        loadOwnership();
         m.el.addEventListener("click", async function (ev) {
+            if(ev.target.closest('[data-ownership-retry]'))return loadOwnership();
             const copy = ev.target.closest("[data-copy]");
             if (copy) return copyText(copy.dataset.copy);
             const msg = ev.target.closest("[data-message-person]");
@@ -1454,8 +1599,12 @@
     }
 
     async function viewEmployees(root, current) {
-        const data = await api("/api/employees");
+        const archive=new URLSearchParams(location.search).get('view')==='offboarded';
+        const data = await api('/api/employees'+(archive?'?view=offboarded':''));
         if (!current()) return;
+        const archiveTabs='<nav class="btn-row" aria-label="Staff records"><a class="btn btn-ghost" href="/employees" data-link>Current employees</a><a class="btn btn-ghost" href="/employees?view=offboarded" data-link>Offboarded employees</a></nav>';
+        if(archive){root.innerHTML=archiveTabs+'<div class="page-head"><h1>Offboarded employees</h1></div><p class="muted">Retained staff records. Sign-in and active staff profiles have been removed; history stays on file.</p><div class="emp-grid">'+data.employees.map(p=>'<article class="panel"><h2>'+esc(p.firstName+' '+p.lastName)+'</h2><p>'+esc(p.jobTitle)+' · '+esc(p.company)+'</p><p class="mono">'+esc(p.employeeNumber)+'</p><p>Offboarded '+esc(new Date(p.offboardedAt).toLocaleDateString('en-GB'))+'</p></article>').join('')+'</div>'+(data.employees.length?'':'<p>No offboarded employees.</p>');return;}
+
         const employees = data.employees.sort(function (a, b) { return a.displayName.localeCompare(b.displayName); });
         const byId = {};
         employees.forEach(function (e) { byId[e.id] = e; });
@@ -1474,7 +1623,7 @@
             '<div class="page-head"><div><h1>Employee Management</h1><p class="muted">Add staff, manage their details and set up their login accounts.</p></div>' +
             '<div class="page-actions">' +
             (can("access.manage") ? '<a class="btn btn-ghost" href="/roles" data-link>' + icon("shield") + "Roles & permissions</a>" : "") +
-            '<a class="btn btn-ghost" href="https://accounts.hngroup.org.uk/#accounts" target="_blank" rel="noopener" data-hn-account="/#accounts">' + icon("key") + "HN Account</a>" +
+            '<a class="btn btn-ghost" href="https://it.hngroup.org.uk/accounts" target="_blank" rel="noopener" data-hn-account="/#accounts">' + icon("key") + "Account administration</a>" +
             '<button type="button" class="btn btn-primary" id="add-employee">' + icon("plus") + "Add employee</button></div></div>" +
             '<div class="emp-stats">' + stat("all", "Staff", count("all"), "") + stat("active", "Can sign in", count("active"), "ok") +
             stat("none", "No sign-in account", count("none"), "warn") + stat("disabled", "Sign-in disabled", count("disabled"), "bad") + "</div>" +
@@ -1512,7 +1661,7 @@
                 if (filters.company && e.company !== filters.company && !e.otherRoles.some(function (r) { return r.company === filters.company; })) return false;
                 if (filters.login !== "all" && loginState(e) !== filters.login) return false;
                 const pr = profileFor(e);
-                return !q || [e.displayName, pr.jobTitle, pr.department, pr.company, e.loginUsername].concat((e.access ? e.access.roles : []), e.otherRoles.map(function (r) { return r.company + " " + (r.jobTitle || ""); }), e.emails.map(function (x) { return x.address; })).join(" ").toLowerCase().indexOf(q) !== -1;
+                return !q || [e.displayName, e.employeeNumber, pr.jobTitle, pr.department, pr.company, e.loginUsername].concat((e.access ? e.access.roles : []), e.otherRoles.map(function (r) { return r.company + " " + (r.jobTitle || ""); }), e.emails.map(function (x) { return x.address; })).join(" ").toLowerCase().indexOf(q) !== -1;
             });
             $("#emp-showing").textContent = list.length === employees.length ? "Showing everyone (" + list.length + ")" : "Showing " + list.length + " of " + employees.length;
             $("#emp-body").innerHTML = list.length ? list.map(function (e) {
@@ -1524,7 +1673,7 @@
                     '<button type="button" class="menu-item compact" data-act="edit">' + icon("edit") + "<span>Edit details</span></button>",
                 ];
                 // Sign-in accounts are created on HN Account (the user's request, 28 October 2026).
-                const onHnAccount = '<a class="menu-item compact" href="https://accounts.hngroup.org.uk/#accounts" target="_blank" rel="noopener" data-hn-account="/#staff/create/' + esc(e.id) + '">' + icon("key") + "<span>Create sign-in account on HN Account</span></a>";
+                const onHnAccount = '<a class="menu-item compact" href="https://it.hngroup.org.uk/accounts" target="_blank" rel="noopener" data-hn-account="/#staff/create/' + esc(e.id) + '">' + icon("key") + "<span>Create sign-in account on IT</span></a>";
                 if (locked && !e.account) {
                     actions.length = 0;
                     actions.push(onHnAccount);
@@ -1542,7 +1691,7 @@
                             : '<button type="button" class="menu-item compact" data-act="enable">' + icon("check") + "<span>Enable login</span></button>");
                     }
                     if (e.temporary) actions.push('<button type="button" class="menu-item compact" data-act="permanent">' + icon("check") + "<span>Make permanent</span></button>");
-                    actions.push('<div class="menu-sep"></div><button type="button" class="menu-item compact danger" data-act="delete">' + icon("trash") + "<span>Delete employee</span></button>");
+                    actions.push('<div class="menu-sep"></div><button type="button" class="menu-item compact danger" data-act="delete">' + icon("trash") + "<span>Offboard employee</span></button>");
                 }
                 const menu = locked && e.account
                     ? '<span class="icon-btn" title="Only the system owner can change this record">' + icon("lock") + "</span>"
@@ -1555,7 +1704,7 @@
                     accessBadges(e) + "</div>" +
                     '<div class="emp-chips"><span class="emp-chip main" title="' + (pr.main ? "Main company" : "Their staff profile at " + esc(pr.company)) + '">' + icon("building") + esc(pr.company) + "</span>" +
                     (pr.main ? "" : '<span class="emp-chip" title="Main company: ' + esc(e.company) + '">Profile at ' + esc(pr.company) + "</span>") + "</div>" +
-                    '<dl class="emp-facts">' +
+                    '<dl class="emp-facts">' + (e.employeeNumber ? '<div><dt>Employee number</dt><dd class="mono">' + esc(e.employeeNumber) + '</dd></div>' : '') +
                     '<div><dt>Reports to</dt><dd>' + (sup ? '<span class="emp-sup">' + avatar(sup, "xs") + esc(sup.displayName) + "</span>" : '<span class="muted">Top of ' + esc(pr.company) + "</span>") + "</dd></div>" +
                     '<div><dt>Sign-in</dt><dd>' + accountBadge(e) + "</dd></div>" +
                     '<div class="wide"><dt>Email</dt><dd class="emp-email">' + esc(e.loginUsername) + (e.emails.length > 1 ? ' <span class="count-pill">+' + (e.emails.length - 1) + "</span>" : "") + "</dd></div></dl>" +
@@ -1644,12 +1793,12 @@
                 }
                 if (act === "delete") {
                     if (!(await confirmDialog({
-                        title: "Delete " + emp.displayName + "?",
-                        message: "This permanently removes their staff record and login. This can't be undone.",
-                        confirmLabel: "Delete employee", danger: true,
+                        title: "Offboard " + emp.displayName + "?",
+                        message: "Their sign-in will be disabled and their staff record moved to Offboarded employees. Employment, payroll and document history will be retained.",
+                        confirmLabel: "Offboard employee", danger: true,
                     }))) return;
-                    await api("/api/employees/" + emp.id + "/delete", {});
-                    toast(emp.displayName + " has been deleted.");
+                    await api("/api/employees/" + emp.id + "/offboard", {});
+                    toast(emp.displayName + " has been offboarded.");
                     reload();
                 }
             } catch (err) {
@@ -1657,6 +1806,7 @@
             }
         });
         draw();
+        root.insertAdjacentHTML("afterbegin",archiveTabs);
     }
 
     function viewNoAccess(root) {
@@ -1679,7 +1829,7 @@
         const v = emp || {};
         const supervisors = employees.filter(function (p) { return !emp || p.id !== emp.id; });
         // Job title and supervisor for each extra company; blank means "same as main company".
-        const roleState = {};
+        const roleState = [];
         // Supervisors are positions (the user's request, 7 November 2026): whoever holds the position is filled in.
         // Older records that named a person start on that person's position.
         const positionOf = function (supId, supCompany) {
@@ -1689,7 +1839,7 @@
             const r = c === sup.company ? null : (sup.otherRoles || []).find(function (x) { return x.company === c; });
             return { company: c, title: c === sup.company ? sup.jobTitle : (r && r.jobTitle) || sup.jobTitle };
         };
-        (v.otherRoles || []).forEach(function (r) { roleState[r.company] = { jobTitle: r.jobTitle || "", department: r.department || "", position: r.supervisorPosition || positionOf(r.supervisorId, r.supervisorCompany) }; });
+        (v.otherRoles || []).forEach(function (r) { roleState.push({ company: r.company, jobTitle: r.jobTitle || v.jobTitle || "", department: r.department || "", temporary: !!r.temporary, position: r.supervisorPosition || positionOf(r.supervisorId, r.supervisorCompany) }); });
         // Departments already in use, offered as suggestions.
         const departments = {};
         employees.forEach(function (p) { [p.department].concat((p.otherRoles || []).map(function (r) { return r.department; })).forEach(function (d) { if (d) departments[d] = true; }); });
@@ -1718,7 +1868,7 @@
         };
         const positionsFor = function (c) { return (meta.positions && meta.positions[c]) || []; };
         const same = function (a, b) { return String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase(); };
-        // Who a position usually reports to (People → Job descriptions → Positions); filled in when a position is chosen.
+        // Who a position usually reports to (HR → People → Job descriptions → Positions); filled in when a position is chosen.
         const usualReport = function (company, title) {
             const list = (meta.positionReports && meta.positionReports[company]) || {};
             const key = Object.keys(list).find(function (k) { return same(k, title); });
@@ -1731,7 +1881,7 @@
                 others.find(function (p) { return (p.otherRoles || []).some(function (r) { return r.company === pos.company && same(r.jobTitle || p.jobTitle, pos.title); }); }) || null;
         };
         const posValue = function (pos) { return pos ? encodeURIComponent(pos.company) + "|" + encodeURIComponent(pos.title) : ""; };
-        const posFrom = function (value) { const i = String(value || "").indexOf("|"); return i < 0 ? null : { company: decodeURIComponent(value.slice(0, i)), title: decodeURIComponent(value.slice(i + 1)) }; };
+        const posFrom = function (value) { const i = String(value || "").indexOf("|"); return i < 0 ? null : { company: decodeURIComponent(value.slice(0, i)), title: decodeURIComponent(value.slice(i + 1)), ...(decodeURIComponent(value.slice(i + 1)) === "Board of " + decodeURIComponent(value.slice(0,i)) ? {kind:"board"} : {}) }; };
         // Job title choices: the company's positions (plus their current title if it isn't one, so nothing is lost).
         const titleOptions = function (company, current, emptyLabel) {
             const list = positionsFor(company);
@@ -1754,8 +1904,8 @@
                     return '<option value="' + esc(posValue(pos)) + '"' + (on ? " selected" : "") + ">" + esc(t) + " — " + (h ? esc(h.displayName) : "vacant") + "</option>";
                 }).join("") + "</optgroup>";
             }).join("");
-            const extra = selected && !found ? '<option value="' + esc(posValue(selected)) + '" selected>' + esc(selected.title) + " (" + esc(selected.company) + ", not in the list) — " + (holderOf(selected) ? esc(holderOf(selected).displayName) : "vacant") + "</option>" : "";
-            return '<option value="">' + esc(emptyLabel) + "</option>" + extra + groups;
+            const extra = selected && !found && selected.kind !== "board" ? '<option value="' + esc(posValue(selected)) + '" selected>' + esc(selected.title) + " (" + esc(selected.company) + ", not in the list) — " + (holderOf(selected) ? esc(holderOf(selected).displayName) : "vacant") + "</option>" : "";
+            return '<option value="">' + esc(emptyLabel) + "</option>" + ["HN Group","Horizon Network"].map(c=>{const pos={company:c,title:"Board of "+c,kind:"board"};return '<option value="'+esc(posValue(pos))+'"'+(selected&&selected.kind==="board"&&selected.company===c?" selected":"")+'>'+esc(boardLabel(pos.company))+"</option>";}).join("") + extra + groups;
         };
         let mainPosition = v.supervisorPosition || positionOf(v.supervisorId, v.supervisorCompany);
         const drawMainSupervisor = function () {
@@ -1771,7 +1921,7 @@
             '<p class="muted">' + (isEdit ? "Update this employee's details." : "Create a staff record. You can set up their login once they're added.") + "</p>" +
             '<form class="emp-form" novalidate>' +
 
-            '<fieldset><legend>Personal details</legend><div class="grid-2">' +
+            '<fieldset><legend>Personal details</legend>' + (v.employeeNumber ? '<p><strong>Employee number</strong> · <span class="mono">' + esc(v.employeeNumber) + '</span></p>' : '') + '<div class="grid-2">' +
             '<div><label for="f-first">First name <span class="req">*</span></label><input type="text" id="f-first" maxlength="60" value="' + esc(v.firstName) + '" required></div>' +
             '<div><label for="f-last">Last name <span class="req">*</span></label><input type="text" id="f-last" maxlength="60" value="' + esc(v.lastName) + '" required></div>' +
             "</div>" +
@@ -1780,16 +1930,13 @@
             "</fieldset>" +
 
             '<fieldset><legend>Role</legend>' +
-            '<div class="grid-2"><div><label for="f-title">Position <span class="req">*</span></label><select id="f-title" required></select><p class="muted small">Add positions under People → Job descriptions → Positions.</p></div>' +
+            '<div class="grid-2"><div><label for="f-title">Position <span class="req">*</span></label><select id="f-title" required></select><p class="muted small">Add positions under HR → People → Job descriptions → Positions.</p></div>' +
             '<div><label for="f-dept">Department</label><input type="text" id="f-dept" maxlength="80" value="' + esc(v.department || "") + '" placeholder="e.g. Marketing" list="f-departments"></div></div>' + departmentList +
             '<div class="grid-2">' +
             '<div><label for="f-company">Company <span class="req">*</span></label><select id="f-company">' + companyOptions + "</select></div>" +
             '<div><label for="f-supervisor">Reports to (position)</label><select id="f-supervisor"></select><p class="muted small">Whoever holds that position is their supervisor, and it follows when the position changes hands.</p></div></div>' +
-            '<label>Also works at <span class="muted small">(optional)</span></label><div class="check-chips" id="f-other">' +
-            meta.companies.map(function (c) {
-                return '<label class="check-chip"><input type="checkbox" value="' + esc(c) + '"' + (roleState[c] ? " checked" : "") + "><span>" + esc(c) + "</span></label>";
-            }).join("") + "</div>" +
-            '<div id="f-roles"></div>' +
+            '<p class="hint">Add other appointments at this company or another company. Each position can be temporary independently.</p><div id="f-roles"></div>' +
+            '<button type="button" class="btn btn-ghost" id="f-other">' + icon("plus") + 'Add another position</button>' +
             "</fieldset>" +
 
             '<fieldset><legend>Email addresses</legend>' +
@@ -1821,45 +1968,33 @@
         const el = m.el;
         const f = function (id) { return $("#" + id, el); };
 
-        function syncOtherCompanies() {
-            const company = f("f-company").value;
-            $$("#f-other input", el).forEach(function (cb) {
-                const own = cb.value === company;
-                cb.disabled = own;
-                if (own) cb.checked = false;
-                cb.parentNode.classList.toggle("disabled", own);
-                if (cb.checked && !roleState[cb.value]) roleState[cb.value] = { jobTitle: "", department: "", position: null };
-                if (!cb.checked) delete roleState[cb.value];
-            });
-            drawRoles();
-        }
-
+        function syncOtherCompanies() { drawRoles(); }
         function drawRoles() {
-            const list = meta.companies.filter(function (c) { return roleState[c]; });
-            f("f-roles").innerHTML = list.map(function (c) {
-                const r = roleState[c];
-                return '<div class="role-row" data-company="' + esc(c) + '"><div class="role-row-head">' + icon("building") + esc(c) + "</div>" +
-                    '<div class="grid-2"><div><label>Position at ' + esc(c) + '</label><select class="role-title">' + titleOptions(c, r.jobTitle, "Same as main position") + "</select></div>" +
-                    "<div><label>Department at " + esc(c) + '</label><input type="text" class="role-dept" maxlength="80" value="' + esc(r.department || "") + '" placeholder="Same as main department" list="f-departments"></div></div>' +
-                    "<label>Reports to at " + esc(c) + ' (position)</label><select class="role-sup">' + positionOptions(r.position, c, "Same as main supervisor") + "</select></div>";
-            }).join("");
+            f("f-roles").innerHTML = roleState.map(function (r, i) {
+                const c = r.company;
+                return '<div class="role-row" data-i="' + i + '"><div class="role-row-head">Additional position ' + (i + 1) + '<button type="button" class="btn btn-link danger" data-remove-role="' + i + '">Remove</button></div>' +
+                    '<div class="grid-2"><div><label>Company</label><select class="role-company">' + meta.companies.map(co => '<option' + (co === c ? ' selected' : '') + '>' + esc(co) + '</option>').join('') + '</select></div>' +
+                    '<div><label>Position</label><select class="role-title">' + titleOptions(c, r.jobTitle, "Choose a position") + '</select></div></div>' +
+                    '<label>Department</label><input type="text" class="role-dept" maxlength="80" value="' + esc(r.department) + '" list="f-departments">' +
+                    '<label>Reports to (position)</label><select class="role-sup">' + positionOptions(r.position, c, "Same as main supervisor") + '</select>' +
+                    '<label class="inline-check"><input type="checkbox" class="role-temporary"' + (r.temporary ? ' checked' : '') + '> Temporary appointment</label></div>';
+            }).join('');
         }
-
-        f("f-roles").addEventListener("input", function (e) {
-            const row = e.target.closest(".role-row");
-            if (row && e.target.classList.contains("role-title")) roleState[row.dataset.company].jobTitle = e.target.value;
-            if (row && e.target.classList.contains("role-dept")) roleState[row.dataset.company].department = e.target.value;
+        f("f-other").onclick = function () { roleState.push({ company: f("f-company").value, jobTitle: "", department: "", position: null, temporary: false }); drawRoles(); };
+        f("f-roles").addEventListener("click", function(e) {
+            const button=e.target.closest('[data-remove-role]');if(!button)return;roleState.splice(Number(button.dataset.removeRole),1);drawRoles();
         });
-        f("f-roles").addEventListener("change", function (e) {
-            const row = e.target.closest(".role-row");
-            if (row && e.target.classList.contains("role-sup")) roleState[row.dataset.company].position = posFrom(e.target.value);
-            if (row && e.target.classList.contains("role-title")) {
-                const c = row.dataset.company, to = usualReport(c, e.target.value);
-                roleState[c].jobTitle = e.target.value;
-                if (to !== undefined) { roleState[c].position = to; $(".role-sup", row).innerHTML = positionOptions(to, c, "Same as main supervisor"); }
-            }
+        f("f-roles").addEventListener("input", function(e) {
+            const row=e.target.closest('.role-row');if(!row)return;const r=roleState[Number(row.dataset.i)];
+            if(e.target.matches('.role-dept'))r.department=e.target.value;
         });
-        f("f-other").addEventListener("change", syncOtherCompanies);
+        f("f-roles").addEventListener("change", function(e) {
+            const row=e.target.closest('.role-row');if(!row)return;const r=roleState[Number(row.dataset.i)];
+            if(e.target.matches('.role-company')){r.company=e.target.value;r.jobTitle="";r.position=null;drawRoles();}
+            if(e.target.matches('.role-title')){r.jobTitle=e.target.value;const to=usualReport(r.company,r.jobTitle);if(to!==undefined){r.position=to;row.querySelector('.role-sup').innerHTML=positionOptions(to,r.company,"Same as main supervisor");}}
+            if(e.target.matches('.role-sup'))r.position=posFrom(e.target.value);
+            if(e.target.matches('.role-temporary'))r.temporary=e.target.checked;
+        });
 
         function domainOptions(selected) {
             return meta.domains.map(function (d) {
@@ -2008,9 +2143,7 @@
                 department: f("f-dept").value,
                 company: f("f-company").value,
                 supervisorPosition: mainPosition || null,
-                otherRoles: meta.companies.filter(function (c) { return roleState[c] && c !== f("f-company").value; }).map(function (c) {
-                    return { company: c, jobTitle: roleState[c].jobTitle, department: roleState[c].department, supervisorPosition: roleState[c].position || null };
-                }),
+                otherRoles: roleState.map(function(r) { return { company:r.company, jobTitle:r.jobTitle, department:r.department, temporary:r.temporary, supervisorPosition:r.position || null }; }),
                 emails: rows.map(function (r) { return { local: r.local, domain: r.domain, auto: r.auto, primary: r.primary }; }),
                 location: f("f-location").value,
                 timezone: f("f-tz").value,
@@ -2109,9 +2242,9 @@
         const m = openModal(
             '<div class="success-mark">' + icon("check") + "</div>" +
             '<h2 class="modal-title center">' + esc(emp.displayName) + " has been added</h2>" +
-            '<p class="muted center">Sign-in accounts are created on HN Account. Give them one there when they need to sign in; each company they work at is its own profile.</p>' +
+            '<p class="muted center">Sign-in accounts are created on HN Group IT. Give them one there when they need to sign in; each company they work at is its own profile.</p>' +
             '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Not now</button>' +
-            '<a class="btn btn-primary" href="https://accounts.hngroup.org.uk/#staff" target="_blank" rel="noopener" data-create data-hn-account="/#staff/create/' + esc(emp.id) + '">Open HN Account</a></div>',
+            '<a class="btn btn-primary" href="https://it.hngroup.org.uk/staff-accounts" target="_blank" rel="noopener" data-create data-hn-account="/#staff/create/' + esc(emp.id) + '">Open IT account administration</a></div>',
             { onClose: onDone }
         );
         $("[data-create]", m.el).addEventListener("click", function () { closeModal(); });
@@ -2605,6 +2738,7 @@
         birthday: { icon: "gift", label: "Birthday" },
         anniversary: { icon: "star", label: "Work anniversary" },
         leave: { icon: "sun", label: "Leave" },
+        sick: { icon: "thermometer", label: "Sickness" },
     };
     const EVENT_TYPE_LABELS = { event: "Event", meeting: "Meeting", social: "Social", training: "Training", holiday: "Company holiday" };
 
@@ -2698,7 +2832,7 @@
             if (!d.checklists.length) return;
             box.hidden = false;
             const draw = function () {
-                box.innerHTML = '<h2 class="section-title">' + icon("check") + "Onboarding</h2>" + d.checklists.map(function (c) { return checklistHtml(c, { compact: true }); }).join("");
+                box.innerHTML = '<h2 class="section-title">' + icon("check") + "Your joiner &amp; leaver tasks</h2>" + d.checklists.map(function (c) { return checklistHtml(c, { compact: !HR_APP }); }).join("");
                 paintProgress(box);
             };
             draw();
@@ -2713,6 +2847,7 @@
     // ================= Calendar =================
 
     async function viewCalendar(root, current) {
+        if (window.HNPersonalCalendar) return window.HNPersonalCalendar.render(root, current, { state, api, icon, isoDay, render, openCalendarItem, openEventForm });
         if (state.pendingCalendarDate) {
             state.calendarMonth = state.pendingCalendarDate.slice(0, 7);
             state.pendingCalendarDate = null;
@@ -2820,7 +2955,8 @@
             (it.startTime ? '<div class="muted small">' + esc(it.startTime) + (it.endTime ? " – " + esc(it.endTime) : "") + "</div>" : it.kind === "event" ? '<div class="muted small">All day</div>' : "") + "</div></div>" +
             (it.location ? '<div class="detail-row">' + icon("pin") + "<div>" + esc(it.location) + "</div></div>" : "") +
             (it.description ? '<div class="detail-row">' + icon("file") + '<div class="ann-body">' + richText(it.description) + "</div></div>" : "") +
-            (it.companies ? '<div class="chips">' + audienceChips(it.companies) + "</div>" : "") +
+            (it.visibility === 'private' ? '<p class="muted small">Private · visible to selected attendees.</p>' : it.companies ? '<div class="chips">' + audienceChips(it.companies) + "</div>" : "") +
+            (it.halfDay ? '<p class="muted small">Half day · ' + (it.halfDay === 'am' ? 'morning' : 'afternoon') + '</p>' : '') +
             '<div class="modal-actions">' +
             (it.canEdit ? '<button type="button" class="btn btn-ghost danger-text" id="ev-delete">' + icon("trash") + "Delete</button>" +
                 '<button type="button" class="btn btn-ghost" id="ev-edit">' + icon("edit") + "Edit</button>" : "") +
@@ -2855,11 +2991,13 @@
             '<div><label for="ev-et">To</label><input type="time" id="ev-et" value="' + esc(v.endTime || "") + '"></div></div>' +
             '<label for="ev-loc">Location <span class="muted small">(optional)</span></label><input type="text" id="ev-loc" maxlength="150" value="' + esc(v.location || "") + '">' +
             '<label for="ev-desc">Details <span class="muted small">(optional)</span></label><textarea id="ev-desc" rows="3" maxlength="2000">' + esc(v.description || "") + "</textarea>" +
-            audienceField(v.companies || []) +
+            (window.HNPersonalCalendar ? window.HNPersonalCalendar.eventFields(v, state.calendarPeople) : '') +
+            (window.HNPersonalCalendar ? '<div id="ev-company-audience"'+(v.visibility === 'private' ? ' hidden' : '')+'>'+audienceField(v.companies || [])+'</div>' : audienceField(v.companies || [])) +
             '<div class="form-error" id="ev-error" hidden></div>' +
             '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">' + (ev ? "Save changes" : "Add to calendar") + "</button></div></form>",
             { wide: true }
         );
+        if ($("#ev-visibility", m.el)) $("#ev-visibility", m.el).addEventListener("change", function (e) { $("#ev-attendees", m.el).hidden = e.target.value !== 'private'; $("#ev-company-audience", m.el).hidden = e.target.value === 'private'; });
         $("#ev-allday", m.el).addEventListener("change", function (e) { $("#ev-times", m.el).hidden = e.target.checked; });
         $("#ev-start", m.el).addEventListener("change", function (e) { if ($("#ev-end", m.el).value < e.target.value) $("#ev-end", m.el).value = e.target.value; });
         $("#ev-form", m.el).addEventListener("submit", async function (e) {
@@ -2877,6 +3015,7 @@
                     location: $("#ev-loc", m.el).value,
                     description: $("#ev-desc", m.el).value,
                     companies: readAudience(m.el),
+                    ...(window.HNPersonalCalendar ? {visibility: $("#ev-visibility", m.el).value, attendeeIds: $$("[name=ev-attendee]:checked", m.el).map(function (input) { return input.value; })} : {}),
                 });
                 closeModal();
                 state.calendarMonth = $("#ev-start", m.el).value.slice(0, 7);
@@ -3509,7 +3648,7 @@
         const overlay = document.createElement("div");
         overlay.className = "search-overlay";
         overlay.innerHTML = '<div class="search-palette" role="dialog" aria-modal="true" aria-label="Search">' +
-            '<div class="sp-input">' + icon("search") + '<input type="search" id="sp-q" placeholder="Search people, documents, announcements, events…" autocomplete="off" aria-label="Search">' +
+            '<div class="sp-input">' + icon("search") + '<input type="search" id="sp-q" placeholder="' + (FINANCE_APP ? 'Search finance tools…' : HR_APP ? 'Search HR tools…' : 'Search people, documents, announcements, events…') + '" autocomplete="off" aria-label="Search">' +
             '<kbd>Esc</kbd></div><div class="sp-results" id="sp-results"><p class="sp-hint muted small">Type at least two letters.</p></div></div>';
         document.body.appendChild(overlay);
         const input = $("#sp-q", overlay);
@@ -3524,8 +3663,14 @@
             overlay.remove();
             document.removeEventListener("keydown", onKey, true);
         };
-        const pages = NAV.reduce(function (all, s) { return all.concat(visibleItems(s).filter(function (it) { return it.href; })); }, [
-            { title: "Home", href: "/home", icon: "home" }, { title: "Settings", href: "/settings", icon: "settings" },
+        const pages = (FINANCE_APP ? [{items:FINANCE_ITEMS}] : IT_APP ? [{items:IT_ITEMS.filter(it=>!it.accountsAdmin||state.me.canManageAccounts)}] : HR_APP ? [{items: HR_ITEMS}] : NAV).reduce(function (all, s) { return all.concat(visibleItems(s).filter(function (it) { return it.href && (!window.HNPortal || window.HNPortal.isPortalDestination(it.href)); })); }, [
+            { title: "Home", href: "/home", icon: "home" }, ...((HR_APP || IT_APP || FINANCE_APP) ? [] : [
+                { title: "Settings", href: "/settings", icon: "settings" },
+                { title: "HN Group HR", href: "https://hr.hngroup.org.uk/", icon: "users" },
+                { title: "HN Group Finance", href: "https://finance.hngroup.org.uk/", icon: "pound" },
+                { title: "HN Group Docs", href: "https://docs.hngroup.org.uk/", icon: "file" },
+                { title: "HN Account", href: "https://auth.hngroup.org.uk/account/", icon: "user" },
+            ]),
         ]);
         function go(it) {
             close();
@@ -3534,7 +3679,7 @@
             else if (it.kind === "announcement") { state.pendingAnnouncement = it.id; navigate("/announcements"); }
             else if (it.kind === "event") { state.pendingCalendarDate = it.date; navigate("/calendar"); }
             else if (it.kind === "poll") { state.pendingPoll = it.id; navigate("/polls"); }
-            else if (it.kind === "page") navigate("/wiki?p=" + it.id);
+            else if (it.kind === "page" && it.id) navigate("/wiki?p=" + it.id);
             else if (it.kind === "question") navigate("/questions?q=" + it.id);
             else navigate(it.href);
         }
@@ -3562,6 +3707,7 @@
             const mySeq = ++seq;
             const pageHits = pages.filter(function (p) { return q && p.title.toLowerCase().indexOf(q.toLowerCase()) !== -1; })
                 .map(function (p) { return { kind: "page", href: p.href, title: p.title, icon: p.icon, sub: "Page" }; });
+            if (HR_APP || IT_APP || FINANCE_APP) { draw([{ label: FINANCE_APP ? "Finance tools" : IT_APP ? "IT tools" : "HR tools", items: pageHits }]); return; }
             if (q.length < 2) {
                 if (!pageHits.length) results.innerHTML = '<p class="sp-hint muted small">Type at least two letters.</p>';
                 else draw([{ label: "Pages", items: pageHits }]);
@@ -3638,7 +3784,7 @@
         {
             name: "Horizon Development", legal: "Part of Horizon Network Limited", logo: "horizon-development-logo",
             about: "Custom software development and web applications, from concept to deployment, built with modern technologies.",
-            files: roundelSet("horizon-development").concat([["horizon-development-email-logo", "Email signature logo", false, true]]),
+            files: roundelSet("horizon-development").map(function (f) { return [f[0], f[1].replace("Roundel", "Circle only").replace(/^Logo/, "Full logo"), f[2], f[3]]; }).concat([["horizon-development-email-logo", "Email signature logo", false, true]]),
         },
         {
             name: "Horizon Media Group", legal: "Horizon Media Group Limited", logo: "horizon-media-group-logo", domain: "media.hngroup.org.uk",
@@ -3667,7 +3813,7 @@
     ];
 
     function brandImg(file, cls, alt) {
-        return '<img src="/assets/brand/' + (file[3] ? "png/" + file[0] + ".png" : "svg/" + file[0] + ".svg") + '" alt="' + esc(alt || "") + '"' + (cls ? ' class="' + cls + '"' : "") + ' loading="lazy">';
+        return '<img src="/assets/brand/' + (file[3] ? "png/" + file[0] + ".png?v=20261120-development-full-logo" : "svg/" + file[0] + ".svg?v=20261120-development-full-logo") + '" alt="' + esc(alt || "") + '"' + (cls ? ' class="' + cls + '"' : "") + ' loading="lazy">';
     }
 
     async function viewAbout(root, current) {
@@ -3677,7 +3823,8 @@
             d.people.forEach(function (p) { companiesOf(p).forEach(function (c) { counts[c] = (counts[c] || 0) + 1; }); });
         } catch (e) { counts = {}; }
         if (!current()) return;
-        const companies = BRANDS.filter(function (b) { return !b.logosOnly; });
+        const visibleBrands = window.HNPortal ? BRANDS.filter(function (brand) { return window.HNPortal.companyVisible(brand.name); }) : BRANDS;
+        const companies = visibleBrands.filter(function (b) { return !b.logosOnly; });
         let brandFilter = "";
 
         root.innerHTML =
@@ -3687,7 +3834,7 @@
             '<section class="about-hero">' +
             '<div class="about-hero-text"><p class="eyebrow">One group, ' + companies.length + " companies</p>" +
             "<h2>Building the digital infrastructure, products and media for tomorrow’s businesses.</h2>" +
-            '<p class="muted">HN Group Limited wholly owns Horizon Network, Horizon Media Group and HN Group Management. Horizon Development is part of Horizon Network, and Horizon Advertising is a Horizon Media Group subsidiary managed by Horizon Network. Each company has its own focus, and they share people, systems and standards across the group.</p></div>' +
+            '<p class="muted">HN Group brings together people and services across its companies. Horizon Development is part of Horizon Network, and Horizon Advertising is a Horizon Media Group subsidiary managed by Horizon Network. Each company has its own focus, and they share people, systems and standards across the group.</p></div>' +
             '<div class="about-hero-logo">' + brandImg(["hn-group-wordmark"], "logo-light-theme", "HN Group") + brandImg(["hn-group-wordmark-white"], "logo-dark-theme", "HN Group") + "</div>" +
             "</section>" +
 
@@ -3715,19 +3862,19 @@
 
             '<h2 class="section-title about-title" id="brand-logos">' + icon("download") + "Logos</h2>" +
             '<div class="brand-notes">' +
-            '<div class="info-card"><div class="info-label">' + icon("tree") + "Wordmarks</div><p class=\"small\">HN Group and Horizon Network use a heavy wordmark above a stepped line of the eight brand colours. Use the stacked version where space is tight, such as email.</p></div>" +
-            '<div class="info-card"><div class="info-label">' + icon("star") + "Roundels</div><p class=\"small\">The other companies use a thick ring with their initials. Horizon Advertising is lavender (#7B52C4); the others are indigo (#5514B4).</p></div>" +
+            '<div class="info-card"><div class="info-label">' + icon("tree") + "Wordmarks</div><p class=\"small\">HN Group, Horizon Network and Horizon Media Group use a heavy wordmark above a stepped line of the eight brand colours. Use the stacked version where space is tight, such as email.</p></div>" +
+            '<div class="info-card"><div class="info-label">' + icon("star") + "Roundels</div><p class=\"small\">Compact company marks use a thick ring with their initials. Horizon Advertising and Horizon Development both use HN Purple (#5514B4).</p></div>" +
             '<div class="info-card"><div class="info-label">' + icon("eye") + "Light or dark</div><p class=\"small\">Use the <strong>white</strong> versions on dark or photo backgrounds. SVG is best for print and the web; PNG works everywhere else.</p></div>" +
             "</div>" +
             '<div class="company-tabs" id="brand-tabs"><button type="button" data-brand="">All logos</button>' +
-            BRANDS.map(function (b) { return '<button type="button" data-brand="' + esc(b.name) + '">' + esc(b.name) + "</button>"; }).join("") + "</div>" +
+            visibleBrands.map(function (b) { return '<button type="button" data-brand="' + esc(b.name) + '">' + esc(b.name) + "</button>"; }).join("") + "</div>" +
             '<div id="brand-library"></div>';
 
         $$(".swatch-chip", root).forEach(function (el) { el.style.background = el.dataset.colour; });
 
         function drawLibrary() {
             $$("#brand-tabs [data-brand]").forEach(function (b) { b.classList.toggle("active", b.dataset.brand === brandFilter); });
-            $("#brand-library").innerHTML = BRANDS.filter(function (b) { return !brandFilter || b.name === brandFilter; }).map(function (b) {
+            $("#brand-library").innerHTML = visibleBrands.filter(function (b) { return !brandFilter || b.name === brandFilter; }).map(function (b) {
                 return '<section class="brand-group"><h3 class="detail-head">' + esc(b.name) + '</h3><div class="logo-grid">' + b.files.map(function (f) {
                     return '<div class="logo-tile"><div class="logo-preview' + (f[2] ? " on-dark" : "") + (/app-icon/.test(f[0]) ? " is-icon" : "") + '">' + brandImg(f, "", b.name + " " + f[1]) + "</div>" +
                         '<div class="logo-info"><span class="logo-name">' + esc(f[1]) + "</span>" +
@@ -3807,13 +3954,15 @@
     const LEAVE_ICONS = { annual: "sun", sick: "thermometer", compassionate: "heart", unpaid: "calendar", other: "calendar", toil: "clock" };
 
     async function viewLeave(root, current) {
-        const year = state.leaveYear || new Date().getFullYear();
+        const query = new URLSearchParams(location.search);
+        const year = state.leaveYear || (/^\d{4}$/.test(query.get("year") || "") ? Number(query.get("year")) : new Date().getFullYear());
         const d = await api("/api/leave?year=" + year);
         if (!current()) return;
-        let tab = state.leaveTab || ((d.extraApprovals || []).length ? "extra" : d.approvals.length ? "approvals" : "mine");
+        let tab = state.leaveTab || query.get("tab") || ((d.extraApprovals || []).length ? "extra" : d.approvals.length ? "approvals" : "mine");
         if (tab === "approvals" && !d.isApprover) tab = "mine";
         if ((tab === "allowances" || tab === "shutdowns") && !d.canManage) tab = "mine";
         if (tab === "rtw" && !d.returnToWork.length && !d.canManage) tab = "mine";
+        if (!["mine", "extra", "approvals", "off", "calendar", "rtw", "allowances", "shutdowns"].includes(tab)) tab = "mine";
         const s = d.summary;
 
         const tabs = [["mine", "My leave", d.mine.length], ["extra", "Additional days", (d.extraApprovals || []).length]];
@@ -4137,14 +4286,16 @@
     const SHEET_STATUS = { draft: "Draft", submitted: "Waiting for approval", approved: "Approved", rejected: "Sent back" };
 
     async function viewRotas(root, current) {
-        const week = state.rotaWeek || mondayOf(isoDay(new Date()));
+        const query = new URLSearchParams(location.search);
+        const week = state.rotaWeek || (/^\d{4}-\d{2}-\d{2}$/.test(query.get("week") || "") ? mondayOf(query.get("week")) : mondayOf(isoDay(new Date())));
         const [rota, mine] = await Promise.all([
             api("/api/rotas?week=" + week),
             state.me.system ? Promise.resolve(null) : api("/api/timesheets/mine?week=" + week),
         ]);
         const review = rota.isApprover ? await api("/api/timesheets/review") : null;
         if (!current()) return;
-        let tab = state.rotaTab || "rota";
+        let tab = state.rotaTab || query.get("tab") || "rota";
+        if (!["rota", "timesheet", "approvals"].includes(tab)) tab = "rota";
         if (tab === "timesheet" && !mine) tab = "rota";
         if (tab === "approvals" && !review) tab = "rota";
         let company = state.rotaCompany || "";
@@ -4953,7 +5104,7 @@
                 '<div class="grid-2"><div><label for="pd-type">Pay type</label><select id="pd-type"><option value="salary"' + (v.payType === "salary" ? " selected" : "") + '>Monthly salary</option><option value="hourly"' + (v.payType === "hourly" ? " selected" : "") + ">Hourly rate</option></select></div>" +
                 '<div id="pd-salary-box"><label for="pd-salary">Monthly salary (£)</label><input type="number" id="pd-salary" min="0" step="0.01" value="' + esc(v.monthlySalary) + '"></div>' +
                 '<div id="pd-rate-box"><label for="pd-rate">Hourly rate (£)</label><input type="number" id="pd-rate" min="0" step="0.01" value="' + esc(v.hourlyRate || "") + '"></div></div>' +
-                '<div class="grid-2"><div><label for="pd-num">Employee number</label><input type="text" id="pd-num" maxlength="20" value="' + esc(v.employeeNumber) + '"></div>' +
+                '<div class="grid-2"><div><label for="pd-num">Employee number</label><input type="text" id="pd-num" readonly maxlength="20" value="' + esc(v.employeeNumber) + '"></div>' +
                 '<div><label for="pd-ni">National Insurance number</label><input type="text" id="pd-ni" maxlength="13" value="' + esc(v.niNumber) + '" placeholder="AB123456C"></div></div>' +
                 '<div class="grid-2"><div><label for="pd-tax">Tax code</label><input type="text" id="pd-tax" maxlength="12" value="' + esc(v.taxCode) + '"></div>' +
                 '<div><label for="pd-nicat">NI category</label><input type="text" id="pd-nicat" maxlength="1" value="' + esc(v.niCategory) + '"></div></div>' +
@@ -5149,7 +5300,19 @@
     }
 
     async function viewHelpdesk(root, current) {
-        const d = await api("/api/helpdesk");
+        const IS_IT_CASE=IT_APP||location.pathname==="/it-cases";
+        if (!HR_APP && !IT_APP && !["/cases","/it-cases"].includes(location.pathname)) {
+            const d = await api("/api/requests/options");
+            if (!current()) return;
+            root.innerHTML = '<div class="page-head"><div><h1>Raise a issue</h1><p class="muted">Choose the right team and send your request.</p></div></div><div id="request-workspace"></div>';
+            if (window.HNRequests) window.HNRequests.mount($("#request-workspace", root), {data:d,icon:icon,api:api,state:state,complete:function(r){
+                state.requestDraft=null;
+                root.innerHTML='<section class="request-success" aria-labelledby="request-success-title"><span class="request-success-icon">'+icon('check')+'</span><p class="portal-eyebrow">Successfully submitted</p><h1 id="request-success-title">Request sent</h1><p class="request-success-lead">Your request is with the right team. They will review the details you provided.</p><div class="request-success-summary"><div><small>Reference</small><strong>#'+Number(r.receipt.number)+'</strong></div><div><small>Team</small><strong>'+esc(r.receipt.teamLabel)+'</strong></div><div><small>Brand / company</small><strong>'+esc(r.receipt.company)+'</strong></div></div>'+(r.receipt.team==='hr'?'<p class="request-success-note">Follow progress and replies in HR Cases.</p>':'<p class="request-success-note">The selected team will review your request.</p>')+'<div class="request-success-actions">'+(r.receipt.team==='technology'?'<a class="btn btn-primary" href="/it-cases">Open IT Cases '+icon('chevronRight')+'</a>':r.receipt.team==='hr'?'<a class="btn btn-primary" href="/cases">Open HR Cases '+icon('chevronRight')+'</a>':'')+'<button type="button" class="btn btn-ghost" id="raise-another">Raise another issue</button></div></section>';
+                $('#raise-another',root).onclick=function(){render();};
+            }});
+            return;
+        }
+        const d = await api(requestApi());
         if (!current()) return;
         const me = state.me;
         const done = function (t) { return t.status === "resolved" || t.status === "closed"; };
@@ -5161,8 +5324,8 @@
         let filter = state.helpFilter && filters.some(function (f) { return f[0] === state.helpFilter; }) ? state.helpFilter : "open";
 
         root.innerHTML =
-            '<div class="page-head"><div><h1>IT Helpdesk</h1><p class="muted">' + (d.canManage ? "Every ticket raised across HN Group." : "Get help from the IT team. Raise a ticket and follow it here.") + "</p></div>" +
-            '<div class="page-actions"><button type="button" class="btn btn-primary" id="hd-new">' + icon("plus") + "New ticket</button></div></div>" +
+            '<div class="page-head"><div><h1>'+ (IS_IT_CASE ? 'IT cases' : 'HR requests') + '</h1><p class="muted">' + (d.canManage ? (IS_IT_CASE ? "Requests you raised and IT cases you are authorised to handle." : "Requests you raised and HR requests you are authorized to handle.") : (IS_IT_CASE ? "Follow your requests to the Internal Technology Team." : "Follow your requests to the Human Resources Team.")) + "</p></div></div>" +
+            '<div class="hr-request-summary">'+[['open','Open cases',d.tickets.filter(t=>!done(t)).length],['unassigned','Awaiting assignment',d.tickets.filter(t=>!done(t)&&!t.assignee).length],['done','Resolved',d.tickets.filter(done).length]].map(([key,label,count])=>'<div><span>'+esc(label)+'</span><strong data-hr-count="'+key+'">'+count+'</strong></div>').join('')+'</div><div class="hr-request-toolbar"><label class="hr-request-search">'+icon('search')+'<input type="search" id="hr-request-query" aria-label="Find a case" placeholder="Find a case by reference, subject or company" value="'+esc(state.hrRequestQuery||'')+'"></label><span class="hr-live-state"><i></i> Live updates</span></div>' +
             '<div class="company-tabs" id="hd-tabs">' + filters.map(function (f) {
                 return '<button type="button" data-f="' + f[0] + '">' + esc(f[1]) + ' <span class="tab-count">' + d.tickets.filter(f[2]).length + "</span></button>";
             }).join("") + "</div>" +
@@ -5171,27 +5334,33 @@
         function draw() {
             $$("#hd-tabs [data-f]").forEach(function (b) { b.classList.toggle("active", b.dataset.f === filter); });
             const fn = filters.find(function (f) { return f[0] === filter; })[2];
-            const list = d.tickets.filter(fn);
+            const query=(state.hrRequestQuery||'').trim().toLowerCase();
+            const list = d.tickets.filter(fn).filter(t=>!query||[t.number,t.subject,t.company,t.requester&&t.requester.displayName].join(' ').toLowerCase().includes(query));
+            $$("#hd-tabs [data-f]",root).forEach(b=>{$(".tab-count",b).textContent=d.tickets.filter(filters.find(f=>f[0]===b.dataset.f)[2]).length;});
+            const counts={open:d.tickets.filter(t=>!done(t)).length,unassigned:d.tickets.filter(t=>!done(t)&&!t.assignee).length,done:d.tickets.filter(done).length};
+            $$("[data-hr-count]",root).forEach(n=>n.textContent=counts[n.dataset.hrCount]);
             $("#hd-list").innerHTML = list.length ? '<div class="ticket-list">' + list.map(function (t) {
                 return '<button type="button" class="ticket-row" data-ticket="' + t.id + '">' +
-                    '<span class="tk-num">#' + t.number + "</span>" +
+                    '<span class="hr-request-case-icon">'+icon('file')+'</span><span class="tk-num">#' + t.number + "</span>" +
                     '<span class="tk-main"><span class="tk-subject">' + esc(t.subject) + "</span>" +
-                    '<span class="muted small">' + esc(t.categoryLabel) + (d.canManage && t.requester ? " · " + esc(t.requester.displayName) : "") +
+                    '<span class="muted small">' + (t.teamLabel ? esc(t.teamLabel) + (t.company ? " · " + esc(t.company) : "") + " · " : "") + esc(t.categoryLabel) + (d.canManage && t.requester ? " · " + esc(t.requester.displayName) : "") +
                     " · updated " + esc(timeAgo(t.updatedAt)) + (t.replies ? " · " + t.replies + (t.replies === 1 ? " reply" : " replies") : "") + "</span></span>" +
                     '<span class="tk-side">' + priorityPill(t.priority, d.priorities) + ticketStatusPill(t.status, d.statuses) +
                     (t.assignee ? '<span class="tk-assignee" title="Assigned to ' + esc(t.assignee.displayName) + '">' + avatar(t.assignee, "xs") + "</span>" : "") + "</span></button>";
             }).join("") + "</div>"
-                : '<div class="empty-page">' + icon("lifebuoy", "big") + "<h2>" + (filter === "open" ? "No open tickets" : "Nothing here") + "</h2>" +
-                  '<p class="muted">' + (filter === "open" && !d.canManage ? "Something not working? Use <strong>New ticket</strong> and the IT team will help." : "All quiet.") + "</p></div>";
+                : '<div class="empty-page">' + icon("lifebuoy", "big") + "<h2>" + (filter === "open" ? "No open cases" : "Nothing here") + "</h2>" +
+                  '<p class="muted">' + (filter === "open" && !d.canManage ? "Your HR requests and replies will appear here." : "All quiet.") + "</p></div>";
         }
 
         root.addEventListener("click", function (e) {
             const f = e.target.closest("[data-f]");
             if (f) { filter = state.helpFilter = f.dataset.f; return draw(); }
-            if (e.target.closest("#hd-new")) return openNewTicket(d);
             const t = e.target.closest("[data-ticket]");
             if (t) openTicket(t.dataset.ticket, d);
         });
+        $('#hr-request-query',root).oninput=function(e){state.hrRequestQuery=e.target.value;draw();};
+        livePageRefresh=async function(){if(!current()||!root.isConnected)return;const next=await api(requestApi());if(!current())return;if(JSON.stringify(next.tickets)===JSON.stringify(d.tickets)&&next.canManage===d.canManage)return;Object.assign(d,next);draw();};
+        root.classList.add('hr-request-workspace');
         draw();
         if (state.pendingTicket) {
             const id = state.pendingTicket;
@@ -5200,61 +5369,32 @@
         }
     }
 
-    function openNewTicket(d) {
-        const m = openModal(
-            '<h2 class="modal-title">New IT ticket</h2><p class="muted">Tell the IT team what’s wrong. The more detail, the quicker they can fix it.</p>' +
-            '<form id="tk-form" novalidate>' +
-            '<label for="tk-subject">Summary</label><input type="text" id="tk-subject" maxlength="150" placeholder="e.g. Can’t connect to the VPN from home">' +
-            '<div class="grid-2"><div><label for="tk-cat">Category</label><select id="tk-cat">' + Object.keys(d.categories).map(function (k) {
-                return '<option value="' + k + '">' + esc(d.categories[k]) + "</option>";
-            }).join("") + "</select></div>" +
-            '<div><label for="tk-pri">How urgent?</label><select id="tk-pri">' + Object.keys(d.priorities).map(function (k) {
-                return '<option value="' + k + '"' + (k === "normal" ? " selected" : "") + ">" + esc(d.priorities[k]) + "</option>";
-            }).join("") + "</select></div></div>" +
-            '<label for="tk-body">Details</label><textarea id="tk-body" rows="6" maxlength="5000" placeholder="What happened, what you expected, any error messages, and what you’ve tried."></textarea>' +
-            '<div class="form-error" id="tk-error" hidden></div>' +
-            '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary">Raise ticket</button></div></form>'
-        );
-        $("#tk-subject", m.el).focus();
-        $("#tk-form", m.el).addEventListener("submit", async function (e) {
-            e.preventDefault();
-            try {
-                const r = await api("/api/helpdesk", { subject: $("#tk-subject", m.el).value, category: $("#tk-cat", m.el).value, priority: $("#tk-pri", m.el).value, body: $("#tk-body", m.el).value });
-                state.me = r.user;
-                renderChrome();
-                closeModal();
-                toast("Ticket #" + r.ticket.number + " raised. The IT team will be in touch.");
-                state.pendingTicket = r.ticket.id;
-                state.helpFilter = "open";
-                if (window.location.pathname === "/helpdesk") render(); else navigate("/helpdesk");
-            } catch (err) { formError($("#tk-error", m.el), err.message); }
-        });
-    }
+    function requestThreadHtml(t) { return t.messages.map(function (msg) {
+                const mine = msg.authorId === state.me.id;
+                return '<div class="tk-msg' + (mine ? " mine" : "") + (msg.internal ? " internal" : "") + (msg.fromIt ? " from-it" : "") + '">' + avatar(msg.author || {}, "sm") +
+                    '<div class="tk-bubble"><div class="tk-meta"><strong>' + esc(msg.author ? msg.author.displayName : "") + "</strong>" +
+                    (msg.fromIt ? '<span class="badge">Team handler</span>' : "") + (msg.internal ? '<span class="badge badge-yellow">Internal note</span>' : "") +
+                    '<span class="muted small">' + esc(timeAgo(msg.at)) + '</span></div><div class="tk-body">' + richText(msg.body) + "</div></div></div>";
+            }).join(""); }
 
     async function openTicket(id, d) {
         let t;
-        try { t = (await api("/api/helpdesk/" + id)).ticket; } catch (err) { return toast(err.message); }
+        try { t = (await api(requestApi() + "/" + id)).ticket; } catch (err) { return toast(err.message); }
         const done = t.status === "resolved" || t.status === "closed";
         const m = openModal(
             '<div class="tk-header"><span class="tk-num">#' + t.number + "</span>" + ticketStatusPill(t.status, d.statuses) + priorityPill(t.priority, d.priorities) + "</div>" +
             '<h2 class="modal-title">' + esc(t.subject) + "</h2>" +
-            '<p class="muted small">' + esc(t.categoryLabel) + " · raised by " + esc(t.requester ? t.requester.displayName : "") + " " + esc(timeAgo(t.createdAt)) +
+            '<p class="muted small">' + (t.teamLabel ? esc(t.teamLabel) + (t.company ? " · " + esc(t.company) : "") + " · " : "") + esc(t.categoryLabel) + " · raised by " + esc(t.requester ? t.requester.displayName : "") + " " + esc(timeAgo(t.createdAt)) +
             (t.assignee ? " · assigned to " + esc(t.assignee.displayName) : " · not assigned yet") + "</p>" +
             (t.canManage ? '<div class="tk-controls">' +
                 '<label>Status<select id="tk-status">' + Object.keys(d.statuses).map(function (k) { return '<option value="' + k + '"' + (t.status === k ? " selected" : "") + ">" + esc(k === "waiting" ? "Waiting on requester" : d.statuses[k]) + "</option>"; }).join("") + "</select></label>" +
                 '<label>Priority<select id="tk-priority">' + Object.keys(d.priorities).map(function (k) { return '<option value="' + k + '"' + (t.priority === k ? " selected" : "") + ">" + esc(d.priorities[k]) + "</option>"; }).join("") + "</select></label>" +
-                '<label>Assigned to<select id="tk-assignee"><option value="">Nobody</option>' + d.agents.map(function (a) { return '<option value="' + a.id + '"' + (t.assignee && t.assignee.id === a.id ? " selected" : "") + ">" + esc(a.displayName) + (a.id === state.me.id ? " (me)" : "") + "</option>"; }).join("") + "</select></label>" +
+                '<label>Assigned to<select id="tk-assignee"><option value="">Nobody</option>' + (t.agents || d.agents).map(function (a) { return '<option value="' + a.id + '"' + (t.assignee && t.assignee.id === a.id ? " selected" : "") + ">" + esc(a.displayName) + (a.id === state.me.id ? " (me)" : "") + "</option>"; }).join("") + "</select></label>" +
                 "</div>" : "") +
-            '<div class="tk-thread">' + t.messages.map(function (msg) {
-                const mine = msg.authorId === state.me.id;
-                return '<div class="tk-msg' + (mine ? " mine" : "") + (msg.internal ? " internal" : "") + (msg.fromIt ? " from-it" : "") + '">' + avatar(msg.author || {}, "sm") +
-                    '<div class="tk-bubble"><div class="tk-meta"><strong>' + esc(msg.author ? msg.author.displayName : "") + "</strong>" +
-                    (msg.fromIt ? '<span class="badge">IT</span>' : "") + (msg.internal ? '<span class="badge badge-yellow">Internal note</span>' : "") +
-                    '<span class="muted small">' + esc(timeAgo(msg.at)) + '</span></div><div class="tk-body">' + richText(msg.body) + "</div></div></div>";
-            }).join("") + "</div>" +
+            '<div class="tk-thread">' + requestThreadHtml(t) + "</div>" +
             (t.status === "closed" && !t.canManage ? '<p class="muted small center">This ticket is closed. Reopen it if the problem is back.</p>' :
-            '<form id="tk-reply" class="tk-reply" novalidate><textarea id="tk-reply-text" rows="3" maxlength="5000" placeholder="' + (t.canManage ? "Reply to " + esc(t.requester ? t.requester.displayName : "the requester") : "Add more detail or reply to IT") + '…"></textarea>' +
-            '<div class="tk-reply-bar">' + (t.canManage ? '<label class="inline-check"><input type="checkbox" id="tk-internal"> Internal note (only IT sees it)</label>' : "<span></span>") +
+            '<form id="tk-reply" class="tk-reply" novalidate><textarea id="tk-reply-text" rows="3" maxlength="5000" placeholder="' + (t.canManage ? "Reply to " + esc(t.requester ? t.requester.displayName : "the requester") : "Add more detail or reply to the team") + '…"></textarea>' +
+            '<div class="tk-reply-bar">' + (t.canManage ? '<label class="inline-check"><input type="checkbox" id="tk-internal"> Internal note (authorized handlers only)</label>' : "<span></span>") +
             '<button type="submit" class="btn btn-primary btn-small">' + icon("message") + "Send</button></div></form>") +
             '<div class="modal-actions">' + (t.isRequester && !t.canManage
                 ? (done ? '<button type="button" class="btn btn-ghost" data-set="open">' + icon("refresh") + "Reopen ticket</button>" : '<button type="button" class="btn btn-ghost" data-set="resolved">' + icon("tick") + "It’s fixed – close ticket</button>")
@@ -5267,7 +5407,7 @@
             state.me = r.user;
             renderChrome();
             toast(message);
-            if (window.location.pathname === "/helpdesk") {
+            if (["/cases","/it-cases"].includes(window.location.pathname)) {
                 closeModal();
                 state.pendingTicket = id;
                 render();
@@ -5279,7 +5419,7 @@
                 if (!field) return;
                 const body = {};
                 body[field] = e.target.value;
-                try { after(await api("/api/helpdesk/" + id + "/update", body), "Ticket updated."); } catch (err) { toast(err.message); }
+                try { after(await api(requestApi() + "/" + id + "/update", body), "Ticket updated."); } catch (err) { toast(err.message); }
             });
         }
         const replyForm = $("#tk-reply", m.el);
@@ -5287,13 +5427,30 @@
             e.preventDefault();
             const body = $("#tk-reply-text", m.el).value;
             if (!body.trim()) return;
-            try { after(await api("/api/helpdesk/" + id + "/reply", { body: body, internal: $("#tk-internal", m.el) ? $("#tk-internal", m.el).checked : false }), "Reply sent."); } catch (err) { toast(err.message); }
+            try { after(await api(requestApi() + "/" + id + "/reply", { body: body, internal: $("#tk-internal", m.el) ? $("#tk-internal", m.el).checked : false }), "Reply sent."); } catch (err) { toast(err.message); }
         });
         m.el.addEventListener("click", async function (e) {
             const s = e.target.closest("[data-set]");
             if (!s) return;
-            try { after(await api("/api/helpdesk/" + id + "/update", { status: s.dataset.set }), s.dataset.set === "open" ? "Ticket reopened." : "Ticket closed. Thanks!"); } catch (err) { toast(err.message); }
+            try { after(await api(requestApi() + "/" + id + "/update", { status: s.dataset.set }), s.dataset.set === "open" ? "Ticket reopened." : "Ticket closed. Thanks!"); } catch (err) { toast(err.message); }
         });
+        m.el.classList.add('hr-request-dialog');
+        const threadBox=$('.tk-thread',m.el);threadBox.setAttribute('role','log');threadBox.setAttribute('aria-live','polite');
+        liveModalRefresh=async function(){
+            if(!m.el.isConnected)return;
+            let next;
+            try{next=(await api(requestApi()+"/"+id)).ticket;}catch(error){if(error.status===403||error.status===404){closeModal();toast('This case is no longer available.');}return;}
+            if(!m.el.isConnected)return;
+            if(JSON.stringify(next.messages)!==JSON.stringify(t.messages)){
+                const pinned=threadBox.scrollHeight-threadBox.scrollTop-threadBox.clientHeight<48,top=threadBox.scrollTop;
+                threadBox.innerHTML=requestThreadHtml(next);threadBox.scrollTop=pinned?threadBox.scrollHeight:top;
+            }
+            $('.tk-header',m.el).innerHTML='<span class="tk-num">#'+next.number+'</span>'+ticketStatusPill(next.status,d.statuses)+priorityPill(next.priority,d.priorities);
+            for(const [field,value]of[['#tk-status',next.status],['#tk-priority',next.priority],['#tk-assignee',next.assignee?next.assignee.id:'']]){const el=$(field,m.el);if(el&&document.activeElement!==el)el.value=value;}
+            const composer=$('.tk-reply',m.el);if(composer)composer.hidden=next.status==='closed'&&!next.canManage;
+            const action=$('[data-set]',m.el);if(action){const done=next.status==='resolved'||next.status==='closed';action.dataset.set=done?'open':'closed';action.innerHTML=icon(done?'refresh':'check')+(done?'Reopen case':'Close case');}
+            t=next;
+        };
     }
 
     // ================= Probation & reviews =================
@@ -5493,7 +5650,7 @@
     // ================= Staff documents =================
 
     async function viewStaffFiles(root, current) {
-        const personId = state.staffFilesPerson || "";
+        const personId = state.staffFilesPerson || new URLSearchParams(location.search).get("person") || "";
         const d = await api("/api/staff-files" + (personId ? "?person=" + personId : ""));
         if (!current()) return;
         const own = d.person.id === state.me.id;
@@ -5612,6 +5769,7 @@
     let statusTimer = null;
 
     async function viewStatus(root, current) {
+        if(window.HNITStatus)return window.HNITStatus.mount(root,{api:api,current:current,icon:icon});
         clearInterval(statusTimer);
         const d = await api("/api/status");
         if (!current()) return;
@@ -6079,6 +6237,8 @@
         "login-deleted": ["deleted the sign-in account", "accounts"],
         "profile-chosen": ["signed in as their profile at", "sign-ins"],
         "password-reset": ["reset the password for", "accounts"],
+        "account-locked": ["locked the account", "accounts"],
+        "account-unlocked": ["unlocked the account", "accounts"],
         "login-disabled": ["disabled the login for", "accounts"],
         "login-enabled": ["enabled the login for", "accounts"],
         "employee-added": ["added employee", "staff"],
@@ -6289,7 +6449,7 @@
         ["leave", "Leave & absence"],
         ["rotas", "Rotas & timesheets"],
         ["payroll", "Payroll & funds"],
-        ["helpdesk", "IT Helpdesk"],
+        ["helpdesk", HELP_LABEL],
         ["cases", "HR cases"],
         ["system", "System Admin"],
     ];
@@ -6309,6 +6469,8 @@
             '<div class="form-error" id="pin-error" hidden></div>' +
             '<button type="submit" class="btn btn-primary btn-block" id="pin-go">Unlock</button>' +
             "</form></div></div>";
+        // Dynamic screens do not reliably apply the HTML autofocus attribute.
+        $("#pin", root).focus({ preventScroll: true });
         $("#pin").addEventListener("input", function (e) { e.target.value = e.target.value.replace(/\D/g, ""); });
         $("#pin-form").addEventListener("submit", async function (e) {
             e.preventDefault();
@@ -6636,18 +6798,36 @@
 
     // ================= Start =================
 
+    async function finishStartup() {
+        if(document.fonts)await Promise.race([document.fonts.ready,new Promise(resolve=>setTimeout(resolve,1500))]);
+        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+        document.querySelectorAll(".hn-reveal").forEach(el=>el.classList.add("hn-in"));
+        document.body.classList.add("portal-entering");
+        document.body.classList.remove("app-loading");
+        document.body.setAttribute("aria-busy","false");
+        setTimeout(()=>{const loader=document.getElementById("portal-startup");if(loader)loader.hidden=true;document.body.classList.remove("portal-entering");},220);
+    }
     async function start() {
+        const loader=document.getElementById("portal-startup");if(loader)loader.hidden=false;
+        document.body.classList.add("app-loading");document.body.setAttribute("aria-busy","true");
         $("#year").textContent = new Date().getFullYear();
         try {
             state.me = (await api("/api/me")).user;
             applyTheme(state.me.theme);
-            if (!state.me.passwordTemporary && !state.me.passwordExpired && !state.me.codeSetupRequired) state.meta = await api("/api/meta");
+            if (!state.me.passwordTemporary && !state.me.passwordExpired && !state.me.codeSetupRequired) {
+                state.meta = await api("/api/meta");
+                if (window.HNPortal) state.meta.companies = state.meta.companies.filter(window.HNPortal.companyVisible);
+            }
         } catch (e) {
+            if (window.HNPortal) {
+                $("#view").innerHTML = window.HNPortal.error(e.message);
+                $("#view [data-portal-retry]").addEventListener("click", start);
+                await finishStartup();
+            }
             return;
         }
-        renderChrome();
-        document.body.classList.remove("app-loading");
-        render();
+        state.bootstrapFresh=true;
+        try{renderChrome();await render();}finally{state.bootstrapFresh=false;await finishStartup();}
 
         let justSignedIn = false;
         try { justSignedIn = sessionStorage.getItem("hn-just-signed-in") === "1"; sessionStorage.removeItem("hn-just-signed-in"); } catch (e) { /* ignore */ }
@@ -6656,7 +6836,34 @@
             toast("Signed in as " + mainRole.jobTitle + ", " + mainRole.company);
         }
 
-        if (!HR_APP && state.me.canManage && !state.me.impersonatedBy && !state.me.passwordTemporary && !state.me.passwordExpired && !state.me.codeSetupRequired) missingDiscordPrompt();
+        if (HR_APP && !FINANCE_APP && state.me.canManage && !state.me.impersonatedBy && !state.me.passwordTemporary && !state.me.passwordExpired && !state.me.codeSetupRequired) missingDiscordPrompt();
+
+        if(window.HNLive)window.HNLive.start({api:api,update:async function(){
+            if(state.me.passwordTemporary||state.me.passwordExpired||state.me.codeSetupRequired)return false;
+            const was=state.me,values=await Promise.all([api('/api/me'),api('/api/meta')]);
+            state.me=values[0].user;state.meta=values[1];
+            if(window.HNPortal)state.meta.companies=state.meta.companies.filter(window.HNPortal.companyVisible);
+            const securityChanged=was.canManageAccounts!==state.me.canManageAccounts||was.id!==state.me.id||JSON.stringify(was.permissions)!==JSON.stringify(state.me.permissions)||!!was.impersonatedBy!==!!state.me.impersonatedBy;
+            applyTheme(state.me.theme);
+            if(securityChanged){renderChrome();await render({live:true});return true;}
+            if(document.querySelector('.portal-account[open],#hr-account-menu:popover-open, #it-account-menu:popover-open,#finance-account-menu:popover-open,.menu:not([hidden])'))return false;
+            renderChrome();
+            if(liveModalRefresh){await liveModalRefresh();if(livePageRefresh)await livePageRefresh();return true;}
+            if(activeModal || document.querySelector('#it-admin-dialog[open],.it-admin-menu-host'))return false;
+            if(livePageRefresh){await livePageRefresh();return true;}
+            if(document.querySelector('.portal-position-chart')&&window.HNOrgChart){await window.HNOrgChart.refresh();return true;}
+            if(location.pathname==='/helpdesk')return true; // A draft/receipt stays in place; routing choices update at the next step.
+            if(FINANCE_APP && document.activeElement?.matches('.finance-list-search input')){
+                const selection=[document.activeElement.selectionStart,document.activeElement.selectionEnd];
+                await render({live:true});
+                const search=document.querySelector('.finance-list-search input');
+                if(search){search.focus({preventScroll:true});search.setSelectionRange(selection[0],selection[1]);}
+                return true;
+            }
+            if(document.activeElement&&document.activeElement.matches('input,textarea,select,[contenteditable=true]'))return false;
+            if(Array.from(document.querySelectorAll('#view form')).some(f=>dirtyForms.has(f)))return false;
+            await render({live:true});return true;
+        }});
 
         // Notice quickly if this session is ended from the system panel.
         setInterval(function () {
@@ -7498,6 +7705,19 @@
     // ================= HR cases =================
 
     async function viewCases(root, current) {
+        if (IT_APP || location.pathname==="/it-cases") return viewHelpdesk(root,current);
+        root.innerHTML='<div class="company-tabs" id="hr-cases-tabs"><button type="button" data-cases-tab="requests">HR requests</button>'+(can('cases.manage')?'<button type="button" data-cases-tab="records">HR case records</button>':'')+'</div><div id="hr-cases-view"></div>';
+        const show=function(tab){
+            state.hrCasesTab=tab;livePageRefresh=null;
+            $$('#hr-cases-tabs button',root).forEach(b=>b.classList.toggle('active',b.dataset.casesTab===tab));
+            const previous=$('#hr-cases-view',root),target=document.createElement('div');target.id='hr-cases-view';previous.replaceWith(target);
+            const active=()=>current()&&state.hrCasesTab===tab&&target.isConnected;
+            (tab==='records'&&can('cases.manage')?viewCaseRecords:viewHelpdesk)(target,active).catch(e=>{if(active())target.textContent=e.message;});
+        };
+        $('#hr-cases-tabs',root).onclick=function(e){const button=e.target.closest('[data-cases-tab]');if(button)show(button.dataset.casesTab);};
+        show(can('cases.manage')&&state.hrCasesTab==='records'?'records':'requests');
+    }
+    async function viewCaseRecords(root, current) {
         const d = await api("/api/cases");
         if (!current()) return;
         let filter = state.caseFilter || "open";
@@ -7819,7 +8039,7 @@
     }
 
     function noteItemHtml(n) {
-        return '<button type="button" class="note-item' + (n.read ? "" : " unread") + '" data-note="' + esc(n.id) + '" data-href="' + esc(n.link || "") + '">' +
+        return '<button type="button" class="note-item' + (n.read ? "" : " unread") + '" data-note="' + esc(n.id) + '" data-href="' + esc(destination(n.link || "")) + '">' +
             '<span class="note-icon">' + icon(NOTE_ICONS[n.type] || "bell") + '</span><span class="note-text"><span class="note-title">' + esc(n.title) + "</span>" +
             (n.body ? '<span class="note-body">' + esc(n.body) + "</span>" : "") + '<span class="note-time">' + esc(timeAgo(n.at)) + "</span></span></button>";
     }
@@ -8147,9 +8367,6 @@
             '<section class="panel"><h2 class="panel-title">' + icon("calendar") + "Upcoming events</h2>" + (d.events.length ? '<ul class="team-list">' + d.events.map(function (e) {
                 return "<li><strong>" + esc(e.title) + '</strong><span class="muted small">' + esc(dateRange(e.startDate, e.endDate)) + (e.location ? " · " + esc(e.location) : "") + "</span></li>";
             }).join("") + "</ul>" : '<p class="muted small">No events coming up.</p>') + "</section>" +
-            (d.vacancies.length ? '<section class="panel"><h2 class="panel-title">' + icon("briefcase") + "We’re hiring</h2><ul class=\"team-list\">" + d.vacancies.map(function (v) {
-                return '<li><a href="/jobs" data-link><strong>' + esc(v.title) + "</strong></a>" + '<span class="muted small">' + esc(v.company || "") + "</span>" + "</li>";
-            }).join("") + "</ul></section>" : "") +
             "</aside></div>";
         root.addEventListener("click", function (e) {
             const t = e.target.closest("[data-team]");
@@ -8769,13 +8986,15 @@
     // it with stuff"): shortcuts to the pages you use, your colleagues at a glance, and the other HN Group websites.
     const HOME_SHORTCUTS = ["/directory", "/leave", "/calendar", "/payslips", "/rotas", "/expenses", "/helpdesk", "/chat", "/kudos", "/wiki", "/polls"];
     const HN_SITES = [
+        { title: "HN Group HR", desc: "Leave, working hours, development and staff records", href: "https://hr.hngroup.org.uk/", icon: "users" },
+        { title: "HN Group Finance", desc: "Payslips, expenses and company finances", href: "https://finance.hngroup.org.uk/", icon: "pound" },
         { title: "HN Group Docs", desc: "Write and store documents", href: "https://docs.hngroup.org.uk/", icon: "file" },
         { title: "Contracts", desc: "Send and sign contracts", href: "https://contract.hngroup.org.uk/", icon: "edit" },
         { title: "Wiki", desc: "The companies of HN Group", href: "https://wiki.hngroup.org.uk/", icon: "book" },
         { title: "Service status", desc: "Is everything up?", href: "https://status.hngroup.org.uk/", icon: "activity" },
-        { title: "HN Account", desc: "Your sign-in, PIN and devices", href: "https://accounts.hngroup.org.uk/", icon: "user" },
+        { title: "HN Account", desc: "Your sign-in, PIN and devices", href: "https://auth.hngroup.org.uk/account/", icon: "user" },
         { title: "Devices", desc: "Approve your computers", href: "https://devices.hngroup.org.uk/", icon: "monitor" },
-        { title: "Downloads", desc: "HN Browser and HN Secure Gateway", href: "https://downloads.hngroup.org.uk/", icon: "download" },
+        { title: "Downloads", desc: "HN Browser and HN Secure Access Terminal", href: "https://downloads.hngroup.org.uk/", icon: "download" },
         { title: "News", desc: "The HN Group newsroom", href: "https://news.hngroup.org.uk/", icon: "bell" },
         { title: "Brand centre", desc: "Logos, colours and rules", href: "https://branding.hngroup.org.uk/", icon: "palette" },
     ];
@@ -8787,7 +9006,7 @@
             '</div><div class="quick-grid">' +
             picks.map(function (it) {
                 const count = it.badge ? state.me[it.badge] || 0 : 0;
-                return '<a class="quick-tile" href="' + it.href + '" data-link><span class="qt-icon">' + icon(it.icon) + '</span><span class="qt-text"><span class="qt-title">' + esc(it.title) +
+                return '<a class="quick-tile" href="' + destination(it.href) + '" data-link><span class="qt-icon">' + icon(it.icon) + '</span><span class="qt-text"><span class="qt-title">' + esc(it.title) +
                     (count ? ' <span class="count-badge">' + count + "</span>" : "") + '</span><span class="qt-desc">' + esc(it.desc) + "</span></span></a>";
             }).join("") + "</div></section>" : "") +
             '<section class="home-block" id="home-colleagues" hidden></section>' +
@@ -8800,7 +9019,7 @@
     }
     // Side panels that fill the right-hand column (the user's request, 3 November 2026: "fill in that gap").
     function homeQuickActions() {
-        const acts = [["/leave", "sun", "Book leave"], ["/helpdesk", "lifebuoy", "Raise an IT ticket"], ["/expenses", "pound", "Claim an expense"],
+        const acts = [["/leave", "sun", "Book leave"], ["/helpdesk", "lifebuoy", HELP_LABEL], ["/expenses", "pound", "Claim an expense"],
             ["/kudos", "heart", "Give kudos"], ["/questions", "help", "Ask a question"], ["/ideas", "flag", "Share an idea"]];
         return '<h2 class="section-title">' + icon("tick") + "Quick actions</h2>" + '<div class="qa-grid">' +
             acts.map(function (a) { return '<a class="qa-btn" href="' + a[0] + '" data-link>' + icon(a[1]) + "<span>" + a[2] + "</span></a>"; }).join("") + "</div>";
@@ -9503,10 +9722,10 @@
                 return '<section class="panel jd-card' + (isOpen ? " open" : "") + '" data-jd="' + x.id + '">' +
                     '<div class="jd-head"><button type="button" class="jd-toggle" aria-expanded="' + isOpen + '" data-jda="toggle">' +
                     '<span class="jd-title"><span class="jd-role">' + esc(x.role) + '</span><span class="badge">' + esc(x.company) + "</span></span>" +
-                    '<span class="jd-reports muted small">' + icon("users") + "Reports to " + esc(x.reportsTo) + "</span></button>" +
+                    '<span class="jd-reports muted small">' + icon("users") + "Reports to " + esc(supervisorText(x.reportsTo)) + "</span></button>" +
                     (d.canManage ? '<div class="btn-row"><button type="button" class="icon-btn" data-jda="edit" aria-label="Edit">' + icon("edit") + '</button><button type="button" class="icon-btn" data-jda="delete" aria-label="Delete">' + icon("trash") + "</button></div>" : "") + "</div>" +
                     '<div class="jd-body"' + (isOpen ? "" : " hidden") + '><dl class="jd-facts">' +
-                    "<div><dt>Role</dt><dd>" + esc(x.role) + "</dd></div><div><dt>Company</dt><dd>" + esc(x.company) + "</dd></div><div><dt>Reports to</dt><dd>" + esc(x.reportsTo) + "</dd></div></dl>" +
+                    "<div><dt>Role</dt><dd>" + esc(x.role) + "</dd></div><div><dt>Company</dt><dd>" + esc(x.company) + "</dd></div><div><dt>Reports to</dt><dd>" + esc(supervisorText(x.reportsTo)) + "</dd></div></dl>" +
                     '<h3 class="detail-head">Job description</h3><div class="jd-text">' + esc(x.description) + "</div>" +
                     '<h3 class="detail-head">Authority</h3><div class="jd-text">' + esc(x.authority) + "</div>" +
                     '<p class="muted small">Last updated ' + esc(fmtDate(x.updatedAt)) + (x.updatedBy ? " by " + esc(x.updatedBy) : "") + "</p></div></section>";
@@ -9564,14 +9783,15 @@
     }
 
     // Positions at each company (the user's request, 7 November 2026): staff records' positions and supervisors are
-    // chosen from these lists. Opened from People → Job descriptions → Positions.
+    // chosen from these lists. Opened from HR → People → Job descriptions → Positions.
     function openPositionsManager(d) {
-        const m = openModal('<h2 class="modal-title">Positions</h2><p class="muted">The positions people can hold at each company, and who each one reports to. Choosing a position on Employee Management fills in its Reports to (it can still be changed there). HN Group People’s org charts follow these reporting lines.</p><div id="pos-body"></div>', { wide: true });
+        let positionsChanged = false;
+        const m = openModal('<h2 class="modal-title">Positions</h2><p class="muted">The positions people can hold at each company, and who each one reports to. Choosing a position on Employee Management fills in its Reports to (it can still be changed there). HN Group People’s org charts follow these reporting lines.</p><div id="pos-body"></div>', { wide: true, onClose: function(){ if(positionsChanged) render(); } });
         d.positionReports = d.positionReports || {};
         const enc = function (p) { return p ? encodeURIComponent(p.company) + "|" + encodeURIComponent(p.title) : ""; };
         const reportOptions = function (c, t) {
             const cur = (d.positionReports[c] || {})[t] || null;
-            return '<option value="">Reports to no one</option>' + d.companies.map(function (oc) {
+            return '<option value="">Reports to no one</option>' + ['HN Group','Horizon Network'].map(co=>'<option value="'+esc(enc({company:co,title:'Board of '+co}))+'"'+(cur&&cur.kind==='board'&&cur.company===co?' selected':'')+'>'+esc(boardLabel(co))+'</option>').join('') + d.companies.map(function (oc) {
                 const list = (d.positions[oc] || []).filter(function (x) { return !(oc === c && x === t); });
                 return list.length ? '<optgroup label="' + esc(oc) + '">' + list.map(function (x) { const on = cur && cur.company === oc && cur.title === x; return '<option value="' + esc(enc({ company: oc, title: x })) + '"' + (on ? " selected" : "") + ">" + esc(x) + (oc !== c ? " (" + esc(oc) + ")" : "") + "</option>"; }).join("") + "</optgroup>" : "";
             }).join("");
@@ -9580,7 +9800,7 @@
             $("#pos-body", m.el).innerHTML = d.companies.map(function (c) {
                 const list = d.positions[c] || [];
                 return '<section class="pos-company" data-company="' + esc(c) + '"><h3 class="detail-head">' + esc(c) + ' <span class="tab-count">' + list.length + "</span></h3>" +
-                    (list.length ? '<ul class="pos-list">' + list.map(function (t) { return '<li data-pos="' + esc(t) + '"><span>' + esc(t) + '</span><label class="pos-report"><span class="muted small">Reports to</span><select class="pos-report-select" aria-label="Who ' + esc(t) + ' reports to">' + reportOptions(c, t) + '</select></label><button type="button" class="icon-btn" data-pos-remove="' + esc(t) + '" aria-label="Remove ' + esc(t) + '">' + icon("trash") + "</button></li>"; }).join("") + "</ul>" : '<p class="muted small">No positions yet.</p>') +
+                    (list.length ? '<ul class="pos-list">' + list.map(function (t,index) { return '<li data-pos="' + esc(t) + '"><span class="pos-title">' + esc(t) + '</span><form class="pos-rename" hidden><input type="text" maxlength="100" aria-label="New name for ' + esc(t) + '" value="' + esc(t) + '"><button type="submit" class="btn btn-primary btn-small">Save</button><button type="button" class="btn btn-ghost btn-small" data-rename-cancel>Cancel</button></form><button type="button" class="btn btn-ghost btn-small" data-pos-rename aria-label="Rename ' + esc(t) + '">Rename</button><label class="pos-report"><span class="muted small">Reports to</span><select class="pos-report-select" aria-label="Who ' + esc(t) + ' reports to">' + reportOptions(c, t) + '</select></label><button type="button" class="btn btn-ghost btn-small" data-move="-1"'+(index===0?' disabled':'')+' aria-label="Move '+esc(t)+' up">↑</button><button type="button" class="btn btn-ghost btn-small" data-move="1"'+(index===list.length-1?' disabled':'')+' aria-label="Move '+esc(t)+' down">↓</button><button type="button" class="icon-btn" data-pos-remove="' + esc(t) + '" aria-label="Remove ' + esc(t) + '">' + icon("trash") + "</button></li>"; }).join("") + "</ul>" : '<p class="muted small">No positions yet.</p>') +
                     '<form class="pos-add" novalidate><input type="text" maxlength="100" placeholder="New position at ' + esc(c) + '" aria-label="New position at ' + esc(c) + '"><button type="submit" class="btn btn-ghost btn-small">' + icon("plus") + "Add</button></form></section>";
             }).join("") + '<div class="form-error" id="pos-error" hidden></div>';
         }
@@ -9591,11 +9811,22 @@
                 if (r.positionReports) d.positionReports = r.positionReports;
                 if (state.meta) { state.meta.positions = r.positions; if (r.positionReports) state.meta.positionReports = r.positionReports; }
                 formError($("#pos-error", m.el), "");
+                positionsChanged = true;
                 draw();
-            } catch (err) { formError($("#pos-error", m.el), err.message); }
+                return true;
+            } catch (err) { formError($("#pos-error", m.el), err.message); return false; }
         }
         draw();
-        m.el.addEventListener("submit", function (e) {
+        m.el.addEventListener("submit", async function (e) {
+            const rename = e.target.closest(".pos-rename");
+            if(rename){
+                e.preventDefault();
+                const row=rename.closest("[data-pos]"), input=$("input",rename), button=$("button[type=submit]",rename);
+                button.disabled=true;
+                const ok=await change("/api/positions/rename",{company:row.closest("[data-company]").dataset.company,title:row.dataset.pos,newTitle:input.value});
+                if(!ok){button.disabled=false;input.focus();}
+                return;
+            }
             const form = e.target.closest(".pos-add");
             if (!form) return;
             e.preventDefault();
@@ -9606,9 +9837,16 @@
             const s = e.target.closest(".pos-report-select");
             if (!s) return;
             const v = s.value, i = v.indexOf("|");
-            change("/api/positions/reports", { company: s.closest("[data-company]").dataset.company, title: s.closest("[data-pos]").dataset.pos, reportsTo: i < 0 ? null : { company: decodeURIComponent(v.slice(0, i)), title: decodeURIComponent(v.slice(i + 1)) } });
+            change("/api/positions/reports", { company: s.closest("[data-company]").dataset.company, title: s.closest("[data-pos]").dataset.pos, reportsTo: i < 0 ? null : { company: decodeURIComponent(v.slice(0, i)), title: decodeURIComponent(v.slice(i + 1)), ...(decodeURIComponent(v.slice(i+1)) === "Board of " + decodeURIComponent(v.slice(0,i)) ? {kind:"board"} : {}) } });
         });
+        function cancelRename(row){$(".pos-rename",row).hidden=true;$(".pos-title",row).hidden=false;$("[data-pos-rename]",row).hidden=false;$("[data-pos-rename]",row).focus();}
+        m.el.addEventListener("keydown",function(e){if(e.key==="Escape"&&e.target.closest(".pos-rename")){e.stopPropagation();e.preventDefault();cancelRename(e.target.closest("[data-pos]"));}});
         m.el.addEventListener("click", function (e) {
+            const rename=e.target.closest('[data-pos-rename]');
+            if(rename){const row=rename.closest('[data-pos]'),form=$(".pos-rename",row);form.hidden=false;$(".pos-title",row).hidden=true;rename.hidden=true;$("input",form).focus();$("input",form).select();return;}
+            const cancel=e.target.closest('[data-rename-cancel]');if(cancel){cancelRename(cancel.closest('[data-pos]'));return;}
+            const move=e.target.closest('[data-move]');
+            if(move){const company=move.closest('[data-company]').dataset.company,titles=d.positions[company].slice(),i=titles.indexOf(move.closest('[data-pos]').dataset.pos),j=i+Number(move.dataset.move);if(j>=0&&j<titles.length){[titles[i],titles[j]]=[titles[j],titles[i]];change('/api/positions/reorder',{company,titles});}return;}
             const b = e.target.closest("[data-pos-remove]");
             if (b) change("/api/positions/remove", { company: b.closest("[data-company]").dataset.company, title: b.dataset.posRemove });
         });
@@ -9859,7 +10097,6 @@
 
     const HOME_WIDGETS = [
         { key: "todo", label: "To do", desc: "Things waiting for you to acknowledge" },
-        { key: "onboarding", label: "Onboarding", desc: "Your joiner or leaver checklist" },
         { key: "pulse", label: "Pulse", desc: "This week’s quick question" },
         { key: "leave", label: "Leave balance", desc: "Days left this year and what’s booked", off: true },
         { key: "celebrate", label: "Celebrations", desc: "Birthdays and work anniversaries" },
@@ -9922,7 +10159,7 @@
 
     function openHomeCustomiser() {
         const l = homeLayout();
-        let order = l.order.slice();
+        let order = window.HNPortal ? l.order.filter(function (key) { return window.HNPortal.widgetKeys.includes(key); }) : l.order.slice();
         const hidden = {};
         l.hidden.forEach(function (k) { hidden[k] = true; });
         const byKey = {};

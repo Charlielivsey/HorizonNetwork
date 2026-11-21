@@ -18,6 +18,7 @@ LOG=/var/log/hn-install.log
 [ "$(id -u)" = 0 ] || { echo 'Run with sudo.'; exit 1; }
 for tool in node pm2 nginx certbot; do command -v "$tool" >/dev/null || { echo "$tool is missing. On a new server run: sudo bash install-fresh-vps.sh $EMAIL"; exit 1; }; done
 exec > >(tee -a "$LOG") 2>&1
+bash "$ROOT/offline-site/install.sh" || exit 1
 echo "=== HN Group install $(date -Is) ($(git -C "$ROOT" log -1 --format='%h %s' 2>/dev/null)) ==="
 
 # Updates don't contact Let's Encrypt for certificates that already exist: certbot.timer renews them
@@ -88,7 +89,13 @@ else
     changed hngroup-site/ && run 'hngroup.org.uk' bash "$ROOT/hngroup-site/install.sh" "$EMAIL"
     changed auth-site/ status-site/install-portal-sso.sh && run 'HN Group Auth' bash "$ROOT/auth-site/install.sh" "$EMAIL"
 fi
-changed compass-site/ && run 'Compass (compass.hngroup.org.uk)' bash "$ROOT/compass-site/install.sh" "$EMAIL"
+if changed finance-site/ || [ ! -f /etc/letsencrypt/live/finance.hngroup.org.uk/fullchain.pem ]; then
+    run 'HN Group Finance (finance.hngroup.org.uk)' bash "$ROOT/finance-site/install.sh" "$EMAIL"
+fi
+if changed appeals-site/ || [ ! -f /etc/letsencrypt/live/appeals.hngroup.org.uk/fullchain.pem ]; then
+    run 'HN Group Appeals (appeals.hngroup.org.uk)' bash "$ROOT/appeals-site/install.sh" "$EMAIL"
+fi
+changed it-site/ && run 'HN Group IT (it.hngroup.org.uk)' bash "$ROOT/it-site/install.sh" "$EMAIL"
 changed hr-site/ && run 'HN Group HR (hr.hngroup.org.uk)' bash "$ROOT/hr-site/install.sh" "$EMAIL"
 changed echo-site/ && run 'Echo (echo.hngroup.org.uk)' bash "$ROOT/echo-site/install.sh" "$EMAIL"
 # HN Group People also re-runs until it has its HTTPS certificate (it waits for DNS on the first install).

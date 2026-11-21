@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Isolated HN Group Bots site (bots.hngroup.org.uk). Keeps its data (/var/lib/hn-bots) and every other service.
 set -euo pipefail
+bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/offline-site/install.sh"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOMAIN=bots.hngroup.org.uk
 EMAIL="${1:-}"

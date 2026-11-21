@@ -37,7 +37,7 @@ PY
 done
 mkdir -p "/opt/$APP/public" "/var/lib/$APP" "$CHALLENGE_DIR" /etc/nginx/sites-available /etc/nginx/sites-enabled
 chmod 700 "/var/lib/$APP"
-cp "$SHARED/server.js" "$SOURCE/auth.js" "$SOURCE/config.json" "/opt/$APP/"
+cp "$SHARED/server.js" "$SOURCE/auth.js" "$SOURCE/profile-gate.cjs" "$SOURCE/config.json" "/opt/$APP/"
 cp -r "$SHARED/public/." "/opt/$APP/public/"
 cp -r "$SOURCE/public/." "/opt/$APP/public/"
 # Announcements shipped with the site (News only) are published once by the server.

@@ -17,8 +17,9 @@ test('Email signatures: real account permissions, old redirect, branded assets, 
   const make = (first, last, local, password, pin) => { const p = store.saveEmployee({ firstName: first, lastName: last, jobTitle: 'Analyst', company: 'HN Group', emails: [{ local, domain: 'hngroup.org.uk', primary: true }] }); store.issueTemporaryPassword(p); store.setPassword(p, password); store.setCode(p, pin); return p; };
   const admin = make('Ada', 'Admin', 'ada.admin', 'Ada-password-582!', '582947');
   const sam = make('Sam', 'Staff', 'sam.staff', 'Sam-password-582!', '493817');
+  sam.otherRoles=[{company:'HN Group',jobTitle:'Director'}];admin.otherRoles=[{company:'HN Group',jobTitle:'Chief Executive Officer'}];store.savePeople();
   store.setRoleMembers(store.listRoles().find((r) => r.name === 'Super Admin'), [admin.id]);
-  const nia = store.saveEmployee({ firstName: 'Nia', lastName: 'Legal', displayName: 'Nia Display', jobTitle: 'Designer', company: 'HN Group', emails: [{ local: 'nia', domain: 'hngroup.org.uk', primary: true }, { local: 'nia', domain: 'horizonadvertising.co.uk' }], otherRoles: [{ company: 'Horizon Advertising', jobTitle: 'Creative director' }] });
+  const nia = store.saveEmployee({ firstName: 'Nia', lastName: 'Legal', displayName: 'Nia Display', jobTitle: 'Designer', company: 'HN Group', emails: [{ local: 'nia', domain: 'hngroup.org.uk', primary: true }, { local: 'nia', domain: 'horizonadvertising.co.uk' }], otherRoles: [{ company: 'Horizon Advertising', jobTitle: 'Creative director' }, {company:'Horizon Network',jobTitle:'Chairman & CEO'}] });
   const secret = path.join(dir, 'secret'); fs.writeFileSync(secret, 'd'.repeat(64));
 
   const [authPort, staffPort, accPort] = [await freePort(), await freePort(), await freePort()];
@@ -57,7 +58,7 @@ test('Email signatures: real account permissions, old redirect, branded assets, 
     assert.equal(old.headers.get('location'), 'https://accounts.hngroup.org.uk/?source=bookmark#signature');
     const samCookie = await signIn('sam.staff@hngroup.org.uk', 'Sam-password-582!', '493817');
     const s = client(samCookie);
-    assert.equal((await s.get('/api/signature-people')).status, 403);
+    assert.equal((await s.get('/api/signature-people')).status, 403);const ownSignature=await(await s.get('/api/signature-profile')).json();assert.equal(ownSignature.person.otherRoles[0].jobTitle,'Director');
     const adaCookie = await signIn('ada.admin@hngroup.org.uk', 'Ada-password-582!', '582947');
     const a = client(adaCookie);
     const people = await (await a.get('/api/signature-people')).json();
@@ -78,14 +79,14 @@ test('Email signatures: real account permissions, old redirect, branded assets, 
       await page.goto(ACC + '/#signature');
       await page.waitForSelector('#sig-name');
       assert.equal(await page.inputValue('#sig-name'), 'Sam Staff');
-      assert.equal(await page.inputValue('#sig-title'), 'Analyst');
+      assert.equal(await page.inputValue('#sig-title'), 'Analyst');assert.equal(await page.locator('#sig-role option').count(),2,'Same-company appointments are distinct choices');await page.selectOption('#sig-role','1');assert.equal(await page.inputValue('#sig-title'),'Director');await page.selectOption('#sig-role','0');
       assert.equal(await page.locator('#sig-person').count(), 0);
-      assert.equal(await page.locator('#sig-preview img').evaluate(img => img.complete && img.naturalWidth > 0), true);
+      assert.equal(await page.locator('#sig-preview img').evaluate(img => img.complete && img.naturalWidth > 0), true);const lines=page.locator('#sig-preview > table > tbody > tr').first().locator('td').nth(1).locator(':scope > p');assert.equal(await lines.nth(1).innerText(),'Analyst');assert.equal(await lines.nth(2).innerText(),'HN Group Limited');assert.ok(await page.locator('#sig-preview img').evaluate(img=>img.naturalWidth/img.naturalHeight>2),'Horizontal wordmark used');
       await page.fill('#sig-name', 'Sam <Test> & Team');
       await page.click('#sig-copy-code');
       const html = await page.evaluate(() => navigator.clipboard.readText());
       assert.match(html, /Sam &lt;Test&gt; &amp; Team/);
-      assert.match(html, /assets\/brand\/png\/hn-group-email-logo.png/);
+      assert.match(html, /assets\/brand\/png\/hn-group-wordmark.png/);
       await page.click('#sig-copy');
       await page.waitForFunction(() => document.querySelector('#toast').textContent.startsWith('Signature copied'));
       const types = await page.evaluate(async () => (await navigator.clipboard.read())[0].types);
@@ -95,7 +96,7 @@ test('Email signatures: real account permissions, old redirect, branded assets, 
       await page.click('[data-help="outlook"]');
       assert.equal(await page.locator('[data-steps="gmail"]').isVisible(), false);
       assert.equal(await page.locator('[data-steps="outlook"]').isVisible(), true);
-      await page.reload(); await page.waitForSelector('#sig-name');
+      await context.addCookies([{name:'hn_profile_arrival',value:'1',url:ACC}]);await page.reload(); await page.waitForSelector('#sig-name');
       assert.equal(await page.inputValue('#sig-name'), 'Sam Staff', 'refresh keeps valid sign-in and live profile defaults');
       await page.setViewportSize({ width: 390, height: 844 });
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'no mobile page overflow');
@@ -105,7 +106,7 @@ test('Email signatures: real account permissions, old redirect, branded assets, 
       await page.setViewportSize({ width: 1440, height: 1000 });
       await page.screenshot({ path: path.join(__dirname, '.test-results/signature-desktop.png'), fullPage: true });
       await context.addCookies([{ name: 'hn_account', value: adaCookie.split('=')[1], url: ACC }]);
-      await page.reload(); await page.waitForSelector('#sig-person');
+      await context.addCookies([{name:'hn_profile_arrival',value:'1',url:ACC}]);await page.reload(); await page.waitForSelector('#sig-person');assert.equal(await page.locator('#sig-role option').count(),2,'A manager’s own additional positions are included too');
       await page.selectOption('#sig-person', { label: 'Sam Staff' });
       assert.equal(await page.inputValue('#sig-name'), 'Sam Staff');
       assert.equal(await page.inputValue('#sig-email'), 'sam.staff@hngroup.org.uk');
@@ -116,10 +117,16 @@ test('Email signatures: real account permissions, old redirect, branded assets, 
       assert.equal(await page.inputValue('#sig-email'), 'nia@horizonadvertising.co.uk');
       assert.match(await page.locator('#sig-preview').innerText(), /Horizon Media Group/);
       assert.match(await page.locator('#sig-preview img').getAttribute('src'), /horizon-advertising-email-logo/);
+      await page.selectOption('#sig-role','2');assert.match(await page.locator('#sig-preview img').getAttribute('src'),/horizon-network-wordmark.png/);await page.waitForFunction(()=>document.querySelector('#sig-preview img').complete);assert.ok(await page.locator('#sig-preview img').evaluate(img=>img.naturalWidth/img.naturalHeight>4));const networkLines=page.locator('#sig-preview > table > tbody > tr').first().locator('td').nth(1).locator(':scope > p');assert.equal(await networkLines.nth(1).innerText(),'Chairman & CEO');assert.equal(await networkLines.nth(2).innerText(),'Horizon Network Limited');const png=page.waitForEvent('download');await page.click('#sig-download');fs.copyFileSync(await(await png).path(),path.join(__dirname,'.test-results/signature-network.png'));await page.screenshot({path:path.join(__dirname,'.test-results/signature-horizontal.png'),fullPage:true});
       assert.deepEqual(errors, []);
       await context.close();
     } finally { await browser.close(); }
-    await a.post('/api/employees/' + sam.id + '/account/disable', {});
+    // Account administration lives in Staff; exercise the actual permitted Staff route.
+    const staffPost=(route,body,cookie='')=>fetch(staffBase+route,{method:'POST',headers:{Origin:staffBase,'Content-Type':'application/json',Cookie:cookie},body:JSON.stringify(body)});
+    const staffLogin=await staffPost('/api/login',{username:'ada.admin@hngroup.org.uk',password:'Ada-password-582!'});assert.equal(staffLogin.status,200);
+    const staffCode=await staffPost('/api/login/code',{challenge:(await staffLogin.json()).challenge,code:'582947'});assert.equal(staffCode.status,200);
+    const staffCookie=cookieOf(staffCode,'hn_staff_session');assert.ok(staffCookie);
+    const disabled=await staffPost('/api/employees/'+sam.id+'/account/disable',{},staffCookie);assert.equal(disabled.status,200);
     assert.equal((await s.get('/api/signature-people')).status, 401, 'disabled accounts cannot use the new API');
   } finally {
     const exited = (c) => (c.exitCode !== null ? Promise.resolve() : new Promise((r) => c.once('exit', r)));

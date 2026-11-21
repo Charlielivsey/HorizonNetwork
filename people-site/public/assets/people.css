@@ -109,7 +109,7 @@ main:focus { outline: none; }
 .lg-filled { background: var(--accent) !important; }
 .lg-vacant { background: transparent !important; border: 1.5px dashed var(--muted); }
 /* The canvas: a soft dotted grid; Fit shows the whole chart, zooming in makes it scroll. */
-.org-scroll { position: relative; overflow: hidden; padding: 1.8rem 1.5rem 1.5rem; background-color: var(--tint); background-image: radial-gradient(circle, color-mix(in srgb, var(--muted) 22%, transparent) 1px, transparent 1.2px); background-size: 22px 22px; }
+.org-scroll { position: relative; overflow: hidden; padding: 1.8rem 1.5rem 1.5rem; background-color: var(--tint); background-image: radial-gradient(circle, color-mix(in srgb, var(--muted) 22%, transparent) 1px, transparent 1.2px); background-size: 22px 22px; touch-action: none; }
 .org-scroll.zoomed { overflow: auto; max-height: 75vh; overscroll-behavior: contain; }
 .org-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
 .org-canvas { position: relative; }
@@ -151,7 +151,7 @@ main:focus { outline: none; }
 .org-empty { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; border: 1.5px dashed color-mix(in srgb, var(--muted) 55%, transparent); }
 .org-empty svg { width: 20px; height: 20px; fill: none; stroke: var(--muted); stroke-width: 1.8; stroke-linecap: round; }
 /* The branch button sits on the card's bottom edge. */
-.org-toggle { position: absolute; left: 50%; bottom: -15px; transform: translateX(-50%); z-index: 1; display: inline-flex; align-items: center; gap: .2rem; height: 28px; padding: 0 .55rem 0 .7rem; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); font: inherit; font-size: .76rem; font-weight: 800; cursor: pointer; box-shadow: 0 2px 6px rgba(28,33,53,.08); transition: color .15s, border-color .15s; }
+.org-toggle { position: absolute; left: 50%; bottom: -18px; transform: translateX(-50%); z-index: 1; display: inline-flex; align-items: center; gap: .2rem; min-height: 36px; padding: 0 .7rem 0 .8rem; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); font: inherit; font-size: .76rem; font-weight: 800; cursor: pointer; box-shadow: 0 2px 6px rgba(28,33,53,.08); transition: color .15s, border-color .15s; }
 .org-toggle:hover { color: var(--accent); border-color: var(--accent); }
 .org-toggle svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; transition: transform .2s; }
 .collapsed > .org-node .org-toggle svg { transform: rotate(-90deg); }
@@ -204,9 +204,17 @@ main:focus { outline: none; }
 }
 
 /* A single filter row replaces the duplicate company navigation and static legend. */
-.org-legend .org-filter { display: inline-flex; align-items: center; gap: .45rem; font: inherit; color: var(--muted); background: transparent; border: 1px solid transparent; border-radius: 999px; padding: .4rem .65rem; text-decoration: none; cursor: pointer; }
+.org-legend .org-filter { display: inline-flex; align-items: center; gap: .45rem; min-height: 42px; font: inherit; color: var(--muted); background: transparent; border: 1px solid transparent; border-radius: 999px; padding: .4rem .8rem; text-decoration: none; cursor: pointer; }
 .org-legend .org-filter:hover, .org-legend .org-filter:focus-visible { color: var(--text); border-color: var(--accent); }
 .org-legend .org-filter.active { background: var(--accent); color: var(--on-accent); }
 .org-node.org-context { opacity: .5; }
 .org-hits { top: 50%; transform: translateY(-50%); }
 @media (max-width: 720px) { .org-find { max-width: none; flex-basis: 100%; } .org-btns { justify-content: flex-start; } }
+
+@media (pointer: coarse) {
+  .org-btn, .org-zoom button { min-height: 44px; }
+  .org-legend { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-inline: contain; scroll-snap-type: inline proximity; scrollbar-width: thin; }
+  .org-legend .org-filter { flex: 0 0 auto; scroll-snap-align: start; min-height: 44px; }
+  .org-toggle { min-height: 44px; bottom: -22px; }
+}
+.org-scroll.dragging { cursor: grabbing; user-select: none; }

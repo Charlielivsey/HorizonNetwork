@@ -1,7 +1,6 @@
 'use strict';
 // Public destinations only. Shortcuts never grant sign-in or website permissions.
 const SITES=[
- ['https://compass.hngroup.org.uk/',['compass','hn compass','hn group compass','compass browser']],
  ['https://appeals.hngroup.org.uk/',['hn group appeals','hn appeals','appeals','appeal','moderation appeal']],
  ['https://staff.hngroup.org.uk/finance',['hn group finance','hn finance','finance','payroll','payslips','expenses','company funds','invoices','bills']],
  ['https://staff.hngroup.org.uk/it',['hn group it','hn it','it','technology','it support','it cases']],

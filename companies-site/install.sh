@@ -3,6 +3,7 @@
 # Auth and staff services are untouched. Register data and uploaded PDFs live in /var/lib/hn-companies
 # and are kept. It has its own staff and customer accounts and doesn't use HN Group Auth.
 set -euo pipefail
+bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/offline-site/install.sh"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOMAIN=companies.hngroup.org.uk
 EMAIL="${1:-}"

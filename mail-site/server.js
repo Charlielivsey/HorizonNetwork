@@ -161,7 +161,7 @@ function createServer({ dir = process.env.MAIL_DATA_DIR || '/var/lib/hn-mail', f
         let sender = null;
         if (status.connected) { try { sender = await senderOf(user); } catch (e) { if (e.code === 'connect') status.connected = false; } }
         const status2 = google.status(user);
-        return json(200, { user: { displayName: user.displayName, username: user.username, email: user.email, jobTitle: user.jobTitle, company: user.company }, gmail: { ...status2, sender },
+        return json(200, { user: { displayName: user.displayName, username: user.username, email: user.email, jobTitle: user.jobTitle, company: user.company, mainCompany: user.mainCompany }, gmail: { ...status2, sender },
           hnSignature: hnSignature({ ...user, email: (sender && sender.email) || status2.email || status2.linkedEmail || user.email }) });
       }
       if (route === '/api/avatar' && req.method === 'GET') {

@@ -22,7 +22,7 @@
   // Restrict replacement to application chrome: never touch document artwork, signatures or company records.
   doc.querySelectorAll('.portal-brand img,.topbar > .brand img,.topbar .brand img,header.top .brand img,header .brand img,.pf-brand img,.footer-brand img').forEach(img=>{
    const dark=img.matches('.logo-dark-theme,.on-dark') || (img.closest('.footer-brand') && !img.matches('.on-light,.logo-light-theme'));
-   const src='/assets/staff-brand/'+b.logo+(dark?'-white':'')+'.svg';
+   const src=(doc.documentElement.dataset.accountBase||'')+'/assets/staff-brand/'+b.logo+(dark?'-white':'')+'.svg?v=20261120-company-logos';
    if(img.getAttribute('src')!==src)img.setAttribute('src',src);
    img.alt=b.name;img.style.objectFit='contain';
    if(img.closest('a'))img.closest('a').title=name;

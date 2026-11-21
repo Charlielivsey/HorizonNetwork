@@ -3,6 +3,7 @@
 // "wiki" application with the fixed callback https://wiki.hngroup.org.uk/auth/callback. Any staff
 // account can edit; the system owner and Super Admin members can also protect and delete pages.
 // Reading the wiki needs no sign-in.
+const {chooseOnArrival,arrivalCookie}=require('./profile-gate.cjs');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 
@@ -96,6 +97,7 @@ const safeReturn = (p) => (typeof p === 'string' && /^\/(wiki|w)\/[^\s\\]*$/.tes
 
 // /auth/login, /auth/callback and /auth/logout. Returns true when it handled the request.
 async function handle(req, res, url, showError) {
+  if(await chooseOnArrival(req,res,url,{client:CLIENT,session:()=>sessions.get(tokenKey(cookie(req,SESSION_COOKIE)))?.authSession,backend:AUTH_BACKEND,secretFile:SECRET_FILE,authOrigin:AUTH_ORIGIN,secure:SECURE,stateCookie:STATE_COOKIE,safeNext:safeReturn}))return true;
   if (url.pathname === '/auth/login' && req.method === 'GET') {
     const state = crypto.randomBytes(32).toString('hex');
     const back = safeReturn(url.searchParams.get('return'));
@@ -120,7 +122,7 @@ async function handle(req, res, url, showError) {
       const token = crypto.randomBytes(32).toString('hex'), longest = PRIVATE ? 30 * 86400 * 1000 : 12 * 3600 * 1000;
       sessions.set(tokenKey(token), { authSession: result.session, user: userView(result.user), checked: Date.now(), csrf: crypto.randomBytes(24).toString('hex'), expires: Math.min(Number(result.expires) || 0, Date.now() + longest) || Date.now() + 3600 * 1000 });
       persist();
-      redirect(res, back, [clear, setCookie(SESSION_COOKIE, token, PRIVATE ? 30 * 86400 : undefined)]);
+      redirect(res, back, [clear, arrivalCookie(SECURE), setCookie(SESSION_COOKIE, token, PRIVATE ? 30 * 86400 : undefined)]);
     } catch (e) {
       showError(res, e.status === 403 ? 403 : 503, 'Sign-in failed', e.message, [clear]);
     }

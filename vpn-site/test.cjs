@@ -66,7 +66,7 @@ test('HN Group VPN: Auth sign-in (website and Mac app), devices, admin and accou
     let body = ''; req.on('data', (c) => { body += c; }); req.on('end', () => {
       const data = JSON.parse(body || '{}');
       if (req.headers.authorization === 'Bearer ' + secret && req.url === '/api/auth/vpn-pin') {
-        const ok = data.id === 'p-sam' && data.code === '123456' && data.client === 'HN Secure Gateway';
+        const ok = data.id === 'p-sam' && data.code === '123456' && data.client === 'HN Secure Access Terminal';
         res.writeHead(ok ? 200 : 401, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify(ok ? { ok: true } : { error: 'That PIN isn’t right. 4 tries left.' }));
       }
@@ -225,7 +225,7 @@ test('HN Group VPN: Auth sign-in (website and Mac app), devices, admin and accou
     assert.equal((await call('/api/me', { cookie: samCookie })).body.macApp.version, '1.2.0');
     r = await call('/api/mac-app', { cookie: samCookie });
     assert.equal(r.status, 200); assert.equal(r.headers.get('content-type'), 'application/zip');
-    assert.match(r.headers.get('content-disposition'), /HN-Secure-Network-macOS-1\.2\.0\.zip/);
+    assert.match(r.headers.get('content-disposition'), /HN-Secure-Access-Terminal-macOS-1\.2\.0\.zip/);
     assert.equal((await call('/api/mac-app')).status, 401);
     assert.ok(!fs.readFileSync(path.join(dir, 'data', 'vpn.json'), 'utf8').includes(sam));
 

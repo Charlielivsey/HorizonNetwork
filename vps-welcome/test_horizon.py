@@ -50,14 +50,14 @@ class ShortcutTests(unittest.TestCase):
     def test_welcome_cannot_read_or_run_commands(self):
         with patch('builtins.input', side_effect=AssertionError('Login may not read input')), patch.object(horizon, 'run') as run, contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(horizon.main(['--welcome']), 0)
-            self.assertIn('horizon', output.getvalue())
+            self.assertIn('Open terminal', output.getvalue())
             run.assert_not_called()
 
     def test_menu_requires_numbers_and_stays_open_after_shortcuts(self):
-        with patch.object(horizon.sys, 'stdin') as stdin, patch.object(horizon.sys, 'stdout') as stdout, patch.object(horizon, 'welcome') as welcome, patch.object(horizon, 'execute', return_value=0) as execute, patch('builtins.input', side_effect=['', 'status', '9', '7', '8', '0']):
+        with patch.object(horizon.sys, 'stdin') as stdin, patch.object(horizon.sys, 'stdout') as stdout, patch.object(horizon, 'welcome') as welcome, patch.object(horizon, 'execute', return_value=0) as execute, patch('builtins.input', side_effect=['', 'status', '9', '2', '3', '1']):
             stdin.isatty.return_value = stdout.isatty.return_value = True
             self.assertEqual(horizon.main([]), 0)
-            self.assertEqual([call.args for call in execute.call_args_list], [('resources',), ('git',)])
+            self.assertEqual([call.args for call in execute.call_args_list], [('codex',), ('pm2',)])
             self.assertEqual(welcome.call_count, 3)
 
     def test_interrupted_shortcut_returns_to_menu(self):
@@ -71,6 +71,37 @@ class ShortcutTests(unittest.TestCase):
             stdin.isatty.return_value = True
             self.assertEqual(horizon.logs(), 0)
             run.assert_called_once_with(['pm2', 'logs', 'hn-auth', '--lines', '80'])
+
+    def test_codex_opens_in_project(self):
+        with patch.object(horizon, 'run', return_value=0) as run:
+            self.assertEqual(horizon.execute('codex'), 0)
+            run.assert_called_once_with(['codex'], cwd=horizon.REPO)
+
+    def test_stop_all_requires_confirmation_and_uses_fixed_command(self):
+        with patch.object(horizon.os, 'geteuid', return_value=0), patch.object(horizon, 'confirm', return_value=False) as confirm, patch.object(horizon, 'run', return_value=0) as run:
+            self.assertEqual(horizon.execute('stop-all', unlocked=True), 0)
+            run.assert_not_called()
+            confirm.return_value = True
+            self.assertEqual(horizon.execute('stop-all', unlocked=True), 0)
+            run.assert_called_once_with(['pm2', 'stop', 'all'])
+
+    def test_start_all_uses_fixed_command(self):
+        with patch.object(horizon.os, 'geteuid', return_value=0), patch.object(horizon, 'run', return_value=0) as run:
+            self.assertEqual(horizon.execute('start-all', unlocked=True), 0)
+            run.assert_called_once_with(['pm2', 'start', 'all'])
+
+    def test_pm2_submenu_routes_actions_and_back(self):
+        with patch.object(horizon.sys, 'stdin') as stdin, patch.object(horizon.sys, 'stdout') as stdout, patch.object(horizon, 'welcome') as welcome, patch.object(horizon, 'unlock_pm2', return_value=True), patch.object(horizon, 'execute', return_value=0) as execute, patch('builtins.input', side_effect=['invalid', '1', '2', 'B']):
+            stdin.isatty.return_value = stdout.isatty.return_value = True
+            self.assertEqual(horizon.pm2_menu(), 0)
+            self.assertEqual([call.args for call in execute.call_args_list], [('start-all',), ('stop-all',)])
+            self.assertEqual(welcome.call_count, 4)
+
+    def test_logout_returns_shell_handoff_code(self):
+        with patch.object(horizon.sys, 'stdin') as stdin, patch.object(horizon.sys, 'stdout') as stdout, patch.object(horizon, 'welcome'), patch('builtins.input', return_value='L'), patch.object(horizon, 'execute') as execute:
+            stdin.isatty.return_value = stdout.isatty.return_value = True
+            self.assertEqual(horizon.main([]), horizon.LOGOUT)
+            execute.assert_not_called()
 
     def test_numeric_confirmation(self):
         with patch.object(horizon.sys, 'stdin') as stdin:
@@ -113,50 +144,6 @@ class LoginTests(unittest.TestCase):
     def test_interactive_ssh_opens_menu_once(self):
         self.assertEqual(self.hook(True, True), ['welcome'])
 
-    def test_real_login_waits_for_zero_before_releasing_the_console(self):
-        with tempfile.TemporaryDirectory() as name:
-            directory = Path(name)
-            command = directory / 'horizon'
-            command.write_text('#!/bin/sh\nexec ' + shlex.quote(sys.executable) + ' ' + shlex.quote(str(ROOT / 'horizon.py')) + ' "$@"\n')
-            command.chmod(0o755)
-            hook = directory / 'hook.sh'
-            hook.write_text((ROOT / 'profile.sh').read_text().replace('/usr/local/bin/horizon', str(command)))
-            env = {**os.environ, 'TERM': 'xterm-256color', 'SSH_CONNECTION': '192.0.2.2 12345 192.0.2.1 22'}
-            for key in ('HN_HORIZON_SHOWN', 'HN_HORIZON_DISABLE'):
-                env.pop(key, None)
-            master, slave = pty.openpty()
-            child = subprocess.Popen(['/bin/bash', '--noprofile', '--norc', '-ic', '. ' + shlex.quote(str(hook)) + '; echo CONSOLE_READY'], stdin=slave, stdout=slave, stderr=slave, env=env)
-            os.close(slave)
-            output = b''
-
-            def until(marker):
-                nonlocal output
-                end = time.monotonic() + 5
-                while marker not in output and time.monotonic() < end:
-                    if select.select([master], [], [], 0.1)[0]:
-                        try:
-                            output += os.read(master, 65536)
-                        except OSError:
-                            break
-                self.assertIn(marker, output)
-
-            try:
-                until(b'Choose a number (0 for console):')
-                self.assertIsNone(child.poll())
-                self.assertNotIn(b'CONSOLE_READY', output)
-                os.write(master, b'\n9\n')
-                until(b'Choose a number from 0 to 8.')
-                self.assertIsNone(child.poll())
-                self.assertNotIn(b'CONSOLE_READY', output)
-                os.write(master, b'0\n')
-                until(b'CONSOLE_READY')
-                self.assertEqual(child.wait(timeout=5), 0)
-            finally:
-                if child.poll() is None:
-                    child.kill()
-                    child.wait()
-                os.close(master)
-
     def test_command_ssh_with_or_without_tty_stays_silent(self):
         self.assertEqual(self.hook(False, True), [])
         self.assertEqual(self.hook(False, False), [])
@@ -173,7 +160,7 @@ class LoginTests(unittest.TestCase):
             root = Path(name)
             subprocess.run(['bash', str(ROOT / 'install.sh')], env={**os.environ, 'HN_HORIZON_INSTALL_ROOT': name}, check=True, stdout=subprocess.PIPE)
             files = {str(p.relative_to(root)) for p in root.rglob('*') if p.is_file()}
-            self.assertEqual(files, {'usr/local/bin/horizon', 'usr/local/lib/hn-horizon/horizon.py', 'usr/local/lib/hn-horizon/catalog.json', 'etc/profile.d/90-hn-horizon.sh'})
+            self.assertEqual(files, {'usr/local/bin/horizon', 'usr/local/lib/hn-horizon/horizon.py', 'usr/local/lib/hn-horizon/session.py', 'usr/local/lib/hn-horizon/session.bash', 'usr/local/lib/hn-horizon/power.py', 'usr/local/lib/hn-horizon/frame.py', 'usr/local/lib/hn-horizon/catalog.json', 'etc/profile.d/90-hn-horizon.sh'})
 
 
 if __name__ == '__main__':

@@ -12,7 +12,16 @@ test('Discord accounts on staff profiles and pictures that follow Discord', () =
     const store = require('./lib/store'); store.init(dir);
     const company = store.COMPANIES[0], domain = store.COMPANY_DOMAINS[company];
     const make = (first, extra) => store.saveEmployee({ firstName: first, lastName: 'Tester', jobTitle: 'Designer', company, emails: [{ domain, auto: true, primary: true }], ...extra }, null);
-    const jo = make('Jo', { discordId: '123456789012345678' }), sam = make('Sam', {});
+    const jo = make('Jo', { discordId: '123456789012345678', department: 'Technology' }), sam = make('Sam', { supervisorId: jo.id });
+    // Public Discord directory includes unlinked staff and only the required staff details.
+    const directory = store.discordStaffList();
+    assert.equal(directory.length, 2);
+    assert.equal(directory.find((p) => p.name === sam.displayName).roles[0].supervisor.name, jo.displayName);
+    assert.ok(directory.some((p) => p.name === sam.displayName));
+    assert.deepEqual(directory.find((p) => p.name === jo.displayName).roles, [{ company, title: 'Designer', department: 'Technology', supervisor: null }]);
+    assert.ok(directory.every((p) => Object.keys(p).sort().join(',') === 'access,discordId,name,roles'));
+    assert.equal(directory.find(p => p.name === jo.displayName).discordId, '123456789012345678');
+    assert.equal(directory.find(p => p.name === sam.displayName).discordId, null);
     // Sam has no Discord account yet, so people who manage staff are asked for it.
     assert.deepEqual(store.missingDiscord().map((p) => p.id), [sam.id]);
     assert.throws(() => store.setRecordDiscord(sam, '123'), /15 to 22 digits/);

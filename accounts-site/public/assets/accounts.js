@@ -2,14 +2,17 @@
 // HN Account: the signed-in pages. Everything is built with DOM methods (never HTML strings), and every
 // change goes to this site's /api, which passes it to the staff account service.
 (function () {
+  const base=document.documentElement.dataset.accountBase||'';
+  const accountPath=p=>base&&String(p).startsWith('/')&&!String(p).startsWith('//')&&!String(p).startsWith(base+'/')?base+p:p;
   const $ = (s) => document.querySelector(s);
   let session = null, me = null, staffList = null;
 
   // ---------- Small helpers ----------
   function h(tag, attrs) {
     const el = document.createElement(tag);
-    for (const [k, v] of Object.entries(attrs || {})) {
+    for (let [k, v] of Object.entries(attrs || {})) {
       if (v === null || v === undefined || v === false) continue;
+      if(['src','href','action'].includes(k))v=accountPath(v);
       if (k === 'class') el.className = v; else if (k === 'text') el.textContent = v;
       else if (k.startsWith('on')) el.addEventListener(k.slice(2), v); else el.setAttribute(k, v === true ? '' : v);
     }
@@ -18,9 +21,10 @@
   }
   async function api(path, body) {
     const opts = body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': session.csrf }, body: JSON.stringify(body) };
-    const r = await fetch(path, opts);
+    const r = await fetch(accountPath(path), opts);
     const data = await r.json().catch(() => ({}));
-    if (r.status === 401) { location.href = '/auth/login?return=' + encodeURIComponent('/' + location.hash); throw new Error('Please sign in again.'); }
+    for(const user of [data.user,...(data.people||[])].filter(Boolean))if(user.avatarUrl)user.avatarUrl=accountPath(user.avatarUrl);
+    if (r.status === 401) { location.href = accountPath('/auth/login')+'?return='+encodeURIComponent('/'+location.hash); throw new Error('Please sign in again.'); }
     if (!r.ok) throw new Error(data.error || 'Something went wrong. Please try again.');
     return data;
   }
@@ -86,8 +90,6 @@
     ['security', 'Password & PIN', 'M6 10h12v11H6zM8 10V7a4 4 0 0 1 8 0v3'],
     ['devices', 'Devices', 'M3 4h18v12H3zM8 20h8M12 16v4'],
     ['websites', 'Websites', 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18'],
-    ['accounts', 'Sign-in accounts', 'M15 7a4 4 0 1 1-3.9 5H9v2H7v2H4v-3l6.1-6.1A4 4 0 0 1 15 7zM16 9.5h.01', true],
-    ['staff', 'Staff records', 'M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 20c1-3.5 3.5-5 7-5s6 1.5 7 5M17 11a3 3 0 1 0 0-6M22 20c-.6-2.6-2-4.1-4-4.7', true],
   ];
   const icon = (d) => { const ns = 'http://www.w3.org/2000/svg', svg = document.createElementNS(ns, 'svg'), p = document.createElementNS(ns, 'path'); svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true'); p.setAttribute('d', d); svg.append(p); return svg; };
   function nav(active) {
@@ -216,7 +218,7 @@
   function websites() {
     const u = session.user || {}, admin = !!u.statusAdminAllowed, owner = !!u.ownerAccess, hnGroup = owner || (u.companies || [u.company]).includes('HN Group');
     const SITES = [
-      ['Everyday', [['Staff portal', 'https://staff.hngroup.org.uk/', true, 'Your work, pay, leave and colleagues.'], ['HN Group Auth', 'https://auth.hngroup.org.uk/', true, 'Sign in to HN Group websites.'], ['HN Mail', 'https://mail.hngroup.org.uk/', !!(u.google && u.google.email), u.google && u.google.email ? 'Your Gmail (' + u.google.email + ') in HN Group’s mail app.' : 'Link a Google account on HN Group Auth first.'], ['HN Group Wiki', 'https://wiki.hngroup.org.uk/', true, 'Read and edit the group encyclopedia.'], ['Brand centre', 'https://branding.hngroup.org.uk/', true, 'Logos, colours and type.'], ['HN Group VPN', 'https://vpn.hngroup.org.uk/', true, 'Connect your devices privately.'], ['Downloads', 'https://downloads.hngroup.org.uk/', true, 'HN Browser and HN Secure Gateway.'], ['HN Group HR', 'https://hr.hngroup.org.uk/', !u.standalone, 'Leave, absence and additional annual leave requests.'], ['HN Group Docs', 'https://docs.hngroup.org.uk/', true, 'Write company documents and keep your private storage.'], ['Echo', 'https://echo.hngroup.org.uk/', ['catnap@hngroup.org.uk', 'charlie.livsey@hngroup.org.uk'].includes(String(u.username || '').trim().toLowerCase()) && !u.impersonated, 'A private character and artwork library.'], ['HN Group Bots', 'https://bots.hngroup.org.uk/', admin || owner, 'Manage the Discord Auth bot.'], ['Private Company Register', 'https://private.companies.hngroup.org.uk/', true, (admin || owner) ? 'Read the private register and run its staff area.' : 'Read the private register and file changes.'], ['HN Group Private Wiki', 'https://private.wiki.hngroup.org.uk/', true, (admin || owner) ? 'Read and edit the private wiki.' : 'Read the private wiki.'], ['HN Group Contracts', 'https://contract.hngroup.org.uk/', true, (admin || owner) ? 'Sign contracts, and send them for signing.' : 'Sign the contracts sent to you.'], ['HN Group Devices', 'https://devices.hngroup.org.uk/', true, (admin || owner) ? 'Add your computers, and approve everyone’s.' : 'Add your computers so the HN apps work on them.']]],
+      ['Everyday', [['Staff portal', 'https://staff.hngroup.org.uk/', true, 'Your workplace, HR, Finance and IT.'], ['HN Group Auth', 'https://auth.hngroup.org.uk/', true, 'Sign in to HN Group websites.'], ['HN Mail', 'https://mail.hngroup.org.uk/', !!(u.google && u.google.email), u.google && u.google.email ? 'Your Gmail (' + u.google.email + ') in HN Group’s mail app.' : 'Contact IT for linked mailbox access.'], ['HN Group Wiki', 'https://wiki.hngroup.org.uk/', true, 'Read and edit the group encyclopedia.'], ['Brand centre', 'https://branding.hngroup.org.uk/', true, 'Logos, colours and type.'], ['HN Secure Access Terminal', 'https://sat.hngroup.org.uk/', true, 'Connect your devices privately.'], ['Downloads', 'https://downloads.hngroup.org.uk/', true, 'HN Browser and HN Secure Access Terminal.'], ['HN Group Docs', 'https://docs.hngroup.org.uk/', true, 'Write company documents and keep your private storage.'], ['Echo', 'https://echo.hngroup.org.uk/', ['catnap@hngroup.org.uk', 'charlie.livsey@hngroup.org.uk'].includes(String(u.username || '').trim().toLowerCase()) && !u.impersonated, 'A private character and artwork library.'], ['HN Group Bots', 'https://bots.hngroup.org.uk/', admin || owner, 'Manage the Discord Auth bot.'], ['Private Company Register', 'https://private.companies.hngroup.org.uk/', true, (admin || owner) ? 'Read the private register and run its staff area.' : 'Read the private register and file changes.'], ['HN Group Private Wiki', 'https://private.wiki.hngroup.org.uk/', true, (admin || owner) ? 'Read and edit the private wiki.' : 'Read the private wiki.'], ['HN Group Contracts', 'https://contract.hngroup.org.uk/', true, (admin || owner) ? 'Sign contracts, and send them for signing.' : 'Sign the contracts sent to you.'], ['HN Group Devices', 'https://devices.hngroup.org.uk/', true, (admin || owner) ? 'Add your computers, and approve everyone’s.' : 'Add your computers so the HN apps work on them.']]],
       ['Investors', [['HN Group Investors', 'https://investors.hngroup.org.uk/staff', hnGroup, hnGroup ? 'Manage investors, valuations and news.' : 'For staff with a role at HN Group.']]],
       ['Website administration', [['hngroup.org.uk', 'https://hngroup.org.uk/admin', admin], ['Horizon Network', 'https://network.hngroup.org.uk/admin', admin], ['Service status', 'https://status.hngroup.org.uk/admin', admin], ['Horizon Media Group', 'https://media.hngroup.org.uk/admin', admin], ['Horizon Development', 'https://development.hngroup.org.uk/admin', admin], ['Careers', 'https://careers.hngroup.org.uk/admin', admin], ['News', 'https://news.hngroup.org.uk/admin', admin]].map((x) => x.concat(admin ? 'You can manage this website.' : 'System owner and Super Admin members only.'))],
       ['Website control', [['Website control', 'https://admin.hngroup.org.uk/', owner, owner ? 'Every permission (owner-level account).' : 'Needs access granted in website control itself.']]],
@@ -225,228 +227,13 @@
       ...SITES.map(([group, list]) => section(group, null, h('div', { class: 'site-grid' }, list.map(([name, url, ok, note]) => h('a', { class: 'site' + (ok ? '' : ' locked'), href: url, rel: 'noopener' }, h('span', { class: 'site-name', text: name }), h('span', { class: 'pill ' + (ok ? 'ok' : ''), text: ok ? 'You can use this' : 'No access' }), h('span', { class: 'muted small', text: note || '' })))))) ];
   }
 
-  async function staff() {
-    if (!staffList) staffList = (await api('/api/employees')).employees;
-    const search = h('input', { type: 'search', placeholder: 'Search by name, username or company', 'aria-label': 'Search staff accounts', class: 'search' });
-    const body = h('tbody');
-    const status = (e) => !e.account ? ['No login', ''] : !e.account.enabled ? ['Disabled', 'warn'] : e.account.passwordTemporary ? ['Temporary password', ''] : !e.account.hasCode ? ['PIN not set', ''] : ['Active', 'ok'];
-    async function act(e, action, title, text, label, danger) {
-      if (!(await confirmDialog(title, text, label, danger))) return;
-      try {
-        const r = await api('/api/employees/' + e.id + '/' + action, {});
-        staffList = staffList.map((x) => (x.id === e.id ? r.employee : x));
-        if (r.temporaryPassword) showDialog('Temporary password for ' + e.displayName, [h('p', { text: 'Give them these details. They’ll choose a new password and PIN when they next sign in. This won’t be shown again.' }), h('dl', { class: 'creds' }, h('dt', { text: 'Username' }), h('dd', {}, h('code', { text: r.username })), h('dt', { text: 'Temporary password' }), h('dd', {}, h('code', { text: r.temporaryPassword })))]);
-        else toast('Done.');
-        draw();
-      } catch (err) { toast(err.message, true); }
-    }
-    function draw() {
-      const q = search.value.trim().toLowerCase();
-      body.replaceChildren(...staffList.filter((e) => !q || [e.displayName, e.loginUsername, e.company, e.jobTitle].join(' ').toLowerCase().includes(q)).sort((a, b) => a.displayName.localeCompare(b.displayName)).map((e) => {
-        const [label, cls] = status(e), self = e.id === me.id;
-        return h('tr', {}, h('td', {}, h('span', { class: 'person' }, avatar(e, 'sm'), h('span', {}, h('b', { text: e.displayName }), h('span', { class: 'muted small', text: e.loginUsername || 'No login' })))),
-          h('td', {}, h('span', { text: e.jobTitle || '' }), h('span', { class: 'muted small', text: e.company || '' })),
-          h('td', {}, h('span', { class: 'pill ' + cls, text: label })), h('td', { class: 'small', text: e.account ? when(e.account.lastLoginAt) : '—' }),
-          h('td', {}, h('div', { class: 'actions' }, self ? h('span', { class: 'muted small', text: 'You' }) : [
-            h('button', { class: 'button secondary small', type: 'button', onclick: () => act(e, 'account', e.account ? 'Reset ' + e.displayName + '’s password?' : 'Create a login for ' + e.displayName + '?', e.account ? 'They’ll be signed out everywhere and get a temporary password.' : 'They’ll get a username and temporary password.', e.account ? 'Reset password' : 'Create login') }, e.account ? 'Reset password' : 'Create login'),
-            e.account && e.account.hasCode ? h('button', { class: 'button secondary small', type: 'button', onclick: () => act(e, 'code/reset', 'Reset ' + e.displayName + '’s PIN?', 'They’ll be signed out and asked to set a new PIN when they next sign in.', 'Reset PIN') }, 'Reset PIN') : null,
-            e.account ? h('button', { class: 'button small ' + (e.account.enabled ? 'danger' : 'secondary'), type: 'button', onclick: () => act(e, e.account.enabled ? 'account/disable' : 'account/enable', (e.account.enabled ? 'Disable ' : 'Enable ') + e.displayName + '’s account?', e.account.enabled ? 'They’ll be signed out everywhere and can’t sign in to any HN Group website until it’s enabled again.' : 'They’ll be able to sign in again.', e.account.enabled ? 'Disable' : 'Enable', e.account.enabled) }, e.account.enabled ? 'Disable' : 'Enable') : null])));
-      }));
-    }
-    search.addEventListener('input', draw); draw();
-    // Opened from the staff portal straight after adding someone (#staff/create/<record id>): show them and offer to
-    // create their sign-in account (the user's request, 6 November 2026).
-    const wanted = /^#staff\/create\/([a-f0-9]{16})$/.exec(location.hash);
-    if (wanted) {
-      history.replaceState(null, '', '#staff');
-      const e = staffList.find((x) => x.id === wanted[1]);
-      if (e) setTimeout(() => {
-        search.value = e.displayName; draw();
-        if (!e.account) act(e, 'account', 'Create a login for ' + e.displayName + '?', 'They’ll get a username and temporary password, and choose their own password and PIN when they first sign in.', 'Create login');
-      }, 50);
-    }
-    const counts = { all: staffList.length, active: staffList.filter((e) => e.account && e.account.enabled).length, disabled: staffList.filter((e) => e.account && !e.account.enabled).length };
-    return [h('h1', { text: 'Staff records' }), h('p', { class: 'lede', text: 'Every staff record and its own sign-in account. To give someone more accounts, accounts at other profiles, or an account with no staff record, use Sign-in accounts.' }),
-      h('div', { class: 'stats' }, h('div', { class: 'stat' }, h('b', { text: counts.all }), ' people'), h('div', { class: 'stat' }, h('b', { text: counts.active }), ' active'), h('div', { class: 'stat' }, h('b', { text: counts.disabled }), ' disabled')),
-      h('section', { class: 'card' }, search, h('div', { class: 'table-wrap' }, h('table', { class: 'staff-table' },h('thead', {}, h('tr', {}, ['Person', 'Role', 'Account', 'Last sign-in', ''].map((t) => h('th', { text: t })))), body))),
-      h('p', { class: 'muted small' }, 'To add staff, change roles or edit staff records, use the ', h('a', { href: 'https://staff.hngroup.org.uk/', text: 'staff portal' }), '.')];
-  }
-
-  // ---------- Sign-in accounts ----------
-  // The user's request, 28 October 2026: sign-in accounts are separate from staff records. Each has its own
-  // password, PIN and permissions, and can use any number of profiles (each company on a staff record is its own
-  // profile) with one as its default, or none at all. People choose the profile when they sign in.
-  let loginData = null;
-  function credentialsDialog(name, r) {
-    showDialog('Sign-in details for ' + name, [h('p', { text: 'Give them these details. They’ll choose a new password and PIN when they first sign in. This won’t be shown again.' }), h('dl', { class: 'creds' }, h('dt', { text: 'Username' }), h('dd', {}, h('code', { text: r.username })), h('dt', { text: 'Temporary password' }), h('dd', {}, h('code', { text: r.temporaryPassword })))]);
-  }
-  // Create or edit an account: its name and username (new accounts), profiles, default profile and permissions.
-  function editAccount(account, done) {
-    const d = $('#dialog'), creating = !account, own = account && account.ownLoginOf;
-    const chosen = new Map((account ? account.profiles : []).map((p) => [p.key, p]));
-    let def = account ? (account.profiles.find((p) => p.default) || {}).key || null : null;
-    const roles = new Set(account ? account.roleIds : []);
-    const status = h('p', { class: 'form-status', role: 'status', 'aria-live': 'polite' });
-    // Guest accounts (the user's request, 6 November 2026): only the websites and apps ticked here; chosen when the
-    // account is made, changeable later; Make permanent turns a guest into an ordinary account.
-    const guestSites = new Set(account && account.guest ? account.guest.sites : []);
-    const canGuest = creating || (account && account.guest);
-    const guestBox = creating ? h('input', { type: 'checkbox', id: 'guest-toggle' }) : null;
-    const siteBoxes = h('div', { class: 'role-pick guest-sites' }, (loginData.guestSites || []).map((x) => h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: guestSites.has(x.id), onchange: (e) => { if (e.target.checked) guestSites.add(x.id); else guestSites.delete(x.id); } }), h('span', {}, h('b', { text: x.name })))));
-    const guestPart = canGuest ? h('div', { class: 'guest-part' },
-      h('h3', { text: 'Guest account' }),
-      creating ? h('label', { class: 'check' }, guestBox, h('span', {}, h('b', { text: 'This is a guest account' }), h('span', { class: 'muted small', text: ' It doesn’t need a permanent staff record, and can only use the websites and apps ticked below. Link it to a temporary staff record under Profiles if they have one.' })))
-        : h('p', { class: 'muted small', text: 'This guest account can only use the websites and apps ticked below. Use “Make permanent” when they move to a permanent position.' }),
-      siteBoxes) : null;
-    if (guestBox) { const show = () => { siteBoxes.hidden = !guestBox.checked; }; guestBox.addEventListener('change', show); show(); }
-    const name = creating || !own ? field('Name', 'displayName', account ? account.displayName : '', { max: 80, required: true, hint: 'How this account is shown when it isn’t using a staff profile.' }) : null;
-    const user = creating ? field('Username or email address', 'username', '', { max: 120, required: true, auto: 'off', hint: 'What they type to sign in. It can be any email address, including a personal one.' }) : null;
-    const filter = h('input', { type: 'search', class: 'search', placeholder: 'Find a profile by name or company', 'aria-label': 'Find a profile' });
-    const list = h('div', { class: 'profile-pick' });
-    function drawProfiles() {
-      const q = filter.value.trim().toLowerCase();
-      const all = loginData.profiles.filter((p) => chosen.has(p.key) || !q || (p.displayName + ' ' + p.company + ' ' + p.jobTitle).toLowerCase().includes(q));
-      if (def && !chosen.has(def)) def = null;
-      if (!def && chosen.size) def = [...chosen.keys()][0];
-      list.replaceChildren(...(all.length ? all.map((p) => {
-        const auto = own && account.profiles.some((x) => x.key === p.key && x.automatic);
-        const box = h('input', { type: 'checkbox', checked: chosen.has(p.key), disabled: auto, onchange: () => { if (box.checked) chosen.set(p.key, p); else chosen.delete(p.key); drawProfiles(); } });
-        const star = h('input', { type: 'radio', name: 'default-profile', checked: def === p.key, disabled: !chosen.has(p.key), 'aria-label': 'Default profile', onchange: () => { def = p.key; } });
-        return h('div', { class: 'profile-row' + (chosen.has(p.key) ? ' on' : '') }, h('label', { class: 'check' }, box, avatar(p, 'sm'), h('span', {}, h('b', { text: p.displayName }), h('span', { class: 'muted small', text: p.company + (p.jobTitle ? ' · ' + p.jobTitle : '') + (p.temporary ? ' · temporary' : '') + (auto ? ' · their own record' : '') }))),
-          h('label', { class: 'default-pick small' }, star, 'Default'));
-      }) : [h('p', { class: 'muted small', text: 'No profiles match.' })]));
-    }
-    filter.addEventListener('input', drawProfiles); drawProfiles();
-    const roleBoxes = h('div', { class: 'role-pick' }, loginData.roles.map((r) => h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: roles.has(r.id), disabled: !loginData.canManageRoles || (!loginData.ownerLevel && account && account.id === (me.accountId || '')), onchange: (e) => { if (e.target.checked) roles.add(r.id); else roles.delete(r.id); } }), h('span', {}, h('b', { text: r.name }), h('span', { class: 'muted small', text: r.permissions.length + (r.permissions.length === 1 ? ' permission' : ' permissions') })))));
-    // Only the system owner can make an account owner-level (every permission everywhere) or another system owner.
-    const ownerPick = loginData.systemOwner && !creating ? field('Owner access', 'owner', account.owner || '', { options: [['', 'None (just the permissions below)'], ['level', 'Owner-level: every permission on every website'], ['system', 'System owner']], hint: account.systemOwner && !account.owner ? 'This account is the system owner already.' : null }) : null;
-    const save = h('button', { class: 'button', type: 'button', text: creating ? 'Create account' : 'Save changes' });
-    save.addEventListener('click', async () => {
-      if (save.disabled) return;
-      save.disabled = true; status.textContent = ''; status.className = 'form-status';
-      try {
-        const body = { profiles: [...chosen.values()].filter((p) => !(own && account.profiles.some((x) => x.key === p.key && x.automatic))).map((p) => ({ personId: p.personId, company: p.company })), defaultProfile: def, ...(loginData.canManageRoles ? { roleIds: [...roles] } : {}) };
-        if (name) body.displayName = name.querySelector('input').value;
-        if (ownerPick) body.owner = ownerPick.querySelector('select').value || false;
-        if (creating) body.username = user.querySelector('input').value;
-        if ((creating && guestBox.checked) || (account && account.guest)) {
-          if (!guestSites.size) throw new Error('Tick at least one website or app the guest account can use.');
-          body.guest = { sites: [...guestSites] };
-        }
-        const r = creating ? await api('/api/logins', body) : await api('/api/logins/' + account.id, body);
-        d.close('ok'); loginData = null; done();
-        if (r.temporaryPassword) credentialsDialog(r.account.displayName, r); else toast('Saved.');
-      } catch (err) { status.textContent = err.message; status.className = 'form-status bad'; }
-      finally { save.disabled = false; }
-    });
-    $('#dialog-title').textContent = creating ? 'New sign-in account' : 'Edit ' + account.displayName;
-    $('#dialog-body').replaceChildren(h('div', { class: 'account-editor' },
-      name, user, guestPart,
-      h('h3', { text: 'Profiles' }), h('p', { class: 'muted small', text: 'Each company someone works at is its own profile. Tick the profiles this account can use and choose its default; they’ll pick one each time they sign in. With none, the account works on HN Group websites but not as a member of staff.' }),
-      filter, list,
-      h('h3', { text: 'Permissions' }), h('p', { class: 'muted small', text: loginData.canManageRoles ? 'This account’s own permissions, whichever profile it uses.' : 'You need the “Manage roles” permission to change these.' }), roleBoxes, ownerPick, status));
-    $('#dialog-buttons').replaceChildren(h('button', { class: 'button secondary', value: 'cancel', text: 'Cancel', formnovalidate: true }), save);
-    d.onclose = null; d.classList.add('wide'); d.addEventListener('close', () => d.classList.remove('wide'), { once: true });
-    d.showModal();
-  }
-  // A small "More" menu of actions (the danger ones in red). The menu is attached to the page itself, not inside the
-  // table: the table's rows animate with transforms, which would otherwise move or clip a fixed menu (the user's
-  // report, 6 November 2026: "more just doesnt work").
-  function closeMore() { for (const p of document.querySelectorAll('.more-pop')) { if (p._button) p._button.setAttribute('aria-expanded', 'false'); p.remove(); } }
-  function moreMenu(items) {
-    const button = h('button', { type: 'button', class: 'button secondary small more', 'aria-haspopup': 'menu', 'aria-expanded': 'false' }, 'More');
-    button.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const wasOpen = button.getAttribute('aria-expanded') === 'true';
-      closeMore();
-      if (wasOpen) return;
-      const pop = h('div', { class: 'more-pop', role: 'menu' }, items.filter(Boolean).map(([label, run, danger]) => h('button', { type: 'button', role: 'menuitem', class: danger ? 'danger' : '', onclick: () => { closeMore(); run(); } }, label)));
-      pop._button = button;
-      pop.addEventListener('click', (ev) => ev.stopPropagation());
-      pop.addEventListener('keydown', (ev) => {
-        const list = [...pop.querySelectorAll('button')], at = list.indexOf(document.activeElement);
-        if (ev.key === 'Escape') { ev.preventDefault(); closeMore(); button.focus(); }
-        else if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') { ev.preventDefault(); list[(at + (ev.key === 'ArrowDown' ? 1 : list.length - 1)) % list.length].focus(); }
-      });
-      document.body.appendChild(pop);
-      button.setAttribute('aria-expanded', 'true');
-      const r = button.getBoundingClientRect(), height = pop.offsetHeight, width = Math.max(pop.offsetWidth, 170), below = window.innerHeight - r.bottom > height + 12;
-      pop.style.left = Math.max(8, Math.min(window.innerWidth - width - 8, r.right - width)) + 'px';
-      pop.style.top = Math.max(8, below ? r.bottom + 6 : r.top - height - 6) + 'px';
-      const first = pop.querySelector('button'); if (first) first.focus({ preventScroll: true });
-    });
-    return button;
-  }
-  document.addEventListener('click', closeMore);
-  window.addEventListener('scroll', closeMore, true);
-  window.addEventListener('resize', closeMore);
-  window.addEventListener('hashchange', closeMore);
-  async function accounts() {
-    if (!loginData) loginData = await api('/api/logins');
-    const search = h('input', { type: 'search', placeholder: 'Search by name, username, profile or company', 'aria-label': 'Search sign-in accounts', class: 'search' });
-    const body = h('tbody');
-    const roleName = (id) => (loginData.roles.find((r) => r.id === id) || {}).name;
-    const status = (a) => !a.account ? ['No password', ''] : !a.account.enabled ? ['Disabled', 'warn'] : a.account.passwordTemporary ? ['Temporary password', ''] : !a.account.hasCode ? ['PIN not set', ''] : ['Active', 'ok'];
-    const reload = async () => { loginData = await api('/api/logins'); draw(); };
-    // Make permanent: keep their temporary staff record (it becomes permanent) or move them onto an existing permanent one.
-    function makePermanent(a) {
-      const d = $('#dialog');
-      const temps = a.profiles.filter((p) => p.temporary);
-      const records = [...new Map(loginData.profiles.filter((p) => !p.temporary).map((p) => [p.personId, p])).values()].sort((x, y) => x.displayName.localeCompare(y.displayName));
-      const choice = field('Where they go', 'target', temps.length ? '' : (records[0] || {}).personId || '', { options: [
-        ...(temps.length ? [['', 'Keep their staff record (' + [...new Set(temps.map((p) => p.displayName))].join(', ') + ') and make it permanent']] : []),
-        ...records.map((p) => [p.personId, 'Move to ' + p.displayName + ' (' + p.company + (p.jobTitle ? ', ' + p.jobTitle : '') + ')'])], hint: 'The account keeps its username, password and PIN, stops being a guest and can then use HN Group websites like any member of staff (with its own permissions).' });
-      const status = h('p', { class: 'form-status', role: 'status', 'aria-live': 'polite' });
-      const go = h('button', { class: 'button', type: 'button', text: 'Make permanent' });
-      go.addEventListener('click', async () => {
-        if (go.disabled) return; go.disabled = true; status.textContent = '';
-        try { const personId = choice.querySelector('select').value; await api('/api/logins/' + a.id + '/permanent', personId ? { personId } : {}); d.close('ok'); toast(a.displayName + ' is now a permanent account.'); await reload(); }
-        catch (err) { status.textContent = err.message; status.className = 'form-status bad'; } finally { go.disabled = false; }
-      });
-      $('#dialog-title').textContent = 'Make ' + a.displayName + ' permanent';
-      $('#dialog-body').replaceChildren(h('p', { text: 'Use this when a guest moves to a permanent position.' }), choice, status);
-      $('#dialog-buttons').replaceChildren(h('button', { class: 'button secondary', value: 'cancel', text: 'Cancel', formnovalidate: true }), go);
-      d.onclose = null; d.classList.add('wide'); d.addEventListener('close', () => d.classList.remove('wide'), { once: true }); d.showModal();
-    }
-    async function act(a, action, title, text, label, danger) {
-      if (!(await confirmDialog(title, text, label, danger))) return;
-      try {
-        const r = await api('/api/logins/' + a.id + '/' + action, {});
-        if (r.temporaryPassword) credentialsDialog(a.displayName, r); else toast(action === 'delete' ? 'Account deleted.' : 'Done.');
-        await reload();
-      } catch (err) { toast(err.message, true); }
-    }
-    function draw() {
-      const q = search.value.trim().toLowerCase();
-      body.replaceChildren(...loginData.accounts.filter((a) => !q || [a.displayName, a.username, ...a.profiles.map((p) => p.displayName + ' ' + p.company)].join(' ').toLowerCase().includes(q)).map((a) => {
-        const [label, cls] = status(a), self = a.id === me.accountId && !loginData.ownerLevel;
-        return h('tr', {}, h('td', {}, h('span', { class: 'person' }, avatar(a.profiles.find((p) => p.default) || a, 'sm'), h('span', {}, h('b', { text: a.displayName }, a.guest ? h('span', { class: 'pill guest', text: 'Guest' }) : null), h('span', { class: 'muted small', text: a.username })))),
-          h('td', {}, a.profiles.length ? h('div', { class: 'chips' }, a.profiles.map((p) => h('span', { class: 'chip' + (p.default ? ' default' : ''), title: p.default ? 'Default profile' : null, text: (a.profiles.some((x) => x.personId !== p.personId) ? p.displayName + ' · ' : '') + p.company + (p.default ? ' ★' : '') }))) : h('span', { class: 'muted small', text: 'No staff profile' })),
-          h('td', {}, a.systemOwner ? h('span', { class: 'pill ok', text: 'System owner' }) : a.ownerAccess ? h('span', { class: 'pill ok', text: 'Owner-level' }) : a.roleIds.length ? h('span', { class: 'small', text: a.roleIds.map(roleName).filter(Boolean).join(', ') }) : h('span', { class: 'muted small', text: 'None' })),
-          h('td', {}, h('span', { class: 'pill ' + cls, text: label })), h('td', { class: 'small nowrap', text: a.account && a.account.lastLoginAt ? new Date(a.account.lastLoginAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Never' }),
-          h('td', {}, h('div', { class: 'actions' },
-            h('button', { class: 'button secondary small', type: 'button', onclick: () => editAccount(a, draw) }, 'Edit'),
-            self ? h('span', { class: 'muted small', text: 'You' }) : moreMenu([
-              [a.account ? 'Reset password' : 'Set password', () => act(a, 'reset', 'Reset the password for ' + a.username + '?', 'They’ll be signed out everywhere and get a temporary password.', 'Reset password')],
-              a.account && a.account.hasCode ? ['Reset PIN', () => act(a, 'code/reset', 'Reset the PIN for ' + a.username + '?', 'They’ll be signed out and asked to set a new PIN when they next sign in.', 'Reset PIN')] : null,
-              a.account ? [a.account.enabled ? 'Disable' : 'Enable', () => act(a, a.account.enabled ? 'disable' : 'enable', (a.account.enabled ? 'Disable ' : 'Enable ') + a.username + '?', a.account.enabled ? 'It’ll be signed out everywhere and can’t sign in to any HN Group website until it’s enabled again.' : 'It’ll be able to sign in again.', a.account.enabled ? 'Disable' : 'Enable', a.account.enabled), a.account.enabled] : null,
-              a.guest ? ['Make permanent…', () => makePermanent(a)] : null,
-              a.ownLoginOf ? null : ['Delete', () => act(a, 'delete', 'Delete ' + a.username + '?', 'The account is removed and signed out everywhere. Staff records and their data aren’t affected.', 'Delete account', true), true]]))));
-      }));
-    }
-    search.addEventListener('input', draw); draw();
-    const list = loginData.accounts, counts = { all: list.length, linked: list.filter((a) => a.profiles.length).length, none: list.filter((a) => !a.profiles.length).length, guests: list.filter((a) => a.guest).length };
-    return [h('div', { class: 'page-head' }, h('div', {}, h('h1', { text: 'Sign-in accounts' }), h('p', { class: 'lede', text: 'Every account people sign in with. Each has its own password, PIN and permissions, and the profiles it can use. Accounts are only created here.' })),
-      h('button', { class: 'button', type: 'button', onclick: () => editAccount(null, async () => { await reload(); }) }, 'New sign-in account')),
-      h('div', { class: 'stats' }, h('div', { class: 'stat' }, h('b', { text: counts.all }), ' accounts'), h('div', { class: 'stat' }, h('b', { text: counts.linked }), ' with staff profiles'), h('div', { class: 'stat' }, h('b', { text: counts.none }), ' without'), h('div', { class: 'stat' }, h('b', { text: counts.guests }), ' guest' + (counts.guests === 1 ? '' : 's'))),
-      h('section', { class: 'card' }, search, h('div', { class: 'table-wrap' }, h('table', { class: 'staff-table accounts-table' }, h('thead', {}, h('tr', {}, ['Account', 'Profiles', 'Permissions', 'Status', 'Last sign-in', ''].map((t) => h('th', { text: t })))), body)))];
-  }
-
   const signature = async () => { me = (await api('/api/me')).user; return window.HNSignature({ me, api, toast }); };
-  const VIEWS = { overview, profile, signature, security, devices, websites, accounts, staff };
+  const VIEWS = { overview, profile, signature, security, devices, websites };
   let seq = 0;
   async function render(name) {
-    name = String(name || '').split('/')[0];
+    const old=String(name || '');
+    if(/^(accounts|staff)(\/|$)/.test(old)){const m=/^staff\/create\/([a-f0-9]{16})$/.exec(old);location.replace('https://staff.hngroup.org.uk/'+(old.startsWith('staff')?'staff-accounts':'accounts')+(m?'?create='+m[1]:''));return;}
+    name = old.split('/')[0];
     if (!VIEWS[name] || ((name === 'staff' || name === 'accounts') && !session.admin)) name = 'overview';
     const mine = ++seq, main = $('#content');
     nav(name); main.classList.add('leaving');
@@ -460,8 +247,8 @@
   }
   window.addEventListener('hashchange', () => { render(location.hash.slice(1)); $('#content').focus({ preventScroll: true }); });
   (async function start() {
-    try { session = await (await fetch('/api/session')).json(); if (!session.csrf) throw 0; me = (await api('/api/me')).user; }
-    catch { location.href = '/auth/login?return=' + encodeURIComponent('/' + location.hash); return; }
-    header(); render(location.hash.slice(1) || 'overview');
+    try { session = await (await fetch(accountPath('/api/session'))).json(); if (!session.csrf) throw 0; me = (await api('/api/me')).user; }
+    catch { location.href = accountPath('/auth/login')+'?return='+encodeURIComponent('/'+location.hash); return; }
+    header(); if(window.HNStaffBrand)window.HNStaffBrand.apply(me); render(location.hash.slice(1) || 'overview');
   })();
 })();

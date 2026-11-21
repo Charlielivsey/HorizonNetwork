@@ -41,7 +41,7 @@ function notify(personIds, item, from) {
       type: String(item.type || "info").slice(0, 30),
       title: String(item.title || "").slice(0, 200),
       body: String(item.body || "").slice(0, 300),
-      link: /^\/[a-z0-9\-/?=&#]*$/i.test(item.link || "") ? item.link : "",
+      link: (/^\/[a-z0-9\-/?=&#]*$/i.test(item.link || "") || ["https://hr.hngroup.org.uk/cases","https://it.hngroup.org.uk/cases"].includes(item.link)) ? item.link : "",
       at,
       read: false,
     });

@@ -10,6 +10,7 @@
 //  - the register's own passwords, customer sign-up and staff sign-in are switched off;
 //  - its company feed answers only over loopback, for the private wiki, never through nginx.
 // Sign-ins are kept with the register's data (hashed), so they survive restarts, and rechecked with Auth every minute.
+const {chooseOnArrival,arrivalCookie}=require('./profile-gate.cjs');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 const store = require('./store');
@@ -92,6 +93,7 @@ const isLoopback = (req) => ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(re
 
 // Runs before every other route. Returns true when it answered the request itself.
 async function gate(req, res, url, p, showMessage) {
+  if(await chooseOnArrival(req,res,url,{client:CLIENT,session:()=>saved.get('auth',cookie(req,COOKIE))?.user?.authSession,backend:AUTH_BACKEND,secretFile:SECRET_FILE,authOrigin:AUTH_ORIGIN,secure:SECURE,stateCookie:STATE,safeNext}))return true;
   if (p === '/api/public/companies') { if (isLoopback(req)) return false; showMessage(res, 404, 'Page not found', 'That page isn’t on the register.'); return true; }
   if (p === '/auth/login' && req.method === 'GET') {
     const state = crypto.randomBytes(32).toString('hex'), next = Buffer.from(safeNext(url.searchParams.get('next'))).toString('base64url');
@@ -109,7 +111,7 @@ async function gate(req, res, url, p, showMessage) {
     const user = who(result.user), raw = saved.create('auth', { authSession: result.session, user, checked: Date.now() });
     store.audit((user.admin ? 'staff:' : 'customer:') + user.email, 'auth.sign-in'); store.save();
     let next = '/'; try { next = safeNext(Buffer.from(nextRaw || '', 'base64url').toString('utf8')); } catch {}
-    redirect(res, next, [clear, setCookie(COOKIE, raw, saved.COOKIE_AGE)]); return true;
+    redirect(res, next, [clear, arrivalCookie(SECURE), setCookie(COOKIE, raw, saved.COOKIE_AGE)]); return true;
   }
   if (p === '/signed-out' && req.method === 'GET') { showMessage(res, 200, 'You’re signed out', 'Sign in with your HN Group account to use the private register again.', [], true); return true; }
   const raw = cookie(req, COOKIE), entry = saved.get('auth', raw);

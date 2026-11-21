@@ -55,7 +55,7 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
     const login=p.__login,profiles=login?store.loginProfiles(login):[];
     return {
       id:p.profileId||p.id,accountId:login?login.id:p.id,displayName:p.displayName,firstName:p.firstName||'',lastName:p.lastName||'',email:(p.emails||[]).find(e=>e.primary)?.address||p.emails?.[0]?.address||store.loginName(p),contactEmail:p.contactEmail||'',theme:typeof store.themeOf==='function'?store.themeOf(p):'midnight',
-      username:store.loginName(p),
+      username:store.loginName(p),mainCompany:(store.getPerson(p.id)||p).company||'',
       // Every profile this sign-in account can use, so HN Group Auth can ask which one (the default first chosen).
       profileKey:p.profile?p.profile.key:null,profiles:profiles.map(x=>({key:x.key,company:x.company,jobTitle:x.jobTitle,displayName:x.displayName,photo:!!x.avatarUrl,default:!!login&&store.defaultProfile(login)?.key===x.key})),
       ...(p.standalone?{standalone:true}:{}),
@@ -83,6 +83,20 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
   }
   const credentials = serviceRequest;
   return async function handle(req, res, pathname, session) {
+    if (pathname === '/api/auth/account-unlock') {
+      if (req.method !== 'POST') { sendJson(res, 405, { error: 'Method not allowed.' }); return true; }
+      const local = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket?.remoteAddress);
+      if (!local || req.headers.origin || req.headers['x-forwarded-for'] || !credentials(req)) {
+        sendJson(res, 403, { error: 'Account recovery is available only from the server terminal.' }); return true;
+      }
+      const body = await readJsonBody(req), email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+      if (!email.includes('@') || email.length > 254 || /\s/.test(email)) { sendJson(res, 400, { error: 'Enter the full sign-in email address.' }); return true; }
+      const person = store.findByLogin(email, true);
+      if (!person) { sendJson(res, 404, { error: 'No recoverable sign-in account matches that email.' }); return true; }
+      store.setAccountLocked(person, false, 'Server terminal');
+      logEvent(req, null, 'account-unlocked', { actor: 'Server terminal', target: store.loginName(person) });
+      sendJson(res, 200, { username: store.loginName(person), enabled: person.account.enabled === true }); return true;
+    }
     if (pathname === '/status-admin/authorize') {
       if (req.method !== 'GET') { sendJson(res, 405, { error: 'Method not allowed.' }); return true; }
       const state = new URL(req.url, 'http://localhost').searchParams.get('state');
@@ -99,14 +113,18 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       logEvent(req, session, 'status-admin-sign-in');
       redirect(res, `${STATUS_ORIGIN}/auth/callback?code=${code}&state=${state}`); return true;
     }
-    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/password', '/api/auth/code', '/api/auth/network-leadership', '/api/auth/network-avatar', '/api/auth/group-leadership', '/api/auth/group-avatar', '/api/auth/people-public', '/api/auth/people-avatar', '/api/auth/account-status', '/api/auth/staff-directory', '/api/auth/directory-avatar', '/api/auth/vpn-pin', '/api/auth/accounts-session', '/api/auth/profile-select', '/api/auth/profile-avatar', '/api/auth/browser-issue', '/api/auth/browser-profile', '/api/auth/browser-avatar', '/api/auth/browser-offer', '/api/auth/browser-logout', '/api/auth/browser-unlock', '/api/auth/browser-lock', '/api/auth/browser-account', '/api/auth/browser-account-update', '/api/auth/browser-account-status', '/api/auth/browser-account-photo', '/api/auth/google-login', '/api/auth/google-link', '/api/auth/google-unlink', '/api/auth/discord-positions', '/api/auth/accounts-handoff', '/api/auth/discord-login', '/api/auth/discord-link', '/api/auth/discord-unlink', '/api/auth/discord-accounts', '/api/auth/discord-update'].includes(pathname)) return false;
+    if (!['/api/status-sso/exchange', '/api/status-sso/session', '/api/auth/profile', '/api/auth/avatar', '/api/auth/password', '/api/auth/code', '/api/auth/network-leadership', '/api/auth/network-avatar', '/api/auth/group-leadership', '/api/auth/group-avatar', '/api/auth/people-public', '/api/auth/people-avatar', '/api/auth/account-status', '/api/auth/staff-directory', '/api/auth/directory-avatar', '/api/auth/vpn-pin', '/api/auth/accounts-session', '/api/auth/profile-select', '/api/auth/session-fork', '/api/auth/profile-avatar', '/api/auth/browser-issue', '/api/auth/browser-profile', '/api/auth/browser-avatar', '/api/auth/browser-offer', '/api/auth/browser-logout', '/api/auth/browser-unlock', '/api/auth/browser-lock', '/api/auth/browser-account', '/api/auth/browser-account-update', '/api/auth/browser-account-status', '/api/auth/browser-account-photo', '/api/auth/google-login', '/api/auth/google-link', '/api/auth/google-unlink', '/api/auth/discord-staff-list', '/api/auth/discord-positions', '/api/auth/accounts-handoff', '/api/auth/discord-login', '/api/auth/discord-link', '/api/auth/discord-unlink', '/api/auth/discord-accounts', '/api/auth/discord-update'].includes(pathname)) return false;
     if (req.method !== 'POST') { sendJson(res, 405, { error: 'Method not allowed.' }); return true; }
     if (!credentials(req)) { sendJson(res, 401, { error: 'Status integration not authenticated.' }); return true; }
+    if (/^\/api\/auth\/(google|discord)-(login|link)$/.test(pathname)) {
+      sendJson(res, 410, { error: 'Sign in with your username, password and PIN.' }); return true;
+    }
     const body = await readJsonBody(req, pathname === '/api/auth/browser-account-photo' ? 2 * 1024 * 1024 : undefined);
     if (pathname.startsWith('/api/auth/browser-')) {
       const action=pathname.slice('/api/auth/browser-'.length),raw=body.token;
       const remembered=HEX.test(raw||'')&&resume.lookup(raw);
       const active=action==='issue'?current(body.session):remembered?.kind==='browser'?{person:store.getPerson(remembered.personId),data:{expires:remembered.expires}}:null;
+      if(active?.person?.account?.locked){sendJson(res,423,{error:"Your HN account has been locked. Please contact the IT team for more information and help restoring access.",code:'ACCOUNT_LOCKED',restart:true});return true;}
       if (!active?.person?.account?.enabled || active.data.impersonatorId || active.person.account.passwordTemporary || !store.hasCode(active.person) || (store.maintenance().on&&!store.hasOwnerAccess(active.person))) {
         if(remembered?.kind==='browser')resume.forget(raw);
         sendJson(res,401,{error:'Your browser account session ended. Sign in again.',restart:true});return true;
@@ -163,7 +181,8 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
     }
     // HN Group Auth's Discord bot keeps the stored usernames up to date.
     // Job titles by company for each linked Discord ID: the bot keeps Discord roles in step with positions.
-    if (pathname === '/api/auth/discord-positions') { sendJson(res, 200, { people: store.discordPositions() }); return true; }
+    if (pathname === '/api/auth/discord-staff-list') { sendJson(res, 200, { people: store.discordStaffList(), positions: store.positions() }); return true; }
+    if (pathname === '/api/auth/discord-positions') { sendJson(res, 200, { people: store.discordPositions(), positions: store.positions(), reports: store.positionReports() }); return true; }
     if (pathname === '/api/auth/discord-accounts') { sendJson(res, 200, { ids: store.discordIds(body.pending === true) }); return true; }
     // New Discord details from the bot; changed pictures are then copied onto the profiles that follow Discord.
     if (pathname === '/api/auth/discord-update') { sendJson(res, 200, { changed: store.updateDiscordNames(body.updates) }); if (syncDiscordPhotos) syncDiscordPhotos().catch(() => {}); return true; }
@@ -190,7 +209,7 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
           contactEmail: rec.contactEmail || '', email: store.contactAddress(rec) }; });
       sendJson(res, 200, { people }); return true;
     }
-    // HN Secure Gateway asks for the PIN before connecting the VPN (checked through vpn.hngroup.org.uk).
+    // HN Secure Access Terminal asks for the PIN before connecting the VPN (checked through vpn.hngroup.org.uk).
     if (pathname === '/api/auth/vpn-pin') {
       const error = verifyVpnPin(body.id, body.code, typeof body.ip === 'string' ? body.ip.slice(0, 64) : '', typeof body.client === 'string' ? body.client.slice(0, 80) : '');
       sendJson(res, error ? error.status : 200, error ? { error: error.error } : { ok: true }); return true;
@@ -260,6 +279,11 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
       }
       // HN Group Auth asks which profile to use after signing in (the user's request, 28 October 2026): the sign-in
       // carries on as the chosen profile of the same sign-in account.
+      if (pathname === '/api/auth/session-fork') {
+        if (active.data.impersonatorId || active.person.account.passwordTemporary || !store.hasCode(active.person)) { sendJson(res, 403, { error: 'Finish signing in before choosing a profile.' }); return true; }
+        const raw=issueSession(store.sessionIdOf(active.person),active.data.ip||'',active.data.userAgent||'HN Group Auth');
+        sendJson(res,200,{session:crypto.createHash('sha256').update(raw).digest('hex'),expires:Date.now()+12*3600000});return true;
+      }
       if (pathname === '/api/auth/profile-select') {
         const login = active.person.__login, profile = login && store.loginProfiles(login).find((x) => x.key === body.key);
         if (!profile) { sendJson(res, 400, { error: 'That profile isn’t available for this account.' }); return true; }

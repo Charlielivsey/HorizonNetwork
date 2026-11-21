@@ -5,6 +5,7 @@
 // customer accounts that anyone can create (document requests, mistake reports and filing
 // submissions), and a staff administration area with its own staff accounts (lib/staff.js).
 const http = require('node:http');
+const crypto=require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const store = require('./lib/store');
@@ -42,7 +43,7 @@ function layout(o) {
       : '<a href="/account/login">Sign in</a><a href="/account/register">Create an account</a><a href="/staff/login" class="staff-link">Staff sign in</a>';
   return '<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0b0c0c">' +
     '<title>' + esc(o.title) + ' – ' + SERVICE + ' – HN Group</title>' + (o.description ? '<meta name="description" content="' + esc(o.description) + '">' : '') + (o.noindex ? '<meta name="robots" content="noindex">' : '') +
-    '<meta name="color-scheme" content="light"><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/assets/companies.css?v=7"><script src="/assets/companies.js?v=7" defer></script></head><body>' +
+    '<meta name="color-scheme" content="light"><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/assets/companies.css?v=7"><script src="/assets/companies.js?v=20261118-voting-minimum" defer></script></head><body>' +
     '<a class="skip" href="#main">Skip to main content</a>' +
     '<header class="header"><div class="wrap header-inner"><a class="logo" href="/"><img src="/assets/brand/hn-group-wordmark-white.svg" alt="HN Group" width="126" height="44"></a>' +
     '<a class="service" href="/">' + SERVICE + '</a><nav class="header-nav" aria-label="Account">' + nav + '</nav></div></header>' +
@@ -75,7 +76,7 @@ function field(label, name, value, extra) {
   const described = x.hint ? ' aria-describedby="' + id + '-hint"' : '';
   const control = x.textarea
     ? '<textarea id="' + id + '" name="' + name + '" rows="' + (x.rows || 4) + '"' + (x.required ? ' required' : '') + ' maxlength="' + (x.max || 3000) + '"' + described + ((x.max || 3000) >= 300 ? ' data-count' : '') + '>' + esc(value) + '</textarea>'
-    : '<input id="' + id + '" name="' + name + '" type="' + type + '" value="' + esc(value) + '"' + (x.required ? ' required' : '') + (x.auto ? ' autocomplete="' + x.auto + '"' : '') + ' maxlength="' + (x.max || 200) + '"' + (x.number ? ' min="0" max="100" step="0.01" inputmode="decimal"' : '') + described + (width ? ' class="w-' + width + '"' : '') + '>';
+    : '<input id="' + id + '" name="' + name + '" type="' + type + '" value="' + esc(value) + '"' + (x.required ? ' required' : '') + (x.readOnly ? ' readonly' : '') + (x.auto ? ' autocomplete="' + x.auto + '"' : '') + ' maxlength="' + (x.max || 200) + '"' + (x.number ? ' min="0" max="100" step="0.01" inputmode="decimal"' : '') + described + (width ? ' class="w-' + width + '"' : '') + '>';
   return '<div class="field' + (x.textarea ? ' wide' : '') + '"><label for="' + id + '">' + esc(label) + optional + '</label>' + (x.hint ? '<span class="hint" id="' + id + '-hint">' + esc(x.hint) + '</span>' : '') +
     (x.number ? '<span class="suffix-wrap">' + control + '<span class="suffix" aria-hidden="true">%</span></span>' : control) + '</div>';
 }
@@ -153,7 +154,7 @@ function companyActions(c, ctx) {
   const base = '/company/' + c.slug;
   const manages = ctx.customer && store.canManage(c, ctx.customer.account.id);
   // The third value marks the main action, shown as a button; the rest are links.
-  return [...(manages ? [[base + '/file', 'File for this company', true], ['/account/register-company?parent=' + c.slug, 'Register a subsidiary']] : [[base + '/claim', 'Manage this company', true]]),
+  return [...(manages ? [[base + '/file', 'File for this company', true], ...(c.shareModel==='founder75'?[[base+'/capital','Manage shares and voting']]:[]), ['/account/register-company?parent=' + c.slug, 'Register a subsidiary']] : [[base + '/claim', 'Manage this company', true]]),
     [base + '/group-report', 'Download a company report'], [base + '/request', 'Request a document'], [base + '/report', 'Report a mistake']];
 }
 const companyName = (s) => store.company(s.company)?.legalName || (s.change && s.change.details && s.change.details.legalName) || s.company;
@@ -211,15 +212,16 @@ function peoplePage(res, ctx, c, sub) {
   const officers = [...c.officers].sort((a, b) => (!!a.resigned - !!b.resigned) || a.name.localeCompare(b.name));
   const active = officers.filter((o) => !o.resigned).length;
   const votes = store.votingPower(c), classes = store.shareClasses(c);
+  const visiblePsc=c.shareModel==='founder75'?c.psc.filter(p=>Number(p.share)>0||Number(votes[p.id]?.votes)>0):c.psc;
   const classLine = (p) => { const k = store.classesOf(p); return k.split ? [['A', p.classA], ['B', p.classB], ['C', p.classC]].filter(([, v]) => Number(v || 0) > 0).map(([n, v]) => 'Class ' + n + ' ' + esc(v) + '%').join('<br>') + (Number(p.classC || 0) > 0 ? '<br><span class="muted">Class C issued by ' + esc(p.classCIssuedBy) + '</span>' : '') : (p.share ? 'Not split into classes (counted as Class A)' : val('')); };
-  const voteLine = (p) => { const v = votes[p.id]; return p.ceased ? val('') : v ? '<strong>' + esc(v.votes) + '%</strong>' + (v.control ? ' <span class="status">Voting control</span><br><span class="muted">Holds the most Class C shares (more than ' + store.CLASS_C_CONTROL + '% of them), so holds ' + store.CONTROL_VOTES + '% of the votes or more.</span>'
+  const voteLine = (p) => { const v = votes[p.id]; if(c.shareModel==='founder75')return p.ceased?'—':v?'<strong>'+esc(v.votes)+'%</strong>':'—';return p.ceased ? val('') : v ? '<strong>' + esc(v.votes) + '%</strong>' + (v.control ? ' <span class="status">Voting control</span><br><span class="muted">Holds the most Class C shares (more than ' + store.CLASS_C_CONTROL + '% of them), so holds ' + store.CONTROL_VOTES + '% of the votes or more.</span>'
     : v.sharedControl ? ' <span class="status">Shared voting control</span><br><span class="muted">Holds the most Class C shares together with ' + esc(v.sharedWith.join(' and ')) + ', so together they hold ' + esc(v.together) + '% of the votes. ' + (v.sharedWith.length > 1 ? 'None of them' : 'Neither') + ' holds ' + store.CONTROL_VOTES + '% alone.</span>' : '') : val(''); };
   const body = psc
-    ? '<h2 class="heading-m">' + plural(c.psc.filter((p) => !p.ceased).length, 'active person', 'active persons') + ' with significant control</h2>' +
-      (classes ? '<div class="inset share-classes"><p><strong>Shares by class</strong> (recorded holdings): Class A ' + esc(classes.classA) + '% · Class B ' + esc(classes.classB) + '% · Class C ' + esc(classes.classC) + '%</p>' +
-        '<details><summary>How share classes vote</summary><ul class="list"><li><strong>Class A</strong>: ordinary shares for the public and other companies. One vote each.</li><li><strong>Class B</strong>: staff shares, held by people only. Half the votes of Class A.</li><li><strong>Class C</strong>: special issue shares, issued only by one of the company’s officers. Double the votes of Class A. Of the holders with more than ' + store.CLASS_C_CONTROL + '% of all the Class C shares, the one holding the most holds ' + store.CONTROL_VOTES + '% of the votes; the others count double.</li><li>Only 100% of a company’s shares can be issued.</li></ul></details></div>' : '') +
-      (c.psc.length ? c.psc.map((p) => '<article class="person"><h2 class="person-name">' + esc(p.name) + (p.ceased ? ' <span class="status warn">Ceased</span>' : '') + '</h2>' + dl([
-        ['Type', esc(p.kind)], ...(p.kind === 'Parent company' ? [['Company', parentLink(p.name)]] : []), ['Shareholding', p.share ? esc(p.share) + '%' : val('')], ['Share classes', classLine(p)], ['Voting power', voteLine(p)], ['Notified on', val(fmt(p.notified))], ...(p.ceased ? [['Ceased on', esc(fmt(p.ceased))]] : []),
+    ? '<h2 class="heading-m">' + plural(visiblePsc.filter((p) => !p.ceased).length, 'active person', 'active persons') + ' with significant control</h2>' +
+      (c.shareModel==='founder75'?founderRules(c):(classes ? '<div class="inset share-classes"><p><strong>Shares by class</strong> (recorded holdings): Class A ' + esc(classes.classA) + '% · Class B ' + esc(classes.classB) + '% · Class C ' + esc(classes.classC) + '%</p>' +
+        '<details><summary>How share classes vote</summary><ul class="list"><li><strong>Class A</strong>: ordinary shares for the public and other companies. One vote each.</li><li><strong>Class B</strong>: staff shares, held by people only. Half the votes of Class A.</li><li><strong>Class C</strong>: special issue shares, issued only by one of the company’s officers. Double the votes of Class A. Of the holders with more than ' + store.CLASS_C_CONTROL + '% of all the Class C shares, the one holding the most holds ' + store.CONTROL_VOTES + '% of the votes; the others count double.</li><li>Only 100% of a company’s shares can be issued.</li></ul></details></div>' : '')) +
+      (visiblePsc.length ? visiblePsc.map((p) => '<article class="person"><h2 class="person-name">' + esc(p.name) + (p.ceased ? ' <span class="status warn">Ceased</span>' : '') + '</h2>' + dl([
+        ['Type', esc(p.kind)], ...(p.kind === 'Parent company' ? [['Company', parentLink(p.name)]] : []), ['Shareholding', p.share ? esc(p.share) + '%' : val('')], ['Share classes', classLine(p)], ['Voting power', voteLine(p)], ...(votes[p.id]?.delegatedTo?[['Voting delegated to',(votes[p.id].delegations||[]).map(d=>esc(d.name)+' — '+esc(d.votes)+'% of company votes ('+esc(d.percent)+'% of this holder’s voting rights)').join('<br>')]]:[]), ...(votes[p.id]?.receivedFrom?.length?[['Voting rights received from',votes[p.id].receivedFrom.map(d=>esc(d.name)+' — '+esc(d.votes)+'% of company votes').join('<br>')]]:[]), ['Notified on', val(fmt(p.notified))], ...(p.ceased ? [['Ceased on', esc(fmt(p.ceased))]] : []),
         ['Nature of control', p.control.length ? p.control.map(esc).join('<br>') : val('')]], 'data cols-3') + '</article>').join('') : '<p class="muted">No persons with significant control have been recorded.</p>')
     : '<h2 class="heading-m">' + plural(officers.length, 'officer', 'officers') + ' / ' + plural(officers.length - active, 'resignation', 'resignations') + '</h2>' +
       (officers.length ? officers.map((o) => '<article class="person"><h2 class="person-name">' + esc(o.name) + (o.resigned ? ' <span class="status warn">Resigned</span>' : '') + '</h2>' + dl([
@@ -351,10 +353,11 @@ const CHANGE_GROUPS = [
 ];
 function submitForm(res, ctx, c, values, error, kind) {
   kind = Object.hasOwn(store.CHANGE_TYPES, kind) ? kind : '';
+  if(c.shareModel==='founder75'&&kind.startsWith('psc_'))return companyCapitalPage(res,ctx,c,error?{error:true,text:error}:undefined);
   const base = '/company/' + esc(c.slug) + '/file';
   const flash = error && { error: true, text: error };
   if (!kind) return page(res, ctx, { title: 'File a change · ' + c.legalName, noindex: true, flash, back: '/company/' + c.slug,
-    body: '<section class="panel"><p class="eyebrow">' + esc(c.legalName) + '</p><h1 class="page-title">What do you want to file?</h1><p class="lead-s">Our staff review every filing. When it’s accepted, the company’s record is updated and the filing appears in its filing history.</p>' +
+    body: '<section class="panel"><p class="eyebrow">' + esc(c.legalName) + '</p><h1 class="page-title">What do you want to file?</h1><p class="lead-s">' + (c.shareModel==='founder75'?'Shareholder and voting changes are recorded directly using <a href="/company/'+esc(c.slug)+'/capital">shares and voting tools</a>. Other filings are reviewed by register staff.':'Our staff review every filing. When it’s accepted, the company’s record is updated and the filing appears in its filing history.') + '</p>' +
       CHANGE_GROUPS.map(([title, items]) => '<h2 class="choice-heading">' + esc(title) + '</h2><div class="choice-grid">' + items.map(([k, d]) => '<a class="choice-card" href="' + base + '?type=' + k + '"><strong>' + esc(store.CHANGE_TYPES[k].label) + '</strong><span>' + esc(d) + '</span></a>').join('') + '</div>').join('') +
       '<p><a class="cancel" href="/company/' + esc(c.slug) + '">Back to the company</a></p></section>' });
   const v = values || {};
@@ -374,7 +377,7 @@ function submitForm(res, ctx, c, values, error, kind) {
         body: '<section class="panel narrow"><p class="eyebrow">' + esc(c.legalName) + '</p><h1>Whose details have changed?</h1><div class="choice-grid one">' + now.map((p) => '<a class="choice-card" href="' + base + '?type=psc_change&amp;psc=' + p.id + '"><strong>' + esc(p.name) + '</strong><span>' + esc(p.kind) + (p.share ? ' · ' + esc(p.share) + '%' : '') + '</span></a>').join('') + '</div><p><a class="cancel" href="' + base + '">Back</a></p></section>' });
       const item = v.item || chosen;
       fields = '<input type="hidden" name="psc" value="' + esc(chosen.id) + '">' + inset('Changing the details of', '<strong>' + esc(chosen.name) + '</strong><br>' + esc(chosen.kind) + (chosen.share ? ' · ' + esc(chosen.share) + '%' : '') + (store.votingPower(c)[chosen.id] ? ' · ' + esc(store.votingPower(c)[chosen.id].votes) + '% of votes' : '')) +
-        prefixed('psc_', field('Name', 'name', item.name, { required: true, max: 160 }) + select('Type', 'kind', store.PSC_KINDS, item.kind) + field('Share percentage', 'share', item.share, { type: 'number', number: true, max: 6, hint: 'From 0 to 100. Leave blank if not known, or if you give the share classes below.' }) + classFields(item) + votePreview(c, chosen.id) + controlField(item.control)) +
+        prefixed('psc_', field('Name', 'name', item.name, { required: true, max: 160 }) + select('Type', 'kind', store.PSC_KINDS, item.kind) + field('Share percentage', 'share', item.share, { type: 'number', number: true, max: 6, readOnly:c.shareModel==='founder75',hint: 'From 0 to 100. Use capital tools for companies with founder voting rules.' }) + classFields(item) + votePreview(c, chosen.id) + controlField(item.control)) +
         field('Date the details changed', 'changed', v.changed, { type: 'date', required: true });
       break;
     }
@@ -495,29 +498,40 @@ function companyForm(c, ctx, values) {
     '<div class="form-actions"><button class="button" type="submit">' + (c ? 'Save company details' : 'Add company') + '</button></div></form>';
 }
 
+function founderRules(c){const result=store.votingCalculation(c),classes=store.shareClasses(c),minimum=store.founderVotingMinimum(c);return '<section class="inset founder-rules"><h2>Shares and voting</h2><p><strong>Class A — Founder shares</strong> · <strong>Class B — Ordinary shares</strong></p><p>Class A '+esc(classes?.classA||0)+'% · Class B '+esc(classes?.classB||0)+'%</p><ul class="list"><li>Founder Class A holdings collectively retain at least '+esc(minimum)+'% of the votes; if their equity gives them more, that higher share is retained.</li><li>Voting weights recalculate when shares are issued, transferred or cancelled.</li><li>Founder transfers can retain Class A with written consent, or convert to ordinary Class B.</li><li>Written founder consent is recorded before founder shares are transferred or cancelled.</li><li>Dividends and capital distributions remain proportionate to equity ownership. Voting delegation does not change ownership.</li></ul><p>'+ (result.votesPerFounderShare===null?'All voting rights are allocated to founder shares.':'Current votes per founder share: <strong>'+esc(result.votesPerFounderShare.toFixed(4))+'</strong> · Per ordinary share: <strong>1</strong>')+'</p><h3>Voting controllers</h3><ul class="list">'+result.controllers.map(x=>'<li>'+esc(x.name)+' ('+esc(x.kind)+'): <strong>'+esc(x.votes)+'%</strong></li>').join('')+'</ul><details><summary>Interactive voting example</summary><label>Founder equity <input type="range" min="1" max="99" value="51" data-founder-example data-minimum="'+esc(minimum)+'"></label><p data-founder-output>51% equity → '+esc(Math.max(51,minimum))+'% of votes</p></details></section>';}
+function founderAdmin(c,ctx,options={}){if(c.shareModel!=='founder75')return '';const base=options.base||'/admin/company/'+esc(c.slug),sessionCsrf=options.csrf||ctx.staffUser?.csrf,holders=c.psc.filter(p=>!p.ceased),holderOptions=holders.map(p=>'<option value="'+p.id+'">'+esc(p.name)+'</option>').join(''),holder=(label,name)=>'<label>'+label+'<select name="'+name+'" required>'+holderOptions+'</select></label>',consent=()=>field('Written founder consent reference','consent','',{max:300,hint:'Required for founder Class A transfers, cancellation or delegation. Record the written consent reference.'});
+ const capital=(action,title,description,body)=>'<details class="item"><summary>'+title+'</summary><p>'+description+'</p><form method="post" action="'+base+'/capital" class="form grid-form">'+csrfField(sessionCsrf)+'<input type="hidden" name="requestId" value="'+crypto.randomBytes(16).toString('hex')+'"><input type="hidden" name="action" value="'+action+'">'+body+'<div class="form-actions"><button class="button" type="submit" data-confirm="Record this share '+action+' and recalculate ownership/voting weights?">Record '+action+'</button></div></form></details>';
+ return '<section class="panel" id="capital-tools"><h2>Capital and voting management</h2>'+founderRules(c)+capital('issue','Issue ordinary shares','The percentage is the recipient’s newly issued ownership after issue. Existing holdings dilute proportionately; founder voting retains its minimum.',holder('Recipient','to')+field('New ownership percentage after issue','amount','',{type:'number',number:true,required:true,max:9}))+capital('transfer','Transfer shares','The amount is a percentage of all company shares. Choose whether founder Class A stays Class A or converts to ordinary Class B.',holder('From holder','from')+holder('To holder','to')+select('Share class','class',['A','B'],'B')+select('Founder share treatment','transferTreatment',[['convert','Convert to ordinary Class B'],['retain','Retain founder Class A']],'convert')+field('Percentage of company shares','amount','',{type:'number',number:true,required:true,max:9})+consent())+capital('cancel','Cancel shares','The amount is a percentage of current company shares. Remaining ownership percentages and voting weights recalculate.',holder('Holder','from')+select('Share class','class',['A','B'],'B')+field('Percentage of company shares','amount','',{type:'number',number:true,required:true,max:9})+consent())+
+ '<details class="item"><summary>Founder voting minimum</summary><p>The current minimum is <strong>'+esc(store.founderVotingMinimum(c))+'%</strong>. A higher founder equity percentage retains that higher voting share. Changing this setting leaves ownership unchanged and records a resolution.</p><form method="post" action="'+base+'/voting" class="form grid-form">'+csrfField(sessionCsrf)+'<input type="hidden" name="requestId" value="'+crypto.randomBytes(16).toString('hex')+'"><input type="hidden" name="action" value="minimum">'+field('Minimum founder voting percentage','minimum',store.founderVotingMinimum(c),{type:'number',number:true,required:true,max:9})+field('Written founder consent reference','consent','',{required:true,max:300})+'<button class="button" type="submit" data-confirm="Change the founder voting minimum? This changes voting rights, leaves ownership unchanged and records a resolution.">Save voting minimum</button></form></details>'+
+ '<details class="item"><summary>Delegate voting rights</summary><p>Delegation is revocable, affects only this holder’s own voting entitlement and does not transfer shares or dividends.</p><form method="post" action="'+base+'/voting" class="form grid-form">'+csrfField(sessionCsrf)+'<input type="hidden" name="requestId" value="'+crypto.randomBytes(16).toString('hex')+'"><input type="hidden" name="action" value="delegate">'+holder('Delegating holder','holder')+select('Delegate type','kind',['Individual','Company'],'Individual')+field('Delegate full name / company name','name','',{required:true,max:160})+field('Percentage of this holder’s voting rights','percent','100',{type:'number',number:true,required:true,max:9})+consent()+'<label><input type="checkbox" name="append"> Keep this holder’s existing delegations and add this recipient (combined maximum 100%)</label><div class="form-actions"><button class="button" type="submit">Save delegation</button></div></form></details>'+
+ '<details class="item"><summary>Revoke voting delegation</summary><form method="post" action="'+base+'/voting" class="form grid-form">'+csrfField(sessionCsrf)+'<input type="hidden" name="requestId" value="'+crypto.randomBytes(16).toString('hex')+'"><input type="hidden" name="action" value="revoke">'+holder('Holder','holder')+'<button class="button" type="submit">Revoke delegation</button></form></details></section>';
+}
+
+function companyCapitalPage(res,ctx,c,flash){return page(res,ctx,{title:'Shareholders and voting · '+c.legalName,noindex:true,flash,back:'/company/'+c.slug+'/file',body:'<section class="panel"><p class="eyebrow">'+esc(c.legalName)+'</p><h1>Shareholders and voting</h1><p>Transfer an existing percentage, issue ordinary shares or delegate voting rights. Changes are recorded immediately with the relevant filing.</p></section>'+founderAdmin(c,ctx,{base:'/company/'+esc(c.slug),csrf:ctx.customer.csrf})+'<section class="panel"><h2>Add a share recipient</h2><p>Add a person or company with zero shares, then choose them in a transfer or share issue.</p><form method="post" action="/company/'+esc(c.slug)+'/capital" class="form grid-form">'+csrfField(ctx.customer.csrf)+'<input type="hidden" name="requestId" value="'+crypto.randomBytes(16).toString('hex')+'"><input type="hidden" name="action" value="add-holder">'+field('Full name / company name','name','',{required:true,max:160})+select('Holder type','kind',store.PSC_KINDS,'Individual')+'<button class="button" type="submit">Add recipient</button></form></section>'});}
+
 // Share classes: each as a percentage of all the company's shares (see lib/store.js for the rules).
-const classFields = (p) => '<div class="wide"><p class="field-group-title">Share classes</p><p class="hint">Split the shareholding into classes, each as a percentage of all the company’s shares. Leave them blank if the shares aren’t split (they count as Class A).</p></div>' +
-  field('Class A shares (%)', 'classA', p.classA, { type: 'number', number: true, max: 6, hint: 'Ordinary shares for the public and other companies. One vote each.' }) +
-  field('Class B shares (%)', 'classB', p.classB, { type: 'number', number: true, max: 6, hint: 'Staff shares, held by people only. Half a vote each.' }) +
-  field('Class C shares (%)', 'classC', p.classC, { type: 'number', number: true, max: 6, hint: 'Special issue by one of the company’s officers. Two votes each. The largest Class C holder, if they have more than 10% of the Class C shares, holds 51% of all votes.' }) +
-  field('Class C issued by', 'classCIssuedBy', p.classCIssuedBy, { max: 120, hint: 'The officer who issued them. They must be a current officer of this company (any role).' });
+const classFields = (p) => '<div class="wide"><p class="field-group-title">Share classes</p><p class="hint">Class A founder and Class B ordinary shares apply to every company. Enter each as a percentage of the company; unclassified initial holdings become ordinary Class B.</p></div>' + field('Founder Class A (%)','classA',p.classA,{type:'number',number:true,max:9}) + field('Ordinary Class B (%)','classB',p.classB,{type:'number',number:true,max:9});
 // Shows the holder's voting power now and, as the share or classes are changed, what it would become and
 // which "Ownership of voting rights" option matches (worked out in the browser by companies.js from the
 // other current holdings; the register works out the real figure when the change is saved).
 function votePreview(c, selfId) {
+  if(!c||c.shareModel==='founder75')return '';
   const others = c ? c.psc.filter((p) => !p.ceased && p.id !== selfId).map((p) => store.classesOf(p)).filter((k) => k.known).map((k) => [k.a, k.b, k.c]) : [];
   const now = c && selfId ? store.votingPower(c)[selfId] : null;
   return '<div class="wide vote-preview" data-vote-preview data-others="' + esc(JSON.stringify(others)) + '" data-threshold="' + store.CLASS_C_CONTROL + '" data-control="' + store.CONTROL_VOTES + '">' +
     '<p class="field-group-title">Voting power</p>' + (now ? '<p>Now: <strong>' + esc(now.votes) + '% of the votes</strong>' + (now.control ? ' (voting control through Class C shares)' : now.sharedControl ? ' (voting control shared with ' + esc(now.sharedWith.join(' and ')) + ')' : '') + '.</p>' : '') +
     '<p class="vote-after" aria-live="polite">' + (now ? '' : 'Enter the shareholding or share classes to see the voting power.') + '</p></div>';
 }
+function founderHoldingSummary(p){const rows=[['Total ownership',Number(p.share||0)],['Founder Class A',Number(p.classA||0)],['Ordinary Class B',Number(p.classB||0)]].filter(([,n])=>Number.isFinite(n)&&n>0);return '<div class="wide">'+(rows.length?'<h3>Current holding</h3>'+dl(rows.map(([label,n])=>[label,n+'%'])):'')+'<p><a href="#capital-tools">Transfer, issue or cancel shares</a>. '+(!p.id?'Add this recipient, then allocate shares using the tools above.':'Saving these details keeps the current holding unchanged.')+'</p>'+['share','classA','classB','classC'].map(k=>'<input type="hidden" name="'+k+'" value="'+esc(p[k]||'0')+'">').join('')+'</div>';}
+
 const ITEM_FIELDS = {
     officers: (o, opt) => { opt = opt || {}; return field('Full name', 'name', o.name, { required: true, max: 120 }) + select('Role', 'role', store.OFFICER_ROLES, o.role || 'Director') + field('Appointed on', 'appointed', o.appointed, { type: 'date', required: !!opt.appointedRequired }) + (opt.noResigned ? '' : field('Resigned on', 'resigned', o.resigned, { type: 'date' })) + field('Occupation', 'occupation', o.occupation, { max: 80 }) + field('Nationality', 'nationality', o.nationality, { max: 60 }) + field('Country of residence', 'countryOfResidence', o.countryOfResidence, { max: 60 }); },
-    psc: (p, opt) => { opt = opt || {}; return field('Name', 'name', p.name, { required: true, max: 160, hint: 'A person’s full name, or a company’s registered name exactly as it appears on the register.' }) + select('Type', 'kind', store.PSC_KINDS, p.kind || 'Individual') + field('Share percentage', 'share', p.share, { type: 'number', number: true, max: 6, hint: 'From 0 to 100. Leave blank if not known, or if you give the share classes below.' }) + classFields(p) + field('Notified on', 'notified', p.notified, { type: 'date', required: !!opt.notifiedRequired }) + (opt.noCeased ? '' : field('Ceased on', 'ceased', p.ceased, { type: 'date' })) + votePreview(opt.company, opt.self) + controlField(p.control); },
+    psc: (p, opt) => { opt = opt || {}; return field('Name', 'name', p.name, { required: true, max: 160, hint: 'A person’s full name, or a company’s registered name exactly as it appears on the register.' }) + select('Type', 'kind', store.PSC_KINDS, p.kind || 'Individual') + (opt.company?.shareModel==='founder75'?'':field('Share percentage','share',p.share,{type:'number',number:true,max:6,hint:'From 0 to 100.'})) + (opt.company?.shareModel==='founder75'?founderHoldingSummary(p):classFields(p)) + field('Notified on', 'notified', p.notified, { type: 'date', required: !!opt.notifiedRequired }) + (opt.noCeased ? '' : field('Ceased on', 'ceased', p.ceased, { type: 'date' })) + (opt.company?.shareModel==='founder75'?'':votePreview(opt.company, opt.self)) + controlField(p.control); },
     charges: (x) => field('Charge code', 'code', x.code, { max: 40 }) + select('Status', 'status', ['Outstanding', 'Part satisfied', 'Satisfied'], x.status || 'Outstanding') + field('Created on', 'created', x.created, { type: 'date' }) + field('Delivered on', 'delivered', x.delivered, { type: 'date' }) + field('Satisfied on', 'satisfied', x.satisfied, { type: 'date' }) + field('Persons entitled', 'entitled', x.entitled, { required: true, max: 200 }) + field('Brief description', 'description', x.description, { textarea: true, rows: 2, max: 600 }),
 };
 function itemForms(c, ctx, list) {
-  const items = c[list];
+  const votes=list==='psc'&&c.shareModel==='founder75'?store.votingPower(c):null;
+  const items=votes?c[list].filter(p=>Number(p.share)>0||Number(votes[p.id]?.votes)>0):c[list];
   const forms = ITEM_FIELDS;
   const title = { officers: 'Officers', psc: 'Persons with significant control', charges: 'Charges' }[list];
   const label = (x) => list === 'charges' ? (x.code ? 'Charge ' + x.code : 'Charge for ' + x.entitled) : x.name;
@@ -531,7 +545,7 @@ function adminCompany(res, ctx, c, flash) {
   const list = store.filings(c.slug);
   page(res, ctx, { title: 'Edit ' + c.legalName, noindex: true, flash,
     body: '<p><a href="/admin">← Administration</a></p><h1 class="page-title">' + esc(c.legalName) + '</h1><p><a href="/company/' + esc(c.slug) + '">View the public record →</a></p>' +
-      '<section class="panel"><h2>Company details</h2>' + companyForm(c, ctx) + '</section>' + incorporationPanel(c, ctx) + managersPanel(c, ctx) + itemForms(c, ctx, 'officers') + itemForms(c, ctx, 'psc') + itemForms(c, ctx, 'charges') +
+      '<section class="panel"><h2>Company details</h2>' + companyForm(c, ctx) + '</section>' + incorporationPanel(c, ctx) + managersPanel(c, ctx) + itemForms(c, ctx, 'officers') + founderAdmin(c,ctx) + itemForms(c, ctx, 'psc') + itemForms(c, ctx, 'charges') +
       '<section class="panel"><h2>Filing history</h2>' + (list.length ? '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Description</th><th>Document</th><th></th></tr></thead><tbody>' + list.map((f) => '<tr><td>' + esc(fmt(f.date)) + '</td><td>' + esc(f.category) + '</td><td>' + esc(f.description) + (f.source === 'customer' ? ' <span class="muted small">(customer submission)</span>' : '') + '</td><td>' + (f.file ? '<a href="/document/' + f.id + '" target="_blank" rel="noopener">PDF</a>' : '—') + '</td><td><form method="post" action="/admin/filing/' + f.id + '/delete">' + csrfField(ctx.staffUser.csrf) + '<button class="link danger-text" type="submit" data-confirm="Delete this filing and its document?">Delete</button></form></td></tr>').join('') + '</tbody></table></div>' : '<p class="muted">No filings yet.</p>') +
       '<details class="item add"><summary>Add a filing</summary><form method="post" action="/admin/company/' + esc(c.slug) + '/filings" class="form grid-form" enctype="multipart/form-data">' + csrfField(ctx.staffUser.csrf) + field('Date', 'date', new Date().toISOString().slice(0, 10), { type: 'date' }) + select('Type', 'category', store.FILING_CATEGORIES, 'Other') + field('Description', 'description', '', { required: true, max: 300 }) + fileField('Document', '', false) + '<div class="form-actions"><button class="button small" type="submit">Add filing</button></div></form></details></section>' +
       '<section class="panel danger-zone"><h2>Delete company</h2><p class="muted">This removes the company, its people, charges and all its filings from the register. It can’t be undone.</p><form method="post" action="/admin/company/' + esc(c.slug) + '/delete">' + csrfField(ctx.staffUser.csrf) + '<button class="button danger" type="submit" data-confirm="Delete ' + esc(c.legalName) + ' and all its records?">Delete company</button></form></section>' });
@@ -725,6 +739,23 @@ async function route(req, res) {
         catch (e) { if (e.status !== 400 && e.status !== 429) throw e; return claimPage(res, ctx, c, fields, e.message); }
       }
     }
+    if (sub === 'capital' || sub === 'voting') {
+      if (needCustomer(res,ctx,p)) return;
+      if (!store.canManage(c,ctx.customer.account.id)) return notManagerPage(res,ctx,c);
+      if(c.shareModel!=='founder75')return messagePage(res,ctx,404,'Page not found','This company uses its existing filing tools.');
+      if(req.method==='GET')return companyCapitalPage(res,ctx,c,url.searchParams.get('saved')?{text:'Shareholder or voting change recorded. The company record and filing history are updated.'}:undefined);
+      if(req.method==='POST'){
+        const {fields}=await forms.parse(req);
+        if(fields.csrf!==ctx.customer.csrf)throw fail(403,'Your session has changed. Refresh the page and try again.');
+        if(!/^[a-f0-9]{32}$/.test(fields.requestId||''))throw fail(400,'Refresh the company page before recording this change.');
+        try{const actor='customer:'+ctx.customer.account.email;
+          if(sub==='voting'){if(fields.action==='minimum')store.setVotingMinimum(c.slug,fields,actor);else store.votingDelegation(c.slug,fields,actor);}
+          else if(fields.action==='add-holder')store.addCapitalHolder(c.slug,fields,actor);
+          else store.capitalTransaction(c.slug,fields,actor);
+          return redirect(res,'/company/'+c.slug+'/capital?saved=1');
+        }catch(e){if(e.status!==400)throw e;return companyCapitalPage(res,ctx,store.company(c.slug),{error:true,text:e.message});}
+      }
+    }
     if (sub === 'request' || sub === 'report' || sub === 'file') {
       if (needCustomer(res, ctx, p)) return;
       if (sub === 'file' && !store.canManage(c, ctx.customer.account.id)) return notManagerPage(res, ctx, c);
@@ -853,7 +884,7 @@ async function route(req, res) {
       try { const c = store.saveCompany('', fields, actor, { officer, psc }); return redirect(res, '/admin/company/' + c.slug); }
       catch (e) { if (e.status !== 400) throw e; return addPage({ company: { ...fields, sic: String(fields.sic || '').split('\n'), divisions: String(fields.divisions || '').split('\n'), hidden: fields.hidden === 'on' }, officer, psc }, { error: true, text: e.message }); }
     }
-    m = /^\/admin\/company\/([a-z0-9-]+)(?:\/(officers|psc|charges|filings|managers|incorporation|delete))?(?:\/([a-f0-9]{24}))?(\/delete)?$/.exec(p);
+    m = /^\/admin\/company\/([a-z0-9-]+)(?:\/(officers|psc|charges|filings|managers|incorporation|capital|voting|delete))?(?:\/([a-f0-9]{24}))?(\/delete)?$/.exec(p);
     if (m) {
       const c = store.company(m[1]);
       if (!c) return messagePage(res, ctx, 404, 'Company not found', 'That company isn’t on the register.');
@@ -861,13 +892,15 @@ async function route(req, res) {
       if (req.method === 'POST') {
         try {
           if (!m[2]) { store.saveCompany(c.slug, fields, actor); return adminCompany(res, ctx, c, { text: 'Company details saved.' }); }
+          if(m[2]==='capital'){if(!/^[a-f0-9]{32}$/.test(fields.requestId||''))throw fail(400,'Refresh the company page before recording this change.');store.capitalTransaction(c.slug,fields,actor);return adminCompany(res,ctx,store.company(c.slug),{text:'Share transaction recorded. Ownership and voting weights recalculated.'});}
+          if(m[2]==='voting'){if(!/^[a-f0-9]{32}$/.test(fields.requestId||''))throw fail(400,'Refresh the company page before recording this change.');if(fields.action==='minimum')store.setVotingMinimum(c.slug,fields,actor);else store.votingDelegation(c.slug,fields,actor);return adminCompany(res,ctx,store.company(c.slug),{text:fields.action==='minimum'?'Founder voting minimum updated. Share ownership is unchanged.':'Voting delegation updated. Share ownership is unchanged.'});}
           if (m[2] === 'incorporation') { const r = store.changeIncorporation(c.slug, fields, actor); return adminCompany(res, ctx, c, { text: 'Incorporation date changed to ' + fmt(r.date) + (r.old ? ' (was ' + fmt(r.old) + ')' : '') + '. The Incorporation filing has been updated' + (r.moved ? ', and ' + r.moved + (r.moved === 1 ? ' officer or person with significant control was' : ' officers and persons with significant control were') + ' moved to the new date' : '') + '.' }); }
           if (m[2] === 'delete') { store.deleteCompany(c.slug, actor); return adminHome(res, ctx, { text: c.legalName + ' has been deleted.' }); }
           if (m[2] === 'managers') { if (m[4]) store.removeManager(c.slug, m[3], actor); else store.addManager(c.slug, fields.email, actor); return adminCompany(res, ctx, c, { text: m[4] ? 'Manager removed.' : 'Manager added.' }); }
           if (m[2] === 'filings') { store.addFiling(c.slug, fields, file, actor); return adminCompany(res, ctx, c, { text: 'Filing added.' }); }
           if (m[4]) { store.deleteItem(c.slug, m[2], m[3], actor); return adminCompany(res, ctx, c, { text: 'Entry removed.' }); }
           store.saveItem(c.slug, m[2], m[3], fields, actor); return adminCompany(res, ctx, c, { text: 'Saved.' });
-        } catch (e) { if (e.status !== 400) throw e; return adminCompany(res, ctx, c, { error: true, text: e.message }); }
+        } catch (e) { if (e.status !== 400) throw e; return adminCompany(res, ctx, store.company(c.slug)||c, { error: true, text: e.message }); }
       }
     }
     m = /^\/admin\/filing\/([a-f0-9]{24})\/delete$/.exec(p);

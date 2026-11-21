@@ -1,9 +1,11 @@
+const { boardLabel } = require('./people-public');
 // Data layer for the staff portal: people (employees + system accounts), passwords,
 // email generation and access settings. Everything is kept in JSON files in DATA_DIR.
 
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const badges = require("./badges");
 
 const COMPANIES = [
   "HN Group",
@@ -84,13 +86,34 @@ function writeJson(file, data) {
   fs.renameSync(tmp, file);
 }
 
+function ensureEmployeeNumbers() {
+  if (!people.some(p => !p.system && !p.employeeNumber)) return false;
+  // Adopt the latest issued badge number once, then retain this identity through all reissues.
+  const registerFile = path.join(dataDir, 'staff-badges.json');
+  const issues = fs.existsSync(registerFile) ? JSON.parse(fs.readFileSync(registerFile, 'utf8')).issues || [] : [];
+  const used = new Set(people.filter(p => p.employeeNumber).map(p => p.employeeNumber));
+  let changed = false;
+  for (const p of people) {
+    if (p.system || p.employeeNumber) continue;
+    const previous = issues.find(b => b.personId === p.id && b.status === 'current') || issues.find(b => b.personId === p.id);
+    let number = previous && previous.number;
+    if (!number || used.has(number)) do { number = 'HN-' + crypto.randomBytes(5).toString('hex').toUpperCase(); } while (used.has(number));
+    p.employeeNumber = number;used.add(number);changed = true;
+  }
+  return changed;
+}
 function savePeople() {
+  ensureEmployeeNumbers();
   writeJson(peopleFile, people);
   saveLogins();
+  // Staff changes commit independently; a temporarily unavailable photo is retried on badge access.
+  try { badges.sync(); } catch (error) { console.error("Staff badge issuance deferred:", error.message); }
 }
 
 function init(dir) {
+  badges.reset();
   dataDir = dir;
+  require("./position-transaction").recover(dataDir);
   peopleFile = path.join(dataDir, "people.json");
   settingsFile = path.join(dataDir, "settings.json");
   auditFile = path.join(dataDir, "audit.log");
@@ -167,6 +190,30 @@ function init(dir) {
     settings.positionReportsSeeded = true;
     fillReports = true;
   }
+  if (!settings.badgesPermissionAdded) {
+    for (const role of settings.roles) if (role.permissions.includes("staff.manage") || role.name.toLowerCase() === "super admin") {
+      if (!role.permissions.includes("badges.manage")) role.permissions.push("badges.manage");
+    }
+    settings.badgesPermissionAdded = true;
+  }
+  if(!settings.networkBoardPositions20261117){
+    settings.positions ||= {};settings.positions['Horizon Network']=['Board Chairman','Board Director','Board Member',...(settings.positions['Horizon Network']||[]).filter(t=>!['Board Chairman','Board Director','Board Member'].includes(t))];
+    settings.networkBoardPositions20261117=true;
+  }
+  if (!settings.collectiveBoards20261117) {
+    settings.positionReports = settings.positionReports || {};
+    for (const [company,title] of [['HN Group','Board Chairman'],['Horizon Network','President'],['Horizon Network','Board Chairman']]) {
+      const boardCompany=company==='Horizon Network'&&title==='Board Chairman'?'HN Group':company;
+      const target={company:boardCompany,title:'Board of '+boardCompany,kind:'board'};
+      (settings.positionReports[company] ||= {})[title]=target;
+      for (const p of people) {
+        if(p.company===company&&sameTitle(p.jobTitle,title))p.supervisorPosition={...target};
+        for(const r of p.otherRoles||[])if(r.company===company&&sameTitle(r.jobTitle,title))r.supervisorPosition={...target};
+      }
+    }
+    settings.collectiveBoards20261117=true;
+    writeJson(peopleFile,people);
+  }
   writeJson(settingsFile, settings);
   loadLogins();
   // Once: roles with no supervisor at all get their position's usual one; anything set by hand stays.
@@ -178,6 +225,8 @@ function init(dir) {
     for (const r of p.otherRoles || []) fill(r, r.company, r.jobTitle || p.jobTitle);
   }
   if (resolveSupervisors() || filled) savePeople();
+  if (ensureEmployeeNumbers()) writeJson(peopleFile, people);
+  badges.init(dataDir, { employees, avatarFile });
 }
 
 // ---------- Positions (the user's request, 7 November 2026) ----------
@@ -202,7 +251,7 @@ function positionReports() {
     out[c] = {};
     for (const t of (settings.positions || {})[c] || []) {
       const own = all[c] || {}, key = Object.keys(own).find((k) => sameTitle(k, t));
-      out[c][t] = key && own[key] ? { company: own[key].company, title: own[key].title } : null;
+      out[c][t] = key && own[key] ? cleanPosition(own[key]) : null;
     }
   }
   return out;
@@ -216,7 +265,7 @@ function setPositionReport(company, title, to) {
   const t = list.find((x) => sameTitle(x, title));
   if (!t) throw new ValidationError("That position no longer exists.");
   const target = to ? cleanPosition(to) : null;
-  if (to && (!target || !((settings.positions || {})[target.company] || []).some((x) => sameTitle(x, target.title)))) throw new ValidationError("Choose one of the positions.");
+  if (to && (!target || (target.kind !== "board" && !((settings.positions || {})[target.company] || []).some((x) => sameTitle(x, target.title))))) throw new ValidationError("Choose one of the positions.");
   if (target && target.company === company && sameTitle(target.title, t)) throw new ValidationError("A position can't report to itself.");
   // Never a loop of positions reporting to each other.
   for (let cur = target, hops = 0; cur && hops < 100; cur = reportsToOf(cur.company, cur.title), hops++) {
@@ -242,7 +291,7 @@ const sameTitle = (a, b) => String(a || "").trim().toLowerCase() === String(b ||
 function holdersOf(company, title) {
   const main = [], other = [];
   for (const p of people) {
-    if (p.system) continue;
+    if (p.system || p.offboardedAt) continue;
     if (p.company === company && sameTitle(p.jobTitle, title)) main.push(p);
     else if ((p.otherRoles || []).some((r) => r.company === company && sameTitle(r.jobTitle || p.jobTitle, title))) other.push(p);
   }
@@ -253,7 +302,8 @@ function holdersOf(company, title) {
 function cleanPosition(v) {
   if (!v || typeof v !== "object") return null;
   const company = str(v.company, 60), title = str(v.title, 100);
-  return COMPANIES.includes(company) && title ? { company, title } : null;
+  if(v.kind === "board" && ["HN Group","Horizon Network"].includes(company) && title === "Board of " + company) return {company,title,kind:"board"};
+  return COMPANIES.includes(company) && title && !v.kind ? { company, title } : null;
 }
 
 function addPosition(company, title, reportsTo) {
@@ -266,6 +316,46 @@ function addPosition(company, title, reportsTo) {
   list.push(t);
   writeJson(settingsFile, settings);
   if (reportsTo) setPositionReport(c, t, reportsTo);
+  return positions();
+}
+
+function renamePosition(company, title, newTitle, actor) {
+  if (!COMPANIES.includes(company)) throw new ValidationError("Choose a company.");
+  const list = (settings.positions || {})[company] || [], index = list.findIndex(t => sameTitle(t, title));
+  if (index < 0) throw new ValidationError("That position no longer exists. Refresh the list and try again.");
+  if (typeof newTitle !== "string" || !newTitle.trim() || newTitle.trim().length > 100 || /[\x00-\x1f]/.test(newTitle)) throw new ValidationError("Use a position name between 1 and 100 characters.");
+  const name = newTitle.trim().replace(/\s+/g, " "), previous = list[index];
+  if (list.some((t,i) => i !== index && sameTitle(t,name))) throw new ValidationError("That company already has a position with this name.");
+  if (sameTitle(name,"Board of "+company) || sameTitle(name,boardLabel(company))) throw new ValidationError("That name is reserved for the collective board.");
+  if (name === previous) return positions();
+  const nextSettings = JSON.parse(JSON.stringify(settings)), nextPeople = JSON.parse(JSON.stringify(people));
+  nextSettings.positions[company][index] = name;
+  const remap = target => { if(target && target.kind !== "board" && target.company === company && sameTitle(target.title,previous)) target.title = name; };
+  const reports = nextSettings.positionReports || {};
+  for (const co of Object.keys(reports)) for (const t of Object.keys(reports[co])) {
+    const value = reports[co][t]; remap(value);
+    if(co === company && sameTitle(t,previous)) { delete reports[co][t]; reports[co][name] = value; }
+  }
+  for (const p of nextPeople) {
+    if(p.system || p.offboardedAt) continue;
+    const before = JSON.stringify(p), mainTitle = p.jobTitle;
+    if(p.company === company && sameTitle(mainTitle,previous)) p.jobTitle = name;
+    remap(p.supervisorPosition);
+    for (const role of p.otherRoles || []) {
+      const effective = role.jobTitle || mainTitle;
+      if(role.company === company && sameTitle(effective,previous)) role.jobTitle = name;
+      else if(!role.jobTitle && p.jobTitle !== mainTitle) role.jobTitle = mainTitle;
+      remap(role.supervisorPosition);
+    }
+    if(JSON.stringify(p) !== before) p.updatedAt = new Date().toISOString();
+  }
+  const jobPlan = require("./jobdescriptions").positionRenamePlan(dataDir,company,previous,name,actor);
+  const changes = [{name:"settings.json",value:nextSettings},{name:"people.json",value:nextPeople}];
+  if(jobPlan) changes.push({name:"job-descriptions.json",value:jobPlan.value});
+  require("./position-transaction").commitFiles(dataDir,changes);
+  settings = nextSettings;
+  for(let i=0;i<people.length;i++)Object.assign(people[i],nextPeople[i]);
+  if(jobPlan) jobPlan.apply();
   return positions();
 }
 
@@ -289,9 +379,9 @@ function resolveSupervisors() {
   let changed = false;
   // Never a loop: someone can't end up reporting (through others) to themselves.
   const leadsTo = (from, self) => { for (let cur = from, hops = 0; cur && hops < 200; cur = cur.supervisorId ? people.find((x) => x.id === cur.supervisorId) : null, hops++) if (cur.id === self.id) return true; return false; };
-  const pick = (pos, self) => { if (!pos) return null; const h = holdersOf(pos.company, pos.title).find((x) => x.id !== self.id && !leadsTo(x, self)); return h ? h.id : null; };
+  const pick = (pos, self) => { if (!pos || pos.kind === "board") return null; const h = holdersOf(pos.company, pos.title).find((x) => x.id !== self.id && !leadsTo(x, self)); return h ? h.id : null; };
   for (const p of people) {
-    if (p.system) continue;
+    if (p.system || p.offboardedAt) continue;
     if (p.supervisorPosition) {
       const id = pick(p.supervisorPosition, p), company = id ? p.supervisorPosition.company : null;
       if (p.supervisorId !== id || (p.supervisorCompany || null) !== company) { p.supervisorId = id; p.supervisorCompany = company; changed = true; }
@@ -308,6 +398,7 @@ function resolveSupervisors() {
 // ---------- Roles & permissions ----------
 
 const PERMISSIONS = [
+  { key: "badges.manage", name: "Manage staff badges", description: "View every staff badge and reissue individual, selected or all badges." },
   { key: "staff.manage", name: "Manage staff", description: "Add, edit and remove employees, and manage their logins." },
   { key: "access.manage", name: "Manage roles", description: "Create roles and choose who has them." },
   { key: "announcements.manage", name: "Post announcements", description: "Post, edit and delete announcements." },
@@ -317,7 +408,10 @@ const PERMISSIONS = [
   { key: "onboarding.manage", name: "Run onboarding", description: "Start onboarding checklists and edit the templates." },
   { key: "leave.manage", name: "Manage leave", description: "Approve anyone's leave, see all absence and set holiday allowances." },
   { key: "rotas.manage", name: "Manage rotas & timesheets", description: "Plan shifts on the rota and approve anyone's timesheets." },
-  { key: "helpdesk.manage", name: "Handle IT tickets", description: "See every IT Helpdesk ticket, reply, assign and change its status." },
+  { key: "helpdesk.manage", name: "Handle Internal Technology requests", description: "Read and handle Internal Technology requests and existing IT tickets across companies. Does not grant access to other teams' private requests." },
+  { key: "requests.leadership", name: "Handle Leadership requests", description: "Read, reply to and assign Leadership Team requests across companies." },
+  { key: "requests.hr", name: "Handle Human Resources requests", description: "Read, reply to and assign private Human Resources Team requests across companies. Independent of staff and leave management." },
+  { key: "requests.compliance", name: "Handle Compliance requests", description: "Read, reply to and assign private Compliance Team requests across companies." },
   { key: "payroll.manage", name: "Run payroll & finance", description: "See pay details, generate and issue payslips, and manage company funds, expenses and invoices. Only people who already have it can give it out." },
   { key: "cases.manage", name: "HR cases", description: "See and record disciplinary, grievance and capability cases. These are private to people with this permission." },
   { key: "jobdescriptions.manage", name: "Manage job descriptions", description: "Post, edit and delete job descriptions for roles (People → Job descriptions). Everyone can read them." },
@@ -334,7 +428,7 @@ const PAYROLL = "payroll.manage";
 // Permissions only someone who already has them can hand out.
 const STORAGE_ACCESS = "storage.access";
 const CONTRACTS_MANAGE = "contracts.manage";
-const GUARDED_PERMISSIONS = [SYSTEM_ADMIN, PAYROLL, STORAGE_ACCESS, CONTRACTS_MANAGE];
+const GUARDED_PERMISSIONS = [SYSTEM_ADMIN, PAYROLL, STORAGE_ACCESS, CONTRACTS_MANAGE, "requests.leadership", "requests.hr", "requests.compliance"];
 const PERMISSION_KEYS = PERMISSIONS.map((p) => p.key);
 
 // First run with roles: create sensible defaults, and give anyone who had access through their
@@ -631,9 +725,22 @@ function findSystemAccount(username) {
 }
 
 function employees() {
-  return people.filter((p) => !p.system);
+  return people.filter((p) => !p.system && !p.offboardedAt);
 }
 
+function offboardedEmployees(){return people.filter(p=>!p.system&&p.offboardedAt);}
+function offboardEmployee(person,actor){
+ if(person.system||hasOwnerAccess(person))throw new ValidationError("The owner cannot be offboarded.");
+ if(person.offboardedAt)return person;
+ person.offboardedAt=new Date().toISOString();person.offboardedBy=String(actor||'');
+ for(const login of logins)if(login.primaryFor===person.id&&login.account)login.account.enabled=false;
+ resolveSupervisors();savePeople();return person;
+}
+function reorderPositions(company,titles){
+ const existing=(settings.positions||{})[company];
+ if(!existing||!Array.isArray(titles)||titles.length!==existing.length||new Set(titles).size!==titles.length||titles.some(t=>!existing.includes(t)))throw new ValidationError("Send every current position exactly once.");
+ settings.positions[company]=titles.slice();writeJson(settingsFile,settings);return positions();
+}
 function cleanContactEmail(value) {
   const e = String(value || "").trim().toLowerCase();
   if (!e) return "";
@@ -719,12 +826,22 @@ function discordIds(pending) {
   if (pending) return [...new Set(people.filter((p) => p.discord && p.discord.id && !p.discord.username).map((p) => p.discord.id))];
   return [...new Set([...logins.filter((l) => l.account && l.account.discord).map((l) => l.account.discord.id), ...people.filter((p) => p.discord && p.discord.id).map((p) => p.discord.id)])];
 }
+// Minimal directory for the public Discord staff-list command; never expose contacts or account credentials.
+function discordStaffList() {
+  return employees().map((p) => ({
+    name: p.displayName || [p.firstName, p.lastName].filter(Boolean).join(' ') || 'Unnamed staff member',
+    discordId: DISCORD_ID.test(String(p.discord?.id || '')) ? String(p.discord.id) : null,
+    roles: rolesOf(p).map((r) => ({ company: r.company, title: r.jobTitle, department: r.department || '',
+      supervisor: r.supervisor ? { name: r.supervisor.displayName, title: r.supervisor.jobTitle } : null })),
+    access: accessOf(p),
+  })).sort((a, b) => a.name.localeCompare(b.name, 'en'));
+}
 // Each staff record's Discord ID with its job titles at every company (main role and other roles), for HN Group Auth's
 // bot to keep Discord roles in step with positions (the user's request, 6 November 2026). System accounts are left out.
 // Records sharing a Discord ID are merged, so that member gets the roles of every position on all of them.
 function discordPositions() {
   const byId = new Map();
-  for (const p of people.filter((x) => !x.system && x.discord && DISCORD_ID.test(String(x.discord.id)))) {
+  for (const p of employees().filter((x) => x.discord && DISCORD_ID.test(String(x.discord.id)))) {
     const id = String(p.discord.id), titles = byId.get(id) || [];
     for (const t of [{ company: p.company || "", title: p.jobTitle || "" }, ...(p.otherRoles || []).map((r) => ({ company: r.company || "", title: r.jobTitle || "" }))]) {
       if (!t.company || !t.title) continue;
@@ -796,12 +913,12 @@ function saveDiscordPhoto(person, buffer, hash) {
   savePeople();
 }
 
-function findByLogin(login) {
+function findByLogin(login, includeLocked = false) {
   const name = String(login || "").trim().toLowerCase();
   if (!name) return null;
-  const builtIn = people.find((p) => p.system && p.account && p.account.enabled && String(p.username || "").toLowerCase() === name);
+  const builtIn = people.find((p) => p.system && p.account && (p.account.enabled || (includeLocked && p.account.locked)) && String(p.username || "").toLowerCase() === name);
   if (builtIn) return builtIn;
-  const active = logins.filter((l) => l.account && l.account.enabled);
+  const active = logins.filter((l) => l.account && (l.account.enabled || (includeLocked && l.account.locked)));
   const l = active.find((x) => String(x.username || "").toLowerCase() === name) ||
     active.find((x) => x.matchEmails && x.primaryFor && ((getRecord(x.primaryFor) || {}).emails || []).some((e) => e.address === name));
   return l ? viewOf(l, defaultProfile(l)) : null;
@@ -860,9 +977,26 @@ function avatarUrl(person) {
   return person.avatar ? `/api/avatars/${person.id}?v=${person.avatar.version}` : null;
 }
 
+// Signature choices use real appointments, rather than the single-company session view.
+// Only company profiles available to this sign-in account are included for the current person.
+function signatureProfile(person) {
+  const record = person.profile ? getRecord(person.profile.personId) : getRecord(person.id);
+  if(!record || record.system || record.offboardedAt) return publicView(person);
+  const allowed = person.__login ? new Set(loginProfiles(person.__login).filter(p=>p.personId===record.id).map(p=>p.company)) : new Set(companiesOf(record));
+  const appointments = rolesOf(record).filter(r=>allowed.has(r.company)).sort((a,b)=>(a.company===person.company?0:1)-(b.company===person.company?0:1));
+  if(!appointments.length) return publicView(person);
+  const result = publicView(person);
+  result.company = appointments[0].company;
+  result.jobTitle = appointments[0].jobTitle;
+  result.otherRoles = appointments.slice(1).map(r=>({company:r.company,jobTitle:r.jobTitle,department:r.department,temporary:r.temporary}));
+  return result;
+}
+
 function publicView(p) {
   return {
     id: p.id,
+    employeeNumber: p.employeeNumber || null,
+    offboardedAt: p.offboardedAt || null,
     firstName: p.firstName,
     lastName: p.lastName,
     displayName: p.displayName,
@@ -925,7 +1059,7 @@ function manageView(p) {
     access: accessOf(p),
     account: p.account
       ? {
-          enabled: p.account.enabled,
+          enabled: p.account.enabled, locked: !!p.account.locked,
           hasCode: hasCode(p),
           passwordTemporary: p.account.passwordTemporary,
           createdAt: p.account.createdAt,
@@ -939,11 +1073,11 @@ function manageView(p) {
 // Extra companies fall back to the main job title and supervisor when theirs are left blank.
 function rolesOf(p) {
   // A supervisor is shown in their role at the same company, or their main role if they don't work there.
-  const brief = (id, company, chosen) => {
+  const brief = (id, company, chosen, position) => {
     const s = id ? getPerson(id) : null;
     if (!s) return null;
     if (chosen && supervisorCompanyFor(s, chosen)) company = chosen;
-    const other = s.company === company ? null : (s.otherRoles || []).find((r) => r.company === company);
+    const other = position ? (s.otherRoles || []).find(r => r.company === company && sameTitle(r.jobTitle || s.jobTitle, position.title)) : s.company === company ? null : (s.otherRoles || []).find((r) => r.company === company);
     const sameCompany = s.company === company || !!other;
     return {
       id: s.id,
@@ -953,12 +1087,13 @@ function rolesOf(p) {
       company: sameCompany ? company : s.company,
     };
   };
-  return [{ company: p.company, jobTitle: p.jobTitle, department: p.department || "", supervisor: brief(p.supervisorId, p.company, p.supervisorCompany), main: true }].concat(
+  return [{ company: p.company, jobTitle: p.jobTitle, department: p.department || "", supervisor: p.supervisorPosition?.kind==="board"?{displayName:boardLabel(p.supervisorPosition.company),jobTitle:"Collective board",company:p.supervisorPosition.company}:brief(p.supervisorId, p.company, p.supervisorCompany, p.supervisorPosition), temporary: !!p.temporary, main: true }].concat(
     (p.otherRoles || []).map((r) => ({
       company: r.company,
       jobTitle: r.jobTitle || p.jobTitle,
       department: r.department || p.department || "",
-      supervisor: r.supervisorId ? brief(r.supervisorId, r.company, r.supervisorCompany) : brief(p.supervisorId, r.company),
+      supervisor: r.supervisorPosition?.kind === "board" ? {displayName:boardLabel(r.supervisorPosition.company),jobTitle:"Collective board",company:r.supervisorPosition.company} : r.supervisorId ? brief(r.supervisorId, r.company, r.supervisorCompany, r.supervisorPosition) : brief(p.supervisorId, r.company),
+      temporary: !!r.temporary,
       main: false,
     }))
   );
@@ -971,6 +1106,7 @@ function meView(p) {
     ...publicView(p),
     // The sign-in account in use and the profile it's acting as (each company on a staff record is a profile).
     accountId: login ? login.id : null,
+    mainCompany: (getPerson(p.id) || p).company || "",
     profileCompany: p.profile ? p.profile.company : null,
     roles: rolesOf(p),
     theme: themeOf(p) === "dusk" ? "lavender-dusk" : themeOf(p),
@@ -1093,9 +1229,14 @@ function saveEmployee(input, existing) {
   const company = str(input.company, 60);
   const timezone = TIMEZONES.has(input.timezone) ? input.timezone : DEFAULT_TIMEZONE;
   const otherRoles = [];
-  for (const r of Array.isArray(input.otherRoles) ? input.otherRoles.slice(0, COMPANIES.length) : []) {
+  if (Array.isArray(input.otherRoles) && input.otherRoles.length > 30) errors.push("A staff record can have at most 30 additional positions.");
+  for (const r of Array.isArray(input.otherRoles) ? input.otherRoles.slice(0, 30) : []) {
     const roleCompany = str(r && r.company, 60);
-    if (!COMPANIES.includes(roleCompany) || roleCompany === company || otherRoles.some((x) => x.company === roleCompany)) continue;
+    const roleTitle = str(r && r.jobTitle, 100) || jobTitle;
+    if (!COMPANIES.includes(roleCompany)) { errors.push("Choose a company for each additional position."); continue; }
+    if ((roleCompany === company && sameTitle(roleTitle, jobTitle)) || otherRoles.some(x => x.company === roleCompany && sameTitle(x.jobTitle, roleTitle))) {
+      errors.push("Each position at the same company must be different."); continue;
+    }
     const rolePosition = r && r.supervisorPosition !== undefined ? cleanPosition(r.supervisorPosition) : undefined;
     let roleSupervisor = rolePosition !== undefined ? null : (r && r.supervisorId) || null;
     let roleSupervisorCompany = null;
@@ -1106,7 +1247,7 @@ function saveEmployee(input, existing) {
         roleSupervisor = null;
       } else roleSupervisorCompany = supervisorCompanyFor(sup, r.supervisorCompany);
     }
-    const role = { company: roleCompany, jobTitle: str(r.jobTitle, 100), department: str(r.department, 80), supervisorId: roleSupervisor, supervisorCompany: roleSupervisorCompany };
+    const role = { company: roleCompany, jobTitle: roleTitle, temporary: r.temporary === true, department: str(r.department, 80), supervisorId: roleSupervisor, supervisorCompany: roleSupervisorCompany };
     // Supervisor set as a position: filled in from whoever holds it (resolveSupervisors).
     if (rolePosition) role.supervisorPosition = rolePosition;
     otherRoles.push(role);
@@ -1249,13 +1390,13 @@ function roleAt(rec, company) {
   return { company, jobTitle: r.jobTitle || rec.jobTitle || "", supervisorId: r.supervisorId || rec.supervisorId || null, supervisorCompany: r.supervisorCompany || null };
 }
 function profileInfo(rec, company) {
-  return { key: profileKey(rec.id, company), personId: rec.id, company, profileId: profileIdOf(rec, company), displayName: rec.displayName, jobTitle: roleAt(rec, company).jobTitle, avatarUrl: avatarUrl(rec), temporary: !!rec.temporary };
+  return { key: profileKey(rec.id, company), personId: rec.id, company, profileId: profileIdOf(rec, company), displayName: rec.displayName, jobTitle: [company === rec.company ? rec.jobTitle : null, ...(rec.otherRoles || []).filter(r => r.company === company).map(r => r.jobTitle || rec.jobTitle)].filter(Boolean).join(" / "), avatarUrl: avatarUrl(rec), temporary: !!rec.temporary };
 }
 function loginProfiles(l) {
   const out = [], seen = new Set();
   const add = (personId, company) => {
     const rec = getRecord(personId);
-    if (!rec || !companiesOf(rec).includes(company)) return;
+    if (!rec || rec.offboardedAt || !companiesOf(rec).includes(company)) return;
     const info = profileInfo(rec, company);
     if (seen.has(info.key)) return;
     seen.add(info.key); out.push(info);
@@ -1389,7 +1530,7 @@ function loginView(l) {
     profiles: list.map((p) => ({ ...p, default: !!def && p.key === def.key, automatic: !!rec && p.personId === rec.id })),
     guest: l.guest ? { sites: l.guest.sites.slice() } : null,
     roleIds: l.roleIds || [], ownerAccess: hasOwnerAccess({ __login: l, account: l.account }), systemOwner: isOwner({ __login: l }), owner: l.owner || false,
-    account: l.account ? { enabled: !!l.account.enabled, hasCode: !!l.account.code, passwordTemporary: !!l.account.passwordTemporary, lastLoginAt: l.account.lastLoginAt || null, google: l.account.google ? l.account.google.email : null } : null,
+    account: l.account ? { enabled: !!l.account.enabled, locked: !!l.account.locked, lockReason: l.account.locked?.reason || null, failedSignIns: l.account.failedSignIns || 0, hasCode: !!l.account.code, passwordTemporary: !!l.account.passwordTemporary, lastLoginAt: l.account.lastLoginAt || null, google: l.account.google ? l.account.google.email : null } : null,
     createdAt: l.createdAt,
   };
 }
@@ -1431,8 +1572,8 @@ function createLogin(input) {
 // the websites and apps ticked for it; HN Group Auth checks this as well as each website's own rules. The ids are
 // HN Group Auth's client ids (auth-site/server.js CLIENTS; the test checks they exist there).
 const GUEST_SITES = [
-  ["hr", "HN Group HR"], ["portal", "Staff portal"], ["accounts", "HN Account"], ["docs", "HN Group Docs"], ["contracts", "HN Group Contracts"],
-  ["devices", "HN Group Devices"], ["vpn", "HN Group VPN"], ["browser", "HN Browser"], ["app-manager", "HN Group App Manager"],
+  ["it", "HN Group IT"], ["finance", "HN Group Finance"], ["hr", "HN Group HR"], ["portal", "Staff portal"], ["accounts", "HN Account"], ["docs", "HN Group Docs"], ["contracts", "HN Group Contracts"],
+  ["devices", "HN Group Devices"], ["vpn", "HN Secure Access Terminal"], ["browser", "HN Browser"], ["app-manager", "HN Group App Manager"],
   ["wiki", "HN Group Wiki (editing)"], ["branding", "Brand centre"], ["private-companies", "Private company register"],
   ["private-wiki", "Private wiki"], ["news", "HN Group News"], ["investors", "HN Group Investors"], ["mail", "HN Mail"],
 ].map(([id, name]) => ({ id, name }));
@@ -1543,7 +1684,8 @@ function issueTemporaryPassword(person) {
   const temporaryPassword = generateTemporaryPassword();
   const now = new Date().toISOString();
   person.account = {
-    enabled: true,
+    enabled: person.account?.locked ? false : true,
+    ...(person.account?.locked ? {locked:person.account.locked,failedSignIns:person.account.failedSignIns || 0} : {}),
     mustChangePassword: false,
     createdAt: (person.account && person.account.createdAt) || now,
     lastLoginAt: (person.account && person.account.lastLoginAt) || null,
@@ -1555,7 +1697,24 @@ function issueTemporaryPassword(person) {
   return { username: loginName(person), temporaryPassword };
 }
 
+// Locks are account-wide, persistent, and preserve a previously disabled state.
+function setAccountLocked(person, locked, actor, reason = 'manual') {
+  const a=person.account;if(!a)throw new ValidationError('This account has no sign-in details.');
+  if(locked){if(!a.locked)a.locked={at:new Date().toISOString(),by:actor || 'System',reason,wasEnabled:a.enabled !== false};a.enabled=false;}
+  else {if(a.locked){a.enabled=a.locked.wasEnabled !== false;delete a.locked;}a.failedSignIns=0;}
+  savePeople();
+}
+function noteAccountFailure(person) {
+  if(!person?.account || person.account.locked || !person.account.enabled)return !!person?.account?.locked;
+  person.account.failedSignIns=(Number(person.account.failedSignIns)||0)+1;
+  if(person.account.failedSignIns>=2)setAccountLocked(person,true,'System','failed-sign-ins');else savePeople();
+  return !!person.account.locked;
+}
+function clearAccountFailures(person){if(person?.account?.failedSignIns && !person.account.locked){person.account.failedSignIns=0;savePeople();}}
 function setAccountEnabled(person, enabled) {
+  const record = person.__login && person.__login.primaryFor ? people.find(p=>p.id===person.__login.primaryFor) : person;
+  if (enabled && record && record.offboardedAt) throw new ValidationError("Offboarded staff cannot be enabled for sign-in.");
+  if (person.account.locked) throw new ValidationError("Unlock this account before changing sign-in access.");
   person.account.enabled = !!enabled;
   savePeople();
 }
@@ -1568,6 +1727,7 @@ function setHomeLayout(person, input) {
 }
 
 function recordLogin(person) {
+  if(!person.account.locked)person.account.failedSignIns=0;
   person.account.lastLoginAt = new Date().toISOString();
   savePeople();
 }
@@ -1853,7 +2013,7 @@ module.exports = {
   getPerson,
   findSystemAccount,
   savePeople,
-  employees,
+  employees, offboardedEmployees, offboardEmployee, reorderPositions, renamePosition,
   findByLogin,
   findByGoogle,
   findByDiscord,
@@ -1863,6 +2023,7 @@ module.exports = {
   makePermanent,
   makeRecordPermanent,
   discordPositions,
+  discordStaffList,
   missingDiscord,
   setRecordDiscord,
   discordPhotoSync,
@@ -1885,6 +2046,7 @@ module.exports = {
   clearCode,
   canManage,
   publicView,
+  signatureProfile,
   manageView,
   meView,
   resolveEmails,
@@ -1908,6 +2070,7 @@ module.exports = {
   companiesOf,
   profileInfo,
   setAccountEnabled,
+  setAccountLocked, noteAccountFailure, clearAccountFailures,
   recordLogin,
   updateOwnProfile,
   setTheme,

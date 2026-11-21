@@ -142,20 +142,47 @@ test('HN Group Docs: sign-in, storage, files, access, templates, filters, editin
     // Every template for every company, shared with staff.
     const made = [];
     for (const c of catalog.COMPANIES) for (const t of catalog.TEMPLATES) {
+      if (t.company && t.company !== c.id) continue;
       r = await call('/api/documents', { cookie: sam.cookie, json: { company: c.id, template: t.id, title: t.name + ' for ' + c.name, sharing: 'staff' } });
       assert.equal(r.status, 201, JSON.stringify(r.body)); made.push(r.body.document);
       assert.equal(r.body.document.sharing, 'staff'); assert.equal(r.body.document.version, 1);
     }
+    const purchase = made.find(d => d.template === 'purchase-statement');
+    assert.equal(purchase.fields.preparedBy, 'Sam Taylor');
+    assert.equal(purchase.fields.currency, 'GBP');
+    assert.equal(purchase.fields.soldBy, '', 'the author is not assumed to be the seller');
+    const transaction = { ...purchase.fields, reference: 'PS-2026-001', item: 'Design assets and server setup',
+      purchasePrice: '125.50', salePrice: '200.00', purchasedFrom: 'Original supplier',
+      soldTo: 'Example Buyer\nExample Company', soldBy: 'Example Seller\nHorizon Development',
+      paymentStatus: 'Part paid', amountPaid: '100.00', balanceDue: '100.00 due 30 November 2026' };
+    r = await call('/api/documents/' + purchase.id, { cookie: sam.cookie, method: 'PUT', json: { version: purchase.version, fields: transaction } });
+    assert.equal(r.status, 200);
+    const savedPurchase = (await call('/api/documents/' + purchase.id, { cookie: sam.cookie })).body.document;
+    assert.deepEqual(savedPurchase.fields, transaction, 'transaction amounts and multiline parties survive saving');
+    r = await call('/api/documents/' + purchase.id + '/pdf', { cookie: sam.cookie });
+    assert.equal(r.status, 200); assert.equal(r.headers.get('content-type'), 'application/pdf');
+    const pdfjs = await require('../contracts-site/lib/stamp').loadPdfjs();
+    const purchasePdf = await pdfjs.getDocument({ data: new Uint8Array(r.body), isEvalSupported: false, verbosity: 0 }).promise;
+    try {
+      let text = '';
+      for (let page = 1; page <= purchasePdf.numPages; page++) {
+        const content = await (await purchasePdf.getPage(page)).getTextContent();
+        text += content.items.map(item => item.str).join(' ') + ' ';
+      }
+      for (const value of ['Original purchase price', '125.50', 'Sold for', '200.00', 'Example Buyer', 'Example Seller', 'Payment and handover']) assert.ok(text.includes(value), value + ' appears in the PDF');
+    } finally { await purchasePdf.destroy(); }
     const directive = made.find(d => d.template === 'executive-directive');
-    assert.equal(directive.fields.authority, 'Article 10 of the Operations Policy');
+    assert.equal(directive.fields.authority, 'Article 1 of the Horizon Network Operations Policy');
     assert.equal(directive.fields.senderName, 'Sam Taylor');
-    assert.equal(directive.fields.signature, 'Sam Taylor');
-    assert.equal(directive.fields.senderRole, 'Head of People');
-    assert.equal(directive.fields.signed, catalog.longDate(new Date()));
-    assert.match(directive.body, /under Article 10 of the Operations Policy/);
+    
+    assert.equal(directive.fields.senderRole, '[Board Chairman / Chief Executive Officer]');
+    assert.equal(directive.fields.signed, '');
+    assert.equal(directive.fields.signature, '');
+    assert.match(directive.fields.reference, /^ED\d{4,}$/);
+    assert.match(directive.body, /under Article 1 of the Horizon Network Operations Policy/);
     r = await call('/api/documents/' + directive.id, { cookie: sam.cookie, method: 'PUT', json: { version: directive.version, fields: { ...directive.fields, authority: 'Article 8' } } });
     assert.equal(r.status, 200);
-    assert.equal(r.body.document.fields.authority, 'Article 10 of the Operations Policy', 'authority stays fixed even for direct API edits');
+    assert.equal(r.body.document.fields.authority, 'Article 1 of the Horizon Network Operations Policy', 'authority stays fixed even for direct API edits');
     assert.equal((await call('/api/documents', { cookie: sam.cookie, json: { company: 'nope', template: 'letter' } })).status, 400);
     assert.equal((await call('/api/documents', { cookie: sam.cookie, json: { company: 'hn-group', template: 'letter' }, origin: 'https://evil.example' })).status, 403, 'changes must come from the site');
     const termination = made.find((d) => d.template === 'termination' && d.company === 'hn-group');

@@ -3,6 +3,7 @@
 // application with the fixed callback https://investors.hngroup.org.uk/auth/callback. Only staff with
 // a role at HN Group (their main role or another one) may sign in, and owner-level accounts, which
 // hold every permission on every website. Auth checks this too; it's checked again here.
+const {chooseOnArrival,arrivalCookie}=require('./profile-gate.cjs');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 
@@ -74,6 +75,7 @@ function loginUrl(back) { return '/auth/login?return=' + encodeURIComponent(safe
 
 // /auth/login, /auth/callback and /auth/logout. Returns true when it handled the request.
 async function handle(req, res, url, showError) {
+  if(await chooseOnArrival(req,res,url,{client:'investors',session:()=>sessions.get(cookie(req,SESSION_COOKIE))?.authSession,backend:AUTH_BACKEND,secretFile:SECRET_FILE,authOrigin:AUTH_ORIGIN,secure:SECURE,stateCookie:STATE_COOKIE,safeNext:safeReturn,eligible:url=>url.pathname.startsWith('/admin')}))return true;
   if (url.pathname === '/auth/login' && req.method === 'GET') {
     const state = crypto.randomBytes(32).toString('hex');
     const back = safeReturn(url.searchParams.get('return'));
@@ -97,7 +99,7 @@ async function handle(req, res, url, showError) {
       const old = cookie(req, SESSION_COOKIE); if (old) sessions.delete(old);
       const token = crypto.randomBytes(32).toString('hex');
       sessions.set(token, { authSession: result.session, user: userView(result.user), checked: Date.now(), csrf: crypto.randomBytes(24).toString('hex'), expires: Math.min(Number(result.expires) || 0, Date.now() + 12 * 3600 * 1000) || Date.now() + 3600 * 1000 });
-      redirect(res, back, [clear, setCookie(SESSION_COOKIE, token)]);
+      redirect(res, back, [clear, arrivalCookie(SECURE), setCookie(SESSION_COOKIE, token)]);
     } catch (e) {
       showError(res, e.status === 403 ? 403 : 503, 'Sign-in failed', e.message, [clear]);
     }

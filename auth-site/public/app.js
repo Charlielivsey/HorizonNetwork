@@ -10,8 +10,10 @@ if (discordReturn) { query.delete('discord'); history.replaceState(null, '', loc
 const client = query.get('client_id'), state = query.get('state');
 // Must match the applications registered in server.js.
 const APPS = {
+  it: {name:'HN Group IT',short:'IT',allowed:u=>!u.standalone,granted:'IT cases, service status and support tools with your existing permissions.',restricted:'A staff profile is required to use IT.'},
+  finance: {name:'HN Group Finance',short:'Finance',allowed:u=>!u.standalone,granted:'View payslips, claim expenses and manage finance with your existing permissions.',restricted:'A staff profile is required to use Finance.'},
   hr: {name:'HN Group HR',short:'HR',allowed:u=>!u.standalone,granted:'Manage your leave and absence.',restricted:'A staff profile is required to use HR.'},
-  browser: {name:'HN Browser',short:'HN Browser',allowed:()=>true,granted:'Your HN account is ready for the browser.',restricted:''},
+  browser: {name:'Compass',short:'Compass',allowed:()=>true,granted:'Your HN account is ready for the browser.',restricted:''},
   media: { name: 'Horizon Media Group administration', short: 'Horizon Media Group', allowed: user => user.statusAdminAllowed, granted: 'You can manage this website.', restricted: 'Only the system owner and Super Admin members can manage this website.' },
   development: { name: 'Horizon Development administration', short: 'Horizon Development', allowed: user => user.statusAdminAllowed, granted: 'You can manage this website.', restricted: 'Only the system owner and Super Admin members can manage this website.' },
   careers: { name: 'HN Group Careers administration', short: 'HN Group Careers', allowed: user => user.statusAdminAllowed, granted: 'You can manage this website.', restricted: 'Only the system owner and Super Admin members can manage this website.' },
@@ -27,9 +29,9 @@ const APPS = {
   branding: { name: 'HN Group brand centre', short: 'the brand centre', allowed: () => true, granted: 'You can use the HN Group brand centre.', restricted: '' },
   accounts: { name: 'HN Account', short: 'HN Account', allowed: () => true, granted: 'You can manage your HN account.', restricted: '' },
   investors: { name: 'HN Group Investors', short: 'the investors website', allowed: user => !!user.ownerAccess || (Array.isArray(user.companies) ? user.companies : [user.company]).includes('HN Group'), granted: 'You can manage investors, valuations and investor news.', restricted: 'Only staff with a role at HN Group can sign in to the investors website.' },
-  vpn: { name: 'HN Group VPN', short: 'the VPN', allowed: () => true, granted: 'You can use the HN Group VPN.', restricted: '' },
+  vpn: { name: 'HN Secure Access Terminal', short: 'the VPN', allowed: () => true, granted: 'You can use the HN Secure Access Terminal.', restricted: '' },
   devices: { name: 'HN Group Devices', short: 'HN Group Devices', allowed: () => true, granted: 'You can add and manage your computers.', restricted: '' },
-  mail: { name: 'HN Mail', short: 'HN Mail', allowed: u => !!(u.google && u.google.email) && !u.impersonated, granted: 'You can open your Gmail in HN Mail.', restricted: 'HN Mail only works with an account that has a Google account linked. Turn on Sign in with Google below first.' },
+  mail: { name: 'HN Mail', short: 'HN Mail', allowed: u => !!(u.google && u.google.email) && !u.impersonated, granted: 'You can open your Gmail in HN Mail.', restricted: 'HN Mail only works with an account that has a Google account linked. Contact IT for linked mailbox access.' },
   echo: { name: 'Echo', short: 'Echo', allowed: u => ['catnap@hngroup.org.uk', 'charlie.livsey@hngroup.org.uk'].includes(String(u.username || '').trim().toLowerCase()) && !u.impersonated, granted: 'You can open your private character library.', restricted: 'Echo is private to its authorised HN Group accounts.' },
   bots: { name: 'HN Group Bots', short: 'HN Group Bots', allowed: u => !!(u.ownerAccess || u.statusAdminAllowed) && !u.impersonated, granted: 'You can manage the Discord Auth bot.', restricted: 'Only owner-level accounts and Super Admin members can manage bots.' },
   'private-companies': { name: 'HN Group Private Company Register', short: 'the private register', allowed: () => true, granted: 'You can read the private register and file changes for companies you manage.', restricted: '' },
@@ -155,7 +157,10 @@ async function account(user) {
   }
 }
 async function busy(button, action, label) {
-  if (working || transitioning) return;
+  if (working) return;
+  // A visible button remains actionable while its panel finishes entering.
+  while (transitioning) await new Promise(resolve => requestAnimationFrame(resolve));
+  if (working) return;
   working = true; const controls = [...document.querySelectorAll('.card button')];
   const verifyingPin = button === $('pin').querySelector('[type=submit]');
   if (verifyingPin) $('code').readOnly = true;
@@ -237,63 +242,17 @@ async function connectToStatus() {
   location.replace(result.redirect);
 }
 $('continue').onclick = () => busy($('continue'), connectToStatus, 'Connecting…');
-// ---------- Sign in with Google (optional for each person; no password or PIN, and the account is remembered) ----------
-let googleEnabled = false;
-const googleReady = api('google').then(v => { googleEnabled = !!v.enabled && !pinApp; $('google-login').hidden = !googleEnabled; $('google-or').hidden = !(googleEnabled || discordEnabled); $('google-resume').hidden = !googleEnabled || !resumeMode; }).catch(() => {});
-async function startGoogle(mode) {
-  const result = await api('google/start', { mode, next: location.pathname + location.search });
-  location.assign(result.url);
-  await new Promise(() => {}); // Leaving for Google.
+// Username/password and PIN are the only sign-in methods. Retired provider controls stay hidden.
+const googleEnabled = false, discordEnabled = false;
+const googleReady = Promise.resolve(), discordReady = Promise.resolve();
+function googleOnly() {
+  $('pin').classList.remove('google-only');
+  for (const id of ['google-login', 'discord-login', 'google-or', 'google-resume', 'discord-resume', 'google-row', 'discord-row']) $(id).hidden = true;
 }
-// An account with Sign in with Google turned on gets only Continue with Google on this step: no PIN (the user's request),
-// plus Continue with Discord when its Discord is connected (the user's request, 30 October 2026). An account remembered
-// from a Google or Discord sign-in that has no PIN gets the same.
-function googleOnly(on, { google = true, discord = false } = {}) {
-  $('pin').classList.toggle('google-only', on);
-  if (on) { $('google-resume').hidden = !(google && googleEnabled); $('discord-resume').hidden = !discord; }
-  $('google-resume').querySelector('span').textContent = on ? 'Continue with Google' : 'Use Google';
-  $('discord-resume').querySelector('span').textContent = on ? 'Continue with Discord' : 'Use Discord';
-}
-$('google-login').onclick = () => busy($('google-login'), () => startGoogle('login'), 'Opening Google…');
-$('google-resume').onclick = () => busy($('google-resume'), () => startGoogle('login'), 'Opening Google…');
-// The signed-in panel: turn Sign in with Google on (a trip to Google) or off.
-function showGoogle(user) {
-  $('google-row').hidden = !googleEnabled && !user.google;
-  $('google-status').textContent = user.google ? 'On for ' + user.google.email : 'Use Google instead of your password and PIN.';
-  $('google-toggle').textContent = user.google ? 'Turn off' : 'Turn on';
-  $('google-toggle').classList.toggle('off', !!user.google);
-  $('google-toggle').onclick = () => busy($('google-toggle'), async () => {
-    if (!user.google) return startGoogle('link');
-    const data = await api('google/unlink', {}); showGoogle(data.user); message('Sign in with Google is off.', true);
-  });
-}
-// Continue with Discord (discord.js on the server): signs straight in once someone has connected Discord.
-let discordEnabled = false;
-const discordReady = api('discord').then(v => { discordEnabled = !!v.enabled && !pinApp; $('discord-login').hidden = !discordEnabled; $('google-or').hidden = !(googleEnabled || discordEnabled); $('discord-resume').hidden = !discordEnabled || !resumeMode; }).catch(() => {});
-async function startDiscord(mode) {
-  const result = await api('discord/start', { mode, next: location.pathname + location.search });
-  location.href = result.url;
-}
-$('discord-login').onclick = () => busy($('discord-login'), () => startDiscord('login'), 'Opening Discord…');
-$('discord-resume').onclick = () => busy($('discord-resume'), () => startDiscord('login'), 'Opening Discord…');
-function showDiscord(user) {
-  $('discord-row').hidden = !discordEnabled && !user.discord;
-  $('discord-status').textContent = user.discord ? 'Connected to @' + user.discord.username : 'Use the Discord account on your staff profile.';
-  $('discord-toggle').textContent = user.discord ? 'Disconnect' : 'Connect';
-  $('discord-toggle').classList.toggle('off', !!user.discord);
-  $('discord-toggle').onclick = () => busy($('discord-toggle'), async () => {
-    if (!user.discord) return startDiscord('link');
-    const data = await api('discord/unlink', {}); showDiscord(data.user); message('Continue with Discord is off.', true);
-  });
-}
-async function discordResult() {
-  if (!discordReturn) return null;
-  try { return await api('discord/result', {}); } catch (e) { return { error: e.message }; }
-}
-async function googleResult() {
-  if (!googleReturn) return null;
-  try { return await api('google/result', {}); } catch (e) { return { error: e.message }; }
-}
+function showGoogle() { $('google-row').hidden = true; }
+function showDiscord() { $('discord-row').hidden = true; }
+async function discordResult() { return null; }
+async function googleResult() { return null; }
 function maybeVerifyPin() {
   if (!pendingPinSubmit || working || transitioning || $('pin').hidden || $('code').value.length !== 6) return;
   pendingPinSubmit = false; $('pin').requestSubmit($('pin').querySelector('[type=submit]'));

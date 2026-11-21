@@ -366,7 +366,7 @@
     const groups = S.filter.company ? [company(S.filter.company)] : S.companies;
     $('template-list').replaceChildren(...groups.map((c) => el('section', { class: 'template-group' },
       el('h2', {}, el('img', { src: logo(c), alt: '' }), c.name),
-      el('div', { class: 'grid' }, ...S.templates.map((t) => el('button', { type: 'button', class: 'doc-card template-card', onclick: () => openNew({ company: c.id, template: t.id, chosen: true }) },
+      el('div', { class: 'grid' }, ...S.templates.filter(t => !t.company || t.company === c.id).map((t) => el('button', { type: 'button', class: 'doc-card template-card', onclick: () => openNew({ company: c.id, template: t.id, chosen: true }) },
         paper(c, t, t.id === 'blank' ? '' : t.titleHint),
         el('div', { class: 'card-body' }, el('h3', { text: t.name }), el('p', { text: t.blurb }), el('span', { class: 'use', text: 'Use this template →' }))))))));
   }
@@ -375,9 +375,9 @@
   // From a template card (or a link naming both), the company and template are already chosen, so the dialog only
   // asks for the title and where it goes (the user's request, 29 October 2026: don't make me choose the template twice).
   function openNew({ company: cid, template: tid, chosen } = {}) {
-    const cSel = S.companies.some((c) => c.id === cid) ? cid : S.filter.company || S.companies[0].id;
     const tSel = S.templates.some((t) => t.id === tid) ? tid : 'letter';
-    $('new-companies').replaceChildren(...S.companies.map((c) => el('label', { class: 'option' }, el('input', { type: 'radio', name: 'company', value: c.id, checked: c.id === cSel }),
+    const cSel = template(tSel).company || (S.companies.some((c) => c.id === cid) ? cid : S.filter.company || S.companies[0].id);
+    $('new-companies').replaceChildren(...S.companies.map((c) => el('label', { class: 'option' }, el('input', { type: 'radio', name: 'company', value: c.id, checked: c.id === cSel, disabled: !!template(tSel).company && template(tSel).company !== c.id }),
       el('span', { class: 'logo' }, el('img', { src: logo(c), alt: '' })), el('strong', { text: c.name }))));
     const groups = [...new Set(S.templates.map((t) => t.group))];
     $('new-templates').replaceChildren(...groups.flatMap((g) => [el('p', { class: 'pick-group', text: g }),
@@ -393,7 +393,7 @@
     (fixed ? $('new-name') : $('new-dialog').querySelector('input[name=company]:checked')).focus();
   }
   // Choosing a template sets its usual marking (termination and resignation letters start private & confidential).
-  $('new-templates').addEventListener('change', (e) => { if (e.target.name === 'template') $('new-confidential').checked = !!template(e.target.value).confidential; });
+  $('new-templates').addEventListener('change', (e) => { if (e.target.name === 'template') { const t = template(e.target.value); $('new-confidential').checked = !!t.confidential; for (const node of $('new-companies').querySelectorAll('input')) { node.disabled = !!t.company && node.value !== t.company; if (t.company) node.checked = node.value === t.company; } } });
   function closeNew() { if ($('new-dialog').hidden) return; hideLayer(); if (location.pathname === '/new') history.replaceState({}, '', '/'); }
   $('new-button').addEventListener('click', () => openNew({ company: S.filter.company }));
   document.addEventListener('click', (e) => { if (e.target.closest('[data-new]')) openNew({ company: S.filter.company }); });
@@ -434,8 +434,8 @@
   }
   function field(f, value) {
     const node = el('div', { class: 'field', contenteditable: 'true', 'data-key': f.key, 'data-placeholder': f.label, 'aria-label': f.label, spellcheck: 'true' });
-    node.textContent = f.fixed ? f.value : value || '';
-    if (f.fixed) { node.dataset.fixed = 'true'; node.setAttribute('aria-readonly', 'true'); }
+    node.textContent = value || (f.fixed ? f.value : '');
+    if (f.fixed || f.generated) { node.dataset.fixed = 'true'; node.setAttribute('aria-readonly', 'true'); }
     plainField(node, !!f.multiline);
     return node;
   }
@@ -457,6 +457,7 @@
       if (!document.adoptedStyleSheets.includes(printSheet)) document.adoptedStyleSheets = [...document.adoptedStyleSheets, printSheet];
     } catch {}
     $('doc-company').value = c.id;
+    $('doc-company').disabled = !!t.company && c.id === t.company;
   }
   function drawSheet(content) {
     const d = S.doc, t = template(d.template);
@@ -484,12 +485,12 @@
   }
   // Policies: the version history, recorded by the server each time a changed policy is marked final.
   function drawHistory() {
-    const d = S.doc, t = template(d.template), list = d.history || [];
+    const d = S.doc, t = template(d.template), list = [...(d.history || []), ...(d.draftHistory || [])].sort((a, b) => (a.at || Date.parse(a.date) || 0) - (b.at || Date.parse(b.date) || 0));
     $('history').hidden = !t.versions;
     if (!t.versions) return;
-    $('history-hint').textContent = list.length ? '' : 'Mark this policy as final to record version ' + ((d.fields && d.fields.version) || '1.0') + '. After that, each time it’s changed and marked final again, the version number goes up and the changes are listed here.';
+    $('history-hint').textContent = list.length ? '' : 'Saved draft changes appear here. Mark this policy as final to record version ' + ((d.fields && d.fields.version) || '1.0') + '. After that, each time it’s changed and marked final again, the version number goes up and the changes are listed here.';
     $('history-hint').hidden = !!list.length;
-    $('history-rows').replaceChildren(...list.slice().reverse().map((h) => el('tr', {}, el('td', { text: h.version }), el('td', { text: h.date }), el('td', { text: h.by }),
+    $('history-rows').replaceChildren(...list.slice().reverse().map((h) => el('tr', {}, el('td', { text: h.draft ? h.version + ' (draft, save ' + h.revision + ')' : h.version }), el('td', { text: h.date }), el('td', { text: h.by }),
       el('td', {}, el('ul', {}, ...h.changes.map((c) => el('li', { text: c })))))));
   }
   function drawControls() {
@@ -558,8 +559,11 @@
       const r = await api('PUT', '/api/documents/' + doc.id, sent);
       if (S.doc && S.doc.id === doc.id) {
         const versionsBefore = (S.doc.history || []).length;
-        Object.assign(S.doc, { version: r.document.version, status: r.document.status, sharing: r.document.sharing, company: r.document.company, title: r.document.title, updatedAt: r.document.updatedAt, history: r.document.history, canManage: r.document.canManage, confidential: r.document.confidential, protected: r.document.protected });
+        const draftsBefore = (S.doc.draftHistory || []).length;
+        Object.assign(S.doc, { version: r.document.version, status: r.document.status, sharing: r.document.sharing, company: r.document.company, title: r.document.title, updatedAt: r.document.updatedAt, history: r.document.history, draftHistory: r.document.draftHistory, canManage: r.document.canManage, confidential: r.document.confidential, protected: r.document.protected });
         document.title = S.doc.title + ' · HN Group Docs';
+        for (const f of [...template(S.doc.template).head, ...template(S.doc.template).foot]) if (f.generated) { S.doc.fields[f.key] = r.document.fields[f.key]; const node = sheet.querySelector('.field[data-key=' + f.key + ']'); if (node) node.textContent = r.document.fields[f.key]; }
+        if ((r.document.draftHistory || []).length !== draftsBefore) drawHistory();
         // A policy marked final may have a new version number and history entry.
         if ((r.document.history || []).length !== versionsBefore) {
           const v = sheet.querySelector('.field[data-key=version]');
@@ -695,6 +699,7 @@
     let me;
     try { me = await api('GET', '/api/me'); } catch (e) { $('loading').textContent = e.message; return; }
     Object.assign(S, { me: me.user, companies: me.companies, templates: me.templates, counts: me.counts });
+    if(window.HNStaffBrand)window.HNStaffBrand.apply(me.user);
     $('who').hidden = false; $('who-name').textContent = me.user.name; $('who-avatar').textContent = initials(me.user.name);
     if (me.user.picture) {
       $('who-photo').addEventListener('load', () => { $('who-photo').hidden = false; $('who-avatar').hidden = true; }, { once: true });

@@ -3,6 +3,7 @@
 # websites, Auth and staff services are untouched. Staff sign in through HN Group Auth, which must
 # know the "branding" application: run auth-site/install.sh first (the README's command does both).
 set -euo pipefail
+bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/offline-site/install.sh"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOMAIN=branding.hngroup.org.uk
 EMAIL="${1:-}"

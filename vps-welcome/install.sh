@@ -8,6 +8,7 @@ python3 -c 'import ast, pathlib, sys; ast.parse(pathlib.Path(sys.argv[1]).read_t
 sh -n "$ROOT/vps-welcome/profile.sh"
 install -d -m 755 "$PREFIX/usr/local/lib/hn-horizon" "$PREFIX/usr/local/bin" "$PREFIX/etc/profile.d"
 install -m 755 "$ROOT/vps-welcome/horizon.py" "$PREFIX/usr/local/lib/hn-horizon/horizon.py"
+install -m 644 "$ROOT/vps-welcome/session.py" "$ROOT/vps-welcome/session.bash" "$ROOT/vps-welcome/power.py" "$ROOT/vps-welcome/frame.py" "$PREFIX/usr/local/lib/hn-horizon/"
 install -m 644 "$ROOT/admin-site/catalog.json" "$PREFIX/usr/local/lib/hn-horizon/catalog.json"
 install -m 644 "$ROOT/vps-welcome/profile.sh" "$PREFIX/etc/profile.d/90-hn-horizon.sh"
 cat > "$PREFIX/usr/local/bin/horizon" <<'WRAPPER'

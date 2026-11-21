@@ -8,12 +8,12 @@ test('job descriptions, positions and supervisors set as positions',()=>{
   const jd=require('./lib/jobdescriptions');jd.init(dir);
   // The user's positions and job descriptions are there from the start.
   assert.deepEqual(store.positions()['HN Group'],['Board Chairman','Board Director','Board Member','Chief Executive Officer','Chief Operating Officer','Executive Assistant']);
-  assert.equal(store.positions()['Horizon Network'].length,7);
-  assert.equal(jd.list().length,13);
+  assert.equal(store.positions()['Horizon Network'].length,10);
+  assert.equal(jd.list().length,16);
   const president=jd.list().find(i=>i.company==='Horizon Network'&&i.role==='President');
-  assert.equal(president.reportsTo,'Chief Operating Officer (HN Group)');assert.match(president.authority,/Divisions Policy, Article 6/);
+  assert.equal(president.reportsTo,'Board of Horizon Network');assert.match(president.authority,/Divisions Policy, Article 6/);
   // Seeds are added once: deleting one doesn't bring it back.
-  jd.remove(jd.get(president.id));jd.init(dir);assert.equal(jd.list().length,12);
+  jd.remove(jd.get(president.id));jd.init(dir);assert.equal(jd.list().length,15);
   // Roles must be one of the company's positions; positions can be added and removed.
   assert.throws(()=>jd.save({role:'Designer',company:'Horizon Network',reportsTo:'x',description:'x',authority:'x'},null),/positions/);
   store.addPosition('Horizon Media Group','Designer');
@@ -34,9 +34,9 @@ test('job descriptions, positions and supervisors set as positions',()=>{
   assert.ok(!store.positions()['Horizon Media Group'].includes('Designer'));
   // The user's reporting lines (7 November 2026) are there from the start and can be changed, never in a loop.
   const rep=store.positionReports();
-  assert.equal(rep['HN Group']['Board Chairman'],null);
+  assert.deepEqual(rep['HN Group']['Board Chairman'],{company:'HN Group',title:'Board of HN Group',kind:'board'});
   assert.deepEqual(rep['HN Group']['Chief Operating Officer'],{company:'HN Group',title:'Chief Executive Officer'});
-  assert.deepEqual(rep['Horizon Network']['President'],{company:'HN Group',title:'Chief Operating Officer'});
+  assert.deepEqual(rep['Horizon Network']['President'],{company:'Horizon Network',title:'Board of Horizon Network',kind:'board'});
   assert.deepEqual(rep['Horizon Network']['Advisor'],{company:'Horizon Network',title:'Chief of Staff'});
   assert.equal(rep['Horizon Network']['Founder'],null);
   store.setPositionReport('Horizon Network','Advisor',{company:'Horizon Network',title:'President'});

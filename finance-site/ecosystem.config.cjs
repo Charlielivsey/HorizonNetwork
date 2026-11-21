@@ -1,0 +1,1 @@
+module.exports={apps:[{name:'hn-finance',script:'/opt/hn-finance/server.js',cwd:'/opt/hn-finance',instances:1,exec_mode:'fork',autorestart:true,max_memory_restart:'192M',env:{NODE_ENV:'production',PORT:5690}}]};

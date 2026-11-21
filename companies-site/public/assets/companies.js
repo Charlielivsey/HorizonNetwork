@@ -110,3 +110,6 @@ document.addEventListener('DOMContentLoaded', function () {
     update();
   });
 });
+
+// Founder voting example follows the same 75% minimum used by the register.
+document.addEventListener('input',function(e){if(!e.target.matches('[data-founder-example]'))return;const a=Number(e.target.value),votes=Math.max(Number(e.target.dataset.minimum||75),a),weight=Math.max(1,(votes/(100-votes))*(100-a)/a);e.target.closest('details').querySelector('[data-founder-output]').textContent=a+'% equity → '+votes+'% of votes · '+(votes===100?'all votes allocated to founder shares':weight.toFixed(4)+' votes per founder share');});

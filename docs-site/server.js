@@ -157,7 +157,7 @@ async function api(req, res, url) {
   if (route.startsWith('/api/administration/')) return administration(req, res, url, current);
   const q = url.searchParams;
   if (route === '/api/me' && method === 'GET') {
-    return send(res, 200, { user: { id: user.id, name: user.displayName, fullName: user.fullName, jobTitle: user.jobTitle, email: user.email, admin: user.admin, picture: !!store.avatar(user.id),
+    return send(res, 200, { user: { id: user.id, name: user.displayName, fullName: user.fullName, mainCompany: user.mainCompany, company: user.company, jobTitle: user.jobTitle, email: user.email, admin: user.admin, picture: !!store.avatar(user.id),
       administration: { storage: !user.impersonated && (user.owner || user.permissions.includes('storage.access')), documents: !user.impersonated && (user.owner || user.permissions.includes('documents.manage')) }, storageAccess: user.storageAccess, storageGrants: user.storageGrants, canSendContracts: canSendContracts(user) }, ...catalog.publicCatalog(), counts: { shared: store.counts(user, 'shared'), mine: store.counts(user, 'mine') } });
   }
   if (route === '/api/avatar' && method === 'GET') {
@@ -234,7 +234,7 @@ const server = http.createServer(async (req, res) => {
   const route = url.pathname;
   try {
     if (route === '/healthz') return send(res, 200, { ok: true });
-    if (route.startsWith('/auth/') && await auth.handle(req, res, url, showPage)) return;
+    if (await auth.handle(req, res, url, showPage)) return;
     if (route.startsWith('/api/service/')) return await service(req, res, url);
     if (route.startsWith('/api/')) return await api(req, res, url);
     if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, { error: 'Not allowed.' });

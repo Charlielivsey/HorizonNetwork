@@ -20,7 +20,7 @@ test('the newest release wins: an older GitHub answer never replaces a newer ins
   const offline=createReleases(path.join(dir,'data'),{bundled:path.join(dir,'missing.json'),fetcher:async()=>{throw Error('Offline');}});await offline.refresh();assert.equal(offline.current.version,'0.7.0-17');
  }finally{fs.rmSync(dir,{recursive:true,force:true});}});
 
-test('HN Secure Gateway is offered only from a genuine record, newest first',async()=>{const{readApp,createApp}=require('./lib/apps');const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-download-app-'));
+test('HN Secure Access Terminal is offered only from a genuine record, newest first',async()=>{const{readApp,createApp}=require('./lib/apps');const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-download-app-'));
  const record=(v,n)=>({tag:'secure-network-v'+v+'-'+n,asset:{name:'HN-Secure-Network-'+v+'-macOS.zip',size:1000,sha256:'a'.repeat(64)}});
  try{assert.equal(readApp({...record('2.1.0',30),tag:'browser-v2.1.0-30'}),null);assert.equal(readApp({...record('2.1.0',30),asset:{name:'evil.zip',size:1,sha256:'a'.repeat(64)}}),null);
   assert.equal(readApp(record('2.1.0',30)).asset.url,'https://github.com/Charlielivsey/HorizonNetwork/releases/download/secure-network-v2.1.0-30/HN-Secure-Network-2.1.0-macOS.zip');
@@ -29,7 +29,7 @@ test('HN Secure Gateway is offered only from a genuine record, newest first',asy
   const b=createApp(path.join(dir,'data2'),{bundled:path.join(dir,'none'),fetcher:async()=>Response.json(record('2.1.0',32))});await b.refresh();assert.equal(b.current.version,'2.1.0-32');
  }finally{fs.rmSync(dir,{recursive:true,force:true});}});
 
-test('HN Secure Gateway for Windows is offered only from a genuine Windows record',async()=>{const{readApp,createApp}=require('./lib/apps');const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-download-win-'));
+test('HN Secure Access Terminal for Windows is offered only from a genuine Windows record',async()=>{const{readApp,createApp}=require('./lib/apps');const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-download-win-'));
  const record=(v,n)=>({tag:'secure-network-windows-v'+v+'-'+n,asset:{name:'HN-Secure-Network-'+v+'-windows-x64.exe',size:5000,sha256:'b'.repeat(64)}});
  try{assert.equal(readApp(record('1.0.0',3),'mac'),null,'a Windows record is never a Mac one');assert.equal(readApp({tag:'secure-network-v1.0.0-3',asset:{name:'HN-Secure-Network-1.0.0-macOS.zip',size:1,sha256:'b'.repeat(64)}},'windows'),null);
   assert.equal(readApp({...record('1.0.0',3),asset:{name:'HN-Secure-Network-1.0.1-windows-x64.exe',size:5000,sha256:'b'.repeat(64)}},'windows'),null,'the file name must match the version');
@@ -39,7 +39,7 @@ test('HN Secure Gateway for Windows is offered only from a genuine Windows recor
 
 test('App Manager offers only the matching verified Mac and Windows installers',()=>{const{readApp}=require('./lib/apps');for(const[kind,suffix]of[['manager-mac','mac-universal.zip'],['manager-windows','win-x64.exe'],['manager-linux','linux-x86_64.AppImage']]){const record={tag:'app-manager-v1.0.0-1',asset:{name:'HN-Group-App-Manager-1.0.0-'+suffix,size:500,sha256:'a'.repeat(64)}};assert.equal(readApp(record,kind).version,'1.0.0-1');assert.equal(readApp({...record,tag:'browser-v1.0.0-1'},kind),null);assert.equal(readApp({...record,asset:{...record.asset,sha256:'bad'}},kind),null);assert.equal(readApp(record,kind==='manager-mac'?'manager-windows':'manager-mac'),null);}});
 
-test('Linux: HN Secure Gateway’s AppImage comes only from a genuine Linux record, and HN Browser’s from its release',()=>{
+test('Linux: HN Secure Access Terminal’s AppImage comes only from a genuine Linux record, and HN Browser’s from its release',()=>{
  const{readApp}=require('./lib/apps'),{readRelease}=require('./lib/releases');
  const rec={tag:'secure-network-linux-v2.1.0-5',asset:{name:'HN-Secure-Network-2.1.0-linux-x86_64.AppImage',size:5000,sha256:'c'.repeat(64)}};
  assert.equal(readApp(rec,'linux').asset.url,'https://github.com/Charlielivsey/HorizonNetwork/releases/download/secure-network-linux-v2.1.0-5/HN-Secure-Network-2.1.0-linux-x86_64.AppImage');
@@ -86,15 +86,15 @@ test('installers are copied once, checked against their release record and serve
     assert.deepEqual(fs.readdirSync(path.join(dir, 'files')), [sha256]);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+test('discontinued Browser release stays archived and makes no upstream release checks',async()=>{const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-browser-archive-')),before=process.env.HN_BROWSER_DISCONTINUED;try{process.env.HN_BROWSER_DISCONTINUED='1';const file=path.join(dir,'bundled.json');fs.writeFileSync(file,JSON.stringify({tag:'browser-v1.3.7-62',assets:{'mac-arm64':{name:'HN-Browser-1.3.7-mac-arm64.dmg',size:10,sha256:'a'.repeat(64)}}}));let calls=0;const archive=createReleases(path.join(dir,'data'),{bundled:file,fetcher:async()=>{calls++;throw Error('No network release check expected');}});await archive.refresh();assert.equal(archive.current.version,'1.3.7-62');await archive.refresh();assert.equal(calls,0);assert.equal(archive.status.source,'discontinued archive');}finally{if(before===undefined)delete process.env.HN_BROWSER_DISCONTINUED;else process.env.HN_BROWSER_DISCONTINUED=before;fs.rmSync(dir,{recursive:true,force:true});}});
 
-test('Compass-prefixed browser releases are accepted alongside legacy HN-Browser releases', () => {
-  const { fromManifest } = require('./lib/releases');
-  const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, 'release.json'), 'utf8'));
-  const parsed = readRelease(fromManifest(manifest));
-  assert.ok(parsed, 'bundled Compass release.json parses');
-  assert.ok(parsed.assets['mac-arm64']?.name.startsWith('Compass-'));
-  assert.ok(parsed.assets['windows-x64']?.name.startsWith('Compass-'));
-  assert.ok(parsed.assets['linux-x64']?.name.startsWith('Compass-'));
-  assert.ok(parsed.assets['mac-arm64-zip']?.name.startsWith('Compass-'));
+test('Compass installers and the legacy Browser archive are both recognised without relaxing the fixed repository',()=>{
+ const modern=release();modern.tag_name='browser-v2.0.0-65';modern.assets=modern.assets.map(a=>({...a,name:a.name.replace('HN-Browser-0.1.0','Horizon-Compass-2.0.0'),browser_download_url:a.browser_download_url.replace('browser-v0.1.0-1','browser-v2.0.0-65').replace('HN-Browser-0.1.0','Horizon-Compass-2.0.0')}));
+ assert.equal(readRelease(modern).assets['windows-x64'].name,'Horizon-Compass-2.0.0-win-x64.exe');assert.ok(readRelease(release()).assets['windows-x64']);
+ modern.assets[0].browser_download_url='https://example.com/Horizon-Compass-2.0.0-mac-arm64.dmg';assert.equal(readRelease(modern).assets['mac-arm64'],undefined);
 });
 
+test('Compass short-name installers retain fixed-origin and digest checks',()=>{
+ const r=release();r.tag_name='browser-v2.0.1-66';r.assets=r.assets.map(a=>({...a,name:a.name.replace('HN-Browser-0.1.0','Compass-2.0.1'),browser_download_url:a.browser_download_url.replace('browser-v0.1.0-1','browser-v2.0.1-66').replace('HN-Browser-0.1.0','Compass-2.0.1')}));
+ assert.equal(readRelease(r).assets['windows-x64'].name,'Compass-2.0.1-win-x64.exe');r.assets[0].browser_download_url='https://example.com/Compass-2.0.1-mac-arm64.dmg';assert.equal(readRelease(r).assets['mac-arm64'],undefined);
+});

@@ -3,6 +3,10 @@
 // company: the company decides the logo, names and footer; the template decides the layout and starting text.
 // Logos are the approved original files from brand/logos (light and white versions).
 
+const operationsPolicy = require('./hn-operations-policy.json');
+const policyClause = number => operationsPolicy.articles.flatMap(article => article[1]).find(clause => clause[0] === number)[1];
+const policyQuote = number => '<blockquote><p><strong>Article ' + number + '</strong> — “' + policyClause(number) + '”</p></blockquote>';
+
 const COMPANIES = [
   { id: 'hn-group', name: 'HN Group', legal: 'HN Group Limited', logo: 'hn-group-wordmark', website: 'hngroup.org.uk', note: '',
     about: 'HN Group brings together Horizon Network and Horizon Media Group.' },
@@ -26,6 +30,29 @@ const letterHead = (reference = 'Our reference') => [{ key: 'recipient', label: 
 const signOff = (closing, withCompany = true) => [{ key: 'closing', label: 'Closing', value: closing }, { key: 'senderName', label: 'Your name', value: 'me', gap: true },
   { key: 'senderRole', label: 'Your job title', value: 'jobTitle' }, ...(withCompany ? [{ key: 'senderCompany', label: 'Company', value: '{legal}' }] : [])];
 const TEMPLATES = [
+  { id: 'purchase-statement', group: 'Finance documents', name: 'Purchase Statement',
+    blurb: 'Record an original purchase and subsequent sale, including prices, buyer, seller, payment and handover details.',
+    label: 'Purchase Statement', title: 'heading', titleHint: 'Statement title', defaultTitle: 'Purchase Statement',
+    head: [{ key: 'reference', label: 'Statement reference' }, { key: 'date', label: 'Statement date', value: 'today' },
+      { key: 'item', label: 'Item, asset or service', multiline: true }, { key: 'currency', label: 'Currency', value: 'GBP' },
+      { key: 'purchasePrice', label: 'Original purchase price' }, { key: 'purchaseDate', label: 'Original purchase date' },
+      { key: 'purchasedFrom', label: 'Originally purchased from', multiline: true },
+      { key: 'salePrice', label: 'Sold for' }, { key: 'saleDate', label: 'Sale date' },
+      { key: 'soldTo', label: 'Sold to — name, company and contact', multiline: true },
+      { key: 'soldBy', label: 'Sold by — name and company', multiline: true },
+      { key: 'paymentStatus', label: 'Payment status' }, { key: 'paymentMethod', label: 'Payment method / reference' },
+      { key: 'amountPaid', label: 'Amount received' }, { key: 'balanceDue', label: 'Balance outstanding / due date' },
+      { key: 'preparedBy', label: 'Prepared by', value: 'me' }],
+    foot: [],
+    body: '<h2>Item and sale details</h2><p>[Describe what was purchased and sold, including quantity, condition, asset or serial numbers, and what is included in the sale.]</p>' +
+      '<h2>Price breakdown</h2><table><thead><tr><th>Description</th><th>Amount and currency</th></tr></thead><tbody>' +
+      '<tr><td>Discounts, if any</td><td>[Amount / not applicable]</td></tr>' +
+      '<tr><td>Delivery or other charges</td><td>[Amount / not applicable]</td></tr>' +
+      '<tr><td>Tax, if applicable</td><td>[Amount and basis / not applicable]</td></tr></tbody></table>' +
+      '<p>[State whether the original purchase price and sale price include tax and charges. Explain any instalments, refunds or other adjustments.]</p>' +
+      '<h2>Payment and handover</h2><p>[Record payment dates, any remaining payment terms, handover date and method, and the person receiving the item or service.]</p>' +
+      '<h2>Supporting records and notes</h2><p>[Add invoice or receipt references, agreed conditions and any other relevant information.]</p>' +
+      '<h2>Confirmation</h2><p>Seller confirmation: [Name and date]</p><p>Buyer confirmation: [Name and date, if required]</p>' },
   { id: 'letter', group: 'General', layout: 'letter', name: 'Letter', blurb: 'A formal letter on company letterhead, with the address, date, reference and sign-off.', label: '', title: 'subject', titleHint: 'Subject',
     head: letterHead(), foot: signOff('Yours sincerely,'),
     body: '<p>Dear [name],</p><p>[Write your letter here.]</p><p>[If you need anything else, let us know.]</p>' },
@@ -39,20 +66,32 @@ const TEMPLATES = [
     head: [{ key: 'owner', label: 'Policy owner', value: 'me' }, { key: 'effective', label: 'Effective from', value: 'today' }, { key: 'review', label: 'Next review' }, { key: 'version', label: 'Version', value: '1.0' }],
     versions: true,
     foot: [], body: '<h2>1. Purpose</h2><p>[What this policy is for.]</p><h2>2. Scope</h2><p>[Who and what it applies to at {legal}.]</p><h2>3. Policy</h2><p>[The rules.]</p><h2>4. Responsibilities</h2><p>[Who is responsible for what.]</p><h2>5. Review</h2><p>[When and how this policy is reviewed.]</p>' },
-  { id: 'executive-directive', group: 'General', name: 'Executive Directive', blurb: 'A Board Chairman directive with its authority, instructions, affected policies, effective dates and sign-off.', label: 'Executive Directive', title: 'heading', titleHint: 'Directive title', defaultTitle: 'Executive Directive — [subject]',
-    head: [{ key: 'reference', label: 'Directive reference', value: '[ED reference]' }, { key: 'issuer', label: 'Issued by', value: 'Board Chairman' },
-      { key: 'date', label: 'Date issued', value: 'today' }, { key: 'authority', label: 'Authority', value: 'Article 10 of the Operations Policy', fixed: true },
-      { key: 'scope', label: 'Applies to', value: '[HN Group / affected companies]' }, { key: 'effective', label: 'Effective from', value: '[Date and time]' },
+  { id: 'executive-directive', group: 'General', name: 'Executive Directive', company: 'horizon-network',
+    blurb: 'A Horizon Network directive under Article 1 of its Operations Policy. The ED number is generated when created; confirm the policy is approved before issuing.', label: 'Executive Directive', title: 'heading', titleHint: 'Directive title', defaultTitle: 'Executive Directive — [subject]',
+    head: [{ key: 'reference', label: 'ED number', generated: true }, { key: 'issuer', label: 'Issued by', value: '[Substantive Board Chairman / Chief Executive Officer]' },
+      { key: 'date', label: 'Date issued', value: '[Complete when issued]' }, { key: 'authority', label: 'Authority', value: 'Article 1 of the Horizon Network Operations Policy', fixed: true },
+      { key: 'policyVersion', label: 'Policy version', value: '0.1 — Draft; confirm approved version before issue' },
+      { key: 'supporting', label: 'Supporting provisions', value: '[Article 4 / Article 5 / other applicable provision; or none]' },
+      { key: 'scope', label: 'Applies to', value: 'Horizon Network' }, { key: 'effective', label: 'Effective from', value: '[Date and time]' },
       { key: 'end', label: 'End or review date', value: '[End date, review date or until withdrawn]' }],
-    foot: [{ key: 'senderName', label: 'Issued by — full name', value: 'me' }, { key: 'senderRole', label: 'Position', value: 'jobTitle' },
-      { key: 'signature', label: 'Signature', value: 'me' }, { key: 'signed', label: 'Date signed', value: 'today' }],
-    body: '<h2>Authority and purpose</h2><p>This directive is issued on behalf of HN Group Limited (HN Group) by the Board Chairman under Article 10 of the Operations Policy.</p><p>[Explain the purpose, circumstances and reasons for the directive. Identify any supporting provisions relevant to the action; the issuing authority is always Article 10 of the Operations Policy. Confirm the policy is in force before issuing.]</p>' +
-      '<h2>Direction</h2><p>[State the precise decision, instructions and required outcome. Identify the affected companies, teams or persons.]</p>' +
-      '<h2>Policy sections suspended, if applicable</h2><p>[For a suspension directive, keep Article 10 of the Operations Policy as the issuing authority, note Article 9 as the supporting policy-suspension provision, and complete the table. Otherwise remove this section or mark it not applicable.]</p>' +
-      '<table><thead><tr><th>Policy and company</th><th>Version / date</th><th>Section(s) suspended</th><th>Scope and interim instructions</th></tr></thead><tbody><tr><td>[Policy / company]</td><td>[Version / date]</td><td>[Exact sections]</td><td>[Who and what is affected; instructions during suspension]</td></tr></tbody></table>' +
-      '<h2>Effective period and review</h2><p>[State when the directive takes effect, when it ends or will be reviewed, and how any variation, withdrawal or reinstatement will be communicated.]</p>' +
-      '<h2>Implementation and responsibilities</h2><table><thead><tr><th>Action</th><th>Responsible person / position</th><th>Deadline</th></tr></thead><tbody><tr><td>[Required action]</td><td>[Person / position]</td><td>[Deadline]</td></tr></tbody></table>' +
-      '<h2>Communication and records</h2><p>[Identify recipients, anyone to be copied, where the directive will be retained, and the policy or decision records to be updated. Record any later amendment or withdrawal against this directive’s reference.]</p>' },
+    foot: [{ key: 'senderName', label: 'Issuer — full name', value: 'me' }, { key: 'senderRole', label: 'Substantive position', value: '[Board Chairman / Chief Executive Officer]' },
+      { key: 'signature', label: 'Signature', value: '' }, { key: 'signed', label: 'Date signed', value: '' }],
+    body: '<h2>Authority and policy basis</h2><p>This draft directive is prepared for Horizon Network under Article 1 of the Horizon Network Operations Policy. Confirm the policy is approved and in force, enter the approved policy version, and remove drafting instructions before issue.</p>' +
+      policyQuote('1.2') + policyQuote('1.3') + policyQuote('1.5') +
+      '<p>[Identify the issuer and confirm they hold the substantive position. Acting or temporary office-holders may not issue an ED. The automatic ED number identifies this document; creating or saving it does not itself issue a directive.]</p>' +
+      '<h2>Purpose and direction</h2><p>[Explain the purpose and reasons. State the precise decision, instructions, affected functions or persons, required outcomes and deadlines. Confine the directive to Horizon Network.]</p>' +
+      '<h2>Supporting powers</h2>' + policyQuote('1.9') +
+      '<p>[Identify each applicable supporting Article. Retain the relevant section below and remove unused sections. Article 1 remains the issuing authority.]</p>' +
+      '<h2>Assumption of control or director dismissal — Article 4, if applicable</h2>' + policyQuote('4.1') +
+      '<p>[Board Chairman only: state that control of Horizon Network is assumed under Article 4, the effective time and immediate instructions. If dismissing a director under Article 4.4, identify the person and Horizon Network directorship, the effective time and the requirements in Article 1.3. Record leadership notifications, responsibilities and access reviews under Articles 4.5–4.6.]</p>' +
+      '<h2>Policy sections suspended — Article 5, if applicable</h2>' + policyQuote('5.1') +
+      '<p>[Board Chairman only: identify the exact Horizon Network policy sections, versions, reason, scope, effective period, interim instructions and review or reinstatement arrangements under Articles 5.2–5.6. HN Group and other companies’ policies are outside this power.]</p>' +
+      '<table><thead><tr><th>HN policy / version</th><th>Exact sections</th><th>Reason and scope</th><th>Interim instructions / reinstatement</th></tr></thead><tbody><tr><td>[Policy and version]</td><td>[Sections]</td><td>[Reason; persons or activities affected]</td><td>[Instructions; end or review arrangements]</td></tr></tbody></table>' +
+      '<h2>Effective period and implementation</h2><p>[State the effective date and time, expiry or review arrangements, treatment of work already under way and any interim arrangements, as required by Articles 1.6–1.7.]</p>' +
+      '<table><thead><tr><th>Required action</th><th>Responsible person / position</th><th>Deadline</th></tr></thead><tbody><tr><td>[Action]</td><td>[Person / position]</td><td>[Deadline]</td></tr></tbody></table>' +
+      '<h2>Communication, review and records</h2><p>Communicate this directive in accordance with Article 1.8 to the Horizon Network Board of Directors, the HN Group Chief Executive, affected Horizon Network leadership and those responsible for implementation. Retain it in the governance record under Article 6.</p>' +
+      '<p>This directive is subject to the four review and repeal routes in Article 2. Any amendment, extension, replacement or withdrawal must identify this ED number and be communicated and retained under Articles 1.10 and 2.2–2.3. A suspension does not permanently amend a policy (Article 5.6).</p>' +
+      '<p>[Record recipients, delivery date, governance-record location, related ED numbers and any affected policy records.]</p>' },
   { id: 'minutes', group: 'General', name: 'Meeting minutes', blurb: 'A record of a meeting: who attended, what was discussed and the actions.', label: 'Minutes', title: 'heading', titleHint: 'Meeting name',
     head: [{ key: 'date', label: 'Date', value: 'today' }, { key: 'location', label: 'Location' }, { key: 'chair', label: 'Chair' }, { key: 'attendees', label: 'Attendees', multiline: true }, { key: 'apologies', label: 'Apologies' }],
     foot: [], body: '<h2>1. Welcome</h2><p>[Notes]</p><h2>2. [Agenda item]</h2><p>[Notes and decisions]</p><h2>Actions</h2><table><thead><tr><th>Action</th><th>Owner</th><th>Due</th></tr></thead><tbody><tr><td>[Action]</td><td>[Name]</td><td>[Date]</td></tr></tbody></table>' },
@@ -138,7 +177,7 @@ function start(t, c, user, now = new Date()) {
 // What the browser needs to draw the pages (no starting text: that's made on the server when a document is created).
 const publicCatalog = () => ({
   companies: COMPANIES.map(({ id, name, legal, logo, website, note }) => ({ id, name, legal, logo, website, note })),
-  templates: TEMPLATES.map(({ id, group, layout, name, blurb, label, title, titleHint, head, foot, versions, confidential }) => ({ id, group, layout: layout || '', name, blurb, label, title, titleHint, head, foot, versions: !!versions, confidential: !!confidential })),
+  templates: TEMPLATES.map(({ id, group, layout, name, blurb, label, title, titleHint, head, foot, versions, confidential, company }) => ({ id, group, company, layout: layout || '', name, blurb, label, title, titleHint, head, foot, versions: !!versions, confidential: !!confidential })),
 });
 
 module.exports = { COMPANIES, TEMPLATES, company, template, start, publicCatalog, longDate };

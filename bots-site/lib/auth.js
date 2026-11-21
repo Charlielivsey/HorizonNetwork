@@ -2,6 +2,7 @@
 // HN Group Auth's fixed "bots" client. Only current owner-level and Super Admin
 // accounts may enter; impersonated sessions are refused. The browser cookie points
 // to a private server-side application session, rechecked at least every minute.
+const {chooseOnArrival,arrivalCookie}=require('./profile-gate.cjs');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 
@@ -59,6 +60,7 @@ function createAuth(store) {
   }
   function redirect(res, location, cookies) { res.writeHead(302, { Location: location, 'Cache-Control': 'no-store', 'Set-Cookie': cookies || [] }); res.end(); }
   async function handle(req, res, url, showPage) {
+    if(await chooseOnArrival(req,res,url,{client:'bots',session:()=>store.session(cookie(req,SESSION_COOKIE))?.authSession,backend:AUTH_BACKEND,secretFile:SECRET_FILE,authOrigin:AUTH_ORIGIN,secure:SECURE,stateCookie:STATE_COOKIE,safeNext}))return true;
     if (url.pathname === '/auth/login' && req.method === 'GET') {
       const state = crypto.randomBytes(32).toString('hex'), next = Buffer.from(safeNext(url.searchParams.get('next'))).toString('base64url');
       redirect(res, AUTH_ORIGIN + '/authorize?client_id=bots&state=' + state, [setCookie(STATE_COOKIE, state + '.' + next, 600)]);
@@ -76,7 +78,7 @@ function createAuth(store) {
       const old = cookie(req, SESSION_COOKIE); if (old) store.endSession(old);
       const token = store.createSession(userOf(result.user), result.session, result.expires);
       let next = '/'; try { next = safeNext(Buffer.from(nextRaw || '', 'base64url').toString('utf8')); } catch {}
-      redirect(res, next, [clear, setCookie(SESSION_COOKIE, token, 30 * 86400)]);
+      redirect(res, next, [clear, arrivalCookie(SECURE), setCookie(SESSION_COOKIE, token, 30 * 86400)]);
       return true;
     }
     if (url.pathname === '/auth/logout' && req.method === 'POST') {

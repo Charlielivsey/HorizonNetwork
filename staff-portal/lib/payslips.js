@@ -126,6 +126,8 @@ const PAY_DEFAULTS = {
 function payDetails(personId, period) {
   const saved = db.data.payDetails[personId] || {};
   const d = { ...PAY_DEFAULTS, ...saved };
+  const person = store.getPerson(personId);
+  if (person && person.employeeNumber) d.employeeNumber = person.employeeNumber;
   // Older records stored an annual salary.
   if (saved.monthlySalary === undefined && saved.annualSalary) d.monthlySalary = money(saved.annualSalary / 12);
   const month = period || new Date().toISOString().slice(0, 7);
@@ -217,7 +219,7 @@ function savePayDetails(personId, input, by) {
   const taxCode = str(input.taxCode, 12).toUpperCase().replace(/\s+/g, "") || "1257L";
   if (!/^[SC]?(\d{1,6}[LMNT]|K\d{1,6}|BR|D0|D1|D2|NT|0T)(W1|M1|X)?$/.test(taxCode)) throw new store.ValidationError("Enter a valid tax code, like 1257L.");
   db.data.payDetails[personId] = {
-    employeeNumber: str(input.employeeNumber, 20),
+    employeeNumber: (store.getPerson(personId) || {}).employeeNumber || str(input.employeeNumber, 20),
     niNumber: ni,
     taxCode,
     niCategory: /^[A-Z]$/.test(str(input.niCategory, 1).toUpperCase()) ? str(input.niCategory, 1).toUpperCase() : "A",

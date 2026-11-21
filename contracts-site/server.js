@@ -144,7 +144,7 @@ async function api(req, res, url) {
   const user = who.user;
   const pic = /^\/api\/picture\/([A-Za-z0-9_-]{1,64})$/.exec(route);
   if (pic && method === 'GET') return picture(res, pic[1], who);
-  if (route === '/api/me' && method === 'GET') return send(res, 200, { user: { id: user.id, displayName: user.displayName, fullName: user.fullName, jobTitle: user.jobTitle, impersonated: user.impersonated }, canSend: store.canSend(user), canManage: store.canManage(user), roles: store.ROLES });
+  if (route === '/api/me' && method === 'GET') return send(res, 200, { user: { id: user.id, displayName: user.displayName, fullName: user.fullName, mainCompany: user.mainCompany, company: user.company, jobTitle: user.jobTitle, impersonated: user.impersonated }, canSend: store.canSend(user), canManage: store.canManage(user), roles: store.ROLES });
   if (route === '/api/contracts' && method === 'GET') return send(res, 200, store.lists(user));
   if (route === '/api/contracts' && method === 'POST') {
     if (!store.canSend(user)) throw fail(403, 'You need the “Send contracts for signing” permission to upload contracts.');
@@ -253,7 +253,7 @@ http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost'), route = url.pathname;
   try {
     if (route === '/healthz') return send(res, 200, health());
-    if (route.startsWith('/auth/') && await auth.handle(req, res, url, page)) return;
+    if (await auth.handle(req, res, url, page)) return;
     if (route.startsWith('/api/service/')) return await service(req, res, route);
     if (route.startsWith('/api/link/')) return await linkApi(req, res, url);
     if (store.TOKEN.test(route.slice(3)) && route.startsWith('/s/') && req.method === 'GET') { res.setHeader('X-Robots-Tag', 'noindex, nofollow'); return staticFile(res, 'link.html'); }

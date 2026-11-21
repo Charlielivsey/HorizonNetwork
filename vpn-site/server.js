@@ -57,7 +57,7 @@ const escHtml = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ 
 function showPage(res, status, title, text, cookies, appUrl) {
   res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Set-Cookie': cookies || [] });
   res.end('<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">' +
-    (appUrl ? '<meta http-equiv="refresh" content="0;url=' + escHtml(appUrl) + '">' : '') + '<title>' + escHtml(title) + ' · HN Group VPN</title><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/assets/vpn.css?v=6"><script src="/assets/hn-theme.js?v=20261109-midnight"></script></head><body>' +
+    (appUrl ? '<meta http-equiv="refresh" content="0;url=' + escHtml(appUrl) + '">' : '') + '<title>' + escHtml(title) + ' · HN Secure Access Terminal</title><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/assets/vpn.css?v=6"><script src="/assets/hn-theme.js?v=20261109-midnight"></script></head><body>' +
     '<header class="top"><div class="wrap top-inner"><a class="brand" href="/"><img class="on-light" src="/assets/brand/hn-group-wordmark.svg" alt="HN Group" width="118" height="41"><img class="on-dark" src="/assets/brand/hn-group-wordmark-white.svg" alt="" width="118" height="41"><span class="brand-name">VPN</span></a></div><div class="stripe" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></header>' +
     '<main class="wrap"><section class="card narrow"><h1>' + escHtml(title) + '</h1><p class="muted">' + escHtml(text) + '</p><p>' + (appUrl ? '<a class="btn btn-primary" href="' + escHtml(appUrl) + '">Open HN Group VPN</a>' : '<a class="btn btn-primary" href="/">Back to the VPN</a>') + '</p></section></main></body></html>');
 }
@@ -118,10 +118,10 @@ async function api(req, res, route) {
   let m;
   // The Mac app says which version it is, so the profile can show it.
   const appVersion = String(req.headers['x-hn-vpn-app'] || '');
-  // HN Browser and Secure Gateway both use app sign-ins; X-HN-VPN-Client says which one this is.
-  const appClient = { 'hn-browser': 'HN Browser', 'secure-terminal': 'HN Secure Gateway', 'secure-network': 'HN Secure Gateway' }[String(req.headers['x-hn-vpn-client'] || '')];
+  // HN Browser and Secure Access Terminal both use app sign-ins; X-HN-VPN-Client says which one this is.
+  const appClient = { 'hn-browser': 'HN Browser', 'secure-terminal': 'HN Secure Access Terminal', 'secure-network': 'HN Secure Access Terminal' }[String(req.headers['x-hn-vpn-client'] || '')];
   if (!current.cookie && (appClient || /^[0-9][0-9A-Za-z.\- ()]{0,30}$/.test(appVersion))) { const s = store.session(current.token); if (s) { if (/^[0-9][0-9A-Za-z.\- ()]{0,30}$/.test(appVersion)) s.appVersion = appVersion; if (appClient) s.client = appClient; } }
-  // HN Secure Gateway (Mac and Windows) asks for the six-digit PIN before every VPN connection.
+  // HN Secure Access Terminal (Mac and Windows) asks for the six-digit PIN before every VPN connection.
   if (route === '/api/app/verify-pin' && method === 'POST') {
     const body = await json(req);
     if (!/^\d{6}$/.test(String(body.pin || ''))) throw fail(400, 'Enter your six-digit PIN.');
@@ -188,7 +188,7 @@ async function api(req, res, route) {
     const body = await readBody(req, MAX_APP);
     if (body.slice(0, 4).toString('binary') !== 'PK\x03\x04') throw fail(400, 'Upload the app as a .zip file.');
     let plist = null; try { plist = macApp.infoPlist(body); } catch { plist = null; }
-    if (!plist || !/CFBundleShortVersionString/.test(plist) || !/<key>CFBundleIdentifier<\/key>\s*<string>uk\.org\.hngroup\.vpn<\/string>/.test(plist)) throw fail(400, 'That zip doesn’t contain the HN Secure Gateway app.');
+    if (!plist || !/CFBundleShortVersionString/.test(plist) || !/<key>CFBundleIdentifier<\/key>\s*<string>uk\.org\.hngroup\.vpn<\/string>/.test(plist)) throw fail(400, 'That zip doesn’t contain the HN Secure Access Terminal app.');
     const tmp = APP_FILE + '.tmp';
     fs.writeFileSync(tmp, body, { mode: 0o600 }); fs.renameSync(tmp, APP_FILE);
     const a = appView();
@@ -198,7 +198,7 @@ async function api(req, res, route) {
   if (route === '/api/mac-app' && method === 'GET') {
     let stat; try { stat = fs.statSync(APP_FILE); } catch { throw fail(404, 'The Mac app hasn’t been published yet.'); }
     const a = appView();
-    const name = 'HN-Secure-Network-macOS' + (a && a.version ? '-' + a.version : '') + '.zip';
+    const name = 'HN-Secure-Access-Terminal-macOS' + (a && a.version ? '-' + a.version : '') + '.zip';
     res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Length': stat.size, 'Content-Disposition': 'attachment; filename="' + name + '"', 'Cache-Control': 'no-store', ...(a ? { 'X-Content-SHA256': a.sha256 } : {}) });
     fs.createReadStream(APP_FILE).pipe(res);
     return;
@@ -228,7 +228,7 @@ const server = http.createServer(async (req, res) => {
   try {
     if (route === '/healthz') return send(res, 200, { ok: true });
     if (route.startsWith('/api/')) return await api(req, res, route);
-    if (route.startsWith('/auth/') && await auth.handle(req, res, new URL(req.url, 'http://localhost'), showPage)) return;
+    if (await auth.handle(req, res, new URL(req.url, 'http://localhost'), showPage)) return;
     if (req.method === 'GET' && serveStatic(res, route)) return;
     if (req.method === 'GET' && serveStatic(res, '/')) return;
     send(res, 404, { error: 'Not found.' });

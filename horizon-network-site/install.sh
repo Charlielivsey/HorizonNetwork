@@ -2,6 +2,7 @@
 # Install the dedicated Horizon Network website (network.hngroup.org.uk) and its narrow staff leadership integration.
 # Its former addresses, horizon-network.co.uk and horizonetwork.com, redirect there (the user's request, 30 October 2026).
 set -euo pipefail
+bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/offline-site/install.sh"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOMAIN=network.hngroup.org.uk
 OLD=horizon-network.co.uk
@@ -45,7 +46,7 @@ bash "$SCRIPT_DIR/../auth-site/install.sh" "$EMAIL"
 
 mkdir -p "$APP_DIR/public" "$DATA_DIR" "$SSL_DIR" "$CHALLENGE_DIR" /etc/nginx/sites-available /etc/nginx/sites-enabled
 chmod 700 "$DATA_DIR"
-cp "$SCRIPT_DIR/server.js" "$SCRIPT_DIR/auth.js" "$APP_DIR/"
+cp "$SCRIPT_DIR/server.js" "$SCRIPT_DIR/auth.js" "$SCRIPT_DIR/profile-gate.cjs" "$APP_DIR/"
 mkdir -p "$APP_DIR/control"
 cp -r "$SCRIPT_DIR/control/." "$APP_DIR/control/"
 mkdir -p /var/www/hn-network

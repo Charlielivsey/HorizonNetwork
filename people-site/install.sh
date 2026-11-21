@@ -2,6 +2,7 @@
 # Install only HN Group People at people.hngroup.org.uk (PM2 hn-people, loopback 5670, /opt/hn-people). It reads the
 # public staff list from the staff portal with the service secret; other websites, Auth and staff services are untouched.
 set -euo pipefail
+bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/offline-site/install.sh"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOMAIN=people.hngroup.org.uk
 EMAIL="${1:-}"

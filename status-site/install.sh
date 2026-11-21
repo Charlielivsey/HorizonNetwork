@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Install status.hngroup.org.uk and its minimal staff sign-in integration. No other website installers are invoked.
 set -euo pipefail
+bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/offline-site/install.sh"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOMAIN=status.hngroup.org.uk
 EMAIL="${1:-}"
@@ -41,7 +42,7 @@ bash "$SCRIPT_DIR/../auth-site/install.sh" "$EMAIL"
 
 mkdir -p "$APP_DIR/public" "$DATA_DIR" "$SSL_DIR" "$CHALLENGE_DIR" /etc/nginx/sites-available /etc/nginx/sites-enabled
 chmod 700 "$DATA_DIR"
-cp "$SCRIPT_DIR/server.js" "$SCRIPT_DIR/auth.js" "$SCRIPT_DIR/catalog.cjs" "$SCRIPT_DIR/reset.cjs" "$APP_DIR/"
+cp "$SCRIPT_DIR/server.js" "$SCRIPT_DIR/auth.js" "$SCRIPT_DIR/profile-gate.cjs" "$SCRIPT_DIR/catalog.cjs" "$SCRIPT_DIR/reset.cjs" "$APP_DIR/"
 cp "$SCRIPT_DIR/../admin-site/catalog.json" "$APP_DIR/catalog.json"
 cp -r "$SCRIPT_DIR/public/." "$APP_DIR/public/"
 PORT=3300 HOST=127.0.0.1 DATA_DIR="$DATA_DIR" pm2 startOrRestart "$SCRIPT_DIR/ecosystem.config.cjs" --update-env

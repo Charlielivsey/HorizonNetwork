@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const pdf = require('./pdf');
+const founder=require('./founder-voting');
 
 let dir, file, filesDir, db;
 
@@ -38,7 +39,9 @@ function blankCompany(o) {
   };
 }
 
-function init(dataDir) {
+// legacyShares is reserved for isolated historical import/tests; HTTP callers use the current model.
+let applyingHistoricalUpdates=false;
+function init(dataDir, options={}) {
   dir = dataDir; file = path.join(dir, 'register.json'); filesDir = path.join(dir, 'files');
   fs.mkdirSync(filesDir, { recursive: true, mode: 0o700 });
   if (fs.existsSync(file)) db = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -54,7 +57,8 @@ function init(dataDir) {
   for (const c of db.companies) { if (!Array.isArray(c.managers)) c.managers = []; generateFilings(c); }
   // The private register (COMPANIES_SEED=off) starts empty: nothing from the main register is copied into it.
   if (process.env.COMPANIES_SEED !== 'off') for (const s of SEED) if (!db.seeded.includes(s.slug)) { if (!db.companies.some((c) => c.slug === s.slug)) db.companies.push(blankCompany(s)); db.seeded.push(s.slug); }
-  runGroupMigrations();
+  applyingHistoricalUpdates=true;try{runGroupMigrations();}finally{applyingHistoricalUpdates=false;}
+  if(!options.legacyShares&&process.env.COMPANIES_GROUP_UPDATES!=='off')for(const c of [...db.companies])if(!founder.policy(c))migrateFounderVoting(c.slug,'system:all-company-share-model');
   save();
 }
 
@@ -645,7 +649,8 @@ function publicFeed() {
     managedBy: c.managedBy && company(c.managedBy) && !company(c.managedBy).hidden ? c.managedBy : '',
     divisions: c.divisions.slice(), previousNames: (c.previousNames || []).map((p) => ({ name: p.name, until: p.until || p.changed || '' })),
     officers: c.officers.filter((o) => !o.resigned).map((o) => ({ name: o.name, role: o.role, appointed: o.appointed })),
-    owners: c.psc.filter((p) => !p.ceased).map((p) => { const v = votes[p.id]; return { name: p.name, kind: p.kind, share: p.share, classes: classesOf(p).split ? { A: p.classA || '', B: p.classB || '', C: p.classC || '' } : null, classCIssuedBy: p.classCIssuedBy || '', votes: v ? v.votes : null, votingControl: !!(v && v.control), sharedVotingControl: !!(v && v.sharedControl), sharedWith: v && v.sharedControl ? v.sharedWith.slice() : [], control: (p.control || []).slice(), notified: p.notified }; }),
+    owners: c.psc.filter((p) => !p.ceased).map((p) => { const v = votes[p.id]; return { name: p.name, kind: p.kind, share: p.share, classes: classesOf(p).split ? { A: p.classA || '', B: p.classB || '', C: p.classC || '' } : null, classCIssuedBy: p.classCIssuedBy || '', votes: v ? v.votes : null, delegations:v?.delegations||[],delegatedTo:v?.delegatedTo||null, delegatedVotes:Number.isFinite(v?.delegatedVotes)?v.delegatedVotes:null, delegationPercent:v?.delegationPercent||null, receivedFrom:v?.receivedFrom||[], votingControl: !!(v && v.control), sharedVotingControl: !!(v && v.sharedControl), sharedWith: v && v.sharedControl ? v.sharedWith.slice() : [], control: (p.control || []).slice(), notified: p.notified }; }),
+    shareModel:c.shareModel||'legacy',founderVotingMinimum:founder.policy(c)?founder.minimum(c):null,votingControllers:founder.policy(c)?founder.calculation(c).controllers:[],
     shareClasses: shareClasses(c),
     updatedAt: c.updatedAt,
   }; });
@@ -668,7 +673,7 @@ function saveCompany(slug, input, actor, opts) {
     const incorporated = d(input.incorporated);
     firstOfficer = LISTS.officers({ ...opts.officer, appointed: opts.officer.appointed || incorporated });
     firstPsc = LISTS.psc({ ...opts.psc, notified: opts.psc.notified || incorporated });
-    checkShareRules({ officers: [firstOfficer] }, [firstPsc], [firstOfficer]);
+    const legacy=applyingHistoricalUpdates||opts.shareModel==='legacy';if(!legacy&&!CLASS_KEYS.some(k=>Number(firstPsc[k]||0)>0)){firstPsc.classB=firstPsc.share||'';firstPsc.classA='';}checkShareRules({shareModel:legacy?'legacy':'founder75',officers:[firstOfficer]},[firstPsc],[firstOfficer]);
   }
   const c = existing || blankCompany({ slug: '', name: legalName, legalName });
   if (!existing) {
@@ -690,7 +695,7 @@ function saveCompany(slug, input, actor, opts) {
   c.divisions = String(input.divisions || '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 10).map((x) => x.slice(0, 100));
   c.hidden = input.hidden === 'on' || input.hidden === true;
   c.updatedAt = now();
-  if (!existing) { c.officers.push({ id: id(), ...firstOfficer }); c.psc.push({ id: id(), ...firstPsc }); db.companies.push(c); }
+  if (!existing) { c.shareModel=applyingHistoricalUpdates||opts?.shareModel==='legacy'?'legacy':'founder75';c.founderVotingMinimum=75;c.votingDelegations=[];c.capitalHistory=[]; c.officers.push({ id: id(), ...firstOfficer }); c.psc.push({ id: id(), ...firstPsc }); db.companies.push(c); }
   // Editing the date in the details form moves the Incorporation filing with it (officers and persons with
   // significant control are only moved by Change incorporation date).
   if (existing && oldIncorporated && c.incorporated && c.incorporated !== oldIncorporated) { const date = c.incorporated; c.incorporated = oldIncorporated; moveIncorporation(c, date, { records: false }); }
@@ -751,8 +756,6 @@ function withClasses(x, i) {
     if (x.share !== '' && Math.abs(Number(x.share) - sum) > 0.01) throw bad('The share classes add up to ' + sum + '%, but the shareholding is ' + x.share + '%. Make them match, or leave the shareholding blank.');
     x.share = String(sum);
   }
-  if (Number(x.classB || 0) > 0 && x.kind !== 'Individual') throw bad('Class B shares are for staff, so only a person (an Individual) can hold them.');
-  if (Number(x.classC || 0) > 0 && !x.classCIssuedBy) throw bad('Class C shares can only be issued by one of the company’s officers. Enter the officer who issued them.');
   return x;
 }
 const classesOf = (p) => { const split = CLASS_KEYS.some((k) => p[k] !== undefined && p[k] !== ''); return { split, a: split ? Number(p.classA || 0) : (p.share !== '' && p.share != null ? Number(p.share) : 0), b: split ? Number(p.classB || 0) : 0, c: split ? Number(p.classC || 0) : 0, known: split || (p.share !== '' && p.share != null) }; };
@@ -761,11 +764,14 @@ function checkShareRules(c, holdings, officers) {
   const cur = holdings.filter((p) => !p.ceased);
   const total = Math.round(cur.reduce((n, p) => n + Number(p.share || 0), 0) * 100) / 100;
   if (total > 100.001) throw bad('Only 100% of a company’s shares can be issued. The shareholdings on this company would add up to ' + total + '% (' + Math.round((total - 100) * 100) / 100 + '% too many).');
+  if(founder.policy(c)){if(cur.some(p=>Number(p.classC||0)>0))throw bad('This company uses founder Class A and ordinary Class B only.');return;}
+  for(const p of cur){if(Number(p.classB||0)>0&&p.kind!=='Individual')throw bad('Class B shares are for staff, so only a person (an Individual) can hold them.');if(Number(p.classC||0)>0&&!p.classCIssuedBy)throw bad('Class C shares can only be issued by one of the company’s officers. Enter the officer who issued them.');}
   const current = (officers || c.officers).filter((o) => !o.resigned), issuers = current.map((o) => o.name.trim().toLowerCase());
   for (const p of cur) if (Number(p.classC || 0) > 0 && !issuers.includes(String(p.classCIssuedBy || '').trim().toLowerCase())) throw bad('Class C shares can only be issued by one of the company’s current officers. ' + (current.length ? 'Enter the name of the officer who issued them (' + current.map((o) => o.name).join(', ') + ').' : 'Record the officer first.'));
 }
 // Each current holder's share of the votes, as a percentage, and whether their Class C shares give them control.
 function votingPower(c) {
+  if(founder.policy(c))return founder.calculation(c).holders;
   const cur = c.psc.filter((p) => !p.ceased).map((p) => ({ p, k: classesOf(p) })).filter((x) => x.k.known);
   const weight = (k) => k.a + k.b * 0.5 + k.c * 2;
   const W = cur.reduce((n, x) => n + weight(x.k), 0), totalC = cur.reduce((n, x) => n + x.k.c, 0);
@@ -802,6 +808,13 @@ function saveItem(slug, list, itemId, input, actor) {
   if (!c || !LISTS[list]) throw Object.assign(new Error('Not found.'), { status: 404 });
   const value = LISTS[list](input);
   const existing = itemId && c[list].find((x) => x.id === itemId);
+  if(list==='psc'&&founder.policy(c)){
+    if(existing&&CLASS_KEYS.every(k=>Number(input[k]||0)===Number(existing[k]||0))&&Number(input.share||0)===Number(existing.share||0)){for(const k of CLASS_KEYS)value[k]=existing[k]||'';value.share=existing.share;}
+    const before=existing||{classA:'',classB:'',classC:'',share:''};
+    if(CLASS_KEYS.some(k=>Number(before[k]||0)!==Number(value[k]||0))||Number(before.share||0)!==Number(value.share||0))throw bad('Use the capital tools to issue, transfer or cancel shares. Ownership changes cannot bypass the founder rules.');
+    if(existing&&Number(existing.share||0)>0&&value.ceased)throw bad('Transfer or cancel this holder’s shares before marking them ceased.');
+    if(existing&&Number(existing.classA||0)>0&&(value.name!==existing.name||value.kind!==existing.kind))throw bad('Transfer founder shares using the capital tools; transferred shares automatically become Class B.');
+  }
   if (list === 'psc') checkShareRules(c, existing ? c.psc.map((x) => (x === existing ? { ...x, ...value } : x)) : c.psc.concat([value]));
   if (list === 'officers' && existing) checkShareRules(c, c.psc, c.officers.map((x) => (x === existing ? { ...x, ...value } : x)));
   if (existing) Object.assign(existing, value); else c[list].push({ id: id(), ...value });
@@ -813,10 +826,23 @@ function saveItem(slug, list, itemId, input, actor) {
 function deleteItem(slug, list, itemId, actor) {
   const c = company(slug);
   if (!c || !LISTS[list]) return;
+  if(list==='psc'&&founder.policy(c)&&c.psc.some(p=>p.id===itemId&&!p.ceased&&Number(p.share||0)>0))throw bad('Transfer or cancel this holder’s shares before removing their record.');
   c[list] = c[list].filter((x) => x.id !== itemId);
   audit(actor, list + '.delete', slug);
   save();
 }
+
+function commitFounder(slug,candidate,actor,description,category='Capital',reference=''){
+  const c=company(slug);if(!c)throw bad('Company not found.');const snapshot=JSON.stringify(db),files=new Set(db.filings.map(f=>f.file));
+  try{Object.assign(c,candidate);checkShareRules(c,c.psc);c.updatedAt=now();const votes=founder.calculation(c);for(const p of c.psc.filter(p=>!p.ceased)){const economic=(p.control||[]).filter(x=>!/^Ownership of (shares|voting rights)/.test(x));p.control=[...economic,...(Number(p.share)>=75?['Ownership of shares – 75% or more']:Number(p.share)>50?['Ownership of shares – more than 50% but less than 75%']:Number(p.share)>25?['Ownership of shares – more than 25% but not more than 50%']:[]),...(votes.holders[p.id]?.votes>=75?['Ownership of voting rights – 75% or more']:votes.holders[p.id]?.votes>50?['Ownership of voting rights – more than 50% but less than 75%']:votes.holders[p.id]?.votes>25?['Ownership of voting rights – more than 25% but not more than 50%']:[])];}
+    pushGenerated(c,now().slice(0,10),category,description,{code:'',heading:description,rows:[['Share model','Class A founder shares; Class B ordinary shares'],['Founder voting entitlement','Minimum '+founder.minimum(c)+'% collectively; higher equity voting share retained'],...c.psc.filter(p=>!p.ceased).map(p=>[p.name,'Ownership '+p.share+'%; Class A '+(p.classA||0)+'%; Class B '+(p.classB||0)+'%; votes '+(votes.holders[p.id]?.votes||0)+'%']),...votes.controllers.map(x=>['Voting controller',x.name+' ('+x.kind+'): '+x.votes+'%']),...(reference?[['Written founder consent reference',reference]]:[]),...(c.votingDelegations||[]).map(d=>['Delegation',((c.psc.find(p=>p.id===d.holder)||{}).name||d.holder)+' → '+d.name+' ('+d.kind+'), '+d.percent+'% of holder votes'])]});audit(actor,'capital.voting.change',slug+' '+description);save();return c;
+  }catch(e){for(const f of db.filings)if(!files.has(f.file))removeFile(f.file);db=JSON.parse(snapshot);throw e;}
+}
+function migrateFounderVoting(slug,actor){const c=company(slug);if(!c)throw bad('Company not found.');if(founder.policy(c))return c;const next=structuredClone(c);next.shareModel='founder75';next.founderVotingMinimum=75;next.votingDelegations=next.votingDelegations||[];next.capitalHistory=next.capitalHistory||[];for(const p of next.psc.filter(p=>!p.ceased)){const old=classesOf(p);p.classA=String(old.c||'');p.classB=String(old.a+old.b||'');p.classC='';p.classCIssuedBy='';}return commitFounder(slug,next,actor,'Adoption of founder Class A and ordinary Class B voting rules');}
+function addCapitalHolder(slug,input,actor){const c=company(slug);if(!founder.policy(c))throw bad('This company uses its existing filing tools.');if((c.appliedVotingOperations||[]).includes(input.requestId))return c;const value=LISTS.psc({name:input.name,kind:input.kind,share:'0',classA:'',classB:'',classC:'',notified:now().slice(0,10)});if(c.psc.some(p=>!p.ceased&&p.name.toLowerCase()===value.name.toLowerCase()&&p.kind===value.kind))throw bad('This recipient already exists. Choose them in the transfer or issue form.');const next=structuredClone(c);next.psc.push({id:id(),...value});next.appliedVotingOperations=[...(c.appliedVotingOperations||[]),input.requestId];return commitFounder(slug,next,actor,'Addition of a zero-share recipient');}
+function capitalTransaction(slug,input,actor){const c=company(slug);if(input.requestId&&(c?.appliedVotingOperations||[]).includes(input.requestId))return c;const next=founder.transaction(c,input);if(input.requestId)next.appliedVotingOperations=[...(c.appliedVotingOperations||[]),input.requestId];return commitFounder(slug,next,actor,'Share '+input.action+' and statement of capital','Capital',String(input.consent||''));}
+function setVotingMinimum(slug,input,actor){const c=company(slug);if(input.requestId&&(c?.appliedVotingOperations||[]).includes(input.requestId))return c;const next=founder.setMinimum(c,input,actor);if(founder.minimum(next)===founder.minimum(c))return c;if(input.requestId)next.appliedVotingOperations=[...(c.appliedVotingOperations||[]),input.requestId];return commitFounder(slug,next,actor,'Change of founder voting minimum to '+founder.minimum(next)+'%','Resolution',String(input.consent||''));}
+function votingDelegation(slug,input,actor){const c=company(slug);if(input.requestId&&(c?.appliedVotingOperations||[]).includes(input.requestId))return c;const next=founder.delegate(c,input,actor);if(input.requestId)next.appliedVotingOperations=[...(c.appliedVotingOperations||[]),input.requestId];return commitFounder(slug,next,actor,input.action==='revoke'?'Revocation of voting delegation':'Voting rights delegation','Resolution',input.action==='revoke'?'':String(input.consent||''));}
 
 // ---------- Generated filings ----------
 // When a company's incorporation date is first recorded, an officer is recorded with an appointment
@@ -1084,6 +1110,7 @@ const bad = (message) => Object.assign(new Error(message), { status: 400 });
 
 // Checks a change against the company as it is now and returns the details to store.
 function checkChange(c, kind, input) {
+  if(founder.policy(c)&&kind.startsWith('psc_'))throw bad('Use the company’s capital and voting tools in the filing area for shareholder changes.');
   switch (kind) {
     case 'address': { const v = req(input.registeredOffice, 'Enter the new registered office address.', 300); if (v === c.registeredOffice) throw bad('That is already the registered office address.'); return { registeredOffice: v }; }
     case 'appoint': { const o = LISTS.officers(input); if (!o.appointed) throw bad('Enter the date of appointment.'); o.resigned = ''; return { officer: o }; }
@@ -1291,6 +1318,7 @@ function applyChange(s) {
   const c = company(s.company);
   if (!c) throw bad('The company is no longer on the register.');
   const kind = s.kind || 'document';
+  if(founder.policy(c)&&kind.startsWith('psc_'))throw bad('This staged change predates the founder rules. Record the change using capital and voting tools instead.');
   const ch = s.change || {};
   const date = now().slice(0, 10);
   // A customer's PDF becomes the filing's document; otherwise the register generates one.
@@ -1367,7 +1395,7 @@ function decideSubmission(s, accept, note, actor) {
 }
 
 module.exports = {
-  publicFeed,
+  publicFeed, migrateFounderVoting, addCapitalHolder, capitalTransaction, votingDelegation, setVotingMinimum, founderVotingMinimum:founder.minimum, votingCalculation:founder.calculation,
   init, STATUSES, votingPower, shareClasses, classesOf, CLASS_C_CONTROL, CONTROL_VOTES, FILING_CATEGORIES, OFFICER_ROLES, PSC_KINDS, REQUEST_KINDS, CHANGE_TYPES,
   canManage, managedCompanies, groupOf, groupReport, addApplication, addManager, removeManager,
   companies, company, children, search, saveCompany, changeIncorporation, deleteCompany, saveItem, deleteItem,

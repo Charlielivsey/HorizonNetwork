@@ -2,6 +2,7 @@
 # Install only HN Group HR at hr.hngroup.org.uk (PM2 hn-hr, loopback 5680, /opt/hn-hr). It reads the
 # private staff service for leave records; it never stores a second copy of staff or leave data.
 set -euo pipefail
+bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/offline-site/install.sh"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOMAIN=hr.hngroup.org.uk
 EMAIL="${1:-}"
@@ -24,7 +25,9 @@ for config in /etc/nginx/sites-enabled/* /etc/nginx/conf.d/*.conf; do
 done
 [ -f /var/lib/hn-status-sso/secret ] || echo 'Note: the staff portal integration secret is missing, so the staff list will show as unavailable until auth-site/install.sh has run.'
 mkdir -p /opt/hn-hr "$CHALLENGE_DIR" /etc/nginx/sites-available /etc/nginx/sites-enabled
-cp "$SCRIPT_DIR/server.js" /opt/hn-hr/
+cp "$SCRIPT_DIR/server.js" "$SCRIPT_DIR/staff-redirect.cjs" /opt/hn-hr/
+mkdir -p /opt/hn-hr/public
+cp -r "$SCRIPT_DIR/public/." /opt/hn-hr/public/
 pm2 startOrRestart "$SCRIPT_DIR/ecosystem.config.cjs" --update-env
 healthy=0
 for attempt in {1..15}; do

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Isolated HN Group Docs site (docs.hngroup.org.uk, staff only). Keeps its data (/var/lib/hn-docs) and every other service.
 set -euo pipefail
+bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/offline-site/install.sh"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOMAIN=docs.hngroup.org.uk
 EMAIL="${1:-}"

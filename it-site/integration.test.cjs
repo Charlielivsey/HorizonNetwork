@@ -1,0 +1,60 @@
+'use strict';
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),http=require('node:http'),{spawn}=require('node:child_process');
+const root=path.join(__dirname,'..');
+const port=async()=>{const s=http.createServer();await new Promise(r=>s.listen(0,'127.0.0.1',r));const p=s.address().port;await new Promise(r=>s.close(r));return p;};
+const cookie=(r,n)=>(r.headers.getSetCookie().find(c=>c.startsWith(n+'='))||'').split(';')[0];
+const ready=async u=>{for(let i=0;i<100;i++){try{if((await fetch(u)).ok)return;}catch{}await new Promise(r=>setTimeout(r,50));}throw Error('Not ready: '+u);};
+test('IT Auth, isolated sessions, team privacy, live cases and desktop branding',async()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hn-it-'));
+ process.env.DATA_DIR=dir;
+ const store=require('../staff-portal/lib/store');store.init(dir);
+ const make=(first,permission)=>{const person=store.saveEmployee({firstName:first,lastName:'Fixture',displayName:first,company:'Horizon Network',jobTitle:'Analyst',discordId:first==='Agent'?'123456789012345678':'223456789012345678',emails:[{local:'it.'+first.toLowerCase(),domain:'hngroup.org.uk',primary:true}]});store.issueTemporaryPassword(person);store.setPassword(person,'Fixture-password-582!');store.setCode(person,'582947');if(permission){const role=store.saveRole({name:'IT fixture agent',permissions:[permission]});store.setRoleMembers(role,[person.id]);}return person;};
+ const agent=make('Agent','helpdesk.manage'),employee=make('Employee');
+ const secret=path.join(dir,'secret');fs.writeFileSync(secret,'f'.repeat(64));
+ const [a,b,c,d,e]=await Promise.all([port(),port(),port(),port(),port()]);
+ const staff='http://127.0.0.1:'+a,auth='http://127.0.0.1:'+b,it='http://127.0.0.1:'+c,portal='http://127.0.0.1:'+d,hr='http://127.0.0.1:'+e;
+ const common={...process.env,DATA_DIR:dir,STATUS_SSO_SECRET_FILE:secret,AUTH_BACKEND:auth,STAFF_PORTAL_BACKEND:staff,PRIVATE_STAFF_BACKEND:staff,IT_ORIGIN:it,HR_ORIGIN:hr};
+ const children=[];for(const [file,n]of[['staff-portal/server.js',a],['auth-site/server.js',b],['it-site/server.js',c],['staff-portal/public-proxy.js',d],['hr-site/server.js',e]])children.push(spawn(process.execPath,[file],{cwd:root,env:{...common,PORT:String(n)},stdio:['ignore','ignore','inherit']}));
+ const post=(base,p,body,c='',origin=base)=>fetch(base+p,{method:'POST',headers:{Origin:origin,'Content-Type':'application/json',Cookie:c},body:JSON.stringify(body),redirect:'manual'});
+ const get=(base,p,c='',headers={})=>fetch(base+p,{headers:{Cookie:c,...headers},redirect:'manual'});
+ async function signIn(person,base=it,client='it',next='/cases'){
+  const start=await get(base,'/auth/start?next='+encodeURIComponent(next)),to=new URL(start.headers.get('location')),state=to.searchParams.get('state');assert.equal(to.searchParams.get('client_id'),client);
+  const login=await post(auth,'/api/login',{username:person.emails[0].address,password:'Fixture-password-582!'},'','https://auth.hngroup.org.uk');assert.equal(login.status,200,await login.clone().text());
+  const verified=await post(auth,'/api/login/code',{code:'582947'},cookie(login,'__Host-hn_auth_flow'),'https://auth.hngroup.org.uk');assert.equal(verified.status,200,await verified.clone().text());
+  const grant=await post(auth,'/api/continue',{client_id:client,state},cookie(verified,'__Host-hn_auth_session'),'https://auth.hngroup.org.uk');assert.equal(grant.status,200,await grant.clone().text());
+  const back=new URL((await grant.json()).redirect),done=await get(base,back.pathname+back.search,cookie(start,'hn_staff_auth_state'));assert.equal(done.status,302);assert.equal(done.headers.get('location'),next);
+  const c=cookie(done,client==='it'?'hn_it_session':'hn_staff_session');assert.ok(c);assert.ok(done.headers.getSetCookie().every(x=>!x.includes('Domain=')));return c;
+ }
+ let browser;
+ try{
+  await Promise.all([ready(staff+'/healthz'),ready(auth+'/healthz'),ready(it+'/healthz'),ready(portal+'/healthz'),ready(hr+'/healthz')]);
+  assert.equal((await get(it,'/api/me')).status,401);
+  const mine=await signIn(employee),agentCookie=await signIn(agent),portalCookie=await signIn(employee,portal,'portal','/home');
+  assert.equal((await get(it,'/api/me',mine)).status,200);assert.equal((await get(it,'/api/me',mine)).status,200,'refresh keeps sign-in');
+  assert.equal((await get(it,'/api/me',portalCookie.replace('hn_staff_session','hn_it_session'))).status,401);
+  assert.equal((await get(portal,'/api/me',mine.replace('hn_it_session','hn_staff_session'),{'x-hn-it-app':'1'})).status,401);
+  for(const endpoint of ['/api/hr-requests','/api/cases','/api/system','/api/payroll'])assert.equal((await get(it,endpoint,mine)).status,404,endpoint);
+  const create=await post(portal,'/api/helpdesk',{team:'technology',company:'Horizon Network',subject:'Network access fixture',body:'Please investigate',category:'network'},portalCookie);assert.equal(create.status,201,await create.clone().text());
+  assert.equal((await post(portal,'/api/helpdesk',{team:'hr',company:'Horizon Network',subject:'Private HR fixture',body:'HR only',category:'concern'},portalCookie)).status,201);
+  const list=await(await get(it,'/api/it-requests',mine)).json();assert.equal(list.tickets.length,1);assert.equal(list.canManage,false);const id=list.tickets[0].id;
+  const managed=await(await get(it,'/api/it-requests',agentCookie)).json();assert.equal(managed.canManage,true);assert.equal(managed.tickets.length,1);
+  const hrId=JSON.parse(fs.readFileSync(path.join(dir,'helpdesk.json'))).tickets.find(t=>t.team==='hr').id;
+  assert.equal((await get(it,'/api/it-requests/'+hrId,agentCookie)).status,404);
+  assert.equal((await get(portal,'/api/it-requests',portalCookie,{'x-hn-it-app':'1'})).status,410);
+  assert.equal((await get(hr,'/api/it-requests',portalCookie,{'x-hn-it-app':'1'})).status,404);
+  assert.equal((await post(it,'/api/it-requests/'+id+'/reply',{body:'Private note',internal:true},agentCookie)).status,200);
+  assert.doesNotMatch(JSON.stringify(await(await get(it,'/api/it-requests/'+id,mine)).json()),/Private note/);
+  assert.equal((await post(it,'/api/it-requests/'+id+'/update',{priority:'urgent'},mine)).status,403);
+  assert.equal((await post(it,'/api/it-requests/'+id+'/reply',{body:'Bad origin'},mine,'https://evil.test')).status,403);
+  for(const route of ['/status','/on-call'])assert.equal((await get(portal,route+'?source=old')).headers.get('location'),'https://it.hngroup.org.uk'+route+'?source=old');
+  for(const route of ['/api/oncall'])assert.equal((await get(it,route,mine)).status,200,route);
+  const {chromium}=require('../browser-app/node_modules/playwright');browser=await chromium.launch({executablePath:process.env.CHROMIUM_EXECUTABLE,args:['--no-sandbox']});
+  const context=await browser.newContext({viewport:{width:1440,height:1000}});await context.addCookies([{name:'hn_it_session',value:mine.split('=')[1],url:it}]);const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.goto(it+'/home');await page.getByRole('heading',{name:'Technology, connected.'}).waitFor();await page.locator('#it-sidebar img[alt="Horizon Network"]:visible').first().waitFor();assert.equal(await page.locator('html').getAttribute('data-theme'),'midnight');
+  assert.match(await page.locator('footer').innerText(),/Horizon Network Limited/);await page.screenshot({path:path.join(os.tmpdir(),'hn-it-home-desktop.png')});
+  await page.locator('.workspace-action-link[href="/cases"]').click();await page.getByText('Network access fixture',{exact:true}).waitFor();await page.locator('[data-ticket]').first().click();await page.locator('#tk-reply-text').fill('Keep my draft');await page.locator('html[data-live-updates=connected]').waitFor();
+  assert.equal((await post(it,'/api/it-requests/'+id+'/reply',{body:'Live IT response'},agentCookie)).status,200);await page.locator('.tk-thread').getByText('Live IT response',{exact:true}).waitFor({timeout:12000});assert.equal(await page.locator('#tk-reply-text').inputValue(),'Keep my draft');
+  await page.keyboard.press('Escape');await page.goto(it+'/status');await page.getByRole('heading',{name:'Service status',exact:true}).waitFor();await page.goto(it+'/on-call');await page.locator('#view h1').waitFor();assert.deepEqual(errors,[]);
+  await context.close();
+ }finally{if(browser)await browser.close();for(const child of children)child.kill('SIGTERM');await Promise.all(children.map(child=>new Promise(r=>child.exitCode!==null?r():child.once('exit',r))));fs.rmSync(dir,{recursive:true,force:true});}
+});

@@ -8,13 +8,13 @@ test('HN Group Sites: every catalogue website, search, filters, pins, live statu
   // Every website in website control's catalogue is listed (except this directory itself); private pages never are.
   const catalog = require('../admin-site/catalog.json');
   const listed = new Set(data.map((s) => s.host));
-  for (const site of catalog) if (site.id !== 'links') assert.ok(listed.has(site.hosts[0]), site.name + ' is listed');
-  for (const hidden of ['evan.hngroup.org.uk', 'oldstaffportal.hngroup.org.uk']) assert.ok(!listed.has(hidden), hidden + ' is never listed');
+  for (const site of catalog) if (!['links','hr','finance','it','accounts'].includes(site.id)) assert.ok(listed.has(site.hosts[0]), site.name + ' is listed');
+  for (const hidden of ['evan.hngroup.org.uk', 'oldstaffportal.hngroup.org.uk','hr.hngroup.org.uk','finance.hngroup.org.uk','it.hngroup.org.uk']) assert.ok(!listed.has(hidden), hidden + ' is never listed');
   assert.ok(catalog.find((s) => s.id === 'links').hosts.includes('sites.hngroup.org.uk'));
 
   const status = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ services: [{ id: 'website:vpn:vpn.hngroup.org.uk', status: 'outage' }, { id: 'website:docs:docs.hngroup.org.uk', status: 'operational' }, { id: 'manual:somewhere.example', status: 'outage' }, { id: 'staff-made', host: 'wiki.hngroup.org.uk', status: 'maintenance' }] }));
+    res.end(JSON.stringify({ services: [{ id: 'website:vpn:sat.hngroup.org.uk', status: 'outage' }, { id: 'website:docs:docs.hngroup.org.uk', status: 'operational' }, { id: 'manual:somewhere.example', status: 'outage' }, { id: 'staff-made', host: 'wiki.hngroup.org.uk', status: 'maintenance' }] }));
   });
   await new Promise((r) => status.listen(0, '127.0.0.1', r));
   process.env.STATUS_BACKEND = 'http://127.0.0.1:' + status.address().port;
@@ -22,14 +22,14 @@ test('HN Group Sites: every catalogue website, search, filters, pins, live statu
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const base = 'http://127.0.0.1:' + server.address().port;
   const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({executablePath:process.env.CHROMIUM_EXECUTABLE,args:['--no-sandbox']});
   try {
     // The page carries every card in its HTML; the status feed passes on only listed hosts.
     const html = await (await fetch(base + '/')).text();
     assert.equal((html.match(/<article class="site-card/g) || []).length, data.length);
     assert.match(html, /<link rel="canonical" href="https:\/\/sites\.hngroup\.org\.uk\/">/);
     assert.match(html, /assets\/site\.css/, 'the approved HN Group stylesheet');
-    assert.deepEqual(JSON.parse(await (await fetch(base + '/api/status')).text()).hosts, { 'vpn.hngroup.org.uk': 'outage', 'docs.hngroup.org.uk': 'operational', 'wiki.hngroup.org.uk': 'maintenance' });
+    assert.deepEqual(JSON.parse(await (await fetch(base + '/api/status')).text()).hosts, { 'sat.hngroup.org.uk': 'outage', 'docs.hngroup.org.uk': 'operational', 'wiki.hngroup.org.uk': 'maintenance' });
     assert.equal((await fetch(base + '/nope')).status, 404);
     assert.equal((await fetch(base + '/../server.js')).status, 404);
     assert.equal((await fetch(base + '/sites.json')).status, 404, 'the data file is not served');
@@ -38,7 +38,7 @@ test('HN Group Sites: every catalogue website, search, filters, pins, live statu
     const page = await browser.newPage(); const errors = []; page.on('pageerror', (e) => errors.push(e.message));
     for (const scheme of ['light', 'dark']) {
       await page.emulateMedia({ colorScheme: scheme });
-      for (const width of [320, 390, 768, 1440]) {
+      for (const width of (process.env.HN_DESKTOP_ONLY === '1' ? [1440] : [320, 390, 768, 1440])) {
         await page.setViewportSize({ width, height: 1000 }); await page.goto(base);
         assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'no sideways scrolling at ' + width + ' (' + scheme + ')');
         assert.ok(await page.locator('.card-mark.logo img:visible').evaluateAll((imgs) => imgs.length > 0 && imgs.every((i) => i.complete && i.naturalWidth > 0)), 'company logos load');

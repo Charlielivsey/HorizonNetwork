@@ -3,6 +3,7 @@
 // And should only work if you have a google account linked already to the Auth account"). Auth itself refuses accounts
 // without a linked Google account; this site checks again before every page and request, and never while someone is
 // logged in as someone else. The browser cookie points to a private server-side session.
+const {chooseOnArrival,arrivalCookie}=require('./profile-gate.cjs');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 
@@ -23,7 +24,7 @@ const linkedGoogle = (u) => (u && u.google && typeof u.google.email === 'string'
 const permitted = (u) => !!u && u.impersonated !== true && !!linkedGoogle(u);
 function userOf(u) {
   return { id: u.id, accountId: u.accountId || u.id, username: u.username, email: u.email, displayName: u.displayName,
-    firstName: u.firstName, lastName: u.lastName, company: u.company, jobTitle: u.jobTitle, google: linkedGoogle(u), impersonated: u.impersonated === true };
+    firstName: u.firstName, lastName: u.lastName, company: u.company, mainCompany: u.mainCompany || u.company, jobTitle: u.jobTitle, google: linkedGoogle(u), impersonated: u.impersonated === true };
 }
 const safeNext = (next) => (typeof next === 'string' && /^\/[A-Za-z0-9/_?=&.%#-]{0,300}$/.test(next) && !next.startsWith('//') ? next : '/');
 
@@ -66,6 +67,7 @@ function createAuth(store) {
   }
   function redirect(res, location, cookies) { res.writeHead(302, { Location: location, 'Cache-Control': 'no-store', 'Set-Cookie': cookies || [] }); res.end(); }
   async function handle(req, res, url, showPage) {
+    if(await chooseOnArrival(req,res,url,{client:'mail',session:()=>store.session(cookie(req,SESSION_COOKIE))?.authSession,backend:AUTH_BACKEND,secretFile:SECRET_FILE,authOrigin:AUTH_ORIGIN,secure:SECURE,stateCookie:STATE_COOKIE,safeNext}))return true;
     if (url.pathname === '/auth/login' && req.method === 'GET') {
       const state = crypto.randomBytes(32).toString('hex'), next = Buffer.from(safeNext(url.searchParams.get('next'))).toString('base64url');
       redirect(res, AUTH_ORIGIN + '/authorize?client_id=mail&state=' + state, [setCookie(STATE_COOKIE, state + '.' + next, 600)]);
@@ -85,7 +87,7 @@ function createAuth(store) {
       const token = store.createSession(userOf(result.user), result.session, result.expires);
       store.updateSession(token, { fresh: true }); // the first page load after signing in opens HN Mail
       let next = '/'; try { next = safeNext(Buffer.from(nextRaw || '', 'base64url').toString('utf8')); } catch {}
-      redirect(res, next, [clear, setCookie(SESSION_COOKIE, token, 30 * 86400)]);
+      redirect(res, next, [clear, arrivalCookie(SECURE), setCookie(SESSION_COOKIE, token, 30 * 86400)]);
       return true;
     }
     if (url.pathname === '/auth/logout' && req.method === 'POST') {

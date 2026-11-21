@@ -51,6 +51,14 @@ test('an open org chart redraws when only reporting positions change', async () 
     assert.equal(await page.locator('.org-node:not(.org-context):not(.vacant)').count(), 0);
     await page.getByRole('button', { name: 'Everyone', exact: true }).click();
     assert.ok(await page.locator('.org-node:not(.vacant)').count() > 0);
+    await page.getByRole('button', { name: 'HN Group', exact: true }).click();
+    await page.getByRole('button', { name: 'Horizon Network', exact: true }).click();
+    assert.match(page.url(), /\/org\?companies=hn-group%2Chorizon-network/);
+    assert.equal(await page.getByRole('button', { name: 'HN Group', exact: true }).getAttribute('aria-pressed'), 'true');
+    assert.equal(await page.getByRole('button', { name: 'Horizon Network', exact: true }).getAttribute('aria-pressed'), 'true');
+    assert.match(await page.locator('.page-head').innerText(), /2 companies/);
+    assert.equal(await page.locator('.org-scroll').evaluate(el => getComputedStyle(el).touchAction), 'none');
+    await page.getByRole('button', { name: 'Everyone', exact: true }).click();
     assert.equal(await page.locator('.org-switch').count(), 0, 'no duplicated company tabs');
     positions = [{ company: 'HN Group', title: 'Board Chairman', reportsTo: null, holders: [], key: 'chair' }];
     for (let i = 0; i < 9; i++) positions.push({ company: 'HN Group', title: 'Leadership position ' + i, reportsTo: { company: 'HN Group', title: 'Board Chairman' }, holders: [], key: 'lead-' + i });
