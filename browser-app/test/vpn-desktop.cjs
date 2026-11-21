@@ -33,7 +33,7 @@ const savedPrefs=async(file,ok)=>{for(let i=0;i<100;i++){try{const p=JSON.parse(
   assert.equal(await top.locator('#vpn-user').textContent(),'VPN Person');assert.ok(await top.locator('#vpn-power').isDisabled());
   const state=await page.evaluate(()=>window.browser.state());assert.ok(!JSON.stringify(state).includes(vpnToken));assert.ok(!JSON.stringify(state).includes(token));
   await top.locator('#vpn-step-button').click();await top.waitForFunction(()=>document.querySelector('#vpn-step').hidden);
-  assert.match(await top.locator('#vpn-device').textContent(),/HN Browser on .* · 10\.88\.0\.7/);
+  assert.match(await top.locator('#vpn-device').textContent(),/(?:HN Browser|Compass) on .* · 10\.88\.0\.7/);
   await top.locator('#vpn-power').click();await top.waitForFunction(()=>document.querySelector('#vpn-title').textContent==='Connected');
   assert.equal(await top.locator('#vpn-power').getAttribute('aria-pressed'),'true');await page.locator('#vpn-dot').waitFor({state:'visible'});await top.waitForFunction(()=>document.querySelector('#vpn-chip').textContent.startsWith('Server reachable'));
   fs.mkdirSync(path.resolve(__dirname,'../.test-results'),{recursive:true});await top.screenshot({path:path.resolve(__dirname,'../.test-results/vpn.png')});
@@ -57,7 +57,7 @@ const savedPrefs=async(file,ok)=>{for(let i=0;i<100;i++){try{const p=JSON.parse(
   await top.keyboard.press('Enter');await top.waitForFunction(()=>document.querySelector('#find-count').textContent==='2 of 3');
   await top.keyboard.press('Shift+Enter');await top.waitForFunction(()=>document.querySelector('#find-count').textContent==='1 of 3');
   await top.keyboard.press('Escape');await top.locator('#find-bar').waitFor({state:'hidden'});
-  const count=()=>page.evaluate(()=>document.querySelectorAll('.tab').length),activeIndex=()=>page.evaluate(()=>[...document.querySelectorAll('.tab')].findIndex(t=>t.classList.contains('active')));
+  const rail=await require('./layers.cjs').railOf(app),count=()=>rail.evaluate(()=>document.querySelectorAll('.tab').length),activeIndex=()=>rail.evaluate(()=>[...document.querySelectorAll('.tab')].findIndex(t=>t.classList.contains('active')));
   const before=await count();await page.keyboard.press(mod+'+t');await (await require('./layers.cjs').railOf(app)).waitForFunction(n=>document.querySelectorAll('.tab').length===n+1,before);
   await page.keyboard.press(mod+'+1');await (await require('./layers.cjs').railOf(app)).waitForFunction(()=>document.querySelector('.tab').classList.contains('active'));
   await page.keyboard.press('Control+Tab');await (await require('./layers.cjs').railOf(app)).waitForFunction(()=>document.querySelectorAll('.tab')[1].classList.contains('active'));assert.equal(await activeIndex(),1);

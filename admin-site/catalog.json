@@ -1,5 +1,14 @@
 [
   {
+    "id": "compass",
+    "name": "Compass",
+    "process": "hn-compass",
+    "port": 5690,
+    "hosts": [
+      "compass.hngroup.org.uk"
+    ]
+  },
+  {
     "id": "appeals",
     "name": "HN Group Appeals",
     "process": "hn-appeals",

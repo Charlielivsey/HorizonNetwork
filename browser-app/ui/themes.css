@@ -1,24 +1,150 @@
-/* Compass themes: one set of colour tokens per theme, shared by the toolbar, menus, suggestions and the
-   new tab page. Purple actions and the HN stripe stay the same in every theme. */
-:root,body{
- --bg:#100d1a;--chrome:#100d1a;--toolbar:#1a1528;--panel:#1f1930;--raised:#2a2240;--hover:#ffffff0f;--press:#ffffff17;--sunken:#140f20;
- --ink:#f4f0fd;--muted:#aa9fc0;--faint:#776c8e;--accent:#c5a6ff;--accent-soft:#c5a6ff24;--action:#7a3ef0;--action-2:#5514b4;--on-action:#fff;
- --line:#2d2542;--line-strong:#3f3459;--shadow:#05030bb8;--scrim:#07050d73;--good:#6fd39a;--warn:#f0c46a;--bad:#ff8aa8;--teal:#7bd8ce;
- color-scheme:dark}
-body[data-theme=daylight]{
- --bg:#e9e4f1;--chrome:#e9e4f1;--toolbar:#fbfaff;--panel:#fff;--raised:#f2edfa;--hover:#2a14500d;--press:#2a145017;--sunken:#f3f0f9;
- --ink:#1d1630;--muted:#685d7d;--faint:#988dab;--accent:#5514b4;--accent-soft:#5514b41a;--action:#5f22c8;--action-2:#4a10a0;--on-action:#fff;
- --line:#e2dbed;--line-strong:#cdc2df;--shadow:#2a175233;--scrim:#1d163033;--good:#1f8a52;--warn:#a86a08;--bad:#c2306b;--teal:#167b79;
- color-scheme:light}
-body[data-theme=deep-ocean]{
- --bg:#07131d;--chrome:#07131d;--toolbar:#0e1f2d;--panel:#102536;--raised:#183448;--hover:#ffffff0f;--press:#ffffff17;--sunken:#0a1824;
- --ink:#e7f5fc;--muted:#8fb3c6;--faint:#5f8396;--accent:#72d6e2;--accent-soft:#72d6e224;--action:#5d3fd4;--action-2:#3f27a8;--on-action:#fff;
- --line:#1d3547;--line-strong:#2a4a60;--shadow:#010811b8;--scrim:#02090f73;--good:#6fd39a;--warn:#f0c46a;--bad:#ff8aa8;--teal:#72d6e2}
-body[data-theme=forest]{
- --bg:#0b1612;--chrome:#0b1612;--toolbar:#13231d;--panel:#172a23;--raised:#203a30;--hover:#ffffff0f;--press:#ffffff17;--sunken:#0e1b16;
- --ink:#eaf7ee;--muted:#9ec1ab;--faint:#6a8b77;--accent:#a3e0b2;--accent-soft:#a3e0b224;--action:#6d43c2;--action-2:#4f2a9c;--on-action:#fff;
- --line:#22382f;--line-strong:#2f4b3f;--shadow:#020a07b8;--scrim:#030b0873;--good:#7bd8a0;--warn:#f0c46a;--bad:#ff8aa8;--teal:#a3e0b2}
-body[data-theme=rose]{
- --bg:#1c121d;--chrome:#1c121d;--toolbar:#281a28;--panel:#301f2f;--raised:#40293e;--hover:#ffffff0f;--press:#ffffff17;--sunken:#211521;
- --ink:#fff1f8;--muted:#d1a8c1;--faint:#9c7790;--accent:#f4accf;--accent-soft:#f4accf24;--action:#8c3fbe;--action-2:#6b2a96;--on-action:#fff;
- --line:#3c2739;--line-strong:#53364f;--shadow:#0b040ab8;--scrim:#0b040a73;--good:#7bd8a0;--warn:#f0c46a;--bad:#ff9db8;--teal:#f4accf}
+/* Compass 3.0 design tokens — shared across toolbar, floating rail, overlays, suggestions and new tab. */
+:root, body {
+  --bg: #0d0a16;
+  --chrome: #110d1d;
+  --toolbar: #161126;
+  --panel: #1d1730;
+  --rail: #1a142be8;
+  --raised: #272040;
+  --hover: #ffffff12;
+  --press: #ffffff1c;
+  --sunken: #110d1e;
+  --ink: #f6f2ff;
+  --muted: #aea3c7;
+  --faint: #786d91;
+  --accent: #c8a8ff;
+  --accent-soft: #c8a8ff24;
+  --accent-ring: #9d6bff55;
+  --action: #7c42f5;
+  --action-2: #5514b4;
+  --on-action: #ffffff;
+  --line: #2e2547;
+  --line-strong: #463969;
+  --shadow: #04020ac8;
+  --scrim: #06040d88;
+  --good: #6fd39a;
+  --warn: #f0c46a;
+  --bad: #ff8aa8;
+  --teal: #7bd8ce;
+  color-scheme: dark;
+}
+
+body[data-theme=daylight] {
+  --bg: #eeebf5;
+  --chrome: #ece7f4;
+  --toolbar: #fcfbff;
+  --panel: #ffffff;
+  --rail: #ffffffeb;
+  --raised: #f2edfb;
+  --hover: #2d145c0e;
+  --press: #2d145c18;
+  --sunken: #f3effa;
+  --ink: #1a132e;
+  --muted: #655a7c;
+  --faint: #9287a8;
+  --accent: #5514b4;
+  --accent-soft: #5514b418;
+  --accent-ring: #5514b43a;
+  --action: #6226cf;
+  --action-2: #4a10a0;
+  --on-action: #ffffff;
+  --line: #e2dbef;
+  --line-strong: #cbbfe0;
+  --shadow: #2914522e;
+  --scrim: #1a132e38;
+  --good: #1f8a52;
+  --warn: #a86a08;
+  --bad: #c2306b;
+  --teal: #167b79;
+  color-scheme: light;
+}
+
+body[data-theme=deep-ocean] {
+  --bg: #06111a;
+  --chrome: #081520;
+  --toolbar: #0d1f2e;
+  --panel: #11273a;
+  --rail: #0f2334eb;
+  --raised: #18364d;
+  --hover: #ffffff12;
+  --press: #ffffff1c;
+  --sunken: #091824;
+  --ink: #eaf6fd;
+  --muted: #8fb4c8;
+  --faint: #5f8499;
+  --accent: #72d6e2;
+  --accent-soft: #72d6e224;
+  --accent-ring: #72d6e250;
+  --action: #5d3fd4;
+  --action-2: #3f27a8;
+  --on-action: #ffffff;
+  --line: #1c3649;
+  --line-strong: #2c5069;
+  --shadow: #010811c8;
+  --scrim: #02090f82;
+  --good: #6fd39a;
+  --warn: #f0c46a;
+  --bad: #ff8aa8;
+  --teal: #72d6e2;
+  color-scheme: dark;
+}
+
+body[data-theme=forest] {
+  --bg: #091410;
+  --chrome: #0b1813;
+  --toolbar: #12241e;
+  --panel: #172e26;
+  --rail: #142922eb;
+  --raised: #203e33;
+  --hover: #ffffff12;
+  --press: #ffffff1c;
+  --sunken: #0d1c17;
+  --ink: #ecf8f0;
+  --muted: #9ec3ac;
+  --faint: #6a8d78;
+  --accent: #a3e0b2;
+  --accent-soft: #a3e0b224;
+  --accent-ring: #a3e0b24d;
+  --action: #6d43c2;
+  --action-2: #4f2a9c;
+  --on-action: #ffffff;
+  --line: #213a30;
+  --line-strong: #325447;
+  --shadow: #020a07c8;
+  --scrim: #030b0882;
+  --good: #7bd8a0;
+  --warn: #f0c46a;
+  --bad: #ff8aa8;
+  --teal: #a3e0b2;
+  color-scheme: dark;
+}
+
+body[data-theme=rose] {
+  --bg: #180f19;
+  --chrome: #1d121e;
+  --toolbar: #271928;
+  --panel: #312031;
+  --rail: #2c1c2deb;
+  --raised: #422b41;
+  --hover: #ffffff12;
+  --press: #ffffff1c;
+  --sunken: #201421;
+  --ink: #fff2f8;
+  --muted: #d3abc3;
+  --faint: #9e7892;
+  --accent: #f4accf;
+  --accent-soft: #f4accf24;
+  --accent-ring: #f4accf50;
+  --action: #8c3fbe;
+  --action-2: #6b2a96;
+  --on-action: #ffffff;
+  --line: #3e283b;
+  --line-strong: #593955;
+  --shadow: #0b040ac8;
+  --scrim: #0b040a82;
+  --good: #7bd8a0;
+  --warn: #f0c46a;
+  --bad: #ff9db8;
+  --teal: #f4accf;
+  color-scheme: dark;
+}

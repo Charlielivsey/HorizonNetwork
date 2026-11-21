@@ -12,5 +12,6 @@
   "links-site/public/assets",
   "mail-site/public/assets",
   "people-site/public/assets",
-  "appeals-site/public/assets"
+  "appeals-site/public/assets",
+  "compass-site/public/assets"
 ]

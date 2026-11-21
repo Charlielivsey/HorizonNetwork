@@ -1,1 +1,48 @@
-<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; img-src 'self'; font-src 'self'; base-uri 'none'; form-action 'self'"><title>New tab</title><link rel="stylesheet" href="themes.css"><link rel="stylesheet" href="newtab.css"></head><body><div class="glow" aria-hidden="true"></div><img class="watermark" src="assets/compass-mark.svg" alt="" aria-hidden="true"><main><section class="hero"><div class="welcome"><img class="hero-mark" src="assets/compass.svg" alt="Compass"><div><p class="eyebrow">YOUR HN WORKSPACE</p><h1><!--GREETING--></h1><p class="role"><!--ROLE--></p></div></div><form action="hn-browser://start/search"><label for="q" class="visually-hidden">Search or type a web address</label><div class="search"><svg aria-hidden="true"><use href="icons.svg#search"/></svg><input id="q" name="q" placeholder="Search or type a web address" autocomplete="off"><span class="search-provider"><!--ENGINE--></span><button aria-label="Search"><svg><use href="icons.svg#forward"/></svg></button></div></form></section><section class="directory" aria-label="HN Group directory"><!--SHORTCUTS--></section><!--RECENT--><footer><img class="on-light" src="assets/hn-group-wordmark.svg" alt="HN Group"><img class="on-dark" src="assets/hn-group-wordmark-white.svg" alt="HN Group"><span>One group. All connected.</span></footer></main></body></html>
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; img-src 'self'; font-src 'self'; base-uri 'none'; form-action 'self'">
+  <title>New tab</title>
+  <link rel="stylesheet" href="themes.css">
+  <link rel="stylesheet" href="newtab.css">
+</head>
+<body>
+  <div class="glow" aria-hidden="true"></div>
+  <img class="watermark" src="assets/compass-mark.svg" alt="" aria-hidden="true">
+  <main class="workspace">
+    <section class="hero">
+      <div class="welcome">
+        <div class="hero-emblem">
+          <img class="hero-mark" src="assets/compass.svg" alt="Compass">
+        </div>
+        <div class="welcome-copy">
+          <p class="eyebrow">YOUR HN WORKSPACE</p>
+          <h1 class="greeting"><!--GREETING--></h1>
+          <p class="role"><!--ROLE--></p>
+        </div>
+      </div>
+      <form class="search-form" action="hn-browser://start/search">
+        <label for="q" class="visually-hidden">Search or type a web address</label>
+        <div class="search">
+          <svg aria-hidden="true"><use href="icons.svg#search"/></svg>
+          <input id="q" name="q" placeholder="Search the web, a site name or an address" autocomplete="off">
+          <span class="search-provider"><!--ENGINE--></span>
+          <button type="submit" aria-label="Search"><svg><use href="icons.svg#forward"/></svg></button>
+        </div>
+      </form>
+    </section>
+
+    <!--RECENT-->
+
+    <section class="directory" aria-label="HN Group directory"><!--SHORTCUTS--></section>
+
+    <footer class="home-footer">
+      <img class="on-light" src="assets/hn-group-wordmark.svg" alt="HN Group">
+      <img class="on-dark" src="assets/hn-group-wordmark-white.svg" alt="HN Group">
+      <span>Compass · One group, all connected.</span>
+    </footer>
+  </main>
+</body>
+</html>

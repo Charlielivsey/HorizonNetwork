@@ -1,6 +1,6 @@
 {
   "name": "hn-group-browser",
-  "version": "2.0.1",
+  "version": "3.0.0",
   "productName": "Compass",
   "private": true,
   "description": "Compass \u2014 the HN Group browser with a floating vertical tab panel and your HN workspace",

@@ -21,5 +21,6 @@
   "vpn-site/public/assets",
   "website-suite/public/assets",
   "wiki-site/public/assets",
-  "appeals-site/public/assets"
+  "appeals-site/public/assets",
+  "compass-site/public/assets"
 ]

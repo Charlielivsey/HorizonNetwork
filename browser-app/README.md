@@ -1,10 +1,12 @@
-# Compass 2.0
+# Compass 3.0
 
-Compass for macOS Apple silicon, Windows x64 and Linux x64, rebuilt with a vertical tab rail and HN workspace home. Intel Macs remain unsupported.
+Compass for macOS Apple silicon, Windows x64 and Linux x64, rebuilt from the ground up with a modular main-process architecture (`src/core/`), a refreshed UI, floating vertical tabs, HN Account + six-digit PIN sign-in, built-in HN VPN, VPS SSH terminal and your HN workspace home. Intel Macs remain unsupported. Website: `https://compass.hngroup.org.uk`.
 
-## 2.0 — floating side tabs and your HN workspace
+## 3.0 — ground-up rebuild, floating tabs & refreshed workspace
 
-The top toolbar keeps navigation, the address bar, bookmarks, downloads, VPN, account and settings. Tabs sit in a left-hand rail: icons in compact mode, or names in the expanded list. The expansion choice is saved. Tabs support keyboard selection, drag ordering, pinning and closing; webpages keep their own sandbox and receive bounds beside the rail. The home page uses HN colours, a name/role greeting when signed in, search, real HN apps and recent sites. HR, Finance and IT shortcuts use the unified Staff Portal; Account and SAT use their current hosts. The prior Browser 1.x archive is retained.
+- **Clean modular architecture (`src/core/`):** the main process is split into focused modules (`dialogs.cjs`, `newtab.cjs`, `menu.cjs`, `shell-views.cjs`, `tabs.cjs`, `ipc.cjs`) wired cleanly in `src/main.cjs`.
+- **Preserved sign-in & floating tab design:** keeps HN Group Auth + masked six-digit PIN lock, OS-encrypted `safeStorage` credential vault (`HN Browser` namespace preserved so existing accounts, profiles, tabs and history survive), device approval gate, and the floating rounded vertical tab panel (`WebContentsView` with `setBorderRadius(22)`) in compact or expanded mode.
+- **Overhauled UI:** rebuilt `themes.css`, `chrome.css` (removing legacy horizontal-tab leftovers), `rail.css`, and `newtab.html`/`newtab.css` (with left safe-area clearance so the floating tab rail sits cleanly beside the workspace hero). Includes the new `compass.hngroup.org.uk` shortcut.
 
 A new installation does not replace a user’s installed browser remotely. Existing profiles, tabs, history and encrypted account storage remain in their existing locations.
 

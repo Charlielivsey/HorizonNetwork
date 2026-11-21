@@ -1,278 +1,728 @@
 'use strict';
-const{app,BrowserWindow,WebContentsView,ipcMain,session,Menu,dialog,protocol,net,shell,safeStorage,nativeTheme,powerMonitor,clipboard,nativeImage,Notification}=require('electron');
-const path=require('node:path'),fs=require('node:fs'),{execFile}=require('node:child_process'),{pathToFileURL}=require('node:url'),crypto=require('node:crypto');
-const{SSH}=require('./ssh.cjs');
-const{Frames}=require('./runtime/frames.cjs'),{Themes}=require('./runtime/themes.cjs'),{Preferences}=require('./runtime/preferences.cjs'),{keyboard}=require('./runtime/shortcuts.cjs');
-const{ASSETS,directory}=require('./homepage.cjs');
-const siteTheme=require('./site-theme.cjs');
-const{websiteHeaders}=require('./auth-headers.cjs');
-const{Vault}=require('./vault.cjs');
-const{homeSearch,siteShortcut}=require('./sites.cjs');
-const{Library,host}=require('./library.cjs'),settings=require('./settings.cjs'),{hnSite}=require('./hn.cjs');
-const{Downloads}=require('./downloads.cjs');
-const{Updates}=require('./updates.cjs'),{installMac,installWindows,installLinux}=require('./installer.cjs');
-const{HOME,address,webURL,navigationAllowed,theme}=require('./policy.cjs'),{Account}=require('./sign-in.cjs');
-const{VPN,FakeController,controllerFor,ORIGIN:VPN_ORIGIN}=require('./vpn.cjs');
-const{Device,testFetcher}=require('./device.cjs'),{createDeviceGate}=require('./device-gate.cjs');
-// Keep the OS encryption namespace: Electron keys safeStorage and encrypted cookies by this internal name.
-// Visible app, window and menu labels use Compass.
+const path = require('node:path');
+const fs = require('node:fs');
+const { execFile } = require('node:child_process');
+const { pathToFileURL } = require('node:url');
+const { app, BrowserWindow, session, protocol, net, safeStorage, powerMonitor, Notification } = require('electron');
+
+const { SSH } = require('./ssh.cjs');
+const { Frames } = require('./runtime/frames.cjs');
+const { Themes } = require('./runtime/themes.cjs');
+const { Preferences } = require('./runtime/preferences.cjs');
+const { keyboard } = require('./runtime/shortcuts.cjs');
+const { ASSETS } = require('./homepage.cjs');
+const { websiteHeaders } = require('./auth-headers.cjs');
+const { Vault } = require('./vault.cjs');
+const { Library } = require('./library.cjs');
+const settings = require('./settings.cjs');
+const { Downloads } = require('./downloads.cjs');
+const { Updates } = require('./updates.cjs');
+const { HOME, webURL, theme } = require('./policy.cjs');
+const { Account } = require('./sign-in.cjs');
+const { VPN, FakeController, controllerFor } = require('./vpn.cjs');
+const { Device, testFetcher } = require('./device.cjs');
+const { createDeviceGate } = require('./device-gate.cjs');
+
+const { Dialogs } = require('./core/dialogs.cjs');
+const { ShellViews } = require('./core/shell-views.cjs');
+const { TabManager } = require('./core/tabs.cjs');
+const { renderNewTab, greetingText } = require('./core/newtab.cjs');
+const { installAppMenu } = require('./core/menu.cjs');
+const { registerIpc } = require('./core/ipc.cjs');
+
+// Preserve the OS encryption namespace and userData path so safeStorage keys, accounts, tabs and history survive.
 app.setName('HN Browser');
-// Keep the original profile directory and bundle ID so existing accounts, tabs and history survive.
-app.setPath('userData',path.join(app.getPath('appData'),'HN Browser'));
-if(!app.isPackaged&&process.env.HN_BROWSER_TEST_PROFILE)app.setPath('userData',path.resolve(process.env.HN_BROWSER_TEST_PROFILE));
-// One Compass at a time per profile: opening it again brings the existing window forward.
-if(!app.requestSingleInstanceLock()){app.quit();}else app.on('second-instance',()=>{if(win&&!win.isDestroyed()){if(win.isMinimized())win.restore();win.focus();}});
-protocol.registerSchemesAsPrivileged([{scheme:'hn-browser',privileges:{standard:true,secure:true,supportFetchAPI:true}}]);
-// Linux desktops other than KDE and GNOME (such as Bazzite's Gaming Mode) keep the account in the Secret Service.
-if(process.platform==='linux'&&app.isPackaged&&!/KDE|GNOME|Unity|XFCE|Cinnamon|MATE|Pantheon|Budgie/i.test(process.env.XDG_CURRENT_DESKTOP||'')&&!app.commandLine.hasSwitch('password-store'))app.commandLine.appendSwitch('password-store','gnome-libsecret');
-const UI=path.join(__dirname,'../ui'),SHELL=pathToFileURL(path.join(UI,'shell.html')).href,OVERLAY=pathToFileURL(path.join(UI,'workspace.html')).href+'?layer=overlay',RAIL=pathToFileURL(path.join(UI,'rail.html')).href,TOP=76;
-let frames,themes,preferencesStore,ssh,sshKey=null,unlockEmail=null;
-let device,deviceGate,win,account,authWindow,tabs=[],active=null,preferences=settings.load(null),library,sessionTimer,quitting=false,allowClose=false,keepTabsOnce=false,noticeTimer,popup=null,popupShown=false,popupItems=[],message='',errorTimer,downloads,panel=null,closingPanel=false,overlay=null,railView=null,flushTimer=null,panelRequest=0,updates,build=0,closedTabs=[],historyVersion=0,anchors={},themeQueue=Promise.resolve(),authTheme=null,vpn,find={open:false,text:'',active:0,matches:0};
-const remotePreferences={nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true,allowRunningInsecureContent:false,safeDialogs:true,navigateOnDragDrop:false};
-function report(error){message=String(error?.message||error).slice(0,300);changed();clearTimeout(errorTimer);errorTimer=setTimeout(()=>{message='';changed();},10000);}
-function snapshot(){return{themeAt:themes?.at||0,themeRevision:themes?.revision||0,ssh:ssh?.snapshot()||null,preferences:{...preferences,downloadPath:preferences.downloadPath||app.getPath('downloads')},chromium:process.versions.chrome,electron:process.versions.electron,platform:process.platform,historyVersion,panel,panelClosing:closingPanel,question:question&&{id:question.id,title:question.title,text:question.text||'',detail:question.detail||'',note:question.note||'',icon:question.icon||'info',tone:question.tone||'primary',buttons:question.buttons},anchors,update:updates?.state,build,avatar:account?.avatar||null,locked:!!account?.locked,remembered:account?.remembered||null,theme:preferences.theme,bookmarks:library?.bookmarks||[],profileEditable:!!account?.unlockKey,user:account?.user||null,message,downloads:downloads?.snapshot()||[],active,tabs:tabs.map(t=>({id:t.id,hn:hnSite(t.url)?.name||null,icon:t.icon||null,zoom:t.view.webContents.isDestroyed()?0:t.view.webContents.getZoomLevel(),pinned:!!t.pinned,muted:t.view.webContents.isAudioMuted(),title:t.title,url:t.url,loading:t.loading,error:t.error,back:!t.view.webContents.isDestroyed()&&t.view.webContents.navigationHistory.canGoBack(),forward:!t.view.webContents.isDestroyed()&&t.view.webContents.navigationHistory.canGoForward()})),version:app.getVersion(),vpn:vpn?.snapshot()||null,find:{open:find.open,text:find.text,active:find.active,matches:find.matches}};}
-// Changes are gathered and sent to the browser's own pages at most once a frame, so a burst of page events
-// (loading, titles, download progress) can't flood the interface.
-function changed(){frames?.changed();}
-function flush(){frames?.flush();}
-// Questions are asked in Compass's own window, in the HN Group design (never a plain system box): a card
-// over the dimmed page, drawn by the overlay. One at a time; resolves with the chosen button's id, or 'cancel'.
-// Updates only install on a computer that's still approved on devices.hngroup.org.uk.
-function requireDevice(){if(!device?.state().allowed)throw Error('This computer isn’t approved on devices.hngroup.org.uk, so Compass can’t be updated here.');}
-let question=null;const questions=[];
-function ask(spec){return new Promise(resolve=>{questions.push({...spec,id:crypto.randomUUID(),resolve});if(!question)nextQuestion();});}
-function nextQuestion(){question=questions.shift()||null;if(question&&win&&!win.isDestroyed()){hidePopup();if(win.isMinimized())win.restore();win.show();win.focus();overlay?.webContents.focus();}flush();}
-function answerQuestion(id,choice){if(!question||question.id!==id)return;const q=question;question=null;q.resolve(q.buttons.some(b=>b.id===choice)?choice:'cancel');flush();if(questions.length)setTimeout(nextQuestion,preferences.reduceMotion?0:160);else if(!panel&&win&&!win.isDestroyed())tabs.find(t=>t.id===active)?.view.webContents.focus();}
-// A yes/no question: the safe choice comes first and has focus.
-const confirmed=async spec=>await ask({...spec,buttons:[{id:'cancel',label:spec.cancel||'Cancel'},{id:'ok',label:spec.confirm,tone:spec.tone==='danger'?'danger':'primary'}]})==='ok';
-// A short confirmation (bookmarked, copied…), cleared after a few seconds.
-function notify(text){message=text;changed();clearTimeout(errorTimer);errorTimer=setTimeout(()=>{message='';changed();},3500);}
-// Remembers open tabs for "Continue where you left off".
-function saveSession(){if(quitting||!library||preferences.startup!=='restore')return;clearTimeout(sessionTimer);sessionTimer=setTimeout(()=>{if(!quitting&&tabs.length)library.saveSession(tabs.map(t=>({url:t.url,pinned:t.pinned})),tabs.findIndex(t=>t.id===active));},800);sessionTimer.unref?.();}
-const esc=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function sidebarWidth(){return preferences.sidebarExpanded?232:76;}
-function resize(){if(!win||win.isDestroyed())return;const[w,h]=win.getContentSize();for(const t of tabs){t.view.setVisible(t.id===active);t.view.setBounds({x:0,y:TOP,width:w,height:Math.max(0,h-TOP)});}placeRail();placeOverlay();}
-// A rounded trusted native layer floats over the full-width live website. No sidebar gutter is reserved.
-function placeRail(){if(!railView||!win||win.isDestroyed())return;const[,h]=win.getContentSize();const height=Math.min(Math.max(0,h-TOP-32),148+Math.max(1,tabs.length)*52);railView.setBounds({x:12,y:TOP+16,width:sidebarWidth()-20,height});}
-function createRail(){railView=new WebContentsView({webPreferences:{...remotePreferences,backgroundThrottling:false,preload:path.join(__dirname,'preload.cjs')}});railView.setBackgroundColor('#00000000');railView.setBorderRadius(22);const wc=railView.webContents;wc.on('will-navigate',e=>e.preventDefault());wc.setWindowOpenHandler(()=>({action:'deny'}));wc.on('before-input-event',(event,input)=>{if(keys(input))event.preventDefault();});win.contentView.addChildView(railView);placeRail();return wc.loadURL(RAIL);}
-// Menus and messages are drawn by a transparent copy of the browser's interface laid over the live page,
-// so pages are never hidden, frozen or swapped for a picture. It takes no room while nothing is shown.
-function createOverlay(){overlay=new WebContentsView({webPreferences:{...remotePreferences,backgroundThrottling:false,preload:path.join(__dirname,'preload.cjs')}});overlay.setBackgroundColor('#00000000');overlay.setBounds({x:0,y:0,width:0,height:0});const wc=overlay.webContents;wc.on('will-navigate',e=>e.preventDefault());wc.setWindowOpenHandler(()=>({action:'deny'}));wc.on('before-input-event',(event,input)=>{if(keys(input))event.preventDefault();});win.contentView.addChildView(overlay);return wc.loadURL(OVERLAY);}
-function placeOverlay(){if(!overlay||!win||win.isDestroyed())return;const[w,h]=win.getContentSize(),room=Math.max(0,h-TOP);let b={x:0,y:0,width:0,height:0};
- if(panel||closingPanel||question)b={x:0,y:TOP,width:w,height:room};else if(find.open){const width=Math.min(w,420);b={x:w-width,y:TOP,width,height:Math.min(64,room)};}else if(message){const width=Math.min(Math.max(0,w-24),640),height=Math.min(100,room);b={x:Math.round((w-width)/2),y:h-height,width,height};}
- const c=overlay.getBounds();if(c.x!==b.x||c.y!==b.y||c.width!==b.width||c.height!==b.height)overlay.setBounds(b);}
-// Keeps the overlay above newly opened tabs.
-function raise(){if(railView&&win&&!win.isDestroyed())win.contentView.addChildView(railView);if(overlay&&win&&!win.isDestroyed())win.contentView.addChildView(overlay);}
-// Address bar suggestions: a small trusted page drawn above the website, so the website never has to be
-// swapped for a still picture while you type.
-function createPopup(){popup=new WebContentsView({webPreferences:{...remotePreferences,preload:path.join(__dirname,'popup-preload.cjs')}});popup.setBackgroundColor('#00000000');popup.webContents.on('will-navigate',e=>e.preventDefault());popup.webContents.setWindowOpenHandler(()=>({action:'deny'}));popup.webContents.loadFile(path.join(UI,'popup.html'));}
-function showPopup(items,rect,index=-1){if(!popup||!win||win.isDestroyed())return;popupItems=items;if(!items.length||!rect){hidePopup();return;}const x=Math.max(0,Math.round(rect.x)-10),y=Math.round(rect.y)-6,width=Math.round(rect.width)+20,height=Math.min(items.length,8)*44+38;popup.webContents.send('popup:items',{items,index,theme:preferences.theme,reduceMotion:preferences.reduceMotion});const c=popup.getBounds();if(c.x!==x||c.y!==y||c.width!==width||c.height!==height)popup.setBounds({x,y,width,height});if(!popupShown)win.contentView.addChildView(popup);popupShown=true;}
-// Hiding also empties the list, so an old list can never flash up the next time it appears.
-function hidePopup(){if(popupShown&&win&&!win.isDestroyed()){win.contentView.removeChildView(popup);popup.webContents.send('popup:items',{items:[],index:-1,theme:preferences.theme,reduceMotion:preferences.reduceMotion});}popupShown=false;popupItems=[];}
-function select(id){const t=tabs.find(t=>t.id===id);if(!t)return;hidePopup();if(active!==t.id)stopFind();active=t.id;panelRequest++;panel=null;closingPanel=false;resize();changed();t.view.webContents.focus();}
-async function setPanel(value){
- const request=++panelRequest;
- hidePopup();
- // Closing: the menu animates away over the live page, then the overlay gets out of the way.
- if(!value){const was=panel;if(!was&&!closingPanel)return;panel=null;if(overlay?.webContents.isFocused()&&win&&!win.isDestroyed())win.webContents.focus();if(was&&!preferences.reduceMotion){closingPanel=true;flush();await new Promise(resolve=>setTimeout(resolve,170));if(request!==panelRequest)return;}closingPanel=false;flush();return;}
- if(!['account','appearance','menu','updates','downloads','settings','vpn','history','bookmarks','ssh'].includes(value))throw Error('Unknown browser menu.');
- panel=value;closingPanel=false;flush();if(win&&!win.isDestroyed()){win.focus();overlay?.webContents.focus();}
+app.setPath('userData', path.join(app.getPath('appData'), 'HN Browser'));
+if (!app.isPackaged && process.env.HN_BROWSER_TEST_PROFILE) {
+  app.setPath('userData', path.resolve(process.env.HN_BROWSER_TEST_PROFILE));
 }
-function titleTheme(){themes?.native(preferences.theme);}
-const ENGINES={google:['Google','https://www.google.com/search?q='],bing:['Bing','https://www.bing.com/search?q='],duckduckgo:['DuckDuckGo','https://duckduckgo.com/?q=']};
-function searchURL(q){return ENGINES[preferences.searchEngine][1]+encodeURIComponent(q);}
-// The address bar's answer for typed text: a site, an address, or a search with the chosen engine.
-function resolve(value){const target=address(value);return target.startsWith('https://www.google.com/search?q=')?searchURL(new URL(target).searchParams.get('q')):target;}
-function navigate(t,value){let target=resolve(value);t.error='';t.view.webContents.loadURL(target).catch(e=>{if(e.code!=='ERR_ABORTED'&&e.errno!==-3)report('That page could not be loaded. Check the address or your connection.');});}
-function add(value=HOME,{background=false,next=preferences.newTabNextToCurrent,pinned=false}={}){if(tabs.length>=40)throw Error('Close a tab before opening another one.');const opener=tabs.findIndex(t=>t.id===active);
- const view=new WebContentsView({webPreferences:{...remotePreferences,partition:'persist:hn-browser-pages'}}),t={id:crypto.randomUUID(),view,title:'New tab',url:HOME,loading:false,error:'',pinned};if(next&&opener>=0)tabs.splice(opener+1,0,t);else tabs.push(t);view.setVisible(false);win.contentView.addChildView(view);raise();resize();const wc=view.webContents;
- wc.setWindowOpenHandler(({url,disposition})=>{if(!preferences.popups&&disposition!=='background-tab'&&disposition!=='foreground-tab'){notify('A pop-up from this site was blocked. Settings → Privacy can allow them.');return{action:'deny'};}if(webURL(url)){try{add(url,{background:disposition==='background-tab',next:true});}catch(e){report(e);}}return{action:'deny'};});
- const restrict=(event,url)=>{const query=homeSearch(url);if(wc.getURL()===HOME&&query!==null){event.preventDefault();try{navigate(t,query);}catch(e){report(e);}return;}if(!navigationAllowed(url))event.preventDefault();};wc.on('will-navigate',restrict);wc.on('will-redirect',restrict);wc.on('will-attach-webview',e=>e.preventDefault());
- wc.on('page-title-updated',(_e,title)=>{t.title=title.slice(0,120);if(preferences.saveHistory)library.title(wc.getURL(),title);changed();});
- const remember=url=>{if(preferences.saveHistory&&webURL(url)){library.visit(url,wc.getTitle());historyVersion++;changed();}};wc.on('did-navigate',(_e,url)=>remember(url));wc.on('did-navigate-in-page',(_e,url,isMain)=>{if(isMain)remember(url);});
- wc.on('zoom-changed',()=>changed());wc.on('focus',()=>{if(panel)setTimeout(()=>{if(panel&&overlay&&!overlay.webContents.isDestroyed())overlay.webContents.focus();},0);});wc.on('context-menu',(_e,params)=>pageMenu(t,params));
- wc.on('page-favicon-updated',(_e,icons)=>tabIcon(t,icons));wc.on('did-navigate',()=>{if(t.icon){t.icon=null;changed();}});
- wc.on('found-in-page',(_e,result)=>{if(t.id===active&&find.open&&result.finalUpdate!==false){find.answered=Math.max(find.answered||0,result.requestId||0);find.active=result.activeMatchOrdinal||0;find.matches=result.matches||0;changed();}});
- wc.setZoomLevel(preferences.defaultZoom);wc.on('did-finish-load',()=>applySiteTheme(t));
- const update=()=>{t.url=wc.getURL()||HOME;t.loading=wc.isLoading();changed();};for(const event of ['did-start-loading','did-stop-loading','did-navigate','did-navigate-in-page'])wc.on(event,update);
- wc.on('did-fail-load',(_e,code,_description,url,isMain)=>{if(isMain&&code!==-3){t.error='This page could not be loaded. Check your connection or try another address.';t.url=url;changed();report(t.error);}});
- wc.on('render-process-gone',()=>{t.error='This tab stopped responding. Reload to try again.';changed();report(t.error);});
- wc.on('before-input-event',(event,input)=>{if(keys(input))event.preventDefault();});
- navigate(t,value);if(background&&active)changed();else select(t.id);return t;
+
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (win && !win.isDestroyed()) {
+      if (win.isMinimized()) win.restore();
+      win.focus();
+    }
+  });
 }
-function close(id){const index=tabs.findIndex(t=>t.id===id);if(index<0)return;const[t]=tabs.splice(index,1);if(navigationAllowed(t.url)){closedTabs.push(t.url);closedTabs=closedTabs.slice(-20);}win.contentView.removeChildView(t.view);t.view.webContents.close();if(!tabs.length)add();else if(active===id)select(tabs[Math.min(index,tabs.length-1)].id);changed();}
-// Keyboard shortcuts shared by web pages and the browser shell. Returns true when handled.
-function keys(input){return keyboard(input,{tab:n=>{const t=n===9?tabs.at(-1):tabs[n-1];if(t)select(t.id);},cycle,shortcut,history,reopen:()=>{try{if(closedTabs.length)add(closedTabs.pop());}catch(e){report(e);}},panel:value=>setPanel(value).catch(report),lock:()=>lockBrowser().catch(report),zoom});}
-function cycle(step){if(tabs.length<2)return;const index=tabs.findIndex(t=>t.id===active);select(tabs[(index+step+tabs.length)%tabs.length].id);}
-function history(step){const h=tabs.find(t=>t.id===active)?.view.webContents.navigationHistory;if(step<0&&h?.canGoBack())h.goBack();else if(step>0&&h?.canGoForward())h.goForward();}
-// Tab icons come from the page's own favicon, fetched here (images only, small) and shown as data URLs.
-async function tabIcon(t,icons){const url=(icons||[]).find(u=>/^https?:\/\//.test(u)||/^data:image\/(png|x-icon|vnd\.microsoft\.icon|gif|jpeg|webp);base64,/.test(u));if(!url||t.iconSource===url)return;t.iconSource=url;try{let data=url;if(!url.startsWith('data:')){const response=await session.fromPartition('persist:hn-browser-pages').fetch(url,{signal:AbortSignal.timeout(8000),redirect:'follow'});const type=(response.headers.get('content-type')||'').split(';')[0].trim();if(!response.ok||!/^image\/(png|x-icon|vnd\.microsoft\.icon|gif|jpeg|webp)$/.test(type))return;const body=Buffer.from(await response.arrayBuffer());if(!body.length||body.length>200000)return;data='data:'+type+';base64,'+body.toString('base64');}else if(url.length>270000)return;if(t.iconSource===url&&tabs.includes(t)){t.icon=data;changed();}}catch{}}
-// Find in page: a find bar in the trusted shell drives Chromium's search in the active tab.
-function stopFind(){const wc=tabs.find(t=>t.id===active)?.view.webContents;if(find.open&&wc&&!wc.isDestroyed())wc.stopFindInPage('clearSelection');find={open:false,text:'',active:0,matches:0};}
-function shortcut(key){try{if(key==='d')toggleBookmark();else if(key==='p')tabs.find(t=>t.id===active)?.view.webContents.print({},()=>{});else if(key==='f'){hidePopup();find.open=true;flush();overlay?.webContents.focus();overlay?.webContents.send('browser:find');}else if(key==='t')add();else if(key==='w')close(active);else if(key==='l'){win.webContents.focus();win.webContents.send('browser:focus-address');}else if(key==='r')tabs.find(t=>t.id===active)?.view.webContents.reload();}catch(e){report(e);}}
-// Connects the HN VPN when the browser account is unlocked, if the person asked for that.
-// Compass never turns the VPN on by itself (the user's request, 25 October 2026); it only connects when asked.
-// Quitting Compass turns the VPN off, unless HN Secure Access Terminal is open to look after it.
-function secureNetworkOpen(){return new Promise(resolve=>{
- if(process.platform==='darwin')execFile('/bin/ps',['-axo','comm='],{timeout:3000},(e,out)=>resolve(!e&&String(out).split('\n').some(l=>/\.app\/Contents\/MacOS\/(HN Secure Network|HN Secure Access Terminal|HN Group VPN)$/.test(l.trim()))));
- else if(process.platform==='win32')execFile('tasklist',['/FI','IMAGENAME eq HN Secure Network.exe','/FO','CSV','/NH'],{timeout:3000,windowsHide:true},(e,out)=>resolve(!e&&/"HN Secure Network\.exe"/i.test(String(out))));
- // Linux: HN Secure Access Terminal's program is called hn-secure-network (inside its AppImage).
- else if(process.platform==='linux'){let found=false;try{for(const pid of fs.readdirSync('/proc')){if(!/^\d+$/.test(pid))continue;try{if(path.basename(fs.readFileSync('/proc/'+pid+'/cmdline','utf8').split('\0')[0])==='hn-secure-network'){found=true;break;}}catch{}}}catch{}resolve(found);}
- else resolve(false);});}
-async function vpnOffOnQuit(){let result='off already';try{await vpn?.poll().catch(()=>{});if(vpn?.connected){if(!app.isPackaged&&process.env.HN_BROWSER_TEST_SECURE_NETWORK_OPEN==='1'||await secureNetworkOpen())result='left on for HN Secure Access Terminal';else{await Promise.race([vpn.disconnect(),new Promise(r=>setTimeout(r,8000))]);result=vpn.connected?'still on':'turned off';}}}catch{result='still on';}
- if(!app.isPackaged&&process.env.HN_BROWSER_TEST_PROFILE){try{fs.writeFileSync(path.join(app.getPath('userData'),'vpn-on-quit.txt'),result);}catch{}}}
-function flushSession(){if(quitting)return;clearTimeout(sessionTimer);if(library&&(preferences.startup==='restore'||keepTabsOnce)&&tabs.length)library.saveSession(tabs.map(t=>({url:t.url,pinned:t.pinned})),tabs.findIndex(t=>t.id===active));quitting=true;library?.flush();}
-function persistPreferences(){preferencesStore?.save(preferences);changed();}
-async function applySiteTheme(t){return themes?.page(t.view.webContents,preferences.theme,preferences.hnThemes);}
-async function saveTheme(value){preferences.theme=theme(value);themes.change(preferences.theme,preferences.reduceMotion);persistPreferences();await Promise.all([...tabs,...(authTheme?[authTheme]:[])].map(applySiteTheme));}
-function tabMenu(id){const t=tabs.find(t=>t.id===id);if(!t)return;const index=tabs.indexOf(t);const safe=fn=>()=>{try{fn();}catch(e){report(e);}};Menu.buildFromTemplate([
- {label:'New tab to the right',click:safe(()=>{const n=add();tabs.splice(tabs.indexOf(n),1);tabs.splice(tabs.indexOf(t)+1,0,n);changed();})},
- {label:'Reload tab',click:()=>t.view.webContents.reload()},
- {label:'Duplicate tab',click:safe(()=>add(t.url))},
- {label:t.pinned?'Unpin tab':'Pin tab',click:()=>{t.pinned=!t.pinned;tabs.splice(tabs.indexOf(t),1);tabs.splice(t.pinned?0:tabs.filter(x=>x.pinned).length,0,t);changed();}},
- {label:t.view.webContents.isAudioMuted()?'Unmute tab':'Mute tab',click:()=>{t.view.webContents.setAudioMuted(!t.view.webContents.isAudioMuted());changed();}},
- {type:'separator'},
- {label:'Close tab',click:()=>close(id)},
- {label:'Close other tabs',enabled:tabs.some(x=>x!==t&&!x.pinned),click:()=>{for(const x of [...tabs])if(x!==t&&!x.pinned)close(x.id);}},
- {label:'Close tabs to the right',enabled:tabs.slice(index+1).some(x=>!x.pinned),click:()=>{for(const x of tabs.slice(tabs.indexOf(t)+1))if(!x.pinned)close(x.id);}},
- {type:'separator'},{label:'Reopen closed tab',enabled:closedTabs.length>0,click:safe(()=>add(closedTabs.pop()))}
- ]).popup({window:win});}
-function zoom(delta){const wc=tabs.find(t=>t.id===active)?.view.webContents;if(wc){wc.setZoomLevel(delta===null?preferences.defaultZoom:Math.max(-3,Math.min(5,wc.getZoomLevel()+delta)));changed();}}
-function toggleBookmark(){const t=tabs.find(t=>t.id===active);if(!t||!webURL(t.url))throw Error('Only websites can be bookmarked.');notify(library.toggleBookmark(t.url,t.title)?'Bookmarked “'+(t.title||host(t.url)).slice(0,60)+'”.':'Bookmark removed.');}
-// Locks Compass: the remembered account needs its PIN again. Pages stay open behind the lock.
-async function lockBrowser(){if(!account?.user)return;ssh?.closeAll();if(sshKey)sshKey.fill(0);sshKey=null;stopFind();await account.lock();message='';await setPanel('account');}
-// Right-click menu for webpages.
-function pageMenu(t,p){const wc=t.view.webContents,items=[],safe=fn=>()=>{try{fn();}catch(e){report(e);}},sep={type:'separator'};
- if(p.linkURL&&webURL(p.linkURL))items.push({label:'Open link in new tab',click:safe(()=>add(p.linkURL,{background:true,next:true}))},{label:'Copy link address',click:()=>clipboard.writeText(p.linkURL)},sep);
- if(p.mediaType==='image'&&p.srcURL){if(webURL(p.srcURL))items.push({label:'Open image in new tab',click:safe(()=>add(p.srcURL,{background:true,next:true}))},{label:'Save image as…',click:()=>wc.downloadURL(p.srcURL)});items.push({label:'Copy image',click:()=>wc.copyImageAt(p.x,p.y)},sep);}
- if(p.isEditable)items.push({label:'Undo',enabled:p.editFlags.canUndo,click:()=>wc.undo()},{label:'Redo',enabled:p.editFlags.canRedo,click:()=>wc.redo()},sep,{label:'Cut',enabled:p.editFlags.canCut,click:()=>wc.cut()},{label:'Copy',enabled:p.editFlags.canCopy,click:()=>wc.copy()},{label:'Paste',enabled:p.editFlags.canPaste,click:()=>wc.paste()},{label:'Select all',click:()=>wc.selectAll()});
- else if(p.selectionText.trim()){const text=p.selectionText.trim().replace(/\s+/g,' ');items.push({label:'Copy',click:()=>wc.copy()},{label:'Search '+ENGINES[preferences.searchEngine][0]+' for “'+(text.length>28?text.slice(0,27)+'…':text)+'”',click:safe(()=>add(searchURL(text.slice(0,500)),{next:true}))});}
- else if(!items.length){const h=wc.navigationHistory;items.push({label:'Back',enabled:h.canGoBack(),click:()=>h.goBack()},{label:'Forward',enabled:h.canGoForward(),click:()=>h.goForward()},{label:'Reload',click:()=>wc.reload()},sep,{label:library.bookmarked(t.url)?'Remove bookmark':'Bookmark this page',enabled:webURL(t.url),click:safe(()=>{select(t.id);toggleBookmark();})},{label:'Copy page address',enabled:webURL(t.url),click:()=>{clipboard.writeText(t.url);notify('Page address copied.');}},sep,{label:'Find in page…',click:()=>{select(t.id);shortcut('f');}},{label:'Print…',click:()=>wc.print({},()=>{})});}
- while(items.at(-1)?.type==='separator')items.pop();if(items.length)Menu.buildFromTemplate(items).popup({window:win});}
-function bookmarkMenu(id){const b=library.bookmarks.find(b=>b.id===id);if(!b)return;const safe=fn=>()=>{try{fn();}catch(e){report(e);}};Menu.buildFromTemplate([{label:'Open',click:safe(()=>navigate(tabs.find(t=>t.id===active),b.url))},{label:'Open in new tab',click:safe(()=>add(b.url,{next:true}))},{label:'Copy address',click:()=>clipboard.writeText(b.url)},{type:'separator'},{label:'Edit bookmarks…',click:()=>setPanel('bookmarks')},{label:'Remove',click:safe(()=>{library.removeBookmark(b.id);changed();})}]).popup({window:win});}
-// The new tab page, with a greeting and the person's most visited sites.
-function newTabPage(){
- const name=String(account?.user?.firstName||account?.user?.displayName||'').trim().split(/\s+/)[0],h=new Date().getHours(),part=h<5?'evening':h<12?'morning':h<18?'afternoon':'evening';
- const recent=preferences.recentSites&&preferences.saveHistory?library.topSites(6):[];
- return fs.readFileSync(path.join(UI,'newtab.html'),'utf8').replace('<!--SHORTCUTS-->',directory())
-  .replace('<!--GREETING-->',preferences.greeting?(name?'Hello, '+esc(name)+'.':'Welcome home.'):'Compass')
-  .replace('<!--ROLE-->',esc(account?.user?.jobTitle||'Your HN Group workspace'))
-  .replace('<!--ENGINE-->',esc({google:'Google',bing:'Bing',duckduckgo:'DuckDuckGo'}[preferences.searchEngine]||'Google'))
-  .replace('<!--RECENT-->',recent.length?'<section class="recent" aria-labelledby="recent-title"><p class="eyebrow" id="recent-title">PICK UP WHERE YOU LEFT OFF</p><div>'+recent.map((x,i)=>'<a href="'+esc(x.url)+'" style="--i:'+i+'"><b aria-hidden="true">'+esc((x.title.trim()[0]||'•').toUpperCase())+'</b><span>'+esc(x.title)+'</span><small>'+esc(host(x.url))+'</small></a>').join('')+'</div></section>':'')
-  .replace('<body>','<body data-theme="'+preferences.theme+'"'+(preferences.reduceMotion?' data-motion="reduced"':'')+'>');
+
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'hn-browser', privileges: { standard: true, secure: true, supportFetchAPI: true } }
+]);
+
+if (
+  process.platform === 'linux' &&
+  app.isPackaged &&
+  !/KDE|GNOME|Unity|XFCE|Cinnamon|MATE|Pantheon|Budgie/i.test(process.env.XDG_CURRENT_DESKTOP || '') &&
+  !app.commandLine.hasSwitch('password-store')
+) {
+  app.commandLine.appendSwitch('password-store', 'gnome-libsecret');
 }
-// Profile photos are made square and small here, like the staff portal does (GIFs stay as uploaded).
-function photoData(file){const ext=path.extname(file).slice(1).toLowerCase(),size=fs.statSync(file).size;
- if(ext==='gif'){if(size>1.4*1024*1024)throw Error('That GIF is too large (max 1.4 MB).');return'data:image/gif;base64,'+fs.readFileSync(file).toString('base64');}
- if(!['jpg','jpeg','png','webp'].includes(ext))throw Error('Choose a JPG, PNG, WebP or GIF image.');if(size>25*1024*1024)throw Error('That image is too large.');
- let image=nativeImage.createFromPath(file);if(image.isEmpty())throw Error('That image couldn’t be opened. Try a JPG or PNG.');const{width,height}=image.getSize(),side=Math.min(width,height);
- image=image.crop({x:Math.floor((width-side)/2),y:Math.floor((height-side)/2),width:side,height:side}).resize({width:Math.min(512,side),height:Math.min(512,side),quality:'best'});
- return'data:image/jpeg;base64,'+image.toJPEG(88).toString('base64');}
-async function permission(contents,permission,callback,details){const allowed=['media','geolocation','notifications','clipboard-sanitized-write'];if(!contents||!tabs.some(t=>t.view.webContents===contents&&t.id===active)||!allowed.includes(permission))return callback(false);let origin;try{origin=new URL(details.requestingUrl||contents.getURL()).origin;}catch{return callback(false);}if(!origin.startsWith('https://'))return callback(false);if(questions.length>=3)return callback(false);const what={media:'your camera or microphone',geolocation:'your location',notifications:'notifications','clipboard-sanitized-write':'your clipboard'}[permission];callback(await ask({title:'Allow '+new URL(origin).host+' to use '+what+'?',text:'Only allow websites you trust. This is allowed once, for this visit.',icon:'shield',buttons:[{id:'cancel',label:'Block'},{id:'allow',label:'Allow once',tone:'primary'}]})==='allow');}
-async function setup(){
- app.setAppUserModelId('uk.org.hngroup.browser');
- try{build=JSON.parse(fs.readFileSync(path.join(__dirname,'build.json'))).build||0;}catch{}
- // Compass only opens on computers HN Group has approved on devices.hngroup.org.uk (the user's request,
- // 23 October 2026). Desktop tests use a stand-in whose answer is in device-status.txt in the test profile.
- const deviceTest=!app.isPackaged&&process.env.HN_BROWSER_TEST_PROFILE?{dir:path.join(app.getPath('userData'),'device'),fetcher:testFetcher(path.join(app.getPath('userData'),'device-status.txt')),machine:'0'.repeat(64),name:'Test computer'}:{};
- device=new Device({app:'browser',version:app.getVersion(),...deviceTest});
- deviceGate=createDeviceGate({device,appName:'Compass',electron:require('electron'),uiDir:UI,preloadDir:__dirname});
- await deviceGate.ensure();
- downloads=new Downloads({file:path.join(app.getPath('userData'),'downloads.json'),changed:()=>changed(),done:record=>{if(record.status!=='completed'||!preferences.downloadNotify||!Notification.isSupported()||(win?.isFocused()&&panel==='downloads'))return;const n=new Notification({title:'Download complete',body:record.name,silent:true});n.on('click',()=>{if(win&&!win.isDestroyed()){win.show();win.focus();setPanel('downloads').catch(()=>{});}});n.show();}});
- updates=new Updates({dir:path.join(app.getPath('userData'),'updates'),current:app.getVersion()+'-'+build,changed:()=>changed()});
- try{preferences=settings.load(JSON.parse(fs.readFileSync(path.join(app.getPath('userData'),'preferences.json'))));}catch{}
- preferencesStore=new Preferences(path.join(app.getPath('userData'),'preferences.json'));
- themes=new Themes({window:()=>win,emit:detail=>{for(const wc of[win?.webContents,overlay?.webContents,railView?.webContents,popup?.webContents])if(wc&&!wc.isDestroyed())wc.send('browser:appearance',detail);}});
- frames=new Frames({snapshot,recipients:()=>[win?.webContents,overlay?.webContents,railView?.webContents],before:()=>{placeRail();placeOverlay();},after:saveSession});
- ssh=new SSH({file:path.join(app.getPath('userData'),'ssh.json'),verify:async({host,fingerprint})=>await ask({title:'Check the HN Group server',text:'This is the first SSH session from this computer. Check that this fingerprint matches the one HN Group gave you before trusting '+host+'.',detail:fingerprint,note:'It’s remembered on this computer, and Compass refuses to connect if it ever changes.',icon:'server',buttons:[{id:'cancel',label:'Don’t connect'},{id:'trust',label:'Trust the server',tone:'primary'}]})==='trust'});
- ssh.on('changed',changed);ssh.on('data',data=>{if(overlay&&!overlay.webContents.isDestroyed())overlay.webContents.send('browser:ssh-data',data);});
- library=new Library({dir:app.getPath('userData')});
- const pages=session.fromPartition('persist:hn-browser-pages');
- pages.protocol.handle('hn-browser',request=>{const url=new URL(request.url),files={'/':'newtab.html','/themes.css':'themes.css','/newtab.css':'newtab.css','/icons.svg':'icons.svg',...Object.fromEntries(ASSETS.map(name=>['/assets/'+name,'assets/'+name])),'/assets/hn-group-wordmark.svg':'assets/hn-group-wordmark.svg','/assets/hn-group-wordmark-white.svg':'assets/hn-group-wordmark-white.svg','/assets/plus-jakarta-sans.woff2':'assets/plus-jakarta-sans.woff2'};const file=url.hostname==='start'&&files[url.pathname];if(file==='newtab.html')return new Response(newTabPage(),{headers:{'Content-Type':'text/html; charset=utf-8'}});return file?net.fetch(pathToFileURL(path.join(UI,file)).href):new Response('Not found',{status:404});});
- pages.setPermissionRequestHandler(permission);pages.setPermissionCheckHandler(()=>false);
- pages.on('will-download',(event,item)=>{if(!webURL(item.getURL())){event.preventDefault();return;}const downloadPath=path.join(preferences.downloadPath||app.getPath('downloads'),path.basename(item.getFilename()));if(preferences.askDownload)item.setSaveDialogOptions({title:'Save download',defaultPath:downloadPath});else{let target=downloadPath,n=1;while(fs.existsSync(target))target=path.join(path.dirname(downloadPath),path.parse(downloadPath).name+' ('+(n++)+')'+path.extname(downloadPath));item.setSavePath(target);}downloads.track(item);if(preferences.openDownloadsOnStart&&panel!=='downloads')setPanel('downloads').catch(()=>{});});
- win=new BrowserWindow({width:1320,height:900,minWidth:760,minHeight:520,title:'Compass',titleBarStyle:'hidden',...(process.platform==='darwin'?{trafficLightPosition:{x:16,y:26}}:{titleBarOverlay:{color:'#100d1a',symbolColor:'#f4efff',height:72}}),...(process.platform==='linux'&&fs.existsSync(path.join(UI,'app-icon.png'))?{icon:path.join(UI,'app-icon.png')}:{}),backgroundColor:'#100d1a',autoHideMenuBar:true,webPreferences:{...remotePreferences,backgroundThrottling:false,preload:path.join(__dirname,'preload.cjs')}});
- titleTheme();
- win.webContents.on('before-input-event',(event,input)=>{if(keys(input))event.preventDefault();});
- win.webContents.on('will-navigate',e=>e.preventDefault());win.webContents.setWindowOpenHandler(()=>({action:'deny'}));
- account=new Account({vault:new Vault(path.join(app.getPath('userData'),'account.enc'),safeStorage),open:async url=>{if(authWindow&&!authWindow.isDestroyed())authWindow.close();authWindow=new BrowserWindow({parent:win,width:520,height:820,title:'HN account sign-in',autoHideMenuBar:true,webPreferences:{...remotePreferences,partition:'persist:hn-browser-auth'}});authTheme={view:{webContents:authWindow.webContents}};authWindow.webContents.on('did-finish-load',()=>{if(authTheme)applySiteTheme(authTheme);});const authSession=authWindow.webContents.session;authSession.setPermissionRequestHandler((_w,_p,callback)=>callback(false));authSession.setPermissionCheckHandler(()=>false);const allow=(event,url)=>{let u;try{u=new URL(url);}catch{return event.preventDefault();}if(u.origin!=='https://auth.hngroup.org.uk'&&!(account.pending&&url.startsWith(account.pending.redirect+'?')))event.preventDefault();};authWindow.webContents.on('will-navigate',allow);authWindow.webContents.on('will-redirect',allow);authWindow.webContents.setWindowOpenHandler(()=>({action:'deny'}));authWindow.on('closed',()=>{authWindow=null;authTheme=null;account.cancel();});await authWindow.loadURL(url);},changed:result=>{if(result.error)report(result.error);if(!account.user)ssh?.closeAll();const email=account.user?.email?.toLowerCase()||null;if(unlockEmail&&email&&unlockEmail!==email)ssh?.closeAll();if(email)unlockEmail=email;if(vpn?.user&&account.remembered&&vpn.user.email?.toLowerCase()!==account.remembered.email?.toLowerCase())vpn.signOut().catch(()=>{});changed();if(result.user&&authWindow&&!authWindow.isDestroyed())authWindow.close();}});
- const vpnController=!app.isPackaged&&process.env.HN_BROWSER_VPN_FAKE?Object.assign(new FakeController(),['set-up','connected'].includes(process.env.HN_BROWSER_VPN_FAKE)?{installed:'[Interface]\n',on:process.env.HN_BROWSER_VPN_FAKE==='connected'}:{}):controllerFor(process.platform,{helperSource:path.join(__dirname,'hn-vpn-ctl')});
- vpn=new VPN({vault:new Vault(path.join(app.getPath('userData'),'vpn.enc'),safeStorage),controller:vpnController,stateFile:path.join(app.getPath('userData'),'vpn.json'),version:app.getVersion(),...(vpnController instanceof FakeController?{reach:async()=>true}:{}),openTab:async url=>{await setPanel(null);return add(url).id;},closeTab:id=>{if(tabs.some(t=>t.id===id))close(id);},changed:()=>{if(!vpn?.connected)ssh?.closeAll();changed();}});
- pages.webRequest.onBeforeSendHeaders({urls:['https://auth.hngroup.org.uk/*']},(details,callback)=>{websiteHeaders(details,account).then(requestHeaders=>callback({requestHeaders})).catch(()=>callback({requestHeaders:details.requestHeaders}));});
- win.on('close',event=>{if(quitting||allowClose||!preferences.confirmClose||tabs.length<2)return;event.preventDefault();if(question?.closing||questions.some(q=>q.closing))return;ask({closing:true,title:'Close '+tabs.length+' tabs?',text:preferences.startup==='restore'?'They’ll open again next time.':'You can turn this warning off in Settings → Tabs.',icon:'window',buttons:[{id:'cancel',label:'Cancel'},{id:'ok',label:'Close tabs',tone:'primary'}]}).then(choice=>{if(choice==='ok'&&win&&!win.isDestroyed()){allowClose=true;win.close();}});});
- win.on('resize',()=>{hidePopup();resize();});win.on('closed',()=>{flushSession();for(const t of tabs)if(!t.view.webContents.isDestroyed())t.view.webContents.close();tabs=[];account.cancel();if(authWindow&&!authWindow.isDestroyed())authWindow.close();win=null;});
- const trusted=event=>{const from=(wc,url)=>wc&&event.sender===wc&&event.senderFrame===wc.mainFrame&&event.senderFrame.url===url;if(!win||!(from(win.webContents,SHELL)||from(overlay?.webContents,OVERLAY)||from(railView?.webContents,RAIL)))throw Error('This page cannot access browser controls.');};
- ipcMain.handle('browser:state',event=>{trusted(event);return snapshot();});
- ipcMain.on('popup:choose',(event,index)=>{if(!popup||event.sender!==popup.webContents||event.senderFrame!==popup.webContents.mainFrame||event.senderFrame.url!==pathToFileURL(path.join(UI,'popup.html')).href)return;const item=popupItems[index];hidePopup();if(!item||!webURL(item.url))return;const t=tabs.find(x=>x.id===active);if(t){navigate(t,item.url);t.view.webContents.focus();}if(win&&!win.isDestroyed())win.webContents.send('browser:suggest-chosen');});
- ipcMain.on('browser:ssh-ack',(event,id,bytes)=>{trusted(event);ssh.ack(String(id),bytes);});
- ipcMain.handle('browser:action',async(event,action,data)=>{trusted(event);try{const t=tabs.find(t=>t.id===active);let result=null;switch(action){case'question-answer':answerQuestion(String(data?.id||''),String(data?.choice||''));break;case'anchors':{const next={};for(const name of['account','appearance','menu','downloads','vpn']){const a=data?.[name];if(a&&[a.x,a.right,a.bottom].every(Number.isFinite))next[name]={x:Math.round(a.x),right:Math.round(a.right),bottom:Math.round(a.bottom)};}anchors=next;changed();break;}case'tab-reorder':{const from=tabs.findIndex(x=>x.id===data?.id),to=tabs.findIndex(x=>x.id===data?.before);if(from>=0&&to>=0&&from!==to){const[x]=tabs.splice(from,1);tabs.splice(Math.min(to,tabs.length),0,x);changed();}break;}case'tab-menu':tabMenu(String(data));break;case'reopen':if(closedTabs.length)add(closedTabs.pop());break;case'new':add();break;case'close':close(String(data));break;case'select':select(String(data));break;case'navigate':hidePopup();navigate(t,data);break;case'back':if(t.view.webContents.navigationHistory.canGoBack())t.view.webContents.navigationHistory.goBack();break;case'forward':if(t.view.webContents.navigationHistory.canGoForward())t.view.webContents.navigationHistory.goForward();break;case'reload':t.view.webContents.reload();break;case'stop':t.view.webContents.stop();break;case'home':navigate(t,HOME);break;case'theme':themeQueue=themeQueue.catch(()=>{}).then(()=>saveTheme(data));await themeQueue;break;case'profile':await setPanel(data===true?'account':null);break;case'panel':await setPanel(data);break;case'download-pause':downloads.pause(String(data));break;case'download-resume':downloads.resume(String(data));break;case'download-cancel':downloads.cancel(String(data));break;case'download-retry':{const url=downloads.retry(String(data));pages.downloadURL(url);break;}case'download-reveal':shell.showItemInFolder(downloads.reveal(String(data)));break;case'download-open':{const file=downloads.reveal(String(data));if(await confirmed({title:'Open '+path.basename(file)+'?',text:'Only open files from sources you trust.',icon:'file',confirm:'Open file'})){const error=await shell.openPath(file);if(error)throw Error(error);}break;}case'download-remove':downloads.remove(String(data));break;case'download-folder':{const error=await shell.openPath(preferences.downloadPath||app.getPath('downloads'));if(error)throw Error(error);break;}case'preference':{const{key,value}=data||{};if(key==='theme'||key==='downloadPath'||!(key in settings.DEFAULTS))throw Error('Invalid setting.');preferences[key]=settings.validate(key,value);persistPreferences();if(key==='sidebarExpanded')resize();if(key==='defaultZoom')for(const tab of tabs)tab.view.webContents.setZoomLevel(value);if(key==='hnThemes')await Promise.all(tabs.map(applySiteTheme));if(key==='startup'&&value==='restore')saveSession();break;}case'choose-download-folder':{const result=await dialog.showOpenDialog(win,{title:'Downloads folder',properties:['openDirectory','createDirectory']});if(!result.canceled){preferences.downloadPath=result.filePaths[0];persistPreferences();}break;}case'clear-data':{if(!['cache','cookies'].includes(data))throw Error('Choose browsing data to clear.');if(await confirmed({title:data==='cookies'?'Clear website cookies and sign out of websites?':'Clear cached website images and files?',text:'Your Compass account and downloaded files are kept.',icon:'trash',tone:'danger',confirm:'Clear data'})){if(data==='cache')await pages.clearCache();else await pages.clearStorageData({storages:['cookies','localstorage','indexdb','serviceworkers','cachestorage']});message='Browsing data cleared.';changed();}break;}case'download-clear':downloads.clear();break;case'check-update':await updates.check();break;case'download-update':requireDevice();await updates.download();break;case'install-update':{requireDevice();const file=await updates.verifiedFile(),asset=updates.asset,inPlace=asset.kind==='zip'||asset.kind==='exe';
- if(!await confirmed({title:inPlace?'Restart Compass to update to '+asset.version.split('-')[0]+'?':'Open the verified update installer?',icon:'download',confirm:inPlace?'Restart and update':'Open installer and quit',cancel:'Later',text:inPlace?'Compass closes, updates itself and opens again in a few seconds. Your tabs, account and browsing data are kept.':process.platform==='darwin'?'Compass will close. In the disk image, drag Compass to Applications and replace the existing app. Your saved browser data stays on this Mac.':'Compass will close so the installer can update it. Your saved browser data stays on this PC.'}))break;
- if(asset.kind==='zip'){await installMac(file,asset.version);}else if(asset.kind==='exe'){installWindows(file);}else if(asset.kind==='appimage'){await installLinux(file);}else{const error=await shell.openPath(file);if(error)throw Error(error);}
- // Reopen the same tabs after the update, once, whatever the start-up setting is.
- if(inPlace){keepTabsOnce=true;try{fs.writeFileSync(path.join(app.getPath('userData'),'restore-once'),'1',{mode:0o600});}catch{}}
- app.quit();break;}
- case'zoom-in':zoom(0.5);break;case'zoom-out':zoom(-0.5);break;case'zoom-reset':zoom(null);break;case'fullscreen':await setPanel(null);win.setFullScreen(!win.isFullScreen());break;case'unlock-account':await account.unlock(String(data||''));if(account.user){message='';clearTimeout(errorTimer);await setPanel(null);shortcut('l');for(const home of tabs.filter(x=>x.url===HOME)){const who=String(account.user?.displayName||'').trim().split(/\s+/)[0],hour=new Date().getHours(),part=hour<12?'morning':hour<18?'afternoon':'evening';home.view.webContents.executeJavaScript('document.querySelector(".greeting").textContent='+JSON.stringify(preferences.greeting?'Good '+part+(who?', '+who:''):'HN BROWSER')).catch(()=>{});}}break;case'sign-in':await account.start();break;case'sign-out':ssh.closeAll();await account.signOut();await vpn.signOut();break;
- case'find':{const{text,forward=true,next=false}=data||{};if(typeof text!=='string'||text.length>500)throw Error('Enter something to find.');const wc=t?.view.webContents;if(!wc)break;find.open=true;find.text=text;if(!text){wc.stopFindInPage('clearSelection');find.active=0;find.matches=0;changed();break;}const request=wc.findInPage(text,{forward:!!forward,findNext:!next});find.request=request;
-  // findNext:true starts a new search (Electron’s meaning); Chromium can still drop the first search in a
-  // page, so keep asking (briefly) until an answer arrives.
-  let tries=0;const retry=()=>{if(!find.open||find.text!==text||wc.isDestroyed()||(find.answered||0)>=find.request||++tries>40)return;find.request=wc.findInPage(text,{forward:!!forward,findNext:!next});setTimeout(retry,250);};setTimeout(retry,250);break;}
- case'key':{const k=data||{};if(typeof k.key!=='string'||k.key.length>12)throw Error('Unknown shortcut.');keys({type:'keyDown',key:k.key,control:!!k.control,meta:!!k.meta,shift:!!k.shift,alt:!!k.alt});break;}
- case'find-open':await setPanel(null);shortcut('f');break;
- case'find-close':stopFind();changed();if(t)t.view.webContents.focus();break;
- case'ssh-key':{if(!account.user)throw Error('Unlock Compass first.');const chosen=await dialog.showOpenDialog(win,{title:'Choose an SSH private key',properties:['openFile']});if(!chosen.canceled){const file=chosen.filePaths[0];if(fs.statSync(file).size>1024*1024)throw Error('That key file is too large.');sshKey=fs.readFileSync(file);result={name:path.basename(file)};}break;}
- case'ssh-connect':{if(!account.user)throw Error('Unlock your HN account before using SSH.');if(!vpn.ready)throw Error('Set up this computer’s HN VPN first.');if(!vpn.connected)throw Error('Connect the HN VPN first, then retry SSH.');if(!await vpn.reach('10.88.0.1',22,15000))throw Error("The server isn't answering through the VPN. Check the VPN is connected and UDP 51820 is open.");try{result={id:ssh.connect({username:String(data?.username||ssh.username),password:String(data?.password||''),privateKey:data?.useKey?sshKey:null,passphrase:data?.useKey?String(data?.password||''):undefined,cols:data?.cols,rows:data?.rows})};}finally{if(data)data.password='';if(sshKey)sshKey.fill(0);sshKey=null;}break;}
- case'ssh-input':if(!account.user)throw Error('Unlock Compass first.');ssh.input(String(data?.id),data?.data);break;
- case'ssh-resize':ssh.resize(String(data?.id),data?.cols,data?.rows);break;
- case'ssh-close':ssh.close(String(data));break;
- case'ssh-link':{const url=String(data||'');if(!webURL(url))throw Error('Only website links can be opened.');add(url,{background:true});break;}
- case'ssh-copy':if(typeof data==='string'&&data.length<=65536)clipboard.writeText(data);break;
- case'ssh-paste':result=clipboard.readText().slice(0,65536);break;
- case'vpn-sign-in':if(!account.user)throw Error('Unlock your HN account first.');await vpn.signIn();break;
- case'vpn-sign-out':await vpn.signOut();break;
- case'vpn-setup':if(!account.user)throw Error('Unlock your HN account first.');await vpn.setUp();break;
- case'vpn-connect':if(!account.user)throw Error('Unlock your HN account first.');await vpn.connect();break;
- case'vpn-disconnect':ssh.closeAll();await vpn.disconnect();break;
- case'vpn-toggle':if(!vpn.connected&&!account.user)throw Error('Unlock your HN account first.');await vpn.toggle();break;
- case'vpn-refresh':await vpn.poll();await vpn.refresh();break;
- case'vpn-remove':{if(await confirmed({title:'Remove the HN VPN from this computer?',text:'This disconnects the VPN and removes this computer’s VPN connection and registration. You can set it up again at any time.',icon:'vpn',tone:'danger',confirm:'Remove'}))await vpn.remove();break;}
- case'vpn-tools':if(process.platform==='darwin'){const brew=['/opt/homebrew/bin/brew','/usr/local/bin/brew'].find(f=>fs.existsSync(f));if(brew){const{execFile}=require('node:child_process');execFile('/usr/bin/osascript',['-e','tell application "Terminal" to activate','-e','tell application "Terminal" to do script "'+brew+' install wireguard-tools"']);}else await shell.openExternal('https://brew.sh');}else await shell.openExternal('https://www.wireguard.com/install/');break;
- case'reset-settings':{if(await confirmed({title:'Reset Compass settings?',text:'Settings go back to how they were when Compass was installed. Your account, bookmarks, history and downloads are kept.',icon:'settings',tone:'danger',confirm:'Reset settings'})){preferences=settings.load(null);titleTheme();persistPreferences();for(const tab of tabs)tab.view.webContents.setZoomLevel(preferences.defaultZoom);await Promise.all(tabs.map(applySiteTheme));notify('Settings reset.');}break;}
- case'suggest':{const text=String(data?.text??'').slice(0,300),rect=data?.rect;let items=[];if(text.trim()&&!panel){let first=null;try{const url=resolve(text),site=siteShortcut(text);first=url.startsWith(ENGINES[preferences.searchEngine][1])?{kind:'search',url,title:text.trim(),engine:ENGINES[preferences.searchEngine][0]}:{kind:site?'site':'go',url,title:site?text.trim():url};}catch{}
-  const more=preferences.suggestions?library.suggest(text,6).filter(x=>x.url!==first?.url):[];items=[first,...more].filter(Boolean).slice(0,7).map(x=>({...x,hn:x.kind==='search'?null:hnSite(x.url)?.name||null}));}
-  const valid=rect&&[rect.x,rect.y,rect.width].every(Number.isFinite);if(valid&&(preferences.suggestions||items[0]?.hn)&&items.length>(preferences.suggestions?0:0))showPopup(preferences.suggestions?items:items.slice(0,1),rect,-1);else hidePopup();result=items;break;}
- case'suggest-index':if(popupShown)popup.webContents.send('popup:items',{items:popupItems,index:Number(data),theme:preferences.theme,reduceMotion:preferences.reduceMotion});break;
- case'suggest-close':hidePopup();break;
- case'open':{hidePopup();const url=String(data?.url||'');if(!webURL(url))throw Error('Only websites can be opened.');if(data?.newTab)add(url,{next:true,background:!!data.background});else{await setPanel(null);navigate(t,url);}break;}
- case'bookmark-toggle':toggleBookmark();break;
- case'bookmark-remove':library.removeBookmark(String(data));changed();break;
- case'bookmark-rename':library.renameBookmark(String(data?.id),data?.title);changed();break;
- case'bookmark-move':library.moveBookmark(String(data?.id),data?.step===-1?-1:1);changed();break;
- case'bookmark-menu':bookmarkMenu(String(data));break;
- case'history-list':result=library.searchHistory(String(data||''),400);break;
- case'history-remove':library.removeHistory(String(data));break;
- case'history-clear':{const ranges={hour:3600000,day:86400000,week:7*86400000,all:0};if(!(data in ranges))throw Error('Choose what to clear.');const labels={hour:'the last hour',day:'the last day',week:'the last 7 days',all:'all time'};const clear=await confirmed({title:'Clear browsing history from '+labels[data]+'?',text:'Bookmarks, downloads and website sign-ins are kept.',icon:'clock',tone:'danger',confirm:'Clear history'});if(clear){library.clearHistory(ranges[data]?Date.now()-ranges[data]:0);notify('History cleared.');}result=clear;break;}
- case'lock':ssh.closeAll();await lockBrowser();break;
- case'print':tabs.find(x=>x.id===active)?.view.webContents.print({},()=>{});break;
- case'copy-address':if(t&&webURL(t.url)){clipboard.writeText(t.url);notify('Page address copied.');}break;
- case'staff-settings':await setPanel(null);add('https://staff.hngroup.org.uk/settings',{next:true});break;
- case'account-get':result=await account.account();break;
- case'account-update':result=await account.account('update',{profile:data});notify('Profile saved.');break;
- case'account-status':result=await account.account('status',{status:data||null});notify(data?.type?'Status updated.':'Status cleared.');break;
- case'account-photo':{if(data==='remove'){if(!await confirmed({title:'Remove your profile picture?',text:'Your initials are shown instead on HN Group websites.',icon:'image',tone:'danger',confirm:'Remove'}))break;result=await account.account('photo',{remove:true});notify('Profile picture removed.');break;}const chosen=await dialog.showOpenDialog(win,{title:'Choose a profile picture',properties:['openFile'],filters:[{name:'Images',extensions:['jpg','jpeg','png','webp','gif']}]});if(chosen.canceled||!chosen.filePaths[0])break;result=await account.account('photo',{image:photoData(chosen.filePaths[0])});notify('Profile picture updated.');break;}
- case'vpn-manage':await setPanel(null);add(VPN_ORIGIN+'/');break;default:throw Error('Unknown browser control.');}return{ok:true,result};}catch(e){if(data?.password)data.password='';if(action!=='suggest')report(e);return{error:e.message,relock:!!e.relock};}});
- Menu.setApplicationMenu(Menu.buildFromTemplate([...(process.platform==='darwin'?[{label:'Compass',submenu:[{label:'About Compass',click:()=>setPanel('updates')},{label:'Check for updates…',click:async()=>{await setPanel('updates');updates.check();}},{type:'separator'},{role:'services'},{type:'separator'},{role:'hide',label:'Hide Compass'},{role:'hideOthers'},{role:'unhide'},{type:'separator'},{role:'quit',label:'Quit Compass'}]}]:[]),{label:'File',submenu:[{label:'New tab',accelerator:'CmdOrCtrl+T',click:()=>shortcut('t')},{label:'Reopen closed tab',accelerator:'CmdOrCtrl+Shift+T',click:()=>{try{if(closedTabs.length)add(closedTabs.pop());}catch(e){report(e);}}},{label:'Close tab',accelerator:'CmdOrCtrl+W',click:()=>shortcut('w')},{type:'separator'},{label:'Print…',accelerator:'CmdOrCtrl+P',click:()=>shortcut('p')},{label:'Lock Compass',accelerator:'CmdOrCtrl+Shift+L',click:()=>lockBrowser().catch(report)},{type:'separator'},{role:'quit',label:'Quit Compass'}]},{role:'editMenu'},{label:'View',submenu:[{label:'Reload tab',accelerator:'CmdOrCtrl+R',click:()=>shortcut('r')},{label:'Settings',accelerator:'CmdOrCtrl+,',click:()=>setPanel('settings')},{label:'Downloads',accelerator:'CmdOrCtrl+J',click:()=>setPanel('downloads')},{label:'History',accelerator:process.platform==='darwin'?'Cmd+Y':'Ctrl+H',click:()=>setPanel('history')},{label:'Bookmarks',accelerator:'CmdOrCtrl+Shift+O',click:()=>setPanel('bookmarks')},{label:'Bookmark this page',accelerator:'CmdOrCtrl+D',click:()=>{try{toggleBookmark();}catch(e){report(e);}}},{label:'Address bar',accelerator:'CmdOrCtrl+L',click:()=>shortcut('l')},{label:'Find in page…',accelerator:'CmdOrCtrl+F',click:()=>shortcut('f')},{label:'SSH terminal',accelerator:'CmdOrCtrl+Shift+S',click:()=>setPanel('ssh')},{label:'HN VPN',accelerator:'CmdOrCtrl+Shift+V',click:()=>setPanel('vpn')},{type:'separator'},{role:'togglefullscreen'},{label:'Zoom in',accelerator:'CmdOrCtrl+Plus',click:()=>zoom(0.5)},{label:'Zoom out',accelerator:'CmdOrCtrl+-',click:()=>zoom(-0.5)},{label:'Actual size',accelerator:'CmdOrCtrl+0',click:()=>zoom(null)}]}]));
- // A remembered account is ready (locked, with its name and picture) before the first frame is drawn.
- account.load();
- deviceGate.watch({onBlocked:()=>{lockBrowser().catch(()=>{});if(win&&!win.isDestroyed())win.hide();},onAllowed:()=>{if(win&&!win.isDestroyed()){win.show();win.focus();}}});
- await win.loadFile(path.join(UI,'shell.html'));createPopup();await createRail();await createOverlay();
- const once=path.join(app.getPath('userData'),'restore-once'),afterUpdate=fs.existsSync(once);fs.rmSync(once,{force:true});
- const previous=preferences.startup==='restore'||afterUpdate?library.session():null;if(previous){let first=null;for(const[i,x]of previous.tabs.entries()){const tab=add(x.url,{background:i!==previous.active,next:false,pinned:x.pinned});if(i===previous.active)first=tab;}if(first)select(first.id);}else add();
- // …and its PIN box opens straight away, without waiting for HN Group Auth.
- if(account.locked){if(process.platform==='darwin')app.focus({steal:true});win.show();await setPanel('account');}
- // Locking: after the chosen time without using the computer, and (if chosen) when it sleeps or locks.
- const idle=setInterval(()=>{if(preferences.autoLock&&account?.user&&powerMonitor.getSystemIdleTime()>=preferences.autoLock*60)lockBrowser().catch(()=>{});},20000);idle.unref();
- for(const event of ['lock-screen','suspend'])powerMonitor.on(event,()=>{if(preferences.lockOnSleep)lockBrowser().catch(()=>{});});const rememberedAtStart=account.locked;account.restore().then(()=>{if(!rememberedAtStart&&!account.locked){shortcut('l');for(const home of tabs.filter(x=>x.url===HOME)){const who=String(account.user?.displayName||'').trim().split(/\s+/)[0],hour=new Date().getHours(),part=hour<12?'morning':hour<18?'afternoon':'evening';home.view.webContents.executeJavaScript('document.querySelector(".greeting").textContent='+JSON.stringify(preferences.greeting?'Good '+part+(who?', '+who:''):'HN BROWSER')).catch(()=>{});}}}).catch(report);vpn.restore().catch(()=>{});const vpnTimer=setInterval(()=>{vpn.poll().catch(()=>{});},15000);vpnTimer.unref();const vpnRefresh=setInterval(()=>{vpn.refresh().catch(()=>{});},300000);vpnRefresh.unref();const timer=setInterval(()=>account.refresh(),60000);timer.unref();const firstCheck=setTimeout(()=>updates.check(),15000);firstCheck.unref();const updateTimer=setInterval(()=>updates.check(),6*3600000);updateTimer.unref();
+
+const UI = path.join(__dirname, '../ui');
+const REMOTE_PREFS = {
+  nodeIntegration: false,
+  contextIsolation: true,
+  sandbox: true,
+  webSecurity: true,
+  allowRunningInsecureContent: false,
+  safeDialogs: true,
+  navigateOnDragDrop: false
+};
+
+let win = null;
+let authWindow = null;
+let authTheme = null;
+let preferences = settings.load(null);
+let preferencesStore = null;
+let frames = null;
+let themes = null;
+let shellViews = null;
+let tabs = null;
+let dialogs = null;
+let device = null;
+let deviceGate = null;
+let account = null;
+let vpn = null;
+let ssh = null;
+let downloads = null;
+let updates = null;
+let library = null;
+
+let sshKey = null;
+let unlockEmail = null;
+let build = 0;
+let historyVersion = 0;
+let sessionTimer = null;
+let quitting = false;
+let allowClose = false;
+let keepTabsOnce = false;
+let exitReady = false;
+
+function changed() { frames?.changed(); }
+function flush() { frames?.flush(); }
+function clearSshKey() { if (sshKey) sshKey.fill(0); sshKey = null; }
+function requireDevice() {
+  if (!device?.state().allowed) {
+    throw Error('This computer isn’t approved on devices.hngroup.org.uk, so Compass can’t be updated here.');
+  }
 }
-// Linux: an AppImage opened from Downloads adds itself to the app menu (src/appimage.cjs).
-app.whenReady().then(()=>{if(process.platform==='linux'&&app.isPackaged){try{require('./appimage.cjs').integrate({id:'hn-browser',name:'Compass',comment:'The HN Group web browser',categories:'Network;WebBrowser;',args:['%U'],icon:path.join(UI,'app-icon.png')});}catch{}}});
-app.whenReady().then(setup).catch(error=>{console.error(error);app.quit();});app.on('window-all-closed',()=>app.quit());let exitReady=false;app.on('before-quit',event=>{if(!exitReady&&preferencesStore){event.preventDefault();exitReady=true;setTimeout(()=>app.exit(0),12000).unref?.();Promise.all([preferencesStore.drain().catch(()=>{}),vpnOffOnQuit()]).finally(()=>app.quit());return;}flushSession();ssh?.closeAll();if(sshKey)sshKey.fill(0);preferencesStore?.drain().catch(()=>{});account?.cancel();});
+
+function saveSession() {
+  if (quitting || !library || preferences.startup !== 'restore') return;
+  clearTimeout(sessionTimer);
+  sessionTimer = setTimeout(() => {
+    if (!quitting && tabs?.tabs.length) {
+      library.saveSession(
+        tabs.tabs.map(t => ({ url: t.url, pinned: t.pinned })),
+        tabs.tabs.findIndex(t => t.id === tabs.active)
+      );
+    }
+  }, 800);
+  sessionTimer.unref?.();
+}
+
+function flushSession() {
+  if (quitting) return;
+  clearTimeout(sessionTimer);
+  if (library && (preferences.startup === 'restore' || keepTabsOnce) && tabs?.tabs.length) {
+    library.saveSession(
+      tabs.tabs.map(t => ({ url: t.url, pinned: t.pinned })),
+      tabs.tabs.findIndex(t => t.id === tabs.active)
+    );
+  }
+  quitting = true;
+  library?.flush();
+}
+
+function persistPreferences() {
+  preferencesStore?.save(preferences);
+  changed();
+}
+
+function titleTheme() {
+  themes?.native(preferences.theme);
+}
+
+async function applySiteTheme(tab) {
+  return themes?.page(tab.view.webContents, preferences.theme, preferences.hnThemes);
+}
+
+async function saveTheme(value) {
+  preferences.theme = theme(value);
+  themes.change(preferences.theme, preferences.reduceMotion);
+  persistPreferences();
+  await Promise.all([...tabs.tabs, ...(authTheme ? [authTheme] : [])].map(applySiteTheme));
+}
+
+async function lockBrowser() {
+  if (!account?.user) return;
+  ssh?.closeAll();
+  clearSshKey();
+  tabs?.stopFind();
+  await account.lock();
+  dialogs.clearMessage();
+  await shellViews.setPanel('account');
+}
+
+function shortcut(key) {
+  try {
+    if (key === 'd') tabs.toggleBookmark();
+    else if (key === 'p') tabs.activeTab?.view.webContents.print({}, () => {});
+    else if (key === 'f') tabs.openFind();
+    else if (key === 't') tabs.add();
+    else if (key === 'w') tabs.close(tabs.active);
+    else if (key === 'l') { win.webContents.focus(); win.webContents.send('browser:focus-address'); }
+    else if (key === 'r') tabs.activeTab?.view.webContents.reload();
+  } catch (err) {
+    dialogs.report(err);
+  }
+}
+
+function keys(input) {
+  return keyboard(input, {
+    tab: n => tabs.selectByNumber(n),
+    cycle: step => tabs.cycle(step),
+    shortcut,
+    history: step => tabs.history(step),
+    reopen: () => { try { tabs.reopenClosed(); } catch (e) { dialogs.report(e); } },
+    panel: value => shellViews.setPanel(value).catch(err => dialogs.report(err)),
+    lock: () => lockBrowser().catch(err => dialogs.report(err)),
+    zoom: delta => tabs.zoom(delta)
+  });
+}
+
+function snapshot() {
+  return {
+    themeAt: themes?.at || 0,
+    themeRevision: themes?.revision || 0,
+    ssh: ssh?.snapshot() || null,
+    preferences: { ...preferences, downloadPath: preferences.downloadPath || app.getPath('downloads') },
+    chromium: process.versions.chrome,
+    electron: process.versions.electron,
+    platform: process.platform,
+    historyVersion,
+    panel: shellViews?.panel || null,
+    panelClosing: !!shellViews?.closingPanel,
+    question: dialogs?.current || null,
+    anchors: shellViews?.anchors || {},
+    update: updates?.state,
+    build,
+    avatar: account?.avatar || null,
+    locked: !!account?.locked,
+    remembered: account?.remembered || null,
+    theme: preferences.theme,
+    bookmarks: library?.bookmarks || [],
+    profileEditable: !!account?.unlockKey,
+    user: account?.user || null,
+    message: dialogs?.message || '',
+    downloads: downloads?.snapshot() || [],
+    active: tabs?.active || null,
+    tabs: tabs?.snapshot() || [],
+    version: app.getVersion(),
+    vpn: vpn?.snapshot() || null,
+    find: {
+      open: !!tabs?.find.open,
+      text: tabs?.find.text || '',
+      active: tabs?.find.active || 0,
+      matches: tabs?.find.matches || 0
+    }
+  };
+}
+
+function secureNetworkOpen() {
+  return new Promise(resolve => {
+    if (process.platform === 'darwin') {
+      execFile('/bin/ps', ['-axo', 'comm='], { timeout: 3000 }, (e, out) =>
+        resolve(!e && String(out).split('\n').some(l => /\.app\/Contents\/MacOS\/(HN Secure Network|HN Secure Access Terminal|HN Group VPN)$/.test(l.trim())))
+      );
+    } else if (process.platform === 'win32') {
+      execFile('tasklist', ['/FI', 'IMAGENAME eq HN Secure Network.exe', '/FO', 'CSV', '/NH'], { timeout: 3000, windowsHide: true }, (e, out) =>
+        resolve(!e && /"HN Secure Network\.exe"/i.test(String(out)))
+      );
+    } else if (process.platform === 'linux') {
+      let found = false;
+      try {
+        for (const pid of fs.readdirSync('/proc')) {
+          if (!/^\d+$/.test(pid)) continue;
+          try {
+            if (path.basename(fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0')[0]) === 'hn-secure-network') {
+              found = true;
+              break;
+            }
+          } catch {}
+        }
+      } catch {}
+      resolve(found);
+    } else {
+      resolve(false);
+    }
+  });
+}
+
+async function vpnOffOnQuit() {
+  let result = 'off already';
+  try {
+    await vpn?.poll().catch(() => {});
+    if (vpn?.connected) {
+      if ((!app.isPackaged && process.env.HN_BROWSER_TEST_SECURE_NETWORK_OPEN === '1') || await secureNetworkOpen()) {
+        result = 'left on for HN Secure Access Terminal';
+      } else {
+        await Promise.race([vpn.disconnect(), new Promise(r => setTimeout(r, 8000))]);
+        result = vpn.connected ? 'still on' : 'turned off';
+      }
+    }
+  } catch {
+    result = 'still on';
+  }
+  if (!app.isPackaged && process.env.HN_BROWSER_TEST_PROFILE) {
+    try { fs.writeFileSync(path.join(app.getPath('userData'), 'vpn-on-quit.txt'), result); } catch {}
+  }
+}
+
+async function handlePermission(contents, permission, callback, details) {
+  const allowed = ['media', 'geolocation', 'notifications', 'clipboard-sanitized-write'];
+  if (!contents || !tabs.tabs.some(t => t.view.webContents === contents && t.id === tabs.active) || !allowed.includes(permission)) {
+    return callback(false);
+  }
+  let origin;
+  try { origin = new URL(details.requestingUrl || contents.getURL()).origin; } catch { return callback(false); }
+  if (!origin.startsWith('https://') || dialogs.pendingCount >= 3) return callback(false);
+  const what = {
+    media: 'your camera or microphone',
+    geolocation: 'your location',
+    notifications: 'notifications',
+    'clipboard-sanitized-write': 'your clipboard'
+  }[permission];
+  const answer = await dialogs.ask({
+    title: `Allow ${new URL(origin).host} to use ${what}?`,
+    text: 'Only allow websites you trust. This is allowed once, for this visit.',
+    icon: 'shield',
+    buttons: [
+      { id: 'cancel', label: 'Block' },
+      { id: 'allow', label: 'Allow once', tone: 'primary' }
+    ]
+  });
+  callback(answer === 'allow');
+}
+
+async function setup() {
+  app.setAppUserModelId('uk.org.hngroup.browser');
+  try { build = JSON.parse(fs.readFileSync(path.join(__dirname, 'build.json'))).build || 0; } catch {}
+
+  const userData = app.getPath('userData');
+  const deviceTest = !app.isPackaged && process.env.HN_BROWSER_TEST_PROFILE
+    ? { dir: path.join(userData, 'device'), fetcher: testFetcher(path.join(userData, 'device-status.txt')), machine: '0'.repeat(64), name: 'Test computer' }
+    : {};
+  device = new Device({ app: 'browser', version: app.getVersion(), ...deviceTest });
+  deviceGate = createDeviceGate({ device, appName: 'Compass', electron: require('electron'), uiDir: UI, preloadDir: __dirname });
+  await deviceGate.ensure();
+
+  try { preferences = settings.load(JSON.parse(fs.readFileSync(path.join(userData, 'preferences.json')))); } catch {}
+  preferencesStore = new Preferences(path.join(userData, 'preferences.json'));
+  library = new Library({ dir: userData });
+
+  dialogs = new Dialogs({
+    onChange: changed,
+    onFlush: flush,
+    reduceMotion: () => preferences.reduceMotion,
+    onShow: () => {
+      if (win && !win.isDestroyed()) {
+        shellViews?.hidePopup();
+        if (win.isMinimized()) win.restore();
+        win.show();
+        win.focus();
+        shellViews?.overlay?.webContents.focus();
+      }
+    },
+    onDone: () => {
+      if (!shellViews?.panel && win && !win.isDestroyed()) {
+        tabs?.activeTab?.view.webContents.focus();
+      }
+    }
+  });
+
+  downloads = new Downloads({
+    file: path.join(userData, 'downloads.json'),
+    changed,
+    done: record => {
+      if (record.status !== 'completed' || !preferences.downloadNotify || !Notification.isSupported() || (win?.isFocused() && shellViews?.panel === 'downloads')) return;
+      const n = new Notification({ title: 'Download complete', body: record.name, silent: true });
+      n.on('click', () => {
+        if (win && !win.isDestroyed()) {
+          win.show();
+          win.focus();
+          shellViews.setPanel('downloads').catch(() => {});
+        }
+      });
+      n.show();
+    }
+  });
+
+  updates = new Updates({
+    dir: path.join(userData, 'updates'),
+    current: `${app.getVersion()}-${build}`,
+    changed
+  });
+
+  ssh = new SSH({
+    file: path.join(userData, 'ssh.json'),
+    verify: async ({ host, fingerprint }) =>
+      await dialogs.ask({
+        title: 'Check the HN Group server',
+        text: `This is the first SSH session from this computer. Check that this fingerprint matches the one HN Group gave you before trusting ${host}.`,
+        detail: fingerprint,
+        note: 'It’s remembered on this computer, and Compass refuses to connect if it ever changes.',
+        icon: 'server',
+        buttons: [
+          { id: 'cancel', label: 'Don’t connect' },
+          { id: 'trust', label: 'Trust the server', tone: 'primary' }
+        ]
+      }) === 'trust'
+  });
+  ssh.on('changed', changed);
+  ssh.on('data', data => {
+    if (shellViews?.overlay && !shellViews.overlay.webContents.isDestroyed()) {
+      shellViews.overlay.webContents.send('browser:ssh-data', data);
+    }
+  });
+
+  const pages = session.fromPartition('persist:hn-browser-pages');
+  const startFiles = {
+    '/': 'newtab.html',
+    '/themes.css': 'themes.css',
+    '/newtab.css': 'newtab.css',
+    '/icons.svg': 'icons.svg',
+    ...Object.fromEntries(ASSETS.map(name => ['/assets/' + name, 'assets/' + name])),
+    '/assets/hn-group-wordmark.svg': 'assets/hn-group-wordmark.svg',
+    '/assets/hn-group-wordmark-white.svg': 'assets/hn-group-wordmark-white.svg',
+    '/assets/plus-jakarta-sans.woff2': 'assets/plus-jakarta-sans.woff2'
+  };
+  pages.protocol.handle('hn-browser', request => {
+    const url = new URL(request.url);
+    const file = url.hostname === 'start' && startFiles[url.pathname];
+    if (file === 'newtab.html') {
+      return new Response(renderNewTab({ uiDir: UI, user: account?.user, preferences, library }), {
+        headers: { 'Content-Type': 'text/html; charset=utf-8' }
+      });
+    }
+    return file ? net.fetch(pathToFileURL(path.join(UI, file)).href) : new Response('Not found', { status: 404 });
+  });
+  pages.setPermissionRequestHandler(handlePermission);
+  pages.setPermissionCheckHandler(() => false);
+  pages.on('will-download', (event, item) => {
+    if (!webURL(item.getURL())) { event.preventDefault(); return; }
+    const downloadPath = path.join(preferences.downloadPath || app.getPath('downloads'), path.basename(item.getFilename()));
+    if (preferences.askDownload) {
+      item.setSaveDialogOptions({ title: 'Save download', defaultPath: downloadPath });
+    } else {
+      let target = downloadPath;
+      let n = 1;
+      while (fs.existsSync(target)) {
+        target = path.join(path.dirname(downloadPath), `${path.parse(downloadPath).name} (${n++})${path.extname(downloadPath)}`);
+      }
+      item.setSavePath(target);
+    }
+    downloads.track(item);
+    if (preferences.openDownloadsOnStart && shellViews?.panel !== 'downloads') {
+      shellViews.setPanel('downloads').catch(() => {});
+    }
+  });
+
+  win = new BrowserWindow({
+    width: 1320,
+    height: 900,
+    minWidth: 760,
+    minHeight: 520,
+    title: 'Compass',
+    titleBarStyle: 'hidden',
+    ...(process.platform === 'darwin'
+      ? { trafficLightPosition: { x: 16, y: 26 } }
+      : { titleBarOverlay: { color: '#100d1a', symbolColor: '#f4efff', height: 72 } }),
+    ...(process.platform === 'linux' && fs.existsSync(path.join(UI, 'app-icon.png')) ? { icon: path.join(UI, 'app-icon.png') } : {}),
+    backgroundColor: '#100d1a',
+    autoHideMenuBar: true,
+    webPreferences: { ...REMOTE_PREFS, backgroundThrottling: false, preload: path.join(__dirname, 'preload.cjs') }
+  });
+
+  shellViews = new ShellViews({
+    getWin: () => win,
+    uiDir: UI,
+    preloadDir: __dirname,
+    remotePreferences: REMOTE_PREFS,
+    keys,
+    getPreferences: () => preferences,
+    getTabsCount: () => tabs?.tabs.length || 0,
+    getFind: () => tabs?.find || { open: false },
+    getDialogs: () => dialogs,
+    onFlush: flush,
+    onChanged: changed
+  });
+
+  tabs = new TabManager({
+    getWin: () => win,
+    shellViews,
+    remotePreferences: REMOTE_PREFS,
+    keys,
+    getPreferences: () => preferences,
+    getLibrary: () => library,
+    applySiteTheme,
+    report: err => dialogs.report(err),
+    notify: text => dialogs.notify(text),
+    onChanged: changed,
+    onFlush: flush,
+    onHistory: () => { historyVersion++; }
+  });
+
+  themes = new Themes({
+    window: () => win,
+    emit: detail => {
+      for (const wc of shellViews.appearanceRecipients()) {
+        if (wc && !wc.isDestroyed()) wc.send('browser:appearance', detail);
+      }
+    }
+  });
+
+  frames = new Frames({
+    snapshot,
+    recipients: () => shellViews.allRecipients(),
+    before: () => { shellViews.placeRail(); shellViews.placeOverlay(); },
+    after: saveSession
+  });
+
+  titleTheme();
+  win.webContents.on('before-input-event', (event, input) => { if (keys(input)) event.preventDefault(); });
+  win.webContents.on('will-navigate', e => e.preventDefault());
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+
+  account = new Account({
+    vault: new Vault(path.join(userData, 'account.enc'), safeStorage),
+    open: async url => {
+      if (authWindow && !authWindow.isDestroyed()) authWindow.close();
+      authWindow = new BrowserWindow({
+        parent: win,
+        width: 520,
+        height: 820,
+        title: 'HN account sign-in',
+        autoHideMenuBar: true,
+        webPreferences: { ...REMOTE_PREFS, partition: 'persist:hn-browser-auth' }
+      });
+      authTheme = { view: { webContents: authWindow.webContents } };
+      authWindow.webContents.on('did-finish-load', () => { if (authTheme) applySiteTheme(authTheme); });
+      const authSession = authWindow.webContents.session;
+      authSession.setPermissionRequestHandler((_w, _p, cb) => cb(false));
+      authSession.setPermissionCheckHandler(() => false);
+      const allow = (event, targetUrl) => {
+        let parsed;
+        try { parsed = new URL(targetUrl); } catch { return event.preventDefault(); }
+        if (parsed.origin !== 'https://auth.hngroup.org.uk' && !(account.pending && targetUrl.startsWith(account.pending.redirect + '?'))) {
+          event.preventDefault();
+        }
+      };
+      authWindow.webContents.on('will-navigate', allow);
+      authWindow.webContents.on('will-redirect', allow);
+      authWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+      authWindow.on('closed', () => { authWindow = null; authTheme = null; account.cancel(); });
+      await authWindow.loadURL(url);
+    },
+    changed: result => {
+      if (result.error) dialogs.report(result.error);
+      if (!account.user) ssh?.closeAll();
+      const email = account.user?.email?.toLowerCase() || null;
+      if (unlockEmail && email && unlockEmail !== email) ssh?.closeAll();
+      if (email) unlockEmail = email;
+      if (vpn?.user && account.remembered && vpn.user.email?.toLowerCase() !== account.remembered.email?.toLowerCase()) {
+        vpn.signOut().catch(() => {});
+      }
+      changed();
+      if (result.user && authWindow && !authWindow.isDestroyed()) authWindow.close();
+    }
+  });
+
+  const vpnController = !app.isPackaged && process.env.HN_BROWSER_VPN_FAKE
+    ? Object.assign(
+        new FakeController(),
+        ['set-up', 'connected'].includes(process.env.HN_BROWSER_VPN_FAKE)
+          ? { installed: '[Interface]\n', on: process.env.HN_BROWSER_VPN_FAKE === 'connected' }
+          : {}
+      )
+    : controllerFor(process.platform, { helperSource: path.join(__dirname, 'hn-vpn-ctl') });
+
+  vpn = new VPN({
+    vault: new Vault(path.join(userData, 'vpn.enc'), safeStorage),
+    controller: vpnController,
+    stateFile: path.join(userData, 'vpn.json'),
+    version: app.getVersion(),
+    ...(vpnController instanceof FakeController ? { reach: async () => true } : {}),
+    openTab: async url => { await shellViews.setPanel(null); return tabs.add(url).id; },
+    closeTab: id => { if (tabs.tabs.some(t => t.id === id)) tabs.close(id); },
+    changed: () => { if (!vpn?.connected) ssh?.closeAll(); changed(); }
+  });
+
+  pages.webRequest.onBeforeSendHeaders({ urls: ['https://auth.hngroup.org.uk/*'] }, (details, callback) => {
+    websiteHeaders(details, account)
+      .then(requestHeaders => callback({ requestHeaders }))
+      .catch(() => callback({ requestHeaders: details.requestHeaders }));
+  });
+
+  win.on('close', event => {
+    if (quitting || allowClose || !preferences.confirmClose || tabs.tabs.length < 2) return;
+    event.preventDefault();
+    if (dialogs.hasClosing()) return;
+    dialogs.ask({
+      closing: true,
+      title: `Close ${tabs.tabs.length} tabs?`,
+      text: preferences.startup === 'restore' ? 'They’ll open again next time.' : 'You can turn this warning off in Settings → Tabs.',
+      icon: 'window',
+      buttons: [
+        { id: 'cancel', label: 'Cancel' },
+        { id: 'ok', label: 'Close tabs', tone: 'primary' }
+      ]
+    }).then(choice => {
+      if (choice === 'ok' && win && !win.isDestroyed()) {
+        allowClose = true;
+        win.close();
+      }
+    });
+  });
+
+  win.on('resize', () => { shellViews.hidePopup(); tabs.resize(); });
+  win.on('closed', () => {
+    flushSession();
+    tabs.destroyAll();
+    account.cancel();
+    if (authWindow && !authWindow.isDestroyed()) authWindow.close();
+    win = null;
+  });
+
+  registerIpc({
+    getWin: () => win, pages, shellViews, tabs, dialogs, account, vpn, ssh, downloads,
+    updates, library, snapshot, keys, shortcut, lockBrowser,
+    getPreferences: () => preferences,
+    setPreferences: next => { preferences = next; },
+    persistPreferences,
+    saveSession,
+    applySiteTheme,
+    saveTheme,
+    titleTheme,
+    requireDevice,
+    setKeepTabsOnce: val => { keepTabsOnce = val; },
+    getSshKey: () => sshKey,
+    setSshKey: buf => { sshKey = buf; },
+    clearSshKey,
+    changed
+  });
+
+  installAppMenu({
+    shortcut,
+    reopenClosed: () => tabs.reopenClosed(),
+    setPanel: value => shellViews.setPanel(value),
+    checkUpdates: () => updates.check(),
+    lockBrowser,
+    toggleBookmark: () => tabs.toggleBookmark(),
+    zoom: delta => tabs.zoom(delta),
+    report: err => dialogs.report(err)
+  });
+
+  account.load();
+  deviceGate.watch({
+    onBlocked: () => {
+      lockBrowser().catch(() => {});
+      if (win && !win.isDestroyed()) win.hide();
+    },
+    onAllowed: () => {
+      if (win && !win.isDestroyed()) { win.show(); win.focus(); }
+    }
+  });
+
+  await win.loadFile(path.join(UI, 'shell.html'));
+  await shellViews.createAll();
+
+  const once = path.join(userData, 'restore-once');
+  const afterUpdate = fs.existsSync(once);
+  fs.rmSync(once, { force: true });
+  const previous = preferences.startup === 'restore' || afterUpdate ? library.session() : null;
+  if (previous) {
+    let first = null;
+    for (const [i, item] of previous.tabs.entries()) {
+      const tab = tabs.add(item.url, { background: i !== previous.active, next: false, pinned: item.pinned });
+      if (i === previous.active) first = tab;
+    }
+    if (first) tabs.select(first.id);
+  } else {
+    tabs.add();
+  }
+
+  if (account.locked) {
+    if (process.platform === 'darwin') app.focus({ steal: true });
+    win.show();
+    await shellViews.setPanel('account');
+  }
+
+  const idle = setInterval(() => {
+    if (preferences.autoLock && account?.user && powerMonitor.getSystemIdleTime() >= preferences.autoLock * 60) {
+      lockBrowser().catch(() => {});
+    }
+  }, 20000);
+  idle.unref();
+
+  for (const event of ['lock-screen', 'suspend']) {
+    powerMonitor.on(event, () => {
+      if (preferences.lockOnSleep) lockBrowser().catch(() => {});
+    });
+  }
+
+  const rememberedAtStart = account.locked;
+  account.restore().then(() => {
+    if (!rememberedAtStart && !account.locked) {
+      shortcut('l');
+      tabs.refreshHomeGreetings(greetingText(account.user, preferences.greeting));
+    }
+  }).catch(err => dialogs.report(err));
+
+  vpn.restore().catch(() => {});
+  setInterval(() => { vpn.poll().catch(() => {}); }, 15000).unref();
+  setInterval(() => { vpn.refresh().catch(() => {}); }, 300000).unref();
+  setInterval(() => account.refresh(), 60000).unref();
+  setTimeout(() => updates.check(), 15000).unref();
+  setInterval(() => updates.check(), 6 * 3600000).unref();
+}
+
+app.whenReady().then(() => {
+  if (process.platform === 'linux' && app.isPackaged) {
+    try {
+      require('./appimage.cjs').integrate({
+        id: 'hn-browser',
+        name: 'Compass',
+        comment: 'The HN Group web browser',
+        categories: 'Network;WebBrowser;',
+        args: ['%U'],
+        icon: path.join(UI, 'app-icon.png')
+      });
+    } catch {}
+  }
+});
+
+app.whenReady().then(setup).catch(error => {
+  console.error(error);
+  app.quit();
+});
+
+app.on('window-all-closed', () => app.quit());
+
+app.on('before-quit', event => {
+  if (!exitReady && preferencesStore) {
+    event.preventDefault();
+    exitReady = true;
+    setTimeout(() => app.exit(0), 12000).unref?.();
+    Promise.all([preferencesStore.drain().catch(() => {}), vpnOffOnQuit()]).finally(() => app.quit());
+    return;
+  }
+  flushSession();
+  ssh?.closeAll();
+  clearSshKey();
+  preferencesStore?.drain().catch(() => {});
+  account?.cancel();
+});

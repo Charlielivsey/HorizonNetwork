@@ -1,7 +1,7 @@
 'use strict';
 const {nativeTheme}=require('electron'),{eligible,css}=require('../site-theme.cjs');
-// The tab strip's colour in each theme (ui/themes.css --chrome), for the window and Windows' title-bar buttons.
-const CHROME={'midnight-lavender':['#100d1a','#f4f0fd'],daylight:['#e9e4f1','#1d1630'],'deep-ocean':['#07131d','#e7f5fc'],forest:['#0b1612','#eaf7ee'],rose:['#1c121d','#fff1f8']};
+// The toolbar chrome colour in each theme (ui/themes.css --chrome), for the window and Windows' title-bar buttons.
+const CHROME={'midnight-lavender':['#110d1d','#f6f2ff'],daylight:['#ece7f4','#1a132e'],'deep-ocean':['#081520','#eaf6fd'],forest:['#0b1813','#ecf8f0'],rose:['#1d121e','#fff2f8']};
 class Themes{
  constructor({window,pages,emit}){Object.assign(this,{window,pages,emit});this.revision=0;this.at=0;this.timer=null;this.applied=new WeakMap();}
  native(value){const win=this.window();nativeTheme.themeSource=value==='daylight'?'light':'dark';if(!win||win.isDestroyed())return;const[bg,ink]=CHROME[value]||CHROME['midnight-lavender'];win.setBackgroundColor(bg);if(process.platform!=='darwin')win.setTitleBarOverlay({color:bg,symbolColor:ink,height:72});}

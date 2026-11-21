@@ -88,6 +88,7 @@ else
     changed hngroup-site/ && run 'hngroup.org.uk' bash "$ROOT/hngroup-site/install.sh" "$EMAIL"
     changed auth-site/ status-site/install-portal-sso.sh && run 'HN Group Auth' bash "$ROOT/auth-site/install.sh" "$EMAIL"
 fi
+changed compass-site/ && run 'Compass (compass.hngroup.org.uk)' bash "$ROOT/compass-site/install.sh" "$EMAIL"
 changed hr-site/ && run 'HN Group HR (hr.hngroup.org.uk)' bash "$ROOT/hr-site/install.sh" "$EMAIL"
 changed echo-site/ && run 'Echo (echo.hngroup.org.uk)' bash "$ROOT/echo-site/install.sh" "$EMAIL"
 # HN Group People also re-runs until it has its HTTPS certificate (it waits for DNS on the first install).

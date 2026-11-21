@@ -86,3 +86,15 @@ test('installers are copied once, checked against their release record and serve
     assert.deepEqual(fs.readdirSync(path.join(dir, 'files')), [sha256]);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('Compass-prefixed browser releases are accepted alongside legacy HN-Browser releases', () => {
+  const { fromManifest } = require('./lib/releases');
+  const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, 'release.json'), 'utf8'));
+  const parsed = readRelease(fromManifest(manifest));
+  assert.ok(parsed, 'bundled Compass release.json parses');
+  assert.ok(parsed.assets['mac-arm64']?.name.startsWith('Compass-'));
+  assert.ok(parsed.assets['windows-x64']?.name.startsWith('Compass-'));
+  assert.ok(parsed.assets['linux-x64']?.name.startsWith('Compass-'));
+  assert.ok(parsed.assets['mac-arm64-zip']?.name.startsWith('Compass-'));
+});
+
