@@ -7,10 +7,8 @@
 // Never emails, phone numbers, locations, birthdays or anything else from the record.
 function boardLabel(company) { return company === 'Horizon Network' ? 'Board of Directors' : company + ' Board of Directors'; }
 function listed(store, p) {
-  if (!p || p.system) return false;
-  const logins = store.loginsForId ? store.loginsForId(p.id) : [];
-  // Someone whose sign-in accounts are all switched off has left; records without an account are still staff.
-  return !logins.length || logins.some((l) => l.account && l.account.enabled);
+  // Employment status controls the directory; sign-in access is managed separately.
+  return !!p && !p.system && !p.offboardedAt;
 }
 function people(store) {
   return store.employees().filter((p) => listed(store, p));
@@ -23,10 +21,9 @@ function rolesOf(p) {
 function publicPeople(store) {
   return projectPeople(store, people(store));
 }
-// The signed-in staff chart follows employment status, independently of login access.
-// Public People retains its separate account-visibility policy above.
+// Both directories use active employment records and the same public-safe fields.
 function staffOrgChart(store) {
-  return projectPeople(store, store.employees().filter(p => !p.system && !p.offboardedAt));
+  return projectPeople(store, people(store));
 }
 function projectPeople(store, list) {
   const ids = new Set(list.map((p) => p.id));

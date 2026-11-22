@@ -8,7 +8,7 @@ const pub = require('../staff-portal/lib/people-public');
 const PEOPLE = [
   { id: 'a'.repeat(16), displayName: 'Charlie', firstName: 'Charlie', lastName: 'Livsey', company: 'HN Group', jobTitle: 'Board Chairman', department: 'Board', supervisorId: null, bio: 'Hello there', phone: '07000', email: 'c@example.test', otherRoles: [{ company: 'Horizon Network', jobTitle: 'President', supervisorId: null }] },
   { id: 'b'.repeat(16), displayName: 'Jack', company: 'HN Group', jobTitle: 'Board Director', supervisorId: 'a'.repeat(16), supervisorCompany: 'HN Group', bio: 'Private words', peopleBio: false },
-  { id: 'c'.repeat(16), displayName: 'Gone', company: 'Horizon Network', jobTitle: 'Advisor' },
+  { id: 'c'.repeat(16), displayName: 'Gone', company: 'Horizon Network', jobTitle: 'Advisor', offboardedAt: '2026-11-21' },
   { id: 'd'.repeat(16), displayName: 'System', system: true },
 ];
 const store = {
@@ -38,6 +38,31 @@ test('the staff portal publishes only public fields, respects the About me choic
   assert.deepEqual(pos('Horizon Network', 'President').holders, ['a'.repeat(16)]);
   assert.deepEqual(pos('HN Group', 'Chief Executive Officer').holders, [], 'vacant positions are listed');
   assert.deepEqual(pos('Horizon Network', 'President').reportsTo, { company: 'HN Group', title: 'Chief Executive Officer' });
+});
+
+test('active staff need no enabled login, retain their current roles and keep private fields private', () => {
+  const active = { id: 'e'.repeat(16), displayName: 'No account', company: 'Horizon Network', jobTitle: 'Advisor',
+    otherRoles: [{ company: 'HN Group', jobTitle: 'Board Director' }], bio: 'Hidden biography', peopleBio: false,
+    email: 'private@example.test', phone: 'private', account: { enabled: false } };
+  const disabled = { id: 'f'.repeat(16), displayName: 'Disabled login', company: 'Horizon Network', jobTitle: 'Founder' };
+  const leaver = { id: '1'.repeat(16), displayName: 'Former employee', company: 'HN Group', jobTitle: 'Board Chairman', offboardedAt: '2026-11-21' };
+  const fixture = { ...store, employees: () => [active, disabled, leaver],
+    loginsForId: id => id === active.id ? [] : [{ account: { enabled: id === leaver.id } }],
+    avatarFile: () => ({ file: 'private-path.png', mime: 'image/png' }) };
+  const out = pub.publicPeople(fixture);
+  assert.deepEqual(out.people.map(p => p.id).sort(), [active.id, disabled.id]);
+  assert.equal(out.people.find(p => p.id === active.id).about, '');
+  assert.ok(out.positions.some(p => p.company === 'HN Group' && p.title === 'Board Director' && p.holders.includes(active.id)));
+  assert.ok(out.positions.some(p => p.title === 'Founder' && p.holders.includes(disabled.id)));
+  assert.ok(pub.avatarOf(fixture, active.id));
+  assert.ok(pub.avatarOf(fixture, disabled.id));
+  assert.equal(pub.avatarOf(fixture, leaver.id), null);
+  assert.doesNotMatch(JSON.stringify(out), /private@example|private-path|Hidden biography|"account"|"phone"/);
+  disabled.jobTitle = 'Internal Relations Director';
+  disabled.supervisorId = active.id;
+  const updated = pub.publicPeople(fixture);
+  assert.equal(updated.people.find(p => p.id === disabled.id).roles[0].jobTitle, 'Internal Relations Director');
+  assert.deepEqual(updated.people.find(p => p.id === disabled.id).roles[0].reportsTo, { id: active.id, company: 'Horizon Network' });
 });
 
 test('the site serves the list, pictures and page addresses', async () => {
