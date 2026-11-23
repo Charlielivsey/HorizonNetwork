@@ -19,6 +19,12 @@ test('brand centre and approved downloads are public; retired Management brandin
    assert.deepEqual(png,fs.readFileSync(path.join(__dirname,'../brand/discord-bot',file+'.png')));
    const svg=await fetch(base+'/assets/brand/svg/'+file+'.svg');assert.equal(svg.status,200);const artwork=await svg.text();assert.match(artwork,/Horizon Network/);assert.doesNotMatch(artwork,/HN Group/);assert.ok(html.includes(file+'.png?v=20261114-horizon-network'));
   }
+  for(const brand of ['horizon-advertising','horizon-development','horizon-media-group']){
+   const svg=Buffer.from(await(await fetch(base+'/assets/brand/svg/'+brand+'-logo.svg')).arrayBuffer());
+   assert.deepEqual(svg,fs.readFileSync(path.join(__dirname,'../brand/logos',brand+'-logo.svg')),brand+' uses approved artwork');
+   const email=Buffer.from(await(await fetch(base+'/assets/brand/png/'+brand+'-email-logo.png')).arrayBuffer());
+   assert.deepEqual(email,fs.readFileSync(path.join(__dirname,'../accounts-site/public/assets/brand/png',brand+'-email-logo.png')),brand+' agrees with email signatures');
+  }
   const sites=JSON.parse(fs.readFileSync(path.join(__dirname,'../links-site/sites.json')));const entry=(Array.isArray(sites)?sites:sites.sites).find(x=>x.id==='branding');assert.equal(entry.access,'public');
  }finally{await new Promise(r=>server.close(r));}
 });
