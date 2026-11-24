@@ -10,6 +10,7 @@ const store = require('./lib/store');
 const catalog = require('./lib/catalog');
 const { createAuth } = require('./lib/auth');
 const { renderDocument } = require('./lib/pdf');
+const { renderDocx } = require('./lib/docx');
 const crypto = require('node:crypto');
 
 const PUBLIC = process.env.DOCS_PUBLIC_DIR || path.join(__dirname, 'public');
@@ -115,6 +116,14 @@ function sendPdf(res, d) {
   res.end(bytes);
 }
 
+function sendDocx(res, d) {
+  const bytes = renderDocx(d, catalog.company(d.company), catalog.template(d.template));
+  const name = (String(d.title || 'Document').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').trim() || 'Document') + '.docx', encoded = encodeURIComponent(name);
+  res.writeHead(200, { 'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'Content-Length': bytes.length, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff',
+    'Content-Disposition': 'attachment; filename="' + encoded + '"; filename*=UTF-8\'\'' + encoded });
+  res.end(bytes);
+}
+
 // The raw bytes of an upload (up to 25 MB).
 function raw(req) {
   return new Promise((resolve, reject) => {
@@ -173,6 +182,8 @@ async function api(req, res, url) {
   if (route === '/api/documents' && method === 'POST') return send(res, 201, { document: store.create(user, await json(req)) });
   let m = /^\/api\/documents\/([0-9a-f-]{36})\/send-for-signing$/.exec(route);
   if (m && UUID.test(m[1]) && method === 'POST') return send(res, 200, await sendForSigning(store.view(store.get(m[1], user), user, true), user));
+  m = /^\/api\/documents\/([0-9a-f-]{36})\/docx$/.exec(route);
+  if (m && UUID.test(m[1]) && method === 'GET') return sendDocx(res, store.view(store.get(m[1], user), user, true));
   m = /^\/api\/documents\/([0-9a-f-]{36})\/pdf$/.exec(route);
   if (m && UUID.test(m[1]) && method === 'GET') return sendPdf(res, store.view(store.get(m[1], user), user, true));
   m = /^\/api\/documents\/([0-9a-f-]{36})(\/duplicate)?$/.exec(route);

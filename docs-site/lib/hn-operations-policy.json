@@ -1,7 +1,7 @@
 {
   "title": "Horizon Network Operations Policy",
-  "version": "0.1 — Draft",
-  "date": "20 November 2026",
+  "version": "0.2",
+  "date": "24 November 2026",
   "owner": "Horizon Network Board of Directors",
   "articles": [
     [
@@ -87,7 +87,7 @@
       [
         [
           "3.1",
-          "The CEO of Horizon Network may issue a special resolution dissolving the Horizon Network Board of Directors at any time."
+          "The CEO of Horizon Network may recommend to the Board of Directors that it be dissolved. A special resolution dissolving the Board must be issued by the Board Chairman, or the permitted alternative office-holder, in accordance with Article 7.1. The Board may direct the Chairman to issue the resolution under Article 7.2."
         ],
         [
           "3.2",
@@ -166,7 +166,7 @@
       [
         [
           "6.1",
-          "The Horizon Network Board of Directors is the document owner for this Operations Policy and must ensure that executive directives and their amendments, repeals and retractions are retained in an identifiable governance record."
+          "The Horizon Network Board of Directors is the document owner for this Operations Policy and must ensure that executive directives, special resolutions and their amendments, repeals, retractions and appeal decisions are retained in an identifiable governance record."
         ],
         [
           "6.2",
@@ -178,15 +178,66 @@
         ],
         [
           "6.4",
-          "Permanent changes to this policy must be recorded in a revised policy version. A directive that suspends a provision must not be presented as a permanent amendment merely because the suspension has taken effect."
+          "Permanent changes to this policy must be recorded in a revised policy version, including amendments made by special resolution under Article 7. A directive that suspends a provision must not be presented as a permanent amendment merely because the suspension has taken effect."
+        ]
+      ]
+    ],
+    [
+      "Special resolutions",
+      [
+        [
+          "7.1",
+          "A special resolution may be issued only by the Chairman of the Horizon Network Board of Directors, except where no Chairman is appointed, the Chairman is on annual leave, or the Chairman has left and a replacement has not yet been appointed. In those circumstances, the CEO, as the head of Horizon Network, may issue the resolution instead. The exception in Article 7.6 is reserved to the Chairman of the HN Group Board of Directors. All resolutions remain subject to applicable law and the company’s governing documents."
+        ],
+        [
+          "7.2",
+          "The Board of Directors may vote to direct the Chairman to issue a special resolution. The CEO may make a recommendation to the Board that a special resolution be issued. The recommendation, Board decision and resulting resolution must be recorded. A recommendation alone does not amend the charter or any policy."
+        ],
+        [
+          "7.3",
+          "Special resolutions may be used to amend the company charter or a policy of Horizon Network. Each resolution must identify the document, its current version, the provisions to be changed, the replacement wording, the reasons for the change, the issuing office-holder and the proposed effective date."
+        ],
+        [
+          "7.4",
+          "A change to the company charter proposed by special resolution does not take effect until the Board of Directors has voted to approve it, in accordance with the charter and any applicable voting and consent requirements. When the result is declared, an approved resolution becomes binding subject to those requirements and any later effective date it specifies; a rejected resolution is revoked and the existing charter remains in force. The vote and its result must be retained with the resolution."
+        ],
+        [
+          "7.5",
+          "A special resolution issued under the ordinary authority in Article 7.1 must not amend, remove or circumvent the company charter’s Class A founder-share protections, including the provisions governing founder status, enhanced voting rights, founder consent and protection against dilution of those rights. Any such attempt results in automatic revocation of the resolution. Nothing in this Article alters the current shareholdings, voting minimum or voting delegations."
+        ],
+        [
+          "7.6",
+          "An amendment to the protected founder-share provisions described in Article 7.5, or to the protection established by Article 7.5 itself, may be made only through a special resolution issued by the Chairman of the HN Group Board of Directors. That exclusive issuing authority does not dispense with the founder consent, voting, approval or other requirements of the company charter and applicable law."
+        ],
+        [
+          "7.7",
+          "The Chief Executive of HN Group may issue an executive directive revoking a special resolution if they determine that revocation is in the best interests of Horizon Network and the wider HN Group. The directive must identify the resolution, explain the decision, state when revocation takes effect and restore the affected charter or policy wording to its form immediately before that resolution. The directive, restored wording and implementation instructions must be recorded and communicated to the affected leadership."
+        ],
+        [
+          "7.8",
+          "The Board Chairman may, having taken advice from the Board of Directors and the Chief Executive, appeal the decision under Article 7.7 in writing to the HN Group Board of Directors at boad-appeals@hngroup.org.uk. The appeal must identify the special resolution and revoking directive, set out the grounds of appeal and include the relevant supporting records."
+        ],
+        [
+          "7.9",
+          "The HN Group Board of Directors must consider the appeal and hold a vote approving or rejecting it. The HN Group Chief Executive must be asked to explain why the special resolution was revoked. The Board’s decision and reasons must be recorded and communicated to the Board Chairman and the Chief Executive."
+        ],
+        [
+          "7.10",
+          "If the appeal is rejected, the HN Group Chief Executive’s decision stands and no further action is taken under this appeal procedure. If the appeal is approved, the Board Chairman must issue a directive reinstating the special resolution in accordance with the HN Group Board’s decision. The reinstating directive must identify that decision, the original resolution and revoking directive, the wording being restored and the effective date."
+        ],
+        [
+          "7.11",
+          "The original resolution, Board direction or recommendation, charter-approval vote where required, revoking directive, appeal, appeal vote, outcome and any reinstating directive must be retained together under Article 6. Changes to the charter or a policy must be reflected in its version history, with the previous wording retained."
         ]
       ]
     ]
   ],
   "notes": [
-    "Board repeal vote: confirm the voting threshold, quorum and meaning of “full Board” in Article 2.1(b). No majority or unanimity rule has been assumed.",
-    "Appeals: confirm who may appeal an HN Group executive intervention, the submission route and time limit, and whether the intervention remains effective while the appeal is pending.",
-    "Replacement Board: confirm who selects or appoints the replacement Board under Article 3 and the arrangements for governance during the 72-hour period.",
+    "Board votes: confirm the applicable quorum, voting threshold and meaning of “full Board” in Article 2.1(b), and the applicable requirements for votes under Article 7. No majority or unanimity rule has been invented.",
+    "Executive-directive appeals: confirm who may appeal an intervention under Article 2.1(c), its submission route and time limit, and whether the intervention remains effective while that appeal is pending. Article 7 provides the separate appeal procedure for revoked special resolutions; confirm any appeal time limit and interim-effect rule before approval.",
+    "Replacement Board: confirm who selects or appoints the replacement Board under Article 3 and the arrangements for governance during the 72-hour period. Article 3 now follows the Chairman-issued special-resolution authority in Article 7, with a CEO recommendation and the stated absence exceptions.",
+    "Founder charter reference: no numbered company-charter text was supplied or located in Docs. Articles 7.5–7.6 identify the protected Class A founder provisions by subject rather than inventing an article number. Insert the verified charter citation before adopting the policy; existing founder consent and voting rights remain unchanged.",
+    "Appeal mailbox: Article 7.8 retains boad-appeals@hngroup.org.uk exactly as supplied. Confirm that spelling and the mailbox is operational before adopting the policy.",
     "Approval: confirm the approval process, effective date and review date before issuing this draft as an operative policy."
   ]
 }

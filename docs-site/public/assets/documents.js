@@ -275,6 +275,7 @@
       { label: 'Open in a new tab', run: () => window.open('/doc/' + d.id, '_blank', 'noopener') },
       view ? null : { label: 'Copy link', run: () => copyLink(url) },
       '-',
+      { label: 'Download Word (.docx)', run: () => { const a = el('a', { href: '/api/documents/' + d.id + '/docx', download: '' }); document.body.append(a); a.click(); a.remove(); toast('Downloading Word document…'); } },
       { label: 'Download PDF', run: () => { const a = el('a', { href: '/api/documents/' + d.id + '/pdf', download: '' }); document.body.append(a); a.click(); a.remove(); toast('Downloading “' + d.title + '.pdf”…'); } },
       view ? null : { label: 'Make a copy', run: async () => { try { await api('POST', '/api/documents/' + d.id + '/duplicate'); toast('Copy made.'); loadDocuments(); } catch (e) { toast(e.message, true); } } },
       view ? null : { label: 'Send for signing…', run: async () => {
@@ -593,13 +594,14 @@
   $('doc-company').addEventListener('change', () => { S.doc.company = $('doc-company').value; patch.company = S.doc.company; drawBranding(); saveNow(); });
   $('doc-sharing').addEventListener('change', () => { patch.sharing = $('doc-sharing').value; S.doc.sharing = patch.sharing; saveNow().then(() => toast(S.doc.sharing === 'private' ? 'Moved to your private storage. Only you can see it now.' : 'Shared with staff. Everyone can see and edit it now.')); });
   $('doc-status').addEventListener('click', () => { S.doc.status = S.doc.status === 'final' ? 'draft' : 'final'; patch.status = S.doc.status; drawControls(); saveNow(); });
-  // Download PDF: the server makes the PDF (no print dialog, so the browser adds nothing to it).
-  $('doc-pdf').addEventListener('click', async (e) => {
+  // Save current edits before exporting; a failed save must not download stale text.
+  for (const format of ['pdf', 'docx']) $('doc-' + format).addEventListener('click', async (e) => {
     e.preventDefault();
     await saveNow();
-    const a = el('a', { href: '/api/documents/' + S.doc.id + '/pdf', download: '' });
+    if (dirty || saving) { toast('Save your changes before downloading. Please try again.', true); return; }
+    const a = el('a', { href: '/api/documents/' + S.doc.id + '/' + format, download: '' });
     document.body.append(a); a.click(); a.remove();
-    toast('Downloading “' + S.doc.title + '.pdf”…');
+    toast('Downloading “' + S.doc.title + '.' + format + '”…');
   });
   // Send for signing: HN Group Docs makes the PDF and hands it to HN Group Contracts, which opens to choose who signs it.
   $('doc-sign').addEventListener('click', async () => {

@@ -32,6 +32,7 @@ its data in `/var/lib/hn-docs/old-help-site-<time>/`.
 - **Editor:** an A4 page as it will be in the PDF, with headings, lists, alignment, links, tables and lines; it saves
   by itself and refuses to overwrite someone else's newer changes. Mark final (locked until it goes back to draft),
   move between Shared and My storage, duplicate or delete. No website address appears on documents.
+- **Download Word (.docx):** available in the editor and document menus. Exports the latest saved text as native, editable Word paragraphs and tables, with the company letterhead, metadata, policy history and page-number fields. Uses the same document access controls as PDF; no sign-in or permission bypass. Editing a downloaded copy in Word does not change the saved Docs document.
 - **Download PDF** (`lib/pdf.js`): the server makes the PDF itself, so no print dialog opens and the browser adds
   nothing. It embeds Plus Jakarta Sans (static TrueType files in `lib/pdf-assets/`, OFL) and a PNG of the company's
   approved logo (rendered from the SVG), and lays out the details, version history, text (headings, lists, quotes,
