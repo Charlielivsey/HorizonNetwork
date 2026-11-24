@@ -285,6 +285,17 @@ function positions() {
   return out;
 }
 
+// Stable identities let Utilities rename a Discord role in place rather than recreate it.
+function positionId(company, title, state = settings) {
+  return state.positionIds?.[company]?.[title] || crypto.createHash('sha256').update(JSON.stringify([company,title])).digest('hex').slice(0,24);
+}
+function discordPositionCatalog() {
+  return Object.fromEntries(Object.entries(positions()).map(([company,titles]) => [company,titles.map(title => {
+    const id = positionId(company,title);
+    return {id,title,aliases:(settings.positionAliases?.[id] || []).slice()};
+  })]));
+}
+
 const sameTitle = (a, b) => String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
 
 // Everyone holding a position (main role or a role at another company), main roles first.
@@ -314,6 +325,8 @@ function addPosition(company, title, reportsTo) {
   const list = settings.positions[c] = settings.positions[c] || [];
   if (list.some((x) => sameTitle(x, t))) throw new ValidationError(`${c} already has a ${t} position.`);
   list.push(t);
+  settings.positionIds = settings.positionIds || {};
+  (settings.positionIds[c] = settings.positionIds[c] || {})[t] = crypto.randomBytes(12).toString('hex');
   writeJson(settingsFile, settings);
   if (reportsTo) setPositionReport(c, t, reportsTo);
   return positions();
@@ -330,6 +343,12 @@ function renamePosition(company, title, newTitle, actor) {
   if (name === previous) return positions();
   const nextSettings = JSON.parse(JSON.stringify(settings)), nextPeople = JSON.parse(JSON.stringify(people));
   nextSettings.positions[company][index] = name;
+  const id = positionId(company,previous);
+  nextSettings.positionIds = nextSettings.positionIds || {};
+  const identities = nextSettings.positionIds[company] = nextSettings.positionIds[company] || {};
+  delete identities[previous]; identities[name] = id;
+  nextSettings.positionAliases = nextSettings.positionAliases || {};
+  nextSettings.positionAliases[id] = [...new Set([...(nextSettings.positionAliases[id] || []),previous])];
   const remap = target => { if(target && target.kind !== "board" && target.company === company && sameTitle(target.title,previous)) target.title = name; };
   const reports = nextSettings.positionReports || {};
   for (const co of Object.keys(reports)) for (const t of Object.keys(reports[co])) {
@@ -366,6 +385,9 @@ function removePosition(company, title) {
   const held = holdersOf(company, list[i]).length;
   if (held) throw new ValidationError(`${held === 1 ? "Someone holds" : held + " people hold"} ${list[i]} at ${company}. Give them another position first.`);
   const gone = list.splice(i, 1)[0];
+  const id = positionId(company,gone);
+  if(settings.positionIds?.[company]) delete settings.positionIds[company][gone];
+  if(settings.positionAliases) delete settings.positionAliases[id];
   // Positions that reported to it now report to no one, until someone chooses again.
   const reports = settings.positionReports || {};
   for (const k of Object.keys(reports[company] || {})) if (sameTitle(k, gone)) delete reports[company][k];
@@ -843,7 +865,7 @@ function discordPositions() {
   const byId = new Map();
   for (const p of employees().filter((x) => x.discord && DISCORD_ID.test(String(x.discord.id)))) {
     const id = String(p.discord.id), titles = byId.get(id) || [];
-    for (const t of [{ company: p.company || "", title: p.jobTitle || "" }, ...(p.otherRoles || []).map((r) => ({ company: r.company || "", title: r.jobTitle || "" }))]) {
+    for (const t of [{ company: p.company || "", title: p.jobTitle || "" }, ...(p.otherRoles || []).map((r) => ({ company: r.company || "", title: r.jobTitle || p.jobTitle || "" }))]) {
       if (!t.company || !t.title) continue;
       const item = { company: String(t.company).slice(0, 80), title: String(t.title).slice(0, 120) };
       if (!titles.some((x) => x.company === item.company && x.title.toLowerCase() === item.title.toLowerCase())) titles.push(item);
@@ -1998,6 +2020,7 @@ module.exports = {
   RENAMED_COMPANIES,
   COMPANIES,
   positions,
+  discordPositionCatalog,
   addPosition,
   removePosition,
   holdersOf,

@@ -182,7 +182,7 @@ function createStatusSso({ store, sessions, sendJson, redirect, readJsonBody, lo
     // HN Group Auth's Discord bot keeps the stored usernames up to date.
     // Job titles by company for each linked Discord ID: the bot keeps Discord roles in step with positions.
     if (pathname === '/api/auth/discord-staff-list') { sendJson(res, 200, { people: store.discordStaffList(), positions: store.positions() }); return true; }
-    if (pathname === '/api/auth/discord-positions') { sendJson(res, 200, { people: store.discordPositions(), positions: store.positions(), reports: store.positionReports() }); return true; }
+    if (pathname === '/api/auth/discord-positions') { sendJson(res, 200, { people: store.discordPositions(), positions: store.positions(), positionCatalog: store.discordPositionCatalog(), reports: store.positionReports() }); return true; }
     if (pathname === '/api/auth/discord-accounts') { sendJson(res, 200, { ids: store.discordIds(body.pending === true) }); return true; }
     // New Discord details from the bot; changed pictures are then copied onto the profiles that follow Discord.
     if (pathname === '/api/auth/discord-update') { sendJson(res, 200, { changed: store.updateDiscordNames(body.updates) }); if (syncDiscordPhotos) syncDiscordPhotos().catch(() => {}); return true; }

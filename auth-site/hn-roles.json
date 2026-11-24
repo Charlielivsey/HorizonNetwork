@@ -1,5 +1,5 @@
 {
-  "_note": "HN Discord role order and staff-title mappings for the four configured servers. /setup-server rebuilds the role list only on explicit request. Normal sync never rebuilds roles; the approved VP split migration adds Relations and Systems in place, preserving the legacy VP role for unmapped members.",
+  "_note": "Staff Portal owns current position identities, names and order. Utilities reconciles listed position/technical roles, permissions and assignments automatically; unrelated roles and channels are preserved. CEO replaces President; CEO/COO/CCO/CTO receive NPL5 and Network Administration. Historical position mappings remain for rename compatibility and retiring obsolete listed roles.",
   "servers": {
     "HQ": "1360208008755413227",
     "Horizon Ads": "266973580900696065",
@@ -50,6 +50,66 @@
     {
       "name": "Vice President (Systems)",
       "color": "#9674D4",
+      "hoist": false,
+      "permissions": []
+    },
+    {
+      "name": "Chief Executive Officer",
+      "color": "#B99AF2",
+      "hoist": true,
+      "permissions": []
+    },
+    {
+      "name": "Chief Operating Officer",
+      "color": "#9674D4",
+      "hoist": false,
+      "permissions": []
+    },
+    {
+      "name": "Chief Compliance Officer",
+      "color": "#9674D4",
+      "hoist": false,
+      "permissions": []
+    },
+    {
+      "name": "Chief Technology Officer",
+      "color": "#9674D4",
+      "hoist": false,
+      "permissions": []
+    },
+    {
+      "name": "IT Director",
+      "color": "#65B8B0",
+      "hoist": false,
+      "permissions": []
+    },
+    {
+      "name": "Compliance Director",
+      "color": "#65B8B0",
+      "hoist": false,
+      "permissions": []
+    },
+    {
+      "name": "Compliance Manager",
+      "color": "#65B8B0",
+      "hoist": false,
+      "permissions": []
+    },
+    {
+      "name": "Compliance Advisor",
+      "color": "#7FAACB",
+      "hoist": false,
+      "permissions": []
+    },
+    {
+      "name": "IT Manager",
+      "color": "#65B8B0",
+      "hoist": false,
+      "permissions": []
+    },
+    {
+      "name": "IT Advisor",
+      "color": "#7FAACB",
       "hoist": false,
       "permissions": []
     },
@@ -300,6 +360,22 @@
     ],
     "@everyone": [
       "Network Permission Level 1"
+    ],
+    "Chief Executive Officer": [
+      "Network Permission Level 5",
+      "NA | Network Administration"
+    ],
+    "Chief Operating Officer": [
+      "Network Permission Level 5",
+      "NA | Network Administration"
+    ],
+    "Chief Compliance Officer": [
+      "Network Permission Level 5",
+      "NA | Network Administration"
+    ],
+    "Chief Technology Officer": [
+      "Network Permission Level 5",
+      "NA | Network Administration"
     ]
   },
   "positions": {
@@ -344,7 +420,50 @@
         "Founder",
         "Network Permission Level 3",
         "NA | Network Administration"
+      ],
+      "Chief Executive Officer": [
+        "Chief Executive Officer",
+        "Network Permission Level 5",
+        "NA | Network Administration"
+      ],
+      "Chief Operating Officer": [
+        "Chief Operating Officer",
+        "Network Permission Level 5",
+        "NA | Network Administration"
+      ],
+      "Chief Compliance Officer": [
+        "Chief Compliance Officer",
+        "Network Permission Level 5",
+        "NA | Network Administration"
+      ],
+      "Chief Technology Officer": [
+        "Chief Technology Officer",
+        "Network Permission Level 5",
+        "NA | Network Administration"
+      ],
+      "IT Director": [
+        "IT Director"
+      ],
+      "Compliance Director": [
+        "Compliance Director"
+      ],
+      "Compliance Manager": [
+        "Compliance Manager"
+      ],
+      "Compliance Advisor": [
+        "Compliance Advisor"
+      ],
+      "IT Manager": [
+        "IT Manager"
+      ],
+      "IT Advisor": [
+        "IT Advisor"
       ]
     }
+  },
+  "positionAliases": {
+    "Chief Executive Officer": [
+      "President"
+    ]
   }
 }

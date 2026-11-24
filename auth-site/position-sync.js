@@ -6,41 +6,33 @@
 // HR supplies position titles/order; current networks supply servers; hn-roles.json supplies technical grants (not a /server-setup layout: the user's correction, 6 November 2026,
 // "dont use setup role list. the bot will do it automatically accross the servers i gave the IDs for").
 //
-// Setting a server's roles up is a command (the user's request, 6 November 2026: "bot seems to get stuck removing
-// roles, make it so a setup server command has to be ran but with no additonal arguments. also add a force sync
-// command"): /setup-server, run inside one of those servers, deletes every other role and creates the list in order
-// (reporting its progress), then syncs everyone's roles; /force-sync syncs staff roles with the staff portal now in
-// every listed server. Automatic sync never creates or reorders server roles: a server whose roles aren't set up is
-// skipped until /setup-server has been run there. Every minute the bot asks the staff backend for each staff record's
-// Discord ID and job titles at each company; when anything has changed (or at least every 10 minutes), in every listed
-// server:
-//   • each member linked to a staff record gets the roles of their position(s) at the layout's company (for example
-//     President → President, Network Permission Level 5, NA | Network Administration) and loses the position, level and
-//     NA roles they no longer hold;
-//   • they also get every separator role, Network Permission Level 1 and M | Member (everyone else gets these from
-//     /setup-server; the background sync only checks members linked to a staff record).
-// Roles outside `positions` (Network Permission Level 2 for Trial Staff, given by hand, and B | Bots) are never touched,
-// bots are never changed, and members who aren't linked to a staff record are never touched by the background sync.
+// Utilities reconciles the current Staff Portal catalogue every minute. Stable position IDs
+// retain Discord roles through renames; retired listed roles are removed. Listed role
+// permissions, colours and order follow policy; unrelated roles remain untouched.
+// /force-sync runs the same reconciliation immediately. /setup-server is a separate,
+// explicitly destructive rebuild and is not required for routine position changes.
 const fs = require('node:fs');
 const path = require('node:path');
 const { ALWAYS_GIVE, isSeparator, roleName, parseLayout } = require('./server-setup');
 const ROLES_FILE = path.join(__dirname, 'hn-roles.json');
 
 // hn-roles.json → one layout per server (same roles everywhere).
-function loadRoles(file = ROLES_FILE, networks = null, catalog = null) {
+function loadRoles(file = ROLES_FILE, networks = null, catalog = null, identities = null) {
   const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
   const servers = networks ? networks.flatMap(n=>(n.guilds||[]).filter(g=>/^\d{15,22}$/.test(String(g))).map(g=>[n.name+' · HN administration',String(g)])) : raw.servers && typeof raw.servers === 'object' ? Object.entries(raw.servers) : [];
-  const { _note, servers: _s, ...body } = raw;
+  const { _note, servers: _s, positionAliases: _aliases, ...body } = raw;
   if(catalog){
     const company=raw.positions.company,titles=catalog[company];if(!Array.isArray(titles))throw Object.assign(new Error('HR position catalogue unavailable for '+company),{layout:true});
     const oldTitles=new Set(Object.keys(raw.positions.roles).map(roleName)),specs=new Map(raw.roles.map(r=>[roleName(r.name),r]));
-    const roles=titles.map(title=>({...specs.get(roleName(title)),name:title,permissions:specs.get(roleName(title))?.permissions||[],color:/^Board (Chairman|Director|Member)$/i.test(title)?'#000000':(specs.get(roleName(title))?.color||'#72B8AD')}));
-    const separators=raw.roles.filter(r=>isSeparator(r.name));body.roles=[...(separators.length?[separators[0]]:[]),...roles,...raw.roles.filter(r=>!oldTitles.has(roleName(r.name))&&roleName(r.name)!==roleName('Vice President')&&r!==separators[0])];
+    const policyTitle=title=>[title,...(identities?.[company]?.find(p=>p.title===title)?.aliases||[]).slice().reverse()].find(t=>raw.positions.roles[t])||title;
+    const roles=titles.map(title=>{const spec=specs.get(roleName(policyTitle(title)));return {...spec,name:title,permissions:spec?.permissions||[],color:/^Board (Chairman|Director|Member)$/i.test(title)?'#000000':(spec?.color||'#72B8AD')};});
+    const separators=raw.roles.filter(r=>isSeparator(r.name)),founder=separators.find(r=>/FOUNDER/.test(r.name));
+    body.roles=[...(separators.length?[separators[0]]:[]),...roles.flatMap(r=>r.name==='Founder'&&founder?[founder,r]:[r]),...raw.roles.filter(r=>!oldTitles.has(roleName(r.name))&&roleName(r.name)!==roleName('Vice President')&&r!==separators[0]&&r!==founder)];
     const known=new Set(body.roles.map(r=>roleName(r.name)));
-    body.positions={company,roles:Object.fromEntries(titles.map(title=>[title,[title,...(raw.positions.roles[title]||[]).filter(n=>roleName(n)!==roleName(title)&&known.has(roleName(n)))]]))};
-    body.roleGrants=Object.fromEntries(Object.entries(raw.roleGrants||{}).filter(([name])=>name==='@everyone'||titles.includes(name)).map(([name,grants])=>[name,grants.filter(n=>known.has(roleName(n)))]).filter(([,grants])=>grants.length));
+    body.positions={company,roles:Object.fromEntries(titles.map(title=>[title,[title,...(raw.positions.roles[policyTitle(title)]||[]).filter(n=>roleName(n)!==roleName(policyTitle(title))&&known.has(roleName(n)))]]))};
+    body.roleGrants=Object.fromEntries([['@everyone',raw.roleGrants?.['@everyone']||[]],...titles.map(title=>[title,raw.roleGrants?.[policyTitle(title)]||[]])].map(([name,grants])=>[name,grants.filter(n=>known.has(roleName(n)))]).filter(([,grants])=>grants.length));
   }
-  return servers.map(([name, guildId]) => parseLayout({ ...body, server: name, guildId: String(guildId), removeUnlisted: { roles: true, channels: false } }, 'hn-roles'));
+  return servers.map(([name, guildId]) => ({...parseLayout({ ...body, server: name, guildId: String(guildId), removeUnlisted: { roles: true, channels: false } }, 'hn-roles'),legacyPositionTitles:Object.keys(raw.positions?.roles||{}),positionAliases:raw.positionAliases||{}}));
 }
 
 const ID = /^\d{15,22}$/;
@@ -53,7 +45,7 @@ const COMMANDS = [
   { name: 'force-sync', description: 'Sync everyone’s roles with their positions on the staff portal now, in every HN server', type: 1, contexts: [0], integration_types: [0] },
 ];
 
-function createPositionSync({ setup, staff, networks=null, rolesFile = ROLES_FILE, record = () => {}, enabled = () => true, now = () => Date.now(), fullEvery = 10 * 60000, fetcher = fetch, appId = () => null, requireCatalog = false, branding = null, overrides = () => ({}) }) {
+function createPositionSync({ setup, staff, networks=null, rolesFile = ROLES_FILE, record = () => {}, enabled = () => true, now = () => Date.now(), fullEvery = 10 * 60000, fetcher = fetch, appId = () => null, requireCatalog = false, branding = null, overrides = () => ({}),positionRoles=()=>({}),commitPositionRoles=null }) {
   let lastDigest = null, lastFull = 0, running = false, stopping = false, lastLayouts = [];
   // The background sync can take a long time in a big server (every member gets the separators, Level 1 and Member, one
   // request at a time, at Discord's pace), so the commands stop it rather than waiting (the user's report, 6 November
@@ -89,9 +81,8 @@ function createPositionSync({ setup, staff, networks=null, rolesFile = ROLES_FIL
     return { add, remove };
   }
 
-  // The members linked to a staff record, looked up one by one (people who aren't in this server are skipped). The
-  // background sync only checks these (the user's request, 6 November 2026: "dont do the making roles automatically jus
-  // the checking roles please"): it never goes through every member; /setup-server gives everyone the basic roles.
+  // Check linked staff and explicit NPL overrides individually; absent members are skipped.
+  // Routine position changes do not enumerate or rewrite every server member.
   async function members(guildId, people) {
     const found = [];
     for (const p of people) {
@@ -102,15 +93,20 @@ function createPositionSync({ setup, staff, networks=null, rolesFile = ROLES_FIL
     return found;
   }
 
-  async function syncGuild(layout, people, authoritative) {
+  async function syncGuild(layout, people, catalog) {
     const guildId = layout.guildId;
     let live = await setup.request('GET', '/guilds/' + guildId + '/roles');
+    let changed = 0;
+    if(catalog&&commitPositionRoles){
+      const bot=await setup.request('GET','/users/@me'),member=await setup.request('GET','/guilds/'+guildId+'/members/'+bot.id);
+      const reconciled=await require('./position-roles').reconcilePositionRoles({layout,catalog:catalog[layout.positions.company],live,state:positionRoles()[guildId],commit:commitPositionRoles,request:setup.request,check,botRoleIds:member.roles||[]});
+      live=reconciled.live;changed+=reconciled.changed;
+    }
     const have = new Set(live.map((r) => roleName(r.name)));
     const missing = layout.roles.filter((r) => !have.has(roleName(r.name))).map((r) => r.name);
     if (missing.length) throw Object.assign(new Error('roles aren’t set up yet (missing ' + missing.slice(0, 3).join(', ') + (missing.length > 3 ? ' and ' + (missing.length - 3) + ' more' : '') + '); run /setup-server there'), { layout: true });
     const sets = rolesFor(layout, live);
     const linked = new Map(people.map((p) => [p.id, p]));
-    let changed = 0;
     for (const m of await members(guildId, [...new Map([...Object.keys(overrides()[guildId]||{}).map(id=>({id,titles:[]})),...people].map(p=>[p.id,p])).values()])) {
       const id = String(m.user?.id || '');
       if (!ID.test(id)) continue;
@@ -138,13 +134,14 @@ function createPositionSync({ setup, staff, networks=null, rolesFile = ROLES_FIL
       const { value } = await staff('/api/auth/discord-positions', {});
       const people = (Array.isArray(value?.people) ? value.people : []).filter((p) => p && ID.test(String(p.id))).map((p) => ({ id: String(p.id), titles: Array.isArray(p.titles) ? p.titles : [] }));
       if(requireCatalog&&!value?.positions)throw Object.assign(new Error('HR position catalogue could not be loaded.'),{layout:true});
-      const digest = JSON.stringify([overrides(),people,value?.positions,networks?.()]);
+      if(commitPositionRoles&&!value?.positionCatalog)throw Object.assign(new Error('Stable staff position catalogue could not be loaded.'),{layout:true});
+      const digest = JSON.stringify([overrides(),people,value?.positions,value?.positionCatalog,networks?.()]);
       if (!force && digest === lastDigest && now() - lastFull < fullEvery) return null;
       let changed = 0;
       const errors = [];
-      lastLayouts=loadRoles(rolesFile,networks?networks():null,value?.positions);
+      lastLayouts=loadRoles(rolesFile,networks?networks():null,value?.positions,value?.positionCatalog);
       for (const layout of lastLayouts) {
-        try { changed += await syncGuild(layout, people,!!value?.positions); }
+        try { changed += await syncGuild(layout, people,value?.positionCatalog); }
         catch (e) { if (e === STOP) { record(null, 'positions.sync.stopped', { changed }); return { changed, errors, stopped: true }; } errors.push(layout.server + ' (' + layout.guildId + '): ' + (e.layout ? e.message : 'failed')); }
       }
       let logos=0;if(branding){try{logos=await branding();}catch(e){errors.push('Server branding: '+e.message);}}

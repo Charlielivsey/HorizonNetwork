@@ -265,7 +265,7 @@ test('the HN Group role list (hn-roles.json) is valid and fits a fresh server', 
   g.roles[1].position = 99;
   const p = makePlan(hq, g.guild, g.roles, g.channels, BOT, [g.botRole]);
   assert.deepEqual(p.problems, []);
-  assert.equal(p.steps.filter((x) => x.kind === 'role' && x.op === 'create').length, 21);
+  assert.equal(p.steps.filter((x) => x.kind === 'role' && x.op === 'create').length, 31);
   assert.deepEqual(require('./server-setup').loadLayouts(path.join(__dirname, 'discord-layouts')).layouts.map((l) => l.id), [], 'not a /server-setup layout');
 });
 
@@ -321,11 +321,11 @@ test('the bot looks after exactly the four HN servers, each with the role list i
   const all = loadRoles();
   assert.deepEqual(all.map((l) => [l.server, l.guildId]), [['HQ', '1360208008755413227'], ['Horizon Ads', '266973580900696065'], ['Staff', '1448685232118038661'], ['dev', '1358813446669602896']]);
   for (const l of all) {
-    assert.deepEqual(l.roles.map((r) => [r.name, r.color === undefined ? null : '#' + r.color.toString(16).toUpperCase().padStart(6, '0')]), SPEC, l.server + ' role order and colours');
+    assert.deepEqual(l.roles.map((r) => [r.name, r.color === undefined ? null : '#' + r.color.toString(16).toUpperCase().padStart(6, '0')]), [...SPEC.slice(0,4),...['Chief Executive Officer','Chief Operating Officer','Chief Compliance Officer','Chief Technology Officer','IT Director','Compliance Director','Compliance Manager','Compliance Advisor','IT Manager','IT Advisor'].map((name,i)=>[name,i===0?'#B99AF2':i<4?'#9674D4':[7,9].includes(i)?'#7FAACB':'#65B8B0']),...SPEC.slice(4)], l.server + ' role order and colours');
     for (const r of l.roles.filter((r) => r.name.startsWith('──'))) assert.equal(r.permissions, '0', 'separators have no permissions');
     assert.ok(l.removeRoles, 'every other role is deleted when the list is set up');
     assert.equal(l.positions.company, 'Horizon Network');
-    assert.deepEqual(l.positions.titles.map((t) => [t.title, t.roles]), Object.entries(LEVEL).map(([t, n]) => [t, [t, 'Network Permission Level ' + n, 'NA | Network Administration']]));
+    for(const [title,level] of Object.entries(LEVEL))assert.deepEqual(l.positions.titles.find(t=>t.title===title).roles,[title,'Network Permission Level '+level,'NA | Network Administration']);
   }
 });
 
@@ -337,16 +337,16 @@ test('roles follow Horizon Network positions; /setup-server sets a server up and
   const rolesFile = path.join(os.tmpdir(), 'hn-roles-' + process.pid + '.json');
   fs.writeFileSync(rolesFile, JSON.stringify({ servers: { Test: GUILD }, roles, positions }));
   let delay = 0;
-  const t = setup({}, async (route) => { assert.equal(route, '/api/auth/discord-positions'); if (delay) await new Promise((r) => setTimeout(r, delay)); return { value: { people } }; }, rolesFile);
+  const t = setup({}, async (route) => { assert.equal(route, '/api/auth/discord-positions'); if (delay) await new Promise((r) => setTimeout(r, delay)); return { value: { people,positions:{'Horizon Network':Object.keys(positions.roles)},positionCatalog:{'Horizon Network':Object.keys(positions.roles).map((title,i)=>({id:String(i+1).repeat(24),title,aliases:[]}))} } }; }, rolesFile);
   try {
     const g = t.servers[GUILD];
     g.members = [{ user: { id: ALICE, username: 'alice' }, roles: [] }, { user: { id: BOB, username: 'bob' }, roles: [] }, { user: { id: CAROL, username: 'carol' }, roles: [] }, { user: { id: BOT2, username: 'other bot', bot: true }, roles: [] }];
     const id = (n) => g.roles.find((r) => r.name === n).id, names = (m) => m.roles.map((r) => g.roles.find((x) => x.id === r)?.name).filter(Boolean).sort();
     const always = SPEC.map(([n]) => n).filter((n) => n.startsWith('──')).concat(['Network Permission Level 1', 'M | Member']);
-    // The automatic sync never deletes or creates server roles: a server that isn't set up is skipped.
+    // Automatic reconciliation creates the listed roles and preserves unrelated roles.
     await t.manager.syncPositions(true);
-    assert.ok(g.roles.some((r) => r.name === 'Old role') && !g.roles.some((r) => r.name === 'President'), 'Background sync does not create or delete roles');
-    assert.match(t.manager.positionsState.errors[0], /run \/setup-server/);
+    assert.ok(g.roles.some((r) => r.name === 'Old role') && g.roles.some((r) => r.name === 'President'), 'Background sync preserves unrelated roles and creates listed roles');
+    assert.deepEqual(t.manager.positionsState.errors, []);
     let n = 700000000000000000n;
     const command = async (name, { user = ALLOWED, guild = GUILD } = {}) => {
       const before = t.discord.replies.length;
