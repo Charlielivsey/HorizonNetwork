@@ -65,7 +65,7 @@ test('CEO adopts the former President role on first sync, and all four chiefs re
  assert.ok(f.member.roles.includes(npl.id));assert.ok(f.member.roles.includes(f.roles.find(r=>r.name==='NA | Network Administration').id));
  const layout=f.layout();for(const title of chiefs){const mapping=layout.positions.titles.find(p=>p.title===title);assert.ok(mapping.roles.includes('Network Permission Level 5'));assert.ok(mapping.roles.includes('NA | Network Administration'));}
  const ordered=layout.roles.map(spec=>f.roles.find(r=>r.name===spec.name));assert.ok(ordered.every((r,i)=>i===0||ordered[i-1].position>r.position),'Applies the full current role-list order');
- assert.equal(f.roles.find(r=>r.name===chiefs[0]).color,parseInt('B99AF2',16));assert.equal(f.roles.find(r=>r.name===chiefs[1]).color,parseInt('9674D4',16));
+ assert.equal(f.roles.find(r=>r.name===chiefs[0]).color,parseInt('B99AF2',16));assert.equal(f.roles.find(r=>r.name===chiefs[1]).color,parseInt('4DBD92',16));
 });
 test('hierarchy failures are detected before changing any roles',async()=>{
  const f=fixture();const na=f.roles.find(r=>r.name==='NA | Network Administration');na.position=2000;

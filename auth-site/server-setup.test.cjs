@@ -321,7 +321,7 @@ test('the bot looks after exactly the four HN servers, each with the role list i
   const all = loadRoles();
   assert.deepEqual(all.map((l) => [l.server, l.guildId]), [['HQ', '1360208008755413227'], ['Horizon Ads', '266973580900696065'], ['Staff', '1448685232118038661'], ['dev', '1358813446669602896']]);
   for (const l of all) {
-    assert.deepEqual(l.roles.map((r) => [r.name, r.color === undefined ? null : '#' + r.color.toString(16).toUpperCase().padStart(6, '0')]), [...SPEC.slice(0,4),...['Chief Executive Officer','Chief Operating Officer','Chief Compliance Officer','Chief Technology Officer','IT Director','Compliance Director','Compliance Manager','Compliance Advisor','IT Manager','IT Advisor'].map((name,i)=>[name,i===0?'#B99AF2':i<4?'#9674D4':[7,9].includes(i)?'#7FAACB':'#65B8B0']),...SPEC.slice(4)], l.server + ' role order and colours');
+    assert.deepEqual(l.roles.map((r) => [r.name, r.color === undefined ? null : '#' + r.color.toString(16).toUpperCase().padStart(6, '0')]), [...SPEC.slice(0,4),...['Chief Executive Officer','Chief Operating Officer','Chief Compliance Officer','Chief Technology Officer','IT Director','Compliance Director','Compliance Manager','Compliance Advisor','IT Manager','IT Advisor'].map((name,i)=>[name,['#B99AF2','#4DBD92','#E8A34B','#54A9E3','#42C6C8','#DB7474','#C89BDF','#B6C85C','#5484BA','#AD8C68'][i]]),...SPEC.slice(4)], l.server + ' role order and colours');
     for (const r of l.roles.filter((r) => r.name.startsWith('──'))) assert.equal(r.permissions, '0', 'separators have no permissions');
     assert.ok(l.removeRoles, 'every other role is deleted when the list is set up');
     assert.equal(l.positions.company, 'Horizon Network');

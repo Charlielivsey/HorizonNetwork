@@ -61,55 +61,55 @@
     },
     {
       "name": "Chief Operating Officer",
-      "color": "#9674D4",
+      "color": "#4DBD92",
       "hoist": false,
       "permissions": []
     },
     {
       "name": "Chief Compliance Officer",
-      "color": "#9674D4",
+      "color": "#E8A34B",
       "hoist": false,
       "permissions": []
     },
     {
       "name": "Chief Technology Officer",
-      "color": "#9674D4",
+      "color": "#54A9E3",
       "hoist": false,
       "permissions": []
     },
     {
       "name": "IT Director",
-      "color": "#65B8B0",
+      "color": "#42C6C8",
       "hoist": false,
       "permissions": []
     },
     {
       "name": "Compliance Director",
-      "color": "#65B8B0",
+      "color": "#DB7474",
       "hoist": false,
       "permissions": []
     },
     {
       "name": "Compliance Manager",
-      "color": "#65B8B0",
+      "color": "#C89BDF",
       "hoist": false,
       "permissions": []
     },
     {
       "name": "Compliance Advisor",
-      "color": "#7FAACB",
+      "color": "#B6C85C",
       "hoist": false,
       "permissions": []
     },
     {
       "name": "IT Manager",
-      "color": "#65B8B0",
+      "color": "#5484BA",
       "hoist": false,
       "permissions": []
     },
     {
       "name": "IT Advisor",
-      "color": "#7FAACB",
+      "color": "#AD8C68",
       "hoist": false,
       "permissions": []
     },
