@@ -77,3 +77,10 @@ test('only known legacy position roles are retired; managed integration roles su
  const result=await reconcilePositionRoles({layout:{...f.layout(),legacyPositionTitles:['Former Position','Integration Position']},catalog:f.catalog,live,state:{},commit:()=>{},request:async(method,url,body)=>{writes.push({method,url});if(method==='POST')return{id:'777777777777777777',...body};}});
  assert.ok(writes.some(w=>w.method==='DELETE'&&w.url.endsWith(old.id)));assert.ok(!writes.some(w=>w.url.endsWith(integration.id)));assert.ok(result.live.some(r=>r.id===integration.id));
 });
+
+test('duplicate low Discord positions use ID tie-breaking within the bot hierarchy',async()=>{
+ const f=fixture();f.catalog=['Chief Executive Officer','Chief Operating Officer','Chief Compliance Officer','Chief Technology Officer'].map((title,i)=>({id:String(i+1).repeat(24),title,aliases:[]}));
+ for(const r of f.roles)r.position=r.managed?20:1;
+ const result=await f.make().sync(true);assert.deepEqual(result.errors,[]);
+ const ordered=f.layout().roles.map(s=>f.roles.find(r=>r.name===s.name));assert.ok(ordered.every((r,i)=>i===0||ordered[i-1].position>r.position||(ordered[i-1].position===r.position&&BigInt(ordered[i-1].id)<BigInt(r.id))));for(const w of f.writes.filter(w=>w.method==='PATCH'&&w.url.endsWith('/roles')))assert.ok(w.body.every(r=>r.position<f.roles.find(r=>r.managed).position));
+});

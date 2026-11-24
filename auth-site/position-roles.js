@@ -2,6 +2,7 @@
 // Manage only the current role list and roles previously claimed by this synchroniser.
 const {roleName}=require('./server-setup');
 const ID=/^\d{15,22}$/;
+const above=(a,b)=>Number(a.position)>Number(b.position)||(Number(a.position)===Number(b.position)&&BigInt(a.id)<BigInt(b.id));
 const invalid=message=>Object.assign(new Error(message),{layout:true});
 async function reconcilePositionRoles({layout,catalog,live,state,commit,request,check=()=>{},botRoleIds=null}){
  const titles=layout.positions.titles.map(p=>p.title);
@@ -83,15 +84,21 @@ async function reconcilePositionRoles({layout,catalog,live,state,commit,request,
   if(changed)live=await request('GET','/guilds/'+layout.guildId+'/roles');
   const ordered=entries.map(e=>live.find(r=>r.id===owned[e.key]?.id));
   if(ordered.some(r=>!r||!editable(r)))throw invalid('Utilities cannot arrange every listed role below its own role.');
-  const inOrder=ordered.every((r,i)=>i===0||Number(ordered[i-1].position)>Number(r.position));
+  const inOrder=ordered.every((r,i)=>i===0||above(ordered[i-1],r));
   if(!inOrder){
    let slots=ordered.map(r=>Number(r.position)).sort((a,b)=>b-a);
-   if(new Set(slots).size!==slots.length||slots.some(p=>p<=0))slots=ordered.map((_,i)=>top()-1-i);
-   if(slots.some(p=>p<=0))throw invalid('There is not enough room below Utilities to arrange the listed roles.');
+   if(new Set(slots).size!==slots.length||slots.some(p=>p<=0)){
+    // Equal numeric positions are ordered by ascending snowflake ID in Discord.
+    // Pack compatible neighbours together while keeping every target below the
+    // bot's numeric position; never try to move a listed role above Utilities.
+    let slot=top()-1;
+    slots=ordered.map((r,i)=>{if(i&&BigInt(ordered[i-1].id)>BigInt(r.id))slot--;return slot;});
+   }
+   if(slots.some(p=>p<=0))throw invalid('Utilities cannot determine the listed role order.');
    const order=ordered.map((r,i)=>({id:r.id,position:slots[i]}));check();await request('PATCH','/guilds/'+layout.guildId+'/roles',order,'Staff Portal role order');
    live=await request('GET','/guilds/'+layout.guildId+'/roles');
    const result=order.map(x=>live.find(r=>r.id===x.id));
-   if(result.some((r,i)=>!r||i>0&&Number(result[i-1].position)<=Number(r.position)))throw invalid('Discord did not apply the requested role order; Utilities will retry.');
+   if(result.some((r,i)=>!r||i>0&&!above(result[i-1],r)))throw invalid('Discord did not apply the requested role order; Utilities will retry.');
    changed++;
   }
  }
