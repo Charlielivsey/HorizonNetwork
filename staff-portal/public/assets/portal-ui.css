@@ -477,3 +477,35 @@ body.app-loading .hn-reveal,body.portal-entering .hn-reveal{opacity:1!important;
 .pos-list .pos-rename[hidden],.pos-list [data-pos-rename][hidden],.pos-list .pos-title[hidden]{display:none}
 .pos-rename input{min-width:90px;width:100%;margin:0}
 @media(max-width:760px){.pos-list li{grid-template-columns:minmax(0,1fr) auto auto auto}.pos-list .pos-report{grid-column:1 / -1;grid-row:2}.pos-list .pos-rename{grid-column:1 / -1}.pos-list [data-pos-rename]{grid-column:1}}
+
+/* Roster charcoal palette, local to Staff Portal; shared account preferences stay intact. */
+html:root:not([data-hn-app]) {
+ color-scheme: dark!important;
+ --bg:#252629!important; --page:#252629!important; --tint:#2b2c30!important;
+ --surface:#303136!important; --panel:#303136!important; --surface-2:#37383e!important;
+ --surface2:#37383e!important; --input-bg:#37383e!important; --sidebar:#303136!important;
+ --text:#f1eef5!important; --ink:#f1eef5!important; --text-muted:#c0b9ca!important; --muted:#c0b9ca!important;
+ --border:#4b4754!important; --line:#4b4754!important; --border-strong:#81708f!important;
+ --border-hover:#b391d0!important; --primary:#ccb2f0!important; --accent:#ccb2f0!important;
+ --primary-hover:#dfc7ff!important; --accent-hover:#dfc7ff!important;
+ --primary-tint:#44384f!important; --primary-soft-border:#9b7bb7!important;
+ --on-primary:#241c2c!important; --on-accent:#241c2c!important;
+ --row-hover:#3c3843!important; --focus-ring:#ccb2f044!important;
+ --inverse-bg:#303136!important; --inverse-text:#f1eef5!important;
+ --shadow:0 3px 12px #0002!important; --shadow-pop:0 16px 40px #0005!important;
+ --backdrop:#101114b3!important;
+ --success-bg:#263e32!important; --success-text:#9bdfb4!important; --success-border:#507a60!important;
+ --warn-bg:#4a4029!important; --warn-text:#f1deb4!important; --warn-border:#a68d55!important;
+ --danger-bg:#492f39!important; --danger-text:#ffb3c9!important; --danger-border:#9d6075!important;
+}
+html[data-portal-ui] body::before { background:none; }
+html[data-portal-ui] .btn-ghost { border-color:#9b7bb7; color:#e0c9fb; background:#35343b; }
+html[data-portal-ui] .btn-ghost:hover:not(:disabled) { background:#484051; border-color:#c4a0e9; }
+html:not([data-hn-app]) #portal-startup { background:#252629; }
+html[data-portal-ui] .topbar .logo-light-theme { display:none!important; }
+html[data-portal-ui] .topbar .logo-dark-theme { display:block!important; }
+
+html[data-portal-ui] :is(.portal-brand,.footer-brand) .logo-light-theme {display:none!important}
+html[data-portal-ui] :is(.portal-brand,.footer-brand) .logo-dark-theme {display:block!important}
+
+html:not([data-hn-app]) .portal-startup-inner img { filter:none!important; }
