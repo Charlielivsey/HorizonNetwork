@@ -238,3 +238,34 @@ footer .footer-brand .on-dark { display: none; }
 @media(max-width:900px){.side footer{padding:clamp(6px,1.4svh,14px) 18px;font-size:11px}}
 /* Short screens, signed in: "You're in." already says it, so the verified banner and the general note step aside. */
 @media(max-height:760px){.side .card #account .success-banner,.side .card #account .root-account-note{display:none}.side .card #account .profile{margin-top:12px}}
+
+/* Roster charcoal, shared visually with Staff Portal; account preferences are preserved. */
+html:root {
+ color-scheme:dark!important;
+ --bg:#252629!important; --page:#252629!important; --tint:#2b2c30!important;
+ --surface:#303136!important; --panel:#303136!important; --surface-2:#37383e!important;
+ --surface2:#37383e!important; --raised:#37383e!important; --input-bg:#37383e!important;
+ --ink:#f1eef5!important; --text:#f1eef5!important; --muted:#c0b9ca!important; --text-muted:#c0b9ca!important;
+ --border:#4b4754!important; --line:#4b4754!important; --border-strong:#81708f!important;
+ --purple:#ccb2f0!important; --link:#ccb2f0!important; --accent:#ccb2f0!important; --primary:#ccb2f0!important;
+ --accent-hover:#dfc7ff!important; --primary-hover:#dfc7ff!important;
+ --soft:#44384f!important; --accent-soft:#44384f!important; --primary-tint:#44384f!important;
+ --button:#ccb2f0!important; --on-button:#241c2c!important; --on-accent:#241c2c!important; --on-primary:#241c2c!important;
+ --error:#ffb3c9!important; --danger:#ffb3c9!important; --danger-soft:#492f39!important;
+ --warn:#f1deb4!important; --warn-soft:#4a4029!important; --good:#9bdfb4!important; --success:#9bdfb4!important; --success-soft:#263e32!important;
+ --shadow:0 3px 12px #0002!important;
+}
+html:root .on-light {display:none!important}
+html:root img.on-dark {display:inline-block!important}
+
+body {background:var(--bg)}
+.brand-panel {background:#303136;color:var(--ink)}
+.brand-glow {display:none}
+.brand-kicker {color:var(--purple)}
+.side::before,.side::after {background:none}
+.side main>.card {background:var(--surface);border-color:#65566f;box-shadow:0 12px 36px #0003;backdrop-filter:none}
+input {background:var(--input-bg);border-color:#81708f}
+input::placeholder {color:#c0b9ca;opacity:1}
+.text-button {color:#e0c9fb}
+.primary {border:1px solid #ccb2f0}
+.side .primary {background:#ccb2f0;color:#241c2c;box-shadow:none}

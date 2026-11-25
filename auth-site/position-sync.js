@@ -6,12 +6,11 @@
 // HR supplies position titles/order; current networks supply servers; hn-roles.json supplies technical grants (not a /server-setup layout: the user's correction, 6 November 2026,
 // "dont use setup role list. the bot will do it automatically accross the servers i gave the IDs for").
 //
-// Utilities reconciles the current Staff Portal catalogue every minute. Stable position IDs
+// Utilities checks for Staff Portal source changes every minute, without repairing Discord drift. Stable position IDs
 // retain Discord roles through renames; retired listed roles are removed. Listed role
 // permissions, colours and order follow policy; unrelated roles remain untouched.
-// /force-sync runs the same reconciliation immediately. /setup-server is a separate,
-// explicitly destructive rebuild and is not required for routine position changes.
-const fs = require('node:fs');
+// /force-sync and /setup-server explicitly run the same reconciliation in place.
+const fs = require('node:fs'),crypto=require('node:crypto');
 const path = require('node:path');
 const { ALWAYS_GIVE, isSeparator, roleName, parseLayout } = require('./server-setup');
 const ROLES_FILE = path.join(__dirname, 'hn-roles.json');
@@ -41,12 +40,12 @@ const API = 'https://discord.com/api/v10';
 // Who may run /setup-server and /force-sync: the same Discord accounts as /server-setup.
 const { ALLOWED_USERS, embed } = require('./server-setup');
 const COMMANDS = [
-  { name: 'setup-server', description: 'Set this server’s HN Group roles up: deletes every other role, then creates the list in order', type: 1, contexts: [0], integration_types: [0], options:[{name:'roles',description:'Choose the role set to configure.',type:3,required:true,choices:[{name:'HN administration roles',value:'hn-administration'}]}] },
+  { name: 'setup-server', description: 'Sync this server’s listed HN roles in place, keeping existing role IDs', type: 1, contexts: [0], integration_types: [0], options:[{name:'roles',description:'Choose the role set to configure.',type:3,required:true,choices:[{name:'HN administration roles',value:'hn-administration'}]}] },
   { name: 'force-sync', description: 'Sync everyone’s roles with their positions on the staff portal now, in every HN server', type: 1, contexts: [0], integration_types: [0] },
 ];
 
-function createPositionSync({ setup, staff, networks=null, rolesFile = ROLES_FILE, record = () => {}, enabled = () => true, now = () => Date.now(), fullEvery = 10 * 60000, fetcher = fetch, appId = () => null, requireCatalog = false, branding = null, overrides = () => ({}),positionRoles=()=>({}),commitPositionRoles=null }) {
-  let lastDigest = null, lastFull = 0, running = false, stopping = false, lastLayouts = [];
+function createPositionSync({ setup, staff, networks=null, rolesFile = ROLES_FILE, record = () => {}, enabled = () => true, now = () => Date.now(), fetcher = fetch, appId = () => null, requireCatalog = false, branding = null, overrides = () => ({}),positionRoles=()=>({}),commitPositionRoles=null,sourceState=()=>null,commitSource=()=>{} }) {
+  let lastDigest = sourceState()?.digest||null, priorPeople=sourceState()?.people||[], running = false, stopping = false, lastLayouts = [];
   // The background sync can take a long time in a big server (every member gets the separators, Level 1 and Member, one
   // request at a time, at Discord's pace), so the commands stop it rather than waiting (the user's report, 6 November
   // 2026: /setup-server said "A setup or sync is already running" because of it). It checks between requests and picks up
@@ -70,14 +69,14 @@ function createPositionSync({ setup, staff, networks=null, rolesFile = ROLES_FIL
     return { always, byTitle, managed,npl:new Map(liveRoles.filter(r=>/^Network Permission Level [1-5]$/.test(r.name)).map(r=>[Number(r.name.at(-1)),r.id])) };
   }
   // The changes for one member: roles to add and roles to remove.
-  function changesFor(member, linked, layout, sets) {
+  function changesFor(member, linked, layout, sets, removed=false) {
     if (member.user?.bot) return { add: [], remove: [] };
     const override=overrides()[layout.guildId]?.[member.user?.id];
     const has = new Set(member.roles || []), want = new Set(!linked&&override?(member.roles||[]):sets.always);
     if (linked) for (const t of linked.titles || []) if (roleName(t.company) === roleName(layout.positions?.company || '')) for (const id of sets.byTitle.get(roleName(t.title)) || []) want.add(id);
     if(override){for(const id of sets.npl.values())want.delete(id);if(sets.npl.get(1))want.add(sets.npl.get(1));if(sets.npl.get(override.level))want.add(sets.npl.get(override.level));}
     const add = [...want].filter((id) => !has.has(id));
-    const remove = linked || override ? [...has].filter((id) => ((linked&&sets.managed.has(id))||(override&&[...sets.npl.values()].includes(id))) && !want.has(id)) : [];
+    const remove = linked || override || removed ? [...has].filter((id) => (((linked||removed)&&sets.managed.has(id))||(override&&[...sets.npl.values()].includes(id))) && !want.has(id)) : [];
     return { add, remove };
   }
 
@@ -93,7 +92,7 @@ function createPositionSync({ setup, staff, networks=null, rolesFile = ROLES_FIL
     return found;
   }
 
-  async function syncGuild(layout, people, catalog) {
+  async function syncGuild(layout, people, catalog, removedIds=[]) {
     const guildId = layout.guildId;
     let live = await setup.request('GET', '/guilds/' + guildId + '/roles');
     let changed = 0;
@@ -107,10 +106,10 @@ function createPositionSync({ setup, staff, networks=null, rolesFile = ROLES_FIL
     if (missing.length) throw Object.assign(new Error('roles aren’t set up yet (missing ' + missing.slice(0, 3).join(', ') + (missing.length > 3 ? ' and ' + (missing.length - 3) + ' more' : '') + '); run /setup-server there'), { layout: true });
     const sets = rolesFor(layout, live);
     const linked = new Map(people.map((p) => [p.id, p]));
-    for (const m of await members(guildId, [...new Map([...Object.keys(overrides()[guildId]||{}).map(id=>({id,titles:[]})),...people].map(p=>[p.id,p])).values()])) {
+    for (const m of await members(guildId, [...new Map([...Object.keys(overrides()[guildId]||{}).map(id=>({id,titles:[]})),...people,...removedIds.map(id=>({id,titles:[]}))].map(p=>[p.id,p])).values()])) {
       const id = String(m.user?.id || '');
       if (!ID.test(id)) continue;
-      const { add, remove } = changesFor(m, linked.get(id), layout, sets);
+      const { add, remove } = changesFor(m, linked.get(id), layout, sets,removedIds.includes(id));
       check();
       if (!add.length && !remove.length) continue;
       if (add.length + remove.length === 1) {
@@ -127,7 +126,7 @@ function createPositionSync({ setup, staff, networks=null, rolesFile = ROLES_FIL
     return changed;
   }
 
-  async function sync(force = false) {
+  async function sync(force = false,onlyGuild=null) {
     if (running || !enabled() || setup.busy()) return null;
     running = true;
     try {
@@ -135,17 +134,25 @@ function createPositionSync({ setup, staff, networks=null, rolesFile = ROLES_FIL
       const people = (Array.isArray(value?.people) ? value.people : []).filter((p) => p && ID.test(String(p.id))).map((p) => ({ id: String(p.id), titles: Array.isArray(p.titles) ? p.titles : [] }));
       if(requireCatalog&&!value?.positions)throw Object.assign(new Error('HR position catalogue could not be loaded.'),{layout:true});
       if(commitPositionRoles&&!value?.positionCatalog)throw Object.assign(new Error('Stable staff position catalogue could not be loaded.'),{layout:true});
-      const digest = JSON.stringify([overrides(),people,value?.positions,value?.positionCatalog,networks?.()]);
-      if (!force && digest === lastDigest && now() - lastFull < fullEvery) return null;
+      // Poll only for explicit Staff Portal membership/position changes. Time, restart,
+      // Discord drift, catalogue ordering, branding and policy changes are not triggers.
+      const co=JSON.parse(fs.readFileSync(rolesFile,'utf8')).positions.company;
+      const canonicalPeople=people.map(p=>({id:p.id,titles:p.titles.filter(t=>t.company===co).map(t=>t.title).sort()})).filter(p=>p.titles.length).sort((a,b)=>a.id.localeCompare(b.id));
+      const canonicalPositions=(value.positionCatalog?.[co]||value.positions?.[co]||[]).map(p=>typeof p==='string'?p:p.title).sort();
+      const digest=crypto.createHash('sha256').update(JSON.stringify([canonicalPeople,canonicalPositions])).digest('hex');
+      const ids=canonicalPeople.map(p=>p.id),saveSource=()=>{commitSource({digest,people:ids});lastDigest=digest;priorPeople=ids;};
+      if(!force&&lastDigest===null){saveSource();return null;}
+      if(!force&&digest===lastDigest)return null;
+      const removedIds=priorPeople.filter(id=>!ids.includes(id));
       let changed = 0;
       const errors = [];
       lastLayouts=loadRoles(rolesFile,networks?networks():null,value?.positions,value?.positionCatalog);
-      for (const layout of lastLayouts) {
-        try { changed += await syncGuild(layout, people,value?.positionCatalog); }
+      for (const layout of lastLayouts.filter(l=>!onlyGuild||l.guildId===onlyGuild)) {
+        try { changed += await syncGuild(layout, people,value?.positionCatalog,removedIds); }
         catch (e) { if (e === STOP) { record(null, 'positions.sync.stopped', { changed }); return { changed, errors, stopped: true }; } errors.push(layout.server + ' (' + layout.guildId + '): ' + (e.layout ? e.message : 'failed')); }
       }
       let logos=0;if(branding){try{logos=await branding();}catch(e){errors.push('Server branding: '+e.message);}}
-      lastDigest = errors.length?null:digest; lastFull = now();
+      if(!errors.length&&!onlyGuild)saveSource();
       Object.assign(state, { lastAt: new Date(now()).toISOString(), changed, logos, errors });
       if (changed || errors.length) record(null, errors.length ? 'positions.sync.partial' : 'positions.sync', { changed, errors: errors.slice(0, 10) });
       return { changed, logos, errors };
@@ -172,24 +179,19 @@ function createPositionSync({ setup, staff, networks=null, rolesFile = ROLES_FIL
   }
   async function setupServer(event, who) {
     const {value}=await staff('/api/auth/discord-positions',{});if(requireCatalog&&!value?.positions)throw Object.assign(new Error('HR position catalogue unavailable.'),{layout:true});
-    const layout = event.guild_id && loadRoles(rolesFile,networks?networks():null,value?.positions).find((l) => l.guildId === event.guild_id);
+    const layout = event.guild_id && loadRoles(rolesFile,networks?networks():null,value?.positions,value?.positionCatalog).find((l) => l.guildId === event.guild_id);
     if (!layout) return { tone: 'error', title: 'Set up server', description: 'This server is not in a registered network. Join it with /network join before running /setup-server.' };
     const roleSet=event.data?.options?.find(o=>o.name==='roles')?.value||'hn-administration';
     if(roleSet!=='hn-administration')return {tone:'error',title:'Set up server',description:'Choose HN administration roles.'};
     if (setup.busy()) {const job=setup.status?.(),p=job?.progress;return {tone:'info',title:'Server setup is working',description:'A setup is running'+(p?' — '+p.stage+(p.total>1?': '+p.n+' of '+p.total:''):'')+'.'+(job?.waitingUntil>now()?' Discord asked us to wait '+Math.ceil((job.waitingUntil-now())/1000)+' seconds.':'')+(job?.lastActivity?' Last activity '+Math.max(0,Math.floor((now()-job.lastActivity)/1000))+' seconds ago.':'')+' Stalled work is checked and resumed automatically.'};}
     await stopSync();
     if (running) return { tone: 'warn', title: 'Set up server', description: 'The staff role sync didn’t stop in time. Try again in a minute.' };
-    // Progress in the reply, at most every 3 seconds, so it's clear the bot is still working.
-    let lastEdit = 0;
-    const progress = (stage, n, total, item) => { if (now() - lastEdit < 3000 && n !== total) return; lastEdit = now(); edit(event, { tone: 'info', title: 'Setting up ' + layout.server + '…', description: stage + ': ' + n + ' of ' + total + (item ? ' (' + item + ')' : '') }).catch(() => {}); };
-    const r = await setup.autoApply(layout.guildId, layout, { force: true, who: 'HN Group Auth bot /setup-server by ' + who, progress });
-    if (r.busy) return { tone: 'warn', title: 'Set up server', description: 'A setup is already running. Try again when it has finished.' };
-    if (r.problems) return { tone: 'error', title: 'Can’t set up ' + layout.server + ' yet', description: 'Nothing was changed:\n• ' + r.problems.join('\n• ') };
-    const synced = await sync(true).catch(() => null);
-    const errors = r.errors || [];
-    return { tone: errors.length ? 'warn' : 'ok', title: (errors.length ? '⚠️ ' : '✅ ') + layout.server + ' is set up',
-      description: (r.done || []).filter((d) => d.startsWith('Deleted')).length + ' role(s) deleted, ' + (r.done || []).filter((d) => d.startsWith('Created')).length + ' created' + (synced ? '; ' + synced.changed + ' role change(s) for members from the staff portal.' : '.') + (errors.length ? '\n❌ ' + errors.slice(0, 10).join('\n❌ ') : '') };
+    record({email:'Discord @'+who},'positions.setup-server',{guild:layout.guildId});
+    const r=await sync(true,layout.guildId);
+    if(!r)return {tone:'warn',title:'Set up server',description:'The bot is switched off or busy. Try again shortly.'};
+    return {tone:r.errors.length?'warn':'ok',title:'Staff roles synced',description:r.changed+' change(s) in '+layout.server+'. Existing roles were updated in place.'+(r.errors.length?'\n'+r.errors.join('\n'):'')};
   }
+
   async function forceSync(who) {
     if (setup.busy()) return { tone: 'warn', title: 'Force sync', description: 'A server setup is running. Try again when it has finished.' };
     await stopSync();

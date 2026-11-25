@@ -26,6 +26,8 @@ test('Email signatures: real account permissions, old redirect, branded assets, 
   const authBase = 'http://127.0.0.1:' + authPort, staffBase = 'http://127.0.0.1:' + staffPort, ACC = 'http://127.0.0.1:' + accPort;
   const staff = spawn(process.execPath, ['staff-portal/server.js'], { cwd: path.join(__dirname, '..'), env: { ...process.env, PORT: String(staffPort), DATA_DIR: dir, AUTH_BACKEND: authBase, STATUS_SSO_SECRET_FILE: secret }, stdio: ['ignore', 'ignore', 'inherit'] });
   process.env.STAFF_PORTAL_BACKEND = staffBase; process.env.STATUS_SSO_SECRET_FILE = secret;
+  process.env.DATA_DIR=path.join(dir,'auth'); fs.mkdirSync(process.env.DATA_DIR,{recursive:true});
+  process.env.HN_DISCORD_PRESENCE='0';
   const { server: auth } = require('../auth-site/server'); await new Promise((r) => auth.listen(authPort, '127.0.0.1', r));
   const acc = spawn(process.execPath, [path.join(__dirname, 'server.js')], { env: { ...process.env, PORT: String(accPort), ACCOUNTS_ORIGIN: ACC, AUTH_ORIGIN: authBase, AUTH_BACKEND: authBase, STAFF_BACKEND: staffBase, STATUS_SSO_SECRET_FILE: secret }, stdio: ['ignore', 'ignore', 'inherit'] });
   try {

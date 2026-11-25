@@ -4,7 +4,7 @@ const{createPositionSync,loadRoles}=require('./position-sync');
 const{reconcilePositionRoles}=require('./position-roles');
 const G='222222222222222222',U='333333333333333333',BOT='444444444444444444',company='Horizon Network',file=path.join(__dirname,'hn-roles.json');
 function fixture(){
- let catalog=[{id:'a'.repeat(24),title:'President',aliases:[]}],people=[{id:U,titles:[{company,title:'President'}]}],registry={},serial=700000000000000000n,writes=[],failCreate=false;
+ let catalog=[{id:'a'.repeat(24),title:'President',aliases:[]}],people=[{id:U,titles:[{company,title:'President'}]}],registry={},source=null,clock=Date.now(),serial=700000000000000000n,writes=[],failCreate=false;
  const networks=[{name:'Fixture',guilds:[G]}],layout=()=>loadRoles(file,networks,{[company]:catalog.map(p=>p.title)},{[company]:catalog})[0];
  let roles=layout().roles.filter(r=>r.name!=='President').map((r,i)=>({...r,id:String(serial++),managed:false,position:100-i}));
  const custom={id:String(serial++),name:'Unrelated community access',permissions:'8',position:2};roles.push(custom);const botRole={id:String(serial++),name:'Utilities integration',managed:true,position:1000,permissions:'8'};roles.push(botRole);
@@ -30,8 +30,8 @@ function fixture(){
   }
   throw Error('Unexpected request '+method+' '+url);
  }};
- const make=()=>createPositionSync({setup,staff:async()=>({value:{positions:{[company]:catalog.map(p=>p.title)},positionCatalog:{[company]:catalog},people}}),rolesFile:file,networks:()=>networks,requireCatalog:true,positionRoles:()=>registry,commitPositionRoles:(g,value)=>{registry={...registry,[g]:structuredClone(value)};}});
- return{make,setup,layout,get catalog(){return catalog;},set catalog(v){catalog=v;},set people(v){people=v;},get roles(){return roles;},member,custom,writes,get registry(){return registry;},set failCreate(v){failCreate=v;}};
+ const make=()=>createPositionSync({setup,now:()=>clock,staff:async()=>({value:{positions:{[company]:catalog.map(p=>p.title)},positionCatalog:{[company]:catalog},people}}),rolesFile:file,networks:()=>networks,requireCatalog:true,sourceState:()=>source,commitSource:v=>{source=structuredClone(v);},positionRoles:()=>registry,commitPositionRoles:(g,value)=>{registry={...registry,[g]:structuredClone(value)};}});
+ return{make,advance:ms=>{clock+=ms;},setup,layout,get catalog(){return catalog;},set catalog(v){catalog=v;},set people(v){people=v;},get roles(){return roles;},member,custom,writes,get registry(){return registry;},set failCreate(v){failCreate=v;}};
 }
 test('automatic create, stable-ID rename, new positions and deletion update linked staff without resetting unrelated roles',async()=>{
  const f=fixture();let sync=f.make();let result=await sync.sync(true);assert.deepEqual(result.errors,[]);
@@ -71,11 +71,11 @@ test('hierarchy failures are detected before changing any roles',async()=>{
  const f=fixture();const na=f.roles.find(r=>r.name==='NA | Network Administration');na.position=2000;
  const result=await f.make().sync(true);assert.ok(result.errors.some(e=>/Move the Utilities/.test(e)));assert.deepEqual(f.writes,[]);
 });
-test('only known legacy position roles are retired; managed integration roles survive',async()=>{
+test('untracked historical names and managed integration roles are preserved',async()=>{
  const f=fixture();const old={id:'888888888888888888',name:'Former Position',managed:false},integration={id:'999999999999999999',name:'Integration Position',managed:true};
  const live=[...f.roles,old,integration];const writes=[];
  const result=await reconcilePositionRoles({layout:{...f.layout(),legacyPositionTitles:['Former Position','Integration Position']},catalog:f.catalog,live,state:{},commit:()=>{},request:async(method,url,body)=>{writes.push({method,url});if(method==='POST')return{id:'777777777777777777',...body};}});
- assert.ok(writes.some(w=>w.method==='DELETE'&&w.url.endsWith(old.id)));assert.ok(!writes.some(w=>w.url.endsWith(integration.id)));assert.ok(result.live.some(r=>r.id===integration.id));
+ assert.ok(!writes.some(w=>w.method==='DELETE'&&w.url.endsWith(old.id)));assert.ok(!writes.some(w=>w.url.endsWith(integration.id)));assert.ok(result.live.some(r=>r.id===integration.id));
 });
 
 test('duplicate low Discord positions use ID tie-breaking within the bot hierarchy',async()=>{
@@ -83,4 +83,15 @@ test('duplicate low Discord positions use ID tie-breaking within the bot hierarc
  for(const r of f.roles)r.position=r.managed?20:1;
  const result=await f.make().sync(true);assert.deepEqual(result.errors,[]);
  const ordered=f.layout().roles.map(s=>f.roles.find(r=>r.name===s.name));assert.ok(ordered.every((r,i)=>i===0||ordered[i-1].position>r.position||(ordered[i-1].position===r.position&&BigInt(ordered[i-1].id)<BigInt(r.id))));for(const w of f.writes.filter(w=>w.method==='PATCH'&&w.url.endsWith('/roles')))assert.ok(w.body.every(r=>r.position<f.roles.find(r=>r.managed).position));
+});
+
+test('only explicit commands or changed staff membership/position catalogues cause role writes',async()=>{
+ const f=fixture();let sync=f.make();assert.equal(await sync.sync(),null);assert.deepEqual(f.writes,[],'Initial polling establishes a baseline without Discord writes');
+ await sync.sync(true);const existing=f.roles.find(r=>r.name==='President'),start=f.writes.length;
+ existing.color=123;f.advance(3600000);await sync.sync();assert.equal(f.writes.length,start,'Discord drift does not trigger automatic repairs');
+ sync=f.make();await sync.sync();assert.equal(f.writes.length,start,'Restart does not trigger a role repair');
+ await sync.sync(true);assert.notEqual(existing.color,123,'Explicit sync repairs policy in place');
+ const afterCommand=f.writes.length;f.catalog=[{id:'b'.repeat(24),title:'President',aliases:[]}];await sync.sync();assert.equal(f.roles.find(r=>r.name==='President').id,existing.id,'Changed identity metadata adopts the existing matching role');assert.ok(!f.writes.slice(afterCommand).some(w=>['POST','DELETE'].includes(w.method)&&!/members/.test(w.url)));
+ f.people=[];await sync.sync();assert.ok(!f.member.roles.includes(existing.id),'Removed staff lose their managed position roles');assert.ok(f.member.roles.includes(f.custom.id),'Unrelated member roles remain');
+ const stopped=f.writes.length;await sync.sync();assert.equal(f.writes.length,stopped,'Unchanged source never causes periodic writes');
 });

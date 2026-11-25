@@ -272,3 +272,34 @@ footer .footer-brand .footer-parent { opacity: .82; font-size: .88rem; }
 .guest-part { margin: .4rem 0 .2rem; }
 .guest-sites { margin-top: .6rem; }
 .guest-sites[hidden] { display: none !important; }
+
+/* Roster charcoal, shared visually with Staff Portal; account preferences are preserved. */
+html:root {
+ color-scheme:dark!important;
+ --bg:#252629!important; --page:#252629!important; --tint:#2b2c30!important;
+ --surface:#303136!important; --panel:#303136!important; --surface-2:#37383e!important;
+ --surface2:#37383e!important; --raised:#37383e!important; --input-bg:#37383e!important;
+ --ink:#f1eef5!important; --text:#f1eef5!important; --muted:#c0b9ca!important; --text-muted:#c0b9ca!important;
+ --border:#4b4754!important; --line:#4b4754!important; --border-strong:#81708f!important;
+ --purple:#ccb2f0!important; --link:#ccb2f0!important; --accent:#ccb2f0!important; --primary:#ccb2f0!important;
+ --accent-hover:#dfc7ff!important; --primary-hover:#dfc7ff!important;
+ --soft:#44384f!important; --accent-soft:#44384f!important; --primary-tint:#44384f!important;
+ --button:#ccb2f0!important; --on-button:#241c2c!important; --on-accent:#241c2c!important; --on-primary:#241c2c!important;
+ --error:#ffb3c9!important; --danger:#ffb3c9!important; --danger-soft:#492f39!important;
+ --warn:#f1deb4!important; --warn-soft:#4a4029!important; --good:#9bdfb4!important; --success:#9bdfb4!important; --success-soft:#263e32!important;
+ --shadow:0 3px 12px #0002!important;
+}
+html:root .on-light {display:none!important}
+html:root img.on-dark {display:inline-block!important}
+
+body::before {background:none}
+.button {background:#ccb2f0;color:#241c2c;box-shadow:none}
+.button.secondary {background:#35343b;color:#e0c9fb;border-color:#9b7bb7}
+.button.secondary:hover {background:#484051;border-color:#c4a0e9}
+.button.danger {color:#241c2c}
+.field input,.field select,.field textarea,.search {background:var(--input-bg)}
+input::placeholder,textarea::placeholder {color:#c0b9ca;opacity:1}
+.c-purple {background:#5514b4}
+.skip {color:#241c2c}
+.foot {background:#303136;color:var(--muted)}
+@media(max-width:600px){.top{flex-wrap:wrap;gap:12px}.top .user{margin-left:auto;max-width:100%}.layout{min-width:0}.side{min-width:0;max-width:100%}}

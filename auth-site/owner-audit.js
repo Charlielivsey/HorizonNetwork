@@ -53,6 +53,7 @@ function logsDeliveryConfig(dir){
 }
 function createOwnerAudit({config,deliveryConfig=config,fetcher=fetch,state,commit}){
  let timer=null,working=null,channel=null,channelOwner=null,channelBot=null,closed=false;
+ const guildNames=new Map();
  const enabled=()=>ID.test(String(config()?.ownerAuditRecipient||''));
  // Remove technical entries queued by the previous broad logger before scheduling delivery.
  if(state().queue?.some(item=>!isBotLog(item.action)))commit({...state(),queue:state().queue.filter(item=>isBotLog(item.action)),retryAt:0});
@@ -76,7 +77,13 @@ function createOwnerAudit({config,deliveryConfig=config,fetcher=fetch,state,comm
     const sender=deliveryConfig();
     if(!sender?.bot)throw Error('HN Logs is not configured.');
     if(!channel||channelOwner!==item.recipient||channelBot!==sender.bot){const dm=await request('POST','/users/@me/channels',{recipient_id:item.recipient},sender.bot);if(!ID.test(String(dm.id)))throw Error('Discord did not open the owner DM channel.');channel=dm.id;channelOwner=item.recipient;channelBot=sender.bot;}
-    const card=logCard(item);
+    let named=item;const guild=String(item.details?.guild||'');
+    if(ID.test(guild)&&!item.details?.guildName){
+     const key=(config()?.id||sender.id)+':'+guild,cached=guildNames.get(key);let name=cached?.expires>Date.now()?cached.name:null;
+     if(!name){try{const info=await request('GET','/guilds/'+guild,undefined,sender.bot);if(typeof info.name==='string'&&info.name.trim()){name=info.name;guildNames.set(key,{name,expires:Date.now()+300000});}}catch{ /* Keep the server ID if Discord cannot resolve its name. */ }}
+     if(name)named={...item,details:{...item.details,guildName:name}};
+    }
+    const card=logCard(named);
     const sent=await request('POST','/channels/'+channel+'/messages',{embeds:[card],allowed_mentions:{parse:[]},nonce:BigInt('0x'+item.id).toString(),enforce_nonce:true},sender.bot);
     if(!ID.test(String(sent.id)))throw Error('Discord did not confirm the owner log message.');
     commit({...state(),queue:state().queue.filter(e=>e.id!==item.id),lastDeliveryAt:new Date().toISOString(),lastMessageId:sent.id,lastRecipient:item.recipient,delivered:(state().delivered||0)+1,lastError:null,retryAt:0});

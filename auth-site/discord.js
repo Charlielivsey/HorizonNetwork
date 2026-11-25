@@ -36,6 +36,8 @@ function goOfflineOnStop(presence){
 
 function createDiscord({ origin, staff, send, profile, entryFor, setCookie, cookie, finishLogin, destination, random, hash, fail, fetcher = fetch,
   file = process.env.DISCORD_OAUTH_FILE || path.join(process.env.DATA_DIR || '/var/lib/hn-auth', 'discord.json'), refreshEvery = 30 * 60000 }) {
+  // Never let a node:test fixture fall back to real bot credentials or state.
+  if(process.env.NODE_TEST_CONTEXT && (path.resolve(file).startsWith('/var/lib/') || !process.env.DATA_DIR && !process.env.DISCORD_OAUTH_FILE))throw Error('Auth tests require an isolated DATA_DIR or DISCORD_OAUTH_FILE.');
   const REDIRECT = origin + '/discord/callback';
   const pending = new Map(), results = new Map();
   setInterval(() => { for (const map of [pending, results]) for (const [k, v] of map) if (v.expires <= Date.now()) map.delete(k); }, 60000).unref();
@@ -121,7 +123,7 @@ function createDiscord({ origin, staff, send, profile, entryFor, setCookie, cook
   if(refreshEvery>0)setInterval(()=>{const s=manager.settings();if(s.enabled)refreshNames(false,true).catch(()=>{});},60000).unref();
   // Discord roles follow Horizon Network positions on the staff portal: checked every minute, and straight after the bot connects.
   if(refreshEvery>0)setInterval(()=>{manager.syncPositions().catch(()=>{});},60000).unref();
-  presence=process.env.HN_DISCORD_PRESENCE==='0'?null:startPresence(()=> (config()||{}).bot||null,{settings:manager.settings,onAction:(action,details)=>manager.record(null,action,details),onInteraction:manager.interaction,onAuditLog:manager.onAuditLog,onMemberAdd:manager.onMemberAdd,onGuildData:manager.onGuildData,onMemberRemove:manager.onMemberRemove,onReady:()=>{manager.registerBuiltins();manager.resumeSetup().catch(()=>{});manager.prepareWelcome().catch(()=>{});manager.syncPositions(true).catch(()=>{});},log:{log:message=>{console.log(message);manager.record(null,'gateway.event',{message});}}});
+  presence=process.env.HN_DISCORD_PRESENCE==='0'?null:startPresence(()=> (config()||{}).bot||null,{settings:manager.settings,onAction:(action,details)=>manager.record(null,action,details),onInteraction:manager.interaction,onAuditLog:manager.onAuditLog,onMemberAdd:manager.onMemberAdd,onGuildData:manager.onGuildData,onMemberRemove:manager.onMemberRemove,onReady:()=>{manager.registerBuiltins();manager.resumeSetup().catch(()=>{});manager.prepareWelcome().catch(()=>{});manager.syncPositions(false).catch(()=>{});},log:{log:message=>{console.log(message);manager.record(null,'gateway.event',{message});}}});
   // When Auth is stopped (website control's power off runs `pm2 stop hn-auth`, which sends SIGINT/SIGTERM), the bot goes
   // fully offline at once (the user's request, 3 November 2026): it turns invisible and closes its Discord connection
   // normally, so Discord shows it offline straight away instead of after the connection times out.

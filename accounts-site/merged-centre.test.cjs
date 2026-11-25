@@ -24,6 +24,8 @@ test('merged Auth account centre preserves sign-in, account options and permissi
   const staff = spawn(process.execPath, ['staff-portal/server.js'], { cwd: path.join(__dirname, '..'), env: { ...process.env, PORT: String(staffPort), DATA_DIR: dir, AUTH_BACKEND: authBase, STATUS_SSO_SECRET_FILE: secret }, stdio: ['ignore', 'ignore', 'inherit'] });
   process.env.STAFF_PORTAL_BACKEND = staffBase; process.env.STATUS_SSO_SECRET_FILE = secret;
   process.env.AUTH_ACCOUNT_CENTRE='1';process.env.ACCOUNT_WEB_BACKEND='http://127.0.0.1:'+accPort;
+  process.env.DATA_DIR=path.join(dir,'auth'); fs.mkdirSync(process.env.DATA_DIR,{recursive:true});
+  process.env.HN_DISCORD_PRESENCE='0';
   const { server: auth } = require('../auth-site/server'); await new Promise((r) => auth.listen(authPort, '127.0.0.1', r));
   const acc = spawn(process.execPath, [path.join(__dirname, 'server.js')], { env: { ...process.env, PORT: String(accPort), ACCOUNTS_ORIGIN: authBase, ACCOUNTS_BASE_PATH:'/account', AUTH_ORIGIN: authBase, AUTH_BACKEND: authBase, STAFF_BACKEND: staffBase, STATUS_SSO_SECRET_FILE: secret }, stdio: ['ignore', 'ignore', 'inherit'] });
   try {

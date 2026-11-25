@@ -39,14 +39,10 @@ async function reconcilePositionRoles({layout,catalog,live,state,commit,request,
    }
   }else if(!editable(r))throw invalid('Move the Utilities bot role above '+r.name+' before syncing.');
  }
- // Known old position names may be retired on the first run. Other custom roles remain untouched.
- for(const title of layout.legacyPositionTitles||[]){
-  if(names.has(roleName(title)))continue;
-  const matches=find(title);
-  if(matches.length>1)throw invalid('Multiple roles match retired position '+title+'.');
-  const r=matches[0];
-  if(usable(r)&&!Object.values(owned).some(p=>p.id===r.id))owned['legacy:'+roleName(title)]={id:r.id,title};
- }
+ // Only previously tracked roles may be retired. A historical title by itself
+ // is not proof that a live Discord role belongs to this synchroniser.
+ const claimed=entries.map(e=>owned[e.key]?.id).filter(Boolean);
+ if(new Set(claimed).size!==claimed.length)throw invalid('A Discord role matches multiple current positions; no roles changed.');
  for(const [key,p] of Object.entries(owned)){
   if(desiredKeys.has(key))continue;
   const r=live.find(r=>r.id===p.id);

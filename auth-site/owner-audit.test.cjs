@@ -3,7 +3,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 const {createOwnerAudit,OWNER_ID,isBotLog}=require('./owner-audit'),{createBotManager}=require('./bot-manager'),{startPresence}=require('./discord-gateway');
 const CHANNEL='222222222222222222',APP='333333333333333333',USER='444444444444444444';
 function fixture(){let db={queue:[]},fail=null;const calls=[],config=()=>({id:APP,bot:'private-bot-token',secret:'private-oauth-secret',ownerAuditRecipient:OWNER_ID});
- const fetcher=async(url,opts={})=>{const body=opts.body?JSON.parse(opts.body):undefined;calls.push({url,...opts,body});if(fail&&url.endsWith('/messages'))return Response.json(fail.body,{status:fail.status});if(url.endsWith('/users/@me/channels'))return Response.json({id:CHANNEL});return Response.json({id:'555555555555555555'});};
+ const fetcher=async(url,opts={})=>{const body=opts.body?JSON.parse(opts.body):undefined;calls.push({url,...opts,body});if(fail&&url.endsWith('/messages'))return Response.json(fail.body,{status:fail.status});if(/\/guilds\/\d+$/.test(url))return Response.json({id:APP,name:'Horizon Test Server'});if(url.endsWith('/users/@me/channels'))return Response.json({id:CHANNEL});return Response.json({id:'555555555555555555'});};
  const build=()=>createOwnerAudit({config,fetcher,state:()=>db,commit:value=>{db=value;}});let audit=build();
  return{calls,fetcher,config,get audit(){return audit;},get db(){return db;},setFailure(value){fail=value;},clearRetry(){db.retryAt=0;},restart(){audit.close();audit=build();},close(){audit.close();}};
 }
@@ -60,10 +60,19 @@ test('existing Utilities queue uses only the registered Logs bot, retaining even
   fs.writeFileSync(configFile,JSON.stringify({client_id:APP,bot_token:logsToken}));assert.equal(logsDeliveryConfig(dir)(),null,'reject a different bot application');
   fs.writeFileSync(configFile,JSON.stringify({client_id:'1571216218449248377',bot_token:logsToken}));
   saved.ownerLog.retryAt=0;fs.writeFileSync(file,JSON.stringify(saved));manager=build();await manager.flushOwnerLogs();
-  assert.equal(JSON.parse(fs.readFileSync(file)).ownerLog.queue.length,0);assert.equal(f.calls.length,2);
+  assert.equal(JSON.parse(fs.readFileSync(file)).ownerLog.queue.length,0);assert.equal(f.calls.length,3);
   assert.ok(f.calls.every(c=>c.headers.Authorization==='Bot '+logsToken));
-  const sent=f.calls[1].body;assert.equal(sent.embeds[0].title,'HN Utilities · Server joined a network');assert.equal(sent.nonce,BigInt('0x'+queued.id).toString());assert.equal(f.calls[0].body.recipient_id,OWNER_ID);
+  const sent=f.calls.find(c=>c.url.endsWith('/messages')).body;assert.equal(sent.embeds[0].title,'HN Utilities · Server joined a network');assert.equal(sent.nonce,BigInt('0x'+queued.id).toString());assert.equal(f.calls[0].body.recipient_id,OWNER_ID);
   manager.record(null,'server.audit.ban',{event:'Member banned',guild:APP});await manager.flushOwnerLogs();
   assert.equal(f.calls.filter(c=>c.url.endsWith('/messages')).length,2);assert.ok(f.calls.every(c=>c.headers.Authorization==='Bot '+logsToken));
  }finally{manager?.closeOwnerLogs();f.close();fs.rmSync(dir,{recursive:true,force:true});}
+});
+
+test('Logs includes the resolved server name and caches it across entries',async()=>{const f=fixture();try{
+ f.audit.enqueue(event('server.audit.31',{guild:APP,event:'Role changed'}));f.audit.enqueue(event('server.audit.32',{guild:APP,event:'Role deleted'}));await f.audit.flush();
+ const messages=f.calls.filter(c=>c.url.endsWith('/messages'));assert.equal(messages.length,2);for(const message of messages)assert.equal(message.body.embeds[0].fields.find(f=>f.name==='Server').value,'Horizon Test Server ('+APP+')');assert.equal(f.calls.filter(c=>c.url.endsWith('/guilds/'+APP)).length,1);
+ }finally{f.close();}});
+
+test('node:test refuses fallback to live Discord credentials before accessing bot state',()=>{
+ assert.ok(process.env.NODE_TEST_CONTEXT);assert.throws(()=>require('./discord').createDiscord({file:'/var/lib/hn-auth/discord.json'}),/isolated DATA_DIR/);
 });
