@@ -52,7 +52,9 @@ $('year').textContent = new Date().getFullYear();
 $('destination').hidden = !connecting;
 if (connecting) { $('destination-name').textContent = app.name; $('application-name').textContent = app.name; $('continue-label').textContent = 'Continue to ' + app.short; }
 async function api(route, data) {
-  const response = await fetch('/api/' + route, { method: data ? 'POST' : 'GET', headers: data ? { 'Content-Type': 'application/json' } : {}, body: data ? JSON.stringify(data) : undefined, credentials: 'same-origin' });
+  let response;
+  try{response=await fetch('/api/' + route, { method: data ? 'POST' : 'GET', headers: data ? { 'Content-Type': 'application/json' } : {}, body: data ? JSON.stringify(data) : undefined, credentials: 'same-origin',signal:AbortSignal.timeout(20000) });}
+  catch(error){if(error.name==='TimeoutError'||error.name==='AbortError')throw Error('Sign-in is taking too long. Please try again.');throw error;}
   const value = await response.json(); if (!response.ok) { const e = new Error(value.error || 'Please try again.'); e.status = response.status; e.restart = !!value.restart; throw e; } return value;
 }
 async function animate(element, frames, options) {
@@ -89,7 +91,7 @@ let profileChosen = false;
 async function chooseProfile(user) {
   const list = (user.profiles || []).slice().sort((a, b) => (b.default - a.default));
   $('card-title').textContent = 'Choose a profile';
-  $('subtitle').textContent = 'You can use this account as any of these. Your default is first.';
+  $('subtitle').textContent = 'Choose the company profile you want to use.';
   const box = $('profile-list');
   box.replaceChildren(...list.map((p) => {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'profile-option' + (p.default ? ' default' : '');
@@ -98,7 +100,8 @@ async function chooseProfile(user) {
     initials.textContent = (p.displayName || p.company || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
     if (p.photo) {
       const img = document.createElement('img'); img.alt = ''; img.src = '/api/profile/avatar?key=' + encodeURIComponent(p.key);
-      img.onerror = () => img.remove();
+      img.onload = () => initials.classList.add('has-photo');
+      img.onerror = () => {img.remove();initials.classList.remove('has-photo');};
       initials.append(img);
     }
     const text = document.createElement('span'); text.className = 'profile-text';
@@ -106,7 +109,7 @@ async function chooseProfile(user) {
     const sub = document.createElement('small'); sub.textContent = [p.displayName, p.jobTitle].filter(Boolean).join(' · ');
     text.append(name, sub);
     b.append(initials, text);
-    if (p.default) { const tag = document.createElement('span'); tag.className = 'profile-default'; tag.textContent = 'Default'; b.append(tag); }
+    if (p.default) { const tag = document.createElement('span'); tag.className = 'profile-default'; tag.textContent = 'Preferred'; tag.title='Your default sign-in profile'; tag.setAttribute('aria-label','Default profile'); b.append(tag); }
     b.onclick = () => busy(b, async () => {
       const data = await api('profile/select', { key: p.key });
       profileChosen = true; await account(data.user);

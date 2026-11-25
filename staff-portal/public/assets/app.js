@@ -137,12 +137,10 @@
         openHnAccount(a.getAttribute("data-hn-account"));
     });
 
-    async function api(path, body) {
-        const res = await fetch(path, body === undefined ? { headers: { Accept: "application/json" } } : {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-        });
+    async function api(path, body, requestOptions = {}) {
+        const options=body === undefined ? {headers:{Accept:"application/json"}} : {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)};
+        if(requestOptions.timeout)options.signal=AbortSignal.timeout(requestOptions.timeout);
+        const res=await fetch(path,options);
         const data = await res.json().catch(function () { return {}; });
         if (res.status === 503 && data.code === "MAINTENANCE") {
             window.location.href = "/login?maintenance=1";
@@ -6812,15 +6810,15 @@
         document.body.classList.add("app-loading");document.body.setAttribute("aria-busy","true");
         $("#year").textContent = new Date().getFullYear();
         try {
-            state.me = (await api("/api/me")).user;
+            state.me = (await api("/api/me",undefined,{timeout:15000})).user;
             applyTheme(state.me.theme);
             if (!state.me.passwordTemporary && !state.me.passwordExpired && !state.me.codeSetupRequired) {
-                state.meta = await api("/api/meta");
+                state.meta = await api("/api/meta",undefined,{timeout:15000});
                 if (window.HNPortal) state.meta.companies = state.meta.companies.filter(window.HNPortal.companyVisible);
             }
         } catch (e) {
             if (window.HNPortal) {
-                $("#view").innerHTML = window.HNPortal.error(e.message);
+                $("#view").innerHTML = window.HNPortal.error(e.name==="TimeoutError"||e.name==="AbortError"?"The connection took too long. Please try again.":e.message);
                 $("#view [data-portal-retry]").addEventListener("click", start);
                 await finishStartup();
             }

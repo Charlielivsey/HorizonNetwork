@@ -316,3 +316,5 @@ input::placeholder,textarea::placeholder {color:#c0b9ca;opacity:1}
 .grid2{gap:24px}.button{border-radius:10px;min-height:44px}.field input,.field select,.field textarea{min-height:48px}
 #content>h1{font-size:36px;letter-spacing:-.05em}.sig-mail{color:#1b1a21}
 @media(max-width:700px){.top{padding:18px}.brand img{height:32px;max-width:190px}.layout{padding:0 18px 32px}.layout>.side{flex-wrap:nowrap;overflow-x:auto;max-width:100%;position:static;padding:14px 0}.side a{flex-shrink:0;padding:9px 12px;font-size:13px}.card{padding:22px}.hello{padding:18px 0 25px}.grid2{gap:18px}}
+
+.top .user form .link{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:8px 15px;border:1px solid #a183ba;border-radius:9px;background:#35343b;color:#dfc7ff;font:inherit;font-size:13px;font-weight:600;text-decoration:none;white-space:nowrap;cursor:pointer}.top .user form .link:hover{background:#44384f}

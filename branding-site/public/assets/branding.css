@@ -153,3 +153,5 @@ main#content{width:min(1480px,100%);padding:0 44px 70px;margin:0 auto;max-width:
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 
 .c-charcoal{background:#252629}.c-panel{background:#303136}.c-raised{background:#37383e}.c-lavender{background:#ccb2f0}
+
+.preview.discord.icon{padding:20px;min-height:190px}.preview.discord.icon img{width:144px;height:144px;max-width:100%;border-radius:50%;object-fit:contain}.foot .footer-brand img{height:46px;width:auto;max-width:240px}.foot p{font-size:14px;line-height:1.75}.foot{padding-top:38px;padding-bottom:38px}@media(max-width:600px){.preview.discord.icon img{width:132px;height:132px}.foot .footer-brand img{height:40px}.foot p{font-size:13px}}
