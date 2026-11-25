@@ -1,6 +1,6 @@
 # Roster
 
-Public, read-only hierarchy and ownership at https://roster.hngroup.org.uk. Horizon Network is the default on a fresh visit. The company selector offers the other published companies without changing defaults on People, staff employment or sign-in permissions. Cool light grey and lavender are the fixed default theme; no inherited account theme overrides them.
+Public, read-only hierarchy and ownership at https://roster.hngroup.org.uk. Horizon Network is the default on a fresh visit. The company selector offers the other published companies without changing defaults on People, staff employment or sign-in permissions. Charcoal grey and lavender are the fixed default theme; no inherited account theme overrides them.
 
 Hierarchy reads People’s existing public feed, so all active staff and every appointment are included regardless of sign-in access. Filled/vacant filters, search with ancestor context, expand/collapse, pan, zoom, fit, 100%, accessible list view and public profile dialogs. Collective supervisor boards show a board name only. Mobile starts in readable list view.
 
