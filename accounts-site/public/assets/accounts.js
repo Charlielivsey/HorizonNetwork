@@ -97,8 +97,16 @@
   }
   function header() {
     const signOut = h('form', { method: 'post', action: '/auth/logout' }, h('input', { type: 'hidden', name: 'csrf', value: session.csrf }), h('button', { class: 'link', type: 'submit', text: 'Sign out' }));
-    $('#user').replaceChildren(avatar(me, 'sm'), h('span', { class: 'who', text: me.displayName }), signOut);
+    const trigger = h('summary', { class: 'account-trigger', 'aria-label': 'Your account: ' + me.displayName },
+      avatar(me, 'sm'), h('span', { class: 'account-trigger-copy' }, h('strong', { text: me.displayName }), h('small', { text: 'Your account' })),
+      icon('m6 9 6 6 6-6'));
+    const menu = h('details', { class: 'account-control' }, trigger,
+      h('div', { class: 'account-popover' }, h('div', { class: 'account-popover-heading' }, h('strong', { text: me.displayName }), h('span', { text: me.username })),
+        h('a', { class: 'account-profile-link', href: '#profile', text: 'Manage your profile', onclick: () => { menu.open = false; } }), signOut));
+    menu.addEventListener('keydown', (event) => { if (event.key === 'Escape') { menu.open = false; trigger.focus(); event.stopPropagation(); } });
+    $('#user').replaceChildren(menu);
   }
+  document.addEventListener('click', (event) => { const menu = $('#user .account-control'); if (menu && !menu.contains(event.target)) menu.open = false; });
   const section = (title, intro, ...body) => h('section', { class: 'card' }, h('h2', { text: title }), intro ? h('p', { class: 'muted', text: intro }) : null, ...body);
 
   function overview() {
