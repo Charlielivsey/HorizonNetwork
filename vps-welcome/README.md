@@ -81,3 +81,5 @@ Power management option 4, **Shutdown server**, performs a full graceful VPS pow
 ## Recover a locked HN account
 
 Run `sudo horizon unlock-account`, or run `horizon` as root and choose **5 — Unlock an HN account**. Enter the terminal’s existing system-admin PIN, then the sign-in email. Recovery goes through the running private account service, which clears the account lock and failed-attempt counter and records an audit event. Passwords and PINs are unchanged; an account disabled before locking stays disabled. The root-only service secret stays in an HTTP header on loopback, never in the command line or terminal output. The shortcut does not edit account files or restart services. If `hn-accounts` is stopped, start it through the normal PM2 controls before recovery.
+
+Restore verification: check `/etc/profile.d/90-hn-horizon.sh` against `profile.sh` as well as the Python helpers. The approved SSH entry point is `exec /usr/local/bin/horizon --session`; plain `horizon` bypasses the persistent frame during initial login. Reconnect after restoring the hook, or run `horizon --session` in an existing unframed connection.
