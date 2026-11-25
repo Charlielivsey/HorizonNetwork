@@ -1,6 +1,7 @@
 'use strict';
 // A fixed allowlist: no request may choose an arbitrary process or hostname.
 const sites=[
+['roster','Horizon Network Roster','hn-roster',5730,['roster.hngroup.org.uk']],
 ['appeals','HN Group Appeals','hn-appeals',5720,['appeals.hngroup.org.uk']],
 ['it','HN Group IT','hn-it',5710,['it.hngroup.org.uk']],
 ['finance','HN Group Finance','hn-finance',5690,['finance.hngroup.org.uk']],

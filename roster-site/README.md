@@ -1,0 +1,15 @@
+# Roster
+
+Public, read-only hierarchy and ownership at https://roster.hngroup.org.uk. Horizon Network is the default on a fresh visit. The company selector offers the other published companies without changing defaults on People, staff employment or sign-in permissions. Cool light grey and lavender are the fixed default theme; no inherited account theme overrides them.
+
+Hierarchy reads People’s existing public feed, so all active staff and every appointment are included regardless of sign-in access. Filled/vacant filters, search with ancestor context, expand/collapse, pan, zoom, fit, 100%, accessible list view and public profile dialogs. Collective supervisor boards show a board name only. Mobile starts in readable list view.
+
+Ownership follows the public Companies feed exactly: equity, exercised voting power, split delegations and voting recipients with zero equity. Completely empty holders are hidden. Current charter minimum is read per company, never hardcoded to75. Known owner/public-display aliases are explicit; ambiguous matches do not guess a person. A SHA-256 of the ownership snapshot excludes staff display bindings and timestamps. Copy the full fingerprint, download a real branded PDF snapshot, or visit the company’s filing history. It does not generate or submit company filings.
+
+Server: core Node only, `hn-roster`, loopback5730. Upstreams are public People5670 and public Companies4900; no service credentials or private staff/account files are read. Only allowlisted public fields are projected. Sources refresh together after10s; browser refreshes15s and keeps interactive state when unchanged. Outages show a labelled last snapshot for at most5minutes, then503. GET/HEAD only; fixed photo source with current public eligibility and bounded response size. No business data storage, login or edits.
+
+Shared PDF/sanitizer/font/company PNG copies are the existing approved Docs renderer/artwork, not redesigned logos. All website artwork is reused from approved public People/Docs sources. Runtime assets are self-hosted, no third-party trackers or scripts.
+
+Validate: `node --test roster-site/test.cjs roster-site/browser.test.cjs` (isolated public fixtures; no production sign-ins or changes). Preview: `PORT=5731 node roster-site/server.js`. Deploy: `sudo bash roster-site/install.sh` after the hostname points to this VPS. Installer touches only this application, PM2 process and nginx host, issues its HTTPS certificate and preserves all other services. Application is registered separately in Administration’s fixed catalogues.
+
+Touch: coarse-pointer controls have44px minimum targets; mobile starts in list view and opens the chart at100% for readable taps. Background dragging and two-finger pointer zoom preserve the gesture midpoint and suppress accidental profile clicks. Content/chart fade-ins and ownership bar growth are short; OS Reduce Motion disables them. Reconnect failures keep an explicit, timestamped last-data banner visible on mobile as well as desktop.

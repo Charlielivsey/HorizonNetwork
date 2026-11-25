@@ -1,5 +1,14 @@
 [
   {
+    "id": "roster",
+    "name": "Horizon Network Roster",
+    "process": "hn-roster",
+    "port": 5730,
+    "hosts": [
+      "roster.hngroup.org.uk"
+    ]
+  },
+  {
     "id": "appeals",
     "name": "HN Group Appeals",
     "process": "hn-appeals",

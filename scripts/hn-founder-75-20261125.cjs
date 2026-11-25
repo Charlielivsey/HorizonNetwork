@@ -1,0 +1,19 @@
+'use strict';
+// User's written instruction: Charlie Livsey and HN Group collectively receive 75% founder voting entitlement.
+// Existing equity, delegations, identities and all other companies are preserved. Stop hn-companies for live use.
+const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),assert=require('node:assert/strict');
+const dir=process.env.HN_VOTING_DATA_DIR,expected=process.env.HN_VOTING_EXPECTED_SHA;if(!dir||!/^[a-f0-9]{64}$/.test(expected||''))throw Error('Exact data directory and baseline SHA-256 required.');
+const file=path.join(dir,'register.json'),bytes=fs.readFileSync(file);assert.equal(crypto.createHash('sha256').update(bytes).digest('hex'),expected,'Register changed; take a fresh snapshot and rehearse.');
+const baseline=JSON.parse(bytes),old=baseline.companies.find(c=>c.slug==='horizon-network');assert.ok(old&&old.shareModel==='founder75');const operation='owner-hn-founder75-20261125';
+if(old.founderVotingMinimum===75){console.log(JSON.stringify({unchanged:true,minimum:75}));process.exit(0);}assert.equal(old.founderVotingMinimum,51);assert.ok(!(old.appliedVotingOperations||[]).includes(operation),'This instruction was already applied; refusing to replay it after another change.');
+for(const name of ['Charlie Livsey','HN Group']){const p=old.psc.find(p=>!p.ceased&&p.name===name);assert.ok(p);assert.equal(Number(p.share),25.5);assert.equal(Number(p.classA),25.5);}
+const oldFiles=new Set(fs.readdirSync(path.join(dir,'files'))),store=require(path.resolve(__dirname,'../companies-site/lib/store')),founder=require(path.resolve(__dirname,'../companies-site/lib/founder-voting'));
+try{store.init(dir);store.setVotingMinimum('horizon-network',{minimum:75,requestId:operation,consent:'Owner instruction, 25 November 2026: Charlie Livsey and HN Group combined Class A founder voting entitlement is 75%; preserve equity and existing delegations.'},'Charlie Livsey (owner instruction)');
+ const after=JSON.parse(fs.readFileSync(file)),c=after.companies.find(c=>c.slug==='horizon-network');assert.equal(c.founderVotingMinimum,75);assert.equal(c.parent,old.parent);assert.deepEqual(c.votingDelegations,old.votingDelegations);
+ for(const p of old.psc){const current=c.psc.find(x=>x.id===p.id);for(const key of ['id','name','kind','share','classA','classB','classC','ceased'])assert.deepEqual(current[key],p[key]);}assert.equal(c.psc.length,old.psc.length);
+ for(const previous of baseline.companies)if(previous.slug!=='horizon-network')assert.deepEqual(after.companies.find(c=>c.slug===previous.slug),previous);
+ for(const key of ['customers','requests','submissions','staff','sessions','migrations','seeded'])assert.deepEqual(after[key],baseline[key]);
+ assert.equal(after.filings.length,baseline.filings.length+1);for(const f of baseline.filings)assert.deepEqual(after.filings.find(x=>x.id===f.id),f);
+ const result=founder.calculation(c);assert.equal(result.founderVotes,75);for(const name of ['Charlie Livsey','HN Group'])assert.equal(result.holders[c.psc.find(p=>!p.ceased&&p.name===name).id].beneficialVotes,37.5);assert.ok(Math.abs(result.controllers.reduce((n,v)=>n+v.votes,0)-100)<1e-6);
+ const filing=after.filings.find(f=>!baseline.filings.some(x=>x.id===f.id));assert.ok(fs.readFileSync(path.join(dir,'files',filing.file)).subarray(0,5).toString()==='%PDF-');const report={minimum:75,combinedFounderVotes:75,beneficialVotesEach:37.5,controllers:result.controllers.map(x=>({name:x.name,votes:x.votes})),filing:{id:filing.id,description:filing.description,url:'https://companies.hngroup.org.uk/document/'+filing.id},equityAndDelegationsPreserved:true};if(process.env.HN_VOTING_REPORT)fs.writeFileSync(process.env.HN_VOTING_REPORT,JSON.stringify(report,null,2));console.log(JSON.stringify(report));
+}catch(e){fs.writeFileSync(file,bytes);for(const f of fs.readdirSync(path.join(dir,'files')))if(!oldFiles.has(f))fs.unlinkSync(path.join(dir,'files',f));throw e;}

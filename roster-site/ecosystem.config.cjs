@@ -1,0 +1,1 @@
+module.exports={apps:[{name:'hn-roster',script:'/opt/hn-roster/server.js',cwd:'/opt/hn-roster',instances:1,exec_mode:'fork',autorestart:true,max_memory_restart:'192M',env:{NODE_ENV:'production',PORT:5730,HOST:'127.0.0.1',PEOPLE_BACKEND:'http://127.0.0.1:5670',COMPANIES_BACKEND:'http://127.0.0.1:4900'}}]};

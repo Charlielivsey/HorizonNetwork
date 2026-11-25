@@ -1,0 +1,11 @@
+'use strict';
+// Existing account preference only. Run production with hn-accounts stopped; does not add employment or access.
+const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),assert=require('node:assert/strict');
+const dir=process.env.HN_PROFILE_DATA_DIR,expected=process.env.HN_PROFILE_EXPECTED_SHA;if(!dir||!/^[a-f0-9]{64}$/.test(expected||''))throw Error('Provide an explicit data directory and exact baseline login SHA-256.');
+const file=path.join(dir,'logins.json'),before=fs.readFileSync(file);assert.equal(crypto.createHash('sha256').update(before).digest('hex'),expected,'Login data changed; rehearse again.');
+const original=JSON.parse(before),people=JSON.parse(fs.readFileSync(path.join(dir,'people.json'))),records=Array.isArray(people)?people:people.people;assert.ok(Array.isArray(original)&&Array.isArray(records));const next=structuredClone(original),hash=crypto.createHash('sha256').update('Horizon Network').digest('hex').slice(0,8),report={updated:[],unavailable:[],profilesRemoved:0};
+for(const l of next){const eligible=[];for(const p of records){if(p.system||p.offboardedAt)continue;const companies=[...new Set([p.company,...(p.otherRoles||[]).map(r=>r.company)].filter(Boolean))];for(const company of companies)if(l.primaryFor===p.id||(l.profiles||[]).some(x=>x.personId===p.id&&x.company===company))eligible.push({personId:p.id,company});}
+ const target=eligible.find(p=>p.company==='Horizon Network'&&p.personId===l.primaryFor)||eligible.find(p=>p.company==='Horizon Network');if(!target){report.unavailable.push({id:l.id,name:l.displayName,activeProfiles:eligible.length});continue;}const key=target.personId+':'+hash;if(l.defaultProfile!==key){l.defaultProfile=key;report.updated.push({id:l.id,name:l.displayName});}}
+assert.equal(next.length,original.length);for(let i=0;i<next.length;i++){const a={...original[i]},b={...next[i]};delete a.defaultProfile;delete b.defaultProfile;assert.deepEqual(a,b);}
+if(process.env.HN_PROFILE_APPLY==='1'&&report.updated.length){const temp=file+'.hn-profile-'+process.pid;try{fs.writeFileSync(temp,JSON.stringify(next,null,2)+'\n',{mode:fs.statSync(file).mode&0o777});fs.renameSync(temp,file);}finally{if(fs.existsSync(temp))fs.unlinkSync(temp);}}
+console.log(JSON.stringify(report));
