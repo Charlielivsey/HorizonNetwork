@@ -509,3 +509,35 @@ html[data-portal-ui] :is(.portal-brand,.footer-brand) .logo-light-theme {display
 html[data-portal-ui] :is(.portal-brand,.footer-brand) .logo-dark-theme {display:block!important}
 
 html:not([data-hn-app]) .portal-startup-inner img { filter:none!important; }
+
+/* Top navigation restored; permissions and dropdown actions remain in the original chrome. */
+html[data-portal-ui] body,html[data-workspace-app="portal"] body {padding-left:0!important}
+html[data-portal-ui] .portal-sidebar,html[data-portal-ui] .portal-nav-shade,html[data-portal-ui] .portal-context,html[data-portal-ui] #workspace-sidebar-toggle {display:none!important}
+html[data-portal-ui] .topbar {display:grid;grid-template-columns:1fr auto;gap:12px 24px;height:auto;min-height:86px;padding:18px 32px 0;position:sticky;top:0;background:#292a2e;backdrop-filter:none;z-index:100}
+html[data-portal-ui] .topbar>.brand {display:flex;grid-column:1;grid-row:1;gap:18px;width:max-content}
+html[data-portal-ui] .brand-logo {height:35px;width:auto;max-width:240px}
+html[data-portal-ui] .topbar-right {grid-column:2;grid-row:1}
+html[data-portal-ui] .topbar>.mainnav {display:flex;grid-column:1/-1;grid-row:2;align-items:center;flex-wrap:wrap;gap:4px;padding:10px 0;border-top:1px solid var(--border);min-width:0}
+html[data-portal-ui] .mainnav .nav-link {font-size:14px;min-height:40px;border-radius:9px;padding:9px 14px;color:var(--text-muted)}
+html[data-portal-ui] .mainnav .nav-link:hover,html[data-portal-ui] .mainnav .nav-link.active,html[data-portal-ui] .mainnav .nav-link[aria-expanded=true] {background:var(--primary-tint);color:var(--primary)}
+html[data-portal-ui] .mainnav .menu {top:calc(100% + 7px);max-height:calc(100dvh - 185px);overflow-y:auto}
+html[data-portal-ui] .portal-skip {left:20px}
+html[data-portal-ui] .container {max-width:1600px;margin:0 auto;width:100%;padding:30px 32px}
+html[data-portal-ui] .nav-toggle {display:none}
+@media(max-width:1100px){
+ html[data-portal-ui] .topbar {padding:14px 18px;gap:12px;min-height:76px}
+ html[data-portal-ui] .brand-logo {height:30px;max-width:195px}
+ html[data-portal-ui] .brand-sub {display:none}
+ html[data-portal-ui] .search-btn {min-width:40px;width:40px;font-size:0}
+ html[data-portal-ui] .search-btn kbd {display:none}
+ html[data-portal-ui] .nav-toggle {display:grid;place-items:center}
+ html[data-portal-ui] .topbar>.mainnav {display:none;max-height:70dvh;overflow:auto;align-items:stretch;flex-direction:column;padding:12px 0 0}
+ html[data-portal-ui] body.nav-open .topbar>.mainnav {display:flex}
+ html[data-portal-ui] .mainnav>.nav-item {width:100%}
+ html[data-portal-ui] .mainnav .nav-link {width:100%;justify-content:space-between;min-height:44px}
+ html[data-portal-ui] .mainnav .menu {position:static;max-width:100%;width:100%;margin:5px 0;max-height:none;box-shadow:none}
+ html[data-portal-ui] .container {padding:24px 18px}
+}
+@media(max-width:480px){html[data-portal-ui] .topbar {gap:10px;padding:12px}html[data-portal-ui] .brand-logo {max-width:164px;height:28px}html[data-portal-ui] .topbar-right {gap:4px}html[data-portal-ui] .user-btn .user-meta,html[data-portal-ui] .user-btn .chev {display:none}html[data-portal-ui] .topbar .search-btn {display:none}}
+
+html[data-portal-ui] .topbar #user-menu {display:block}

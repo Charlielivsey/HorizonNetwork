@@ -29,9 +29,10 @@ function roundelSet(id) {
 }
 
 const COLOURS = [
-  ['purple', 'HN Purple', '#5514B4', 'The core accent. Use it for buttons, links and other actions.'],
+  ['purple', 'HN Purple', '#5514B4', 'The primary identity colour used in our artwork.'],
   ['pink', 'Pink', '#E97DE8', ''], ['yellow', 'Yellow', '#E3E65B', ''], ['teal', 'Teal', '#3E9BA3', ''],
   ['plum', 'Plum', '#7A1F6C', ''], ['raspberry', 'Raspberry', '#C2306B', ''], ['green', 'Green', '#5FAE7B', ''], ['navy', 'Navy', '#1C2135', ''],
+  ['charcoal','Charcoal','#252629','The default page background.'], ['panel','Panel grey','#303136','Cards, menus and panels.'], ['raised','Raised grey','#37383E','Inputs and raised surfaces.'], ['lavender','Lavender','#CCB2F0','Actions and accents on charcoal interfaces.'],
 ];
 // The multicolour stripe, left to right, with each colour's share of the width.
 const STRIPE = [['pink', 14], ['purple', 14], ['yellow', 6], ['teal', 20], ['plum', 10], ['raspberry', 10], ['green', 13], ['navy', 13]];
@@ -69,13 +70,13 @@ function homePage(user) {
   const emailLogos = COMPANIES.filter((c) => has('png', c.id + '-email-logo.png')).map((c) => tile(c.id + '-email-logo', c.name, false)).join('');
 
   const body =
-    '<section class="hero"><p class="eyebrow">HN Group · Brand centre</p><h1>Brand centre.</h1>' +
+    '<section class="hero"><div class="hero-copy"><p class="eyebrow">The HN brand library</p><h1>A shared identity.<br><span>Made for everyone.</span></h1>' +
     '<p class="lede">The approved logos, colours and type for HN Group and its companies. Download what you need, and follow the guidance below so everything we make looks like it belongs together.</p>' +
-    '<nav class="jump" aria-label="On this page"><a href="#logos">Logos</a><a href="#colours">Colours</a><a href="#stripe">Stripe</a><a href="#type">Typography</a><a href="#rules">Using the logos</a><a href="#email">Email signatures</a><a href="#discord">Discord logos</a><a href="#icon">Tab icon</a></nav></section>' +
+    '<div class="hero-actions"><a class="button" href="#logos">Explore the library</a><a class="button secondary" href="#rules">Using our brand</a></div></div><div class="hero-art" aria-hidden="true"><img src="/assets/brand/svg/hn-group-wordmark-white.svg" alt=""><span>One family. Distinct identities.</span><div class="brand-ribbon"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div></section><nav class="jump" aria-label="On this page"><a href="#logos">Logos</a><a href="#colours">Colours</a><a href="#stripe">Stripe</a><a href="#type">Typography</a><a href="#rules">Using the logos</a><a href="#email">Email signatures</a><a href="#discord">Discord logos</a><a href="#icon">Tab icon</a></nav>' +
 
-    '<section class="block" id="logos"><h2>Logos</h2><p class="intro">Every file is the original artwork supplied for the group. Use the regular version on light backgrounds and the white version on dark ones. SVG is best for websites and print; PNG is for apps that don’t accept SVG.</p>' + logos + '</section>' +
+    '<section class="block" id="logos"><div class="section-heading"><div><p class="eyebrow">Original artwork</p><h2>Find your identity.</h2></div><label class="library-search"><span>Filter the logo library</span><input type="search" id="asset-search" placeholder="Find a company or product" autocomplete="off"></label></div><p class="intro">Every file is the original artwork supplied for the group. Use the regular version on light backgrounds and the white version on dark ones. SVG is best for websites and print; PNG is for apps that don’t accept SVG.</p>' + '<p class="library-results" id="library-results" role="status" aria-live="polite"></p>' + logos + '<div id="library-empty" hidden>No matching identities. Try another company or product name.</div></section>' +
 
-    '<section class="block" id="colours"><h2>Colours</h2><p class="intro">HN Purple is the core accent and is used for actions. The other colours appear in the stripe, illustrations and highlights. Select a colour to copy its hex code.</p><div class="swatches">' + colours + '</div>' +
+    '<section class="block" id="colours"><h2>Colours</h2><p class="intro">Our identity colours make up the signature stripe. Charcoal, panel grey and lavender bring the same family into our interfaces. Select a colour to copy its hex code.</p><div class="swatches">' + colours + '</div>' +
     '<p class="note">Keep status colours (such as red for errors and green for success) meaningful. Don’t use brand colours in a way that could be mistaken for a status.</p></section>' +
 
     '<section class="block" id="stripe"><h2>The multicolour stripe</h2><p class="intro">The stripe runs across the top of our websites and along the bottom of email signatures. Keep the colours in this order and these proportions.</p>' + stripe + '</section>' +
@@ -89,7 +90,7 @@ function homePage(user) {
     '<div class="rule dont"><h3>Don’t</h3><ul><li>Crop, stretch, squash or rotate a logo.</li><li>Recolour a logo or change its lettering.</li><li>Redraw a logo or type the name in its place.</li><li>Put a logo on a busy or low-contrast background.</li><li>Swap one company’s logo for another’s.</li></ul></div></div></section>' +
 
     '<section class="block" id="email"><h2>Email signatures</h2><p class="intro">Make your own branded signature in HN Account. It fills in your details from your staff profile and works in Gmail, Outlook and Apple Mail.</p>' +
-    '<p><a class="button" href="https://accounts.hngroup.org.uk/#signature">Open the signature maker →</a></p><h3 class="sub">Signature logos</h3><div class="tiles">' + emailLogos + '</div></section>' +
+    '<p><a class="button" href="https://auth.hngroup.org.uk/account/#signature">Open the signature maker</a></p><h3 class="sub">Signature logos</h3><div class="tiles">' + emailLogos + '</div></section>' +
 
     '<section class="block" id="discord"><h2>Discord logos</h2><p class="intro">Icons for our Discord servers and matching profile pictures and banners for HN Utilities and HN Logs. Legacy HN Group Auth artwork remains available below. Upload them as they are (1024 × 1024 for icons): Discord shows icons as a circle, as below.</p>' + discord + '</section>' +
     '<section class="block" id="icon"><h2>Tab icon</h2><div class="icon-row"><div class="preview icon-preview"><img src="/assets/favicon.svg" alt="HN Group tab icon" width="64" height="64"></div>' +
@@ -100,13 +101,13 @@ function homePage(user) {
 function layout(o) {
   const user = o.user;
   return '<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
-    '<meta name="theme-color" content="#5514B4"><meta name="robots" content="noindex, nofollow"><title>' + esc(o.title) + ' · HN Group</title>' +
+    '<meta name="theme-color" content="#252629"><meta name="robots" content="noindex, nofollow"><title>' + esc(o.title) + ' · HN Group</title>' +
     '<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="preload" href="/assets/fonts/plus-jakarta-sans.woff2" as="font" type="font/woff2" crossorigin>' +
-    '<link rel="stylesheet" href="/assets/branding.css?v=20261117-service-icons"><script src="/assets/hn-theme.js?v=20261109-midnight"></script><script src="/assets/branding.js?v=1" defer></script></head><body>' +
+    '<link rel="stylesheet" href="/assets/branding.css?v=20261125-library"><script src="/assets/hn-theme.js?v=20261109-midnight"></script><script src="/assets/branding.js?v=20261125-library" defer></script></head><body>' +
     '<div class="stripe" aria-hidden="true">' + STRIPE.map(([id, w]) => '<i class="c-' + id + ' f' + w + '"></i>').join('') + '</div>' +
     '<header class="top"><a class="brand" href="/"><img class="on-light" src="/assets/brand/svg/hn-group-wordmark.svg" alt="HN Group" width="92" height="32"><img class="on-dark" src="/assets/brand/svg/hn-group-wordmark-white.svg" alt="" width="92" height="32"><span class="brand-name">Brand centre</span></a>' +
     (user ? '<div class="user"><span>' + esc(user.name) + '</span><form method="post" action="/auth/logout"><input type="hidden" name="csrf" value="' + esc(user.csrf) + '"><button type="submit" class="link">Sign out</button></form></div>' : '') +
-    '</header><main id="content">' + o.body + '</main>' +
+    '<a class="brand-home-link" href="https://hngroup.org.uk">Explore HN Group</a></header><main id="content">' + o.body + '</main>' +
     '<footer class="foot"><div class="footer-brand"><img class="on-light" src="/assets/brand/svg/hn-group-wordmark.svg" alt="" height="32" loading="lazy"><img class="on-dark" src="/assets/brand/svg/hn-group-wordmark-white.svg" alt="" height="32" loading="lazy"></div><p>Approved HN Group brand assets. Please follow the usage guidelines above. © ' + new Date().getFullYear() + ' HN Group Limited.</p></footer>' +
     '<div class="toast" role="status" aria-live="polite" hidden></div></body></html>';
 }

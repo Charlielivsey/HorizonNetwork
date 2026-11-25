@@ -22,3 +22,5 @@ The Auth installer registers the `branding` application. The brand centre instal
 ```
 node --test branding-site/test.cjs
 ```
+
+The public Brand Library uses the fixed HN charcoal/lavender interface. Search filters company/product identities by name, section links show the current section, and colour swatches include the interface palette. Approved original artwork and download routes remain intact; light/dark artwork preview backgrounds deliberately preserve contrast. Signature maker links point to the merged Auth Account Centre.

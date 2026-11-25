@@ -44,3 +44,5 @@ Handler access uses the sign-in account's team permission across companies: `hel
 Checks: `requests.test.cjs`, `requests.integration.test.cjs` (set `HN_REQUESTS_DEPLOYED=1` to use installed UI assets with isolated fixtures), the desktop-only broad portal suite and existing permission regressions. No mobile QA was run, per the user's current preference.
 
 The Staff Portal now uses Roster’s fixed charcoal grey palette with lavender controls (25 November 2026), independent of the shared account theme. Existing account choices remain stored for other sites. The palette excludes HR/Finance service layouts and keeps approved white header artwork readable.
+
+25 November 2026: primary navigation is restored to the top. The original permission-filtered mainnav and user-menu renderers remain authoritative; the former sidebar is hidden/inert. Desktop uses a two-row header; mobile expands the same menus below the header. Workspace section overview routing is retained. Charcoal palette and startup treatment remain.

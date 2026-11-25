@@ -19,18 +19,13 @@
         { title: 'HN Account', desc: 'Your profile & sign-in', href: 'https://auth.hngroup.org.uk/account/', icon: 'user', tone: 'gold' }
     ];
     function mobile(open) {
-        const side = q('#portal-sidebar');
-        if (!side) return;
-        const narrow = matchMedia('(max-width: 1100px)').matches;
-        side.inert = narrow && !open;
-        q('#portal-nav-shade').hidden = !narrow || !open;
-        if (open && narrow) {
-            returnFocus = document.activeElement;
-            side.querySelector('a,button').focus();
-        } else if (returnFocus && narrow) {
-            returnFocus.focus(); returnFocus = null;
-        }
+        const side=q('#portal-sidebar'),nav=q('#mainnav'),narrow=matchMedia('(max-width:1100px)').matches;
+        if(side)side.inert=true;
+        if(nav)nav.inert=narrow&&!open;
+        const shade=q('#portal-nav-shade');if(shade)shade.hidden=true;
+        const toggle=q('#nav-toggle');if(toggle)toggle.setAttribute('aria-controls','mainnav');
     }
+
     function route(path) {
         document.querySelectorAll('.portal-nav-link').forEach(el => {
             const active = el.getAttribute('href') === path;
@@ -82,7 +77,7 @@
             '<a class="portal-nav-link" href="https://auth.hngroup.org.uk/account/"'+(!me.impersonatedBy?' data-hn-account="/#overview"':'')+'>'+icon('user')+'<span>HN Account</span><span class="portal-external" aria-hidden="true">↗</span></a>' + link({title:'Settings',href:'/settings',icon:'settings'}) +
             (ctx.canAdmin ? link({title:'System Admin',href:'/system',icon:'shield'}) : '') + '<button class="portal-nav-link portal-signout" type="button" data-action="logout">'+icon('logout')+'<span>Sign out</span></button><a class="portal-sites-link" href="https://sites.hngroup.org.uk/">Explore all HN sites <span aria-hidden="true">↗</span></a></div></details></div>';
         side.querySelector('.portal-sidebar-close').addEventListener('click', () => {document.body.classList.remove('nav-open');q('#nav-toggle').setAttribute('aria-expanded','false');q('#nav-toggle').innerHTML=icon('menu');mobile(false);});
-        q('#nav-toggle').setAttribute('aria-controls','portal-sidebar');
+        q('#nav-toggle').setAttribute('aria-controls','mainnav');
         const search = q('#search-btn'); search.setAttribute('aria-label','Search the workspace (Ctrl or Command K)');
         if (!q('#user-menu a[href="https://auth.hngroup.org.uk/account/"]')) q('#user-menu .menu-sep').insertAdjacentHTML('beforebegin','<a class="menu-item compact" role="menuitem" href="https://auth.hngroup.org.uk/account/">' + icon('user') + '<span>HN Account</span></a>');
         mobile(document.body.classList.contains('nav-open'));
@@ -118,7 +113,7 @@
             '<aside class="home-side portal-dashboard-side" id="home-side" aria-label="Your day"><section class="panel portal-profile" data-widget="me"><div class="portal-profile-head">' + avatar(me,'lg') + '<div><strong>' + esc(me.displayName) + '</strong><span>' + esc(me.jobTitle || 'HN Group') + '</span></div></div>' +
             '<button class="status-set" type="button" data-action="status">' + (me.status ? ctx.statusPill(me.status) : '<span>Set your availability</span>') + icon('edit') + '</button>' + ctx.rolesHtml(me) + '<a class="portal-profile-account" href="https://auth.hngroup.org.uk/account/">Manage your HN Account ' + icon('chevronRight') + '</a></section>' +
             '<section class="panel" id="home-coming" data-widget="coming">' + panelHead('Coming up','/calendar','Calendar') + '<div class="loading">Loading your calendar…</div></section><section class="panel" id="home-around" data-widget="around" hidden></section><section class="panel" id="home-celebrate" data-widget="celebrate" hidden></section>' +
-            '<section class="panel portal-help" data-widget="help">' + icon('lifebuoy') + '<h2>Here to help</h2><p>Something not working? The IT team can help with access, devices and technical problems.</p><a class="btn btn-ghost btn-block-sm" href="/helpdesk" data-link>Raise a issue ' + icon('chevronRight') + '</a><a class="small" href="/on-call" data-link>Find who’s on call</a></section><button class="btn btn-ghost btn-small home-customise" type="button" id="home-customise">' + icon('settings') + 'Customise your sidebar</button></aside></div>';
+            '<section class="panel portal-help" data-widget="help">' + icon('lifebuoy') + '<h2>Here to help</h2><p>Something not working? The IT team can help with access, devices and technical problems.</p><a class="btn btn-ghost btn-block-sm" href="/helpdesk" data-link>Raise a issue ' + icon('chevronRight') + '</a><a class="small" href="/on-call" data-link>Find who’s on call</a></section><button class="btn btn-ghost btn-small home-customise" type="button" id="home-customise">' + icon('settings') + 'Customise your overview</button></aside></div>';
         ctx.applyHomeLayout(q('#home-side'));
         q('#home-customise').addEventListener('click',ctx.openHomeCustomiser);
         if (q('#home-coming')) ctx.loadComingUp(q('#home-coming'));
@@ -169,7 +164,8 @@
         }
         if (q('.modal-backdrop') || q('.search-overlay')) return;
         if (e.key !== 'Tab' || !document.body.classList.contains('nav-open') || !matchMedia('(max-width:1100px)').matches) return;
-        const controls = Array.from(q('#portal-sidebar').querySelectorAll('a,button')).filter(el => el.getClientRects().length);
+        const controls = Array.from(q('#mainnav').querySelectorAll('a,button')).filter(el => el.getClientRects().length);
+        if(!controls.length)return;
         const first=controls[0],last=controls[controls.length-1];
         if (e.shiftKey && document.activeElement===first) {e.preventDefault();last.focus();}
         else if (!e.shiftKey && document.activeElement===last) {e.preventDefault();first.focus();}

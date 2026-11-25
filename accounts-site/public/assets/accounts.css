@@ -303,3 +303,16 @@ input::placeholder,textarea::placeholder {color:#c0b9ca;opacity:1}
 .skip {color:#241c2c}
 .foot {background:#303136;color:var(--muted)}
 @media(max-width:600px){.top{flex-wrap:wrap;gap:12px}.top .user{margin-left:auto;max-width:100%}.layout{min-width:0}.side{min-width:0;max-width:100%}}
+/* Account workspace, matching the redesigned Auth entrance. */
+.top{padding:24px clamp(20px,4vw,64px);background:#292a2e;border-bottom:1px solid #51475c}
+.brand img{height:40px;width:auto;max-width:250px}.brand-name{font-size:18px;font-weight:600}
+.layout{max-width:1480px;margin:0 auto;display:flex;flex-direction:column;padding:0 32px 50px}
+.layout>.side{position:sticky;top:0;display:flex;flex-direction:row;flex-wrap:wrap;gap:5px;padding:18px 0;margin-bottom:24px;width:100%;height:auto;border-right:0;border-bottom:1px solid var(--border);background:#252629;z-index:3}
+.side a{padding:10px 16px;min-height:44px;border:1px solid transparent;border-radius:10px;font-size:14px;gap:9px}
+.side a.active{background:#44384f;color:#dfc7ff;border-color:#9274ab}.side a:hover{background:#38343e}
+.layout>main{min-width:0;width:100%;padding:12px 0;max-width:1280px;margin:auto}
+.hello{padding:28px 0 34px;border-bottom:1px solid var(--border);margin-bottom:30px}.hello h1{font-size:clamp(30px,4vw,45px);letter-spacing:-.05em}
+.card{border-radius:18px;border-color:#51495a;padding:28px;box-shadow:none}.card h2{font-size:20px;letter-spacing:-.03em}
+.grid2{gap:24px}.button{border-radius:10px;min-height:44px}.field input,.field select,.field textarea{min-height:48px}
+#content>h1{font-size:36px;letter-spacing:-.05em}.sig-mail{color:#1b1a21}
+@media(max-width:700px){.top{padding:18px}.brand img{height:32px;max-width:190px}.layout{padding:0 18px 32px}.layout>.side{flex-wrap:nowrap;overflow-x:auto;max-width:100%;position:static;padding:14px 0}.side a{flex-shrink:0;padding:9px 12px;font-size:13px}.card{padding:22px}.hello{padding:18px 0 25px}.grid2{gap:18px}}
